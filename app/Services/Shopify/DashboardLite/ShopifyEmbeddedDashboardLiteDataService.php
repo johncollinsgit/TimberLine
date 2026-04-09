@@ -187,7 +187,6 @@ class ShopifyEmbeddedDashboardLiteDataService
     {
         if (
             $tenantId === null
-            || ! Schema::hasTable('marketing_profile_links')
             || ! Schema::hasTable('orders')
         ) {
             return $this->emptySummary();
@@ -228,8 +227,6 @@ class ShopifyEmbeddedDashboardLiteDataService
     {
         if (
             $tenantId === null
-            || ! Schema::hasTable('marketing_profile_links')
-            || ! Schema::hasTable('marketing_profiles')
             || ! Schema::hasTable('orders')
         ) {
             return [
@@ -244,13 +241,15 @@ class ShopifyEmbeddedDashboardLiteDataService
         $fromUtc = $utcWindow['from'];
         $toUtc = $utcWindow['to'];
         $ordersStoreColumn = $this->ordersStoreColumn();
+        $hasMarketingProfilesTable = Schema::hasTable('marketing_profiles');
+        $hasProfileLinksTable = Schema::hasTable('marketing_profile_links');
+        $canResolveProfiles = $hasMarketingProfilesTable && $hasProfileLinksTable;
 
         $earnedByProfile = null;
-        if (Schema::hasTable('candle_cash_transactions')) {
+        if ($hasMarketingProfilesTable && Schema::hasTable('candle_cash_transactions')) {
             $earnedByProfile = DB::table('candle_cash_transactions as tx')
                 ->join('marketing_profiles as mp', 'mp.id', '=', 'tx.marketing_profile_id')
                 ->when($tenantId === null, fn ($q) => $q->whereNull('mp.tenant_id'), fn ($q) => $q->where('mp.tenant_id', $tenantId))
-                ->where('tx.type', 'earn')
                 ->where('tx.candle_cash_delta', '>', 0)
                 ->whereBetween('tx.created_at', [$fromUtc, $toUtc])
                 ->groupBy('tx.marketing_profile_id')
@@ -261,7 +260,7 @@ class ShopifyEmbeddedDashboardLiteDataService
 
         $redeemedByProfile = null;
         $redeemedByOrder = null;
-        if (Schema::hasTable('candle_cash_redemptions')) {
+        if ($hasMarketingProfilesTable && Schema::hasTable('candle_cash_redemptions')) {
             $redeemedByProfile = DB::table('candle_cash_redemptions as r')
                 ->join('marketing_profiles as mp', 'mp.id', '=', 'r.marketing_profile_id')
                 ->when($tenantId === null, fn ($q) => $q->whereNull('mp.tenant_id'), fn ($q) => $q->where('mp.tenant_id', $tenantId))
@@ -287,41 +286,75 @@ class ShopifyEmbeddedDashboardLiteDataService
         }
 
         $balanceByProfile = null;
-        if (Schema::hasTable('candle_cash_balances')) {
+        if ($hasMarketingProfilesTable && Schema::hasTable('candle_cash_balances')) {
             $balanceByProfile = DB::table('candle_cash_balances as b')
                 ->selectRaw('b.marketing_profile_id as marketing_profile_id')
                 ->selectRaw('b.balance as balance_points');
         }
 
-        $orderIdJoinExpr = $this->castToIntegerExpression('mpl.source_id');
+        $orderProfiles = null;
+        if ($canResolveProfiles) {
+            $orderIdJoinExpr = $this->castToIntegerExpression('mpl.source_id');
 
-        $query = DB::table('marketing_profile_links as mpl')
-            ->join('orders as o', function ($join) use ($orderIdJoinExpr): void {
-                $join->on(DB::raw($orderIdJoinExpr), '=', 'o.id');
-            })
-            ->join('marketing_profiles as mp', 'mp.id', '=', 'mpl.marketing_profile_id')
-            ->when($tenantId === null, fn ($q) => $q->whereNull('mpl.tenant_id'), fn ($q) => $q->where('mpl.tenant_id', $tenantId))
-            ->where('mpl.source_type', 'order')
+            $orderProfiles = DB::table('marketing_profile_links as mpl')
+                ->when($tenantId === null, fn ($q) => $q->whereNull('mpl.tenant_id'), fn ($q) => $q->where('mpl.tenant_id', $tenantId))
+                ->where('mpl.source_type', 'order')
+                ->whereNotNull('mpl.source_id')
+                ->where('mpl.source_id', '!=', '')
+                ->groupBy(DB::raw($orderIdJoinExpr))
+                ->selectRaw($orderIdJoinExpr.' as order_id')
+                ->selectRaw('max(mpl.marketing_profile_id) as marketing_profile_id');
+        }
+
+        $orderTimeExpr = $this->orderTimeExpression('o');
+        $query = DB::table('orders as o')
+            ->when($tenantId === null, fn ($q) => $q->whereNull('o.tenant_id'), fn ($q) => $q->where('o.tenant_id', $tenantId))
             ->when($storeKey !== null && $ordersStoreColumn !== null, fn ($q) => $q->where("o.{$ordersStoreColumn}", $storeKey))
-            ->whereBetween(DB::raw('coalesce(o.ordered_at, o.created_at)'), [$fromUtc, $toUtc])
-            ->orderByDesc(DB::raw('coalesce(o.ordered_at, o.created_at)'))
+            ->whereBetween(DB::raw($orderTimeExpr), [$fromUtc, $toUtc])
+            ->orderByDesc(DB::raw($orderTimeExpr))
             ->limit($limit)
             ->select([
                 'o.id as order_id',
                 'o.shopify_name',
                 'o.order_number',
-                'o.ordered_at',
                 'o.total_price',
                 'o.currency_code',
+                'o.customer_name',
+            ]);
+        $query->selectRaw($orderTimeExpr.' as order_happened_at');
+
+        if ($orderProfiles !== null) {
+            $query->leftJoinSub($orderProfiles, 'order_profiles', function ($join): void {
+                $join->on('order_profiles.order_id', '=', 'o.id');
+            });
+            $query->leftJoin('marketing_profiles as mp', function ($join) use ($tenantId): void {
+                $join->on('mp.id', '=', 'order_profiles.marketing_profile_id');
+                if ($tenantId === null) {
+                    $join->whereNull('mp.tenant_id');
+
+                    return;
+                }
+
+                $join->where('mp.tenant_id', '=', $tenantId);
+            });
+            $query->addSelect([
                 'mp.id as marketing_profile_id',
                 'mp.first_name',
                 'mp.last_name',
                 'mp.email',
             ]);
+        } else {
+            $query->addSelect([
+                DB::raw('null as marketing_profile_id'),
+                DB::raw('null as first_name'),
+                DB::raw('null as last_name'),
+                DB::raw('null as email'),
+            ]);
+        }
 
-        if ($earnedByProfile) {
+        if ($earnedByProfile && $orderProfiles !== null) {
             $query->leftJoinSub($earnedByProfile, 'earned', function ($join): void {
-                $join->on('earned.marketing_profile_id', '=', 'mp.id');
+                $join->on('earned.marketing_profile_id', '=', 'order_profiles.marketing_profile_id');
             });
             $query->addSelect([
                 DB::raw('coalesce(earned.earned_points, 0) as earned_points'),
@@ -334,9 +367,9 @@ class ShopifyEmbeddedDashboardLiteDataService
             ]);
         }
 
-        if ($redeemedByProfile) {
+        if ($redeemedByProfile && $orderProfiles !== null) {
             $query->leftJoinSub($redeemedByProfile, 'redeemed', function ($join): void {
-                $join->on('redeemed.marketing_profile_id', '=', 'mp.id');
+                $join->on('redeemed.marketing_profile_id', '=', 'order_profiles.marketing_profile_id');
             });
             $query->addSelect([
                 DB::raw('coalesce(redeemed.redeemed_points, 0) as redeemed_points'),
@@ -362,9 +395,9 @@ class ShopifyEmbeddedDashboardLiteDataService
             ]);
         }
 
-        if ($balanceByProfile) {
+        if ($balanceByProfile && $orderProfiles !== null) {
             $query->leftJoinSub($balanceByProfile, 'balances', function ($join): void {
-                $join->on('balances.marketing_profile_id', '=', 'mp.id');
+                $join->on('balances.marketing_profile_id', '=', 'order_profiles.marketing_profile_id');
             });
             $query->addSelect([
                 DB::raw('coalesce(balances.balance_points, 0) as balance_points'),
@@ -375,11 +408,14 @@ class ShopifyEmbeddedDashboardLiteDataService
             ]);
         }
 
-        $rows = $query->get()->map(function ($row): array {
+        $rows = $query->get()->map(function ($row) use ($timezone): array {
             $first = trim((string) ($row->first_name ?? ''));
             $last = trim((string) ($row->last_name ?? ''));
-            $name = trim($first . ' ' . $last);
+            $name = trim($first.' '.$last);
+            $orderCustomerName = trim((string) ($row->customer_name ?? ''));
+            $name = $name !== '' ? $name : ($orderCustomerName !== '' ? $orderCustomerName : null);
             $email = trim((string) ($row->email ?? ''));
+            $email = $email !== '' ? $email : null;
 
             $earnedPoints = (float) ($row->earned_points ?? 0);
             $redeemedOrderPoints = (float) ($row->redeemed_order_points ?? 0);
@@ -391,9 +427,9 @@ class ShopifyEmbeddedDashboardLiteDataService
             return [
                 'order' => [
                     'id' => (int) ($row->order_id ?? 0),
-                    'label' => trim((string) ($row->shopify_name ?? $row->order_number ?? '')) ?: ('Order #' . (int) ($row->order_id ?? 0)),
-                    'orderedAt' => $row->ordered_at
-                        ? (string) CarbonImmutable::parse($row->ordered_at, 'UTC')->setTimezone($timezone ?: 'UTC')->toIso8601String()
+                    'label' => trim((string) ($row->shopify_name ?? $row->order_number ?? '')) ?: ('Order #'.(int) ($row->order_id ?? 0)),
+                    'orderedAt' => $row->order_happened_at
+                        ? (string) CarbonImmutable::parse($row->order_happened_at, 'UTC')->setTimezone($timezone ?: 'UTC')->toIso8601String()
                         : null,
                     'total' => [
                         'amount' => $orderTotal,
@@ -401,9 +437,9 @@ class ShopifyEmbeddedDashboardLiteDataService
                     ],
                 ],
                 'customer' => [
-                    'id' => (int) ($row->marketing_profile_id ?? 0),
-                    'name' => $name !== '' ? $name : null,
-                    'email' => $email !== '' ? $email : null,
+                    'id' => ($row->marketing_profile_id ?? null) !== null ? (int) $row->marketing_profile_id : null,
+                    'name' => $name,
+                    'email' => $email,
                 ],
                 'candleCash' => [
                     'earnedWindow' => $this->formatCandleCashMetric($earnedPoints),
@@ -424,31 +460,37 @@ class ShopifyEmbeddedDashboardLiteDataService
      */
     protected function purchaseStats(?int $tenantId, ?string $storeKey, CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $orderIdJoinExpr = $this->castToIntegerExpression('mpl.source_id');
         $ordersStoreColumn = $this->ordersStoreColumn();
+        $orderTimeExpr = $this->orderTimeExpression('o');
+        $customerKeyExpr = $this->orderCustomerKeyExpression('o');
 
-        $base = DB::table('marketing_profile_links as mpl')
-            ->join('orders as o', function ($join) use ($orderIdJoinExpr): void {
-                $join->on(DB::raw($orderIdJoinExpr), '=', 'o.id');
-            })
-            ->when($tenantId === null, fn ($q) => $q->whereNull('mpl.tenant_id'), fn ($q) => $q->where('mpl.tenant_id', $tenantId))
-            ->where('mpl.source_type', 'order')
+        $base = DB::table('orders as o')
+            ->when($tenantId === null, fn ($q) => $q->whereNull('o.tenant_id'), fn ($q) => $q->where('o.tenant_id', $tenantId))
             ->when($storeKey !== null && $ordersStoreColumn !== null, fn ($q) => $q->where("o.{$ordersStoreColumn}", $storeKey))
-            ->whereBetween(DB::raw('coalesce(o.ordered_at, o.created_at)'), [$from, $to]);
-
-        $customersPurchased = (int) (clone $base)
-            ->distinct('mpl.marketing_profile_id')
-            ->count('mpl.marketing_profile_id');
+            ->whereBetween(DB::raw($orderTimeExpr), [$from, $to]);
 
         $purchaseCount = (int) (clone $base)
             ->distinct('o.id')
             ->count('o.id');
 
-        $returningCustomers = (int) (clone $base)
-            ->select('mpl.marketing_profile_id')
-            ->groupBy('mpl.marketing_profile_id')
-            ->havingRaw('count(distinct o.id) >= 2')
-            ->get()
+        $customersPurchased = (int) DB::query()
+            ->fromSub(
+                (clone $base)
+                    ->selectRaw($customerKeyExpr.' as customer_key')
+                    ->distinct(),
+                'customer_keys'
+            )
+            ->count();
+
+        $returningCustomers = (int) DB::query()
+            ->fromSub(
+                (clone $base)
+                    ->selectRaw($customerKeyExpr.' as customer_key')
+                    ->selectRaw('count(distinct o.id) as order_count')
+                    ->groupBy(DB::raw($customerKeyExpr))
+                    ->havingRaw('count(distinct o.id) >= 2'),
+                'returning_customers'
+            )
             ->count();
 
         $returningRatePct = $customersPurchased > 0
@@ -477,7 +519,6 @@ class ShopifyEmbeddedDashboardLiteDataService
             $earnedPoints = (float) DB::table('candle_cash_transactions as tx')
                 ->join('marketing_profiles as mp', 'mp.id', '=', 'tx.marketing_profile_id')
                 ->when($tenantId === null, fn ($q) => $q->whereNull('mp.tenant_id'), fn ($q) => $q->where('mp.tenant_id', $tenantId))
-                ->where('tx.type', 'earn')
                 ->where('tx.candle_cash_delta', '>', 0)
                 ->whereBetween('tx.created_at', [$from, $to])
                 ->sum('tx.candle_cash_delta');
@@ -611,6 +652,38 @@ class ShopifyEmbeddedDashboardLiteDataService
         }
 
         return 'cast(' . $columnExpression . ' as unsigned)';
+    }
+
+    protected function orderTimeExpression(string $orderAlias = 'o'): string
+    {
+        return 'coalesce('.$orderAlias.'.ordered_at, '.$orderAlias.'.created_at)';
+    }
+
+    protected function orderCustomerKeyExpression(string $orderAlias = 'o'): string
+    {
+        $parts = [];
+        foreach ([
+            'shopify_customer_id',
+            'customer_email',
+            'email',
+            'shipping_email',
+            'billing_email',
+            'customer_phone',
+            'phone',
+            'customer_name',
+        ] as $column) {
+            if (Schema::hasColumn('orders', $column)) {
+                $parts[] = 'nullif('.$orderAlias.'.'.$column.", '')";
+            }
+        }
+
+        $driver = (string) DB::connection()->getDriverName();
+        $fallback = $driver === 'sqlite'
+            ? "'order:' || cast(".$orderAlias.".id as text)"
+            : "concat('order:', cast(".$orderAlias.".id as char))";
+        $parts[] = $fallback;
+
+        return 'lower(trim(coalesce('.implode(', ', $parts).')))';
     }
 
     protected function normalizeStoreKey(mixed $value): ?string

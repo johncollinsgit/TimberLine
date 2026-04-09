@@ -273,12 +273,12 @@
                 <div class="sf-lite-kpi">
                     <p class="sf-lite-kpi-label">Customers purchased</p>
                     <p class="sf-lite-kpi-value" data-kpi="customersPurchased">—</p>
-                    <p class="sf-lite-kpi-meta sf-lite-muted">Reward-aware customers</p>
+                    <p class="sf-lite-kpi-meta sf-lite-muted">Unique customers</p>
                 </div>
                 <div class="sf-lite-kpi">
                     <p class="sf-lite-kpi-label">Purchases</p>
                     <p class="sf-lite-kpi-value" data-kpi="purchaseCount">—</p>
-                    <p class="sf-lite-kpi-meta sf-lite-muted">Linked to loyalty profiles</p>
+                    <p class="sf-lite-kpi-meta sf-lite-muted">All purchases in window</p>
                 </div>
                 <div class="sf-lite-kpi">
                     <p class="sf-lite-kpi-label">Returning signal</p>
@@ -312,7 +312,7 @@
         <div class="sf-lite-grid">
             <article class="sf-lite-card" aria-label="Recent customer purchase activity">
                 <h2>Recent customer purchase activity</h2>
-                <p>High-signal loyalty movement from recent reward-aware purchases.</p>
+                <p>Recent purchases with Candle Cash activity and balances.</p>
 
                 <div data-activity>
                     <div class="sf-lite-empty">Loading recent activity…</div>
@@ -474,7 +474,7 @@
                 const rows = activity && Array.isArray(activity.rows) ? activity.rows : [];
 
                 if (!rows || rows.length === 0) {
-                    activityHost.innerHTML = '<div class="sf-lite-empty">No recent loyalty-linked purchases in this window.</div>';
+                    activityHost.innerHTML = '<div class="sf-lite-empty">No purchases in this window.</div>';
                     return;
                 }
 
