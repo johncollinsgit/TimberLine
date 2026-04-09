@@ -17,6 +17,15 @@
         $messagingMessage = trim((string) ($messagingAccess['message'] ?? ''));
 
         $analytics = is_array($messageAnalytics ?? null) ? $messageAnalytics : [];
+        $storefrontTracking = is_array($storefrontTracking ?? null) ? $storefrontTracking : [];
+        $trackingHealth = is_array($storefrontTracking['health_summary'] ?? null) ? $storefrontTracking['health_summary'] : [];
+        $trackingEvents = is_array($trackingHealth['events'] ?? null) ? $trackingHealth['events'] : [];
+        $trackingTheme = is_array($trackingHealth['theme_embed'] ?? null) ? $trackingHealth['theme_embed'] : [];
+        $trackingWebPixel = is_array($trackingHealth['web_pixel'] ?? null) ? $trackingHealth['web_pixel'] : [];
+        $trackingScopes = is_array($trackingHealth['scopes'] ?? null) ? $trackingHealth['scopes'] : [];
+        $trackingNative = is_array($storefrontTracking['shopify_native'] ?? null) ? $storefrontTracking['shopify_native'] : [];
+        $trackingMissingScopes = array_values((array) ($trackingScopes['missing_requested'] ?? []));
+        $trackingSetupInference = strtolower(trim((string) ($trackingHealth['setup_inference'] ?? 'configuration_only')));
         $analyticsTab = strtolower(trim((string) ($messageAnalyticsTab ?? request()->query('analytics_tab', 'home'))));
         if (! in_array($analyticsTab, ['home', 'performance', 'history', 'sales_success'], true)) {
             $analyticsTab = 'home';
@@ -527,6 +536,73 @@
                 <h2>Message Analytics</h2>
                 <p class="message-analytics-muted">Attributed orders and revenue use a configurable last-click model (window: {{ $attributionWindowDays }} days). This is directional attribution, not guaranteed causation.</p>
             </article>
+
+            @if($storefrontTracking !== [])
+                <article class="message-analytics-card">
+                    <h3>Storefront tracking health</h3>
+                    <p class="message-analytics-muted">
+                        Snapshot from tracking config plus recent funnel events. This helps separate configured state from proven live signal flow.
+                    </p>
+
+                    <section class="message-analytics-meta-grid" aria-label="Storefront tracking health snapshot">
+                        <article class="message-analytics-meta-card">
+                            <span>Theme embed inferred</span>
+                            <strong>{{ (bool) ($trackingTheme['inferred_enabled'] ?? false) ? 'Yes' : 'No' }}</strong>
+                            <span>{{ number_format((int) ($trackingTheme['event_count'] ?? 0)) }} recent theme events</span>
+                        </article>
+                        <article class="message-analytics-meta-card">
+                            <span>Web pixel status</span>
+                            <strong>{{ (bool) ($trackingWebPixel['connected'] ?? false) ? 'Connected' : 'Disconnected' }}</strong>
+                            <span>{{ number_format((int) ($trackingWebPixel['event_count'] ?? 0)) }} recent pixel events</span>
+                        </article>
+                        <article class="message-analytics-meta-card">
+                            <span>Recent storefront events</span>
+                            <strong>{{ number_format((int) ($trackingEvents['recent_count'] ?? 0)) }}</strong>
+                            <span>Last: {{ \Illuminate\Support\Str::of((string) ($trackingEvents['last_event_type'] ?? 'none'))->replace('_', ' ')->title() }}</span>
+                        </article>
+                        <article class="message-analytics-meta-card">
+                            <span>Recent checkout completion</span>
+                            <strong>{{ (bool) ($trackingEvents['checkout_completion_seen_recently'] ?? false) ? 'Seen' : 'Not seen' }}</strong>
+                            <span>{{ $formatDateTime((string) ($trackingEvents['last_checkout_completed_at'] ?? null)) }}</span>
+                        </article>
+                        <article class="message-analytics-meta-card">
+                            <span>Scope verification</span>
+                            <strong>{{ (bool) ($trackingScopes['verified'] ?? false) ? 'Verified' : 'Pending' }}</strong>
+                            <span>Source: {{ (string) ($trackingScopes['source'] ?? 'stored_snapshot') }}</span>
+                        </article>
+                    </section>
+
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">
+                            Setup basis: {{ $trackingSetupInference === 'recent_storefront_events' ? 'recent event data + config' : 'config only (no recent events yet)' }}.
+                        </p>
+                        @if($trackingMissingScopes !== [])
+                            <p class="message-analytics-muted">
+                                Missing requested Shopify scopes: {{ implode(', ', $trackingMissingScopes) }}.
+                            </p>
+                        @endif
+                        @if((bool) data_get($trackingNative, 'analytics_and_reports.requested', false) && ! (bool) data_get($trackingNative, 'analytics_and_reports.granted', false))
+                            <p class="message-analytics-muted">
+                                Shopify native analytics/report scopes are requested but not currently confirmed as granted for this token.
+                            </p>
+                        @endif
+                        @if(! (bool) data_get($trackingNative, 'analytics_and_reports.api_calls_detected', false))
+                            <p class="message-analytics-muted">
+                                Backstage does not currently query Shopify native analytics/report APIs for storefront funnel reporting.
+                            </p>
+                        @endif
+                    </div>
+
+                    <div class="message-analytics-setup-actions">
+                        <a class="message-analytics-button" href="{{ route('shopify.app.messaging.setup', $embeddedContextQuery, false) }}">Open Tracking Setup</a>
+                    </div>
+
+                    <details class="message-analytics-setup-guide">
+                        <summary>Raw tracking diagnostics</summary>
+                        <pre class="message-analytics-muted" style="white-space: pre-wrap; margin: 0;">{{ json_encode($storefrontTracking, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                    </details>
+                </article>
+            @endif
 
             <article class="message-analytics-card">
                 <h3>Analytics tabs</h3>
@@ -1179,6 +1255,10 @@
                                     <article class="message-analytics-meta-card">
                                         <span>Checkout started</span>
                                         <strong>{{ number_format((int) ($funnelSummary['checkout_started'] ?? 0)) }}</strong>
+                                    </article>
+                                    <article class="message-analytics-meta-card">
+                                        <span>Checkout completed</span>
+                                        <strong>{{ number_format((int) ($funnelSummary['checkout_completed'] ?? 0)) }}</strong>
                                     </article>
                                 </section>
 

@@ -49,6 +49,11 @@ test('messaging setup guide includes storefront tracking deployment guidance', f
         ->assertSeeText('Theme app embed bundle is present in this repo')
         ->assertSeeText('Web pixel bundle is present in this repo')
         ->assertSeeText('Enable Forestry storefront tracking embed in Theme Editor')
+        ->assertSeeText('Theme embed inferred:')
+        ->assertSeeText('Checkout completed recently:')
+        ->assertSeeText('Scope verification:')
+        ->assertSeeText('Setup inference:')
+        ->assertSeeText('Raw tracking diagnostics')
         ->assertSee('https://admin.shopify.com/store/theforestrystudio/themes/current/editor?context=apps', false)
         ->assertSee('https://admin.shopify.com/store/theforestrystudio/settings/customer_events', false)
         ->assertSeeText('npm run shopify:app:deploy');

@@ -68,21 +68,21 @@ class ShopifyWebPixelConnectionService
             if ($existing !== null) {
                 $currentSettings = $this->decodeSettings((string) ($existing['settings'] ?? ''));
                 if ($currentSettings === $settings) {
-                    $status = $this->buildConnectedStatus($store, $existing, 'Pixel already connected.');
+                    $status = $this->buildConnectedStatus($store, $existing, 'Pixel already connected.', $scopeCheck);
                     Cache::put($cacheKey, $status, now()->addSeconds(30));
 
                     return $status;
                 }
 
                 $updated = $this->updateWebPixel($client, (string) ($existing['id'] ?? ''), $settings);
-                $status = $this->buildConnectedStatus($store, $updated, 'Pixel connected and settings updated.');
+                $status = $this->buildConnectedStatus($store, $updated, 'Pixel connected and settings updated.', $scopeCheck);
                 Cache::put($cacheKey, $status, now()->addSeconds(30));
 
                 return $status;
             }
 
             $created = $this->createWebPixel($client, $settings);
-            $status = $this->buildConnectedStatus($store, $created, 'Pixel connected in Shopify Customer Events.');
+            $status = $this->buildConnectedStatus($store, $created, 'Pixel connected in Shopify Customer Events.', $scopeCheck);
             Cache::put($cacheKey, $status, now()->addSeconds(30));
 
             return $status;
@@ -109,7 +109,7 @@ class ShopifyWebPixelConnectionService
         }
 
         if ($pixel === null) {
-            return [
+            $status = [
                 'ok' => true,
                 'status' => 'disconnected',
                 'connected' => false,
@@ -118,9 +118,11 @@ class ShopifyWebPixelConnectionService
                 'can_connect' => true,
                 'settings' => $this->pixelSettings(),
             ];
+
+            return $this->withScopeState($status, $scopeCheck);
         }
 
-        return $this->buildConnectedStatus($store, $pixel, 'Shopify Customer Events pixel is connected.');
+        return $this->buildConnectedStatus($store, $pixel, 'Shopify Customer Events pixel is connected.', $scopeCheck);
     }
 
     /**
@@ -342,9 +344,9 @@ GRAPHQL, [
      * @param  array<string,mixed>  $pixel
      * @return array<string,mixed>
      */
-    protected function buildConnectedStatus(array $store, array $pixel, string $message): array
+    protected function buildConnectedStatus(array $store, array $pixel, string $message, array $scopeStatus = []): array
     {
-        return [
+        $status = [
             'ok' => true,
             'status' => 'connected',
             'connected' => true,
@@ -355,6 +357,8 @@ GRAPHQL, [
             'settings' => $this->decodeSettings((string) ($pixel['settings'] ?? '')),
             'store_key' => (string) ($store['key'] ?? ''),
         ];
+
+        return $this->withScopeState($status, $scopeStatus);
     }
 
     /**
@@ -516,6 +520,26 @@ GRAPHQL);
             'can_connect' => true,
             'message' => $message,
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $status
+     * @param  array<string,mixed>  $scopeStatus
+     * @return array<string,mixed>
+     */
+    protected function withScopeState(array $status, array $scopeStatus): array
+    {
+        if ($scopeStatus === []) {
+            return $status;
+        }
+
+        $status['granted_scopes'] = array_values((array) ($scopeStatus['granted_scopes'] ?? []));
+        $status['missing_scopes'] = array_values((array) ($scopeStatus['missing_scopes'] ?? []));
+        $status['scope_source'] = (string) ($scopeStatus['scope_source'] ?? 'stored_snapshot');
+        $status['scope_verified'] = (bool) ($scopeStatus['scope_verified'] ?? false);
+        $status['scope_lookup_error'] = $this->nullableString($scopeStatus['scope_lookup_error'] ?? null);
+
+        return $status;
     }
 
     protected function isInvalidTokenError(Throwable $error): bool

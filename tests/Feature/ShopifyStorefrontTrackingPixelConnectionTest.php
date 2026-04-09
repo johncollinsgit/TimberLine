@@ -112,9 +112,17 @@ test('embedded messaging endpoint connects the shopify web pixel', function () {
         ->assertJsonPath('ok', true)
         ->assertJsonPath('status', 'connected')
         ->assertJsonPath('pixel.connected', true)
+        ->assertJsonPath('pixel.scope_verified', true)
+        ->assertJsonPath('pixel.scope_source', 'live')
         ->assertJsonPath('tracking.web_pixel.connected', true)
         ->assertJsonPath('tracking.web_pixel.status', 'connected')
-        ->assertJsonPath('tracking.web_pixel.settings.appProxyBase', '/apps/forestry');
+        ->assertJsonPath('tracking.web_pixel.settings.appProxyBase', '/apps/forestry')
+        ->assertJsonPath('tracking.scope_state.verified', true)
+        ->assertJsonPath('tracking.health_summary.web_pixel.connected', true)
+        ->assertJsonPath('tracking.shopify_native.analytics_and_reports.api_calls_detected', false)
+        ->assertJsonFragment(['read_pixels'])
+        ->assertJsonFragment(['write_pixels'])
+        ->assertJsonFragment(['read_customer_events']);
 
     expect($graphqlCalls)->toHaveCount(3);
 });

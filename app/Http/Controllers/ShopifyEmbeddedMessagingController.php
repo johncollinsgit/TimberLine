@@ -228,6 +228,7 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
         MessageAnalyticsService $messageAnalyticsService,
+        ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -288,6 +289,9 @@ class ShopifyEmbeddedMessagingController extends Controller
         $detail = (is_array($analyticsPayload) && $messageKey !== '' && $analyticsTab === 'performance')
             ? $probe->time('page_payload', fn (): ?array => $messageAnalyticsService->detail($tenantId, $storeKey, $messageKey))
             : null;
+        $storefrontTracking = $authorized
+            ? $probe->time('page_payload', fn (): array => $storefrontTrackingSetupService->build($store, $context['host'] ?? null))
+            : [];
 
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'analytics', $tenantId));
         $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('analytics', $tenantId));
@@ -333,6 +337,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                     'model' => 'last_click_within_window',
                     'window_days' => max(1, (int) config('marketing.message_analytics.attribution_window_days', 7)),
                 ],
+                'storefrontTracking' => $storefrontTracking,
             ]),
             $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
         ));

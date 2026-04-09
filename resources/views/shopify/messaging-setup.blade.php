@@ -24,7 +24,18 @@
         $trackingSetup = is_array($setupGuide['tracking'] ?? null) ? $setupGuide['tracking'] : [];
         $trackingCommands = is_array($trackingSetup['commands'] ?? null) ? $trackingSetup['commands'] : [];
         $trackingProxy = is_array($trackingSetup['app_proxy'] ?? null) ? $trackingSetup['app_proxy'] : [];
+        $trackingScopeState = is_array($trackingSetup['scope_state'] ?? null) ? $trackingSetup['scope_state'] : [];
+        $trackingHealth = is_array($trackingSetup['health_summary'] ?? null) ? $trackingSetup['health_summary'] : [];
+        $trackingHealthTheme = is_array($trackingHealth['theme_embed'] ?? null) ? $trackingHealth['theme_embed'] : [];
+        $trackingHealthPixel = is_array($trackingHealth['web_pixel'] ?? null) ? $trackingHealth['web_pixel'] : [];
+        $trackingHealthEvents = is_array($trackingHealth['events'] ?? null) ? $trackingHealth['events'] : [];
+        $trackingHealthScopes = is_array($trackingHealth['scopes'] ?? null) ? $trackingHealth['scopes'] : [];
         $trackingWebPixel = is_array($trackingSetup['web_pixel'] ?? null) ? $trackingSetup['web_pixel'] : [];
+        $trackingRecentEvents = is_array($trackingSetup['recent_events'] ?? null) ? $trackingSetup['recent_events'] : [];
+        $trackingInventory = collect((array) ($trackingSetup['tracking_inventory'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $trackingMissingRequestedScopes = array_values((array) ($trackingScopeState['missing_requested'] ?? []));
         $trackingEndpoints = is_array($messageAnalyticsTrackingEndpoints ?? null) ? $messageAnalyticsTrackingEndpoints : [];
 
         $embeddedContextQuery = collect(request()->query())
@@ -261,6 +272,29 @@
                                 <p class="message-setup-muted">
                                     Storefront tracking ships from this repo as a Shopify theme app embed plus a Shopify web pixel. Deploy extensions, enable the Forestry embed in Theme Editor, then verify tagged storefront visits against <code>{{ (string) ($trackingProxy['health_path'] ?? '/apps/forestry/health') }}</code>.
                                 </p>
+                                <div class="message-setup-links">
+                                    <span class="message-setup-status">Theme embed inferred: {{ (bool) ($trackingHealthTheme['inferred_enabled'] ?? false) ? 'Yes' : 'No' }}</span>
+                                    <span class="message-setup-status">Recent events: {{ number_format((int) ($trackingHealthEvents['recent_count'] ?? 0)) }}</span>
+                                    <span class="message-setup-status">Last event: {{ \Illuminate\Support\Str::of((string) ($trackingHealthEvents['last_event_type'] ?? 'none'))->replace('_', ' ')->title() }}</span>
+                                    <span class="message-setup-status">Checkout completed recently: {{ (bool) ($trackingHealthEvents['checkout_completion_seen_recently'] ?? false) ? 'Yes' : 'No' }}</span>
+                                    <span class="message-setup-status">Scope verification: {{ (bool) ($trackingHealthScopes['verified'] ?? false) ? 'Verified' : 'Pending' }}</span>
+                                </div>
+                                <p class="message-setup-muted">
+                                    Setup inference: {{ strtolower(trim((string) ($trackingHealth['setup_inference'] ?? 'configuration_only'))) === 'recent_storefront_events' ? 'recent event data + config' : 'config only (no recent event proof yet)' }}.
+                                </p>
+                                @if($trackingInventory->isNotEmpty())
+                                    <ol class="message-setup-list" aria-label="Storefront tracking inventory">
+                                        @foreach($trackingInventory as $source)
+                                            <li data-done="{{ in_array((string) ($source['status'] ?? ''), ['flow_detected', 'connected', 'events_recorded', 'enabled', 'scopes_granted'], true) ? 'true' : 'false' }}">
+                                                <strong>{{ (string) ($source['source'] ?? 'Tracking source') }} ({{ (string) ($source['status'] ?? 'unknown') }})</strong>
+                                                <span class="message-setup-muted">{{ (string) ($source['runs_in'] ?? '') }}</span>
+                                                @if(! empty($source['known_gaps'] ?? []))
+                                                    <span class="message-setup-muted">Gaps: {{ implode(' | ', (array) $source['known_gaps']) }}</span>
+                                                @endif
+                                            </li>
+                                        @endforeach
+                                    </ol>
+                                @endif
                                 @if($trackingWebPixel !== [])
                                     <div class="message-setup-links">
                                         <span class="message-setup-status">Pixel status: {{ (string) ($trackingWebPixel['label'] ?? 'Unknown') }}</span>
@@ -274,6 +308,15 @@
                                     @if(filled($trackingWebPixel['message'] ?? null))
                                         <p class="message-setup-muted">{{ (string) $trackingWebPixel['message'] }}</p>
                                     @endif
+                                @endif
+                                @if($trackingMissingRequestedScopes !== [])
+                                    <p class="message-setup-muted">Missing requested Shopify scopes: {{ implode(', ', $trackingMissingRequestedScopes) }}.</p>
+                                @endif
+                                @if($trackingRecentEvents !== [])
+                                    <details class="message-setup-guide">
+                                        <summary>Raw tracking diagnostics</summary>
+                                        <pre class="message-setup-muted" style="white-space: pre-wrap; margin: 0;">{{ json_encode($trackingSetup, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                    </details>
                                 @endif
                                 @if($trackingCommands !== [])
                                     <div class="message-setup-links">

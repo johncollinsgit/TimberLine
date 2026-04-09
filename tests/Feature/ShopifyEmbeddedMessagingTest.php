@@ -629,6 +629,8 @@ test('messaging analytics stays tenant and store scoped with attributed outcomes
     $homeResponse->assertOk()
         ->assertSeeText('Message Analytics')
         ->assertSeeText('Analytics tabs')
+        ->assertSeeText('Storefront tracking health')
+        ->assertSeeText('Raw tracking diagnostics')
         ->assertSeeText('Sales Success');
 
     $performanceQuery = retailEmbeddedSignedQuery();
