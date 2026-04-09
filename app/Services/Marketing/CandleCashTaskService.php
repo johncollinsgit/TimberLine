@@ -201,6 +201,14 @@ class CandleCashTaskService
                 $this->taskEventService->markAwarded($event, $completion);
             }
 
+            // TODO(rewards-approved-notification): wire this approval path into the canonical customer
+            // notification channel once reward-approved messaging is available.
+            Log::info('candle cash task completion approved without customer notification hook', [
+                'completion_id' => $completion->id,
+                'task_handle' => $task->handle,
+                'marketing_profile_id' => $profile->id,
+            ]);
+
             return $completion->fresh(['task', 'profile', 'transaction']);
         });
     }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
+use App\Models\CandleCashTask;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\CustomerBirthdayProfile;
@@ -1601,6 +1602,9 @@ class MarketingShopifyIntegrationController extends Controller
             'task_handle' => ['required', 'string', 'max:120'],
             'proof_url' => ['nullable', 'url', 'max:500'],
             'proof_text' => ['nullable', 'string', 'max:2000'],
+            'instagram_handle' => ['nullable', 'string', 'max:120'],
+            'submission_extra_key' => ['nullable', 'string', 'max:120'],
+            'submission_extra' => ['nullable', 'string', 'max:500'],
             'campaign_key' => ['nullable', 'string', 'max:160'],
             'request_key' => ['nullable', 'string', 'max:200'],
             'marketing_profile_id' => ['nullable', 'integer'],
@@ -1623,11 +1627,69 @@ class MarketingShopifyIntegrationController extends Controller
         $profile = $resolved['profile'];
         $requestKey = trim((string) ($data['request_key'] ?? ''));
         $taskHandle = (string) $data['task_handle'];
+        $taskModel = $taskService->taskByHandle($taskHandle);
+        $manualSubmissionConfig = $this->manualSubmissionConfigForTask($taskModel);
+        $proofUrl = trim((string) ($data['proof_url'] ?? ''));
+        $proofText = trim((string) ($data['proof_text'] ?? ''));
+        $extraFieldKey = trim((string) data_get($manualSubmissionConfig, 'extra_field_key', ''));
+        $extraFieldValue = $this->manualSubmissionExtraFieldValue($request, $data, $extraFieldKey);
+        $proofUrlRequiredMessage = trim((string) data_get($manualSubmissionConfig, 'proof_url_required_message', ''))
+            ?: 'Add a proof link so the team can review it.';
+        $proofTextRequiredMessage = trim((string) data_get($manualSubmissionConfig, 'proof_text_required_message', ''))
+            ?: 'Add a note so the team can review it.';
+        $extraFieldRequiredMessage = trim((string) data_get($manualSubmissionConfig, 'extra_field_required_message', ''))
+            ?: 'Add the required detail so the team can verify your submission.';
+
+        if ((bool) data_get($manualSubmissionConfig, 'proof_url_required', false) && $proofUrl === '') {
+            return MarketingStorefrontContract::error(
+                code: 'proof_url_required',
+                message: $proofUrlRequiredMessage,
+                status: 422,
+                details: [
+                    'state' => 'submission_required',
+                    'field' => 'proof_url',
+                ],
+                states: ['submission_required'],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        if ((bool) data_get($manualSubmissionConfig, 'proof_text_required', false) && $proofText === '') {
+            return MarketingStorefrontContract::error(
+                code: 'proof_text_required',
+                message: $proofTextRequiredMessage,
+                status: 422,
+                details: [
+                    'state' => 'submission_required',
+                    'field' => 'proof_text',
+                ],
+                states: ['submission_required'],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
+        if ((bool) data_get($manualSubmissionConfig, 'extra_field_required', false) && $extraFieldValue === '') {
+            $errorCode = $extraFieldKey !== '' ? Str::snake($extraFieldKey) . '_required' : 'submission_extra_required';
+
+            return MarketingStorefrontContract::error(
+                code: $errorCode,
+                message: $extraFieldRequiredMessage,
+                status: 422,
+                details: [
+                    'state' => 'submission_required',
+                    'field' => $extraFieldKey !== '' ? $extraFieldKey : 'submission_extra',
+                ],
+                states: ['submission_required'],
+                recoveryStates: ['try_again_later']
+            );
+        }
+
         $googleReview = $taskHandle === 'google-review'
             ? $googleBusinessConnectionService->reviewReadiness()
             : null;
         $googleReviewMode = (string) ($googleReview['effective_mode'] ?? 'unavailable');
         $googleReviewManualFallback = $taskHandle === 'google-review' && $googleReviewMode === 'manual_review_fallback';
+        $instagramCommentManualTask = $taskHandle === 'instagram-comment';
         $sourceId = trim((string) ($data['campaign_key'] ?? '')) !== ''
             ? ($taskHandle . ':campaign:' . trim((string) $data['campaign_key']))
             : $taskHandle;
@@ -1635,20 +1697,39 @@ class MarketingShopifyIntegrationController extends Controller
             ? ($taskHandle . ':profile:' . $profile->id . ':campaign:' . trim((string) $data['campaign_key']))
             : '';
 
-        if ($googleReviewManualFallback) {
-            $windowKey = now()->startOfWeek()->toDateString();
+        if ($googleReviewManualFallback || $instagramCommentManualTask) {
             $submissionKey = $requestKey !== '' ? $requestKey : (string) Str::uuid();
-            $sourceId = 'google-review:manual-submit:' . $submissionKey;
-            $sourceEventKey = 'google-review:profile:' . $profile->id . ':manual-submit:' . $submissionKey;
+            $sourceId = $taskHandle . ':manual-submit:' . $submissionKey;
+            $sourceEventKey = $taskHandle . ':profile:' . $profile->id . ':manual-submit:' . $submissionKey;
+        }
+
+        $submissionPayload = [
+            'proof_url' => $proofUrl !== '' ? $proofUrl : null,
+            'proof_text' => $proofText !== '' ? $proofText : null,
+        ];
+
+        if ($extraFieldKey !== '' && $extraFieldValue !== '') {
+            $submissionPayload[$extraFieldKey] = $extraFieldValue;
+        }
+
+        if ($instagramCommentManualTask) {
+            if ($extraFieldValue !== '') {
+                $submissionPayload['instagram_handle'] = $extraFieldValue;
+            }
+
+            if ($proofUrl !== '') {
+                $submissionPayload['instagram_post_url'] = $proofUrl;
+            }
+
+            if ($proofText !== '') {
+                $submissionPayload['instagram_comment_summary'] = $proofText;
+            }
         }
 
         $result = $taskService->submitCustomerTask(
             $profile,
             $taskHandle,
-            [
-                'proof_url' => $data['proof_url'] ?? null,
-                'proof_text' => $data['proof_text'] ?? null,
-            ],
+            $submissionPayload,
             [
                 'source_type' => 'shopify_widget_task',
                 'source_id' => $sourceId,
@@ -1659,12 +1740,15 @@ class MarketingShopifyIntegrationController extends Controller
                     'campaign_key' => trim((string) ($data['campaign_key'] ?? '')) ?: null,
                     'google_review_effective_mode' => $googleReviewManualFallback ? 'manual_review_fallback' : null,
                     'google_review_reward_window_start' => $googleReviewManualFallback ? now()->startOfWeek()->toDateString() : null,
+                    'manual_submission_extra_field_key' => $extraFieldKey !== '' ? $extraFieldKey : null,
+                    'manual_submission_extra_field_value' => $extraFieldValue !== '' ? $extraFieldValue : null,
+                    'instagram_comment_submission' => $instagramCommentManualTask ? true : null,
                 ],
-                'effective_verification_mode' => $googleReviewManualFallback ? 'manual_review_fallback' : null,
-                'effective_auto_award' => $googleReviewManualFallback ? false : null,
-                'effective_requires_manual_approval' => $googleReviewManualFallback ? true : null,
-                'effective_requires_customer_submission' => $googleReviewManualFallback ? true : null,
-                'effective_proof_text_required' => $googleReviewManualFallback ? true : null,
+                'effective_verification_mode' => $googleReviewManualFallback || $instagramCommentManualTask ? 'manual_review_fallback' : null,
+                'effective_auto_award' => $googleReviewManualFallback || $instagramCommentManualTask ? false : null,
+                'effective_requires_manual_approval' => $googleReviewManualFallback || $instagramCommentManualTask ? true : null,
+                'effective_requires_customer_submission' => $googleReviewManualFallback || $instagramCommentManualTask ? true : null,
+                'effective_proof_text_required' => $googleReviewManualFallback || (bool) data_get($manualSubmissionConfig, 'proof_text_required', false),
             ]
         );
 
@@ -1684,17 +1768,24 @@ class MarketingShopifyIntegrationController extends Controller
                 'state' => $state,
                 'completion_id' => $completion?->id,
                 'google_review_effective_mode' => $googleReviewManualFallback ? 'manual_review_fallback' : null,
+                'manual_submission_extra_field_key' => $extraFieldKey !== '' ? $extraFieldKey : null,
+                'instagram_comment_submission' => $instagramCommentManualTask ? true : null,
             ],
             'resolution_status' => $ok ? 'resolved' : 'open',
         ]);
 
         if (! $ok) {
             $errorCode = (string) ($result['error'] ?? 'task_submit_failed');
+            $fallbackProofTextMessage = $googleReviewManualFallback
+                ? 'Add the name shown on your Google review plus a short snippet or the date posted so the team can verify it.'
+                : $proofTextRequiredMessage;
 
             return MarketingStorefrontContract::error(
                 code: $errorCode,
                 message: match ($errorCode) {
-                    'proof_text_required' => 'Add the name shown on your Google review plus a short snippet or the date posted so the team can verify it.',
+                    'proof_text_required' => $fallbackProofTextMessage,
+                    'proof_url_required' => $proofUrlRequiredMessage,
+                    'instagram_handle_required', 'submission_extra_required' => $extraFieldRequiredMessage,
                     default => 'That task could not be completed right now.',
                 },
                 status: 422,
@@ -1718,6 +1809,7 @@ class MarketingShopifyIntegrationController extends Controller
                 'awarded_at' => optional($completion->awarded_at)->toIso8601String(),
                 'reviewed_at' => optional($completion->reviewed_at)->toIso8601String(),
             ] : null,
+            'submission_message' => trim((string) data_get($manualSubmissionConfig, 'pending_success_copy', '')) ?: null,
         ], $this->contractMeta($request), [$state]);
     }
 
@@ -3535,6 +3627,59 @@ class MarketingShopifyIntegrationController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @return array{
+     *   proof_url_required:bool,
+     *   proof_text_required:bool,
+     *   proof_url_required_message:string,
+     *   proof_text_required_message:string,
+     *   extra_field_key:string,
+     *   extra_field_required:bool,
+     *   extra_field_required_message:string,
+     *   pending_success_copy:string
+     * }
+     */
+    protected function manualSubmissionConfigForTask(?CandleCashTask $task): array
+    {
+        $metadata = is_array($task?->metadata) ? $task->metadata : [];
+        $manual = data_get($metadata, 'manual_submission', []);
+        $manual = is_array($manual) ? $manual : [];
+        $extraFieldKey = trim((string) ($manual['extra_field_key'] ?? ''));
+
+        return [
+            'proof_url_required' => (bool) ($manual['proof_url_required'] ?? false),
+            'proof_text_required' => (bool) ($manual['proof_text_required'] ?? false),
+            'proof_url_required_message' => trim((string) ($manual['proof_url_required_message'] ?? '')),
+            'proof_text_required_message' => trim((string) ($manual['proof_text_required_message'] ?? '')),
+            'extra_field_key' => $extraFieldKey,
+            'extra_field_required' => $extraFieldKey !== '' ? (bool) ($manual['extra_field_required'] ?? false) : false,
+            'extra_field_required_message' => trim((string) ($manual['extra_field_required_message'] ?? '')),
+            'pending_success_copy' => trim((string) ($manual['pending_success_copy'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $validated
+     */
+    protected function manualSubmissionExtraFieldValue(Request $request, array $validated, string $extraFieldKey): string
+    {
+        if ($extraFieldKey === '') {
+            return '';
+        }
+
+        $direct = trim((string) $request->input($extraFieldKey, ''));
+        if ($direct !== '') {
+            return $direct;
+        }
+
+        $fallbackKey = trim((string) ($validated['submission_extra_key'] ?? ''));
+        if ($fallbackKey === $extraFieldKey) {
+            return trim((string) ($validated['submission_extra'] ?? ''));
+        }
+
+        return '';
     }
 
     /**

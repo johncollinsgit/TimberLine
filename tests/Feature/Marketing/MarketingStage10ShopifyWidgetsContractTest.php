@@ -2,6 +2,7 @@
 
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashTask;
+use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\GoogleBusinessProfileConnection;
@@ -510,13 +511,14 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->assertJsonPath('data.google_review.ready', true)
         ->assertJsonPath('data.google_review.reason', 'live')
         ->assertJsonPath('data.google_review.review_url', 'https://g.page/r/CTucm4R1-wmOEAI/review')
-        ->assertJsonCount(10, 'data.tasks');
+        ->assertJsonCount(11, 'data.tasks');
 
     expect(data_get($response->json(), 'data.balance.points'))->toBeNull();
 
     $tasks = collect($response->json('data.tasks'));
     $googleReview = $tasks->firstWhere('handle', 'google-review');
     $productReview = $tasks->firstWhere('handle', 'product-review');
+    $instagramComment = $tasks->firstWhere('handle', 'instagram-comment');
     $vote = $tasks->firstWhere('handle', 'candle-club-vote');
 
     expect($googleReview)->not->toBeNull()
@@ -526,6 +528,12 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->and($productReview)->not->toBeNull()
         ->and(data_get($productReview, 'verification_mode'))->toBe('product_review_platform_event')
         ->and(data_get($productReview, 'auto_award'))->toBeTrue()
+        ->and($instagramComment)->not->toBeNull()
+        ->and(data_get($instagramComment, 'verification_mode'))->toBe('manual_review_fallback')
+        ->and(data_get($instagramComment, 'auto_award'))->toBeFalse()
+        ->and(data_get($instagramComment, 'requires_manual_approval'))->toBeTrue()
+        ->and(data_get($instagramComment, 'requires_customer_submission'))->toBeTrue()
+        ->and(data_get($instagramComment, 'button_text'))->toBe('Open Instagram')
         ->and($vote)->not->toBeNull()
         ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
         ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
@@ -708,6 +716,171 @@ test('shopify v1 candle cash status hides google review when auto-match is not r
         ->assertJsonPath('data.google_review.review_url', null);
 
     expect(collect($response->json('data.tasks'))->firstWhere('handle', 'google-review'))->toBeNull();
+});
+
+test('shopify v1 candle cash task submit creates pending instagram comment completion with required submission details', function () {
+    configureStage10RewardsStorefront();
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Instagram',
+        'last_name' => 'Commenter',
+        'email' => 'instagram.commenter@example.com',
+        'normalized_email' => 'instagram.commenter@example.com',
+    ]);
+
+    $payload = [
+        'email' => $profile->email,
+        'task_handle' => 'instagram-comment',
+        'instagram_handle' => '@forestfan',
+        'proof_url' => 'https://www.instagram.com/p/ABC123xyz/',
+        'proof_text' => 'Left a comment about the spring launch.',
+        'request_key' => 'instagram-comment-submit-1',
+    ];
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $headers = stage10SignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/candle-cash/tasks/submit',
+        $query,
+        json_encode($payload),
+        'stage10-signing-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.candle-cash.tasks.submit', $query), $payload)
+        ->assertOk()
+        ->assertJsonPath('data.state', 'pending')
+        ->assertJsonPath('data.completion.status', 'pending');
+
+    $completion = CandleCashTaskCompletion::query()
+        ->whereHas('task', fn ($builder) => $builder->where('handle', 'instagram-comment'))
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->firstOrFail();
+
+    expect((string) $completion->status)->toBe('pending')
+        ->and((string) $completion->proof_url)->toBe('https://www.instagram.com/p/ABC123xyz/')
+        ->and((string) $completion->proof_text)->toBe('Left a comment about the spring launch.')
+        ->and((string) data_get($completion->submission_payload, 'instagram_handle'))->toBe('@forestfan')
+        ->and((string) data_get($completion->submission_payload, 'instagram_post_url'))->toBe('https://www.instagram.com/p/ABC123xyz/')
+        ->and((string) data_get($completion->submission_payload, 'instagram_comment_summary'))->toBe('Left a comment about the spring launch.')
+        ->and($completion->candle_cash_transaction_id)->toBeNull();
+});
+
+test('shopify v1 candle cash task submit enforces required instagram comment submission fields', function () {
+    configureStage10RewardsStorefront();
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Required',
+        'last_name' => 'Fields',
+        'email' => 'instagram.required-fields@example.com',
+        'normalized_email' => 'instagram.required-fields@example.com',
+    ]);
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+
+    $missingHandlePayload = [
+        'email' => $profile->email,
+        'task_handle' => 'instagram-comment',
+        'proof_url' => 'https://www.instagram.com/reel/XYZ987abc/',
+        'proof_text' => 'Commented with launch feedback.',
+        'request_key' => 'instagram-comment-missing-handle',
+    ];
+    $missingHandleHeaders = stage10SignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/candle-cash/tasks/submit',
+        $query,
+        json_encode($missingHandlePayload),
+        'stage10-signing-secret'
+    );
+
+    $this->withHeaders($missingHandleHeaders)
+        ->postJson(route('marketing.shopify.v1.candle-cash.tasks.submit', $query), $missingHandlePayload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'instagram_handle_required');
+
+    $missingPostUrlPayload = [
+        'email' => $profile->email,
+        'task_handle' => 'instagram-comment',
+        'instagram_handle' => '@forestfan',
+        'proof_text' => 'Commented with launch feedback.',
+        'request_key' => 'instagram-comment-missing-post-url',
+    ];
+    $missingPostUrlHeaders = stage10SignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/candle-cash/tasks/submit',
+        $query,
+        json_encode($missingPostUrlPayload),
+        'stage10-signing-secret'
+    );
+
+    $this->withHeaders($missingPostUrlHeaders)
+        ->postJson(route('marketing.shopify.v1.candle-cash.tasks.submit', $query), $missingPostUrlPayload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'proof_url_required');
+
+    $missingCommentPayload = [
+        'email' => $profile->email,
+        'task_handle' => 'instagram-comment',
+        'instagram_handle' => '@forestfan',
+        'proof_url' => 'https://www.instagram.com/p/ABC123xyz/',
+        'request_key' => 'instagram-comment-missing-comment',
+    ];
+    $missingCommentHeaders = stage10SignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/candle-cash/tasks/submit',
+        $query,
+        json_encode($missingCommentPayload),
+        'stage10-signing-secret'
+    );
+
+    $this->withHeaders($missingCommentHeaders)
+        ->postJson(route('marketing.shopify.v1.candle-cash.tasks.submit', $query), $missingCommentPayload)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'proof_text_required');
+});
+
+test('shopify v1 reward task open click does not award instagram comment reward', function () {
+    configureStage10RewardsStorefront();
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Link',
+        'last_name' => 'Only',
+        'email' => 'instagram.link-only@example.com',
+        'normalized_email' => 'instagram.link-only@example.com',
+    ]);
+    $query = ['shop' => 'timberline.example.myshopify.com'];
+    $payload = [
+        'event_type' => 'reward_task_open_click',
+        'reward_kind' => 'candle_cash_task',
+        'surface' => 'page',
+        'state' => 'instagram-comment',
+        'request_key' => 'instagram-comment-open-only',
+        'email' => $profile->email,
+    ];
+    $headers = stage10SignedHeaders(
+        'POST',
+        '/shopify/marketing/v1/rewards/event',
+        $query,
+        json_encode($payload),
+        'stage10-signing-secret'
+    );
+
+    $this->withHeaders($headers)
+        ->postJson(route('marketing.shopify.v1.rewards.event', $query), $payload)
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.event_type', 'reward_task_open_click');
+
+    $instagramTask = CandleCashTask::query()->where('handle', 'instagram-comment')->firstOrFail();
+
+    expect(CandleCashTaskCompletion::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('candle_cash_task_id', $instagramTask->id)
+        ->count())->toBe(0);
+
+    expect(CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('source', 'candle_cash_task')
+        ->count())->toBe(0);
 });
 
 test('shopify v1 customer reward reads preserve fractional candle cash balances after legacy correction', function () {

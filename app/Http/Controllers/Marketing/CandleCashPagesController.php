@@ -169,7 +169,7 @@ class CandleCashPagesController extends Controller
             ->with([
                 'task:id,title,handle,verification_mode,auto_award',
                 'profile:id,first_name,last_name,email,phone',
-                'completion:id,status,review_notes,proof_url,proof_text,submitted_at',
+                'completion:id,status,review_notes,proof_url,proof_text,submission_payload,submitted_at',
             ])
             ->latest('id');
 

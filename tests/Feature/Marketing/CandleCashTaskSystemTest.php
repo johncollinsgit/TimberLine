@@ -124,6 +124,131 @@ test('queue shows manual google review proof details and the live review link fo
         ->assertSeeText('Open live Google review page');
 });
 
+test('queue shows instagram comment submission fields for manual review', function () {
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Instagram',
+        'last_name' => 'Queue',
+        'email' => 'instagram-queue@example.com',
+        'normalized_email' => 'instagram-queue@example.com',
+    ]);
+
+    app(CandleCashTaskService::class)->submitCustomerTask($profile, 'instagram-comment', [
+        'proof_url' => 'https://www.instagram.com/p/ABC123xyz/',
+        'proof_text' => 'Left a comment about the spring launch.',
+        'instagram_handle' => '@forestfan',
+        'instagram_post_url' => 'https://www.instagram.com/p/ABC123xyz/',
+        'instagram_comment_summary' => 'Left a comment about the spring launch.',
+    ], [
+        'source_type' => 'shopify_widget_task',
+        'source_id' => 'instagram-comment:manual-submit:queue-check',
+        'source_event_key' => 'instagram-comment:profile:' . $profile->id . ':manual-submit:queue-check',
+        'request_key' => 'queue-instagram-comment-proof',
+        'effective_verification_mode' => 'manual_review_fallback',
+        'effective_auto_award' => false,
+        'effective_requires_manual_approval' => true,
+        'effective_requires_customer_submission' => true,
+        'effective_proof_text_required' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('marketing.candle-cash.queue'))
+        ->assertOk()
+        ->assertSeeText('Leave an Instagram comment')
+        ->assertSeeText('@forestfan')
+        ->assertSeeText('Left a comment about the spring launch.')
+        ->assertSeeText('Open submitted Instagram post');
+});
+
+test('approving instagram comment completion awards candle cash through canonical approval service', function () {
+    $approver = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Approve',
+        'last_name' => 'Instagram',
+        'email' => 'approve-instagram@example.com',
+        'normalized_email' => 'approve-instagram@example.com',
+    ]);
+
+    app(CandleCashTaskService::class)->submitCustomerTask($profile, 'instagram-comment', [
+        'proof_url' => 'https://www.instagram.com/p/APPROVE123/',
+        'proof_text' => 'Shared a launch comment.',
+        'instagram_handle' => '@approvehandle',
+    ], [
+        'source_type' => 'shopify_widget_task',
+        'source_id' => 'instagram-comment:manual-submit:approve-check',
+        'source_event_key' => 'instagram-comment:profile:' . $profile->id . ':manual-submit:approve-check',
+        'request_key' => 'approve-instagram-comment-proof',
+    ]);
+
+    $completion = CandleCashTaskCompletion::query()
+        ->whereHas('task', fn ($builder) => $builder->where('handle', 'instagram-comment'))
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->firstOrFail();
+
+    expect((string) $completion->status)->toBe('pending');
+
+    $approved = app(CandleCashTaskService::class)->approveCompletion($completion, $approver->id, 'Verified on Instagram.');
+
+    expect((string) $approved->status)->toBe('awarded')
+        ->and($approved->candle_cash_transaction_id)->not->toBeNull()
+        ->and($approved->awarded_at)->not->toBeNull();
+
+    expect(CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('source', 'candle_cash_task')
+        ->count())->toBeGreaterThan(0);
+});
+
+test('rejecting instagram comment completion keeps reward unawarded', function () {
+    $reviewer = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Reject',
+        'last_name' => 'Instagram',
+        'email' => 'reject-instagram@example.com',
+        'normalized_email' => 'reject-instagram@example.com',
+    ]);
+
+    app(CandleCashTaskService::class)->submitCustomerTask($profile, 'instagram-comment', [
+        'proof_url' => 'https://www.instagram.com/p/REJECT123/',
+        'proof_text' => 'Commented but missing requirements.',
+        'instagram_handle' => '@rejecthandle',
+    ], [
+        'source_type' => 'shopify_widget_task',
+        'source_id' => 'instagram-comment:manual-submit:reject-check',
+        'source_event_key' => 'instagram-comment:profile:' . $profile->id . ':manual-submit:reject-check',
+        'request_key' => 'reject-instagram-comment-proof',
+    ]);
+
+    $completion = CandleCashTaskCompletion::query()
+        ->whereHas('task', fn ($builder) => $builder->where('handle', 'instagram-comment'))
+        ->where('marketing_profile_id', $profile->id)
+        ->latest('id')
+        ->firstOrFail();
+
+    $rejected = app(CandleCashTaskService::class)->rejectCompletion($completion, $reviewer->id, 'Comment does not match the linked post.');
+
+    expect((string) $rejected->status)->toBe('rejected')
+        ->and($rejected->candle_cash_transaction_id)->toBeNull();
+
+    expect(CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('source', 'candle_cash_task')
+        ->count())->toBe(0);
+});
+
 test('marketing manager can update an existing candle cash redeem rule from backstage', function () {
     $user = User::factory()->create([
         'role' => 'marketing_manager',

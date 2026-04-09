@@ -259,16 +259,38 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-3 align-top text-zinc-500">
+                                        @php
+                                            $submissionPayload = is_array($event->completion?->submission_payload ?? null) ? $event->completion->submission_payload : [];
+                                            $instagramHandle = trim((string) data_get($submissionPayload, 'instagram_handle', ''));
+                                            $instagramPostUrl = trim((string) data_get($submissionPayload, 'instagram_post_url', ''));
+                                            $instagramCommentSummary = trim((string) data_get($submissionPayload, 'instagram_comment_summary', ''));
+                                            $instagramProofReference = trim((string) data_get($submissionPayload, 'proof_reference_url', ''));
+                                        @endphp
                                         <div>{{ $event->source_event_key }}</div>
                                         <div class="mt-1 text-xs text-zinc-500">{{ optional($event->processed_at ?: $event->occurred_at ?: $event->created_at)->format('Y-m-d H:i') }}</div>
                                         @if($event->blocked_reason)
                                             <div class="mt-1 text-xs text-rose-200">{{ str_replace('_', ' ', $event->blocked_reason) }}</div>
                                         @endif
-                                        @if($event->completion?->proof_text)
+                                        @if($event->task?->handle === 'instagram-comment' && ($instagramHandle !== '' || $instagramPostUrl !== '' || $instagramCommentSummary !== '' || $instagramProofReference !== ''))
+                                            <div class="mt-3 text-[11px] uppercase tracking-[0.16em] text-zinc-500">Instagram submission</div>
+                                            @if($instagramHandle !== '')
+                                                <div class="mt-1 text-xs text-zinc-600"><span class="font-semibold text-zinc-700">Handle:</span> {{ $instagramHandle }}</div>
+                                            @endif
+                                            @if($instagramCommentSummary !== '')
+                                                <div class="mt-1 text-xs text-zinc-600"><span class="font-semibold text-zinc-700">Comment:</span> {{ $instagramCommentSummary }}</div>
+                                            @endif
+                                            @if($instagramPostUrl !== '')
+                                                <a href="{{ $instagramPostUrl }}" target="_blank" rel="noopener" class="mt-2 inline-flex text-xs font-semibold text-amber-800 underline decoration-zinc-300 underline-offset-4">Open submitted Instagram post</a>
+                                            @endif
+                                            @if($instagramProofReference !== '')
+                                                <a href="{{ $instagramProofReference }}" target="_blank" rel="noopener" class="mt-2 inline-flex text-xs font-semibold text-amber-800 underline decoration-zinc-300 underline-offset-4">Open optional proof reference</a>
+                                            @endif
+                                        @endif
+                                        @if($event->completion?->proof_text && !($event->task?->handle === 'instagram-comment' && $instagramCommentSummary !== ''))
                                             <div class="mt-3 text-[11px] uppercase tracking-[0.16em] text-zinc-500">Customer note</div>
                                             <div class="mt-1 whitespace-pre-line text-xs text-zinc-600">{{ $event->completion->proof_text }}</div>
                                         @endif
-                                        @if($event->completion?->proof_url)
+                                        @if($event->completion?->proof_url && !($event->task?->handle === 'instagram-comment' && $instagramPostUrl !== ''))
                                             <a href="{{ $event->completion->proof_url }}" target="_blank" rel="noopener" class="mt-3 inline-flex text-xs font-semibold text-amber-800 underline decoration-zinc-300 underline-offset-4">Open submitted proof link</a>
                                         @endif
                                         @if($event->task?->handle === 'google-review' && $event->verification_mode === 'manual_review_fallback' && $googleBusinessReviewUrl)
