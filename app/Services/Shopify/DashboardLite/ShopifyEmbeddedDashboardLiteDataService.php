@@ -29,7 +29,7 @@ class ShopifyEmbeddedDashboardLiteDataService
         $tenantId = isset($input['tenant_id']) && is_numeric($input['tenant_id'])
             ? (int) $input['tenant_id']
             : null;
-        $range = $this->normalizeRange((string) ($input['range'] ?? '7d'));
+        $range = $this->normalizeRange((string) ($input['range'] ?? 'today'));
         $section = strtolower(trim((string) ($input['section'] ?? 'summary'))) ?: 'summary';
         $includeActivity = in_array($section, ['activity', 'all'], true);
         $limit = isset($input['limit']) && is_numeric($input['limit'])
@@ -101,7 +101,8 @@ class ShopifyEmbeddedDashboardLiteDataService
         return match ($raw) {
             'today', '1d' => 'today',
             '30d', 'last_30_days' => '30d',
-            default => '7d',
+            '7d', 'last_7_days' => '7d',
+            default => 'today',
         };
     }
 
@@ -572,4 +573,3 @@ class ShopifyEmbeddedDashboardLiteDataService
         return 'cast(' . $columnExpression . ' as unsigned)';
     }
 }
-

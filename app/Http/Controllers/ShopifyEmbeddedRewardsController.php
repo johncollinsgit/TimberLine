@@ -7,8 +7,6 @@ use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
-use App\Services\Tenancy\TenantDisplayLabelResolver;
-use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -53,9 +51,10 @@ class ShopifyEmbeddedRewardsController extends Controller
         $tenantId = is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : $resolvedTenantId;
         $probe->forTenant($tenantId);
         $hasTenantContext = $authorized && $tenantId !== null;
-        $overview = $hasTenantContext
-            ? $probe->time('page_payload', fn (): array => $rewardsService->overview($tenantId))
-            : [];
+        // NOTE: Rewards overview is rendered server-side and should never block first paint.
+        // The prior implementation computed an "overview" payload here that is not used by
+        // the overview blade view, and it could stall production loads (especially when
+        // caches are cold or cache backends are unhealthy).
         // Rewards overview is intentionally "lite" by default. Pulling the full
         // embedded dashboard analytics payload blocks first paint and has been
         // responsible for timeouts/failed loads in production.
@@ -86,7 +85,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'overview',
             'shopify.rewards-overview',
             [
-                'dashboard' => $overview,
+                'dashboard' => [],
                 'analytics' => $analytics,
                 'analyticsEnabled' => $wantsAnalytics,
                 'analyticsEndpoint' => route('shopify.app', ['full' => 1], false),
@@ -1137,8 +1136,12 @@ class ShopifyEmbeddedRewardsController extends Controller
                 'sms_channel_enabled' => false,
             ]);
         $probe->forTenant(is_numeric($configState['tenant_id'] ?? null) ? (int) $configState['tenant_id'] : $resolvedTenantId);
-        $displayLabels = $probe->time('shell_payload', fn (): array => app(TenantDisplayLabelResolver::class)->resolve($configState['tenant_id'] ?? null));
-        $labels = is_array($displayLabels['labels'] ?? null) ? (array) $displayLabels['labels'] : [];
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation(
+            'rewards',
+            $section,
+            $configState['tenant_id'] ?? null
+        ));
+        $labels = is_array($appNavigation['displayLabels'] ?? null) ? (array) $appNavigation['displayLabels'] : [];
         $rewardsLabel = trim((string) ($labels['rewards_label'] ?? $labels['rewards'] ?? 'Rewards'));
         if ($rewardsLabel === '') {
             $rewardsLabel = 'Rewards';
@@ -1169,12 +1172,6 @@ class ShopifyEmbeddedRewardsController extends Controller
         if ($birthdayRewardLabel === '') {
             $birthdayRewardLabel = 'Birthday reward';
         }
-
-        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation(
-            'rewards',
-            $section,
-            $configState['tenant_id'] ?? null
-        ));
 
         $viewData = [
             'authorized' => $authorized,
@@ -1622,10 +1619,9 @@ class ShopifyEmbeddedRewardsController extends Controller
             ];
         }
 
-        /** @var TenantModuleAccessResolver $moduleResolver */
-        $moduleResolver = app(TenantModuleAccessResolver::class);
-        $rewardsModule = $moduleResolver->module($tenantId, 'rewards');
-        $smsModule = $moduleResolver->module($tenantId, 'sms');
+        $moduleStates = $this->embeddedNavigationModuleStates($tenantId);
+        $rewardsModule = is_array($moduleStates['rewards'] ?? null) ? (array) $moduleStates['rewards'] : [];
+        $smsModule = is_array($moduleStates['sms'] ?? null) ? (array) $moduleStates['sms'] : [];
         $hasRewardsAccess = (bool) ($rewardsModule['has_access'] ?? false);
         $rewardsUiState = strtolower(trim((string) ($rewardsModule['ui_state'] ?? 'locked')));
         $editable = $hasRewardsAccess && $rewardsUiState !== 'locked' && $rewardsUiState !== 'coming_soon';

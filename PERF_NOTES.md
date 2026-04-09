@@ -2,6 +2,17 @@
 
 ## What Changed
 
+### 0) Production Follow-up: Dashboard Lite Default + Rewards Hang (2026-04-08)
+Root causes observed in production after the initial perf deploy:
+- **Dashboard Lite defaulted to 7d** because the Blade markup shipped with `7d` pressed and the inline JS defaulted to `7d`, then stamped that into `localStorage` on first paint (making `7d` “sticky” even when the merchant never chose it).
+- **“Today” looked stuck on first load** because Dashboard Lite fired its first API request immediately, but App Bridge session token (`window.shopify.idToken`) was sometimes not ready within the default wait window. Errors were swallowed for the summary request and there was no retry.
+- **Rewards hung** because `ShopifyEmbeddedRewardsController@index` computed a rewards “overview” payload on first paint that the `rewards-overview` Blade view does not consume. In cold/unhealthy cache conditions this was wasted work that could stall the response. Rewards also duplicated display-label/module-access resolution instead of reusing the cached embedded shell payload.
+
+Fixes shipped:
+- Dashboard Lite now defaults to **Today** on a clean load and only persists the range when the merchant explicitly clicks a range tab (new `fb.dashboard_lite.range.explicit` flag prevents accidental persistence).
+- Dashboard Lite now retries auth + fetch on missing session token, uses longer App Bridge wait options, and shows a visible error/toast instead of silently failing.
+- Rewards no longer computes the unused “overview” payload on initial render, and it reuses the cached embedded shell display labels + module states.
+
 ### 1) Dashboard “Today” Initial Fetch Bug
 - Fixed the embedded React dashboard hook so the initial query state is derived from the URL query string when server `initialData` is absent.
 - Guarded the “skip first fetch when `initialData` exists” logic so it only skips when `initialData.query` matches the current query state (prevents stale/incorrect first paint).

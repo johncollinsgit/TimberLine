@@ -229,7 +229,7 @@ class ShopifyEmbeddedAppController extends Controller
         $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext((array) ($context['store'] ?? [])));
         $probe->forTenant($tenantId);
 
-        $range = (string) $request->query('range', '7d');
+        $range = (string) $request->query('range', 'today');
         $section = (string) $request->query('section', 'summary');
         $limit = (int) $request->query('limit', 20);
 

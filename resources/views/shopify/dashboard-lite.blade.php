@@ -261,8 +261,8 @@
 
             <div class="sf-lite-toolbar">
                 <div class="sf-lite-range" role="group" aria-label="Timeframe">
-                    <button type="button" data-range="today" aria-pressed="false">Today</button>
-                    <button type="button" data-range="7d" aria-pressed="true">7d</button>
+                    <button type="button" data-range="today" aria-pressed="true">Today</button>
+                    <button type="button" data-range="7d" aria-pressed="false">7d</button>
                     <button type="button" data-range="30d" aria-pressed="false">30d</button>
                 </div>
 
@@ -357,7 +357,16 @@
 
             const endpoint = root.dataset.dashboardLiteEndpoint || '';
             const rangeKey = 'fb.dashboard_lite.range';
+            const rangeExplicitKey = 'fb.dashboard_lite.range.explicit';
             const updatedNode = root.querySelector('[data-updated]');
+            const debugEnabled = (() => {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    return params.get('dashboard_debug') === '1' || params.get('debug') === 'dashboard';
+                } catch (e) {
+                    return false;
+                }
+            })();
 
             const kpiNodes = new Map();
             root.querySelectorAll('[data-kpi]').forEach((node) => {
@@ -373,15 +382,28 @@
             const rangeButtons = Array.from(root.querySelectorAll('[data-range]'));
 
             const state = {
-                range: '7d',
+                range: 'today',
                 summaryAbort: null,
                 activityAbort: null,
             };
 
-            function setRange(nextRange) {
+            function debugLog(...args) {
+                if (!debugEnabled) return;
+                // eslint-disable-next-line no-console
+                console.log('[dashboard-lite]', ...args);
+            }
+
+            function wait(ms) {
+                return new Promise((resolve) => window.setTimeout(resolve, ms));
+            }
+
+            function setRange(nextRange, options = {}) {
                 state.range = nextRange;
                 try {
-                    window.localStorage.setItem(rangeKey, nextRange);
+                    if (options.persist === true) {
+                        window.localStorage.setItem(rangeKey, nextRange);
+                        window.localStorage.setItem(rangeExplicitKey, '1');
+                    }
                 } catch (e) {}
 
                 rangeButtons.forEach((btn) => {
@@ -520,6 +542,22 @@
                 activityHost.appendChild(table);
             }
 
+            async function resolveAuthHeaders() {
+                const resolver = window.ForestryEmbeddedApp && window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders;
+                if (typeof resolver !== 'function') {
+                    const error = new Error('Embedded auth bridge unavailable.');
+                    error.code = 'missing_api_auth';
+                    throw error;
+                }
+
+                // Fresh embedded loads can take a few seconds before App Bridge exposes `window.shopify.idToken`.
+                return await resolver({
+                    includeJsonContentType: false,
+                    timeoutMs: 15000,
+                    requestTimeoutMs: 9000,
+                });
+            }
+
             async function fetchLite(section) {
                 if (!endpoint) {
                     return { ok: false };
@@ -534,11 +572,49 @@
                     state.activityAbort = controller;
                 }
 
-                const headers = await window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders({ includeJsonContentType: false });
                 const url = `${endpoint}?range=${encodeURIComponent(state.range)}&section=${encodeURIComponent(section)}&limit=20`;
-                const res = await fetch(url, { method: 'GET', headers, signal: controller.signal, credentials: 'same-origin' });
-                const json = await res.json().catch(() => null);
-                return (json && json.ok && json.data) ? json.data : null;
+
+                for (let attempt = 0; attempt < 4; attempt += 1) {
+                    try {
+                        const headers = await resolveAuthHeaders();
+                        debugLog('fetch', { section, range: state.range, attempt: attempt + 1 });
+
+                        const res = await fetch(url, { method: 'GET', headers, signal: controller.signal, credentials: 'same-origin' });
+                        const json = await res.json().catch(() => null);
+
+                        if (res.ok && json && json.ok && json.data) {
+                            return json.data;
+                        }
+
+                        const error = new Error(`Dashboard lite request failed (${res.status}).`);
+                        error.code = `http_${res.status}`;
+                        error.payload = json;
+                        throw error;
+                    } catch (e) {
+                        if (e && e.name === 'AbortError') {
+                            throw e;
+                        }
+
+                        const code = e && typeof e === 'object' ? e.code : null;
+                        const isAuthMissing = code === 'missing_api_auth'
+                            || code === 'invalid_session_token'
+                            || code === 'http_401'
+                            || code === 'http_403';
+
+                        debugLog('fetch_error', { section, range: state.range, attempt: attempt + 1, code: code || 'unknown' });
+
+                        // If the token is not ready yet, wait briefly and retry. This fixes the
+                        // "fresh load shows shell but Today never populates until tab switch" behavior.
+                        if (isAuthMissing && attempt < 3) {
+                            await wait(350 + attempt * 450);
+                            continue;
+                        }
+
+                        throw e;
+                    }
+                }
+
+                return null;
             }
 
             async function refresh() {
@@ -548,6 +624,13 @@
                     const summary = await fetchLite('summary');
                     if (summary) renderSummary(summary);
                 } catch (e) {
+                    debugLog('summary_failed', e);
+                    if (updatedNode) {
+                        updatedNode.textContent = 'Unable to load. Reload from Shopify Admin.';
+                    }
+                    if (window.ForestryEmbeddedApp && typeof window.ForestryEmbeddedApp.showToast === 'function') {
+                        window.ForestryEmbeddedApp.showToast('Dashboard data could not be loaded. Reload from Shopify Admin.', 'error');
+                    }
                 } finally {
                     setLoading(false);
                 }
@@ -560,6 +643,7 @@
                     const activity = await fetchLite('activity');
                     if (activity) renderActivity(activity);
                 } catch (e) {
+                    debugLog('activity_failed', e);
                     if (activityHost) {
                         activityHost.innerHTML = '<div class="sf-lite-empty">Unable to load recent activity. Reload from Shopify Admin.</div>';
                     }
@@ -567,21 +651,26 @@
             }
 
             try {
+                const explicit = window.localStorage.getItem(rangeExplicitKey) === '1';
                 const stored = window.localStorage.getItem(rangeKey);
-                if (stored === 'today' || stored === '7d' || stored === '30d') {
-                    setRange(stored);
+                if (explicit && (stored === 'today' || stored === '7d' || stored === '30d')) {
+                    setRange(stored, { persist: false });
                 } else {
-                    setRange('7d');
+                    // Default must be Today on a clean load. Also undo the previous behavior
+                    // where the app would stamp "7d" into localStorage on first paint.
+                    window.localStorage.removeItem(rangeKey);
+                    window.localStorage.removeItem(rangeExplicitKey);
+                    setRange('today', { persist: false });
                 }
             } catch (e) {
-                setRange('7d');
+                setRange('today', { persist: false });
             }
 
             rangeButtons.forEach((btn) => {
                 btn.addEventListener('click', () => {
                     const next = btn.dataset.range;
                     if (!next || next === state.range) return;
-                    setRange(next);
+                    setRange(next, { persist: true });
                     refresh();
                 }, { passive: true });
             });
