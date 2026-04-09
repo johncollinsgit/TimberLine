@@ -20,7 +20,8 @@ class ProductReviewService
         protected MarketingStorefrontIdentityService $identityService,
         protected CandleCashVerificationService $verificationService,
         protected CandleCashTaskService $taskService,
-        protected MarketingStorefrontEventLogger $eventLogger
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected ShopifyProductReviewMetafieldService $shopifyProductReviewMetafieldService
     ) {
     }
 
@@ -475,6 +476,8 @@ class ProductReviewService
             'transaction_id' => data_get($award, 'completion.candle_cash_transaction_id'),
         ]);
 
+        $this->syncProductReviewMetafields($review);
+
         $this->eventLogger->log('product_review_submitted', [
             'status' => 'ok',
             'profile' => $profile,
@@ -639,6 +642,8 @@ class ProductReviewService
             $this->recordImportProfileLink($review, $match);
         }
 
+        $this->syncProductReviewMetafields($review);
+
         return [
             'ok' => true,
             'created' => $created,
@@ -661,7 +666,10 @@ class ProductReviewService
             'moderation_notes' => $note ?: $review->moderation_notes,
         ])->save();
 
-        return $review->fresh(['profile']);
+        $review = $review->fresh(['profile']);
+        $this->syncProductReviewMetafields($review);
+
+        return $review;
     }
 
     public function respondToReview(MarketingReviewHistory $review, string $response, User $user): MarketingReviewHistory
@@ -698,7 +706,10 @@ class ProductReviewService
             'reviewed_at' => $review->reviewed_at ?: now(),
         ])->save();
 
-        return $review->fresh(['profile']);
+        $review = $review->fresh(['profile']);
+        $this->syncProductReviewMetafields($review);
+
+        return $review;
     }
 
     public function reject(MarketingReviewHistory $review, ?int $moderatorId = null, ?string $note = null): MarketingReviewHistory
@@ -713,12 +724,16 @@ class ProductReviewService
             'moderation_notes' => $note ?: $review->moderation_notes,
         ])->save();
 
-        return $review->fresh(['profile']);
+        $review = $review->fresh(['profile']);
+        $this->syncProductReviewMetafields($review);
+
+        return $review;
     }
 
     public function delete(MarketingReviewHistory $review): void
     {
         $review->delete();
+        $this->syncProductReviewMetafields($review);
     }
 
     public function moderationEnabled(?int $tenantId = null): bool
@@ -2158,6 +2173,21 @@ class ProductReviewService
         }
 
         return null;
+    }
+
+    protected function syncProductReviewMetafields(MarketingReviewHistory $review): void
+    {
+        try {
+            $this->shopifyProductReviewMetafieldService->syncReview($review);
+        } catch (\Throwable $e) {
+            Log::warning('native product review metafield sync failed', [
+                'review_id' => $review->id,
+                'store_key' => $review->store_key,
+                'product_id' => $review->product_id,
+                'product_handle' => $review->product_handle,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     protected function normalizedSitewideSort(?string $value): string

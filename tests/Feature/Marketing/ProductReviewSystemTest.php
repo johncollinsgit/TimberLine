@@ -13,8 +13,36 @@ use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
 use App\Models\User;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ProductReviewResponseMail;
+
+beforeEach(function (): void {
+    Http::fake(function (Request $request) {
+        $payload = json_decode($request->body(), true);
+        $query = (string) data_get($payload, 'query', '');
+
+        if (str_contains($query, 'ProductReviewLookup')) {
+            return Http::response([
+                'data' => [
+                    'products' => [
+                        'nodes' => [],
+                    ],
+                ],
+            ]);
+        }
+
+        return Http::response([
+            'data' => [
+                'metafieldsSet' => [
+                    'metafields' => [],
+                    'userErrors' => [],
+                ],
+            ],
+        ]);
+    });
+});
 
 test('marketing manager can load candle cash reviews section', function () {
     $user = User::factory()->create([
