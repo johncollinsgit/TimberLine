@@ -41,6 +41,11 @@ Current implemented shell/diagnostics checkpoint:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison
   - campaign delivery diagnostics/provider-context visibility
+  - storefront tracking diagnostics hardening (2026-04-09):
+    - Messaging Setup now provides explicit tracking inventory + health summary (theme embed inference, pixel connection, scope verification, recent events, last event, checkout completion seen/not-seen)
+    - Messaging Analytics now includes a storefront tracking health card and raw diagnostics payload
+    - message-level storefront funnel summary now renders `checkout_completed`
+    - Shopify-native analytics/report scope status is surfaced, but native analytics/report API reads are still not wired
 - Integrations is placeholder-first:
   - setup drawer exists
   - read-only deterministic status registry exists

@@ -43,12 +43,7 @@
     $resultsDeferred = (bool) ($resultsDeferred ?? false);
 @endphp
 
-@if($resultsDeferred)
-    <section class="customers-empty-state" aria-label="Search customers to load results">
-        <p class="customers-empty-state__eyebrow">Search-first loading</p>
-        <h3>Search customers to load results</h3>
-    </section>
-@else
+@unless($resultsDeferred)
     <section class="customers-table-wrap" aria-label="Manage customers table">
         <div class="customers-table-scroll">
             <table>
@@ -135,7 +130,7 @@
             </table>
         </div>
     </section>
-@endif
+@endunless
 
 @if(! $resultsDeferred && $customers instanceof \Illuminate\Contracts\Pagination\Paginator && $customers->hasPages())
     <div class="customers-pagination">

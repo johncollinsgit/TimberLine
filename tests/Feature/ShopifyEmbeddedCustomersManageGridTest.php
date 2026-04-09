@@ -345,7 +345,7 @@ test('/customers/manage stays search-first until a query is entered', function (
 
     $response->assertOk()
         ->assertSeeText('All customers')
-        ->assertSeeText('Search customers to load results')
+        ->assertDontSeeText('Search customers to load results')
         ->assertDontSeeText($fixtures['alice']->email)
         ->assertDontSeeText($fixtures['bob']->email)
         ->assertSeeText('Rewards Balance')
@@ -370,7 +370,7 @@ test('/shopify/app/customers and /shopify/app/customers/manage match manage page
     $this->get(route($routeName, retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSeeText('All customers')
-        ->assertSeeText('Search customers to load results')
+        ->assertDontSeeText('Search customers to load results')
         ->assertDontSeeText($fixtures['alice']->email);
 })->with([
     'alias /shopify/app/customers' => ['shopify.app.customers'],
@@ -480,7 +480,7 @@ test('segment filters show zero-result state when no customers match', function 
     $response = $this->get(shopifyAppCustomersManageUrl(['segment' => 'needs_contact']));
 
     $response->assertOk()
-        ->assertSeeText('Search customers to load results')
+        ->assertDontSeeText('Search customers to load results')
         ->assertDontSeeText('No customers matched your search or filters.');
 });
 
@@ -786,7 +786,7 @@ test('embedded manage filters and sort controls preserve full Shopify context', 
         ->and($content)->toContain('name="session" value="embedded-session-token"')
         ->and($content)->toContain('/shopify/app/customers/manage?shop=modernforestry.myshopify.com')
         ->and($content)->toContain('data-results-deferred="true"')
-        ->and($content)->toContain('Search customers to load results')
+        ->and($content)->not->toContain('Search customers to load results')
         ->and($content)->toContain('id_token=')
         ->and($content)->toContain('locale=en')
         ->and($content)->toContain('session=embedded-session-token');
@@ -857,7 +857,7 @@ test('embedded manage json stays deferred until a search query is present', func
     $resultsHtml = (string) data_get($response->json(), 'data.results_html', '');
 
     expect($resultsHtml)
-        ->toContain('Search customers to load results')
+        ->not->toContain('Search customers to load results')
         ->not->toContain('alice@example.com');
 });
 
