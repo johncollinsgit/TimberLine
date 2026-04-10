@@ -916,6 +916,8 @@ Route::prefix('shopify/marketing/v1')
     Route::get('/app/assistant', [ShopifyEmbeddedAiAssistantController::class, 'start'])->name('shopify.app.assistant.start');
     Route::get('/app/assistant/opportunities', [ShopifyEmbeddedAiAssistantController::class, 'opportunities'])->name('shopify.app.assistant.opportunities');
     Route::get('/app/assistant/drafts', [ShopifyEmbeddedAiAssistantController::class, 'drafts'])->name('shopify.app.assistant.drafts');
+    Route::post('/app/assistant/drafts/create', [ShopifyEmbeddedAiAssistantController::class, 'createDraftFromRecommendation'])->name('shopify.app.assistant.drafts.create');
+    Route::post('/app/assistant/drafts/{campaign}/update', [ShopifyEmbeddedAiAssistantController::class, 'updateDraftCampaign'])->name('shopify.app.assistant.drafts.update');
     Route::get('/app/assistant/setup', [ShopifyEmbeddedAiAssistantController::class, 'setup'])->name('shopify.app.assistant.setup');
     Route::get('/app/assistant/activity', [ShopifyEmbeddedAiAssistantController::class, 'activity'])->name('shopify.app.assistant.activity');
     Route::get('/app/messaging', [ShopifyEmbeddedMessagingController::class, 'show'])->name('shopify.app.messaging');

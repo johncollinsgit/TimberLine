@@ -10,6 +10,7 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 
 beforeEach(function (): void {
     config()->set('entitlements.default_plan', 'growth');
@@ -33,6 +34,10 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->where('tenant_id', $tenant->id)
         ->where('module_key', 'messaging')
         ->first();
+    $aiEntitlement = TenantModuleEntitlement::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'ai')
+        ->first();
 
     $messagingState = TenantModuleState::query()
         ->where('tenant_id', $tenant->id)
@@ -55,10 +60,14 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->where('tenant_id', $tenant->id)
         ->where('page_key', 'south-carolina-wholesale')
         ->first();
+    $aiModule = app(TenantModuleAccessResolver::class)->module($tenant->id, 'ai');
 
     expect($messagingEntitlement)->not->toBeNull()
         ->and($messagingEntitlement->enabled_status)->toBe('enabled')
         ->and($messagingEntitlement->availability_status)->toBe('available')
+        ->and($aiEntitlement)->not->toBeNull()
+        ->and($aiEntitlement->enabled_status)->toBe('enabled')
+        ->and($aiEntitlement->availability_status)->toBe('available')
         ->and($messagingState)->not->toBeNull()
         ->and($messagingState->setup_status)->toBe('configured')
         ->and($aiState)->not->toBeNull()
@@ -75,5 +84,7 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
     expect($discoveryProfile)->not->toBeNull()
         ->and((string) ($discoveryProfile?->primary_brand_name ?? ''))->toBe('Modern Forestry')
         ->and((string) ($discoveryProfile?->domain_map['primary_wholesale_domain'] ?? ''))->toBe('modernforestrywholesale.com')
-        ->and($southCarolinaPage)->not->toBeNull();
+        ->and($southCarolinaPage)->not->toBeNull()
+        ->and($aiModule['has_access'])->toBeTrue()
+        ->and($aiModule['ui_state'])->toBe('active');
 });

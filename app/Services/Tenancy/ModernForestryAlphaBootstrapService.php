@@ -42,6 +42,7 @@ class ModernForestryAlphaBootstrapService
         'bulk_email_marketing',
         'additional_channels',
         'messaging',
+        // Protected alpha tenant override: keep AI Assistant unlocked for Modern Forestry.
         'ai',
     ];
 
@@ -49,6 +50,17 @@ class ModernForestryAlphaBootstrapService
         protected TenantEmailSettingsService $tenantEmailSettingsService,
         protected TenantDiscoveryProfileService $tenantDiscoveryProfileService
     ) {
+    }
+
+    public function hasAiAssistantAlphaOverride(?int $tenantId): bool
+    {
+        if ($tenantId === null) {
+            return false;
+        }
+
+        $tenant = Tenant::query()->find($tenantId);
+
+        return $tenant instanceof Tenant && $this->isModernForestryTenant($tenant);
     }
 
     /**
@@ -132,10 +144,27 @@ class ModernForestryAlphaBootstrapService
     {
         $slug = strtolower(trim((string) $tenant->slug));
         $name = strtolower(trim((string) $tenant->name));
+        $id = (int) $tenant->id;
 
-        return $slug === 'modern-forestry'
-            || $name === 'modern forestry'
-            || ((int) $tenant->id === 1 && ($slug === 'modern-forestry' || $name === 'modern forestry'));
+        $configuredIds = collect((array) config('module_catalog.alpha_overrides.ai_assistant.tenant_ids', []))
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $value): bool => $value > 0)
+            ->values()
+            ->all();
+        $configuredSlugs = collect((array) config('module_catalog.alpha_overrides.ai_assistant.tenant_slugs', ['modern-forestry']))
+            ->map(static fn (mixed $value): string => strtolower(trim((string) $value)))
+            ->filter()
+            ->values()
+            ->all();
+        $configuredNames = collect((array) config('module_catalog.alpha_overrides.ai_assistant.tenant_names', ['Modern Forestry']))
+            ->map(static fn (mixed $value): string => strtolower(trim((string) $value)))
+            ->filter()
+            ->values()
+            ->all();
+
+        return in_array($id, $configuredIds, true)
+            || ($slug !== '' && in_array($slug, $configuredSlugs, true))
+            || ($name !== '' && in_array($name, $configuredNames, true));
     }
 
     protected function ensureStoreOwnership(int $tenantId, ?string $storeKey): void

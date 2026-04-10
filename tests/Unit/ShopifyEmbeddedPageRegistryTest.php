@@ -42,6 +42,28 @@ test('shopify embedded page registry groups pages by expected navigation groups'
     $assistantSubnavKeys = collect($registry->pagesForGroup('assistant_subnav'))
         ->pluck('key')
         ->all();
+    $assistantLabels = collect($registry->pages())
+        ->whereIn('key', [
+            'assistant',
+            'assistant.start',
+            'assistant.opportunities',
+            'assistant.drafts',
+            'assistant.setup',
+            'assistant.activity',
+        ])
+        ->mapWithKeys(fn (array $page): array => [(string) $page['key'] => (string) $page['label']])
+        ->all();
+    $assistantCapabilities = collect($registry->pages())
+        ->whereIn('key', [
+            'assistant',
+            'assistant.start',
+            'assistant.opportunities',
+            'assistant.drafts',
+            'assistant.setup',
+            'assistant.activity',
+        ])
+        ->mapWithKeys(fn (array $page): array => [(string) $page['key'] => (string) ($page['required_capability'] ?? '')])
+        ->all();
     $rewardsChildKeys = collect($registry->pagesForGroup('rewards_children'))
         ->pluck('key')
         ->all();
@@ -50,6 +72,22 @@ test('shopify embedded page registry groups pages by expected navigation groups'
         ->and($customersSubnavKeys)->toBe(['customers.all', 'customers.segments', 'customers.activity', 'customers.imports'])
         ->and($dashboardSubnavKeys)->toBe(['home.start', 'home.plans', 'home.store', 'home.integrations'])
         ->and($assistantSubnavKeys)->toBe(['assistant.start', 'assistant.opportunities', 'assistant.drafts', 'assistant.setup', 'assistant.activity'])
+        ->and($assistantLabels)->toBe([
+            'assistant' => 'AI Assistant',
+            'assistant.start' => 'Start Here',
+            'assistant.opportunities' => 'Top Opportunities',
+            'assistant.drafts' => 'Draft Campaigns',
+            'assistant.setup' => 'Setup',
+            'assistant.activity' => 'Activity',
+        ])
+        ->and($assistantCapabilities)->toBe([
+            'assistant' => 'ai.assistant',
+            'assistant.start' => 'ai.start_here',
+            'assistant.opportunities' => 'ai.opportunities',
+            'assistant.drafts' => 'ai.draft_campaigns',
+            'assistant.setup' => 'ai.setup',
+            'assistant.activity' => 'ai.activity',
+        ])
         ->and($rewardsChildKeys)->toBe([
             'rewards.overview',
             'rewards.earn',

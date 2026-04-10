@@ -36,6 +36,7 @@ class ShopifyEmbeddedShellPayloadBuilder
         $request ??= request();
         $displayLabels = $this->displayLabels($tenantId, $request);
         $moduleStates = $this->moduleStates($tenantId, $request);
+        $capabilityStates = $this->capabilityStates($tenantId, $request);
         $profile = $this->experienceProfile($tenantId, $request);
 
         $items = array_map(function (array $page) use ($request, $displayLabels, $moduleStates): array {
@@ -79,7 +80,7 @@ class ShopifyEmbeddedShellPayloadBuilder
             return $item;
         }, array_values(array_filter(
             $this->pageRegistry->pagesForGroup('primary'),
-            fn (array $page): bool => $this->pageVisibleForNavigation($page, $moduleStates)
+            fn (array $page): bool => $this->pageVisibleForNavigation($page, $moduleStates, $capabilityStates)
         )));
 
         return [
@@ -96,7 +97,8 @@ class ShopifyEmbeddedShellPayloadBuilder
                 tenantId: $tenantId,
                 request: $request,
                 activeSection: $activeSection,
-                activeChild: $activeChild
+                activeChild: $activeChild,
+                capabilityStates: $capabilityStates
             ),
         ];
     }
@@ -161,10 +163,15 @@ class ShopifyEmbeddedShellPayloadBuilder
         $request ??= request();
         $moduleStates = $this->moduleStates($tenantId, $request);
         $displayLabels = $this->displayLabels($tenantId, $request);
+        $capabilityStates = $this->capabilityStates($tenantId, $request);
 
-        return array_map(function (array $page) use ($activeKey, $moduleStates, $displayLabels): array {
+        return array_map(function (array $page) use ($activeKey, $moduleStates, $displayLabels, $capabilityStates): array {
             $shortKey = $this->childKeyFromPage((string) ($page['key'] ?? ''));
             $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
+            $capabilityKey = $this->requiredCapabilityFromPage($page);
+            $capabilityState = $capabilityKey !== '' && is_array($capabilityStates[$capabilityKey] ?? null)
+                ? (array) $capabilityStates[$capabilityKey]
+                : null;
 
             return [
                 'key' => $shortKey,
@@ -174,9 +181,13 @@ class ShopifyEmbeddedShellPayloadBuilder
                 'module_state' => $moduleKey !== '' && is_array($moduleStates[$moduleKey] ?? null)
                     ? $moduleStates[$moduleKey]
                     : null,
+                'capability_state' => $capabilityState,
                 'prefetch_priority' => (string) ($page['prefetch_priority'] ?? 'normal'),
             ];
-        }, $this->pageRegistry->pagesForGroup('assistant_subnav'));
+        }, array_values(array_filter(
+            $this->pageRegistry->pagesForGroup('assistant_subnav'),
+            fn (array $page): bool => $this->pageVisibleForCapability($page, $capabilityStates)
+        )));
     }
 
     /**
@@ -224,11 +235,12 @@ class ShopifyEmbeddedShellPayloadBuilder
         $request ??= request();
         $displayLabels = $this->displayLabels($tenantId, $request);
         $moduleStates = $this->moduleStates($tenantId, $request);
+        $capabilityStates = $this->capabilityStates($tenantId, $request);
         $normalizedQuery = strtolower(trim($query));
 
         $entries = collect($this->pageRegistry->pages())
             ->filter(fn (array $page): bool => (bool) ($page['searchable'] ?? false))
-            ->filter(fn (array $page): bool => $this->searchVisibleForModuleState($page, $moduleStates))
+            ->filter(fn (array $page): bool => $this->searchVisibleForModuleState($page, $moduleStates, $capabilityStates))
             ->map(function (array $page) use ($displayLabels, $normalizedQuery): ?array {
                 $title = $this->resolvedLabel($page, $displayLabels);
                 $subtitle = (string) ($page['search_subtitle'] ?? 'Jump to a workspace section.');
@@ -304,6 +316,36 @@ class ShopifyEmbeddedShellPayloadBuilder
     }
 
     /**
+     * @return array<string,array<string,mixed>>
+     */
+    public function capabilityStates(?int $tenantId, ?Request $request = null): array
+    {
+        $request ??= request();
+
+        $userId = $request->user()?->id ?? 0;
+
+        return $this->remember($request, 'capability_states:tenant:'.$tenantId, function () use ($tenantId, $userId): array {
+            return $this->rememberShared('capability_states', $tenantId, $userId, function () use ($tenantId): array {
+                $capabilityKeys = collect($this->pageRegistry->pages())
+                    ->pluck('required_capability')
+                    ->filter(fn ($value): bool => is_string($value) && trim($value) !== '')
+                    ->map(fn (string $value): string => strtolower(trim($value)))
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                if ($capabilityKeys === []) {
+                    return [];
+                }
+
+                $resolved = $this->moduleAccessResolver->resolveCapabilitiesForTenant($tenantId, $capabilityKeys);
+
+                return is_array($resolved) ? $resolved : [];
+            });
+        });
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function experienceProfile(?int $tenantId, ?Request $request = null): array
@@ -340,7 +382,8 @@ class ShopifyEmbeddedShellPayloadBuilder
         ?int $tenantId,
         Request $request,
         string $activeSection,
-        ?string $activeChild = null
+        ?string $activeChild = null,
+        array $capabilityStates = []
     ): array {
         $displayLabels = $this->displayLabels($tenantId, $request);
         $moduleStates = $this->moduleStates($tenantId, $request);
@@ -349,7 +392,7 @@ class ShopifyEmbeddedShellPayloadBuilder
         $activeChild = strtolower(trim((string) $activeChild));
 
         return collect($this->pageRegistry->pages())
-            ->filter(fn (array $page): bool => $this->searchVisibleForModuleState($page, $moduleStates))
+            ->filter(fn (array $page): bool => $this->searchVisibleForModuleState($page, $moduleStates, $capabilityStates))
             ->map(function (array $page) use ($displayLabels, $currentRoute, $activeSection, $activeChild): ?array {
                 $routeName = strtolower(trim((string) ($page['route_name'] ?? '')));
                 if ($routeName === '') {
@@ -447,9 +490,31 @@ class ShopifyEmbeddedShellPayloadBuilder
 
     /**
      * @param  array<string,array<string,mixed>>  $moduleStates
+     * @param  array<string,array<string,mixed>>  $capabilityStates
      */
-    protected function searchVisibleForModuleState(array $page, array $moduleStates): bool
+    protected function searchVisibleForModuleState(array $page, array $moduleStates, array $capabilityStates = []): bool
     {
+        $requiredCapability = $this->requiredCapabilityFromPage($page);
+        if ($requiredCapability !== '') {
+            $capabilityState = is_array($capabilityStates[$requiredCapability] ?? null)
+                ? (array) $capabilityStates[$requiredCapability]
+                : null;
+
+            $searchPreviewWhenLocked = (bool) ($page['search_preview_when_locked'] ?? false);
+            if (! is_array($capabilityState)) {
+                return ! $this->pageRequiresEnabledAccess($page) || $searchPreviewWhenLocked;
+            }
+
+            if (! (bool) ($capabilityState['has_access'] ?? false) && ! $searchPreviewWhenLocked) {
+                return false;
+            }
+
+            $capabilityReason = strtolower(trim((string) ($capabilityState['reason'] ?? '')));
+            if (in_array($capabilityReason, ['channel_not_supported', 'module_unavailable'], true)) {
+                return false;
+            }
+        }
+
         $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
         if ($moduleKey === '') {
             return ! $this->pageRequiresEnabledAccess($page);
@@ -472,9 +537,14 @@ class ShopifyEmbeddedShellPayloadBuilder
     /**
      * @param  array<string,mixed>  $page
      * @param  array<string,array<string,mixed>>  $moduleStates
+     * @param  array<string,array<string,mixed>>  $capabilityStates
      */
-    protected function pageVisibleForNavigation(array $page, array $moduleStates): bool
+    protected function pageVisibleForNavigation(array $page, array $moduleStates, array $capabilityStates = []): bool
     {
+        if (! $this->pageVisibleForCapability($page, $capabilityStates)) {
+            return false;
+        }
+
         $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
         if (! $this->pageRequiresEnabledAccess($page)) {
             return true;
@@ -494,6 +564,46 @@ class ShopifyEmbeddedShellPayloadBuilder
         }
 
         return (bool) ($state['has_access'] ?? false);
+    }
+
+    /**
+     * @param  array<string,mixed>  $page
+     * @param  array<string,array<string,mixed>>  $capabilityStates
+     */
+    protected function pageVisibleForCapability(array $page, array $capabilityStates): bool
+    {
+        $requiredCapability = $this->requiredCapabilityFromPage($page);
+        if ($requiredCapability === '') {
+            return true;
+        }
+
+        $capabilityState = is_array($capabilityStates[$requiredCapability] ?? null)
+            ? (array) $capabilityStates[$requiredCapability]
+            : null;
+        $previewWhenLocked = (bool) ($page['preview_when_locked'] ?? false);
+
+        if (! is_array($capabilityState)) {
+            return ! $this->pageRequiresEnabledAccess($page) || $previewWhenLocked;
+        }
+
+        if ((bool) ($capabilityState['has_access'] ?? false)) {
+            return true;
+        }
+
+        $reason = strtolower(trim((string) ($capabilityState['reason'] ?? '')));
+        if (in_array($reason, ['channel_not_supported', 'module_unavailable'], true)) {
+            return false;
+        }
+
+        return $previewWhenLocked;
+    }
+
+    /**
+     * @param  array<string,mixed>  $page
+     */
+    protected function requiredCapabilityFromPage(array $page): string
+    {
+        return strtolower(trim((string) ($page['required_capability'] ?? '')));
     }
 
     /**

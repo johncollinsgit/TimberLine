@@ -5,7 +5,13 @@ use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+
+beforeEach(function (): void {
+    app()->forgetInstance(TenantModuleAccessResolver::class);
+    app()->forgetInstance(ModernForestryAlphaBootstrapService::class);
+});
 
 test('default resolver grants starter plan modules', function () {
     $tenant = Tenant::query()->create([
@@ -80,7 +86,7 @@ test('resolver grants addon-enabled module access', function () {
     expect($ai['has_access'])->toBeTrue()
         ->and($ai['access_sources'])->toContain('addon:future_niche_modules')
         ->and($ai['source'])->toBe('addon')
-        ->and($ai['ui_state'])->toBe('coming_soon');
+        ->and($ai['ui_state'])->toBe('setup_needed');
 });
 
 test('resolver keeps setup state distinct from entitlement access', function () {
@@ -100,6 +106,39 @@ test('resolver keeps setup state distinct from entitlement access', function () 
     expect($customers['has_access'])->toBeTrue()
         ->and($customers['setup_status'])->toBe('in_progress')
         ->and($customers['ui_state'])->toBe('setup_needed');
+});
+
+test('non-alpha tenants keep locked setup-needed and coming-soon module states', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Starter Retail Tenant',
+        'slug' => 'starter-retail-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    TenantModuleState::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'customers',
+        'setup_status' => 'in_progress',
+    ]);
+
+    $resolved = app(TenantModuleAccessResolver::class)->resolveForTenant($tenant->id, [
+        'customers',
+        'sms',
+        'ai',
+    ]);
+
+    expect($resolved['modules']['customers']['has_access'])->toBeTrue()
+        ->and($resolved['modules']['customers']['ui_state'])->toBe('setup_needed')
+        ->and($resolved['modules']['sms']['has_access'])->toBeFalse()
+        ->and($resolved['modules']['sms']['ui_state'])->toBe('locked')
+        ->and($resolved['modules']['ai']['has_access'])->toBeFalse()
+        ->and($resolved['modules']['ai']['ui_state'])->toBe('locked');
 });
 
 test('resolver preserves non-shopify operating mode while using canonical plan mapping', function () {
@@ -192,4 +231,125 @@ test('resolver fails closed when a module is channel unsupported or canonical co
         ->and($sms['cta'])->toBe('none')
         ->and($bulkEmail['enabled'])->toBeFalse()
         ->and($bulkEmail['module_key'])->toBe('bulk_email_marketing');
+});
+
+test('resolver capability matrix applies ai surface tiers across starter growth and pro plans', function () {
+    $starter = Tenant::query()->create([
+        'name' => 'Starter Capability Matrix Tenant',
+        'slug' => 'starter-capability-matrix-tenant',
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $starter->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    $growth = Tenant::query()->create([
+        'name' => 'Growth Capability Matrix Tenant',
+        'slug' => 'growth-capability-matrix-tenant',
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $growth->id,
+        'plan_key' => 'growth',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    $pro = Tenant::query()->create([
+        'name' => 'Pro Capability Matrix Tenant',
+        'slug' => 'pro-capability-matrix-tenant',
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $pro->id,
+        'plan_key' => 'pro',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    $capabilityKeys = ['ai.start_here', 'ai.opportunities', 'ai.setup', 'ai.draft_campaigns', 'ai.activity'];
+
+    $starterCapabilities = app(TenantModuleAccessResolver::class)->resolveCapabilitiesForTenant($starter->id, $capabilityKeys);
+    $growthCapabilities = app(TenantModuleAccessResolver::class)->resolveCapabilitiesForTenant($growth->id, $capabilityKeys);
+    $proCapabilities = app(TenantModuleAccessResolver::class)->resolveCapabilitiesForTenant($pro->id, $capabilityKeys);
+
+    expect((bool) ($starterCapabilities['ai.start_here']['has_access'] ?? false))->toBeFalse()
+        ->and((bool) ($starterCapabilities['ai.opportunities']['has_access'] ?? false))->toBeFalse()
+        ->and((bool) ($starterCapabilities['ai.setup']['has_access'] ?? false))->toBeFalse()
+        ->and((bool) ($starterCapabilities['ai.draft_campaigns']['has_access'] ?? false))->toBeFalse()
+        ->and((bool) ($starterCapabilities['ai.activity']['has_access'] ?? false))->toBeFalse()
+        ->and((string) ($starterCapabilities['ai.activity']['tier_message'] ?? ''))->toBe('Available with upgrade');
+
+    expect((bool) ($growthCapabilities['ai.start_here']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($growthCapabilities['ai.opportunities']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($growthCapabilities['ai.setup']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($growthCapabilities['ai.draft_campaigns']['has_access'] ?? false))->toBeFalse()
+        ->and((string) ($growthCapabilities['ai.draft_campaigns']['tier_message'] ?? ''))->toBe('Available with upgrade')
+        ->and((bool) ($growthCapabilities['ai.activity']['has_access'] ?? false))->toBeFalse()
+        ->and((string) ($growthCapabilities['ai.activity']['tier_message'] ?? ''))->toBe('Available with upgrade');
+
+    expect((bool) ($proCapabilities['ai.start_here']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($proCapabilities['ai.opportunities']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($proCapabilities['ai.setup']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($proCapabilities['ai.draft_campaigns']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($proCapabilities['ai.activity']['has_access'] ?? false))->toBeTrue()
+        ->and((string) ($proCapabilities['ai.activity']['reason'] ?? ''))->toBe('setup_required');
+});
+
+test('resolver capability matrix preserves modern forestry full ai access override', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    app(ModernForestryAlphaBootstrapService::class)->ensureForTenant($tenant->id, force: true);
+
+    $capabilities = app(TenantModuleAccessResolver::class)->resolveCapabilitiesForTenant($tenant->id, [
+        'ai.start_here',
+        'ai.opportunities',
+        'ai.setup',
+        'ai.draft_campaigns',
+        'ai.activity',
+    ]);
+
+    expect((bool) ($capabilities['ai.start_here']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($capabilities['ai.opportunities']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($capabilities['ai.setup']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($capabilities['ai.draft_campaigns']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($capabilities['ai.activity']['has_access'] ?? false))->toBeTrue()
+        ->and((bool) ($capabilities['ai.activity']['alpha_override'] ?? false))->toBeTrue();
+});
+
+test('resolver respects landlord entitlement overrides for ai draft capability', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Landlord Override Matrix Tenant',
+        'slug' => 'landlord-override-matrix-tenant',
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'ai',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'included_in_plan',
+        'entitlement_source' => 'override',
+        'price_source' => 'override',
+    ]);
+
+    $draftCapability = app(TenantModuleAccessResolver::class)->capability($tenant->id, 'ai.draft_campaigns');
+
+    expect((bool) ($draftCapability['has_access'] ?? false))->toBeTrue()
+        ->and((string) ($draftCapability['reason'] ?? ''))->toBe('setup_required');
 });

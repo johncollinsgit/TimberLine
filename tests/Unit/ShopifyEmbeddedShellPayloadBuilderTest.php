@@ -55,6 +55,25 @@ test('shopify embedded shell payload builder memoizes tenant shell data within a
                 'rewards' => ['reason' => 'ok'],
             ],
         ]);
+    $moduleAccessResolver
+        ->shouldReceive('resolveCapabilitiesForTenant')
+        ->once()
+        ->with(42, \Mockery::on(function (array $capabilityKeys): bool {
+            return in_array('ai.assistant', $capabilityKeys, true)
+                && in_array('ai.start_here', $capabilityKeys, true)
+                && in_array('ai.opportunities', $capabilityKeys, true)
+                && in_array('ai.draft_campaigns', $capabilityKeys, true)
+                && in_array('ai.setup', $capabilityKeys, true)
+                && in_array('ai.activity', $capabilityKeys, true);
+        }))
+        ->andReturn([
+            'ai.assistant' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.start_here' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.opportunities' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.draft_campaigns' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.setup' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.activity' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+        ]);
 
     $registry = new ShopifyEmbeddedPageRegistry();
     $urlGenerator = new ShopifyEmbeddedUrlGenerator($registry);
@@ -134,6 +153,18 @@ test('shopify embedded shell payload builder picks up future pages from registry
             'modules' => [
                 'integrations' => ['reason' => 'ok'],
             ],
+        ]);
+    $moduleAccessResolver
+        ->shouldReceive('resolveCapabilitiesForTenant')
+        ->once()
+        ->with(99, \Mockery::type('array'))
+        ->andReturn([
+            'ai.assistant' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.start_here' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.opportunities' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.draft_campaigns' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.setup' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.activity' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
         ]);
 
     $builder = new ShopifyEmbeddedShellPayloadBuilder(
@@ -226,6 +257,23 @@ test('shopify embedded shell payload builder returns assistant subnav entries fr
                 'ai' => ['reason' => 'ok', 'has_access' => true],
             ],
         ]);
+    $moduleAccessResolver
+        ->shouldReceive('resolveCapabilitiesForTenant')
+        ->once()
+        ->with(88, \Mockery::on(function (array $capabilityKeys): bool {
+            return in_array('ai.start_here', $capabilityKeys, true)
+                && in_array('ai.opportunities', $capabilityKeys, true)
+                && in_array('ai.draft_campaigns', $capabilityKeys, true)
+                && in_array('ai.setup', $capabilityKeys, true)
+                && in_array('ai.activity', $capabilityKeys, true);
+        }))
+        ->andReturn([
+            'ai.start_here' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.opportunities' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.draft_campaigns' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.setup' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+            'ai.activity' => ['has_access' => true, 'reason' => 'enabled', 'ui_state' => 'active'],
+        ]);
 
     $registry = new ShopifyEmbeddedPageRegistry();
     $builder = new ShopifyEmbeddedShellPayloadBuilder(
@@ -238,6 +286,10 @@ test('shopify embedded shell payload builder returns assistant subnav entries fr
 
     $subnav = $builder->assistantSubnav('setup', 88, $request);
 
+    $setupItem = collect($subnav)->firstWhere('key', 'setup');
+
     expect(collect($subnav)->pluck('key')->all())->toBe(['start', 'opportunities', 'drafts', 'setup', 'activity'])
-        ->and(collect($subnav)->firstWhere('key', 'setup')['active'] ?? false)->toBeTrue();
+        ->and((bool) ($setupItem['active'] ?? false))->toBeTrue()
+        ->and((bool) data_get($setupItem, 'capability_state.has_access', false))->toBeTrue()
+        ->and((string) data_get($setupItem, 'capability_state.ui_state', ''))->toBe('active');
 });

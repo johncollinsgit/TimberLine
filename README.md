@@ -1,8 +1,8 @@
 # Modern Forestry Backstage
 
-## Shopify Embedded AI Assistant Workspace (2026-04-10)
+## Shopify Embedded AI Assistant Foundation (2026-04-10)
 
-This release adds a tenant-aware AI Assistant workspace in Shopify embedded surfaces with centralized access gating and alpha override safety.
+This release adds a tenant-aware AI Assistant foundation in Shopify embedded surfaces with centralized access gating and alpha override safety.
 
 Implemented and shipped:
 - new embedded AI Assistant routes:
@@ -14,12 +14,31 @@ Implemented and shipped:
 - embedded shell registration:
   - top-level nav label: `AI Assistant`
   - assistant subnav labels: `Start Here`, `Top Opportunities`, `Draft Campaigns`, `Setup`, `Activity`
-- assistant payload composition now reuses canonical services (no parallel access system):
-  - `TenantModuleAccessResolver`
-  - `TenantExperienceProfileService`
-  - `UnifiedAppNavigationService`
-  - `UnifiedDashboardService`
-  - `TenantModuleCatalogService`
+- stage foundation behavior:
+  - `Start Here` is now a tenant-facing landing page with:
+    - a short welcome block
+    - a 4-state status strip (`Ready`, `Needs Setup`, `Locked`, `Coming Soon`)
+    - up to 3 recommended next-click actions
+    - a small `What This Helps With` section
+  - `Top Opportunities` is now a recommendation-backed work surface with:
+    - one plain-English opportunities list (top 5 per page)
+    - explainable `why this matters` lines from existing recommendation records
+    - plain-English priority labels (`High priority`, `Medium priority`, `Lower priority`, `Needs review`)
+    - one clear next action per card (no send actions)
+    - clean empty and locked states with clear CTA routing
+  - `Setup` is now tenant-facing with a fast checklist (up to 6 plain-English readiness items, per-item state, and one obvious next action)
+  - `Draft Campaigns` is now tenant-facing as a focused human-review surface with:
+    - a small list of recent/pending drafts
+    - one simple `Review Draft` editor area (`Campaign Name`, `Audience`, `Message`, `Next Step`)
+    - recommendation-to-draft creation actions from existing opportunity records
+    - explicit no-autonomous-send behavior (draft/update only)
+  - `Activity` is now tenant-facing as a lightweight history surface with:
+    - recent opportunities surfaced
+    - drafts created
+    - approvals/rejections
+    - key draft status changes
+    - recent-item focus with pagination for older activity
+  - no autonomous send workflow, no background send automation, and no LLM execution path are implemented
 - tenant-facing module state labels standardized to:
   - `Ready`
   - `Needs Setup`
@@ -29,7 +48,17 @@ Implemented and shipped:
   - `ModernForestryAlphaBootstrapService` now explicitly configures the `ai` module state in addition to entitlement defaults
   - Modern Forestry retains full AI surface access regardless of plan/add-on restrictions
 - human-review guardrail remains explicit:
-  - Draft Campaigns are review-first only; no autonomous send behavior is added.
+  - no autonomous send behavior is added.
+- stage 6 hardening (multi-tenant production readiness):
+  - tier matrix is now enforced at capability level:
+    - `Starter`: locked preview positioning
+    - `Growth`: `Start Here`, `Top Opportunities`, `Setup`
+    - `Pro`: `Start Here`, `Top Opportunities`, `Setup`, `Draft Campaigns`, `Activity`
+  - Modern Forestry protected alpha override remains centralized and config-driven (`module_catalog.alpha_overrides.ai_assistant`) and unlocks all AI surfaces
+  - landlord/commercial entitlement overrides still work and flow through the canonical resolver (no view-level bypasses)
+  - AI routes now fail closed with tenant-aware 403 behavior when a surface is locked
+  - embedded navigation/search visibility now respects required AI capabilities so locked/coming-soon child pages do not leak
+  - embedded capability payloads are cached as safe tenant-scoped summaries to reduce repeated resolver work
 
 ## Agentic Discovery + Brand Graph Backend (2026-04-10)
 

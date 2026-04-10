@@ -26,6 +26,11 @@ class TenantModuleAccessResolver
     protected array $addonCatalog = [];
 
     /**
+     * @var array<string,array<string,mixed>>
+     */
+    protected array $capabilityCatalog = [];
+
+    /**
      * @var array<int|string,array<string,mixed>>
      */
     protected array $profileCache = [];
@@ -45,9 +50,15 @@ class TenantModuleAccessResolver
      */
     protected array $moduleEntitlementCache = [];
 
+    /**
+     * @var array<string,array<string,array<string,mixed>>>
+     */
+    protected array $capabilityResolutionCache = [];
+
     public function __construct(
         protected TenantResolver $tenantResolver,
-        protected SchemaCapabilityMap $schemaCapabilities
+        protected SchemaCapabilityMap $schemaCapabilities,
+        protected ModernForestryAlphaBootstrapService $alphaBootstrapService
     ) {
     }
 
@@ -291,6 +302,93 @@ class TenantModuleAccessResolver
     }
 
     /**
+     * @param  array<int,string>|null  $capabilityKeys
+     * @return array<string,array<string,mixed>>
+     */
+    public function resolveCapabilitiesForTenant(?int $tenantId, ?array $capabilityKeys = null): array
+    {
+        $requestedKeys = $this->requestedCapabilityKeys($capabilityKeys);
+        if ($requestedKeys === []) {
+            return [];
+        }
+
+        $cacheKey = ($tenantId ?? 'none').'|'.implode('|', $requestedKeys);
+        if (array_key_exists($cacheKey, $this->capabilityResolutionCache)) {
+            return $this->capabilityResolutionCache[$cacheKey];
+        }
+
+        $profile = $this->profileForTenant($tenantId);
+        $planKey = $this->canonicalPlanKey((string) ($profile['plan_key'] ?? $this->defaultPlanKey()));
+        $planPosition = $this->planPosition($planKey);
+
+        $capabilityDefinitions = [];
+        $moduleKeys = [];
+        foreach ($requestedKeys as $capabilityKey) {
+            $definition = $this->capabilityDefinition($capabilityKey);
+            if ($definition === []) {
+                continue;
+            }
+
+            $capabilityDefinitions[$capabilityKey] = $definition;
+            $moduleKey = strtolower(trim((string) ($definition['module_key'] ?? '')));
+            if ($moduleKey !== '') {
+                $moduleKeys[] = $moduleKey;
+            }
+        }
+
+        $moduleStates = [];
+        if ($moduleKeys !== []) {
+            $resolved = $this->resolveForTenant($tenantId, array_values(array_unique($moduleKeys)));
+            $moduleStates = is_array($resolved['modules'] ?? null)
+                ? (array) $resolved['modules']
+                : [];
+        }
+
+        $hasAiAlphaOverride = $this->alphaBootstrapService->hasAiAssistantAlphaOverride($tenantId);
+        $capabilities = [];
+
+        foreach ($requestedKeys as $capabilityKey) {
+            $definition = is_array($capabilityDefinitions[$capabilityKey] ?? null)
+                ? (array) $capabilityDefinitions[$capabilityKey]
+                : [];
+            if ($definition === []) {
+                $capabilities[$capabilityKey] = $this->defaultCapabilityState($capabilityKey, $planKey);
+                continue;
+            }
+
+            $moduleKey = strtolower(trim((string) ($definition['module_key'] ?? '')));
+            $moduleState = is_array($moduleStates[$moduleKey] ?? null)
+                ? (array) $moduleStates[$moduleKey]
+                : $this->module($tenantId, $moduleKey);
+
+            $capabilities[$capabilityKey] = $this->decisionForCapability(
+                definition: $definition,
+                moduleState: $moduleState,
+                planKey: $planKey,
+                planPosition: $planPosition,
+                hasAiAlphaOverride: $hasAiAlphaOverride
+            );
+        }
+
+        $this->capabilityResolutionCache[$cacheKey] = $capabilities;
+
+        return $capabilities;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function capability(?int $tenantId, string $capabilityKey): array
+    {
+        $canonical = $this->canonicalCapabilityKey($capabilityKey);
+        $resolved = $this->resolveCapabilitiesForTenant($tenantId, [$canonical]);
+
+        return is_array($resolved[$canonical] ?? null)
+            ? (array) $resolved[$canonical]
+            : $this->defaultCapabilityState($canonical, $this->defaultPlanKey());
+    }
+
+    /**
      * @param  array<int,string>|null  $moduleKeys
      * @return array<int,string>
      */
@@ -304,6 +402,28 @@ class TenantModuleAccessResolver
         $normalized = array_values(array_filter(array_map(
             fn ($value): string => $this->canonicalModuleKey((string) $value),
             $moduleKeys
+        )));
+
+        return array_values(array_filter(
+            array_unique($normalized),
+            fn (string $key): bool => array_key_exists($key, $catalog)
+        ));
+    }
+
+    /**
+     * @param  array<int,string>|null  $capabilityKeys
+     * @return array<int,string>
+     */
+    protected function requestedCapabilityKeys(?array $capabilityKeys): array
+    {
+        $catalog = $this->capabilityCatalog();
+        if ($capabilityKeys === null || $capabilityKeys === []) {
+            return array_keys($catalog);
+        }
+
+        $normalized = array_values(array_filter(array_map(
+            fn ($value): string => $this->canonicalCapabilityKey((string) $value),
+            $capabilityKeys
         )));
 
         return array_values(array_filter(
@@ -596,6 +716,159 @@ class TenantModuleAccessResolver
         ];
     }
 
+    /**
+     * @param  array<string,mixed>  $definition
+     * @param  array<string,mixed>  $moduleState
+     * @return array<string,mixed>
+     */
+    protected function decisionForCapability(
+        array $definition,
+        array $moduleState,
+        string $planKey,
+        int $planPosition,
+        bool $hasAiAlphaOverride
+    ): array {
+        $capabilityKey = strtolower(trim((string) ($definition['capability_key'] ?? '')));
+        $moduleKey = strtolower(trim((string) ($definition['module_key'] ?? '')));
+        $label = trim((string) ($definition['display_name'] ?? $capabilityKey));
+        $description = trim((string) ($definition['description'] ?? ''));
+        $requiresModuleAccess = (bool) ($definition['requires_module_access'] ?? true);
+        $minimumPlan = $this->canonicalPlanKey((string) ($definition['minimum_plan'] ?? ''));
+        $capabilityStatus = strtolower(trim((string) ($definition['status'] ?? 'live')));
+        $minimumPlanPosition = $minimumPlan !== '' ? $this->planPosition($minimumPlan) : 0;
+        $moduleSource = strtolower(trim((string) ($moduleState['source'] ?? 'flag')));
+        $moduleReason = strtolower(trim((string) ($moduleState['reason'] ?? 'not_enabled')));
+        $moduleCta = strtolower(trim((string) ($moduleState['cta'] ?? 'none')));
+        $moduleUiState = strtolower(trim((string) ($moduleState['ui_state'] ?? 'locked')));
+        $moduleSetupStatus = strtolower(trim((string) ($moduleState['setup_status'] ?? 'not_started')));
+        $moduleAccess = (bool) ($moduleState['enabled'] ?? $moduleState['has_access'] ?? false);
+        $isAiCapability = str_starts_with($capabilityKey, 'ai.');
+        $bypassPlanRestrictions = $isAiCapability && ($hasAiAlphaOverride || $moduleSource === 'override');
+
+        $comingSoon = $this->moduleHasFutureStatus($capabilityStatus);
+        if (! $comingSoon) {
+            $comingSoon = (bool) ($moduleState['coming_soon'] ?? false)
+                && in_array($moduleUiState, ['coming_soon'], true);
+        }
+
+        if ($comingSoon && ! $bypassPlanRestrictions) {
+            return [
+                'capability_key' => $capabilityKey,
+                'module_key' => $moduleKey,
+                'label' => $label !== '' ? $label : $capabilityKey,
+                'description' => $description,
+                'status' => $capabilityStatus !== '' ? $capabilityStatus : 'roadmap',
+                'minimum_plan' => $minimumPlan !== '' ? $minimumPlan : null,
+                'plan_key' => $planKey,
+                'has_access' => false,
+                'enabled' => false,
+                'ui_state' => 'coming_soon',
+                'setup_status' => $moduleSetupStatus,
+                'reason' => 'rollout_pending',
+                'cta' => 'none',
+                'source' => $moduleSource !== '' ? $moduleSource : 'flag',
+                'access_sources' => array_values((array) ($moduleState['access_sources'] ?? [])),
+                'tier_message' => 'Coming Soon',
+                'alpha_override' => $hasAiAlphaOverride && $isAiCapability,
+            ];
+        }
+
+        if ($requiresModuleAccess && ! $moduleAccess) {
+            return [
+                'capability_key' => $capabilityKey,
+                'module_key' => $moduleKey,
+                'label' => $label !== '' ? $label : $capabilityKey,
+                'description' => $description,
+                'status' => $capabilityStatus !== '' ? $capabilityStatus : 'live',
+                'minimum_plan' => $minimumPlan !== '' ? $minimumPlan : null,
+                'plan_key' => $planKey,
+                'has_access' => false,
+                'enabled' => false,
+                'ui_state' => $moduleUiState !== '' ? $moduleUiState : 'locked',
+                'setup_status' => $moduleSetupStatus,
+                'reason' => $moduleReason !== '' ? $moduleReason : 'not_enabled',
+                'cta' => $moduleCta !== '' ? $moduleCta : 'none',
+                'source' => $moduleSource !== '' ? $moduleSource : 'flag',
+                'access_sources' => array_values((array) ($moduleState['access_sources'] ?? [])),
+                'tier_message' => $this->tierMessageForCapability(false, $moduleUiState, $moduleCta, $moduleReason),
+                'alpha_override' => $hasAiAlphaOverride && $isAiCapability,
+            ];
+        }
+
+        if (
+            $minimumPlan !== ''
+            && ! $bypassPlanRestrictions
+            && $minimumPlanPosition > 0
+            && $planPosition > 0
+            && $planPosition < $minimumPlanPosition
+        ) {
+            return [
+                'capability_key' => $capabilityKey,
+                'module_key' => $moduleKey,
+                'label' => $label !== '' ? $label : $capabilityKey,
+                'description' => $description,
+                'status' => $capabilityStatus !== '' ? $capabilityStatus : 'live',
+                'minimum_plan' => $minimumPlan,
+                'plan_key' => $planKey,
+                'has_access' => false,
+                'enabled' => false,
+                'ui_state' => 'locked',
+                'setup_status' => $moduleSetupStatus,
+                'reason' => 'plan_upgrade_required',
+                'cta' => 'upgrade',
+                'source' => $moduleSource !== '' ? $moduleSource : 'flag',
+                'access_sources' => array_values((array) ($moduleState['access_sources'] ?? [])),
+                'tier_message' => 'Available with upgrade',
+                'alpha_override' => $hasAiAlphaOverride && $isAiCapability,
+            ];
+        }
+
+        $resolvedUiState = in_array($moduleUiState, ['setup_needed', 'active'], true)
+            ? $moduleUiState
+            : ($moduleSetupStatus === 'configured' ? 'active' : 'setup_needed');
+        $reason = $resolvedUiState === 'setup_needed' ? 'setup_required' : 'enabled';
+
+        return [
+            'capability_key' => $capabilityKey,
+            'module_key' => $moduleKey,
+            'label' => $label !== '' ? $label : $capabilityKey,
+            'description' => $description,
+            'status' => $capabilityStatus !== '' ? $capabilityStatus : 'live',
+            'minimum_plan' => $minimumPlan !== '' ? $minimumPlan : null,
+            'plan_key' => $planKey,
+            'has_access' => true,
+            'enabled' => true,
+            'ui_state' => $resolvedUiState,
+            'setup_status' => $moduleSetupStatus,
+            'reason' => $reason,
+            'cta' => 'none',
+            'source' => $moduleSource !== '' ? $moduleSource : 'flag',
+            'access_sources' => array_values((array) ($moduleState['access_sources'] ?? [])),
+            'tier_message' => 'Included in your plan',
+            'alpha_override' => $hasAiAlphaOverride && $isAiCapability,
+        ];
+    }
+
+    protected function tierMessageForCapability(bool $hasAccess, string $uiState, string $cta, string $reason): string
+    {
+        if ($hasAccess) {
+            return 'Included in your plan';
+        }
+
+        if ($uiState === 'coming_soon' || $reason === 'rollout_pending') {
+            return 'Coming Soon';
+        }
+
+        return match (strtolower(trim($cta))) {
+            'upgrade' => 'Available with upgrade',
+            'add' => 'Available as an add-on',
+            'request' => 'Contact sales',
+            default => in_array(strtolower(trim($reason)), ['contact_sales_required', 'module_unavailable', 'disabled_by_override', 'disabled_by_entitlement'], true)
+                ? 'Contact sales'
+                : 'Available with upgrade',
+        };
+    }
+
     protected function dependencyCta(string $dependencyKey, array $allModules, string $planKey): string
     {
         $dependency = is_array($allModules[$dependencyKey] ?? null) ? $allModules[$dependencyKey] : null;
@@ -704,6 +977,106 @@ class TenantModuleAccessResolver
         }
 
         return $normalized;
+    }
+
+    protected function canonicalCapabilityKey(string $capabilityKey): string
+    {
+        return strtolower(trim($capabilityKey));
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function defaultCapabilityState(string $capabilityKey, string $planKey): array
+    {
+        return [
+            'capability_key' => $capabilityKey,
+            'module_key' => '',
+            'label' => $capabilityKey,
+            'description' => '',
+            'status' => 'disabled',
+            'minimum_plan' => null,
+            'plan_key' => $planKey,
+            'has_access' => false,
+            'enabled' => false,
+            'ui_state' => 'locked',
+            'setup_status' => 'not_started',
+            'reason' => 'not_enabled',
+            'cta' => 'none',
+            'source' => 'flag',
+            'access_sources' => ['none'],
+            'tier_message' => 'Available with upgrade',
+            'alpha_override' => false,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function capabilityDefinition(string $capabilityKey): array
+    {
+        $catalog = $this->capabilityCatalog();
+        $definition = is_array($catalog[$capabilityKey] ?? null)
+            ? (array) $catalog[$capabilityKey]
+            : [];
+        if ($definition === []) {
+            return [];
+        }
+
+        $moduleHint = explode('.', $capabilityKey)[0] ?? '';
+        $moduleKey = $this->canonicalModuleKey((string) ($definition['module_key'] ?? $moduleHint));
+        if ($moduleKey === '') {
+            return [];
+        }
+
+        $status = strtolower(trim((string) ($definition['status'] ?? data_get(config('module_catalog.modules'), $moduleKey.'.status', 'live'))));
+        $minimumPlan = strtolower(trim((string) ($definition['minimum_plan'] ?? '')));
+        if ($minimumPlan !== '') {
+            $minimumPlan = $this->canonicalPlanKey($minimumPlan);
+        }
+
+        return [
+            'capability_key' => $capabilityKey,
+            'module_key' => $moduleKey,
+            'display_name' => trim((string) ($definition['display_name'] ?? $capabilityKey)),
+            'description' => trim((string) ($definition['description'] ?? '')),
+            'status' => $status !== '' ? $status : 'live',
+            'minimum_plan' => $minimumPlan,
+            'requires_module_access' => (bool) ($definition['requires_module_access'] ?? true),
+        ];
+    }
+
+    /**
+     * @return array<string,array<string,mixed>>
+     */
+    protected function capabilityCatalog(): array
+    {
+        if ($this->capabilityCatalog !== []) {
+            return $this->capabilityCatalog;
+        }
+
+        $configured = (array) config('module_catalog.capabilities', []);
+        $normalized = [];
+        foreach ($configured as $key => $value) {
+            $normalizedKey = $this->canonicalCapabilityKey((string) $key);
+            if ($normalizedKey === '' || ! is_array($value)) {
+                continue;
+            }
+
+            $normalized[$normalizedKey] = (array) $value;
+        }
+
+        $this->capabilityCatalog = $normalized;
+
+        return $this->capabilityCatalog;
+    }
+
+    protected function planPosition(string $planKey): int
+    {
+        $canonical = $this->canonicalPlanKey($planKey);
+        $position = (int) data_get(config('module_catalog.plans'), $canonical.'.position', 0);
+
+        return $position > 0 ? $position : 0;
     }
 
     protected function defaultOperatingMode(): string

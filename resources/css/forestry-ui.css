@@ -2261,6 +2261,12 @@ body.mf-app-shell {
   text-decoration: underline;
 }
 
+.assistant-link:focus-visible,
+.assistant-action-link:focus-visible {
+  outline: 2px solid var(--fb-brand-2);
+  outline-offset: 2px;
+}
+
 .assistant-panel--hero {
   border-color: rgba(47, 125, 107, 0.24);
   box-shadow: inset 0 0 0 1px rgba(47, 125, 107, 0.08);
@@ -2278,6 +2284,118 @@ body.mf-app-shell {
   font-size: 0.82rem;
   font-weight: 600;
   margin: 0;
+}
+
+.assistant-start-grid {
+  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.assistant-start-grid .assistant-panel--hero {
+  grid-column: 1 / -1;
+}
+
+.assistant-status-strip {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.assistant-status-card {
+  background: var(--fb-surface-muted);
+  border: 1px solid var(--fb-border);
+  border-radius: var(--fb-radius-md);
+  display: grid;
+  gap: 0.3rem;
+  min-height: 4.25rem;
+  padding: 0.65rem;
+}
+
+.assistant-status-label {
+  color: var(--fb-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.assistant-status-value {
+  color: var(--fb-text);
+  font-family: var(--fb-font-display);
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+.assistant-action-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.assistant-action-item {
+  background: var(--fb-surface-muted);
+  border: 1px solid var(--fb-border);
+  border-radius: var(--fb-radius-md);
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.75rem;
+}
+
+.assistant-setup-item {
+  align-content: start;
+}
+
+.assistant-action-link {
+  align-items: center;
+  border: 1px solid rgba(47, 125, 107, 0.3);
+  border-radius: 0.55rem;
+  color: var(--fb-brand-2);
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.2rem 0.7rem;
+  text-decoration: none;
+  width: fit-content;
+}
+
+button.assistant-action-link {
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.assistant-field-input {
+  background: var(--fb-surface);
+  border: 1px solid var(--fb-border);
+  border-radius: 0.6rem;
+  color: var(--fb-text);
+  font-size: 0.85rem;
+  min-height: 2.3rem;
+  padding: 0.5rem 0.65rem;
+  width: 100%;
+}
+
+textarea.assistant-field-input {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.assistant-field-input:focus-visible {
+  outline: 2px solid var(--fb-brand-2);
+  outline-offset: 2px;
+}
+
+.assistant-help-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.assistant-help-list li {
+  line-height: 1.5;
 }
 
 .assistant-lock {
@@ -2471,6 +2589,10 @@ body.mf-app-shell {
   .assistant-grid--three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .assistant-status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -2566,6 +2688,8 @@ body.mf-app-shell {
   .plans-addon-grid,
   .plans-state-grid,
   .plans-upgrade-grid,
+  .assistant-start-grid,
+  .assistant-status-strip,
   .assistant-grid--three {
     grid-template-columns: 1fr;
   }

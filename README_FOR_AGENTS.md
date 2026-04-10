@@ -37,12 +37,22 @@ Current implemented shell/diagnostics checkpoint:
   - `/shopify/app/assistant/drafts`
   - `/shopify/app/assistant/setup`
   - `/shopify/app/assistant/activity`
-- AI Assistant shell/guardrail status (2026-04-10):
+- AI Assistant foundation status (2026-04-10):
   - tenant-aware/tier-aware access and page rendering are driven from canonical module access services
-  - assistant tabs are intentionally small-purpose surfaces (`Start Here`, `Top Opportunities`, `Draft Campaigns`, `Setup`, `Activity`)
+  - `Start Here` is tenant-facing and intentionally fast (welcome + state strip + next-click actions + what-it-helps-with)
+  - `Top Opportunities` is recommendation-backed and tenant-facing (top 5 paginated cards with explainable why-lines, plain-English priority labels, and one next action per card)
+  - `Setup` is tenant-facing and checklist-based (up to 6 plain-English readiness cards with one obvious action each)
+  - `Draft Campaigns` is now a tenant-facing human-review page (recent/pending drafts list + simple `Review Draft` editor + recommendation-to-draft creation actions)
+  - `Activity` is now a tenant-facing history page (recent opportunities, drafts, approvals/rejections, and key status changes with paginated older history)
+  - stage 6 hardening is in place:
+    - tier matrix: `Starter` preview-only, `Growth` (`Start Here`/`Top Opportunities`/`Setup`), `Pro` (+`Draft Campaigns` + `Activity`)
+    - AI surface gating is capability-driven (`required_capability`) and routes fail closed when locked
+    - assistant nav/search hides locked/coming-soon child surfaces for non-eligible tenants
+    - landlord entitlement/module overrides still flow through canonical resolver decisions
+    - embedded shell uses tenant-scoped cached capability summaries to avoid repeated resolver work
   - tenant-facing module state labels are standardized (`Ready`, `Needs Setup`, `Locked`, `Coming Soon`)
-  - Modern Forestry alpha override remains centralized in `ModernForestryAlphaBootstrapService` and now explicitly configures `ai` module state
-  - no autonomous send behavior is implemented; draft review remains human-controlled
+  - Modern Forestry alpha override remains centralized in `ModernForestryAlphaBootstrapService` and explicitly configures `ai` module state
+  - no autonomous send behavior is implemented
 - Public product surfaces are implemented:
   - `/platform/promo`
   - `/platform/contact`

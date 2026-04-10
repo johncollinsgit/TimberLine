@@ -33,6 +33,15 @@ return [
         ],
     ],
 
+    'alpha_overrides' => [
+        // Protected alpha tenant override for AI Assistant access.
+        'ai_assistant' => [
+            'tenant_ids' => [],
+            'tenant_slugs' => ['modern-forestry'],
+            'tenant_names' => ['Modern Forestry'],
+        ],
+    ],
+
     'capabilities' => [
         'dashboard.overview' => [
             'display_name' => 'Overview dashboard',
@@ -168,31 +177,43 @@ return [
             'display_name' => 'AI Assistant',
             'description' => 'Guided AI assistant workspace for opportunities, setup, and review-ready drafts.',
             'module_key' => 'ai',
+            'minimum_plan' => 'growth',
+            'status' => 'beta',
         ],
         'ai.start_here' => [
-            'display_name' => 'AI Assistant Start Here',
-            'description' => 'Get oriented with tenant-aware AI readiness and next steps.',
+            'display_name' => 'Start Here',
+            'description' => 'Get oriented with AI Assistant readiness and next steps.',
             'module_key' => 'ai',
+            'minimum_plan' => 'growth',
+            'status' => 'beta',
         ],
         'ai.opportunities' => [
-            'display_name' => 'AI Assistant top opportunities',
+            'display_name' => 'Top Opportunities',
             'description' => 'Review high-impact opportunities before preparing campaign drafts.',
             'module_key' => 'ai',
+            'minimum_plan' => 'growth',
+            'status' => 'beta',
         ],
         'ai.draft_campaigns' => [
-            'display_name' => 'AI Assistant draft campaigns',
+            'display_name' => 'Draft Campaigns',
             'description' => 'Prepare draft campaigns that always require human review before sending.',
             'module_key' => 'ai',
+            'minimum_plan' => 'pro',
+            'status' => 'beta',
         ],
         'ai.setup' => [
-            'display_name' => 'AI Assistant setup',
+            'display_name' => 'Setup',
             'description' => 'Track prerequisite setup states for AI-assisted workflows.',
             'module_key' => 'ai',
+            'minimum_plan' => 'growth',
+            'status' => 'beta',
         ],
         'ai.activity' => [
-            'display_name' => 'AI Assistant activity',
+            'display_name' => 'Activity',
             'description' => 'Review recent AI-relevant workspace signals and trend context.',
             'module_key' => 'ai',
+            'minimum_plan' => 'pro',
+            'status' => 'beta',
         ],
         'bulk_email.campaigns' => [
             'display_name' => 'Bulk email marketing',
@@ -641,17 +662,17 @@ return [
         'ai' => [
             'display_name' => 'AI Assistant',
             'description' => 'Tenant-aware AI assistant workspace for guided opportunities and human-reviewed campaign drafts.',
-            'status' => 'roadmap',
-            'market_state' => 'PLACEHOLDER',
+            'status' => 'beta',
+            'market_state' => 'SAFE_TO_MARKET',
             'channels' => ['both'],
-            'classification' => 'add-on',
-            'included_in_plans' => [],
+            'classification' => 'shared-core',
+            'included_in_plans' => ['growth', 'pro'],
             'default_enabled' => false,
             'default_setup_status' => 'not_started',
             'dependencies' => ['customers'],
-            'billing_mode' => 'custom',
-            'visibility' => ['public_site' => false, 'app_store' => false],
-            'cta_routing' => 'contact_sales',
+            'billing_mode' => 'included',
+            'visibility' => ['public_site' => true, 'app_store' => true],
+            'cta_routing' => 'upgrade_plan',
             'capabilities' => [
                 'ai.assistant',
                 'ai.start_here',
@@ -778,6 +799,7 @@ return [
                 'birthdays',
                 'campaigns',
                 'email',
+                'ai',
             ],
             'eligible_addons' => [
                 'referrals',
@@ -812,6 +834,7 @@ return [
                 'campaigns',
                 'email',
                 'wishlist',
+                'ai',
             ],
             'eligible_addons' => [
                 'referrals',

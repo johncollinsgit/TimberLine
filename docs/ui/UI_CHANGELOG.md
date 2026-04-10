@@ -1,30 +1,84 @@
 # UI Changelog
 
-## 2026-04-10 — Embedded AI Assistant Workspace + Tenant State Label Cleanup
+## 2026-04-10 — Embedded AI Assistant Activity Page (Stage 7)
+
+### What changed
+- Implemented the tenant-facing `Activity` page at `/shopify/app/assistant/activity`.
+- Replaced the prior activity stub with a small, readable history list focused on:
+  - recent opportunities surfaced
+  - drafts created
+  - approvals/rejections
+  - key draft status changes
+- Added recent-history pagination (`activity_page`) with a lightweight default page size and recent-window shaping.
+- Kept human-review language explicit on the page so activity history does not imply autonomous sending.
+- Updated capability tiering so `Activity` is now available on `Pro` (and always unlocked for Modern Forestry via centralized alpha override).
+
+### Why
+- Operators needed a trustworthy “what happened recently” view for AI Assistant without a dense audit log or autonomy overclaims.
+- The final stage required closing the loop between opportunities, drafts, and review outcomes in one lightweight tenant-safe page.
+
+### Scope boundary
+- This surface is history/read model only and does not introduce autonomous execution or send behavior.
+- Activity data is tenant-scoped, tier-scoped, paginated, and intentionally limited to recent AI-assistant-related records.
+
+## 2026-04-10 — Embedded AI Assistant Foundation + Stage 6 Hardening
 
 ### What changed
 - Added a new embedded Shopify top-level nav item: `AI Assistant`.
-- Added a focused AI Assistant workspace with intentionally small tabs:
+- Added a focused AI Assistant foundation with intentionally small tabs:
   - `Start Here` (`/shopify/app/assistant`)
   - `Top Opportunities` (`/shopify/app/assistant/opportunities`)
   - `Draft Campaigns` (`/shopify/app/assistant/drafts`)
   - `Setup` (`/shopify/app/assistant/setup`)
   - `Activity` (`/shopify/app/assistant/activity`)
+- AI tabs keep a stage-first footprint (access + navigation + state) while pages are promoted incrementally.
 - Added legacy aliases (`/assistant`, `/assistant/opportunities`, `/assistant/drafts`, `/assistant/setup`, `/assistant/activity`) that redirect into embedded assistant routes.
+- Implemented the first tenant-facing AI Assistant page (`Start Here`) with a fast, small-purpose layout:
+  - short welcome block
+  - 4-state status strip (`Ready`, `Needs Setup`, `Locked`, `Coming Soon`)
+  - up to 3 recommended actions
+  - compact `What This Helps With` section
+- Implemented the first tenant-facing `Top Opportunities` page:
+  - recommendation-backed opportunity cards sourced from existing recommendation records
+  - one plain-English list (top 5 per page) with lightweight pagination for longer queues
+  - explainable card copy (`why this matters` + priority labels) and one clear next action per card
+  - clean empty and locked states with human-friendly CTA guidance
+- Implemented the tenant-facing `Setup` page:
+  - up to 6 plain-English readiness checklist cards (`Customer Data`, `Email Ready`, `Campaigns Ready`, `Recommendations Ready`, `Store Connected`, `Review Needed`)
+  - each checklist item includes one-sentence context, current tenant-aware state, and one obvious action
+  - locked tenants see a clean locked shell with upgrade/access CTA guidance
+- Implemented the first tenant-facing `Draft Campaigns` page:
+  - one focused drafts list (recent/pending drafts only)
+  - one simple `Review Draft` editor area (`Campaign Name`, `Audience`, `Message`, `Next Step`)
+  - recommendation-to-draft creation from existing recommendation records
+  - explicit review-safe behavior: draft creation/update only, no autonomous send path
 - Standardized tenant-facing module status labels and checklist language:
   - `Ready`
   - `Needs Setup`
   - `Locked`
   - `Coming Soon`
 - Kept campaign send control review-first in AI surfaces; no autonomous send UI path was introduced.
+- Added stage-6 production hardening for AI tenant surfaces:
+  - tiered AI capability matrix now drives surface access (`Starter` preview-only, `Growth` Start/Opportunities/Setup, `Pro` adds Draft Campaigns)
+  - `Activity` remained `Coming Soon` in this stage-6 pass (promoted in stage 7)
+  - protected Modern Forestry alpha override stays centralized/config-driven and unlocks all AI surfaces
+  - assistant routes fail closed when a locked surface is requested
+  - assistant child navigation/search visibility now uses capability gating so locked/coming-soon pages do not leak
+  - tenant-scoped embedded shell payloads cache capability summaries to reduce repeated resolver work
 
 ### Why
-- The embedded product needed a dedicated AI workspace that remains easy to scan and fast to navigate without becoming another dense multi-purpose dashboard.
+- The embedded product needed a dedicated AI foundation that remains easy to scan and fast to navigate while the underlying workflow surfaces are staged incrementally.
 - Tenant-facing status language needed to be clearer and more consistent across setup/checklist surfaces.
-- AI drafting flows needed to preserve explicit human review and approval before any outbound campaign action.
+- The hardening pass needed auditable tier and landlord override behavior suitable for multi-tenant production rollout.
 
 ### Scope boundary
-- This pass is limited to embedded Shopify assistant navigation, assistant page composition, and tenant-facing status/copy cleanup.
+- This pass is limited to embedded Shopify assistant navigation, assistant routing stubs, and tenant-facing status/copy cleanup.
+- `Start Here` is tenant-facing for first-click orientation.
+- `Top Opportunities` is tenant-facing for prioritized action selection.
+- `Setup` is tenant-facing for AI readiness checklist actions.
+- `Draft Campaigns` is tenant-facing for human-reviewed draft creation/editing.
+- `Activity` remains stub-first.
+- No autonomous sending was introduced in this hardening pass.
 - It does not add autonomous send workflows, background autonomous execution, or any replacement for existing Shopify messaging send controls.
 
 ## 2026-04-07 — Storefront Review Entry Points + Weekly Reward Launcher Copy
