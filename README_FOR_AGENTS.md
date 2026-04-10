@@ -51,6 +51,21 @@ Current implemented shell/diagnostics checkpoint:
   - read-only deterministic status registry exists
   - entitlement-aware states (`connected`, `setup_needed`, `locked`, `coming_soon`) exist
   - no real connector sync/OAuth/jobs/webhooks/API writes exist
+- Agentic discovery + brand graph backend release is merged and live (2026-04-10):
+  - tenant-scoped discovery persistence now exists (`tenant_discovery_profiles`, `tenant_discovery_pages`)
+  - backend discovery services now resolve canonical brand/domain/audience/trust/merchant signals
+  - machine-readable endpoints are available:
+    - `/.well-known/brand-discovery.json`
+    - `/api/public/discovery/brand/{tenant}`
+    - `/api/public/discovery/structured/{tenant?}`
+    - `/sitemaps/discovery.xml`
+  - audit command is available:
+    - `php artisan modern-forestry:audit:domains`
+  - Modern Forestry defaults seed via existing alpha bootstrap flow (idempotent/non-destructive)
+  - deployment status:
+    - `main` commit `cdfce8d` deployed by GitHub Actions run `24220680927` (`Deploy Production`: `success`)
+  - known external operational blocker remains:
+    - `theforestrystudio.com` custom-domain stale render/cache mismatch is still outside backend-only control (diagnostics are now in place)
 - Billing remains guarded and landlord-controlled:
   - guarded Stripe customer-reference sync action exists on `/landlord/commercial`
   - guarded Stripe subscription-prep metadata sync action exists on `/landlord/commercial`

@@ -1,5 +1,42 @@
 # Modern Forestry Backstage
 
+## Agentic Discovery + Brand Graph Backend (2026-04-10)
+
+This release is shipped and live on production (`main` commit `cdfce8d`).
+
+Implemented and deployed:
+- tenant-scoped discovery source-of-truth persistence:
+  - `tenant_discovery_profiles`
+  - `tenant_discovery_pages`
+- backend discovery services for:
+  - tenant discovery profile resolution/default seeding
+  - canonical domain/page intent resolution
+  - structured data contracts (Organization, WebSite, ContactPoint, policy/shipping/FAQ-safe entities)
+  - normalized brand graph read model
+  - discovery sitemap export
+  - domain/crawler drift audit
+- public machine-readable endpoints:
+  - `/.well-known/brand-discovery.json`
+  - `/api/public/discovery/brand/{tenant}`
+  - `/api/public/discovery/structured/{tenant?}`
+  - `/sitemaps/discovery.xml`
+- audit command:
+  - `php artisan modern-forestry:audit:domains`
+- Modern Forestry bootstrap integration:
+  - discovery defaults now seed through existing alpha bootstrap flow (idempotent/non-destructive)
+
+Safety/accuracy guardrails:
+- no fabricated merchant facts
+- no `LocalBusiness` emission without complete real address data
+- no `FAQPage` emission without real FAQ content
+- no false international/geo guarantees when policy/config is unset
+
+Operational note:
+- the stale custom-domain mismatch on `theforestrystudio.com` is still operationally external; this release adds diagnostics for drift detection but does not assume backend-only remediation.
+
+Production deploy evidence:
+- GitHub Actions `Deploy Production` run `24220680927` succeeded for `cdfce8d` on 2026-04-10.
+
 ## Embedded Admin Dashboard Lite + Rewards Stall Notes (2026-04-08)
 
 Observed in production after the initial embedded perf deploy:
