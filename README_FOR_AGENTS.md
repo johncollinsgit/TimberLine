@@ -32,6 +32,17 @@ Current implemented shell/diagnostics checkpoint:
   - `/shopify/app/start`
   - `/shopify/app/plans`
   - `/shopify/app/integrations`
+  - `/shopify/app/assistant` (`AI Assistant`)
+  - `/shopify/app/assistant/opportunities`
+  - `/shopify/app/assistant/drafts`
+  - `/shopify/app/assistant/setup`
+  - `/shopify/app/assistant/activity`
+- AI Assistant shell/guardrail status (2026-04-10):
+  - tenant-aware/tier-aware access and page rendering are driven from canonical module access services
+  - assistant tabs are intentionally small-purpose surfaces (`Start Here`, `Top Opportunities`, `Draft Campaigns`, `Setup`, `Activity`)
+  - tenant-facing module state labels are standardized (`Ready`, `Needs Setup`, `Locked`, `Coming Soon`)
+  - Modern Forestry alpha override remains centralized in `ModernForestryAlphaBootstrapService` and now explicitly configures `ai` module state
+  - no autonomous send behavior is implemented; draft review remains human-controlled
 - Public product surfaces are implemented:
   - `/platform/promo`
   - `/platform/contact`

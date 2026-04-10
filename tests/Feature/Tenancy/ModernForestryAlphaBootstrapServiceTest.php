@@ -38,6 +38,10 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->where('tenant_id', $tenant->id)
         ->where('module_key', 'messaging')
         ->first();
+    $aiState = TenantModuleState::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'ai')
+        ->first();
 
     $emailSettings = app(TenantEmailSettingsService::class)->forAdmin($tenant->id);
     $marketingSettings = TenantMarketingSetting::query()
@@ -57,6 +61,9 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->and($messagingEntitlement->availability_status)->toBe('available')
         ->and($messagingState)->not->toBeNull()
         ->and($messagingState->setup_status)->toBe('configured')
+        ->and($aiState)->not->toBeNull()
+        ->and($aiState->setup_status)->toBe('configured')
+        ->and((bool) $aiState->coming_soon_override)->toBeFalse()
         ->and($emailSettings['email_provider'])->toBe('sendgrid')
         ->and($emailSettings['email_enabled'])->toBeTrue()
         ->and($emailSettings['analytics_enabled'])->toBeTrue()

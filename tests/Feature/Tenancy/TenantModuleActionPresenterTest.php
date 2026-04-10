@@ -28,7 +28,7 @@ test('tenant module action presenter maps locked add-on modules to add-module CT
 test('tenant module action presenter maps contact-sales modules to request CTA state', function () {
     $presented = TenantModuleActionPresenter::present([
         'module_key' => 'ai',
-        'label' => 'AI / Intelligence',
+        'label' => 'AI Assistant',
         'ui_state' => 'coming_soon',
         'setup_status' => 'not_started',
         'reason' => 'contact_sales_required',

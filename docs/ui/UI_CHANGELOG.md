@@ -1,5 +1,32 @@
 # UI Changelog
 
+## 2026-04-10 — Embedded AI Assistant Workspace + Tenant State Label Cleanup
+
+### What changed
+- Added a new embedded Shopify top-level nav item: `AI Assistant`.
+- Added a focused AI Assistant workspace with intentionally small tabs:
+  - `Start Here` (`/shopify/app/assistant`)
+  - `Top Opportunities` (`/shopify/app/assistant/opportunities`)
+  - `Draft Campaigns` (`/shopify/app/assistant/drafts`)
+  - `Setup` (`/shopify/app/assistant/setup`)
+  - `Activity` (`/shopify/app/assistant/activity`)
+- Added legacy aliases (`/assistant`, `/assistant/opportunities`, `/assistant/drafts`, `/assistant/setup`, `/assistant/activity`) that redirect into embedded assistant routes.
+- Standardized tenant-facing module status labels and checklist language:
+  - `Ready`
+  - `Needs Setup`
+  - `Locked`
+  - `Coming Soon`
+- Kept campaign send control review-first in AI surfaces; no autonomous send UI path was introduced.
+
+### Why
+- The embedded product needed a dedicated AI workspace that remains easy to scan and fast to navigate without becoming another dense multi-purpose dashboard.
+- Tenant-facing status language needed to be clearer and more consistent across setup/checklist surfaces.
+- AI drafting flows needed to preserve explicit human review and approval before any outbound campaign action.
+
+### Scope boundary
+- This pass is limited to embedded Shopify assistant navigation, assistant page composition, and tenant-facing status/copy cleanup.
+- It does not add autonomous send workflows, background autonomous execution, or any replacement for existing Shopify messaging send controls.
+
 ## 2026-04-07 — Storefront Review Entry Points + Weekly Reward Launcher Copy
 
 ### What changed

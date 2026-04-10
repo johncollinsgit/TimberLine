@@ -9,12 +9,12 @@ class TenantModuleUi
      */
     private const STATE_META = [
         'active' => [
-            'label' => 'Active',
+            'label' => 'Ready',
             'tone' => 'success',
             'description' => 'Included and configured for this tenant.',
         ],
         'setup_needed' => [
-            'label' => 'Setup Needed',
+            'label' => 'Needs Setup',
             'tone' => 'attention',
             'description' => 'Included, but setup is not complete yet.',
         ],
@@ -151,7 +151,7 @@ class TenantModuleUi
 
         $nextActions = [];
         if ($setup !== []) {
-            $nextActions[] = 'Finish setup for modules marked as Setup Needed.';
+            $nextActions[] = 'Finish setup for modules marked as Needs Setup.';
         }
         if (array_values(array_filter($locked, static fn (array $state): bool => (bool) ($state['upgrade_prompt_eligible'] ?? false))) !== []) {
             $nextActions[] = 'Review locked modules and trigger upgrade prompts where eligible.';
@@ -239,4 +239,3 @@ class TenantModuleUi
         return ucwords($title);
     }
 }
-

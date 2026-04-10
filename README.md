@@ -1,5 +1,36 @@
 # Modern Forestry Backstage
 
+## Shopify Embedded AI Assistant Workspace (2026-04-10)
+
+This release adds a tenant-aware AI Assistant workspace in Shopify embedded surfaces with centralized access gating and alpha override safety.
+
+Implemented and shipped:
+- new embedded AI Assistant routes:
+  - `/shopify/app/assistant` (`Start Here`)
+  - `/shopify/app/assistant/opportunities` (`Top Opportunities`)
+  - `/shopify/app/assistant/drafts` (`Draft Campaigns`)
+  - `/shopify/app/assistant/setup` (`Setup`)
+  - `/shopify/app/assistant/activity` (`Activity`)
+- embedded shell registration:
+  - top-level nav label: `AI Assistant`
+  - assistant subnav labels: `Start Here`, `Top Opportunities`, `Draft Campaigns`, `Setup`, `Activity`
+- assistant payload composition now reuses canonical services (no parallel access system):
+  - `TenantModuleAccessResolver`
+  - `TenantExperienceProfileService`
+  - `UnifiedAppNavigationService`
+  - `UnifiedDashboardService`
+  - `TenantModuleCatalogService`
+- tenant-facing module state labels standardized to:
+  - `Ready`
+  - `Needs Setup`
+  - `Locked`
+  - `Coming Soon`
+- centralized alpha unlock behavior:
+  - `ModernForestryAlphaBootstrapService` now explicitly configures the `ai` module state in addition to entitlement defaults
+  - Modern Forestry retains full AI surface access regardless of plan/add-on restrictions
+- human-review guardrail remains explicit:
+  - Draft Campaigns are review-first only; no autonomous send behavior is added.
+
 ## Agentic Discovery + Brand Graph Backend (2026-04-10)
 
 This release is shipped and live on production (`main` commit `cdfce8d`).

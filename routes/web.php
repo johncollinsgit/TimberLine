@@ -33,6 +33,7 @@ use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\ShopifyAuthController;
+use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
 use App\Http\Controllers\ShopifyEmbeddedCustomersController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
@@ -229,6 +230,21 @@ Route::get('/messaging/setup', function (Request $request, ShopifyEmbeddedUrlGen
 Route::get('/messaging/responses', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
     return redirect()->to($urlGenerator->route('shopify.app.messaging.responses', [], false, $request));
 })->name('shopify.embedded.messaging.responses');
+Route::get('/assistant', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.assistant.start', [], false, $request));
+})->name('shopify.embedded.assistant');
+Route::get('/assistant/opportunities', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.assistant.opportunities', [], false, $request));
+})->name('shopify.embedded.assistant.opportunities');
+Route::get('/assistant/drafts', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.assistant.drafts', [], false, $request));
+})->name('shopify.embedded.assistant.drafts');
+Route::get('/assistant/setup', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.assistant.setup', [], false, $request));
+})->name('shopify.embedded.assistant.setup');
+Route::get('/assistant/activity', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {
+    return redirect()->to($urlGenerator->route('shopify.app.assistant.activity', [], false, $request));
+})->name('shopify.embedded.assistant.activity');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
@@ -897,6 +913,11 @@ Route::prefix('shopify/marketing/v1')
     Route::get('/app/customers/imports', [ShopifyEmbeddedCustomersController::class, 'imports'])->name('shopify.app.customers.imports');
     Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.app.customers.questions');
     Route::get('/app/customers/manage/{marketingProfile}', [ShopifyEmbeddedCustomersController::class, 'detail'])->name('shopify.app.customers.detail');
+    Route::get('/app/assistant', [ShopifyEmbeddedAiAssistantController::class, 'start'])->name('shopify.app.assistant.start');
+    Route::get('/app/assistant/opportunities', [ShopifyEmbeddedAiAssistantController::class, 'opportunities'])->name('shopify.app.assistant.opportunities');
+    Route::get('/app/assistant/drafts', [ShopifyEmbeddedAiAssistantController::class, 'drafts'])->name('shopify.app.assistant.drafts');
+    Route::get('/app/assistant/setup', [ShopifyEmbeddedAiAssistantController::class, 'setup'])->name('shopify.app.assistant.setup');
+    Route::get('/app/assistant/activity', [ShopifyEmbeddedAiAssistantController::class, 'activity'])->name('shopify.app.assistant.activity');
     Route::get('/app/messaging', [ShopifyEmbeddedMessagingController::class, 'show'])->name('shopify.app.messaging');
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');

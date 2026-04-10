@@ -42,6 +42,7 @@ class ModernForestryAlphaBootstrapService
         'bulk_email_marketing',
         'additional_channels',
         'messaging',
+        'ai',
     ];
 
     public function __construct(

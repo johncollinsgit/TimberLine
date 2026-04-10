@@ -1,7 +1,7 @@
 @props([
     'moduleStates' => [],
     'title' => 'Module setup checklist',
-    'subtitle' => 'Track what is active, what needs setup, and what is locked or still coming soon.',
+    'subtitle' => 'Track what is ready, what needs setup, and what is locked or still coming soon.',
     'moduleOrder' => [],
     'showActive' => true,
     'ctaHref' => null,
@@ -127,7 +127,7 @@
 
     <div class="tenant-module-checklist__summary" aria-label="Module state summary">
         <span class="tenant-module-checklist__count">Total {{ $checklist['counts']['total'] }}</span>
-        <span class="tenant-module-checklist__count">Setup {{ $checklist['counts']['setup'] }}</span>
+        <span class="tenant-module-checklist__count">Needs Setup {{ $checklist['counts']['setup'] }}</span>
         <span class="tenant-module-checklist__count">Locked {{ $checklist['counts']['locked'] }}</span>
         <span class="tenant-module-checklist__count">Soon {{ $checklist['counts']['coming_soon'] }}</span>
     </div>
@@ -135,7 +135,7 @@
     <div class="tenant-module-checklist__sections">
         @if(($checklist['setup'] ?? []) !== [])
             <section class="tenant-module-checklist__section">
-                <h3>Setup Needed</h3>
+                <h3>Needs Setup</h3>
                 <div class="tenant-module-checklist__list">
                     @foreach($checklist['setup'] as $item)
                         <div class="tenant-module-checklist__row" data-module-state="setup_needed">
@@ -180,7 +180,7 @@
 
         @if($showActive && ($checklist['active'] ?? []) !== [])
             <section class="tenant-module-checklist__section">
-                <h3>Active</h3>
+                <h3>Ready</h3>
                 <div class="tenant-module-checklist__list">
                     @foreach($checklist['active'] as $item)
                         <div class="tenant-module-checklist__row" data-module-state="active">
@@ -201,4 +201,3 @@
         </div>
     @endif
 </section>
-

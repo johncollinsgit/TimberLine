@@ -49,6 +49,11 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'rewards vip' => ['shopify.app.rewards.vip', 'rewards', 'vip'],
     'rewards notifications' => ['shopify.app.rewards.notifications', 'rewards', 'notifications'],
     'customers' => ['shopify.app.customers', 'customers', null],
+    'assistant start' => ['shopify.app.assistant.start', 'assistant', 'start'],
+    'assistant opportunities' => ['shopify.app.assistant.opportunities', 'assistant', 'opportunities'],
+    'assistant drafts' => ['shopify.app.assistant.drafts', 'assistant', 'drafts'],
+    'assistant setup' => ['shopify.app.assistant.setup', 'assistant', 'setup'],
+    'assistant activity' => ['shopify.app.assistant.activity', 'assistant', 'activity'],
     'messaging workspace' => ['shopify.app.messaging', 'messaging', 'workspace'],
     'messaging analytics' => ['shopify.app.messaging.analytics', 'messaging', 'analytics'],
     'messaging responses' => ['shopify.app.messaging.responses', 'messaging', 'responses'],
@@ -166,6 +171,7 @@ test('embedded shell renders shopify app nav with top-level links', function () 
         ->assertSee('<s-app-nav>', false)
         ->assertSee('rel="home"', false)
         ->assertSee('href="/shopify/app?shop=', false)
+        ->assertSee('href="/shopify/app/assistant?shop=', false)
         ->assertSee('href="/shopify/app/customers/manage?shop=', false)
         ->assertSee('href="/shopify/app/messaging?shop=', false)
         ->assertSee('href="/shopify/app/rewards?shop=', false)
@@ -218,8 +224,9 @@ test('embedded navigation order includes messaging when module access is enabled
             $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $items);
             $labels = array_map(static fn (array $item): string => (string) ($item['label'] ?? ''), $items);
 
-            return $keys === ['home', 'customers', 'messaging', 'rewards', 'settings']
-                && $labels[2] === 'Messages';
+            return $keys === ['home', 'assistant', 'customers', 'messaging', 'rewards', 'settings']
+                && $labels[1] === 'AI Assistant'
+                && $labels[3] === 'Messages';
         });
 });
 

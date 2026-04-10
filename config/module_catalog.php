@@ -164,9 +164,34 @@ return [
             'description' => 'Future mobile channel connection surface.',
             'module_key' => 'mobile_connection',
         ],
-        'ai.intelligence' => [
-            'display_name' => 'AI intelligence',
-            'description' => 'Future intelligence and automation experiences.',
+        'ai.assistant' => [
+            'display_name' => 'AI Assistant',
+            'description' => 'Guided AI assistant workspace for opportunities, setup, and review-ready drafts.',
+            'module_key' => 'ai',
+        ],
+        'ai.start_here' => [
+            'display_name' => 'AI Assistant Start Here',
+            'description' => 'Get oriented with tenant-aware AI readiness and next steps.',
+            'module_key' => 'ai',
+        ],
+        'ai.opportunities' => [
+            'display_name' => 'AI Assistant top opportunities',
+            'description' => 'Review high-impact opportunities before preparing campaign drafts.',
+            'module_key' => 'ai',
+        ],
+        'ai.draft_campaigns' => [
+            'display_name' => 'AI Assistant draft campaigns',
+            'description' => 'Prepare draft campaigns that always require human review before sending.',
+            'module_key' => 'ai',
+        ],
+        'ai.setup' => [
+            'display_name' => 'AI Assistant setup',
+            'description' => 'Track prerequisite setup states for AI-assisted workflows.',
+            'module_key' => 'ai',
+        ],
+        'ai.activity' => [
+            'display_name' => 'AI Assistant activity',
+            'description' => 'Review recent AI-relevant workspace signals and trend context.',
             'module_key' => 'ai',
         ],
         'bulk_email.campaigns' => [
@@ -614,8 +639,8 @@ return [
             'capabilities' => ['mobile.connection'],
         ],
         'ai' => [
-            'display_name' => 'AI / Intelligence',
-            'description' => 'Reserved intelligence and automation module.',
+            'display_name' => 'AI Assistant',
+            'description' => 'Tenant-aware AI assistant workspace for guided opportunities and human-reviewed campaign drafts.',
             'status' => 'roadmap',
             'market_state' => 'PLACEHOLDER',
             'channels' => ['both'],
@@ -627,7 +652,14 @@ return [
             'billing_mode' => 'custom',
             'visibility' => ['public_site' => false, 'app_store' => false],
             'cta_routing' => 'contact_sales',
-            'capabilities' => ['ai.intelligence'],
+            'capabilities' => [
+                'ai.assistant',
+                'ai.start_here',
+                'ai.opportunities',
+                'ai.draft_campaigns',
+                'ai.setup',
+                'ai.activity',
+            ],
         ],
         'bulk_email_marketing' => [
             'display_name' => 'Bulk Email Marketing',

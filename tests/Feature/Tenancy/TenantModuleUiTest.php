@@ -5,7 +5,7 @@ use App\Support\Tenancy\TenantModuleUi;
 test('tenant module ui presenter exposes locked upgrade prompt metadata', function () {
     $presented = TenantModuleUi::present([
         'module_key' => 'ai',
-        'label' => 'AI / Intelligence',
+        'label' => 'AI Assistant',
         'ui_state' => 'locked',
         'setup_status' => 'not_started',
         'upgrade_prompt_eligible' => true,
@@ -29,7 +29,7 @@ test('tenant module ui presenter keeps setup-needed details distinct from access
     ]);
 
     expect($presented['ui_state'])->toBe('setup_needed')
-        ->and($presented['state_label'])->toBe('Setup Needed')
+        ->and($presented['state_label'])->toBe('Needs Setup')
         ->and($presented['setup_status_label'])->toBe('In Progress')
         ->and($presented['show_upgrade_prompt'])->toBeFalse()
         ->and($presented['description'])->toContain('in progress');
@@ -53,7 +53,7 @@ test('tenant module ui checklist groups setup locked and coming-soon modules', f
         ],
         'ai' => [
             'module_key' => 'ai',
-            'label' => 'AI / Intelligence',
+            'label' => 'AI Assistant',
             'ui_state' => 'locked',
             'setup_status' => 'not_started',
             'has_access' => false,
@@ -74,8 +74,7 @@ test('tenant module ui checklist groups setup locked and coming-soon modules', f
         ->and($checklist['counts']['setup'])->toBe(1)
         ->and($checklist['counts']['locked'])->toBe(1)
         ->and($checklist['counts']['coming_soon'])->toBe(1)
-        ->and($checklist['next_actions'])->toContain('Finish setup for modules marked as Setup Needed.')
+        ->and($checklist['next_actions'])->toContain('Finish setup for modules marked as Needs Setup.')
         ->and($checklist['next_actions'])->toContain('Review locked modules and trigger upgrade prompts where eligible.')
         ->and($checklist['next_actions'])->toContain('Track coming-soon modules separately from live setup tasks.');
 });
-

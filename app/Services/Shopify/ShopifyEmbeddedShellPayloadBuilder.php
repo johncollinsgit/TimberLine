@@ -156,6 +156,32 @@ class ShopifyEmbeddedShellPayloadBuilder
     /**
      * @return array<int,array<string,mixed>>
      */
+    public function assistantSubnav(string $activeKey, ?int $tenantId = null, ?Request $request = null): array
+    {
+        $request ??= request();
+        $moduleStates = $this->moduleStates($tenantId, $request);
+        $displayLabels = $this->displayLabels($tenantId, $request);
+
+        return array_map(function (array $page) use ($activeKey, $moduleStates, $displayLabels): array {
+            $shortKey = $this->childKeyFromPage((string) ($page['key'] ?? ''));
+            $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
+
+            return [
+                'key' => $shortKey,
+                'label' => $this->resolvedLabel($page, $displayLabels),
+                'href' => $this->urlGenerator->route((string) ($page['route_name'] ?? ''), [], false),
+                'active' => $shortKey === $activeKey,
+                'module_state' => $moduleKey !== '' && is_array($moduleStates[$moduleKey] ?? null)
+                    ? $moduleStates[$moduleKey]
+                    : null,
+                'prefetch_priority' => (string) ($page['prefetch_priority'] ?? 'normal'),
+            ];
+        }, $this->pageRegistry->pagesForGroup('assistant_subnav'));
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
     public function dashboardSubnav(string $activeKey, ?int $tenantId = null, ?Request $request = null): array
     {
         $request ??= request();
@@ -365,7 +391,7 @@ class ShopifyEmbeddedShellPayloadBuilder
                 ), static fn (string $keyword): bool => $keyword !== ''));
                 $breadcrumbs = array_values(array_filter([
                     $pageSection !== '' ? str_replace(['_', '-'], ' ', ucfirst($pageSection)) : null,
-                    in_array((string) ($page['group'] ?? ''), ['customers_subnav', 'dashboard_subnav', 'messaging_subnav', 'rewards_children'], true)
+                    in_array((string) ($page['group'] ?? ''), ['customers_subnav', 'dashboard_subnav', 'messaging_subnav', 'assistant_subnav', 'rewards_children'], true)
                         ? 'Section'
                         : null,
                 ]));
@@ -384,7 +410,7 @@ class ShopifyEmbeddedShellPayloadBuilder
                     ])),
                     'entityLabels' => array_values(array_filter([
                         ucfirst(str_replace(['_', '-'], ' ', $pageSection)),
-                        in_array((string) ($page['group'] ?? ''), ['customers_subnav', 'dashboard_subnav', 'messaging_subnav', 'rewards_children'], true)
+                        in_array((string) ($page['group'] ?? ''), ['customers_subnav', 'dashboard_subnav', 'messaging_subnav', 'assistant_subnav', 'rewards_children'], true)
                             ? 'Section'
                             : null,
                     ])),
