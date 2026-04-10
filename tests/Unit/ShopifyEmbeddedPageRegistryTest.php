@@ -39,13 +39,17 @@ test('shopify embedded page registry groups pages by expected navigation groups'
     $dashboardSubnavKeys = collect($registry->pagesForGroup('dashboard_subnav'))
         ->pluck('key')
         ->all();
+    $assistantSubnavKeys = collect($registry->pagesForGroup('assistant_subnav'))
+        ->pluck('key')
+        ->all();
     $rewardsChildKeys = collect($registry->pagesForGroup('rewards_children'))
         ->pluck('key')
         ->all();
 
-    expect($primaryKeys)->toBe(['home', 'customers', 'messaging', 'rewards', 'settings'])
+    expect($primaryKeys)->toBe(['home', 'assistant', 'customers', 'messaging', 'rewards', 'settings'])
         ->and($customersSubnavKeys)->toBe(['customers.all', 'customers.segments', 'customers.activity', 'customers.imports'])
         ->and($dashboardSubnavKeys)->toBe(['home.start', 'home.plans', 'home.store', 'home.integrations'])
+        ->and($assistantSubnavKeys)->toBe(['assistant.start', 'assistant.opportunities', 'assistant.drafts', 'assistant.setup', 'assistant.activity'])
         ->and($rewardsChildKeys)->toBe([
             'rewards.overview',
             'rewards.earn',
