@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
+use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
@@ -232,6 +233,10 @@ Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])-
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
 Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalogFeed'])->name('platform.catalog.feed');
+Route::get('/.well-known/brand-discovery.json', [BrandDiscoveryController::class, 'wellKnown'])->name('discovery.well-known.brand');
+Route::get('/api/public/discovery/brand/{tenant}', [BrandDiscoveryController::class, 'byTenant'])->name('discovery.public.brand');
+Route::get('/api/public/discovery/structured/{tenant?}', [BrandDiscoveryController::class, 'structured'])->name('discovery.public.structured');
+Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {
 

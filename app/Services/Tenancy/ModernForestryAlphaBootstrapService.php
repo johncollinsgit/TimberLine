@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
+use App\Services\Discovery\TenantDiscoveryProfileService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -44,7 +45,8 @@ class ModernForestryAlphaBootstrapService
     ];
 
     public function __construct(
-        protected TenantEmailSettingsService $tenantEmailSettingsService
+        protected TenantEmailSettingsService $tenantEmailSettingsService,
+        protected TenantDiscoveryProfileService $tenantDiscoveryProfileService
     ) {
     }
 
@@ -95,6 +97,7 @@ class ModernForestryAlphaBootstrapService
             $this->ensureModuleStates((int) $tenant->id);
             $this->ensureEmailSettings((int) $tenant->id);
             $this->ensureSmsProviderSettings((int) $tenant->id);
+            $this->tenantDiscoveryProfileService->ensureModernForestryDefaults((int) $tenant->id);
 
             Cache::put($cacheKey, true, now()->addMinutes(10));
         } finally {

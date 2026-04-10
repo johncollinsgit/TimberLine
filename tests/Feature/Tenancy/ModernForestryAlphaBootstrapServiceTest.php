@@ -4,6 +4,8 @@ require_once dirname(__DIR__).'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
+use App\Models\TenantDiscoveryPage;
+use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
@@ -42,6 +44,13 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->where('tenant_id', $tenant->id)
         ->where('key', 'candle_cash_integration_config')
         ->value('value');
+    $discoveryProfile = TenantDiscoveryProfile::query()
+        ->where('tenant_id', $tenant->id)
+        ->first();
+    $southCarolinaPage = TenantDiscoveryPage::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('page_key', 'south-carolina-wholesale')
+        ->first();
 
     expect($messagingEntitlement)->not->toBeNull()
         ->and($messagingEntitlement->enabled_status)->toBe('enabled')
@@ -55,4 +64,9 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->and(is_array($marketingSettings))->toBeTrue()
         ->and(data_get($marketingSettings, 'sms_provider'))->toBe('twilio')
         ->and((bool) data_get($marketingSettings, 'sms_provider_enabled'))->toBeTrue();
+
+    expect($discoveryProfile)->not->toBeNull()
+        ->and((string) ($discoveryProfile?->primary_brand_name ?? ''))->toBe('Modern Forestry')
+        ->and((string) ($discoveryProfile?->domain_map['primary_wholesale_domain'] ?? ''))->toBe('modernforestrywholesale.com')
+        ->and($southCarolinaPage)->not->toBeNull();
 });

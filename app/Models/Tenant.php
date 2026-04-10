@@ -110,4 +110,14 @@ class Tenant extends Model
     {
         return $this->hasMany(TenantUsageCounter::class);
     }
+
+    public function discoveryProfile(): HasOne
+    {
+        return $this->hasOne(TenantDiscoveryProfile::class);
+    }
+
+    public function discoveryPages(): HasMany
+    {
+        return $this->hasMany(TenantDiscoveryPage::class);
+    }
 }
