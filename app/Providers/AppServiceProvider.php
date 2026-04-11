@@ -5,6 +5,9 @@ namespace App\Providers;
 use App\Models\User;
 use App\Models\MarketingReviewHistory;
 use App\Observers\MarketingReviewHistoryObserver;
+use App\Services\Onboarding\Rails\DirectOnboardingRailAdapter;
+use App\Services\Onboarding\Rails\OnboardingRailAdapterRegistry;
+use App\Services\Onboarding\Rails\ShopifyOnboardingRailAdapter;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +22,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(OnboardingRailAdapterRegistry::class, function ($app): OnboardingRailAdapterRegistry {
+            return new OnboardingRailAdapterRegistry([
+                $app->make(ShopifyOnboardingRailAdapter::class),
+                $app->make(DirectOnboardingRailAdapter::class),
+            ]);
+        });
     }
 
     /**
