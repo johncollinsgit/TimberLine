@@ -24,6 +24,24 @@
   $adminSubItems = (array) ($navigationShell['admin_sub_items'] ?? []);
   $marketingSubGroups = (array) ($navigationShell['marketing_sub_groups'] ?? []);
   $birthdaySubGroups = (array) ($navigationShell['birthday_sub_groups'] ?? []);
+  $flattenNestedItems = static function (array $groups): array {
+      return collect($groups)
+          ->flatMap(function (array $group): array {
+              return collect((array) ($group['items'] ?? []))
+                  ->filter(fn (mixed $item): bool => is_array($item))
+                  ->values()
+                  ->all();
+          })
+          ->values()
+          ->all();
+  };
+  $marketingSubItems = $flattenNestedItems($marketingSubGroups);
+  $birthdaySubItems = $flattenNestedItems($birthdaySubGroups);
+  $childMenuItems = [
+      'administration' => $adminSubItems,
+      'marketing' => $marketingSubItems,
+      'birthdays' => $birthdaySubItems,
+  ];
   $wikiSectionItems = (array) ($navigationShell['wiki_sections'] ?? []);
   $wikiSectionsActive = collect($wikiSectionItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
   $quickActions = (array) ($navigationShell['quick_actions'] ?? []);
@@ -37,6 +55,11 @@
   $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
   $birthdaysActive = request()->routeIs('birthdays.*') || request()->is('birthdays*');
   $adminActive = request()->routeIs('admin.*') || request()->is('admin*');
+  $childMenuOpenState = [
+      'administration' => $adminActive,
+      'marketing' => $marketingActive,
+      'birthdays' => $birthdaysActive,
+  ];
 @endphp
 
 <div class="min-h-screen flex">
@@ -81,90 +104,60 @@
                 data-sidebar-item
                 data-sidebar-key="{{ $item['key'] }}"
               >
-                @if($item['key'] === 'administration' && count($adminSubItems) > 0)
-                  <details class="mf-admin-group" {{ $adminActive ? 'open' : '' }}>
-                    <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
+                @php
+                  $itemKey = (string) ($item['key'] ?? '');
+                  $children = collect((array) ($item['children'] ?? []))
+                    ->filter(fn (mixed $child): bool => is_array($child))
+                    ->map(function (array $child): array {
+                        unset($child['children']);
+
+                        return $child;
+                    })
+                    ->values()
+                    ->all();
+                  if ($children === [] && is_array($childMenuItems[$itemKey] ?? null)) {
+                      $children = (array) $childMenuItems[$itemKey];
+                  }
+                  $hasChildren = $children !== [];
+                  $hasActiveChild = collect($children)->contains(
+                      fn (array $child): bool => (bool) ($child['current'] ?? false)
+                  );
+                  $isGroupOpen = (bool) ($childMenuOpenState[$itemKey] ?? false)
+                      || (bool) ($item['current'] ?? false)
+                      || $hasActiveChild;
+                @endphp
+
+                @if($hasChildren)
+                  <details class="mf-admin-group" {{ $isGroupOpen ? 'open' : '' }}>
+                    <summary class="mf-admin-group-summary {{ $item['current'] || $hasActiveChild ? 'mf-active-pill' : '' }}">
                       <span class="mf-admin-group-main">
-                        <flux:icon.wrench-screwdriver class="size-4" />
-                        <span class="mf-nav-label">Administration</span>
-                      </span>
-                      <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
-                    </summary>
-                    <div class="mf-admin-subnav">
-                      @foreach($adminSubItems as $subItem)
-                        <a
-                          href="{{ $subItem['href'] }}"
-                          wire:navigate
-                          class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
-                        >
-                          <span>{{ $subItem['label'] }}</span>
-                        </a>
-                      @endforeach
-                    </div>
-                  </details>
-                @elseif($item['key'] === 'marketing' && count($marketingSubGroups) > 0)
-                  <details class="mf-admin-group" {{ $marketingActive ? 'open' : '' }}>
-                    <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
-                      <span class="mf-admin-group-main">
-                        <flux:icon.megaphone class="size-4" />
+                        @switch($itemKey)
+                          @case('production')
+                            <flux:icon.beaker class="size-4" />
+                            @break
+                          @case('administration')
+                            <flux:icon.wrench-screwdriver class="size-4" />
+                            @break
+                          @case('marketing')
+                            <flux:icon.megaphone class="size-4" />
+                            @break
+                          @case('birthdays')
+                            <flux:icon.gift class="size-4" />
+                            @break
+                        @endswitch
                         <span class="mf-nav-label">{{ $item['label'] }}</span>
                       </span>
                       <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                     </summary>
                     <div class="mf-admin-subnav">
-                      @foreach($marketingSubGroups as $marketingGroup)
-                        <details class="mf-admin-group mf-admin-group-nested" {{ ($marketingGroup['current'] ?? false) ? 'open' : '' }}>
-                          <summary class="mf-admin-group-summary mf-admin-group-summary-compact">
-                            <span class="mf-admin-group-main">
-                              <span class="mf-nav-label">{{ $marketingGroup['label'] }}</span>
-                            </span>
-                            <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
-                          </summary>
-                          <div class="mf-admin-subnav mf-admin-subnav-deep">
-                            @foreach($marketingGroup['items'] as $subItem)
-                              <a
-                                href="{{ $subItem['href'] }}"
-                                wire:navigate
-                                class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
-                              >
-                                <span>{{ $subItem['label'] }}</span>
-                              </a>
-                            @endforeach
-                          </div>
-                        </details>
-                      @endforeach
-                    </div>
-                  </details>
-                @elseif($item['key'] === 'birthdays' && count($birthdaySubGroups) > 0)
-                  <details class="mf-admin-group" {{ $birthdaysActive ? 'open' : '' }}>
-                    <summary class="mf-admin-group-summary {{ $item['current'] ? 'mf-active-pill' : '' }}">
-                      <span class="mf-admin-group-main">
-                        <flux:icon.gift class="size-4" />
-                        <span class="mf-nav-label">Birthdays</span>
-                      </span>
-                      <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
-                    </summary>
-                    <div class="mf-admin-subnav">
-                      @foreach($birthdaySubGroups as $birthdayGroup)
-                        <details class="mf-admin-group mf-admin-group-nested" {{ ($birthdayGroup['current'] ?? false) ? 'open' : '' }}>
-                          <summary class="mf-admin-group-summary mf-admin-group-summary-compact">
-                            <span class="mf-admin-group-main">
-                              <span class="mf-nav-label">{{ $birthdayGroup['label'] }}</span>
-                            </span>
-                            <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
-                          </summary>
-                          <div class="mf-admin-subnav mf-admin-subnav-deep">
-                            @foreach($birthdayGroup['items'] as $subItem)
-                              <a
-                                href="{{ $subItem['href'] }}"
-                                wire:navigate
-                                class="mf-admin-subnav-link {{ $subItem['current'] ? 'mf-admin-subnav-link-active' : '' }}"
-                              >
-                                <span>{{ $subItem['label'] }}</span>
-                              </a>
-                            @endforeach
-                          </div>
-                        </details>
+                      @foreach($children as $subItem)
+                        <a
+                          href="{{ $subItem['href'] ?? '#' }}"
+                          wire:navigate
+                          class="mf-admin-subnav-link {{ ! empty($subItem['current']) ? 'mf-admin-subnav-link-active' : '' }}"
+                        >
+                          <span>{{ $subItem['label'] ?? 'Section' }}</span>
+                        </a>
                       @endforeach
                     </div>
                   </details>

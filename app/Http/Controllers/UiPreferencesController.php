@@ -6,6 +6,16 @@ use Illuminate\Http\Request;
 
 class UiPreferencesController extends Controller
 {
+    private const SIDEBAR_KEY_MIGRATIONS = [
+        'operations' => 'production',
+        'shipping-room' => 'production',
+        'pouring-room' => 'production',
+        'retail-plan' => 'production',
+        'pour-lists' => 'production',
+        'events' => 'production',
+        'markets' => 'production',
+    ];
+
     private const THEMES = [
         'forestry-green',
         'sugar-and-spice',
@@ -43,7 +53,7 @@ class UiPreferencesController extends Controller
         ]);
 
         $prefs = is_array($user->ui_preferences) ? $user->ui_preferences : [];
-        $prefs['sidebar_order'] = array_values(array_unique($validated['sidebar_order']));
+        $prefs['sidebar_order'] = $this->normalizedSidebarOrder((array) $validated['sidebar_order']);
 
         $user->forceFill(['ui_preferences' => $prefs])->save();
 
@@ -67,5 +77,31 @@ class UiPreferencesController extends Controller
         $user->forceFill(['ui_preferences' => $prefs])->save();
 
         return response()->json(['ok' => true, 'theme' => $validated['theme']]);
+    }
+
+    /**
+     * @param  array<int,mixed>  $sidebarOrder
+     * @return array<int,string>
+     */
+    private function normalizedSidebarOrder(array $sidebarOrder): array
+    {
+        $normalized = [];
+        foreach ($sidebarOrder as $candidate) {
+            if (! is_string($candidate)) {
+                continue;
+            }
+
+            $key = strtolower(trim($candidate));
+            if ($key === '') {
+                continue;
+            }
+
+            $mapped = self::SIDEBAR_KEY_MIGRATIONS[$key] ?? $key;
+            if (! in_array($mapped, $normalized, true)) {
+                $normalized[] = $mapped;
+            }
+        }
+
+        return $normalized;
     }
 }

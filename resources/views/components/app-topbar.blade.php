@@ -46,12 +46,25 @@
     if (is_array($activeSubnavItem) && is_array($activeSubnavItem['module_state'] ?? null)) {
         $activeModuleState = $activeSubnavItem['module_state'];
     }
+
+    $brandHref = '/';
+    $homeItem = collect($navigation)->first(
+        fn (array $item): bool => ($item['key'] ?? null) === 'home' && filled($item['href'] ?? null)
+    );
+    if (is_array($homeItem)) {
+        $brandHref = (string) ($homeItem['href'] ?? '/');
+    }
 @endphp
 
 <header class="app-topbar">
     <div class="app-topbar-bar">
         <div class="app-topbar-shell">
-            <div class="app-topbar-brand">
+            <a
+                href="{{ $appendEmbeddedContext($brandHref) }}"
+                class="app-topbar-brand app-topbar-brand-link"
+                data-embedded-prefetch-link="1"
+                data-prefetch-priority="normal"
+            >
                 <img
                     src="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb2"
                     alt="Forestry Backstage"
@@ -63,7 +76,7 @@
                     <strong>Forestry Backstage</strong>
                     <span>{{ $workspaceLabel }}</span>
                 </div>
-            </div>
+            </a>
             <nav class="app-topbar-nav" aria-label="Primary navigation">
                 @foreach($navigation as $item)
                     <a

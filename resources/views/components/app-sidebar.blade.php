@@ -5,8 +5,18 @@
     'workspaceLabel' => 'Unified workspace',
 ])
 
+@php
+    $brandHref = '#';
+    $homeItem = collect($items)->first(
+        fn (array $item): bool => ($item['key'] ?? null) === 'home' && filled($item['href'] ?? null)
+    );
+    if (is_array($homeItem)) {
+        $brandHref = (string) ($homeItem['href'] ?? '#');
+    }
+@endphp
+
 <nav class="app-sidebar app-sidebar-panel" aria-label="App navigation">
-    <div class="app-sidebar-brand">
+    <a href="{{ $brandHref }}" class="app-sidebar-brand app-sidebar-brand-link">
         <img
             src="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb2"
             alt="Forestry Backstage"
@@ -18,15 +28,25 @@
             <strong>Forestry Backstage</strong>
             <span>{{ $workspaceLabel }}</span>
         </div>
-    </div>
+    </a>
     <ul class="app-sidebar-list">
         @foreach($items as $item)
             @php
-                $children = $item['children'] ?? [];
+                $children = collect((array) ($item['children'] ?? []))
+                    ->filter(fn (mixed $child): bool => is_array($child))
+                    ->map(function (array $child): array {
+                        unset($child['children']);
+
+                        return $child;
+                    })
+                    ->values()
+                    ->all();
                 $hasChildren = ! empty($children);
-                $isParentActive = $active === ($item['key'] ?? null);
+                $isParentActive = $active === ($item['key'] ?? null) || ! empty($item['current']);
                 $isChildActive = $hasChildren
-                    && collect($children)->contains(fn ($child) => ($child['key'] ?? null) === $activeChild);
+                    && collect($children)->contains(
+                        fn ($child) => ($child['key'] ?? null) === $activeChild || ! empty($child['current'])
+                    );
                 $isExpanded = $isParentActive || $isChildActive;
             @endphp
             <li>
@@ -50,10 +70,11 @@
                 @if($hasChildren && $isExpanded)
                     <ul class="app-sidebar-children">
                         @foreach($children as $child)
+                            @php($isCurrentChild = $activeChild === ($child['key'] ?? null) || ! empty($child['current']))
                             <li>
                                 <a
                                     href="{{ $child['href'] }}"
-                                    class="app-sidebar-child-link{{ $activeChild === $child['key'] ? ' is-active' : '' }}"
+                                    class="app-sidebar-child-link{{ $isCurrentChild ? ' is-active' : '' }}"
                                 >
                                     <span class="app-sidebar-child-link-row">
                                         <span>{{ $child['label'] }}</span>

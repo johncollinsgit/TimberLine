@@ -65,14 +65,21 @@ class UnifiedAppNavigationService
         }
 
         if ($canAccessOps) {
-            $opsItems = [
-                ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => route('analytics.index'), 'label' => 'Analytics', 'current' => request()->routeIs('analytics.*')],
-                ['key' => 'shipping-room', 'icon' => 'truck', 'href' => route('shipping.orders'), 'label' => 'Shipping Room', 'current' => request()->routeIs('shipping.*')],
-                ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring Room', 'current' => request()->routeIs('pouring.*')],
+            $productionChildren = [
                 ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => route('retail.plan'), 'label' => 'Pour Lists', 'current' => request()->routeIs('retail.plan')],
                 ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => request()->routeIs('events.*')],
+                ['key' => 'shipping', 'icon' => 'truck', 'href' => route('shipping.orders'), 'label' => 'Shipping', 'current' => request()->routeIs('shipping.*')],
+                ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')],
                 ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => request()->routeIs('markets.browser.*')],
-                ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => request()->routeIs('inventory.index')],
+            ];
+            $productionCurrent = collect($productionChildren)->contains(
+                fn (array $child): bool => (bool) ($child['current'] ?? false)
+            );
+
+            $opsItems = [
+                ['key' => 'production', 'icon' => 'beaker', 'href' => route('retail.plan'), 'label' => 'Production', 'current' => $productionCurrent, 'children' => $productionChildren],
+                ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => route('analytics.index'), 'label' => 'Analytics', 'current' => request()->routeIs('analytics.*')],
+                ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => request()->routeIs('inventory.*')],
             ];
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
@@ -80,7 +87,7 @@ class UnifiedAppNavigationService
                 ? array_merge($items, $opsItems)
                 : array_merge(array_slice($items, 0, 1), $opsItems, array_slice($items, 1));
         } elseif ($isPouring) {
-            $items[] = ['key' => 'pouring-room', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring Room', 'current' => request()->routeIs('pouring.*')];
+            $items[] = ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')];
         }
 
         if ($canAccessOps) {
@@ -88,6 +95,8 @@ class UnifiedAppNavigationService
         }
 
         $items[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Backstage Wiki', 'current' => request()->routeIs('wiki.*')];
+
+        $items = $this->normalizeNavigationItems($items);
 
         $prefs = is_array($user?->ui_preferences ?? null) ? $user->ui_preferences : [];
         $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
@@ -118,19 +127,32 @@ class UnifiedAppNavigationService
      */
     protected function orderedItems(array $items, array $preferredOrder): array
     {
-        $itemsByKey = collect($items)->keyBy('key');
+        $itemsByKey = collect($items)
+            ->mapWithKeys(function (array $item): array {
+                $key = $this->normalizeSidebarOrderKey((string) ($item['key'] ?? ''));
+                if ($key === '') {
+                    return [];
+                }
+
+                return [$key => $item];
+            });
         $orderedKeys = [];
 
         foreach ($preferredOrder as $key) {
-            if (is_string($key) && $itemsByKey->has($key) && ! in_array($key, $orderedKeys, true)) {
-                $orderedKeys[] = $key;
+            if (! is_string($key)) {
+                continue;
+            }
+
+            $normalizedKey = $this->normalizeSidebarOrderKey($key);
+            if ($normalizedKey !== '' && $itemsByKey->has($normalizedKey) && ! in_array($normalizedKey, $orderedKeys, true)) {
+                $orderedKeys[] = $normalizedKey;
             }
         }
 
         foreach ($items as $item) {
-            $key = (string) ($item['key'] ?? '');
-            if ($key !== '' && ! in_array($key, $orderedKeys, true)) {
-                $orderedKeys[] = $key;
+            $normalizedKey = $this->normalizeSidebarOrderKey((string) ($item['key'] ?? ''));
+            if ($normalizedKey !== '' && ! in_array($normalizedKey, $orderedKeys, true)) {
+                $orderedKeys[] = $normalizedKey;
             }
         }
 
@@ -139,6 +161,56 @@ class UnifiedAppNavigationService
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $items
+     * @return array<int,array<string,mixed>>
+     */
+    protected function normalizeNavigationItems(array $items): array
+    {
+        return collect($items)
+            ->map(function (array $item): array {
+                $children = collect((array) ($item['children'] ?? []))
+                    ->filter(fn (mixed $child): bool => is_array($child))
+                    ->map(function (array $child): array {
+                        unset($child['children']);
+
+                        return $child;
+                    })
+                    ->values()
+                    ->all();
+
+                if ($children === []) {
+                    unset($item['children']);
+                } else {
+                    $item['children'] = $children;
+                }
+
+                return $item;
+            })
+            ->values()
+            ->all();
+    }
+
+    protected function normalizeSidebarOrderKey(string $key): string
+    {
+        $normalized = strtolower(trim($key));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $legacyMap = [
+            'operations' => 'production',
+            'shipping-room' => 'production',
+            'pouring-room' => 'production',
+            'retail-plan' => 'production',
+            'pour-lists' => 'production',
+            'events' => 'production',
+            'markets' => 'production',
+        ];
+
+        return $legacyMap[$normalized] ?? $normalized;
     }
 
     /**

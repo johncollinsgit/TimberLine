@@ -43,6 +43,31 @@ class NavigationSearchProvider implements GlobalSearchProvider
                 'score' => $score ?: 100,
                 'icon' => (string) ($item['icon'] ?? 'rectangle-stack'),
             ]);
+
+            foreach ((array) ($item['children'] ?? []) as $child) {
+                if (! is_array($child)) {
+                    continue;
+                }
+
+                $childScore = $this->matchScore($normalized, [
+                    (string) ($child['label'] ?? ''),
+                    (string) ($item['label'] ?? ''),
+                ], 126);
+                if ($normalized !== '' && $childScore === 0) {
+                    continue;
+                }
+
+                $results[] = $this->result([
+                    'type' => 'navigation',
+                    'subtype' => 'section',
+                    'title' => (string) ($child['label'] ?? 'Section'),
+                    'subtitle' => 'Jump to '.((string) ($item['label'] ?? 'workspace')).'.',
+                    'url' => (string) ($child['href'] ?? '#'),
+                    'badge' => (string) ($item['label'] ?? 'Section'),
+                    'score' => $childScore ?: 90,
+                    'icon' => (string) ($child['icon'] ?? $item['icon'] ?? 'rectangle-stack'),
+                ]);
+            }
         }
 
         return $results;
