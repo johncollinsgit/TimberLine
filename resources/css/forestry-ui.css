@@ -1278,6 +1278,10 @@ body.mf-app-shell {
   font-weight: 700;
 }
 
+.mf-home-pill :where(div, span) {
+  color: var(--fb-text-primary) !important;
+}
+
 .mf-home-pill img {
   border-radius: 0.5rem;
   height: 1.68rem;
@@ -1383,6 +1387,7 @@ body.mf-app-shell {
 
 .mf-admin-group-summary {
   align-items: center;
+  border: 1px solid transparent;
   border-radius: 0.8rem;
   cursor: pointer;
   display: flex;
@@ -1399,6 +1404,7 @@ body.mf-app-shell {
 
 .mf-admin-group-summary:hover {
   background: rgba(18, 60, 67, 0.05);
+  border-color: rgba(18, 60, 67, 0.14);
 }
 
 .mf-admin-group-main {
@@ -1459,6 +1465,11 @@ body.mf-app-shell {
   color: var(--fb-brand);
 }
 
+.mf-admin-group-summary.mf-active-pill {
+  background: rgba(18, 60, 67, 0.08);
+  border-color: rgba(18, 60, 67, 0.16);
+}
+
 .mf-sidebar-panel {
   margin-top: 0.3rem;
 }
@@ -1468,8 +1479,8 @@ body.mf-app-shell {
 }
 
 .mf-sidebar-theme-shell details {
-  background: rgba(255, 255, 255, 0.58) !important;
-  border: 1px solid var(--fb-border) !important;
+  background: transparent !important;
+  border: 0 !important;
   border-radius: 0.9rem;
 }
 
