@@ -12,7 +12,7 @@ test('blueprint validation canonicalizes module aliases and captures demo creati
     $validated = $service->validateFinal([
         'account_mode' => 'demo',
         'rail' => 'shopify',
-        'template_key' => 'soap_maker',
+        'template_key' => 'candle',
         'desired_outcome_first' => 'first_sync',
         'selected_modules' => ['advanced_reporting', 'customers'],
         'data_source' => 'shopify',
@@ -40,7 +40,7 @@ test('blueprint validation rejects unknown mobile roles', function () {
 
     $fn = fn () => $service->validateFinal([
         'rail' => 'direct',
-        'template_key' => 'electrician',
+        'template_key' => 'law',
         'desired_outcome_first' => 'first_import',
         'selected_modules' => ['customers'],
         'data_source' => 'csv',
@@ -59,7 +59,7 @@ test('blueprint validation rejects unknown module keys after canonicalization', 
 
     $fn = fn () => $service->validateFinal([
         'rail' => 'direct',
-        'template_key' => 'landscaper',
+        'template_key' => 'law',
         'desired_outcome_first' => 'first_value',
         'selected_modules' => ['definitely_not_a_module'],
         'data_source' => 'manual',
@@ -70,4 +70,3 @@ test('blueprint validation rejects unknown module keys after canonicalization', 
 
     expect($fn)->toThrow(ValidationException::class);
 });
-

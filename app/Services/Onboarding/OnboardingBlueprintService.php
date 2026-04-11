@@ -131,6 +131,9 @@ class OnboardingBlueprintService
      */
     protected function normalize(array $input, OnboardingRail $rail, AccountMode $accountMode, bool $strict): array
     {
+        $templateKey = $this->nullableString($input['template_key'] ?? null);
+        $this->assertTemplateKeyAllowed($templateKey);
+
         $normalizedModules = $this->canonicalModuleKeys((array) ($input['selected_modules'] ?? []));
 
         $unknown = array_values(array_diff($normalizedModules, $this->knownModuleKeys()));
@@ -173,7 +176,7 @@ class OnboardingBlueprintService
             'version' => OnboardingBlueprint::VERSION,
             'account_mode' => $accountMode->value,
             'rail' => $rail->value,
-            'template_key' => $this->nullableString($input['template_key'] ?? null),
+            'template_key' => $templateKey,
             'desired_outcome_first' => $this->nullableString($input['desired_outcome_first'] ?? null),
             'selected_modules' => $normalizedModules,
             'data_source' => $dataSource,
@@ -222,6 +225,40 @@ class OnboardingBlueprintService
     protected function knownModuleKeys(): array
     {
         return array_keys((array) config('module_catalog.modules', []));
+    }
+
+    protected function assertTemplateKeyAllowed(?string $templateKey): void
+    {
+        if ($templateKey === null) {
+            return;
+        }
+
+        $templates = (array) config('commercial.templates', []);
+        if ($templates === []) {
+            return;
+        }
+
+        $allowed = [];
+        foreach ($templates as $key => $definition) {
+            if (! is_array($definition)) {
+                continue;
+            }
+
+            if (($definition['active'] ?? true) !== false) {
+                $allowed[] = strtolower(trim((string) $key));
+            }
+        }
+
+        $allowed = array_values(array_filter($allowed, static fn (string $key): bool => $key !== ''));
+        if ($allowed === []) {
+            return;
+        }
+
+        if (! in_array(strtolower(trim($templateKey)), $allowed, true)) {
+            throw ValidationException::withMessages([
+                'template_key' => ['Unknown template key: '.$templateKey],
+            ]);
+        }
     }
 
     protected function railFromInput(array $input): OnboardingRail
@@ -320,4 +357,3 @@ class OnboardingBlueprintService
         return $raw !== '' ? $raw : null;
     }
 }
-

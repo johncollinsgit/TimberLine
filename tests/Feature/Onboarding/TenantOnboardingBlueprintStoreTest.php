@@ -48,7 +48,7 @@ test('blueprint store stages and finalizes demo blueprints without mutating tena
 
     $final = $store->finalize((int) $tenant->id, [
         'rail' => 'shopify',
-        'template_key' => 'soap_maker',
+        'template_key' => 'candle',
         'desired_outcome_first' => 'first_sync',
         'selected_modules' => ['customers'],
         'data_source' => 'shopify',
@@ -94,7 +94,7 @@ test('production blueprints default to use_existing_tenant policy', function ():
 
     $final = $store->finalize((int) $tenant->id, [
         'rail' => 'direct',
-        'template_key' => 'landscaper',
+        'template_key' => 'law',
         'desired_outcome_first' => 'first_value',
         'selected_modules' => ['customers'],
         'data_source' => 'csv',
@@ -106,4 +106,3 @@ test('production blueprints default to use_existing_tenant policy', function ():
     expect($final->account_mode)->toBe('production')
         ->and(data_get($final->payload, 'tenant_creation_policy'))->toBe('use_existing_tenant');
 });
-

@@ -31,6 +31,7 @@ use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
+use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
@@ -262,6 +263,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Onboarding Wizard Contracts (Stage 1A seam)
+    |--------------------------------------------------------------------------
+    |
+    | UI-agnostic authenticated endpoints for wizard clients.
+    |
+    */
+    Route::prefix('api/onboarding')
+        ->name('onboarding.api.')
+        ->middleware(['tenant.access'])
+        ->group(function (): void {
+            Route::get('/wizard-contract', [OnboardingWizardApiController::class, 'contract'])
+                ->name('contract');
+            Route::post('/blueprint-draft', [OnboardingWizardApiController::class, 'autosaveDraft'])
+                ->name('draft.autosave');
+        });
 
     /*
     |--------------------------------------------------------------------------

@@ -92,6 +92,32 @@ class TenantOnboardingBlueprintStore
             ->first();
     }
 
+    public function latestDraftForTenant(int $tenantId, ?int $actorUserId = null): ?TenantOnboardingBlueprint
+    {
+        if (! Schema::hasTable('tenant_onboarding_blueprints')) {
+            return null;
+        }
+
+        if ($actorUserId !== null) {
+            $scoped = TenantOnboardingBlueprint::query()
+                ->forTenantId($tenantId)
+                ->where('status', 'draft')
+                ->where('created_by_user_id', $actorUserId)
+                ->latest('id')
+                ->first();
+
+            if ($scoped instanceof TenantOnboardingBlueprint) {
+                return $scoped;
+            }
+        }
+
+        return TenantOnboardingBlueprint::query()
+            ->forTenantId($tenantId)
+            ->where('status', 'draft')
+            ->latest('id')
+            ->first();
+    }
+
     /**
      * Request-scoped entry point that resolves the tenant from current membership.
      *
@@ -115,4 +141,3 @@ class TenantOnboardingBlueprintStore
         }
     }
 }
-
