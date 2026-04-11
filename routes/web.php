@@ -32,6 +32,7 @@ use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
+use App\Http\Controllers\Onboarding\OnboardingHarnessController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
@@ -263,6 +264,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])
+        ->name('onboarding.harness');
 
     /*
     |--------------------------------------------------------------------------
