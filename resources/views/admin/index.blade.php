@@ -4,15 +4,15 @@
     </x-slot>
 
     <div class="space-y-6">
-        <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6 shadow-[0_30px_80px_-50px_rgba(0,0,0,0.9)]">
-            <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">Administration</div>
-            <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-white">System Controls</div>
-            <div class="mt-2 text-sm text-emerald-50/70">Configuration and catalog tools for Production-OS.</div>
+        <section class="fb-page-surface fb-page-surface--subtle p-6">
+            <div class="fb-kpi-label">Administration</div>
+            <h2 class="mt-2 text-3xl font-semibold text-zinc-950">System Controls</h2>
+            <p class="mt-2 text-sm text-zinc-600">Configuration and catalog tools for Production-OS.</p>
         </section>
 
-        <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6">
-            <div class="text-sm font-semibold text-white/90">Locked Dropdown Lists</div>
-            <div class="text-sm text-emerald-50/70 mt-1">
+        <section class="fb-page-surface p-6">
+            <div class="text-sm font-semibold text-zinc-950">Locked Dropdown Lists</div>
+            <div class="mt-1 text-sm text-zinc-600">
                 Manage the allowed Scent + Size options used by Shipping orders.
             </div>
 
@@ -21,18 +21,18 @@
             </div>
         </section>
 
-        <section class="rounded-3xl border border-emerald-200/10 bg-[#101513]/80 p-6">
-            <div class="text-sm font-semibold text-white/90">Scent Mapping</div>
-            <div class="text-sm text-emerald-50/70 mt-1">
+        <section class="fb-page-surface p-6">
+            <div class="text-sm font-semibold text-zinc-950">Scent Mapping</div>
+            <div class="mt-1 text-sm text-zinc-600">
                 Resolve unmapped Shopify lines and create new scents.
             </div>
             <div class="mt-4">
                 <a href="{{ route('admin.mapping-exceptions') }}"
-                   class="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-white/90">
+                   class="fb-btn-soft fb-link-soft rounded-full">
                     Open Mapping Queue
                 </a>
                 <a href="{{ route('admin.import-runs') }}"
-                   class="ml-3 inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-white/80">
+                   class="ml-3 fb-btn-soft fb-link-soft rounded-full">
                     Import Runs
                 </a>
             </div>

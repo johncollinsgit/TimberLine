@@ -74,7 +74,6 @@
                 />
                 <div class="app-topbar-brand-copy">
                     <strong>Forestry Backstage</strong>
-                    <span>{{ $workspaceLabel }}</span>
                 </div>
             </a>
             <nav class="app-topbar-nav" aria-label="Primary navigation">

@@ -8,6 +8,7 @@
         <x-birthdays.partials.section-shell
             :section="$section"
             :sections="$sections"
+            :suppress-description="($sectionKey ?? '') === 'activity'"
         />
 
         @if($sectionKey === 'customers')
@@ -234,7 +235,7 @@
                 <div class="mt-4">{{ $profiles->links() }}</div>
             </section>
         @elseif($sectionKey === 'analytics')
-            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <section class="fb-kpi-grid md:grid-cols-2 xl:grid-cols-5">
                 @foreach([
                     ['label' => 'Birthdays Today', 'value' => data_get($summary, 'birthdays_today', 0), 'detail' => 'Birthdays happening today.'],
                     ['label' => 'Birthdays This Week', 'value' => data_get($summary, 'birthdays_this_week', 0), 'detail' => 'Birthdays in the current week.'],
@@ -242,24 +243,24 @@
                     ['label' => 'Rewards Redeemed', 'value' => data_get($summary, 'rewards_redeemed_this_year', 0), 'detail' => number_format((float) data_get($summary, 'reward_redemption_rate', 0), 1) . '% redemption rate'],
                     ['label' => 'Birthday Revenue', 'value' => '$' . number_format((float) data_get($summary, 'attributed_revenue', 0), 2), 'detail' => 'AOV $' . number_format((float) data_get($summary, 'reward_average_order_value', 0), 2)],
                 ] as $card)
-                    <article class="rounded-[1.7rem] border border-zinc-200 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),rgba(0,0,0,0.08)_55%,rgba(0,0,0,0.24))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">{{ $card['label'] }}</div>
-                        <div class="mt-3 text-4xl font-semibold text-zinc-950">{{ $card['value'] }}</div>
-                        <p class="mt-2 text-sm text-zinc-600">{{ $card['detail'] }}</p>
+                    <article class="fb-page-surface fb-page-surface--subtle fb-kpi-card">
+                        <div class="fb-kpi-label">{{ $card['label'] }}</div>
+                        <div class="fb-kpi-value">{{ $card['value'] }}</div>
+                        <p class="fb-kpi-detail">{{ $card['detail'] }}</p>
                     </article>
                 @endforeach
             </section>
 
             <section class="grid gap-4 xl:grid-cols-[minmax(0,1.1fr),minmax(360px,0.9fr)]">
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(160deg,rgba(255,255,255,0.08),rgba(0,0,0,0.18))] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
+                <article class="fb-page-surface fb-page-surface--subtle p-6">
                     <div class="flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Recent Trend</div>
+                            <div class="fb-kpi-label">Recent Trend</div>
                             <h2 class="mt-2 text-lg font-semibold text-zinc-950">Last 30 days</h2>
                             <p class="mt-2 max-w-2xl text-sm text-zinc-600">Track signups, issuance, and redemptions without leaving the birthdays workspace.</p>
                         </div>
-                        <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-right">
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Sync Failures</div>
+                        <div class="fb-surface-inset px-4 py-3 text-right">
+                            <div class="fb-kpi-label">Sync Failures</div>
                             <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) data_get($summary, 'discount_sync_failures', 0)) }}</div>
                         </div>
                     </div>
@@ -278,8 +279,8 @@
                         @endforeach
                     </div>
                 </article>
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.14))] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Campaign Overview</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-6">
+                    <div class="fb-kpi-label">Campaign Overview</div>
                     <h2 class="mt-2 text-lg font-semibold text-zinc-950">Reward funnel</h2>
                     <div class="mt-5 space-y-4">
                         @php($issuedTotal = max(1, (int) data_get($summary, 'rewards_issued_this_year', 0)))
@@ -301,13 +302,13 @@
                     </div>
                     <div class="mt-6 space-y-3">
                         @foreach(($campaignSummary ?? []) as $campaignType => $stats)
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                            <div class="fb-surface-inset p-4">
                                 <div class="text-sm font-semibold text-zinc-950">{{ str($campaignType)->replace('_', ' ')->title() }}</div>
                                 <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500">
-                                    <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1">Sent {{ $stats['sent'] }}</span>
-                                    <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1">Opened {{ $stats['opened'] }}</span>
-                                    <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1">Clicked {{ $stats['clicked'] }}</span>
-                                    <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1">Converted {{ $stats['converted'] }}</span>
+                                    <span class="fb-chip fb-chip--quiet">Sent {{ $stats['sent'] }}</span>
+                                    <span class="fb-chip fb-chip--quiet">Opened {{ $stats['opened'] }}</span>
+                                    <span class="fb-chip fb-chip--quiet">Clicked {{ $stats['clicked'] }}</span>
+                                    <span class="fb-chip fb-chip--quiet">Converted {{ $stats['converted'] }}</span>
                                 </div>
                             </div>
                         @endforeach
@@ -316,8 +317,8 @@
             </section>
 
             <section class="grid gap-4 xl:grid-cols-2">
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.14))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Birthdays by Month</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
+                    <div class="fb-kpi-label">Birthdays by Month</div>
                     <div class="mt-4 space-y-3">
                         @php($monthMax = max(1, collect(data_get($summary, 'segments_by_month', []))->max('total')))
                         @foreach(data_get($summary, 'segments_by_month', []) as $monthRow)
@@ -333,8 +334,8 @@
                         @endforeach
                     </div>
                 </article>
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.14))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Signup Sources</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
+                    <div class="fb-kpi-label">Signup Sources</div>
                     <div class="mt-4 space-y-3">
                         @php($sourceMax = max(1, collect(data_get($summary, 'signup_sources', []))->max('total')))
                         @foreach(data_get($summary, 'signup_sources', []) as $sourceRow)
@@ -383,7 +384,7 @@
                 @endforeach
             </section>
         @elseif($sectionKey === 'rewards')
-            <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+            <section class="fb-kpi-grid md:grid-cols-2 xl:grid-cols-6">
                 @foreach([
                     ['label' => 'Available', 'value' => number_format((int) data_get($rewardSummary, 'available', 0))],
                     ['label' => 'Activated', 'value' => number_format((int) data_get($rewardSummary, 'activated', 0))],
@@ -392,26 +393,26 @@
                     ['label' => 'Sync Failures', 'value' => number_format((int) data_get($rewardSummary, 'sync_failures', 0))],
                     ['label' => 'Revenue', 'value' => '$' . number_format((float) data_get($rewardSummary, 'attributed_revenue', 0), 2)],
                 ] as $card)
-                    <article class="rounded-[1.7rem] border border-zinc-200 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),rgba(0,0,0,0.08)_55%,rgba(0,0,0,0.24))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
-                        <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">{{ $card['label'] }}</div>
-                        <div class="mt-3 text-4xl font-semibold text-zinc-950">{{ $card['value'] }}</div>
+                    <article class="fb-page-surface fb-page-surface--subtle fb-kpi-card">
+                        <div class="fb-kpi-label">{{ $card['label'] }}</div>
+                        <div class="fb-kpi-value">{{ $card['value'] }}</div>
                     </article>
                 @endforeach
             </section>
 
             <section class="grid gap-4 xl:grid-cols-[minmax(0,0.85fr),minmax(0,1.15fr)]">
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Reward Rules</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
+                    <div class="fb-kpi-label">Reward Rules</div>
                     <h2 class="mt-2 text-lg font-semibold text-zinc-950">Birthday reward defaults</h2>
-                    <div class="mt-4 rounded-[1.4rem] border border-zinc-200 bg-zinc-50 p-4">
-                        <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Performance</div>
+                    <div class="fb-surface-inset mt-4 p-4">
+                        <div class="fb-kpi-label">Performance</div>
                         <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                                <div class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Activation Rate</div>
+                            <div class="fb-surface-inset p-4">
+                                <div class="fb-kpi-label">Activation Rate</div>
                                 <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((float) data_get($rewardSummary, 'activation_rate', 0), 1) }}%</div>
                             </div>
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                                <div class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Average Order</div>
+                            <div class="fb-surface-inset p-4">
+                                <div class="fb-kpi-label">Average Order</div>
                                 <div class="mt-2 text-2xl font-semibold text-zinc-950">${{ number_format((float) data_get($rewardSummary, 'average_order_value', 0), 2) }}</div>
                             </div>
                         </div>
@@ -451,10 +452,10 @@
                     </form>
                 </article>
 
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
                     <div class="flex items-end justify-between gap-3">
                         <div>
-                            <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Issuances</div>
+                            <div class="fb-kpi-label">Issuances</div>
                             <h2 class="mt-2 text-lg font-semibold text-zinc-950">Birthday rewards</h2>
                         </div>
                     </div>
@@ -621,25 +622,25 @@
             </section>
         @elseif($sectionKey === 'activity')
             <section class="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Imports</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
+                    <div class="fb-kpi-label">Imports</div>
                     <div class="mt-4 space-y-3">
                         @forelse($recentImports as $run)
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                            <div class="fb-surface-inset p-4">
                                 <div class="text-sm font-semibold text-zinc-950">{{ $run->file_name ?: 'Birthday import' }}</div>
                                 <div class="mt-1 text-xs text-zinc-500">{{ strtoupper((string) $run->status) }} · Processed {{ number_format((int) data_get($run->summary, 'processed', 0)) }}</div>
                                 <div class="mt-1 text-xs text-zinc-500">{{ optional($run->finished_at ?: $run->started_at)->format('Y-m-d H:i') ?: '—' }}</div>
                             </div>
                         @empty
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">No birthday imports recorded yet.</div>
+                            <div class="fb-surface-inset p-4 text-sm text-zinc-500">No birthday imports recorded yet.</div>
                         @endforelse
                     </div>
                 </article>
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Audit</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
+                    <div class="fb-kpi-label">Audit</div>
                     <div class="mt-4 space-y-3">
                         @foreach($recentAudits as $audit)
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                            <div class="fb-surface-inset p-4">
                                 <div class="text-sm font-semibold text-zinc-950">{{ str($audit->action)->replace('_', ' ')->title() }}</div>
                                 <div class="mt-1 text-xs text-zinc-500">{{ trim(($audit->marketingProfile?->first_name ?? '').' '.($audit->marketingProfile?->last_name ?? '')) ?: ($audit->marketingProfile?->email ?: 'Unknown') }}</div>
                                 <div class="mt-1 text-xs text-zinc-500">{{ optional($audit->created_at)->format('Y-m-d H:i') ?: '—' }}</div>
@@ -648,11 +649,11 @@
                     </div>
                     <div class="mt-4">{{ $recentAudits->links() }}</div>
                 </article>
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Messages</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
+                    <div class="fb-kpi-label">Messages</div>
                     <div class="mt-4 space-y-3">
                         @foreach($recentEvents as $event)
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                            <div class="fb-surface-inset p-4">
                                 <div class="text-sm font-semibold text-zinc-950">{{ str($event->campaign_type)->replace('_', ' ')->title() }}</div>
                                 <div class="mt-1 text-xs text-zinc-500">{{ $event->status ?: 'sent' }} · {{ trim(($event->marketingProfile?->first_name ?? '').' '.($event->marketingProfile?->last_name ?? '')) ?: ($event->marketingProfile?->email ?: 'Unknown') }}</div>
                                 <div class="mt-1 text-xs text-zinc-500">{{ optional($event->sent_at ?: $event->created_at)->format('Y-m-d H:i') ?: '—' }}</div>
@@ -661,11 +662,11 @@
                     </div>
                     <div class="mt-4">{{ $recentEvents->links() }}</div>
                 </article>
-                <article class="rounded-[1.8rem] border border-zinc-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.16))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Reward Sync</div>
+                <article class="fb-page-surface fb-page-surface--subtle p-5">
+                    <div class="fb-kpi-label">Reward Sync</div>
                     <div class="mt-4 space-y-3">
                         @foreach($recentRewardSignals as $signal)
-                            <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                            <div class="fb-surface-inset p-4">
                                 <div class="text-sm font-semibold text-zinc-950">{{ str($signal->event_type)->replace('_', ' ')->title() }}</div>
                                 <div class="mt-1 text-xs text-zinc-500">{{ $signal->issue_type ?: 'ok' }} · {{ $signal->source_id ?: '—' }}</div>
                                 @if(data_get($signal->meta, 'reward_code'))

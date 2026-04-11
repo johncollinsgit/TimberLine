@@ -2,8 +2,8 @@
     <div class="flex flex-col gap-6">
         <x-auth-header :title="__('Reset password')" :description="__('Please enter your new password below')" />
 
-        <div class="rounded-2xl border border-zinc-200 bg-white/5 p-3 text-xs text-zinc-300">
-            <div class="font-semibold text-white/90">Next step</div>
+        <div class="fb-surface-inset p-3 text-xs text-zinc-600">
+            <div class="font-semibold text-zinc-950">Next step</div>
             <div class="mt-1">After you set your password, you will be returned to the login page to sign in.</div>
         </div>
 

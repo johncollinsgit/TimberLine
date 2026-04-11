@@ -26,7 +26,6 @@
         />
         <div class="app-sidebar-brand-copy">
             <strong>Forestry Backstage</strong>
-            <span>{{ $workspaceLabel }}</span>
         </div>
     </a>
     <ul class="app-sidebar-list">

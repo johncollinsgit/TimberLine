@@ -37,8 +37,8 @@
             </div>
         </form>
 
-        <div class="rounded-2xl border border-zinc-200 bg-white/5 p-3 text-xs text-zinc-300">
-            <div class="font-semibold text-white/90">What happens next?</div>
+        <div class="fb-surface-inset p-3 text-xs text-zinc-600">
+            <div class="font-semibold text-zinc-950">What happens next?</div>
             <ol class="mt-2 list-decimal space-y-1 pl-4">
                 <li>An administrator reviews your request.</li>
                 <li>You receive an approval email with a password setup link.</li>

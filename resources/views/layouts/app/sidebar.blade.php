@@ -88,10 +88,6 @@
             <span class="mf-sidebar-pin-icon" aria-hidden="true">‹</span>
           </button>
         </div>
-        <div class="mt-4 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3">
-          <div class="text-[11px] uppercase tracking-[0.28em] text-emerald-100/45">{{ $workspaceLabel }}</div>
-          <div class="mt-2 text-xs leading-5 text-white/65">{{ $workspaceSubtitle }}</div>
-        </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
@@ -197,11 +193,11 @@
         <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
           <button
             type="button"
-            class="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+            class="fb-surface-inset w-full px-3 py-2 text-left text-sm font-semibold text-zinc-950 transition hover:bg-white"
             data-command-trigger
           >
             Search everything
-            <span class="mt-1 block text-xs text-white/45">Press Cmd/Ctrl + K</span>
+            <span class="mt-1 block text-xs font-normal text-zinc-500">Press Cmd/Ctrl + K</span>
           </button>
 
           @foreach($quickActions as $action)
@@ -209,20 +205,20 @@
             <a
               href="{{ $action['href'] ?? '#' }}"
               wire:navigate
-              class="block rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
+              class="fb-surface-inset block px-3 py-2 text-left text-sm font-semibold text-zinc-950 transition hover:bg-white"
             >
               <span class="mf-nav-label">{{ $action['label'] ?? 'Action' }}</span>
               @if(! empty($action['description']))
-                <span class="mt-1 block text-xs text-white/45">{{ $action['description'] }}</span>
+                <span class="mt-1 block text-xs font-normal text-zinc-500">{{ $action['description'] }}</span>
               @endif
             </a>
           @endforeach
 
           @if($canAccessOps)
             <details class="mt-2 rounded-2xl border p-3 group mf-sidebar-panel">
-              <summary class="cursor-pointer list-none text-[10px] uppercase tracking-[0.3em] text-emerald-100/50 flex items-center justify-between">
+              <summary class="cursor-pointer list-none flex items-center justify-between fb-kpi-label text-zinc-600">
                 <span>Import Tools</span>
-                <span class="text-[10px] transition-transform group-open:rotate-90">▸</span>
+                <span class="text-[10px] text-zinc-500 transition-transform group-open:rotate-90">▸</span>
               </summary>
               <div class="mt-3 space-y-2">
                 <form method="POST" action="{{ route('admin.tools.clear-orders') }}">
@@ -277,25 +273,25 @@
     </flux:header>
 
     {{-- Main content --}}
-    <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
-      <div class="mb-4 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          data-command-trigger
-          class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/80 transition hover:border-emerald-300/25 hover:bg-emerald-400/[0.08]"
-        >
-          <span>Search everything</span>
-          <span class="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-white/40">Cmd/Ctrl + K</span>
-        </button>
-
-        @if(! empty($experienceProfile['tenant_name'] ?? null))
-          <div class="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-white/55">
-            {{ $experienceProfile['tenant_name'] }}
-            · {{ strtoupper((string) ($experienceProfile['channel_type'] ?? 'direct')) }}
-            · {{ strtoupper((string) ($experienceProfile['use_case_profile'] ?? 'ops')) }}
-          </div>
-        @endif
-      </div>
+	    <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
+	      <div class="mb-4 flex items-center justify-between gap-3">
+	        <button
+	          type="button"
+	          data-command-trigger
+	          class="fb-btn-soft rounded-full"
+	        >
+	          <span>Search everything</span>
+	          <span class="fb-chip fb-chip--quiet">Cmd/Ctrl + K</span>
+	        </button>
+	
+	        @if(! empty($experienceProfile['tenant_name'] ?? null))
+	          <div class="fb-chip fb-chip--quiet">
+	            {{ $experienceProfile['tenant_name'] }}
+	            · {{ strtoupper((string) ($experienceProfile['channel_type'] ?? 'direct')) }}
+	            · {{ strtoupper((string) ($experienceProfile['use_case_profile'] ?? 'ops')) }}
+	          </div>
+	        @endif
+	      </div>
 
       @if($canAccessOps && $unresolvedExceptions > 0)
         <div class="mf-announcement mb-4 rounded-2xl border px-4 py-3 text-sm">
@@ -328,7 +324,7 @@
   </div>
 </div>
 
-<div id="mf-toast" role="status" aria-live="polite" class="pointer-events-none fixed left-1/2 top-5 z-50 hidden w-[min(92vw,48rem)] -translate-x-1/2 rounded-2xl border border-white/10 bg-zinc-900/95 px-5 py-4 text-base font-semibold text-white shadow-2xl"></div>
+<div id="mf-toast" role="status" aria-live="polite" class="pointer-events-none fixed left-1/2 top-5 z-50 hidden w-[min(92vw,48rem)] -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white/95 px-5 py-4 text-base font-semibold text-zinc-950 shadow-2xl"></div>
 <x-app-command-palette
   :search-endpoint="route('app.search')"
   :placeholder="$commandPlaceholder"

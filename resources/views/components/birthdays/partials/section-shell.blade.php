@@ -3,75 +3,69 @@
     'sections',
     'title' => null,
     'description' => null,
+    'suppressDescription' => false,
 ])
 
 @php
     $sectionGroups = \App\Support\Birthdays\BirthdaySectionRegistry::groupNavigationItems($sections);
-    $accentStyles = [
-        'rose' => [
-            'dot' => 'bg-rose-300 shadow-[0_0_0_5px_rgba(253,164,175,0.12)]',
-            'panel' => 'border-rose-300/15 bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.18),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.04))]',
-            'pill_current' => 'border-rose-300/45 bg-rose-400/15 text-rose-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_28px_-18px_rgba(244,63,94,0.85)]',
-        ],
-        'amber' => [
-            'dot' => 'bg-amber-300 shadow-[0_0_0_5px_rgba(252,211,77,0.12)]',
-            'panel' => 'border-amber-300/15 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.04))]',
-            'pill_current' => 'border-amber-300/45 bg-amber-400/15 text-amber-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_28px_-18px_rgba(245,158,11,0.85)]',
-        ],
-        'sky' => [
-            'dot' => 'bg-sky-300 shadow-[0_0_0_5px_rgba(125,211,252,0.12)]',
-            'panel' => 'border-sky-300/15 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.18),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.04))]',
-            'pill_current' => 'border-sky-300/45 bg-sky-400/15 text-sky-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_28px_-18px_rgba(14,165,233,0.85)]',
-        ],
-    ];
+    $accentClass = static function (string $accent): string {
+        return match (strtolower(trim($accent))) {
+            'amber' => 'fb-accent-amber',
+            'sky' => 'fb-accent-sky',
+            default => 'fb-accent-rose',
+        };
+    };
+
+    $resolvedTitle = trim((string) ($title ?: data_get($section, 'label', 'Birthdays')));
+    $resolvedDescription = trim((string) ($description ?: data_get($section, 'description', '')));
 @endphp
 
-<section class="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.04))] p-5 sm:p-6 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-            <div class="text-[11px] uppercase tracking-[0.32em] text-white/55">Birthdays</div>
-            <h1 class="mt-2 text-2xl font-semibold text-white">{{ $title ?: $section['label'] }}</h1>
-            <p class="mt-2 max-w-3xl text-sm text-white/70">{{ $description ?: $section['description'] }}</p>
+<section class="fb-page-surface">
+    <div class="fb-birthdays-shell-head">
+        <div class="fb-birthdays-shell-title">
+            <div class="fb-birthdays-shell-eyebrow">Birthdays</div>
+            <h1 class="fb-birthdays-shell-h1">{{ $resolvedTitle }}</h1>
+            @if(! $suppressDescription && $resolvedDescription !== '')
+                <p class="fb-birthdays-shell-subtitle">{{ $resolvedDescription }}</p>
+            @endif
         </div>
-        <a href="{{ route('birthdays.customers') }}" wire:navigate class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10">
+        <a href="{{ route('birthdays.customers') }}" wire:navigate class="fb-btn-soft fb-link-soft">
             Open Customers
         </a>
     </div>
-</section>
 
-<section class="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,rgba(17,24,39,0.55),rgba(10,14,24,0.78))] p-4 sm:p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_24px_60px_-44px_rgba(0,0,0,0.8)] backdrop-blur-xl">
-    <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-            <div class="text-[11px] uppercase tracking-[0.28em] text-white/50">Pages</div>
-            <div class="mt-1 text-sm text-white/68">Import birthdays, manage rewards, and track outcomes.</div>
+    <div class="fb-birthdays-shell-pages">
+        <div class="fb-birthdays-shell-pages-head">
+            <div class="fb-birthdays-shell-pages-label">Pages</div>
         </div>
-        <div class="text-[11px] uppercase tracking-[0.22em] text-white/35">Menu</div>
-    </div>
 
-    <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        @foreach($sectionGroups as $group)
-            @php($accent = $accentStyles[$group['accent']] ?? $accentStyles['rose'])
-            <article class="rounded-[1.55rem] border p-3 sm:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_16px_34px_-26px_rgba(0,0,0,0.9)] backdrop-blur-xl {{ $accent['panel'] }}">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <div class="text-[10px] uppercase tracking-[0.28em] text-white/48">{{ $group['label'] }}</div>
-                        <p class="mt-1 text-xs leading-5 text-white/60">{{ $group['description'] }}</p>
+        <div class="fb-birthdays-shell-groups">
+            @foreach($sectionGroups as $group)
+                @php($groupAccent = $accentClass((string) ($group['accent'] ?? 'rose')))
+                <article class="fb-birthdays-nav-group fb-page-surface fb-page-surface--subtle {{ $groupAccent }}">
+                    <div class="fb-birthdays-nav-group-head">
+                        <div class="fb-birthdays-nav-group-text">
+                            <div class="fb-birthdays-nav-group-label">{{ $group['label'] }}</div>
+                            @if(! empty($group['description']))
+                                <p class="fb-birthdays-nav-group-desc">{{ $group['description'] }}</p>
+                            @endif
+                        </div>
+                        <span class="fb-accent-dot" aria-hidden="true"></span>
                     </div>
-                    <span class="mt-1 h-2.5 w-2.5 rounded-full {{ $accent['dot'] }}"></span>
-                </div>
 
-                <div class="mt-4 flex flex-wrap gap-2">
-                    @foreach($group['items'] as $item)
-                        <a
-                            href="{{ $item['href'] }}"
-                            wire:navigate
-                            class="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition backdrop-blur-md {{ $item['current'] ? $accent['pill_current'] : 'border-white/10 bg-white/[0.06] text-white/[0.78] hover:border-white/20 hover:bg-white/[0.12] hover:text-white' }}"
-                        >
-                            {{ $item['label'] }}
-                        </a>
-                    @endforeach
-                </div>
-            </article>
-        @endforeach
+                    <div class="fb-birthdays-nav-group-items">
+                        @foreach($group['items'] as $item)
+                            <a
+                                href="{{ $item['href'] }}"
+                                wire:navigate
+                                class="fb-chip {{ $item['current'] ? 'fb-chip--active' : 'fb-chip--quiet' }}"
+                            >
+                                {{ $item['label'] }}
+                            </a>
+                        @endforeach
+                    </div>
+                </article>
+            @endforeach
+        </div>
     </div>
 </section>
