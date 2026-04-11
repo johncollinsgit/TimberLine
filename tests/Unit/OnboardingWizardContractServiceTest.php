@@ -14,7 +14,7 @@ test('wizard contract includes only direct-safe steps for direct rail', function
     $context = new OnboardingWizardContext(
         rail: OnboardingRail::Direct,
         accountMode: AccountMode::Production,
-        tenantId: 123,
+        tenantId: null,
         hasShopifyContext: false
     );
 
@@ -33,7 +33,7 @@ test('wizard contract excludes connect_shopify when shopify context is present',
     $context = new OnboardingWizardContext(
         rail: OnboardingRail::Shopify,
         accountMode: AccountMode::Production,
-        tenantId: 123,
+        tenantId: null,
         hasShopifyContext: true
     );
 
@@ -44,4 +44,3 @@ test('wizard contract excludes connect_shopify when shopify context is present',
     expect($keys)->not->toContain('connect_shopify')
         ->and(data_get($contract, 'defaults.data_source'))->toBe('shopify');
 });
-

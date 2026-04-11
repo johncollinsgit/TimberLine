@@ -74,8 +74,11 @@
                     </select>
                 </div>
                 <div>
-                    <label class="text-xs font-semibold text-zinc-700">Template Key</label>
-                    <input id="draft-template-key" type="text" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white p-2 text-sm" placeholder="e.g. candle">
+                    <label class="text-xs font-semibold text-zinc-700">Template</label>
+                    <select id="draft-template-key" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white p-2 text-sm">
+                        <option value="">(unset)</option>
+                    </select>
+                    <div id="allowed-templates" class="mt-1 text-xs text-zinc-500"></div>
                 </div>
                 <div>
                     <label class="text-xs font-semibold text-zinc-700">Desired Outcome First</label>
@@ -85,6 +88,7 @@
                     <label class="text-xs font-semibold text-zinc-700">Selected Modules (comma-separated)</label>
                     <input id="draft-modules" type="text" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white p-2 text-sm" placeholder="customers, rewards, ...">
                     <div id="recommended-modules" class="mt-2 text-xs text-zinc-600"></div>
+                    <div id="allowed-modules" class="mt-1 text-xs text-zinc-500"></div>
                 </div>
                 <div class="md:col-span-2">
                     <label class="text-xs font-semibold text-zinc-700">Setup Preferences (JSON)</label>
@@ -180,6 +184,7 @@
 
                 const draftRail = document.getElementById('draft-rail');
                 const draftTemplateKey = document.getElementById('draft-template-key');
+                const allowedTemplates = document.getElementById('allowed-templates');
                 const draftOutcome = document.getElementById('draft-outcome');
                 const draftModules = document.getElementById('draft-modules');
                 const draftDataSource = document.getElementById('draft-data-source');
@@ -193,6 +198,7 @@
                 const stepsTable = document.getElementById('steps-table');
                 const rawContract = document.getElementById('raw-contract');
                 const recommendedModules = document.getElementById('recommended-modules');
+                const allowedModules = document.getElementById('allowed-modules');
                 const autosaveEnabled = document.getElementById('autosave-enabled');
 
                 const nbaActive = document.getElementById('nba-active');
@@ -322,10 +328,22 @@
                     const effective = Object.assign({}, defaults, draftPayload || {});
 
                     draftRail.value = effective.rail || (contractPayload.context?.rail ?? 'direct');
+                    const templates = contractPayload.options?.templates || [];
+                    draftTemplateKey.innerHTML = '<option value="">(unset)</option>';
+                    templates.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t.key;
+                        opt.textContent = `${t.key} — ${t.name}`;
+                        draftTemplateKey.appendChild(opt);
+                    });
                     draftTemplateKey.value = effective.template_key || '';
+                    allowedTemplates.textContent = templates.length ? `Allowed templates: ${templates.map(t => t.key).join(', ')}` : 'Allowed templates: (not provided)';
                     draftOutcome.value = effective.desired_outcome_first || '';
                     draftDataSource.value = effective.data_source || '';
                     draftModules.value = Array.isArray(effective.selected_modules) ? effective.selected_modules.join(', ') : '';
+
+                    const moduleKeys = contractPayload.options?.module_keys || [];
+                    allowedModules.textContent = moduleKeys.length ? `Allowed module keys: ${moduleKeys.slice(0, 24).join(', ')}${moduleKeys.length > 24 ? ' …' : ''}` : '';
 
                     try {
                         draftSetupPreferences.value = JSON.stringify(effective.setup_preferences || {}, null, 2);

@@ -113,6 +113,13 @@ test('GET contract returns contract payload and includes latest draft when prese
 
     expect(data_get($response, 'contract.context.rail'))->toBe('shopify')
         ->and(data_get($response, 'contract.context.account_mode'))->toBe('demo')
+        ->and(data_get($response, 'contract.options.rails'))->toContain('shopify')
+        ->and(data_get($response, 'contract.options.account_modes'))->toContain('demo')
+        ->and(data_get($response, 'contract.options.data_sources'))->toContain('csv')
+        ->and(data_get($response, 'contract.options.templates.0.key'))->not->toBeNull()
+        ->and(data_get($response, 'contract.options.module_keys'))->toContain('customers')
+        ->and(data_get($response, 'contract.options.mobile_roles'))->toContain('owner')
+        ->and(data_get($response, 'contract.options.mobile_jobs'))->toContain('photos_uploads')
         ->and(data_get($response, 'draft.payload.mobile_intent.needs_mobile_access'))->toBeTrue();
 });
 
@@ -143,3 +150,43 @@ test('POST autosave rejects invalid mobile intent values', function (): void {
         ->assertStatus(422);
 });
 
+test('draft autosave overwrites a stable per-user draft record', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $first = $this->actingAs($user)
+        ->postJson(route('onboarding.api.draft.autosave', ['tenant' => 'tenant-a']), [
+            'rail' => 'direct',
+            'template_key' => 'candle',
+            'selected_modules' => ['customers'],
+            'mobile_intent' => ['needs_mobile_access' => false],
+        ])
+        ->assertOk()
+        ->json();
+
+    $second = $this->actingAs($user)
+        ->postJson(route('onboarding.api.draft.autosave', ['tenant' => 'tenant-a']), [
+            'rail' => 'direct',
+            'template_key' => 'candle',
+            'selected_modules' => ['customers', 'advanced_reporting'],
+            'mobile_intent' => ['needs_mobile_access' => true],
+        ])
+        ->assertOk()
+        ->json();
+
+    expect(data_get($first, 'draft.id'))->toBe(data_get($second, 'draft.id'))
+        ->and(data_get($second, 'draft.payload.selected_modules'))->toContain('diagnostics_advanced')
+        ->and(data_get($second, 'draft.payload.mobile_intent.needs_mobile_access'))->toBeTrue();
+});

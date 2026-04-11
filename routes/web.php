@@ -265,7 +265,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
 
-    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+    Route::middleware(['role:admin', 'tenant.access'])
         ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])
         ->name('onboarding.harness');
 

@@ -12,6 +12,7 @@ class OnboardingHarnessController extends Controller
     public function show(Request $request): View
     {
         abort_unless((bool) config('app.debug', false), 404);
+        abort_unless((bool) config('features.internal_onboarding_harness', false), 404);
 
         /** @var Tenant|null $tenant */
         $tenant = $request->attributes->get('current_tenant');
@@ -38,4 +39,3 @@ class OnboardingHarnessController extends Controller
         ]);
     }
 }
-

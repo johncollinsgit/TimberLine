@@ -14,6 +14,11 @@ use Illuminate\Support\Facades\Schema;
 
 class TenantOnboardingBlueprintStore
 {
+    /**
+     * Draft persistence model (explicit):
+     * - Drafts are stored as a single mutable record per (tenant_id, created_by_user_id) and overwritten on autosave.
+     * - Finals are append-only snapshots (one per completion).
+     */
     public function __construct(
         protected OnboardingBlueprintService $blueprintService,
         protected TenantAccountModeResolver $accountModeResolver,
@@ -38,15 +43,51 @@ class TenantOnboardingBlueprintStore
             'account_mode' => (string) ($input['account_mode'] ?? $this->accountModeResolver->resolveForTenant($tenant)->value),
         ]);
 
+        $accountMode = (string) ($validated['account_mode'] ?? AccountMode::Production->value);
+        $rail = (string) ($validated['rail'] ?? OnboardingRail::Direct->value);
+        $version = (int) ($validated['version'] ?? OnboardingBlueprint::VERSION);
+
+        $existing = null;
+        if ($actorUserId !== null) {
+            $existing = TenantOnboardingBlueprint::query()
+                ->forTenantId($tenantId)
+                ->where('status', 'draft')
+                ->where('created_by_user_id', $actorUserId)
+                ->latest('id')
+                ->first();
+        }
+
+        if ($existing instanceof TenantOnboardingBlueprint) {
+            $priorOrigin = is_array($existing->origin ?? null) ? (array) $existing->origin : [];
+            $revision = is_numeric($priorOrigin['revision'] ?? null) ? (int) $priorOrigin['revision'] : 0;
+
+            $existing->fill([
+                'account_mode' => $accountMode,
+                'rail' => $rail,
+                'blueprint_version' => $version,
+                'payload' => $validated,
+                'origin' => array_replace($priorOrigin, $origin, [
+                    'revision' => $revision + 1,
+                    'last_saved_at' => now()->toIso8601String(),
+                ]),
+            ]);
+            $existing->save();
+
+            return $existing;
+        }
+
         return TenantOnboardingBlueprint::query()->create([
             'tenant_id' => $tenantId,
             'created_by_user_id' => $actorUserId,
             'status' => 'draft',
-            'account_mode' => (string) ($validated['account_mode'] ?? AccountMode::Production->value),
-            'rail' => (string) ($validated['rail'] ?? OnboardingRail::Direct->value),
-            'blueprint_version' => (int) ($validated['version'] ?? OnboardingBlueprint::VERSION),
+            'account_mode' => $accountMode,
+            'rail' => $rail,
+            'blueprint_version' => $version,
             'payload' => $validated,
-            'origin' => $origin,
+            'origin' => array_replace($origin, [
+                'revision' => 1,
+                'last_saved_at' => now()->toIso8601String(),
+            ]),
         ]);
     }
 
@@ -103,7 +144,8 @@ class TenantOnboardingBlueprintStore
                 ->forTenantId($tenantId)
                 ->where('status', 'draft')
                 ->where('created_by_user_id', $actorUserId)
-                ->latest('id')
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
                 ->first();
 
             if ($scoped instanceof TenantOnboardingBlueprint) {
@@ -114,7 +156,8 @@ class TenantOnboardingBlueprintStore
         return TenantOnboardingBlueprint::query()
             ->forTenantId($tenantId)
             ->where('status', 'draft')
-            ->latest('id')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
             ->first();
     }
 

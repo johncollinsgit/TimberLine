@@ -6,6 +6,7 @@ use App\Models\User;
 
 test('onboarding harness page requires auth', function (): void {
     config()->set('app.debug', true);
+    config()->set('features.internal_onboarding_harness', true);
 
     $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
     TenantAccessProfile::query()->create([
@@ -21,6 +22,7 @@ test('onboarding harness page requires auth', function (): void {
 
 test('onboarding harness page is tenant-scoped and renders endpoint URLs', function (): void {
     config()->set('app.debug', true);
+    config()->set('features.internal_onboarding_harness', true);
 
     $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
     TenantAccessProfile::query()->create([
@@ -31,7 +33,7 @@ test('onboarding harness page is tenant-scoped and renders endpoint URLs', funct
     ]);
 
     $user = User::factory()->create([
-        'role' => 'marketing_manager',
+        'role' => 'admin',
         'email_verified_at' => now(),
     ]);
     $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
@@ -46,6 +48,7 @@ test('onboarding harness page is tenant-scoped and renders endpoint URLs', funct
 
 test('onboarding harness page denies access for non-member tenant', function (): void {
     config()->set('app.debug', true);
+    config()->set('features.internal_onboarding_harness', true);
 
     $tenantA = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
     $tenantB = Tenant::query()->create(['name' => 'Tenant B', 'slug' => 'tenant-b']);
@@ -74,3 +77,48 @@ test('onboarding harness page denies access for non-member tenant', function ():
         ->assertStatus(403);
 });
 
+test('onboarding harness page is gated when feature flag is disabled', function (): void {
+    config()->set('app.debug', true);
+    config()->set('features.internal_onboarding_harness', false);
+
+    $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $this->actingAs($user)
+        ->get(route('onboarding.harness', ['tenant' => 'tenant-a']))
+        ->assertStatus(404);
+});
+
+test('onboarding harness page requires admin role', function (): void {
+    config()->set('app.debug', true);
+    config()->set('features.internal_onboarding_harness', true);
+
+    $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $this->actingAs($user)
+        ->get(route('onboarding.harness', ['tenant' => 'tenant-a']))
+        ->assertStatus(403);
+});
