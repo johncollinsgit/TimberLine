@@ -76,6 +76,9 @@
       @forelse($pendingUsers as $pending)
         @php
           $source = $pending->requested_via ?: ($pending->google_id ? 'google' : 'manual');
+          $pendingEmail = strtolower(trim((string) $pending->email));
+          $pendingAccess = is_array($pendingAccessRequests[$pendingEmail] ?? null) ? (array) $pendingAccessRequests[$pendingEmail] : [];
+          $pendingIntent = strtolower(trim((string) ($pendingAccess['intent'] ?? '')));
         @endphp
         <div class="flex flex-col gap-3 rounded-xl border border-[var(--fb-border)] bg-white p-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -85,7 +88,22 @@
               <span class="rounded-full border border-[var(--fb-border)] px-2 py-0.5 capitalize">{{ str_replace('_', ' ', $source) }}</span>
               <span>Requested {{ optional($pending->approval_requested_at ?? $pending->created_at)->diffForHumans() }}</span>
               <span>Role: {{ $pending->role ?? 'pouring' }}</span>
+              @if($pendingIntent !== '')
+                <span class="rounded-full border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] px-2 py-0.5 capitalize">
+                  {{ $pendingIntent === 'demo' ? 'Demo request' : 'Production request' }}
+                </span>
+              @endif
             </div>
+            @if($pendingAccess !== [])
+              <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--fb-muted)]">
+                @if(filled($pendingAccess['company'] ?? null))
+                  <span class="rounded-full border border-[var(--fb-border)] px-2 py-0.5">{{ $pendingAccess['company'] }}</span>
+                @endif
+                @if(filled($pendingAccess['requested_tenant_slug'] ?? null))
+                  <span class="rounded-full border border-[var(--fb-border)] px-2 py-0.5">Tenant: {{ $pendingAccess['requested_tenant_slug'] }}</span>
+                @endif
+              </div>
+            @endif
           </div>
           <div class="flex items-center gap-2">
             <button type="button" wire:click="openEdit({{ $pending->id }})" class="rounded-full border border-[var(--fb-border)] bg-white px-3 py-1 text-[11px] text-[var(--fb-muted)]">
@@ -163,6 +181,30 @@
           <flux:input wire:model.defer="newPassword" label="Reset Password" type="password" />
           @error('newPassword') <div class="mt-1 text-xs text-red-300">{{ $message }}</div> @enderror
         </div>
+
+        @if(! empty($editAccessRequest))
+          <div class="mt-6 rounded-2xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="text-sm font-semibold text-[var(--fb-text)]">Access request</div>
+                <div class="text-xs text-[var(--fb-muted)]">Adjust routing details before sending the approval email.</div>
+              </div>
+              <div class="rounded-full border border-[var(--fb-border)] bg-white px-3 py-1 text-xs text-[var(--fb-muted)] capitalize">
+                {{ $editAccessRequest['intent'] ?? 'unknown' }}
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-3 md:grid-cols-2">
+              <flux:input wire:model.defer="editAccessRequest.company" label="Company" />
+              <flux:input wire:model.defer="editAccessRequest.requested_tenant_slug" label="Requested tenant slug" />
+              <div class="md:col-span-2">
+                <label class="text-xs text-[var(--fb-muted)]">Notes</label>
+                <textarea wire:model.defer="editAccessRequest.message" rows="4" class="mt-1 w-full rounded-xl border border-[var(--fb-border)] bg-white px-3 py-2 text-sm text-[var(--fb-text)]"></textarea>
+              </div>
+            </div>
+          </div>
+        @endif
+
         <div class="mt-4 flex items-center gap-2">
           <button type="button" wire:click="save" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">Save</button>
           <button type="button" wire:click="$set('showEdit', false)" class="rounded-full border border-[var(--fb-border)] bg-white px-4 py-2 text-xs font-semibold text-[var(--fb-muted)]">Cancel</button>

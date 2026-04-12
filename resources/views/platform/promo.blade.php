@@ -31,6 +31,12 @@
                 </div>
                 <div class="fb-hero-cta">
                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Log in</a>
+                    @if(is_array($cta['plans'] ?? null) && filled($cta['plans']['href'] ?? null))
+                        <a href="{{ $cta['plans']['href'] }}" class="fb-btn fb-btn-secondary">{{ $cta['plans']['label'] ?? 'Compare plans' }}</a>
+                    @endif
+                    @if(is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null))
+                        <a href="{{ $cta['start_client']['href'] }}" class="fb-btn fb-btn-secondary">{{ $cta['start_client']['label'] ?? 'Start as a client' }}</a>
+                    @endif
                     @if(is_array($cta['install'] ?? null) && filled($cta['install']['href'] ?? null))
                         <a href="{{ $cta['install']['href'] }}" class="fb-btn fb-btn-primary">{{ $cta['install']['label'] ?? 'Install on Shopify' }}</a>
                     @endif
@@ -46,8 +52,14 @@
                 </p>
                 <div class="fb-hero-cta" aria-label="Primary calls to action">
                     <a href="{{ route('login') }}" class="fb-btn fb-btn-primary">Sign in</a>
+                    @if(is_array($cta['plans'] ?? null) && filled($cta['plans']['href'] ?? null))
+                        <a href="{{ $cta['plans']['href'] }}" class="fb-btn fb-btn-secondary">{{ $cta['plans']['label'] ?? 'Compare plans' }}</a>
+                    @endif
                     @if(is_array($cta['demo'] ?? null) && filled($cta['demo']['href'] ?? null))
-                        <a href="{{ $cta['demo']['href'] }}" class="fb-btn fb-btn-secondary">{{ $cta['demo']['label'] ?? 'Book a demo' }}</a>
+                        <a href="{{ $cta['demo']['href'] }}" class="fb-btn fb-btn-secondary">{{ $cta['demo']['label'] ?? 'See a live demo' }}</a>
+                    @endif
+                    @if(is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null))
+                        <a href="{{ $cta['start_client']['href'] }}" class="fb-btn fb-btn-secondary">{{ $cta['start_client']['label'] ?? 'Start as a client' }}</a>
                     @endif
                 </div>
             </div>

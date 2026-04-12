@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Admin\Users;
 
+use App\Models\CustomerAccessRequest;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
+use App\Services\Onboarding\CustomerAccessRequestService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
@@ -32,6 +34,7 @@ class UsersIndex extends Component
     public ?int $editingId = null;
     public array $edit = [];
     public string $newPassword = '';
+    public array $editAccessRequest = [];
 
     public bool $showDelete = false;
     public ?int $deletingId = null;
@@ -102,6 +105,7 @@ class UsersIndex extends Component
             'role' => $user->role ?? 'admin',
             'is_active' => (bool) $user->is_active,
         ];
+        $this->editAccessRequest = $this->accessRequestPayload($user);
         $this->newPassword = '';
         $this->showEdit = true;
     }
@@ -149,12 +153,14 @@ class UsersIndex extends Component
 
         User::query()->whereKey($this->editingId)->update($payload);
 
+        $this->persistAccessRequestEdits($user);
+
         $emailSent = false;
         if ($wasInactive && $payload['is_active']) {
             $fresh = User::query()->find($this->editingId);
             if ($fresh) {
                 try {
-                    $fresh->notify(new ApprovalPasswordSetupNotification($fresh));
+                    $fresh->notify(new ApprovalPasswordSetupNotification($fresh, $this->preferredHostForUser($fresh)));
                     $emailSent = true;
                 } catch (Throwable $e) {
                     report($e);
@@ -164,6 +170,7 @@ class UsersIndex extends Component
 
         $this->showEdit = false;
         $this->editingId = null;
+        $this->editAccessRequest = [];
         $this->dispatch('toast', [
             'message' => ($wasInactive && $payload['is_active'])
                 ? ($emailSent ? 'User updated and approval email sent.' : 'User updated. Approval email could not be sent.')
@@ -198,21 +205,14 @@ class UsersIndex extends Component
     {
         $user = User::query()->findOrFail($id);
         $wasInactive = !$user->is_active;
-
-        $user->forceFill([
-            'is_active' => true,
-            'approved_at' => now(),
-            'approved_by' => auth()->id(),
-        ])->save();
-
         $emailSent = false;
-        if ($wasInactive) {
-            try {
-                $user->notify(new ApprovalPasswordSetupNotification($user));
-                $emailSent = true;
-            } catch (Throwable $e) {
-                report($e);
-            }
+        $request = $this->latestPendingAccessRequest($user);
+
+        try {
+            app(CustomerAccessRequestService::class)->approveUser($user, $request, auth()->id());
+            $emailSent = true;
+        } catch (Throwable $e) {
+            report($e);
         }
 
         $this->dispatch('toast', [
@@ -223,6 +223,77 @@ class UsersIndex extends Component
         ]);
     }
 
+    protected function latestPendingAccessRequest(User $user): ?CustomerAccessRequest
+    {
+        if (!\Schema::hasTable('customer_access_requests')) {
+            return null;
+        }
+
+        return CustomerAccessRequest::query()
+            ->where('email', strtolower(trim((string) $user->email)))
+            ->where('status', 'pending')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    protected function accessRequestPayload(User $user): array
+    {
+        $request = $this->latestPendingAccessRequest($user);
+        if (! $request) {
+            return [];
+        }
+
+        return [
+            'id' => (int) $request->id,
+            'intent' => (string) $request->intent,
+            'company' => (string) ($request->company ?? ''),
+            'requested_tenant_slug' => (string) ($request->requested_tenant_slug ?? ''),
+            'message' => (string) ($request->message ?? ''),
+        ];
+    }
+
+    protected function persistAccessRequestEdits(User $user): void
+    {
+        if (!\Schema::hasTable('customer_access_requests')) {
+            return;
+        }
+
+        $id = $this->editAccessRequest['id'] ?? null;
+        if (! is_numeric($id) || (int) $id <= 0) {
+            return;
+        }
+
+        $payload = [
+            'company' => trim((string) ($this->editAccessRequest['company'] ?? '')),
+            'requested_tenant_slug' => trim((string) ($this->editAccessRequest['requested_tenant_slug'] ?? '')),
+            'message' => trim((string) ($this->editAccessRequest['message'] ?? '')),
+        ];
+
+        CustomerAccessRequest::query()
+            ->whereKey((int) $id)
+            ->where('status', 'pending')
+            ->update([
+                'company' => $payload['company'] !== '' ? $payload['company'] : null,
+                'requested_tenant_slug' => $payload['requested_tenant_slug'] !== '' ? strtolower($payload['requested_tenant_slug']) : null,
+                'message' => $payload['message'] !== '' ? $payload['message'] : null,
+            ]);
+    }
+
+    protected function preferredHostForUser(User $user): ?string
+    {
+        $request = $this->latestPendingAccessRequest($user);
+        if (! $request) {
+            return null;
+        }
+
+        $slug = strtolower(trim((string) ($request->requested_tenant_slug ?? '')));
+        if ($slug === '') {
+            return null;
+        }
+
+        return app(\App\Support\Tenancy\TenantHostBuilder::class)->hostForSlug($slug);
+    }
+
     public function render()
     {
         $pendingUsers = User::query()
@@ -231,6 +302,35 @@ class UsersIndex extends Component
             ->orderBy('created_at', 'asc')
             ->limit(50)
             ->get();
+
+        $pendingAccessRequests = [];
+        if (\Schema::hasTable('customer_access_requests') && $pendingUsers->isNotEmpty()) {
+            $emails = $pendingUsers
+                ->pluck('email')
+                ->map(static fn ($value): string => strtolower(trim((string) $value)))
+                ->filter()
+                ->values()
+                ->all();
+
+            $rows = CustomerAccessRequest::query()
+                ->whereIn('email', $emails)
+                ->where('status', 'pending')
+                ->orderByDesc('id')
+                ->get();
+
+            foreach ($rows as $row) {
+                $email = strtolower(trim((string) $row->email));
+                if ($email === '' || array_key_exists($email, $pendingAccessRequests)) {
+                    continue;
+                }
+
+                $pendingAccessRequests[$email] = [
+                    'intent' => (string) $row->intent,
+                    'company' => (string) ($row->company ?? ''),
+                    'requested_tenant_slug' => (string) ($row->requested_tenant_slug ?? ''),
+                ];
+            }
+        }
 
         $users = User::query()
             ->when($this->search !== '', function ($query) {
@@ -244,6 +344,7 @@ class UsersIndex extends Component
         return view('livewire.admin.users.index', [
             'users' => $users,
             'pendingUsers' => $pendingUsers,
+            'pendingAccessRequests' => $pendingAccessRequests,
         ])->layout('layouts.app');
     }
 }

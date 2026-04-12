@@ -64,4 +64,7 @@ return [
         'portal_name' => env('AUTH_PORTAL_NAME', 'Backstage'),
         'fallback_tenant_label' => env('AUTH_FALLBACK_TENANT_LABEL', 'Modern Forestry'),
     ],
+    'onboarding' => [
+        'demo_tenant_slug' => env('TENANCY_DEMO_TENANT_SLUG', 'demo'),
+    ],
 ];

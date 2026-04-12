@@ -35,7 +35,9 @@ use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
+use App\Http\Controllers\Onboarding\CustomerStartHereController;
 use App\Http\Controllers\PlatformProductPagesController;
+use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
@@ -253,7 +255,12 @@ Route::get('/assistant/activity', function (Request $request, ShopifyEmbeddedUrl
 })->name('shopify.embedded.assistant.activity');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
+Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
+Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
+Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
+Route::get('/platform/request-submitted', [PlatformProductPagesController::class, 'requestSubmitted'])->name('platform.request-submitted');
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
+Route::post('/platform/access-request', [PlatformAccessRequestController::class, 'store'])->name('platform.access-request');
 Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalogFeed'])->name('platform.catalog.feed');
 Route::get('/.well-known/brand-discovery.json', [BrandDiscoveryController::class, 'wellKnown'])->name('discovery.well-known.brand');
 Route::get('/api/public/discovery/brand/{tenant}', [BrandDiscoveryController::class, 'byTenant'])->name('discovery.public.brand');
@@ -277,6 +284,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/onboarding', \App\Livewire\Onboarding\Wizard::class)
         ->name('onboarding.wizard');
+
+    // Canonical non-embedded Start Here (authenticated, tenant-aware). Reuses TenantCommercialExperienceService journey payload.
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->get('/start', [CustomerStartHereController::class, 'show'])
+        ->name('app.start');
 
     /*
     |--------------------------------------------------------------------------

@@ -25,6 +25,27 @@ Feature flags:
 - `features.internal_onboarding_provisioning` gates provisioning read seams and internal provisioning actions.
 - `features.internal_onboarding_harness` (and `app.debug`) gates the internal harness page at `/internal/onboarding/harness`.
 
+## Customer Access Requests + Activation (2026-04-12)
+
+This release connects the public promo surfaces, landlord/admin approval, and tenant-aware post-login journey into one cohesive (still minimal) customer onboarding path.
+
+Implemented:
+- public entry points:
+  - `/platform/plans` (compare plans + add-ons; informational, config-driven)
+  - `/platform/demo` (request demo access)
+  - `/platform/start` (request production client access)
+- access request persistence:
+  - `customer_access_requests` table + `App\\Models\\CustomerAccessRequest`
+  - `POST /platform/access-request` creates a pending request and an inactive user when needed
+- approval + activation:
+  - admin approvals stay canonical in `/admin/users`
+  - approval sends `ApprovalPasswordSetupNotification` with a password-setup URL targeting the intended tenant host (`<slug>.<base-domain>`)
+- first-run landing:
+  - `/start` is a non-embedded, authenticated Start Here surface (tenant-aware, entitlement-driven) built via `TenantCommercialExperienceService`
+
+Billing note:
+- plan/add-on truth remains landlord-controlled; customer-facing billing writes are intentionally deferred in this pass.
+
 ## Shopify Embedded AI Assistant Foundation (2026-04-10)
 
 This release adds a tenant-aware AI Assistant foundation in Shopify embedded surfaces with centralized access gating and alpha override safety.

@@ -30,8 +30,16 @@ return [
                 'href' => '/shopify/reinstall/retail',
             ],
             'demo' => [
-                'label' => 'Book a demo',
-                'href' => '/platform/contact?intent=demo',
+                'label' => 'See a live demo',
+                'href' => '/platform/demo',
+            ],
+            'start_client' => [
+                'label' => 'Start as a client',
+                'href' => '/platform/start',
+            ],
+            'plans' => [
+                'label' => 'Compare plans',
+                'href' => '/platform/plans',
             ],
             'contact' => [
                 'label' => 'Talk to sales',
@@ -101,6 +109,7 @@ return [
     'plans' => [
         'headline' => 'Plans & Add-ons',
         'subtitle' => 'Informational access profile view built from tenant entitlements and module state. Billing writes are intentionally deferred.',
+        'billing_note' => 'Billing and payment-method capture are currently handled with the team. Plan/add-on truth in the app remains entitlement-driven and landlord-controlled.',
         'plan_order' => [
             'starter',
             'growth',
@@ -187,6 +196,22 @@ return [
                 'href' => '/platform/contact?intent=demo',
             ],
         ],
+    ],
+
+    'demo' => [
+        'eyebrow' => 'Live Demo',
+        'headline' => 'See Forestry Backstage in action.',
+        'summary' => 'Request access to a safe demo workspace. We keep demo and production flows separate and honest.',
+        'submit_label' => 'Request demo access',
+        'footnote' => 'Demo access is granted manually. You will receive an email with a password-setup link once approved.',
+    ],
+
+    'start_client' => [
+        'eyebrow' => 'Client Signup',
+        'headline' => 'Start as a client.',
+        'summary' => 'Request production access for your team. After approval, you will receive an activation email with a single password-setup link.',
+        'submit_label' => 'Request production access',
+        'footnote' => 'Plan assignment remains landlord-controlled during early rollout. You will land in Start Here after first login.',
     ],
 
     'integrations' => [

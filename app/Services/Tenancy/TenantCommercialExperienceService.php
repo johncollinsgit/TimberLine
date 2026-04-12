@@ -70,6 +70,71 @@ class TenantCommercialExperienceService
     }
 
     /**
+     * Public (unauthenticated) compare-plans payload. Read-only and config-driven.
+     *
+     * @return array{
+     *   content:array<string,mixed>,
+     *   plan_cards:array<int,array<string,mixed>>,
+     *   addon_cards:array<int,array<string,mixed>>,
+     *   recommended_plan_key:string
+     * }
+     */
+    public function publicPlansPayload(): array
+    {
+        $content = (array) config('product_surfaces.plans', []);
+        $planCards = $this->planCards(
+            cardsConfig: (array) ($content['cards'] ?? []),
+            preferredOrder: $this->normalizeKeys((array) ($content['plan_order'] ?? [])),
+            activePlanKey: null
+        );
+
+        $addonCatalog = (array) config('entitlements.addons', []);
+        $addonCards = [];
+        foreach ($addonCatalog as $addonKey => $definition) {
+            if (! is_array($definition)) {
+                continue;
+            }
+
+            $normalizedAddonKey = strtolower(trim((string) $addonKey));
+            if ($normalizedAddonKey === '') {
+                continue;
+            }
+
+            $contentDefinition = is_array(($content['addons'][$normalizedAddonKey] ?? null))
+                ? (array) $content['addons'][$normalizedAddonKey]
+                : [];
+            $includeKeys = $this->normalizeKeys((array) ($definition['includes'] ?? []));
+
+            $modules = array_map(function (string $moduleKey): array {
+                $definition = is_array(config('entitlements.modules.'.$moduleKey)) ? (array) config('entitlements.modules.'.$moduleKey) : [];
+                $status = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
+
+                return [
+                    'module_key' => $moduleKey,
+                    'label' => $this->moduleLabel($moduleKey),
+                    'status' => $status,
+                    'coming_soon' => in_array($status, ['placeholder', 'roadmap'], true),
+                ];
+            }, $includeKeys);
+
+            $addonCards[] = [
+                'addon_key' => $normalizedAddonKey,
+                'label' => (string) ($contentDefinition['name'] ?? $definition['label'] ?? Str::title(str_replace('_', ' ', $normalizedAddonKey))),
+                'price_display' => (string) ($contentDefinition['price_display'] ?? 'Add-on pricing'),
+                'summary' => (string) ($contentDefinition['summary'] ?? ''),
+                'modules' => $modules,
+            ];
+        }
+
+        return [
+            'content' => $content,
+            'plan_cards' => $planCards,
+            'addon_cards' => $addonCards,
+            'recommended_plan_key' => 'growth',
+        ];
+    }
+
+    /**
      * @return array{
      *   content:array<string,mixed>,
      *   tenant_id:?int,

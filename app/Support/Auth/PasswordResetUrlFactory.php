@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 
 class PasswordResetUrlFactory
 {
-    public function make(string $token, string $email, ?Request $request = null): string
+    public function make(string $token, string $email, ?Request $request = null, ?string $preferredHost = null): string
     {
         $path = route('password.reset', [
             'token' => $token,
@@ -14,7 +14,7 @@ class PasswordResetUrlFactory
         ], false);
 
         $request ??= request();
-        $requestHost = $this->resolveRequestHost($request);
+        $requestHost = $this->normalizeHost($preferredHost) ?? $this->resolveRequestHost($request);
         if ($requestHost !== null) {
             $scheme = $this->resolveRequestScheme($request) ?? $this->resolveAppScheme();
 
@@ -33,12 +33,7 @@ class PasswordResetUrlFactory
 
     protected function resolveRequestHost(?Request $request): ?string
     {
-        $host = strtolower(trim((string) $request?->getHost()));
-        if ($host !== '') {
-            return $host;
-        }
-
-        return null;
+        return $this->normalizeHost((string) $request?->getHost());
     }
 
     protected function resolveFallbackHost(): ?string
@@ -72,5 +67,12 @@ class PasswordResetUrlFactory
         $appScheme = strtolower(trim((string) $appScheme));
 
         return in_array($appScheme, ['http', 'https'], true) ? $appScheme : 'https';
+    }
+
+    protected function normalizeHost(?string $value): ?string
+    {
+        $host = strtolower(trim((string) $value));
+
+        return $host !== '' ? $host : null;
     }
 }

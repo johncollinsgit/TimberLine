@@ -12,6 +12,11 @@ class HomeRedirect
             return route('login', absolute: false);
         }
 
+        $requestedVia = strtolower(trim((string) ($user->requested_via ?? '')));
+        if ($requestedVia !== '' && str_starts_with($requestedVia, 'customer_')) {
+            return route('app.start', absolute: false);
+        }
+
         $role = (string) ($user->role ?? '');
 
         if ($role === 'pouring') {
