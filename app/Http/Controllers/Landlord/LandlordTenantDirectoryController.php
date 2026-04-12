@@ -11,7 +11,10 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantModuleState;
+use App\Models\TenantOnboardingJourneyEvent;
 use App\Models\User;
+use App\Services\Onboarding\OnboardingJourneyDiagnosticsService;
+use App\Services\Onboarding\OnboardingJourneyEventPresenter;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\LandlordTenantOperationsService;
@@ -34,6 +37,7 @@ class LandlordTenantDirectoryController extends Controller
      */
     protected const TABS = [
         'overview',
+        'onboarding_journey',
         'applications',
         'customers',
         'activity',
@@ -363,7 +367,8 @@ class LandlordTenantDirectoryController extends Controller
         Tenant $tenant,
         LandlordTenantOperationsService $operationsService,
         LandlordOperatorActionAuditService $auditService,
-        TenantModuleAccessResolver $moduleAccessResolver
+        TenantModuleAccessResolver $moduleAccessResolver,
+        OnboardingJourneyDiagnosticsService $journeyDiagnostics
     ): View {
         $hydratedTenant = $this->tenantDetailQuery()->findOrFail($tenant->getKey());
         $hydratedTenant->load([
@@ -399,6 +404,33 @@ class LandlordTenantDirectoryController extends Controller
             ->count();
 
         $customerSearch = trim((string) $request->query('customer_search', ''));
+
+        $journeyOverview = null;
+        if ($activeTab === 'overview') {
+            $journeyOverview = $journeyDiagnostics->overview((int) $hydratedTenant->id);
+        }
+
+        $journeyDetail = null;
+        if ($activeTab === 'onboarding_journey') {
+            $requestedBlueprintId = $request->query('final_blueprint_id');
+            $finalBlueprintId = is_numeric($requestedBlueprintId) ? (int) $requestedBlueprintId : null;
+
+            $journeyDetail = $journeyDiagnostics->detail(
+                tenantId: (int) $hydratedTenant->id,
+                finalBlueprintId: $finalBlueprintId,
+                limit: 200
+            );
+
+            $resolvedBlueprintId = is_numeric(data_get($journeyDetail, 'final_blueprint_id')) ? (int) data_get($journeyDetail, 'final_blueprint_id') : null;
+
+            if ($finalBlueprintId !== null && $finalBlueprintId > 0 && $resolvedBlueprintId !== $finalBlueprintId) {
+                abort(404);
+            }
+
+            if ($finalBlueprintId !== null && $finalBlueprintId > 0 && (int) data_get($journeyDetail, 'meta.raw_event_count', 0) <= 0) {
+                abort(404);
+            }
+        }
 
         return view('landlord.tenants.show', [
             'tenant' => $hydratedTenant,
@@ -436,6 +468,8 @@ class LandlordTenantDirectoryController extends Controller
             'performanceRange' => $this->normalizePerformanceRange((string) $request->query('range', '30d')),
             'performanceRanges' => $this->performanceRangeOptions(),
             'performance' => $this->tenantPerformance((int) $hydratedTenant->id, (string) $request->query('range', '30d')),
+            'onboardingJourneyDetail' => $journeyDetail,
+            'onboardingJourneyOverview' => $journeyOverview,
         ]);
     }
 
@@ -674,7 +708,7 @@ class LandlordTenantDirectoryController extends Controller
 
     protected function resolveTab(string $tab): string
     {
-        $normalized = strtolower(trim($tab));
+        $normalized = str_replace('-', '_', strtolower(trim($tab)));
 
         return in_array($normalized, self::TABS, true) ? $normalized : 'overview';
     }
@@ -1012,6 +1046,7 @@ class LandlordTenantDirectoryController extends Controller
     protected function tenantActivityRows(int $tenantId): Collection
     {
         $entries = [];
+        $onboardingPresenter = app(OnboardingJourneyEventPresenter::class);
 
         if (Schema::hasTable('landlord_operator_actions')) {
             $operatorRows = LandlordOperatorAction::query()
@@ -1040,6 +1075,60 @@ class LandlordTenantDirectoryController extends Controller
                     'related_tenant_url' => $relatedTenantId !== null
                         ? route('landlord.tenants.show', ['tenant' => $relatedTenantId, 'tab' => 'overview'])
                         : null,
+                    'action_url' => null,
+                    'timestamp' => $timestamp?->timestamp ?? 0,
+                ];
+            }
+        }
+
+        if (Schema::hasTable('tenant_onboarding_journey_events')) {
+            $telemetryRows = TenantOnboardingJourneyEvent::query()
+                ->where('tenant_id', $tenantId)
+                ->orderByDesc('occurred_at')
+                ->limit(80)
+                ->get();
+
+            $actorIds = $telemetryRows
+                ->pluck('actor_user_id')
+                ->filter(fn ($value) => is_numeric($value) && (int) $value > 0)
+                ->map(fn ($value) => (int) $value)
+                ->unique()
+                ->values()
+                ->all();
+
+            $actorLookup = $actorIds !== []
+                ? User::query()->whereIn('id', $actorIds)->get(['id', 'name', 'email'])->keyBy('id')
+                : collect();
+
+            foreach ($telemetryRows as $row) {
+                $timestamp = $row->occurred_at ? CarbonImmutable::parse($row->occurred_at) : null;
+                $actorId = is_numeric($row->actor_user_id) ? (int) $row->actor_user_id : null;
+                $actor = $actorId !== null ? $actorLookup->get($actorId) : null;
+
+                $payload = is_array($row->payload ?? null) ? (array) $row->payload : [];
+                $payloadSummary = $onboardingPresenter->payloadSummary((string) $row->event_key, $payload);
+                $contextItems = $onboardingPresenter->contextSummaryItems((string) $row->event_key, $payloadSummary);
+
+                $finalBlueprintId = is_numeric($row->final_blueprint_id) ? (int) $row->final_blueprint_id : null;
+                $actionUrl = $finalBlueprintId !== null && $finalBlueprintId > 0
+                    ? route('landlord.tenants.show', [
+                        'tenant' => $tenantId,
+                        'tab' => 'onboarding_journey',
+                        'final_blueprint_id' => $finalBlueprintId,
+                    ])
+                    : null;
+
+                $entries[] = [
+                    'key' => 'onboarding-journey-'.$row->id,
+                    'event' => $onboardingPresenter->labelForEventKey((string) $row->event_key),
+                    'actor' => $actor?->name ?: ($actor?->email ?: ($actorId ? 'User #'.$actorId : 'System')),
+                    'time' => $timestamp?->toDateTimeString(),
+                    'time_label' => $timestamp?->diffForHumans() ?? 'n/a',
+                    'related_entity' => $onboardingPresenter->activityRelatedEntity($finalBlueprintId, $contextItems),
+                    'status' => $onboardingPresenter->activityStatusForEventKey((string) $row->event_key),
+                    'related_tenant_id' => null,
+                    'related_tenant_url' => null,
+                    'action_url' => $actionUrl,
                     'timestamp' => $timestamp?->timestamp ?? 0,
                 ];
             }
@@ -1074,6 +1163,7 @@ class LandlordTenantDirectoryController extends Controller
                     'status' => (string) ($row->status ?? 'pending'),
                     'related_tenant_id' => null,
                     'related_tenant_url' => null,
+                    'action_url' => null,
                     'timestamp' => $timestamp?->timestamp ?? 0,
                 ];
             }
@@ -1109,6 +1199,7 @@ class LandlordTenantDirectoryController extends Controller
                     'status' => (string) ($row->status ?? 'open'),
                     'related_tenant_id' => null,
                     'related_tenant_url' => null,
+                    'action_url' => null,
                     'timestamp' => $timestamp?->timestamp ?? 0,
                 ];
             }

@@ -150,6 +150,16 @@
                                         <div class="mt-1 font-mono text-xs text-zinc-500">
                                             #{{ $row['tenant_id'] ?? '' }} @if(! empty($row['tenant_slug'])) · {{ $row['tenant_slug'] }} @endif
                                         </div>
+                                        @if (! empty($row['final_blueprint_id']))
+                                            <div class="mt-2">
+                                                <a
+                                                    href="{{ route('landlord.tenants.show', ['tenant' => $row['tenant_id'], 'tab' => 'onboarding_journey', 'final_blueprint_id' => $row['final_blueprint_id']]) }}"
+                                                    class="text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2"
+                                                >
+                                                    View details
+                                                </a>
+                                            </div>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-3 font-mono text-xs">
                                         {{ $row['final_blueprint_id'] ?? '—' }}

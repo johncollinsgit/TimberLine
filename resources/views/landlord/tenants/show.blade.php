@@ -75,6 +75,7 @@
                 <button type="button" @click="showRole = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Role</button>
                 <button type="button" @click="showModules = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Modules</button>
                 <button type="button" @click="showType = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Tenant Type</button>
+                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'onboarding_journey']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Onboarding</a>
                 <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'applications']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Applications</a>
                 <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'customers']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Customers</a>
                 <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'activity']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Activity</a>
@@ -106,6 +107,88 @@
             </section>
 
             <section class="grid gap-6 lg:grid-cols-2">
+                @php
+                    $onboardingOverview = is_array($onboardingJourneyOverview ?? null) ? (array) $onboardingJourneyOverview : null;
+                    $onboardingHasTelemetry = (bool) data_get($onboardingOverview, 'has_telemetry', false);
+                    $onboardingSelectedBlueprintId = data_get($onboardingOverview, 'selected_blueprint_id');
+                    $onboardingSelectedBlueprintId = is_numeric($onboardingSelectedBlueprintId) ? (int) $onboardingSelectedBlueprintId : null;
+                    $onboardingAutoSelected = (bool) data_get($onboardingOverview, 'auto_selected_latest', false);
+                    $onboardingLatestPhase = (string) data_get($onboardingOverview, 'latest_phase', '');
+                    $onboardingStuckPoint = (string) data_get($onboardingOverview, 'stuck_point', '');
+                    $onboardingStatusSentence = (string) data_get($onboardingOverview, 'status_sentence', '');
+                    $onboardingMilestones = is_array(data_get($onboardingOverview, 'milestones')) ? (array) data_get($onboardingOverview, 'milestones') : null;
+                @endphp
+
+                <article class="rounded-2xl border border-zinc-200 bg-white p-5">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-zinc-900">Onboarding status</h3>
+                            <p class="mt-1 text-sm text-zinc-600">At-a-glance reduction from canonical onboarding telemetry.</p>
+                        </div>
+                        @if ($onboardingHasTelemetry)
+                            <a
+                                href="{{ route('landlord.tenants.show', array_filter([
+                                    'tenant' => $tenant->id,
+                                    'tab' => 'onboarding_journey',
+                                    'final_blueprint_id' => $onboardingSelectedBlueprintId,
+                                ], fn ($value): bool => $value !== null)) }}"
+                                class="text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2"
+                            >
+                                Open onboarding journey
+                            </a>
+                        @endif
+                    </div>
+
+                    @if (! $onboardingHasTelemetry)
+                        <div class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                            No onboarding journey telemetry yet.
+                        </div>
+                    @else
+                        <div class="mt-4 flex flex-wrap items-center gap-2">
+                            <span class="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
+                                Phase: {{ $onboardingLatestPhase !== '' ? str_replace('_', ' ', $onboardingLatestPhase) : '—' }}
+                            </span>
+                            <span class="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
+                                Stuck: {{ $onboardingStuckPoint !== '' ? str_replace('_', ' ', $onboardingStuckPoint) : '—' }}
+                            </span>
+                            @if ($onboardingSelectedBlueprintId)
+                                <span class="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                                    Blueprint: <span class="ml-1 font-mono text-[11px] text-zinc-900">{{ '#'.$onboardingSelectedBlueprintId }}</span>
+                                </span>
+                                @if ($onboardingAutoSelected)
+                                    <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">Latest</span>
+                                @endif
+                            @else
+                                <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+                                    Unlinked telemetry
+                                </span>
+                            @endif
+                        </div>
+
+                        <p class="mt-3 text-sm font-semibold text-zinc-900">{{ $onboardingStatusSentence !== '' ? $onboardingStatusSentence : 'Onboarding activity detected' }}</p>
+
+                        @if ($onboardingMilestones)
+                            <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+                                @foreach ([
+                                    ['label' => 'Handoff viewed', 'key' => 'handoff_viewed_at'],
+                                    ['label' => 'First open', 'key' => 'first_open_acknowledged_at'],
+                                    ['label' => 'Import completed', 'key' => 'import_completed_at'],
+                                    ['label' => 'First active module', 'key' => 'first_active_module_reached_at'],
+                                ] as $row)
+                                    <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                                        <dt class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">{{ $row['label'] }}</dt>
+                                        <dd class="mt-1 font-mono text-xs text-zinc-900">{{ data_get($onboardingMilestones, $row['key']) ?? '—' }}</dd>
+                                    </div>
+                                @endforeach
+                            </dl>
+                        @else
+                            <div class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                                Linked milestones not available yet (no linked blueprint context).
+                            </div>
+                        @endif
+                    @endif
+                </article>
+
                 <article class="rounded-2xl border border-zinc-200 bg-white p-5">
                     <h3 class="text-base font-semibold text-zinc-900">Module status</h3>
                     <p class="mt-1 text-sm text-zinc-600">Simple setup signal by module state.</p>
@@ -145,6 +228,369 @@
                         </table>
                     </div>
                 </article>
+            </section>
+        @endif
+
+        @if ($activeTab === 'onboarding_journey')
+            @php
+                $journey = is_array($onboardingJourneyDetail ?? null) ? $onboardingJourneyDetail : null;
+                $milestones = is_array(data_get($journey, 'milestones')) ? (array) data_get($journey, 'milestones') : null;
+                $rawEvents = is_array(data_get($journey, 'raw_events')) ? (array) data_get($journey, 'raw_events') : [];
+                $unlinkedEvents = is_array(data_get($journey, 'unlinked_events')) ? (array) data_get($journey, 'unlinked_events') : [];
+                $actorLookup = is_array(data_get($journey, 'actor_lookup')) ? (array) data_get($journey, 'actor_lookup') : [];
+                $availableBlueprintIds = is_array(data_get($journey, 'available_blueprint_ids')) ? array_values(array_filter((array) data_get($journey, 'available_blueprint_ids'), 'is_numeric')) : [];
+                $finalBlueprintId = data_get($journey, 'final_blueprint_id');
+                $stuckPoint = (string) data_get($journey, 'stuck_point', '');
+                $latestPhase = (string) data_get($journey, 'latest_phase', '');
+                $meta = is_array(data_get($journey, 'meta')) ? (array) data_get($journey, 'meta') : [];
+                $eventFilter = strtolower(trim((string) request()->query('event_filter', 'all')));
+                $allowedFilters = ['all', 'milestones', 'phase', 'import', 'unlinked'];
+                $eventFilter = in_array($eventFilter, $allowedFilters, true) ? $eventFilter : 'all';
+                $formatDuration = static function (?int $seconds): string {
+                    if ($seconds === null) {
+                        return '—';
+                    }
+                    if ($seconds < 60) {
+                        return $seconds.'s';
+                    }
+                    if ($seconds < 3600) {
+                        return (string) ((int) round($seconds / 60)).'m';
+                    }
+                    return number_format($seconds / 3600, 1).'h';
+                };
+                $durations = $milestones && is_array($milestones['durations'] ?? null) ? (array) $milestones['durations'] : [];
+                $linkedMilestoneCount = count(array_filter($rawEvents, static fn (array $event): bool => (string) ($event['category'] ?? '') === 'milestone'));
+                $linkedPhaseCount = count(array_filter($rawEvents, static fn (array $event): bool => (string) ($event['category'] ?? '') === 'phase_change'));
+                $linkedImportCount = count(array_filter($rawEvents, static function (array $event): bool {
+                    $key = (string) ($event['event_key'] ?? '');
+                    return in_array($key, ['onboarding.import_started', 'onboarding.import_completed'], true);
+                }));
+                $linkedTotalCount = count($rawEvents);
+                $unlinkedTotalCount = count($unlinkedEvents);
+
+                $filteredLinkedEvents = $rawEvents;
+                if ($eventFilter === 'milestones') {
+                    $filteredLinkedEvents = array_values(array_filter($rawEvents, static fn (array $event): bool => (string) ($event['category'] ?? '') === 'milestone'));
+                } elseif ($eventFilter === 'phase') {
+                    $filteredLinkedEvents = array_values(array_filter($rawEvents, static fn (array $event): bool => (string) ($event['category'] ?? '') === 'phase_change'));
+                } elseif ($eventFilter === 'import') {
+                    $filteredLinkedEvents = array_values(array_filter($rawEvents, static function (array $event): bool {
+                        $key = (string) ($event['event_key'] ?? '');
+                        return in_array($key, ['onboarding.import_started', 'onboarding.import_completed'], true);
+                    }));
+                } elseif ($eventFilter === 'unlinked') {
+                    $filteredLinkedEvents = [];
+                }
+
+                $filterUrl = static function (string $filter) use ($tenant, $finalBlueprintId): string {
+                    $query = ['tab' => 'onboarding_journey'];
+
+                    if (is_numeric($finalBlueprintId)) {
+                        $query['final_blueprint_id'] = (int) $finalBlueprintId;
+                    }
+
+                    if ($filter !== 'all') {
+                        $query['event_filter'] = $filter;
+                    }
+
+                    return route('landlord.tenants.show', ['tenant' => $tenant->id]) . '?' . http_build_query($query);
+                };
+            @endphp
+
+            <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Tenant</p>
+                        <h3 class="mt-2 text-xl font-semibold text-zinc-950">Onboarding journey</h3>
+                        <p class="mt-1 text-sm text-zinc-600">
+                            Reduced milestones + raw append-only events from <span class="font-mono text-xs">tenant_onboarding_journey_events</span>.
+                        </p>
+                        <p class="mt-2 text-xs text-zinc-600">
+                            Blueprint context:
+                            @if (count($availableBlueprintIds) >= 2)
+                                <form method="GET" action="{{ route('landlord.tenants.show', ['tenant' => $tenant->id]) }}" class="inline-flex items-center gap-2">
+                                    <input type="hidden" name="tab" value="onboarding_journey" />
+                                    <select
+                                        name="final_blueprint_id"
+                                        class="rounded-lg border border-zinc-300 bg-white px-2 py-1 font-mono text-[11px] text-zinc-900"
+                                        onchange="this.form.submit()"
+                                    >
+                                        @foreach ($availableBlueprintIds as $option)
+                                            <option value="{{ (int) $option }}" @selected((int) $finalBlueprintId === (int) $option)>#{{ (int) $option }}</option>
+                                        @endforeach
+                                    </select>
+                                    @if (! empty($meta['auto_selected_latest']))
+                                        <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">Auto-selected latest</span>
+                                    @endif
+                                </form>
+                            @elseif (count($availableBlueprintIds) === 1)
+                                <span class="font-mono">{{ '#'.(int) $availableBlueprintIds[0] }}</span>
+                                @if (! empty($meta['auto_selected_latest']))
+                                    <span class="ml-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">Auto-selected latest</span>
+                                @endif
+                            @else
+                                <span class="text-zinc-500">No linked blueprints yet</span>
+                            @endif
+                            <span class="mx-2 text-zinc-400">•</span>
+                            <a href="{{ route('landlord.onboarding.journey') }}" class="font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">Back to diagnostics</a>
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
+                            Phase: {{ $latestPhase !== '' ? str_replace('_', ' ', $latestPhase) : '—' }}
+                        </span>
+                        <span class="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
+                            Stuck: {{ $stuckPoint !== '' ? str_replace('_', ' ', $stuckPoint) : '—' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                    <p class="font-medium text-zinc-900">How to read this</p>
+                    <ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-zinc-700">
+                        <li><span class="font-semibold">Linked events</span> are scoped to the selected blueprint and drive the milestone reduction above.</li>
+                        <li><span class="font-semibold">Unlinked events</span> (no blueprint id) are shown below for context only and never affect linked milestones.</li>
+                        <li>Use the filters to scan milestones, phase transitions, and import milestones without reading full payload blobs.</li>
+                    </ul>
+                </div>
+
+                @if (! $milestones)
+                    <div class="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                        No journey telemetry found for this tenant yet.
+                    </div>
+                @else
+                    <div class="mt-6 grid gap-3 lg:grid-cols-6">
+                        @foreach ([
+                            ['label' => 'Handoff viewed', 'value' => $milestones['handoff_viewed_at'] ?? null],
+                            ['label' => 'First open acknowledged', 'value' => $milestones['first_open_acknowledged_at'] ?? null],
+                            ['label' => 'Import started', 'value' => $milestones['import_started_at'] ?? null],
+                            ['label' => 'Import completed', 'value' => $milestones['import_completed_at'] ?? null],
+                            ['label' => 'First active module', 'value' => $milestones['first_active_module_reached_at'] ?? null],
+                            ['label' => 'Latest event', 'value' => $milestones['latest_event_at'] ?? null],
+                        ] as $card)
+                            <article class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                                <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">{{ $card['label'] }}</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-900">{{ $card['value'] ?? '—' }}</p>
+                            </article>
+                        @endforeach
+                    </div>
+
+                    <div class="mt-4 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Durations</p>
+                        <div class="mt-2 grid gap-2 sm:grid-cols-3">
+                            <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                                <p class="text-xs font-medium text-zinc-700">Handoff → first open</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-900">{{ $formatDuration($durations['handoff_to_first_open_seconds'] ?? null) }}</p>
+                            </div>
+                            <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                                <p class="text-xs font-medium text-zinc-700">First open → import complete</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-900">{{ $formatDuration($durations['first_open_to_import_complete_seconds'] ?? null) }}</p>
+                            </div>
+                            <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                                <p class="text-xs font-medium text-zinc-700">Import complete → activation</p>
+                                <p class="mt-1 font-mono text-xs text-zinc-900">{{ $formatDuration($durations['import_complete_to_first_active_module_seconds'] ?? null) }}</p>
+                            </div>
+                        </div>
+                    </div>
+                @endif
+
+                <div class="mt-6">
+                    <div class="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <h4 class="text-sm font-semibold text-zinc-900">Raw blueprint events</h4>
+                            <p class="mt-1 text-xs text-zinc-600">Append-only stream in reverse chronological order. Milestones are reduced separately.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-zinc-700">
+                            <a href="{{ $filterUrl('all') }}" class="rounded-full border {{ $eventFilter === 'all' ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100' }} px-3 py-1.5">All ({{ $linkedTotalCount }})</a>
+                            <a href="{{ $filterUrl('milestones') }}" class="rounded-full border {{ $eventFilter === 'milestones' ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100' }} px-3 py-1.5">Milestones ({{ $linkedMilestoneCount }})</a>
+                            <a href="{{ $filterUrl('phase') }}" class="rounded-full border {{ $eventFilter === 'phase' ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100' }} px-3 py-1.5">Phase ({{ $linkedPhaseCount }})</a>
+                            <a href="{{ $filterUrl('import') }}" class="rounded-full border {{ $eventFilter === 'import' ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100' }} px-3 py-1.5">Import ({{ $linkedImportCount }})</a>
+                            @if ($unlinkedTotalCount > 0)
+                                <a href="{{ $filterUrl('unlinked') }}" class="rounded-full border {{ $eventFilter === 'unlinked' ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100' }} px-3 py-1.5">Unlinked ({{ $unlinkedTotalCount }})</a>
+                            @endif
+                        </div>
+                    </div>
+
+                    @if ($eventFilter !== 'unlinked')
+                        <div class="mt-3 overflow-hidden rounded-2xl border border-zinc-200">
+                            <table class="w-full divide-y divide-zinc-200 text-sm">
+                                <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-500">
+                                    <tr>
+                                        <th class="px-4 py-3">Occurred</th>
+                                        <th class="px-4 py-3">Event</th>
+                                        <th class="px-4 py-3">Actor</th>
+                                        <th class="px-4 py-3">Context</th>
+                                        <th class="px-4 py-3">Payload</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-zinc-100 text-zinc-700">
+                                    @forelse ($filteredLinkedEvents as $event)
+                                        @php
+                                            $event = is_array($event) ? $event : [];
+                                            $actorId = is_numeric($event['actor_user_id'] ?? null) ? (int) $event['actor_user_id'] : null;
+                                            $actor = $actorId && is_array($actorLookup[$actorId] ?? null) ? (array) $actorLookup[$actorId] : null;
+                                            $contextItems = is_array($event['context_summary_items'] ?? null) ? (array) $event['context_summary_items'] : [];
+                                            $payload = is_array($event['payload'] ?? null) ? (array) $event['payload'] : [];
+                                            $isMilestone = (string) ($event['category'] ?? '') === 'milestone';
+                                            $isPhaseChange = (string) ($event['category'] ?? '') === 'phase_change';
+                                        @endphp
+                                        <tr>
+                                            <td class="px-4 py-3 font-mono text-xs">{{ $event['occurred_at_iso'] ?? '—' }}</td>
+                                            <td class="px-4 py-3">
+                                                <div class="font-semibold text-zinc-900">{{ $event['event_key'] ?? '—' }}</div>
+                                                @if (! empty($event['final_blueprint_id']))
+                                                    <div class="mt-1 font-mono text-xs text-zinc-500">Blueprint #{{ (int) $event['final_blueprint_id'] }}</div>
+                                                @endif
+                                                <div class="mt-2 flex flex-wrap gap-1">
+                                                    @if ($isMilestone)
+                                                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">Milestone</span>
+                                                    @elseif ($isPhaseChange)
+                                                        <span class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-900">Phase</span>
+                                                    @else
+                                                        <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">Other</span>
+                                                    @endif
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                @if ($actor)
+                                                    <div class="text-xs font-semibold text-zinc-900">{{ $actor['name'] ?: ('User #'.$actorId) }}</div>
+                                                    <div class="mt-1 font-mono text-[11px] text-zinc-500">{{ $actor['email'] ?? '' }}</div>
+                                                @elseif ($actorId)
+                                                    <div class="font-mono text-xs text-zinc-700">User #{{ $actorId }}</div>
+                                                @else
+                                                    <span class="text-xs text-zinc-500">System</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                <div class="flex flex-wrap gap-1.5">
+                                                    @foreach ($contextItems as $item)
+                                                        @php
+                                                            $label = (string) ($item['label'] ?? '');
+                                                            $value = $item['value'] ?? null;
+                                                            if (is_array($value)) {
+                                                                $value = json_encode($value, JSON_UNESCAPED_SLASHES);
+                                                            } elseif (is_bool($value)) {
+                                                                $value = $value ? 'true' : 'false';
+                                                            }
+                                                        @endphp
+                                                        <span class="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">
+                                                            @if ($label !== '')
+                                                                <span class="text-zinc-500">{{ $label }}:</span>
+                                                            @endif
+                                                            <span class="font-mono">{{ $value ?? '—' }}</span>
+                                                        </span>
+                                                    @endforeach
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                @if ($payload !== [])
+                                                    <details class="group">
+                                                        <summary class="cursor-pointer select-none text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">
+                                                            View payload
+                                                        </summary>
+                                                        <pre class="mt-2 whitespace-pre-wrap break-words rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-zinc-700">{{ json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                                    </details>
+                                                @else
+                                                    <span class="text-xs text-zinc-500">No payload</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5" class="px-4 py-6 text-sm text-zinc-600">
+                                                @if ($eventFilter !== 'all')
+                                                    No matching blueprint events for this filter.
+                                                @else
+                                                    No blueprint-scoped onboarding journey events found.
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                </div>
+
+                @if ($unlinkedEvents !== [] && ($eventFilter === 'all' || $eventFilter === 'unlinked'))
+                    <div class="mt-8">
+                        <h4 class="text-sm font-semibold text-zinc-900">Unlinked tenant events</h4>
+                        <p class="mt-1 text-xs text-zinc-600">Telemetry recorded without a finalized blueprint id. These do not influence the milestone reduction above.</p>
+
+                        <div class="mt-3 overflow-hidden rounded-2xl border border-zinc-200">
+                            <table class="w-full divide-y divide-zinc-200 text-sm">
+                                <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-500">
+                                    <tr>
+                                        <th class="px-4 py-3">Occurred</th>
+                                        <th class="px-4 py-3">Event</th>
+                                        <th class="px-4 py-3">Actor</th>
+                                        <th class="px-4 py-3">Context</th>
+                                        <th class="px-4 py-3">Payload</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-zinc-100 text-zinc-700">
+                                    @foreach ($unlinkedEvents as $event)
+                                        @php
+                                            $event = is_array($event) ? $event : [];
+                                            $actorId = is_numeric($event['actor_user_id'] ?? null) ? (int) $event['actor_user_id'] : null;
+                                            $actor = $actorId && is_array($actorLookup[$actorId] ?? null) ? (array) $actorLookup[$actorId] : null;
+                                            $contextItems = is_array($event['context_summary_items'] ?? null) ? (array) $event['context_summary_items'] : [];
+                                            $payload = is_array($event['payload'] ?? null) ? (array) $event['payload'] : [];
+                                        @endphp
+                                        <tr>
+                                            <td class="px-4 py-3 font-mono text-xs">{{ $event['occurred_at_iso'] ?? '—' }}</td>
+                                            <td class="px-4 py-3 font-semibold text-zinc-900">{{ $event['event_key'] ?? '—' }}</td>
+                                            <td class="px-4 py-3">
+                                                @if ($actor)
+                                                    <div class="text-xs font-semibold text-zinc-900">{{ $actor['name'] ?: ('User #'.$actorId) }}</div>
+                                                    <div class="mt-1 font-mono text-[11px] text-zinc-500">{{ $actor['email'] ?? '' }}</div>
+                                                @elseif ($actorId)
+                                                    <div class="font-mono text-xs text-zinc-700">User #{{ $actorId }}</div>
+                                                @else
+                                                    <span class="text-xs text-zinc-500">System</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                <div class="flex flex-wrap gap-1.5">
+                                                    @foreach ($contextItems as $item)
+                                                        @php
+                                                            $label = (string) ($item['label'] ?? '');
+                                                            $value = $item['value'] ?? null;
+                                                            if (is_array($value)) {
+                                                                $value = json_encode($value, JSON_UNESCAPED_SLASHES);
+                                                            } elseif (is_bool($value)) {
+                                                                $value = $value ? 'true' : 'false';
+                                                            }
+                                                        @endphp
+                                                        <span class="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-semibold text-zinc-700">
+                                                            @if ($label !== '')
+                                                                <span class="text-zinc-500">{{ $label }}:</span>
+                                                            @endif
+                                                            <span class="font-mono">{{ $value ?? '—' }}</span>
+                                                        </span>
+                                                    @endforeach
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                @if ($payload !== [])
+                                                    <details class="group">
+                                                        <summary class="cursor-pointer select-none text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">
+                                                            View payload
+                                                        </summary>
+                                                        <pre class="mt-2 whitespace-pre-wrap break-words rounded-lg border border-zinc-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-zinc-700">{{ json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                                    </details>
+                                                @else
+                                                    <span class="text-xs text-zinc-500">No payload</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @endif
             </section>
         @endif
 
@@ -269,12 +715,15 @@
                                         <div>{{ $row['time_label'] }}</div>
                                         <div class="mt-1 text-xs text-zinc-500">{{ $row['time'] }}</div>
                                     </td>
-                                    <td class="px-4 py-3">
-                                        <div>{{ $row['related_entity'] }}</div>
-                                        @if (! empty($row['related_tenant_url']))
-                                            <a href="{{ $row['related_tenant_url'] }}" class="mt-1 inline-block text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">Open related tenant</a>
-                                        @endif
-                                    </td>
+	                                    <td class="px-4 py-3">
+	                                        <div>{{ $row['related_entity'] }}</div>
+	                                        @if (! empty($row['related_tenant_url']))
+	                                            <a href="{{ $row['related_tenant_url'] }}" class="mt-1 inline-block text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">Open related tenant</a>
+	                                        @endif
+	                                        @if (! empty($row['action_url']))
+	                                            <a href="{{ $row['action_url'] }}" class="mt-1 inline-block text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">Open onboarding journey</a>
+	                                        @endif
+	                                    </td>
                                     <td class="px-4 py-3">
                                         <span class="rounded-full border border-zinc-300 px-2 py-1 text-[11px] font-semibold text-zinc-700">{{ Str::headline((string) $row['status']) }}</span>
                                     </td>
