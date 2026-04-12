@@ -488,6 +488,86 @@ class OnboardingJourneyDiagnosticsService
     }
 
     /**
+     * Read-only counts for landlord dashboard onboarding triage cards.
+     *
+     * Counts are derived from the same deterministic stuck-point reduction used elsewhere.
+     * Import bucket intentionally includes both "waiting_for_import" and "progressing" so
+     * operators can triage "import not yet complete" in one click.
+     *
+     * @param  array<int,int|string>  $tenantIds
+     * @return array{
+     *   tenants_with_telemetry:int,
+     *   tenants_needing_onboarding_attention:int,
+     *   counts:array{
+     *     no_telemetry:int,
+     *     waiting_for_first_open:int,
+     *     waiting_for_import:int,
+     *     waiting_for_activation:int,
+     *     completed_first_value:int
+     *   },
+     *   meta:array<string,mixed>
+     * }
+     */
+    public function dashboardTriageSummary(array $tenantIds): array
+    {
+        $summaries = $this->directorySummaries($tenantIds);
+
+        $counts = [
+            'no_telemetry' => 0,
+            self::STUCK_WAITING_FIRST_OPEN => 0,
+            self::STUCK_WAITING_IMPORT => 0,
+            self::STUCK_PROGRESSING => 0,
+            self::STUCK_WAITING_ACTIVATION => 0,
+            self::STUCK_COMPLETED_FIRST_VALUE => 0,
+        ];
+
+        $tenantsWithTelemetry = 0;
+        $unlinkedTelemetry = 0;
+
+        foreach ($summaries as $tenantId => $summary) {
+            if (! is_array($summary)) {
+                continue;
+            }
+
+            $hasTelemetry = (bool) ($summary['has_telemetry'] ?? false);
+            if (! $hasTelemetry) {
+                $counts['no_telemetry']++;
+                continue;
+            }
+
+            $tenantsWithTelemetry++;
+
+            if (! is_numeric($summary['selected_blueprint_id'] ?? null)) {
+                $unlinkedTelemetry++;
+            }
+
+            $stuck = strtolower(trim((string) ($summary['stuck_point'] ?? '')));
+            if ($stuck !== '' && array_key_exists($stuck, $counts)) {
+                $counts[$stuck]++;
+            }
+        }
+
+        $waitingForImportBucket = (int) $counts[self::STUCK_WAITING_IMPORT] + (int) $counts[self::STUCK_PROGRESSING];
+        $needingAttention = $tenantsWithTelemetry - (int) $counts[self::STUCK_COMPLETED_FIRST_VALUE];
+
+        return [
+            'tenants_with_telemetry' => $tenantsWithTelemetry,
+            'tenants_needing_onboarding_attention' => max(0, $needingAttention),
+            'counts' => [
+                'no_telemetry' => (int) $counts['no_telemetry'],
+                'waiting_for_first_open' => (int) $counts[self::STUCK_WAITING_FIRST_OPEN],
+                'waiting_for_import' => $waitingForImportBucket,
+                'waiting_for_activation' => (int) $counts[self::STUCK_WAITING_ACTIVATION],
+                'completed_first_value' => (int) $counts[self::STUCK_COMPLETED_FIRST_VALUE],
+            ],
+            'meta' => [
+                'unlinked_telemetry_tenant_count' => $unlinkedTelemetry,
+                'import_progressing_count' => (int) $counts[self::STUCK_PROGRESSING],
+            ],
+        ];
+    }
+
+    /**
      * Read-only drill-in for one tenant + finalized blueprint id.
      *
      * Milestones are reduced from blueprint-scoped events only. Unlinked events (null blueprint id)

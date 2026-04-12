@@ -45,9 +45,16 @@ class LandlordTenantDirectoryController extends Controller
         'settings',
     ];
 
-    public function dashboard(): View
+    public function dashboard(OnboardingJourneyDiagnosticsService $journeyDiagnostics): View
     {
         $tenants = $this->tenantDirectoryRows();
+        $tenantIds = $tenants
+            ->map(static fn (array $row): int => is_numeric($row['id'] ?? null) ? (int) $row['id'] : 0)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        $onboardingTriage = $journeyDiagnostics->dashboardTriageSummary($tenantIds);
 
         return view('landlord.dashboard', [
             'metrics' => [
@@ -65,6 +72,7 @@ class LandlordTenantDirectoryController extends Controller
                 ->sortByDesc('created_at')
                 ->take(6)
                 ->values(),
+            'onboardingTriage' => $onboardingTriage,
         ]);
     }
 
@@ -108,6 +116,13 @@ class LandlordTenantDirectoryController extends Controller
 
                     if ($onboardingFilter === 'no_telemetry') {
                         return ! (bool) ($summary['has_telemetry'] ?? false);
+                    }
+
+                    if ($onboardingFilter === OnboardingJourneyDiagnosticsService::STUCK_WAITING_IMPORT) {
+                        $stuck = (string) ($summary['stuck_point'] ?? '');
+
+                        return $stuck === OnboardingJourneyDiagnosticsService::STUCK_WAITING_IMPORT
+                            || $stuck === OnboardingJourneyDiagnosticsService::STUCK_PROGRESSING;
                     }
 
                     return (string) ($summary['stuck_point'] ?? '') === $onboardingFilter;

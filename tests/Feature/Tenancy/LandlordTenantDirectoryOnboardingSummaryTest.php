@@ -124,3 +124,79 @@ test('tenant directory supports lightweight onboarding stuck-point filtering', f
         ->assertDontSeeText('Tenant B');
 });
 
+test('tenant directory waiting_for_import filter includes both waiting_for_import and progressing states', function (): void {
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+
+    $tenantWaiting = Tenant::query()->create(['name' => 'Tenant Waiting Import', 'slug' => 'tenant-waiting-import']);
+    $tenantProgressing = Tenant::query()->create(['name' => 'Tenant Import Progressing', 'slug' => 'tenant-import-progressing']);
+    $tenantCompleted = Tenant::query()->create(['name' => 'Tenant Completed', 'slug' => 'tenant-completed']);
+
+    $bpWaiting = TenantOnboardingBlueprint::query()->create(['tenant_id' => $tenantWaiting->id, 'status' => 'final', 'account_mode' => 'demo', 'rail' => 'direct', 'payload' => []]);
+    $bpProgressing = TenantOnboardingBlueprint::query()->create(['tenant_id' => $tenantProgressing->id, 'status' => 'final', 'account_mode' => 'demo', 'rail' => 'direct', 'payload' => []]);
+    $bpCompleted = TenantOnboardingBlueprint::query()->create(['tenant_id' => $tenantCompleted->id, 'status' => 'final', 'account_mode' => 'demo', 'rail' => 'direct', 'payload' => []]);
+
+    TenantOnboardingJourneyEvent::query()->create([
+        'tenant_id' => $tenantWaiting->id,
+        'final_blueprint_id' => $bpWaiting->id,
+        'event_key' => OnboardingJourneyTelemetryService::EVENT_FIRST_OPEN_ACK,
+        'occurred_at' => CarbonImmutable::now()->subHours(3),
+        'dedupe_key' => bin2hex(random_bytes(16)),
+        'payload' => [],
+    ]);
+
+    TenantOnboardingJourneyEvent::query()->create([
+        'tenant_id' => $tenantProgressing->id,
+        'final_blueprint_id' => $bpProgressing->id,
+        'event_key' => OnboardingJourneyTelemetryService::EVENT_FIRST_OPEN_ACK,
+        'occurred_at' => CarbonImmutable::now()->subHours(3),
+        'dedupe_key' => bin2hex(random_bytes(16)),
+        'payload' => [],
+    ]);
+    TenantOnboardingJourneyEvent::query()->create([
+        'tenant_id' => $tenantProgressing->id,
+        'final_blueprint_id' => $bpProgressing->id,
+        'event_key' => OnboardingJourneyTelemetryService::EVENT_IMPORT_STARTED,
+        'occurred_at' => CarbonImmutable::now()->subHours(2),
+        'dedupe_key' => bin2hex(random_bytes(16)),
+        'payload' => [],
+    ]);
+
+    TenantOnboardingJourneyEvent::query()->create([
+        'tenant_id' => $tenantCompleted->id,
+        'final_blueprint_id' => $bpCompleted->id,
+        'event_key' => OnboardingJourneyTelemetryService::EVENT_FIRST_OPEN_ACK,
+        'occurred_at' => CarbonImmutable::now()->subHours(4),
+        'dedupe_key' => bin2hex(random_bytes(16)),
+        'payload' => [],
+    ]);
+    TenantOnboardingJourneyEvent::query()->create([
+        'tenant_id' => $tenantCompleted->id,
+        'final_blueprint_id' => $bpCompleted->id,
+        'event_key' => OnboardingJourneyTelemetryService::EVENT_IMPORT_COMPLETED,
+        'occurred_at' => CarbonImmutable::now()->subHours(3),
+        'dedupe_key' => bin2hex(random_bytes(16)),
+        'payload' => [],
+    ]);
+    TenantOnboardingJourneyEvent::query()->create([
+        'tenant_id' => $tenantCompleted->id,
+        'final_blueprint_id' => $bpCompleted->id,
+        'event_key' => OnboardingJourneyTelemetryService::EVENT_FIRST_ACTIVE_MODULE,
+        'occurred_at' => CarbonImmutable::now()->subHours(2),
+        'dedupe_key' => bin2hex(random_bytes(16)),
+        'payload' => [],
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get("http://{$landlordHost}/landlord/tenants?onboarding_filter=waiting_for_import")
+        ->assertOk()
+        ->assertSeeText('Tenant Waiting Import')
+        ->assertSeeText('Tenant Import Progressing')
+        ->assertDontSeeText('Tenant Completed');
+});
