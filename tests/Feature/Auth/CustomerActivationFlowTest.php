@@ -4,7 +4,7 @@ use App\Models\CustomerAccessRequest;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
-use App\Services\Onboarding\CustomerAccessRequestService;
+use App\Services\Onboarding\CustomerAccessApprovalService;
 use Illuminate\Support\Facades\Notification;
 
 beforeEach(function (): void {
@@ -16,6 +16,7 @@ beforeEach(function (): void {
 
 test('approving a production access request sends a tenant-host password setup link', function (): void {
     Notification::fake();
+    $approver = User::factory()->create(['role' => 'admin', 'is_active' => true]);
 
     $user = User::factory()->create([
         'name' => 'Acme Ops',
@@ -37,7 +38,7 @@ test('approving a production access request sends a tenant-host password setup l
         'user_id' => (int) $user->id,
     ]);
 
-    app(CustomerAccessRequestService::class)->approveUser($user, $accessRequest, 123);
+    app(CustomerAccessApprovalService::class)->approve((int) $accessRequest->id, (int) $approver->id);
 
     $tenant = Tenant::query()->where('slug', 'acme')->first();
     expect($tenant)->not->toBeNull();
@@ -106,4 +107,52 @@ test('start here page renders for tenant members', function (): void {
         ->assertSeeText('Start Here')
         ->assertSeeText('Available Now')
         ->assertSeeText('Acme Candle Co');
+});
+
+test('password setup stays on tenant host and first login lands on start here', function (): void {
+    Notification::fake();
+
+    $approver = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+    $accessRequest = CustomerAccessRequest::query()->create([
+        'intent' => 'production',
+        'status' => 'pending',
+        'name' => 'Acme Ops',
+        'email' => 'ops-activate@example.com',
+        'company' => 'Acme Candle Co',
+        'requested_tenant_slug' => 'acme',
+    ]);
+
+    app(CustomerAccessApprovalService::class)->approve((int) $accessRequest->id, (int) $approver->id);
+
+    $user = User::query()->where('email', 'ops-activate@example.com')->firstOrFail();
+
+    $notification = Notification::sent($user, ApprovalPasswordSetupNotification::class)->first();
+    expect($notification)->not->toBeNull();
+
+    $mail = $notification->toMail($user);
+    $resetUrl = (string) $mail->actionUrl;
+    expect($resetUrl)->toContain('://acme.backstage.local/');
+
+    $this->get($resetUrl)
+        ->assertOk()
+        ->assertSeeText('Reset password');
+
+    $path = (string) (parse_url($resetUrl, PHP_URL_PATH) ?: '');
+    $token = trim((string) basename($path));
+    expect($token)->not->toBe('');
+
+    $this->post('http://acme.backstage.local/reset-password', [
+        'token' => $token,
+        'email' => $user->email,
+        'password' => 'new-password-123',
+        'password_confirmation' => 'new-password-123',
+    ])->assertRedirect('/login');
+
+    $this->post('http://acme.backstage.local/login', [
+        'email' => $user->email,
+        'password' => 'new-password-123',
+    ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('app.start', absolute: false));
 });

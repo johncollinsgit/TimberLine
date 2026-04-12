@@ -55,7 +55,7 @@
         </form>
 
         <div class="text-center text-sm text-zinc-400">
-            <flux:link :href="route('login')" wire:navigate>{{ __('Back to login') }}</flux:link>
+            <flux:link :href="route('login', absolute: false)" wire:navigate>{{ __('Back to login') }}</flux:link>
         </div>
     </div>
 </x-layouts::auth>

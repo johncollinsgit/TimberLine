@@ -7,6 +7,27 @@
     $purchasable = is_array($journey['purchasable'] ?? null) ? (array) $journey['purchasable'] : [];
     $plansPayload = is_array($plans ?? null) ? $plans : [];
     $billingNote = (string) data_get($plansPayload, 'content.billing_note', '');
+
+    $accessRequest = $access_request ?? null;
+    $accessMeta = is_object($accessRequest) ? (array) ($accessRequest->metadata ?? []) : [];
+    $preferredPlanKey = strtolower(trim((string) ($accessMeta['preferred_plan_key'] ?? '')));
+    $addonsInterest = is_array($accessMeta['addons_interest'] ?? null) ? (array) $accessMeta['addons_interest'] : [];
+
+    $planCards = is_array($plansPayload['plan_cards'] ?? null) ? (array) $plansPayload['plan_cards'] : [];
+    $planLabelByKey = [];
+    foreach ($planCards as $card) {
+        if (is_array($card) && filled($card['plan_key'] ?? null)) {
+            $planLabelByKey[strtolower(trim((string) $card['plan_key']))] = (string) ($card['label'] ?? $card['plan_key']);
+        }
+    }
+
+    $addonsConfig = (array) config('product_surfaces.plans.addons', []);
+    $addonLabelByKey = [];
+    foreach ($addonsConfig as $key => $addon) {
+        if (is_array($addon)) {
+            $addonLabelByKey[strtolower(trim((string) $key))] = (string) ($addon['name'] ?? $key);
+        }
+    }
 @endphp
 
 <x-layouts::app.sidebar title="Start Here">
@@ -106,9 +127,30 @@
                             <div class="fb-panel-copy">{{ $billingNote }}</div>
                         </div>
                     </div>
+                    <div class="fb-panel-body space-y-3">
+                        @if($preferredPlanKey !== '' || $addonsInterest !== [])
+                            <div class="text-sm text-[var(--fb-text-secondary)]">
+                                <div class="font-semibold text-[var(--fb-text-primary)]">Your interest (from request)</div>
+                                @if($preferredPlanKey !== '')
+                                    <div class="mt-1">Preferred tier: <span class="font-semibold text-[var(--fb-text-primary)]">{{ $planLabelByKey[$preferredPlanKey] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $preferredPlanKey)) }}</span></div>
+                                @endif
+                                @if($addonsInterest !== [])
+                                    <div class="mt-1">Add-ons of interest:
+                                        <span class="font-semibold text-[var(--fb-text-primary)]">
+                                            {{ collect($addonsInterest)->map(fn ($key) => $addonLabelByKey[strtolower(trim((string) $key))] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', (string) $key)))->implode(', ') }}
+                                        </span>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        <div class="flex flex-wrap gap-2">
+                            <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
+                            <a href="{{ route('platform.contact', ['intent' => 'billing']) }}" class="fb-btn fb-btn-secondary">Talk to sales</a>
+                        </div>
+                    </div>
                 </section>
             @endif
         </div>
     </flux:main>
 </x-layouts::app.sidebar>
-

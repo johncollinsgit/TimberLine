@@ -109,6 +109,11 @@
             <button type="button" wire:click="openEdit({{ $pending->id }})" class="rounded-full border border-[var(--fb-border)] bg-white px-3 py-1 text-[11px] text-[var(--fb-muted)]">
               Review
             </button>
+            @if(($pendingAccess['id'] ?? null) !== null)
+              <button type="button" wire:click="rejectAccessRequest({{ $pending->id }})" class="rounded-full border border-red-300/40 bg-red-50 px-3 py-1 text-[11px] text-red-700">
+                Reject
+              </button>
+            @endif
             <button type="button" wire:click="approve({{ $pending->id }})" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-3 py-1 text-[11px] text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
               Approve
             </button>
@@ -201,6 +206,28 @@
                 <label class="text-xs text-[var(--fb-muted)]">Notes</label>
                 <textarea wire:model.defer="editAccessRequest.message" rows="4" class="mt-1 w-full rounded-xl border border-[var(--fb-border)] bg-white px-3 py-2 text-sm text-[var(--fb-text)]"></textarea>
               </div>
+              <div class="md:col-span-2">
+                <label class="text-xs text-[var(--fb-muted)]">Decision note (internal)</label>
+                <textarea wire:model.defer="accessDecisionNote" rows="3" class="mt-1 w-full rounded-xl border border-[var(--fb-border)] bg-white px-3 py-2 text-sm text-[var(--fb-text)]" placeholder="Optional routing/approval notes..."></textarea>
+              </div>
+              <div class="md:col-span-2">
+                <label class="text-xs text-[var(--fb-muted)]">Rejection note (internal)</label>
+                <textarea wire:model.defer="accessRejectionNote" rows="3" class="mt-1 w-full rounded-xl border border-[var(--fb-border)] bg-white px-3 py-2 text-sm text-[var(--fb-text)]" placeholder="Optional rejection reason..."></textarea>
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+              <button type="button" wire:click="approve({{ $editingId }})" class="rounded-full border border-[var(--fb-brand)] bg-[var(--fb-brand)] px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-[var(--fb-brand-2)] hover:border-[var(--fb-brand-2)]">
+                Approve access request
+              </button>
+              <button type="button" wire:click="rejectAccessRequest({{ $editingId }})" class="rounded-full border border-red-300/40 bg-red-50 px-4 py-2 text-xs font-semibold text-red-700">
+                Reject access request
+              </button>
+              @if($approvedAccessRequestId)
+                <button type="button" wire:click="resendAccessActivation({{ $editingId }})" class="rounded-full border border-[var(--fb-border)] bg-white px-4 py-2 text-xs font-semibold text-[var(--fb-muted)]">
+                  Resend activation
+                </button>
+              @endif
             </div>
           </div>
         @endif

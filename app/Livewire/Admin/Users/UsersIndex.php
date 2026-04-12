@@ -5,7 +5,7 @@ namespace App\Livewire\Admin\Users;
 use App\Models\CustomerAccessRequest;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
-use App\Services\Onboarding\CustomerAccessRequestService;
+use App\Services\Onboarding\CustomerAccessApprovalService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
@@ -35,6 +35,9 @@ class UsersIndex extends Component
     public array $edit = [];
     public string $newPassword = '';
     public array $editAccessRequest = [];
+    public string $accessDecisionNote = '';
+    public string $accessRejectionNote = '';
+    public ?int $approvedAccessRequestId = null;
 
     public bool $showDelete = false;
     public ?int $deletingId = null;
@@ -106,6 +109,9 @@ class UsersIndex extends Component
             'is_active' => (bool) $user->is_active,
         ];
         $this->editAccessRequest = $this->accessRequestPayload($user);
+        $this->accessDecisionNote = (string) ($this->editAccessRequest['decision_note'] ?? '');
+        $this->accessRejectionNote = '';
+        $this->approvedAccessRequestId = $this->latestApprovedAccessRequest($user)?->id;
         $this->newPassword = '';
         $this->showEdit = true;
     }
@@ -171,6 +177,9 @@ class UsersIndex extends Component
         $this->showEdit = false;
         $this->editingId = null;
         $this->editAccessRequest = [];
+        $this->accessDecisionNote = '';
+        $this->accessRejectionNote = '';
+        $this->approvedAccessRequestId = null;
         $this->dispatch('toast', [
             'message' => ($wasInactive && $payload['is_active'])
                 ? ($emailSent ? 'User updated and approval email sent.' : 'User updated. Approval email could not be sent.')
@@ -203,24 +212,81 @@ class UsersIndex extends Component
 
     public function approve(int $id): void
     {
+        $this->assertApprovalActor();
+
         $user = User::query()->findOrFail($id);
-        $wasInactive = !$user->is_active;
-        $emailSent = false;
+        $success = false;
         $request = $this->latestPendingAccessRequest($user);
 
         try {
-            app(CustomerAccessRequestService::class)->approveUser($user, $request, auth()->id());
-            $emailSent = true;
+            if ($request) {
+                app(CustomerAccessApprovalService::class)->approve((int) $request->id, (int) auth()->id(), $this->accessDecisionNote);
+                $success = true;
+            } else {
+                $wasInactive = !$user->is_active;
+                if ($wasInactive) {
+                    $user->forceFill([
+                        'is_active' => true,
+                        'approved_at' => now(),
+                        'approved_by' => auth()->id(),
+                    ])->save();
+
+                    $user->notify(new ApprovalPasswordSetupNotification($user, $this->preferredHostForUser($user)));
+                    $success = true;
+                }
+            }
         } catch (Throwable $e) {
             report($e);
         }
 
         $this->dispatch('toast', [
-            'message' => $emailSent
-                ? 'User approved. Password setup email sent.'
-                : 'User approved. Password setup email could not be sent.',
-            'style' => $emailSent ? 'success' : 'warning',
+            'message' => $success
+                ? 'Approval processed.'
+                : 'Approval failed. See logs for details.',
+            'style' => $success ? 'success' : 'warning',
         ]);
+    }
+
+    public function rejectAccessRequest(int $userId): void
+    {
+        $this->assertApprovalActor();
+
+        $user = User::query()->findOrFail($userId);
+        $request = $this->latestPendingAccessRequest($user);
+        if (! $request) {
+            $this->dispatch('toast', ['message' => 'No pending access request found for this user.', 'style' => 'warning']);
+
+            return;
+        }
+
+        try {
+            app(CustomerAccessApprovalService::class)->reject((int) $request->id, (int) auth()->id(), $this->accessRejectionNote);
+            $this->dispatch('toast', ['message' => 'Access request rejected.', 'style' => 'success']);
+        } catch (Throwable $e) {
+            report($e);
+            $this->dispatch('toast', ['message' => 'Reject failed. See logs for details.', 'style' => 'warning']);
+        }
+    }
+
+    public function resendAccessActivation(int $userId): void
+    {
+        $this->assertApprovalActor();
+
+        $user = User::query()->findOrFail($userId);
+        $request = $this->latestApprovedAccessRequest($user);
+        if (! $request) {
+            $this->dispatch('toast', ['message' => 'No approved access request found for this user.', 'style' => 'warning']);
+
+            return;
+        }
+
+        try {
+            app(CustomerAccessApprovalService::class)->resendActivation((int) $request->id, (int) auth()->id(), $this->accessDecisionNote);
+            $this->dispatch('toast', ['message' => 'Activation email resent.', 'style' => 'success']);
+        } catch (Throwable $e) {
+            report($e);
+            $this->dispatch('toast', ['message' => 'Resend failed. See logs for details.', 'style' => 'warning']);
+        }
     }
 
     protected function latestPendingAccessRequest(User $user): ?CustomerAccessRequest
@@ -249,6 +315,7 @@ class UsersIndex extends Component
             'company' => (string) ($request->company ?? ''),
             'requested_tenant_slug' => (string) ($request->requested_tenant_slug ?? ''),
             'message' => (string) ($request->message ?? ''),
+            'decision_note' => (string) ($request->decision_note ?? ''),
         ];
     }
 
@@ -276,6 +343,7 @@ class UsersIndex extends Component
                 'company' => $payload['company'] !== '' ? $payload['company'] : null,
                 'requested_tenant_slug' => $payload['requested_tenant_slug'] !== '' ? strtolower($payload['requested_tenant_slug']) : null,
                 'message' => $payload['message'] !== '' ? $payload['message'] : null,
+                'decision_note' => $this->accessDecisionNote !== '' ? $this->accessDecisionNote : null,
             ]);
     }
 
@@ -292,6 +360,25 @@ class UsersIndex extends Component
         }
 
         return app(\App\Support\Tenancy\TenantHostBuilder::class)->hostForSlug($slug);
+    }
+
+    protected function latestApprovedAccessRequest(User $user): ?CustomerAccessRequest
+    {
+        if (! \Schema::hasTable('customer_access_requests')) {
+            return null;
+        }
+
+        return CustomerAccessRequest::query()
+            ->where('email', strtolower(trim((string) $user->email)))
+            ->where('status', 'approved')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    protected function assertApprovalActor(): void
+    {
+        $actor = auth()->user();
+        abort_unless($actor && ($actor->role ?? 'admin') === 'admin', 403);
     }
 
     public function render()
@@ -325,6 +412,7 @@ class UsersIndex extends Component
                 }
 
                 $pendingAccessRequests[$email] = [
+                    'id' => (int) $row->id,
                     'intent' => (string) $row->intent,
                     'company' => (string) ($row->company ?? ''),
                     'requested_tenant_slug' => (string) ($row->requested_tenant_slug ?? ''),

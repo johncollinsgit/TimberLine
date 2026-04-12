@@ -17,6 +17,9 @@ class PlatformAccessRequestController extends Controller
             'company' => ['nullable', 'string', 'max:190'],
             'requested_tenant_slug' => ['nullable', 'string', 'max:120'],
             'message' => ['nullable', 'string', 'max:2000'],
+            'preferred_plan_key' => ['nullable', 'string', 'max:80'],
+            'addons_interest' => ['nullable', 'array'],
+            'addons_interest.*' => ['string', 'max:120'],
         ]);
 
         $service->submit([
@@ -26,6 +29,8 @@ class PlatformAccessRequestController extends Controller
             'company' => (string) ($validated['company'] ?? ''),
             'requested_tenant_slug' => (string) ($validated['requested_tenant_slug'] ?? ''),
             'message' => (string) ($validated['message'] ?? ''),
+            'preferred_plan_key' => (string) ($validated['preferred_plan_key'] ?? ''),
+            'addons_interest' => (array) ($validated['addons_interest'] ?? []),
         ]);
 
         return redirect()
@@ -33,4 +38,3 @@ class PlatformAccessRequestController extends Controller
             ->with('status', 'Request received. We will email you once access is approved.');
     }
 }
-

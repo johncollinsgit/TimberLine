@@ -3,11 +3,9 @@
 namespace App\Services\Onboarding;
 
 use App\Models\CustomerAccessRequest;
-use App\Models\Tenant;
 use App\Models\User;
-use App\Notifications\ApprovalPasswordSetupNotification;
-use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -17,11 +15,6 @@ class CustomerAccessRequestService
     public const INTENT_DEMO = 'demo';
     public const INTENT_PRODUCTION = 'production';
 
-    public function __construct(
-        protected TenantHostBuilder $hostBuilder,
-    ) {
-    }
-
     /**
      * @param  array{
      *   intent:string,
@@ -29,7 +22,9 @@ class CustomerAccessRequestService
      *   email:string,
      *   company?:string,
      *   requested_tenant_slug?:string,
-     *   message?:string
+     *   message?:string,
+     *   preferred_plan_key?:string,
+     *   addons_interest?:array<int,string>
      * }  $input
      */
     public function submit(array $input): CustomerAccessRequest
@@ -43,13 +38,44 @@ class CustomerAccessRequestService
         $name = trim((string) ($input['name'] ?? ''));
         $company = trim((string) ($input['company'] ?? ''));
         $message = trim((string) ($input['message'] ?? ''));
+        $preferredPlanKey = strtolower(trim((string) ($input['preferred_plan_key'] ?? '')));
+        $addonsInterest = array_values(array_filter(array_map(static function (mixed $value): ?string {
+            $token = strtolower(trim((string) $value));
+
+            return $token !== '' ? $token : null;
+        }, (array) ($input['addons_interest'] ?? []))));
 
         $requestedSlug = trim((string) ($input['requested_tenant_slug'] ?? ''));
         if ($intent === self::INTENT_DEMO) {
             $requestedSlug = trim((string) config('tenancy.onboarding.demo_tenant_slug', 'demo'));
         }
 
-        return DB::transaction(function () use ($intent, $email, $name, $company, $message, $requestedSlug): CustomerAccessRequest {
+        return DB::transaction(function () use ($intent, $email, $name, $company, $message, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
+            $normalizedSlug = $this->normalizeSlug($requestedSlug);
+
+            $existing = $this->findOpenRequest($email, $normalizedSlug);
+            if ($existing) {
+                if ($this->isRejected($existing)) {
+                    throw ValidationException::withMessages([
+                        'email' => 'This request has been rejected. Please contact sales for next steps.',
+                    ]);
+                }
+
+                $existing->forceFill([
+                    'name' => $name !== '' ? $name : $existing->name,
+                    'company' => $company !== '' ? $company : $existing->company,
+                    'message' => $message !== '' ? $message : $existing->message,
+                    'intent' => $intent,
+                    'requested_tenant_slug' => $normalizedSlug,
+                    'metadata' => array_merge((array) ($existing->metadata ?? []), array_filter([
+                        'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
+                        'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
+                    ], static fn (mixed $value): bool => $value !== null)),
+                ])->save();
+
+                return $existing;
+            }
+
             $user = User::query()->where('email', $email)->first();
 
             if (! $user) {
@@ -70,10 +96,12 @@ class CustomerAccessRequestService
                 'name' => $name,
                 'email' => $email,
                 'company' => $company,
-                'requested_tenant_slug' => $requestedSlug !== '' ? strtolower($requestedSlug) : null,
+                'requested_tenant_slug' => $normalizedSlug,
                 'message' => $message !== '' ? $message : null,
                 'metadata' => [
                     'requested_via' => 'platform',
+                    'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
+                    'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                 ],
                 'user_id' => (int) $user->id,
             ]);
@@ -82,51 +110,43 @@ class CustomerAccessRequestService
         });
     }
 
-    public function approveUser(User $user, ?CustomerAccessRequest $accessRequest, ?int $approverId = null): void
+    protected function findOpenRequest(string $email, ?string $normalizedSlug): ?CustomerAccessRequest
     {
-        $intent = strtolower(trim((string) ($accessRequest?->intent ?? '')));
-        if (! in_array($intent, [self::INTENT_DEMO, self::INTENT_PRODUCTION], true)) {
-            $intent = self::INTENT_PRODUCTION;
+        if (! \Schema::hasTable('customer_access_requests')) {
+            return null;
         }
 
-        $requestedSlug = strtolower(trim((string) ($accessRequest?->requested_tenant_slug ?? '')));
-        if ($intent === self::INTENT_DEMO) {
-            $requestedSlug = strtolower(trim((string) config('tenancy.onboarding.demo_tenant_slug', 'demo')));
+        $query = CustomerAccessRequest::query()
+            ->where('email', $email)
+            ->whereIn('status', ['pending', 'approved'])
+            ->orderByDesc('id');
+
+        if ($normalizedSlug !== null) {
+            $query->where('requested_tenant_slug', $normalizedSlug);
+        } else {
+            $query->whereNull('requested_tenant_slug');
         }
 
-        DB::transaction(function () use ($user, $accessRequest, $approverId, $requestedSlug): void {
-            $user->forceFill([
-                'is_active' => true,
-                'approved_at' => now(),
-                'approved_by' => $approverId,
-            ])->save();
+        return $query->first();
+    }
 
-            if ($requestedSlug !== '') {
-                $tenant = Tenant::query()->where('slug', $requestedSlug)->first();
-                if (! $tenant) {
-                    $tenant = Tenant::query()->create([
-                        'name' => $accessRequest?->company ?: Str::headline($requestedSlug),
-                        'slug' => $requestedSlug,
-                    ]);
-                }
+    protected function normalizeSlug(string $value): ?string
+    {
+        $slug = strtolower(trim($value));
+        if ($slug === '') {
+            return null;
+        }
 
-                $user->tenants()->syncWithoutDetaching([
-                    (int) $tenant->id => ['role' => 'manager'],
-                ]);
+        $slug = preg_replace('/[^a-z0-9\\-]/', '-', $slug);
+        $slug = trim((string) $slug, '-');
 
-                if ($accessRequest) {
-                    $accessRequest->forceFill([
-                        'status' => 'approved',
-                        'tenant_id' => (int) $tenant->id,
-                        'approved_by' => $approverId,
-                        'approved_at' => now(),
-                    ])->save();
-                }
-            }
-        });
+        return $slug !== '' ? $slug : null;
+    }
 
-        $preferredHost = $requestedSlug !== '' ? $this->hostBuilder->hostForSlug($requestedSlug) : null;
-        $user->notify(new ApprovalPasswordSetupNotification($user, $preferredHost));
+    protected function isRejected(CustomerAccessRequest $request): bool
+    {
+        return (string) ($request->status ?? '') === 'rejected'
+            || $request->rejected_at !== null
+            || $request->rejected_by !== null;
     }
 }
-

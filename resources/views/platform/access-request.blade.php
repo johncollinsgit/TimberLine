@@ -1,6 +1,11 @@
 @php
     $content = is_array($surface ?? null) ? $surface : [];
     $intentValue = in_array(($intent ?? ''), ['demo', 'production'], true) ? (string) $intent : 'production';
+    $planCards = is_array($plan_cards ?? null) ? $plan_cards : [];
+    $addonCards = is_array($addon_cards ?? null) ? $addon_cards : [];
+    $recommendedPlanKey = (string) ($recommended_plan_key ?? 'growth');
+    $selectedPlanKey = old('preferred_plan_key', $recommendedPlanKey);
+    $selectedAddons = (array) old('addons_interest', []);
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -69,6 +74,58 @@
                         @error('message') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                     </div>
 
+                    @if($intentValue === 'production')
+                        <div class="rounded-2xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4">
+                            <div class="text-sm font-semibold text-[var(--fb-text-primary)]">Commercial interest (optional)</div>
+                            <div class="mt-1 text-xs text-[var(--fb-text-secondary)]">This is not a billing action. It helps us route the right plan + add-on conversation after approval.</div>
+
+                            <div class="mt-4 grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="fb-form-label" for="preferred_plan_key">Preferred tier</label>
+                                    <select id="preferred_plan_key" name="preferred_plan_key" class="fb-input mt-2">
+                                        <option value="">No preference</option>
+                                        @foreach($planCards as $plan)
+                                            @php
+                                                $key = (string) ($plan['plan_key'] ?? '');
+                                                $label = (string) ($plan['label'] ?? $key);
+                                            @endphp
+                                            @if($key !== '')
+                                                <option value="{{ $key }}" @selected($selectedPlanKey === $key)>
+                                                    {{ $label }}{{ $key === $recommendedPlanKey ? ' (recommended)' : '' }}
+                                                </option>
+                                            @endif
+                                        @endforeach
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <div class="fb-form-label">Add-ons of interest</div>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        @foreach($addonCards as $addon)
+                                            @php
+                                                $addonKey = (string) ($addon['addon_key'] ?? '');
+                                                $addonLabel = (string) ($addon['label'] ?? $addonKey);
+                                            @endphp
+                                            @if($addonKey !== '')
+                                                <label class="fb-module-pill cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        class="mr-2"
+                                                        name="addons_interest[]"
+                                                        value="{{ $addonKey }}"
+                                                        @checked(in_array($addonKey, $selectedAddons, true))
+                                                    />
+                                                    {{ $addonLabel }}
+                                                </label>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                    @error('addons_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
                     <div class="flex flex-wrap items-center gap-3 pt-2">
                         <button type="submit" class="fb-btn fb-btn-primary">
                             {{ $content['submit_label'] ?? 'Submit request' }}
@@ -85,4 +142,3 @@
     </main>
 </body>
 </html>
-

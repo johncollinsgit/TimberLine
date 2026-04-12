@@ -20,6 +20,15 @@ class CustomerAccessRequest extends Model
         'tenant_id',
         'approved_by',
         'approved_at',
+        'decision_note',
+        'rejected_by',
+        'rejected_at',
+        'rejection_note',
+        'activation_email_sent_at',
+        'activation_email_last_attempted_at',
+        'activation_email_last_attempt_status',
+        'activation_email_last_sent_at',
+        'activation_email_resend_count',
     ];
 
     protected function casts(): array
@@ -27,6 +36,11 @@ class CustomerAccessRequest extends Model
         return [
             'metadata' => 'array',
             'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
+            'activation_email_sent_at' => 'datetime',
+            'activation_email_last_attempted_at' => 'datetime',
+            'activation_email_last_sent_at' => 'datetime',
+            'activation_email_resend_count' => 'integer',
         ];
     }
 
@@ -40,4 +54,3 @@ class CustomerAccessRequest extends Model
         return $this->belongsTo(Tenant::class);
     }
 }
-

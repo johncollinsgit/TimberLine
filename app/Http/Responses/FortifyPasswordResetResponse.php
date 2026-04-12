@@ -27,7 +27,7 @@ class FortifyPasswordResetResponse implements PasswordResetResponseContract
 
         return redirect(Fortify::redirects(
             'password-reset',
-            config('fortify.views', true) ? route('login') : null
+            config('fortify.views', true) ? route('login', absolute: false) : null
         ))->with('status', trans($this->status));
     }
 }
