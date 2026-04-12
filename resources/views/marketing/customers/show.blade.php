@@ -969,6 +969,7 @@
 
                 @if($emailTimelinePaginator && $emailTimelinePaginator->hasPages())
                     <div class="mt-3">
+                        <span class="sr-only" data-test="email-timeline-page2-url">{{ $emailTimelinePaginator->url(2) }}</span>
                         {{ $emailTimelinePaginator->onEachSide(1)->links() }}
                     </div>
                 @endif
