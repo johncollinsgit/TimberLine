@@ -5,29 +5,25 @@
     $activeNow = is_array($journey['active_now'] ?? null) ? (array) $journey['active_now'] : [];
     $availableNext = is_array($journey['available_next'] ?? null) ? (array) $journey['available_next'] : [];
     $purchasable = is_array($journey['purchasable'] ?? null) ? (array) $journey['purchasable'] : [];
+    $billingInterest = is_array($journey['billing_interest'] ?? null) ? (array) $journey['billing_interest'] : [];
+    $billingNextStep = is_array($journey['billing_next_step'] ?? null) ? (array) $journey['billing_next_step'] : [];
     $plansPayload = is_array($plans ?? null) ? $plans : [];
     $billingNote = (string) data_get($plansPayload, 'content.billing_note', '');
+    $preferredPlanKey = strtolower(trim((string) data_get($billingInterest, 'preferred_plan_key', '')));
+    $addonsInterest = array_values(array_filter(array_map(fn ($value) => strtolower(trim((string) $value)), (array) data_get($billingInterest, 'addons_interest', [])), fn ($value) => $value !== ''));
 
-    $accessRequest = $access_request ?? null;
-    $accessMeta = is_object($accessRequest) ? (array) ($accessRequest->metadata ?? []) : [];
-    $preferredPlanKey = strtolower(trim((string) ($accessMeta['preferred_plan_key'] ?? '')));
-    $addonsInterest = is_array($accessMeta['addons_interest'] ?? null) ? (array) $accessMeta['addons_interest'] : [];
+    $planCatalog = (array) config('module_catalog.plans', []);
+    $addonCatalog = (array) config('module_catalog.addons', []);
+    $planLabelByKey = collect($planCatalog)
+        ->filter(fn ($definition) => is_array($definition))
+        ->mapWithKeys(fn ($definition, $key) => [strtolower(trim((string) $key)) => (string) ($definition['display_name'] ?? $definition['label'] ?? $key)])
+        ->all();
+    $addonLabelByKey = collect($addonCatalog)
+        ->filter(fn ($definition) => is_array($definition))
+        ->mapWithKeys(fn ($definition, $key) => [strtolower(trim((string) $key)) => (string) ($definition['display_name'] ?? $definition['label'] ?? $key)])
+        ->all();
 
-    $planCards = is_array($plansPayload['plan_cards'] ?? null) ? (array) $plansPayload['plan_cards'] : [];
-    $planLabelByKey = [];
-    foreach ($planCards as $card) {
-        if (is_array($card) && filled($card['plan_key'] ?? null)) {
-            $planLabelByKey[strtolower(trim((string) $card['plan_key']))] = (string) ($card['label'] ?? $card['plan_key']);
-        }
-    }
-
-    $addonsConfig = (array) config('product_surfaces.plans.addons', []);
-    $addonLabelByKey = [];
-    foreach ($addonsConfig as $key => $addon) {
-        if (is_array($addon)) {
-            $addonLabelByKey[strtolower(trim((string) $key))] = (string) ($addon['name'] ?? $key);
-        }
-    }
+    $billingReturn = strtolower(trim((string) request()->query('billing', '')));
 @endphp
 
 <x-layouts::app.sidebar title="Start Here">
@@ -128,9 +124,19 @@
                         </div>
                     </div>
                     <div class="fb-panel-body space-y-3">
+                        @if(in_array($billingReturn, ['success', 'cancel'], true))
+                            <div class="fb-state text-sm">
+                                @if($billingReturn === 'success')
+                                    Checkout submitted. Billing confirmation may take a moment—refresh this page if needed.
+                                @else
+                                    Checkout cancelled. You can return to billing whenever you’re ready.
+                                @endif
+                            </div>
+                        @endif
+
                         @if($preferredPlanKey !== '' || $addonsInterest !== [])
                             <div class="text-sm text-[var(--fb-text-secondary)]">
-                                <div class="font-semibold text-[var(--fb-text-primary)]">Your interest (from request)</div>
+                                <div class="font-semibold text-[var(--fb-text-primary)]">Your interest</div>
                                 @if($preferredPlanKey !== '')
                                     <div class="mt-1">Preferred tier: <span class="font-semibold text-[var(--fb-text-primary)]">{{ $planLabelByKey[$preferredPlanKey] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $preferredPlanKey)) }}</span></div>
                                 @endif
@@ -145,9 +151,31 @@
                         @endif
 
                         <div class="flex flex-wrap gap-2">
+                            @if(is_array($billingNextStep['cta_route'] ?? null) && filled($billingNextStep['cta_route']['name'] ?? null))
+                                <form method="POST" action="{{ route((string) $billingNextStep['cta_route']['name']) }}">
+                                    @csrf
+                                    <button type="submit" class="fb-btn fb-btn-primary">
+                                        {{ $billingNextStep['cta_label'] ?? 'Continue' }}
+                                    </button>
+                                </form>
+                            @elseif(filled($billingNextStep['cta_url'] ?? null))
+                                <a href="{{ (string) $billingNextStep['cta_url'] }}" class="fb-btn fb-btn-primary">
+                                    {{ $billingNextStep['cta_label'] ?? 'Continue' }}
+                                </a>
+                            @endif
+
                             <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
                             <a href="{{ route('platform.contact', ['intent' => 'billing']) }}" class="fb-btn fb-btn-secondary">Talk to sales</a>
                         </div>
+
+                        @if(filled($billingNextStep['title'] ?? null) || filled($billingNextStep['description'] ?? null))
+                            <div class="text-sm text-[var(--fb-text-secondary)]">
+                                <div class="font-semibold text-[var(--fb-text-primary)]">{{ (string) ($billingNextStep['title'] ?? 'Next step') }}</div>
+                                @if(filled($billingNextStep['description'] ?? null))
+                                    <div class="mt-1">{{ (string) $billingNextStep['description'] }}</div>
+                                @endif
+                            </div>
+                        @endif
                     </div>
                 </section>
             @endif

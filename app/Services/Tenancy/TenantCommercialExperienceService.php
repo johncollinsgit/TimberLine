@@ -3,6 +3,7 @@
 namespace App\Services\Tenancy;
 
 use App\Models\CustomerExternalProfile;
+use App\Models\CustomerAccessRequest;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\ShopifyImportRun;
@@ -12,6 +13,7 @@ use App\Models\TenantAccessAddon;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Onboarding\OnboardingJourneyTelemetryService;
+use App\Services\Billing\TenantBillingNextStepResolver;
 use App\Support\Tenancy\TenantModuleUi;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -274,6 +276,10 @@ class TenantCommercialExperienceService
             ];
         });
 
+        $billingInterest = $this->billingInterestPayload($tenantId);
+        $payload['billing_interest'] = $billingInterest;
+        $payload['billing_next_step'] = app(TenantBillingNextStepResolver::class)->resolveForTenantId($tenantId, $billingInterest);
+
         try {
             $this->journeyTelemetryService->observeTenantJourneyPayload($tenantId, 'merchant_journey', is_array($payload) ? (array) $payload : []);
         } catch (\Throwable) {
@@ -281,6 +287,82 @@ class TenantCommercialExperienceService
         }
 
         return $payload;
+    }
+
+    /**
+     * @return array{
+     *   preferred_plan_key:?string,
+     *   addons_interest:array<int,string>,
+     *   source:?string,
+     *   captured_at:?string,
+     *   access_request_id:?int
+     * }
+     */
+    protected function billingInterestPayload(?int $tenantId): array
+    {
+        if ($tenantId === null || $tenantId < 1) {
+            return [
+                'preferred_plan_key' => null,
+                'addons_interest' => [],
+                'source' => null,
+                'captured_at' => null,
+                'access_request_id' => null,
+            ];
+        }
+
+        if (! $this->hasTable('customer_access_requests')) {
+            return [
+                'preferred_plan_key' => null,
+                'addons_interest' => [],
+                'source' => null,
+                'captured_at' => null,
+                'access_request_id' => null,
+            ];
+        }
+
+        $request = CustomerAccessRequest::query()
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'approved')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $request) {
+            return [
+                'preferred_plan_key' => null,
+                'addons_interest' => [],
+                'source' => null,
+                'captured_at' => null,
+                'access_request_id' => null,
+            ];
+        }
+
+        $meta = is_array($request->metadata ?? null) ? (array) $request->metadata : [];
+        $preferredPlanKey = strtolower(trim((string) data_get($meta, 'preferred_plan_key', '')));
+
+        $addonsInterest = array_values(array_filter(array_map(static function (mixed $value): ?string {
+            $token = strtolower(trim((string) $value));
+
+            return $token !== '' ? $token : null;
+        }, (array) data_get($meta, 'addons_interest', []))));
+
+        $allowedPlanKeys = array_keys((array) config('module_catalog.plans', []));
+        if ($preferredPlanKey !== '' && ! in_array($preferredPlanKey, $allowedPlanKeys, true)) {
+            $preferredPlanKey = '';
+        }
+
+        $allowedAddonKeys = array_keys((array) config('module_catalog.addons', []));
+        $addonsInterest = array_values(array_filter(
+            $addonsInterest,
+            static fn (string $addonKey) => in_array($addonKey, $allowedAddonKeys, true)
+        ));
+
+        return [
+            'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
+            'addons_interest' => $addonsInterest,
+            'source' => 'customer_access_request',
+            'captured_at' => $request->created_at?->toIso8601String(),
+            'access_request_id' => (int) $request->id,
+        ];
     }
 
     /**

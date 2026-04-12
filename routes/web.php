@@ -290,6 +290,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->get('/start', [CustomerStartHereController::class, 'show'])
         ->name('app.start');
 
+    // Guarded hosted billing handoff (Stripe hosted checkout / billing portal). Read-only on our side; no plan mutation.
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->prefix('billing')
+        ->name('billing.')
+        ->group(function (): void {
+            Route::post('/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'checkout'])
+                ->name('checkout');
+            Route::post('/portal', [\App\Http\Controllers\Billing\HostedBillingController::class, 'portal'])
+                ->name('portal');
+        });
+
     /*
     |--------------------------------------------------------------------------
     | Onboarding Wizard Contracts (Stage 1A seam)
