@@ -273,6 +273,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])
         ->name('onboarding.harness');
 
+    // Canonical onboarding wizard UI (authenticated, tenant-aware). Uses the onboarding API seams; no redirects.
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->get('/onboarding', \App\Livewire\Onboarding\Wizard::class)
+        ->name('onboarding.wizard');
+
     /*
     |--------------------------------------------------------------------------
     | Onboarding Wizard Contracts (Stage 1A seam)

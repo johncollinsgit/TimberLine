@@ -10,6 +10,12 @@ const contextualModules = [
     mountExport: "mountDashboardWidgetsNow",
   },
   {
+    key: "onboardingWizard",
+    selectors: ["[data-onboarding-wizard-root]"],
+    load: () => import("./onboarding/wizard"),
+    mountExport: "mountOnboardingWizardNow",
+  },
+  {
     key: "widgetDnd",
     selectors: ["[data-dashboard-root]", "[data-widget-root]"],
     load: () => import("./widget-dnd"),

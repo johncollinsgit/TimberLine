@@ -1025,6 +1025,293 @@ test('post-provisioning summary endpoint requires authentication', function (): 
     ]))->assertStatus(401);
 });
 
+test('post-provisioning summary endpoint requires tenant access', function (): void {
+    config()->set('features.internal_onboarding_provisioning', true);
+
+    $tenantA = Tenant::query()->create(['name' => 'Demo Tenant A', 'slug' => 'demo-a']);
+    $tenantB = Tenant::query()->create(['name' => 'Demo Tenant B', 'slug' => 'demo-b']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenantA->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenantA->id => ['role' => 'admin']]);
+
+    $this->actingAs($user)
+        ->getJson(route('onboarding.api.blueprint.post-provisioning-summary', [
+            'tenant' => 'demo-b',
+            'final_blueprint_id' => 1,
+        ]))
+        ->assertStatus(403);
+});
+
+test('post-provisioning summary rejects unknown blueprint ids clearly', function (): void {
+    config()->set('features.internal_onboarding_provisioning', true);
+
+    $tenant = Tenant::query()->create(['name' => 'Demo Tenant', 'slug' => 'demo-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $this->actingAs($user)
+        ->getJson(route('onboarding.api.blueprint.post-provisioning-summary', [
+            'tenant' => 'demo-tenant',
+            'final_blueprint_id' => 999999,
+        ]))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.final_blueprint_id.0', 'Unknown blueprint id for this tenant.');
+});
+
+test('post-provisioning summary rejects non-final blueprints', function (): void {
+    config()->set('features.internal_onboarding_provisioning', true);
+
+    $tenant = Tenant::query()->create(['name' => 'Demo Tenant', 'slug' => 'demo-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $draft = TenantOnboardingBlueprint::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'created_by_user_id' => (int) $user->id,
+        'status' => 'draft',
+        'account_mode' => 'demo',
+        'rail' => 'direct',
+        'blueprint_version' => 1,
+        'payload' => [
+            'rail' => 'direct',
+            'template_key' => 'candle',
+        ],
+        'origin' => [
+            'revision' => 1,
+        ],
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('onboarding.api.blueprint.post-provisioning-summary', [
+            'tenant' => 'demo-tenant',
+            'final_blueprint_id' => (int) $draft->id,
+        ]))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.final_blueprint_id.0', 'Blueprint must be finalized to query post-provisioning summary.');
+});
+
+test('post-provisioning summary preserves creator-only policy', function (): void {
+    config()->set('features.internal_onboarding_provisioning', true);
+
+    $tenant = Tenant::query()->create(['name' => 'Demo Tenant', 'slug' => 'demo-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+
+    $creator = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $intruder = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+
+    $creator->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+    $intruder->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $store = app(TenantOnboardingBlueprintStore::class);
+    $final = $store->finalize((int) $tenant->id, [
+        'rail' => 'direct',
+        'template_key' => 'candle',
+        'desired_outcome_first' => 'first_value',
+        'selected_modules' => ['customers'],
+        'data_source' => 'csv',
+        'mobile_intent' => [
+            'needs_mobile_access' => false,
+        ],
+    ], (int) $creator->id);
+
+    $this->actingAs($intruder)
+        ->getJson(route('onboarding.api.blueprint.post-provisioning-summary', [
+            'tenant' => 'demo-tenant',
+            'final_blueprint_id' => (int) $final->id,
+        ]))
+        ->assertStatus(403);
+});
+
+test('post-provisioning summary rejects cross-tenant blueprint ids even for multi-tenant users', function (): void {
+    config()->set('features.internal_onboarding_provisioning', true);
+
+    $tenantA = Tenant::query()->create(['name' => 'Demo Tenant A', 'slug' => 'demo-a']);
+    $tenantB = Tenant::query()->create(['name' => 'Demo Tenant B', 'slug' => 'demo-b']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenantA->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenantB->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([
+        (int) $tenantA->id => ['role' => 'admin'],
+        (int) $tenantB->id => ['role' => 'admin'],
+    ]);
+
+    $store = app(TenantOnboardingBlueprintStore::class);
+    $finalA = $store->finalize((int) $tenantA->id, [
+        'rail' => 'direct',
+        'template_key' => 'candle',
+        'desired_outcome_first' => 'first_value',
+        'selected_modules' => ['customers'],
+        'data_source' => 'csv',
+        'mobile_intent' => [
+            'needs_mobile_access' => false,
+        ],
+    ], (int) $user->id);
+
+    $this->actingAs($user)
+        ->getJson(route('onboarding.api.blueprint.post-provisioning-summary', [
+            'tenant' => 'demo-b',
+            'final_blueprint_id' => (int) $finalA->id,
+        ]))
+        ->assertStatus(422)
+        ->assertJsonPath('errors.final_blueprint_id.0', 'Unknown blueprint id for this tenant.');
+});
+
+test('post-provisioning summary response shape is stable', function (): void {
+    config()->set('features.internal_onboarding_provisioning', true);
+
+    $tenant = Tenant::query()->create(['name' => 'Demo Tenant', 'slug' => 'demo-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'demo',
+        ],
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $store = app(TenantOnboardingBlueprintStore::class);
+    $final = $store->finalize((int) $tenant->id, [
+        'rail' => 'direct',
+        'template_key' => 'candle',
+        'desired_outcome_first' => 'first_value',
+        'selected_modules' => ['customers'],
+        'data_source' => 'csv',
+        'mobile_intent' => [
+            'needs_mobile_access' => false,
+        ],
+    ], (int) $user->id);
+
+    $response = $this->actingAs($user)
+        ->getJson(route('onboarding.api.blueprint.post-provisioning-summary', [
+            'tenant' => 'demo-tenant',
+            'final_blueprint_id' => (int) $final->id,
+        ]))
+        ->assertOk()
+        ->json();
+
+    expect($response)->toHaveKeys([
+        'ok',
+        'final_blueprint_id',
+        'source_tenant_id',
+        'provisioned_tenant_id',
+        'status',
+        'summary',
+        'provisioning_status',
+        'handoff',
+        'open_context',
+        'payload',
+        'meta',
+        'policy',
+    ]);
+
+    expect((array) data_get($response, 'summary'))->toHaveKeys([
+        'is_provisioned',
+        'ready_for_open',
+        'first_open_acknowledged',
+        'first_opened_at',
+        'payload_anchor',
+        'recommended_first_screen',
+        'recommended_next_requests',
+    ]);
+
+    expect((array) data_get($response, 'summary.recommended_first_screen'))->toHaveKeys([
+        'route_name',
+        'path',
+        'payload_anchor',
+        'reason',
+    ]);
+});
+
 test('post-provisioning summary returns coherent not_provisioned shape with null payload/open_context and no side effects', function (): void {
     config()->set('features.internal_onboarding_provisioning', true);
 
