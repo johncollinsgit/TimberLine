@@ -68,16 +68,62 @@ class LandlordTenantDirectoryController extends Controller
         ]);
     }
 
-    public function index(): View
+    public function index(Request $request, OnboardingJourneyDiagnosticsService $journeyDiagnostics): View
     {
+        $onboardingFilter = strtolower(trim((string) $request->query('onboarding_filter', 'all')));
+        $onboardingFilterOptions = [
+            'all' => 'All',
+            'no_telemetry' => 'No telemetry',
+            OnboardingJourneyDiagnosticsService::STUCK_WAITING_FIRST_OPEN => 'Waiting for first open',
+            OnboardingJourneyDiagnosticsService::STUCK_WAITING_IMPORT => 'Waiting for import',
+            OnboardingJourneyDiagnosticsService::STUCK_PROGRESSING => 'Import in progress',
+            OnboardingJourneyDiagnosticsService::STUCK_WAITING_ACTIVATION => 'Waiting for activation',
+            OnboardingJourneyDiagnosticsService::STUCK_COMPLETED_FIRST_VALUE => 'Reached first value',
+        ];
+
+        if (! array_key_exists($onboardingFilter, $onboardingFilterOptions)) {
+            $onboardingFilter = 'all';
+        }
+
+        $tenants = $this->tenantDirectoryRows();
+        $tenantIds = $tenants
+            ->map(static fn (array $row): int => is_numeric($row['id'] ?? null) ? (int) $row['id'] : 0)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        $onboardingSummaries = $journeyDiagnostics->directorySummaries($tenantIds);
+
+        $tenants = $tenants
+            ->map(static function (array $row) use ($onboardingSummaries): array {
+                $tenantId = is_numeric($row['id'] ?? null) ? (int) $row['id'] : 0;
+                $summary = $tenantId > 0 && isset($onboardingSummaries[$tenantId]) ? (array) $onboardingSummaries[$tenantId] : null;
+                $row['onboarding'] = $summary;
+
+                return $row;
+            })
+            ->when($onboardingFilter !== 'all', function (Collection $rows) use ($onboardingFilter): Collection {
+                return $rows->filter(function (array $row) use ($onboardingFilter): bool {
+                    $summary = is_array($row['onboarding'] ?? null) ? (array) $row['onboarding'] : null;
+
+                    if ($onboardingFilter === 'no_telemetry') {
+                        return ! (bool) ($summary['has_telemetry'] ?? false);
+                    }
+
+                    return (string) ($summary['stuck_point'] ?? '') === $onboardingFilter;
+                })->values();
+            });
+
         return view('landlord.tenants.index', [
-            'tenants' => $this->tenantDirectoryRows(),
+            'tenants' => $tenants,
             'tenantRoleOptions' => $this->tenantRoleOptions(),
             'tenantTypeOptions' => $this->tenantTypeOptions(),
             'tenantStatusOptions' => $this->tenantStatusOptions(),
             'defaultTenantType' => $this->defaultTenantType(),
             'defaultTenantRole' => $this->defaultTenantRole(),
             'defaultTenantStatus' => 'active',
+            'onboardingFilterOptions' => $onboardingFilterOptions,
+            'activeOnboardingFilter' => $onboardingFilter,
         ]);
     }
 
