@@ -1,5 +1,31 @@
 # UI Changelog
 
+## 2026-04-12 — Authenticated Onboarding Wizard + Workflow UI Primitives
+
+### What changed
+- Added the first real authenticated onboarding wizard surface at `/onboarding` (tenant-aware, shared across Shopify/direct rails).
+- Wizard UI consumes existing onboarding API seams (no second onboarding backend):
+  - contract load (`/api/onboarding/wizard-contract`)
+  - autosave (`/api/onboarding/blueprint-draft`)
+  - finalize (`/api/onboarding/blueprint-finalize`)
+  - post-provisioning summary read (`/api/onboarding/blueprint-post-provisioning-summary`, gated/read-only)
+- Standardized a minimal “workflow UI” primitive layer in `resources/css/forestry-ui.css` for:
+  - workflow headers/surfaces
+  - panels and action rows
+  - stepper/progress items
+  - calm state banners (error/warn/success)
+  - structured module cards (selected/locked/recommended)
+  - fast, subtle enter transitions (reduced-motion safe)
+- Applied the same design DNA to `/marketing/modules` so onboarding → in-app workflows feel like one product.
+
+### Why
+- The product needed a real onboarding shell that is backend-driven and stable as steps evolve.
+- “Workflow” surfaces (onboarding, setup, builders, review panels) needed consistent hierarchy, spacing, and state language without introducing a second design system.
+
+### Scope boundary
+- This pass does not add marketing-site complexity, new backend onboarding state machines, redirects, or session-mutation endpoints.
+- Motion remains subtle/fast and is disabled under `prefers-reduced-motion`.
+
 ## 2026-04-10 — Embedded AI Assistant Activity Page (Stage 7)
 
 ### What changed

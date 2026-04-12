@@ -38,6 +38,7 @@
                 <nav class="overflow-x-auto border-t border-zinc-200 px-6 py-3">
                     <ul class="flex min-w-max items-center gap-2 text-xs font-medium text-zinc-600">
                         <li><a href="#overview" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Overview</a></li>
+                        <li><a href="#onboarding-triage" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Onboarding triage</a></li>
                         <li><a href="#recent-tenants" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Recent tenants</a></li>
                     </ul>
                 </nav>
@@ -69,6 +70,59 @@
                             <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Needs attention</p>
                             <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($metrics['tenants_needing_attention'] ?? 0)) }}</p>
                         </article>
+                    </div>
+                </section>
+
+                @php
+                    $triage = is_array($onboardingTriage ?? null) ? (array) $onboardingTriage : [];
+                    $triageCounts = is_array($triage['counts'] ?? null) ? (array) $triage['counts'] : [];
+                    $triageLinks = [
+                        'no_telemetry' => route('landlord.tenants.index', ['onboarding_filter' => 'no_telemetry']),
+                        'waiting_for_first_open' => route('landlord.tenants.index', ['onboarding_filter' => 'waiting_for_first_open']),
+                        'waiting_for_import' => route('landlord.tenants.index', ['onboarding_filter' => 'waiting_for_import']),
+                        'waiting_for_activation' => route('landlord.tenants.index', ['onboarding_filter' => 'waiting_for_activation']),
+                        'completed_first_value' => route('landlord.tenants.index', ['onboarding_filter' => 'completed_first_value']),
+                    ];
+                @endphp
+
+                <section id="onboarding-triage" class="space-y-4 scroll-mt-36">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-zinc-950">Onboarding triage</h3>
+                            <p class="text-sm text-zinc-600">
+                                Queue-style view derived from canonical onboarding journey telemetry. Click a card to open the filtered tenant directory.
+                            </p>
+                        </div>
+                        <div class="text-right text-xs text-zinc-600">
+                            <div><span class="font-semibold text-zinc-900">{{ number_format((int) data_get($triage, 'tenants_with_telemetry', 0)) }}</span> with telemetry</div>
+                            <div><span class="font-semibold text-zinc-900">{{ number_format((int) data_get($triage, 'tenants_needing_onboarding_attention', 0)) }}</span> needing attention</div>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                        @foreach ([
+                            ['key' => 'no_telemetry', 'label' => 'No telemetry', 'tone' => 'zinc'],
+                            ['key' => 'waiting_for_first_open', 'label' => 'Waiting for first open', 'tone' => 'amber'],
+                            ['key' => 'waiting_for_import', 'label' => 'Waiting for import', 'tone' => 'amber'],
+                            ['key' => 'waiting_for_activation', 'label' => 'Waiting for activation', 'tone' => 'amber'],
+                            ['key' => 'completed_first_value', 'label' => 'Reached first value', 'tone' => 'emerald'],
+                        ] as $card)
+                            @php
+                                $key = (string) $card['key'];
+                                $count = (int) ($triageCounts[$key] ?? 0);
+                                $tone = (string) ($card['tone'] ?? 'zinc');
+                                $classes = match ($tone) {
+                                    'emerald' => 'border-emerald-200 bg-emerald-50',
+                                    'amber' => 'border-amber-200 bg-amber-50',
+                                    default => 'border-zinc-200 bg-zinc-50',
+                                };
+                            @endphp
+                            <a href="{{ $triageLinks[$key] ?? route('landlord.tenants.index') }}" class="block rounded-xl border {{ $classes }} p-4 hover:bg-white">
+                                <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">{{ $card['label'] }}</p>
+                                <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format($count) }}</p>
+                                <p class="mt-1 text-xs font-semibold text-zinc-700">View tenants</p>
+                            </a>
+                        @endforeach
                     </div>
                 </section>
 

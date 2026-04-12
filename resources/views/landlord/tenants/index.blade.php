@@ -127,9 +127,28 @@
                 </div>
             </div>
 
+            <form method="GET" action="{{ route('landlord.tenants.index') }}" class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                @foreach (request()->except(['onboarding_filter', 'page']) as $key => $value)
+                    @if (is_scalar($value) && $value !== '')
+                        <input type="hidden" name="{{ $key }}" value="{{ (string) $value }}" />
+                    @endif
+                @endforeach
+                <label class="flex items-center gap-2 text-sm text-zinc-700">
+                    <span class="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Onboarding</span>
+                    <select name="onboarding_filter" class="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900" onchange="this.form.submit()">
+                        @foreach (($onboardingFilterOptions ?? []) as $value => $label)
+                            <option value="{{ $value }}" @selected(($activeOnboardingFilter ?? 'all') === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <noscript>
+                    <button type="submit" class="rounded-xl border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Apply</button>
+                </noscript>
+            </form>
+
             <div class="mt-4 overflow-hidden rounded-2xl border border-zinc-200">
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[980px] divide-y divide-zinc-200 text-sm">
+                    <table class="w-full min-w-[1120px] divide-y divide-zinc-200 text-sm">
                         <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-500">
                             <tr>
                                 <th class="px-4 py-3">Tenant</th>
@@ -139,6 +158,7 @@
                                 <th class="px-4 py-3 text-right">Users</th>
                                 <th class="px-4 py-3 text-right">Connected stores</th>
                                 <th class="px-4 py-3">Health</th>
+                                <th class="px-4 py-3">Onboarding</th>
                                 <th class="px-4 py-3">Actions</th>
                             </tr>
                         </thead>
@@ -154,6 +174,14 @@
 
                                     $healthStatus = (string) ($row['status'] ?? 'healthy');
                                     $healthLabel = (string) ($row['status_label'] ?? Str::headline($healthStatus));
+
+                                    $onboarding = is_array($row['onboarding'] ?? null) ? (array) $row['onboarding'] : null;
+                                    $onboardingHasTelemetry = (bool) data_get($onboarding, 'has_telemetry', false);
+                                    $onboardingBlueprintId = data_get($onboarding, 'selected_blueprint_id');
+                                    $onboardingBlueprintId = is_numeric($onboardingBlueprintId) ? (int) $onboardingBlueprintId : null;
+                                    $onboardingPhase = (string) data_get($onboarding, 'latest_phase', '');
+                                    $onboardingStuck = (string) data_get($onboarding, 'stuck_point', '');
+                                    $onboardingSentence = (string) data_get($onboarding, 'status_sentence', $onboardingHasTelemetry ? 'Onboarding telemetry present' : 'No onboarding telemetry yet');
                                 @endphp
                                 <tr>
                                     <td class="px-4 py-3 align-top">
@@ -176,6 +204,34 @@
                                         <div class="font-semibold text-zinc-900">{{ $healthLabel }}</div>
                                         <div class="mt-1 text-zinc-500">Open issues: {{ number_format((int) $row['open_integration_health_events_count']) }}</div>
                                     </td>
+                                    <td class="px-4 py-3 align-top text-xs">
+                                        <div class="{{ $onboardingHasTelemetry ? 'font-semibold text-zinc-900' : 'text-zinc-500' }}">
+                                            {{ $onboardingSentence }}
+                                        </div>
+                                        <div class="mt-1 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                                            @if ($onboardingPhase !== '')
+                                                <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-zinc-700">Phase: {{ str_replace('_', ' ', $onboardingPhase) }}</span>
+                                            @endif
+                                            @if ($onboardingStuck !== '')
+                                                <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-zinc-700">Stuck: {{ str_replace('_', ' ', $onboardingStuck) }}</span>
+                                            @endif
+                                            @if ($onboardingBlueprintId)
+                                                <span class="rounded-full border border-zinc-200 bg-white px-2 py-0.5 font-mono text-zinc-700">{{ '#'.$onboardingBlueprintId }}</span>
+                                            @endif
+                                        </div>
+                                        @if ($onboardingHasTelemetry)
+                                            <a
+                                                href="{{ route('landlord.tenants.show', array_filter([
+                                                    'tenant' => $row['id'],
+                                                    'tab' => 'onboarding_journey',
+                                                    'final_blueprint_id' => $onboardingBlueprintId,
+                                                ], fn ($value): bool => $value !== null)) }}"
+                                                class="mt-2 inline-block text-[11px] font-semibold text-zinc-900 underline decoration-dotted underline-offset-2"
+                                            >
+                                                Open onboarding
+                                            </a>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3 align-top">
                                         <div class="flex flex-wrap gap-1.5">
                                             <a href="{{ route('landlord.tenants.show', ['tenant' => $row['id'], 'tab' => 'overview']) }}" class="rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100">Workspace</a>
@@ -187,7 +243,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="px-4 py-8 text-center text-sm text-zinc-500">No tenants yet. Create the first tenant from the panel above.</td>
+                                    <td colspan="9" class="px-4 py-8 text-center text-sm text-zinc-500">No tenants yet. Create the first tenant from the panel above.</td>
                                 </tr>
                             @endforelse
                         </tbody>

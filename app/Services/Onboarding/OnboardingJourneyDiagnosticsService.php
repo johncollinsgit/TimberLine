@@ -301,6 +301,273 @@ class OnboardingJourneyDiagnosticsService
     }
 
     /**
+     * Batch directory-level scan summaries for many tenants.
+     *
+     * This is intentionally compact and derived strictly from append-only journey telemetry:
+     * - picks the latest linked blueprint id per tenant (by last-seen telemetry)
+     * - reduces milestones for that blueprint only (linked)
+     * - falls back to "unlinked telemetry" / "no telemetry" states when appropriate
+     *
+     * @param  array<int,int|string>  $tenantIds
+     * @return array<int,array{
+     *   has_telemetry:bool,
+     *   selected_blueprint_id:int|null,
+     *   latest_phase:string|null,
+     *   stuck_point:string|null,
+     *   status_sentence:string
+     * }>
+     */
+    public function directorySummaries(array $tenantIds): array
+    {
+        $ids = [];
+        foreach ($tenantIds as $value) {
+            if (! is_numeric($value)) {
+                continue;
+            }
+            $id = (int) $value;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        $ids = array_values(array_unique($ids));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $eventKeys = [
+            OnboardingJourneyTelemetryService::EVENT_HANDOFF_VIEWED,
+            OnboardingJourneyTelemetryService::EVENT_FIRST_OPEN_ACK,
+            OnboardingJourneyTelemetryService::EVENT_PHASE_CHANGED,
+            OnboardingJourneyTelemetryService::EVENT_IMPORT_STARTED,
+            OnboardingJourneyTelemetryService::EVENT_IMPORT_COMPLETED,
+            OnboardingJourneyTelemetryService::EVENT_FIRST_ACTIVE_MODULE,
+        ];
+
+        $telemetryTenantIds = [];
+        $unlinkedTenantIds = [];
+        $latestBlueprintByTenant = [];
+
+        try {
+            $telemetryTenantIds = TenantOnboardingJourneyEvent::query()
+                ->whereIn('tenant_id', $ids)
+                ->distinct()
+                ->pluck('tenant_id')
+                ->map(static fn (mixed $value): int => is_numeric($value) ? (int) $value : 0)
+                ->filter(static fn (int $value): bool => $value > 0)
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            $telemetryTenantIds = [];
+        }
+
+        try {
+            $unlinkedTenantIds = TenantOnboardingJourneyEvent::query()
+                ->whereIn('tenant_id', $ids)
+                ->whereNull('final_blueprint_id')
+                ->distinct()
+                ->pluck('tenant_id')
+                ->map(static fn (mixed $value): int => is_numeric($value) ? (int) $value : 0)
+                ->filter(static fn (int $value): bool => $value > 0)
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            $unlinkedTenantIds = [];
+        }
+
+        // Determine the most recently seen linked blueprint per tenant.
+        try {
+            $rows = TenantOnboardingJourneyEvent::query()
+                ->selectRaw('tenant_id, final_blueprint_id, max(occurred_at) as last_seen_at')
+                ->whereIn('tenant_id', $ids)
+                ->whereNotNull('final_blueprint_id')
+                ->groupBy('tenant_id', 'final_blueprint_id')
+                ->orderByDesc('last_seen_at')
+                ->limit(50000)
+                ->get();
+
+            foreach ($rows as $row) {
+                $tenantId = is_numeric($row->tenant_id) ? (int) $row->tenant_id : null;
+                $blueprintId = is_numeric($row->final_blueprint_id) ? (int) $row->final_blueprint_id : null;
+
+                if (! is_int($tenantId) || $tenantId <= 0) {
+                    continue;
+                }
+
+                if (! is_int($blueprintId) || $blueprintId <= 0) {
+                    continue;
+                }
+
+                if (! array_key_exists($tenantId, $latestBlueprintByTenant)) {
+                    $latestBlueprintByTenant[$tenantId] = $blueprintId;
+                }
+            }
+        } catch (\Throwable) {
+            $latestBlueprintByTenant = [];
+        }
+
+        $selectedBlueprintIds = array_values(array_unique(array_values($latestBlueprintByTenant)));
+
+        $eventsByTenant = [];
+        if ($selectedBlueprintIds !== []) {
+            try {
+                $rows = TenantOnboardingJourneyEvent::query()
+                    ->select(['tenant_id', 'final_blueprint_id', 'event_key', 'occurred_at', 'payload'])
+                    ->whereIn('tenant_id', $ids)
+                    ->whereIn('final_blueprint_id', $selectedBlueprintIds)
+                    ->whereIn('event_key', $eventKeys)
+                    ->orderByDesc('occurred_at')
+                    ->limit(200000)
+                    ->get();
+
+                foreach ($rows as $event) {
+                    $tenantId = is_numeric($event->tenant_id) ? (int) $event->tenant_id : null;
+                    if (! is_int($tenantId) || $tenantId <= 0) {
+                        continue;
+                    }
+
+                    $eventsByTenant[$tenantId][] = [
+                        'event_key' => (string) $event->event_key,
+                        'occurred_at' => $event->occurred_at?->toImmutable(),
+                        'payload' => is_array($event->payload ?? null) ? (array) $event->payload : [],
+                    ];
+                }
+            } catch (\Throwable) {
+                $eventsByTenant = [];
+            }
+        }
+
+        $telemetryTenantLookup = array_fill_keys($telemetryTenantIds, true);
+        $unlinkedTenantLookup = array_fill_keys($unlinkedTenantIds, true);
+
+        $result = [];
+
+        foreach ($ids as $tenantId) {
+            $hasTelemetry = isset($telemetryTenantLookup[$tenantId]);
+            $selectedBlueprintId = $latestBlueprintByTenant[$tenantId] ?? null;
+
+            if (! $hasTelemetry) {
+                $result[$tenantId] = [
+                    'has_telemetry' => false,
+                    'selected_blueprint_id' => null,
+                    'latest_phase' => null,
+                    'stuck_point' => null,
+                    'status_sentence' => 'No onboarding telemetry yet',
+                ];
+                continue;
+            }
+
+            if ($selectedBlueprintId === null) {
+                $result[$tenantId] = [
+                    'has_telemetry' => true,
+                    'selected_blueprint_id' => null,
+                    'latest_phase' => null,
+                    'stuck_point' => null,
+                    'status_sentence' => isset($unlinkedTenantLookup[$tenantId])
+                        ? 'Unlinked onboarding telemetry present'
+                        : 'Onboarding telemetry present',
+                ];
+                continue;
+            }
+
+            $events = $eventsByTenant[$tenantId] ?? [];
+            $milestonesReduced = $this->reduceMilestones($events);
+            $stuckPoint = $this->stuckPoint($milestonesReduced);
+            $latestPhase = (string) ($milestonesReduced['latest_phase'] ?? '');
+
+            $result[$tenantId] = [
+                'has_telemetry' => true,
+                'selected_blueprint_id' => $selectedBlueprintId,
+                'latest_phase' => $latestPhase !== '' ? $latestPhase : null,
+                'stuck_point' => $stuckPoint,
+                'status_sentence' => $this->statusSentence($stuckPoint),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Read-only counts for landlord dashboard onboarding triage cards.
+     *
+     * Counts are derived from the same deterministic stuck-point reduction used elsewhere.
+     * Import bucket intentionally includes both "waiting_for_import" and "progressing" so
+     * operators can triage "import not yet complete" in one click.
+     *
+     * @param  array<int,int|string>  $tenantIds
+     * @return array{
+     *   tenants_with_telemetry:int,
+     *   tenants_needing_onboarding_attention:int,
+     *   counts:array{
+     *     no_telemetry:int,
+     *     waiting_for_first_open:int,
+     *     waiting_for_import:int,
+     *     waiting_for_activation:int,
+     *     completed_first_value:int
+     *   },
+     *   meta:array<string,mixed>
+     * }
+     */
+    public function dashboardTriageSummary(array $tenantIds): array
+    {
+        $summaries = $this->directorySummaries($tenantIds);
+
+        $counts = [
+            'no_telemetry' => 0,
+            self::STUCK_WAITING_FIRST_OPEN => 0,
+            self::STUCK_WAITING_IMPORT => 0,
+            self::STUCK_PROGRESSING => 0,
+            self::STUCK_WAITING_ACTIVATION => 0,
+            self::STUCK_COMPLETED_FIRST_VALUE => 0,
+        ];
+
+        $tenantsWithTelemetry = 0;
+        $unlinkedTelemetry = 0;
+
+        foreach ($summaries as $tenantId => $summary) {
+            if (! is_array($summary)) {
+                continue;
+            }
+
+            $hasTelemetry = (bool) ($summary['has_telemetry'] ?? false);
+            if (! $hasTelemetry) {
+                $counts['no_telemetry']++;
+                continue;
+            }
+
+            $tenantsWithTelemetry++;
+
+            if (! is_numeric($summary['selected_blueprint_id'] ?? null)) {
+                $unlinkedTelemetry++;
+            }
+
+            $stuck = strtolower(trim((string) ($summary['stuck_point'] ?? '')));
+            if ($stuck !== '' && array_key_exists($stuck, $counts)) {
+                $counts[$stuck]++;
+            }
+        }
+
+        $waitingForImportBucket = (int) $counts[self::STUCK_WAITING_IMPORT] + (int) $counts[self::STUCK_PROGRESSING];
+        $needingAttention = $tenantsWithTelemetry - (int) $counts[self::STUCK_COMPLETED_FIRST_VALUE];
+
+        return [
+            'tenants_with_telemetry' => $tenantsWithTelemetry,
+            'tenants_needing_onboarding_attention' => max(0, $needingAttention),
+            'counts' => [
+                'no_telemetry' => (int) $counts['no_telemetry'],
+                'waiting_for_first_open' => (int) $counts[self::STUCK_WAITING_FIRST_OPEN],
+                'waiting_for_import' => $waitingForImportBucket,
+                'waiting_for_activation' => (int) $counts[self::STUCK_WAITING_ACTIVATION],
+                'completed_first_value' => (int) $counts[self::STUCK_COMPLETED_FIRST_VALUE],
+            ],
+            'meta' => [
+                'unlinked_telemetry_tenant_count' => $unlinkedTelemetry,
+                'import_progressing_count' => (int) $counts[self::STUCK_PROGRESSING],
+            ],
+        ];
+    }
+
+    /**
      * Read-only drill-in for one tenant + finalized blueprint id.
      *
      * Milestones are reduced from blueprint-scoped events only. Unlinked events (null blueprint id)

@@ -330,6 +330,14 @@ class UnifiedAppNavigationService
             ],
         ];
 
+        if ($tenantId !== null && ($canAccessOps || $canAccessMarketing) && Route::has('onboarding.wizard')) {
+            $actions[] = [
+                'label' => 'Onboarding wizard',
+                'description' => 'Create or continue an onboarding blueprint (contract + autosave + finalize).',
+                'href' => route('onboarding.wizard'),
+            ];
+        }
+
         if ($canAccessMarketing) {
             $actions[] = [
                 'label' => 'Find customer',

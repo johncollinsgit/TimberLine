@@ -42,8 +42,15 @@ class OnboardingWizardApiController extends Controller
         $experience = $this->experienceProfileService->forTenant($tenantId, $request->user(), $tenant);
         $availability = is_array($experience['data_availability'] ?? null) ? (array) $experience['data_availability'] : [];
 
-        $rail = OnboardingRail::tryFrom((string) ($final->rail ?? ''))
+        $draft = $this->blueprintStore->latestDraftForTenant($tenantId, $request->user()?->id);
+        $draftPayload = is_array($draft?->payload ?? null) ? (array) $draft->payload : [];
+
+        $railFromDraft = OnboardingRail::tryFrom((string) ($draft?->rail ?? ''))
+            ?? OnboardingRail::tryFrom((string) ($draftPayload['rail'] ?? ''));
+
+        $rail = $railFromDraft
             ?? $this->railForRequest($request, (string) ($experience['operating_mode'] ?? ''));
+
         $accountMode = $this->accountModeResolver->resolveForTenant($tenant);
 
         $context = new OnboardingWizardContext(
@@ -52,9 +59,6 @@ class OnboardingWizardApiController extends Controller
             tenantId: $tenantId,
             hasShopifyContext: (bool) ($availability['shopify'] ?? false)
         );
-
-        $draft = $this->blueprintStore->latestDraftForTenant($tenantId, $request->user()?->id);
-        $draftPayload = is_array($draft?->payload ?? null) ? (array) $draft->payload : [];
 
         $contract = $this->contractService->contractForContext($context, $draftPayload);
 
