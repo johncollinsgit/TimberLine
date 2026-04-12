@@ -58,6 +58,18 @@ Current implemented shell/diagnostics checkpoint:
   - `/platform/contact`
 - Landlord commercial config surface is implemented:
   - `/landlord/commercial` (host-locked, pricing-first admin controls)
+- Authenticated onboarding wizard is implemented (2026-04-12):
+  - UI surface:
+    - `/onboarding` (tenant-aware; shared Shopify/direct wizard shell)
+  - Wizard API seams consumed by the UI (backend-driven; no duplicate client canon):
+    - `GET /api/onboarding/wizard-contract`
+    - `POST /api/onboarding/blueprint-draft` (autosave)
+    - `POST /api/onboarding/blueprint-finalize`
+    - `GET /api/onboarding/blueprint-post-provisioning-summary` (read-only orchestration; gated)
+  - Internal-only harness/debug surface (gated by `app.debug` + feature flag):
+    - `/internal/onboarding/harness`
+  - Workflow UI primitives (shared polish layer):
+    - `resources/css/forestry-ui.css` (`fb-workflow-*`, `fb-panel*`, `fb-stepper*`, `fb-state*`, `fb-module-card*`)
 - Diagnostics/operator surfaces are implemented and test-covered:
   - customer email timeline provider-context filters + CSV export parity
   - birthday analytics/reporting/export/comparison

@@ -1,5 +1,30 @@
 # Modern Forestry Backstage
 
+## Authenticated Onboarding Wizard + Workflow UI System (2026-04-12)
+
+This release adds the first real authenticated onboarding wizard surface and standardizes “workflow” UI polish so onboarding/setup/builder-style screens feel like one coherent product.
+
+Implemented:
+- authenticated onboarding wizard UI:
+  - `/onboarding` (tenant-aware, shared across Shopify/direct rails)
+  - consumes the existing onboarding seams (no second onboarding backend):
+    - `GET /api/onboarding/wizard-contract`
+    - `POST /api/onboarding/blueprint-draft`
+    - `POST /api/onboarding/blueprint-finalize`
+    - `GET /api/onboarding/blueprint-post-provisioning-summary` (read-only; gated by provisioning flag/role)
+  - renders backend-driven stepper + real step panels (`template_and_outcome`, `modules_and_data`, `mobile_intent`, `review_and_start`)
+  - keeps unknown-step fallback safe (contract can evolve without UI crashes)
+- provisioning/orchestration UI integration:
+  - post-finalize “What happens next” card consumes the post-provisioning summary seam as the single read source
+  - provisioning actions remain explicitly internal/gated; the wizard does not introduce redirects or session mutation endpoints
+- workflow UI systemization (minimal, reusable):
+  - shared workflow primitives live in `resources/css/forestry-ui.css` (panels, stepper, state banners, module cards, fast reduced-motion-safe transitions)
+  - the same visual DNA is applied to the Module Store (`/marketing/modules`) so onboarding → in-app feels like one product
+
+Feature flags:
+- `features.internal_onboarding_provisioning` gates provisioning read seams and internal provisioning actions.
+- `features.internal_onboarding_harness` (and `app.debug`) gates the internal harness page at `/internal/onboarding/harness`.
+
 ## Shopify Embedded AI Assistant Foundation (2026-04-10)
 
 This release adds a tenant-aware AI Assistant foundation in Shopify embedded surfaces with centralized access gating and alpha override safety.

@@ -178,28 +178,26 @@ export function mountOnboardingWizardNow() {
     const steps = state.contract?.steps || [];
     steps.forEach((step, idx) => {
       const li = document.createElement("li");
-      const isCurrent = idx === state.currentStepIndex;
       const done = stepComplete(step);
+      const isCurrent = idx === state.currentStepIndex;
 
-      li.className = [
-        "flex items-start gap-3 rounded-2xl border p-3 text-sm",
-        isCurrent ? "border-zinc-900 bg-zinc-50" : "border-zinc-200 bg-white",
-      ].join(" ");
+      li.className = "fb-stepper-item";
+      li.setAttribute("aria-current", isCurrent ? "step" : "false");
+      if (done) {
+        li.classList.add("is-complete");
+      }
 
       const badge = document.createElement("div");
-      badge.className = [
-        "mt-0.5 inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold",
-        done ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-700",
-      ].join(" ");
+      badge.className = "fb-stepper-badge";
       badge.textContent = `${idx + 1}`;
 
       const copy = document.createElement("div");
       const title = document.createElement("div");
-      title.className = "font-semibold text-zinc-950";
+      title.className = "fb-stepper-title";
       title.textContent = step?.title || step?.step_key || `Step ${idx + 1}`;
 
       const desc = document.createElement("div");
-      desc.className = "mt-0.5 text-xs text-zinc-600";
+      desc.className = "fb-stepper-desc";
       desc.textContent = step?.description || "";
 
       copy.appendChild(title);
@@ -232,6 +230,14 @@ export function mountOnboardingWizardNow() {
     if (!exact && fallback) {
       fallback.classList.remove("hidden");
     }
+
+    const shown = exact || fallback;
+    if (shown) {
+      shown.classList.remove("fb-motion-enter");
+      // Force reflow so the animation can replay on each step switch.
+      void shown.offsetWidth; // eslint-disable-line no-unused-expressions
+      shown.classList.add("fb-motion-enter");
+    }
   }
 
   function renderTemplates() {
@@ -258,20 +264,19 @@ export function mountOnboardingWizardNow() {
 
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = [
-        "w-full rounded-2xl border p-4 text-left transition",
-        state.blueprint.template_key === key
-          ? "border-zinc-900 bg-zinc-50"
-          : "border-zinc-200 bg-white hover:bg-zinc-50",
-      ].join(" ");
+      btn.className = "fb-state text-left";
+      if (state.blueprint.template_key === key) {
+        btn.style.borderColor = "rgba(18, 60, 67, 0.28)";
+        btn.style.background = "rgba(30, 90, 99, 0.08)";
+      }
       btn.dataset.templateKey = key;
 
       const title = document.createElement("div");
-      title.className = "text-sm font-semibold text-zinc-950";
+      title.className = "text-sm font-semibold text-[var(--fb-text-primary)]";
       title.textContent = name;
 
       const meta = document.createElement("div");
-      meta.className = "mt-1 text-xs text-zinc-600";
+      meta.className = "mt-1 text-xs text-[var(--fb-text-secondary)]";
       meta.textContent =
         "Templates are defaults (not separate products). You can change module choices next.";
 
@@ -396,6 +401,8 @@ export function mountOnboardingWizardNow() {
         checkbox.checked = isSelected;
         checkbox.disabled = locked && !isSelected;
       }
+
+      card.classList.toggle("is-selected", isSelected);
     });
   }
 
@@ -416,6 +423,24 @@ export function mountOnboardingWizardNow() {
     if (nbaActiveEl) nbaActiveEl.textContent = JSON.stringify(state.contract?.next_best_actions?.available_now || [], null, 2);
     if (nbaSetupEl) nbaSetupEl.textContent = JSON.stringify(state.contract?.next_best_actions?.setup_next || [], null, 2);
     if (nbaUnlockEl) nbaUnlockEl.textContent = JSON.stringify(state.contract?.next_best_actions?.unlock_next || [], null, 2);
+  }
+
+  function recommendedModuleKeys() {
+    const list = state.contract?.recommendations?.recommended_modules;
+    return Array.isArray(list) ? uniqStrings(list) : [];
+  }
+
+  function renderRecommendedModules() {
+    const recommended = new Set(recommendedModuleKeys());
+    moduleCards.forEach((card) => {
+      const key = card.dataset.moduleKey;
+      const pill = card.querySelector("[data-module-recommended-pill]");
+      const isRecommended = recommended.has(key);
+      card.classList.toggle("is-recommended", isRecommended);
+      if (pill) {
+        pill.classList.toggle("hidden", !isRecommended);
+      }
+    });
   }
 
   function markDirty() {
@@ -503,6 +528,7 @@ export function mountOnboardingWizardNow() {
         finalizeStatusEl.textContent = `Finalized blueprint #${state.final.id} (blueprint-only).`;
       }
       await loadSummary();
+      window.dispatchEvent(new CustomEvent("toast", { detail: { message: "Blueprint finalized.", style: "success" } }));
     } catch (error) {
       const payload = error?.response?.data || null;
       showErrors(payload || "Finalize failed.");
@@ -755,6 +781,33 @@ export function mountOnboardingWizardNow() {
       saveBtn.addEventListener("click", () => autosaveNow().catch(() => {}));
     }
 
+    const applyRecommendedBtn = root.querySelector("[data-action-apply-recommended]");
+    if (applyRecommendedBtn) {
+      applyRecommendedBtn.addEventListener("click", () => {
+        const recommended = recommendedModuleKeys();
+        if (recommended.length === 0) {
+          window.dispatchEvent(new CustomEvent("toast", { detail: { message: "No recommendations available yet.", style: "warning" } }));
+          return;
+        }
+
+        const selected = new Set(state.blueprint.selected_modules || []);
+        recommended.forEach((key) => {
+          const card = moduleCards.find((node) => node.dataset.moduleKey === key);
+          const locked = card?.dataset?.moduleLocked === "1";
+          if (!locked) {
+            selected.add(key);
+          }
+        });
+
+        state.blueprint.selected_modules = Array.from(selected);
+        markDirty();
+        updateModuleCheckboxInterlocks();
+        renderReview();
+        scheduleAutosave();
+        window.dispatchEvent(new CustomEvent("toast", { detail: { message: "Applied recommended modules.", style: "success" } }));
+      });
+    }
+
     if (backBtn) {
       backBtn.addEventListener("click", async () => {
         await maybeAutosave();
@@ -863,6 +916,7 @@ export function mountOnboardingWizardNow() {
       renderTemplates();
       renderDataSources();
       renderMobileOptions();
+      renderRecommendedModules();
       updateModuleCheckboxInterlocks();
       renderReview();
 

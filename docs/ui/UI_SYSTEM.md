@@ -133,10 +133,20 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Auth pages: Fortify views under `resources/views/pages/auth/*` via `FortifyServiceProvider`
 
 ## Component Patterns
-- Buttons: `.fb-btn`, `.fb-btn-primary`, `.fb-btn-secondary`
-- Cards: `.fb-card`
-- Section header: `.fb-section-header`, `.fb-section-kicker`
-- Explanation block: `x-ui.page-explainer` + `.fb-page-explainer*`
+- Buttons (canonical):
+  - `.fb-btn-soft` (base)
+  - `.fb-btn-accent` (primary/emphasis)
+  - `.fb-link-soft` (no underline)
+- Workflow surfaces (authenticated setup/builder flows):
+  - `.fb-workflow-shell` (page wrapper)
+  - `.fb-workflow-header` + `.fb-eyebrow` + `.fb-title-xl` + `.fb-subtitle`
+  - `.fb-panel` + `.fb-panel-head` + `.fb-panel-body`
+  - `.fb-action-row` (footer CTA bar)
+  - `.fb-stepper*` (backend-driven wizard step list)
+  - `.fb-state*` (empty/error/warn/success banners)
+  - `.fb-module-card*` (selected/locked/recommended module selection cards)
+  - `.fb-motion-enter` (fast, subtle enter; reduced-motion safe)
+- Explanation block (admin/operator screens): `x-ui.page-explainer` + `.fb-page-explainer*`
 - Embedded shell primitives: `.app-shell*`, `.app-topbar*`, `.app-sidebar*`
 
 ## Public Motion Pattern

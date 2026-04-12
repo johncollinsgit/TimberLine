@@ -120,6 +120,5 @@ test('onboarding wizard UI renders locked modules as visible but grayed out', fu
         ->assertOk()
         ->assertSee('data-module-key="'.$lockedKey.'"', false)
         ->assertSee('data-module-locked="1"', false)
-        ->assertSee('opacity-60', false);
+        ->assertSee('is-locked', false);
 });
-
