@@ -4,7 +4,7 @@ namespace App\Support\Onboarding;
 
 final readonly class OnboardingBlueprint
 {
-    public const int VERSION = 1;
+    public const VERSION = 1;
 
     /**
      * @param  array<int,string>  $selectedModuleKeys
@@ -45,4 +45,3 @@ final readonly class OnboardingBlueprint
         ];
     }
 }
-

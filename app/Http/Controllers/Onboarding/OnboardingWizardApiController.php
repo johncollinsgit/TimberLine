@@ -42,7 +42,8 @@ class OnboardingWizardApiController extends Controller
         $experience = $this->experienceProfileService->forTenant($tenantId, $request->user(), $tenant);
         $availability = is_array($experience['data_availability'] ?? null) ? (array) $experience['data_availability'] : [];
 
-        $rail = $this->railForRequest($request, (string) ($experience['operating_mode'] ?? ''));
+        $rail = OnboardingRail::tryFrom((string) ($final->rail ?? ''))
+            ?? $this->railForRequest($request, (string) ($experience['operating_mode'] ?? ''));
         $accountMode = $this->accountModeResolver->resolveForTenant($tenant);
 
         $context = new OnboardingWizardContext(
@@ -129,6 +130,71 @@ class OnboardingWizardApiController extends Controller
         ]);
     }
 
+    public function finalizeBlueprint(Request $request): JsonResponse
+    {
+        /** @var Tenant|null $tenant */
+        $tenant = $request->attributes->get('current_tenant');
+        $tenantId = is_numeric($request->attributes->get('current_tenant_id'))
+            ? (int) $request->attributes->get('current_tenant_id')
+            : null;
+
+        if ($tenantId === null || ! $tenant instanceof Tenant) {
+            abort(403);
+        }
+
+        $actorId = $request->user()?->id;
+        if (! is_numeric($actorId)) {
+            abort(401);
+        }
+
+        $final = $this->blueprintStore->finalizeLatestDraft(
+            tenantId: $tenantId,
+            actorUserId: (int) $actorId,
+            origin: [
+                'source' => 'api_finalize',
+                'path' => (string) $request->path(),
+            ]
+        );
+
+        $payload = is_array($final->payload ?? null) ? (array) $final->payload : [];
+
+        $experience = $this->experienceProfileService->forTenant($tenantId, $request->user(), $tenant);
+        $availability = is_array($experience['data_availability'] ?? null) ? (array) $experience['data_availability'] : [];
+
+        $rail = $this->railForRequest($request, (string) ($experience['operating_mode'] ?? ''));
+        $accountMode = $this->accountModeResolver->resolveForTenant($tenant);
+
+        $context = new OnboardingWizardContext(
+            rail: $rail,
+            accountMode: $accountMode,
+            tenantId: $tenantId,
+            hasShopifyContext: (bool) ($availability['shopify'] ?? false)
+        );
+
+        $contract = $this->contractService->contractForContext($context, $payload);
+
+        return response()->json([
+            'ok' => true,
+            'tenant_id' => $tenantId,
+            'final' => [
+                'id' => (int) $final->id,
+                'tenant_id' => $tenantId,
+                'status' => (string) ($final->status ?? 'final'),
+                'finalized_at' => $final->created_at?->toIso8601String(),
+                'account_mode' => (string) ($final->account_mode ?? ''),
+                'rail' => (string) ($final->rail ?? ''),
+                'blueprint_version' => (int) ($final->blueprint_version ?? 0),
+                'payload' => $payload,
+                'origin' => is_array($final->origin ?? null) ? (array) $final->origin : [],
+            ],
+            'meta' => [
+                'blueprint_only' => true,
+                'tenant_creation_policy' => (string) ($payload['tenant_creation_policy'] ?? ''),
+            ],
+            'contract' => $contract,
+        ]);
+    }
+
     protected function railForRequest(Request $request, string $fallbackOperatingMode): OnboardingRail
     {
         $raw = strtolower(trim((string) $request->query('rail', '')));
@@ -153,4 +219,3 @@ class OnboardingWizardApiController extends Controller
         return $normalized === 'shopify' ? OnboardingRail::Shopify : OnboardingRail::Direct;
     }
 }
-

@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 
 class OnboardingWizardContractService
 {
-    public const int CONTRACT_VERSION = 1;
+    public const CONTRACT_VERSION = 1;
 
     public function __construct(
         protected OnboardingStepCatalog $stepCatalog,

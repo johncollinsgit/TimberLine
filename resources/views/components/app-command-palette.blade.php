@@ -17,7 +17,7 @@
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <div class="text-[11px] uppercase tracking-[0.28em] text-zinc-500">{{ $contextLabel }}</div>
-                        <div class="mt-2 text-sm text-zinc-600">Search customers, orders, modules, imports, and actions.</div>
+                        <div class="mt-2 text-sm text-zinc-600">Search customers, orders, modules, workflows, and workspace destinations.</div>
                     </div>
                     <button type="button" class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100" data-command-close>Esc</button>
                 </div>
@@ -91,7 +91,7 @@
                 if (!groups.length) {
                     const empty = payload && payload.empty_state ? payload.empty_state : {
                         title: "No exact match yet",
-                        subtitle: "Try a customer name, order number, module, import type, or workflow."
+                        subtitle: "Try a customer name, order number, module, workflow, or workspace destination."
                     };
                     container.innerHTML = `
                         <div class="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6">

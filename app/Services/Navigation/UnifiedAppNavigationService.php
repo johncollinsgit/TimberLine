@@ -48,7 +48,7 @@ class UnifiedAppNavigationService
             : ($isPouring ? route('pouring.index') : route('wiki.index'));
 
         $items = [];
-        $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard', 'pouring.*', 'wiki.*')];
+        $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
         if ($canAccessMarketing) {
             $items[] = ['key' => 'marketing', 'icon' => 'megaphone', 'href' => route('marketing.overview'), 'label' => 'Customer Hub', 'current' => request()->routeIs('marketing.*')];
@@ -71,6 +71,7 @@ class UnifiedAppNavigationService
                 ['key' => 'shipping', 'icon' => 'truck', 'href' => route('shipping.orders'), 'label' => 'Shipping', 'current' => request()->routeIs('shipping.*')],
                 ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')],
                 ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => request()->routeIs('markets.browser.*')],
+                ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => request()->routeIs('inventory.*')],
             ];
             $productionCurrent = collect($productionChildren)->contains(
                 fn (array $child): bool => (bool) ($child['current'] ?? false)
@@ -79,7 +80,6 @@ class UnifiedAppNavigationService
             $opsItems = [
                 ['key' => 'production', 'icon' => 'beaker', 'href' => route('retail.plan'), 'label' => 'Production', 'current' => $productionCurrent, 'children' => $productionChildren],
                 ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => route('analytics.index'), 'label' => 'Analytics', 'current' => request()->routeIs('analytics.*')],
-                ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => request()->routeIs('inventory.*')],
             ];
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
@@ -208,6 +208,7 @@ class UnifiedAppNavigationService
             'pour-lists' => 'production',
             'events' => 'production',
             'markets' => 'production',
+            'inventory' => 'production',
         ];
 
         return $legacyMap[$normalized] ?? $normalized;

@@ -11,6 +11,7 @@ use App\Support\Onboarding\OnboardingBlueprint;
 use App\Support\Onboarding\OnboardingRail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class TenantOnboardingBlueprintStore
 {
@@ -118,6 +119,56 @@ class TenantOnboardingBlueprintStore
             'payload' => $validated,
             'origin' => $origin,
         ]);
+    }
+
+    /**
+     * Finalize the latest draft for the (tenant, user) into a new immutable final snapshot.
+     *
+     * Explicit rules:
+     * - Requires an existing draft for the tenant+user.
+     * - Creates a NEW append-only 'final' snapshot record every time it is called.
+     * - Does NOT delete or convert the draft record.
+     * - Does NOT create/convert any production tenant; this is blueprint-only.
+     *
+     * @param  array<string,mixed>  $origin
+     */
+    public function finalizeLatestDraft(int $tenantId, int $actorUserId, array $origin = []): TenantOnboardingBlueprint
+    {
+        $this->assertBlueprintTablePresent();
+
+        // Finalization is ALWAYS scoped to the calling user; never fall back to another user's draft.
+        $draft = TenantOnboardingBlueprint::query()
+            ->forTenantId($tenantId)
+            ->where('status', 'draft')
+            ->where('created_by_user_id', $actorUserId)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+        if (! $draft instanceof TenantOnboardingBlueprint) {
+            throw ValidationException::withMessages([
+                'draft' => ['No onboarding draft exists to finalize.'],
+            ]);
+        }
+
+        $draftPayload = is_array($draft->payload ?? null) ? (array) $draft->payload : [];
+        $draftOrigin = is_array($draft->origin ?? null) ? (array) $draft->origin : [];
+
+        $finalOrigin = array_replace($origin, [
+            'source' => (string) ($origin['source'] ?? 'finalize'),
+            'finalized_at' => now()->toIso8601String(),
+            'draft' => [
+                'id' => (int) $draft->id,
+                'revision' => is_numeric($draftOrigin['revision'] ?? null) ? (int) $draftOrigin['revision'] : null,
+                'last_saved_at' => $draftOrigin['last_saved_at'] ?? null,
+            ],
+        ]);
+
+        return $this->finalize(
+            tenantId: $tenantId,
+            input: $draftPayload,
+            actorUserId: $actorUserId,
+            origin: $finalOrigin
+        );
     }
 
     public function latestFinalForTenant(int $tenantId): ?TenantOnboardingBlueprint

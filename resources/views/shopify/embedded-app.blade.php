@@ -14,6 +14,8 @@
         $bootstrap = is_array($dashboardBootstrap ?? null) ? $dashboardBootstrap : [];
         $dashboardData = is_array($bootstrap['initialData'] ?? null) ? $bootstrap['initialData'] : [];
         $journey = is_array($merchantJourney ?? null) ? $merchantJourney : [];
+        $onboardingMeta = is_array($journey['onboarding'] ?? null) ? $journey['onboarding'] : [];
+        $isFirstTouch = (bool) ($onboardingMeta['is_first_touch'] ?? false);
 
         $importSummary = is_array($journey['import_summary'] ?? null) ? $journey['import_summary'] : [];
         $importState = (string) ($importSummary['state'] ?? 'not_started');
@@ -449,8 +451,16 @@
             <article class="embedded-home-card">
                 <div class="embedded-home-header">
                     <div>
-                        <h2>{{ $isSetupMode ? 'Setup progress' : 'Performance summary' }}</h2>
-                        <p>{{ $isSetupMode ? 'Finish the core setup steps to go live.' : 'Track revenue, engagement, and program health.' }}</p>
+                        <h2>
+                            {{ $isFirstTouch ? 'Start here' : ($isSetupMode ? 'Setup progress' : 'Performance summary') }}
+                        </h2>
+                        <p>
+                            @if($isFirstTouch)
+                                You’re ready to begin. Complete the core setup steps and keep momentum with the next best action.
+                            @else
+                                {{ $isSetupMode ? 'Finish the core setup steps to go live.' : 'Track revenue, engagement, and program health.' }}
+                            @endif
+                        </p>
                         @if($isSetupMode)
                             <span class="embedded-home-toggle-summary">{{ $completedSetupItems }} of {{ $setupItemCount }} complete{{ $remainingSetupItems > 0 ? ' · '.$remainingSetupItems.' left' : '' }}</span>
                         @endif

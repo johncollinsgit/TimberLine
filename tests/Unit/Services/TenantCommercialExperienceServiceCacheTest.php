@@ -2,6 +2,7 @@
 
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
+use App\Services\Onboarding\OnboardingJourneyTelemetryService;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
@@ -43,7 +44,8 @@ test('merchant journey payload is cached for the same tenant within ttl', functi
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
-        \Mockery::mock(TwilioSenderConfigService::class)
+        \Mockery::mock(TwilioSenderConfigService::class),
+        \Mockery::mock(OnboardingJourneyTelemetryService::class)
     );
 
     $first = $service->merchantJourneyPayload(42);
@@ -79,7 +81,8 @@ test('merchant journey payload cache is tenant scoped', function () {
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
-        \Mockery::mock(TwilioSenderConfigService::class)
+        \Mockery::mock(TwilioSenderConfigService::class),
+        \Mockery::mock(OnboardingJourneyTelemetryService::class)
     );
 
     $tenant42 = $service->merchantJourneyPayload(42);
@@ -116,7 +119,8 @@ test('merchant journey payload cache expires after ttl', function () {
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
-        \Mockery::mock(TwilioSenderConfigService::class)
+        \Mockery::mock(TwilioSenderConfigService::class),
+        \Mockery::mock(OnboardingJourneyTelemetryService::class)
     );
 
     $service->merchantJourneyPayload(42);
@@ -153,7 +157,8 @@ test('merchant journey payload cache can be invalidated for a tenant', function 
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
-        \Mockery::mock(TwilioSenderConfigService::class)
+        \Mockery::mock(TwilioSenderConfigService::class),
+        \Mockery::mock(OnboardingJourneyTelemetryService::class)
     );
 
     $first = $service->merchantJourneyPayload(42);

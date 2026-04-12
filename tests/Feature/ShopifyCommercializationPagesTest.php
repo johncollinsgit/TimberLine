@@ -48,6 +48,11 @@ test('embedded start-here page renders onboarding checklist surface', function (
         ->assertSeeText('Unlock Next')
         ->assertSee('data-onboarding-surface="true"', false)
         ->assertSee('data-module-checklist="true"', false)
+        ->assertViewHas('onboardingPayload', function ($payload): bool {
+            return is_array($payload)
+                && is_array($payload['onboarding'] ?? null)
+                && array_key_exists('recommended_phase', (array) ($payload['onboarding'] ?? []));
+        })
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'start' && ! empty($item['active']));
         });
