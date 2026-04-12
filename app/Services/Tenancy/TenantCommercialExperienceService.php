@@ -7,9 +7,11 @@ use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\ShopifyImportRun;
 use App\Models\ShopifyStore;
+use App\Models\TenantOnboardingBlueprintProvisioning;
 use App\Models\TenantAccessAddon;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
+use App\Services\Onboarding\OnboardingJourneyTelemetryService;
 use App\Support\Tenancy\TenantModuleUi;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -44,7 +46,8 @@ class TenantCommercialExperienceService
         protected LandlordCommercialConfigService $commercialConfigService,
         protected TenantDisplayLabelResolver $displayLabelResolver,
         protected TenantEmailSettingsService $tenantEmailSettingsService,
-        protected TwilioSenderConfigService $twilioSenderConfigService
+        protected TwilioSenderConfigService $twilioSenderConfigService,
+        protected OnboardingJourneyTelemetryService $journeyTelemetryService
     ) {
     }
 
@@ -80,7 +83,7 @@ class TenantCommercialExperienceService
      */
     public function onboardingPayload(?int $tenantId): array
     {
-        return $this->rememberJourneyPayload($tenantId, 'onboarding', function () use ($tenantId): array {
+        $payload = $this->rememberJourneyPayload($tenantId, 'onboarding', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.onboarding', []);
         $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
 
@@ -95,6 +98,7 @@ class TenantCommercialExperienceService
         );
         $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
         $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
+        $onboarding = $this->onboardingMeta($tenantId, $checklist);
 
         $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
         $planDefinition = is_array(config('entitlements.plans.'.$planKey))
@@ -104,6 +108,7 @@ class TenantCommercialExperienceService
             return [
                 'content' => $content,
                 'tenant_id' => $tenantId,
+                'onboarding' => $onboarding,
                 'plan' => [
                     'key' => $planKey,
                     'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
@@ -120,6 +125,14 @@ class TenantCommercialExperienceService
                 ),
             ];
         });
+
+        try {
+            $this->journeyTelemetryService->observeTenantJourneyPayload($tenantId, 'onboarding', is_array($payload) ? (array) $payload : []);
+        } catch (\Throwable) {
+            // Best-effort telemetry must never interrupt payload delivery.
+        }
+
+        return $payload;
     }
 
     /**
@@ -143,7 +156,7 @@ class TenantCommercialExperienceService
      */
     public function merchantJourneyPayload(?int $tenantId): array
     {
-        return $this->rememberJourneyPayload($tenantId, 'merchant_journey', function () use ($tenantId): array {
+        $payload = $this->rememberJourneyPayload($tenantId, 'merchant_journey', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.onboarding', []);
         $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
 
@@ -167,9 +180,11 @@ class TenantCommercialExperienceService
             $summary = $this->merchantJourneySummary($tenantId);
             $customerSummary = $summary['customer_summary'];
             $importSummary = $summary['import_summary'];
+            $onboarding = $this->onboardingMeta($tenantId, $checklist, $importSummary);
 
             return [
                 'tenant_id' => $tenantId,
+                'onboarding' => $onboarding,
                 'plan' => [
                     'key' => $planKey,
                     'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
@@ -193,6 +208,14 @@ class TenantCommercialExperienceService
                 )),
             ];
         });
+
+        try {
+            $this->journeyTelemetryService->observeTenantJourneyPayload($tenantId, 'merchant_journey', is_array($payload) ? (array) $payload : []);
+        } catch (\Throwable) {
+            // Best-effort telemetry must never interrupt payload delivery.
+        }
+
+        return $payload;
     }
 
     /**
@@ -213,7 +236,7 @@ class TenantCommercialExperienceService
      */
     public function plansPayload(?int $tenantId): array
     {
-        return $this->rememberJourneyPayload($tenantId, 'plans', function () use ($tenantId): array {
+        $payload = $this->rememberJourneyPayload($tenantId, 'plans', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.plans', []);
         $moduleCatalog = (array) config('entitlements.modules', []);
         $moduleKeys = array_keys($moduleCatalog);
@@ -225,6 +248,7 @@ class TenantCommercialExperienceService
         );
         $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
         $checklist = TenantModuleUi::checklist($moduleStates, $moduleKeys);
+        $onboarding = $this->onboardingMeta($tenantId, $checklist);
 
         $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
         $planCatalog = (array) config('entitlements.plans', []);
@@ -290,6 +314,7 @@ class TenantCommercialExperienceService
             return [
                 'content' => $content,
                 'tenant_id' => $tenantId,
+                'onboarding' => $onboarding,
                 'current_plan' => [
                     'key' => $planKey,
                     'label' => (string) ($currentPlan['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
@@ -312,6 +337,14 @@ class TenantCommercialExperienceService
                 'enabled_addon_keys' => $enabledAddonKeys,
             ];
         });
+
+        try {
+            $this->journeyTelemetryService->observeTenantJourneyPayload($tenantId, 'plans', is_array($payload) ? (array) $payload : []);
+        } catch (\Throwable) {
+            // Best-effort telemetry must never interrupt payload delivery.
+        }
+
+        return $payload;
     }
 
     /**
@@ -329,7 +362,7 @@ class TenantCommercialExperienceService
      */
     public function integrationsPayload(?int $tenantId): array
     {
-        return $this->rememberJourneyPayload($tenantId, 'integrations', function () use ($tenantId): array {
+        $payload = $this->rememberJourneyPayload($tenantId, 'integrations', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.integrations', []);
         $cardsConfig = (array) ($content['cards'] ?? []);
         $moduleKeys = [];
@@ -353,6 +386,7 @@ class TenantCommercialExperienceService
         );
         $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
         $statusContext = $this->integrationStatusContext($tenantId);
+        $onboarding = $this->onboardingMeta($tenantId);
 
         $cards = $this->integrationCards(
             cardsConfig: $cardsConfig,
@@ -414,6 +448,7 @@ class TenantCommercialExperienceService
             return [
                 'content' => $content,
                 'tenant_id' => $tenantId,
+                'onboarding' => $onboarding,
                 'plan' => [
                     'key' => $planKey,
                     'label' => (string) ($planDefinition['label'] ?? Str::title(str_replace('_', ' ', $planKey ?: 'unknown'))),
@@ -434,6 +469,103 @@ class TenantCommercialExperienceService
                 ],
             ];
         });
+
+        try {
+            $this->journeyTelemetryService->observeTenantJourneyPayload($tenantId, 'integrations', is_array($payload) ? (array) $payload : []);
+        } catch (\Throwable) {
+            // Best-effort telemetry must never interrupt payload delivery.
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Additive, read-only onboarding meta fields derived from canonical provisioning + module/import readiness.
+     *
+     * @param  array<string,mixed>  $checklist
+     * @param  array<string,mixed>  $importSummary
+     * @return array{
+     *   first_open_acknowledged:bool,
+     *   first_opened_at:?string,
+     *   is_first_touch:bool,
+     *   recommended_phase:string
+     * }
+     */
+    protected function onboardingMeta(?int $tenantId, array $checklist = [], array $importSummary = []): array
+    {
+        $signal = $this->firstOpenSignal($tenantId);
+
+        $setupCount = (int) data_get($checklist, 'counts.setup', 0);
+        $importState = strtolower(trim((string) ($importSummary['state'] ?? '')));
+        $needsSetup = $setupCount > 0 || ($importState !== '' && $importState !== 'imported');
+
+        if ($signal['is_first_touch']) {
+            $recommendedPhase = 'handoff';
+        } elseif ($signal['first_open_acknowledged']) {
+            $recommendedPhase = $needsSetup ? 'ongoing_setup' : 'first_session';
+        } else {
+            // Default for non-provisioned tenants: no handoff/first-touch mode.
+            $recommendedPhase = $needsSetup ? 'ongoing_setup' : 'first_session';
+        }
+
+        return [
+            'first_open_acknowledged' => (bool) ($signal['first_open_acknowledged'] ?? false),
+            'first_opened_at' => $signal['first_opened_at'] ?? null,
+            'is_first_touch' => (bool) ($signal['is_first_touch'] ?? false),
+            'recommended_phase' => $recommendedPhase,
+        ];
+    }
+
+    /**
+     * @return array{first_open_acknowledged:bool,first_opened_at:?string,is_first_touch:bool}
+     */
+    protected function firstOpenSignal(?int $tenantId): array
+    {
+        if ($tenantId === null || $tenantId <= 0) {
+            return [
+                'first_open_acknowledged' => false,
+                'first_opened_at' => null,
+                'is_first_touch' => false,
+            ];
+        }
+
+        if (! $this->hasTable('tenant_onboarding_blueprint_provisionings')) {
+            return [
+                'first_open_acknowledged' => false,
+                'first_opened_at' => null,
+                'is_first_touch' => false,
+            ];
+        }
+
+        if (! $this->hasColumn('tenant_onboarding_blueprint_provisionings', 'provisioned_tenant_id')) {
+            return [
+                'first_open_acknowledged' => false,
+                'first_opened_at' => null,
+                'is_first_touch' => false,
+            ];
+        }
+
+        /** @var TenantOnboardingBlueprintProvisioning|null $provisioning */
+        $provisioning = TenantOnboardingBlueprintProvisioning::query()
+            ->where('provisioned_tenant_id', $tenantId)
+            ->orderBy('id')
+            ->first();
+
+        if (! $provisioning instanceof TenantOnboardingBlueprintProvisioning) {
+            return [
+                'first_open_acknowledged' => false,
+                'first_opened_at' => null,
+                'is_first_touch' => false,
+            ];
+        }
+
+        $ack = $provisioning->first_opened_at !== null;
+
+        return [
+            'first_open_acknowledged' => $ack,
+            'first_opened_at' => $provisioning->first_opened_at?->toIso8601String(),
+            'is_first_touch' => ! $ack,
+        ];
     }
 
     /**

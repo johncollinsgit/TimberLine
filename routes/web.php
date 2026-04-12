@@ -6,6 +6,7 @@ use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
+use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
@@ -31,6 +32,9 @@ use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
+use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
+use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
+use App\Http\Controllers\Onboarding\OnboardingHarnessController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
@@ -127,6 +131,8 @@ if ($landlordHost !== '') {
         ->group(function (): void {
             Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
                 ->name('dashboard');
+            Route::get('/landlord/onboarding/journey', [LandlordOnboardingJourneyDiagnosticsController::class, 'index'])
+                ->name('onboarding.journey');
             Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
                 ->name('commercial.index');
             Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])
@@ -262,6 +268,59 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
+
+    Route::middleware(['role:admin', 'tenant.access'])
+        ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])
+        ->name('onboarding.harness');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Onboarding Wizard Contracts (Stage 1A seam)
+    |--------------------------------------------------------------------------
+    |
+    | UI-agnostic authenticated endpoints for wizard clients.
+    |
+    */
+    Route::prefix('api/onboarding')
+        ->name('onboarding.api.')
+        ->middleware(['tenant.access'])
+        ->group(function (): void {
+            Route::get('/wizard-contract', [OnboardingWizardApiController::class, 'contract'])
+                ->name('contract');
+            Route::post('/blueprint-draft', [OnboardingWizardApiController::class, 'autosaveDraft'])
+                ->name('draft.autosave');
+            Route::post('/blueprint-finalize', [OnboardingWizardApiController::class, 'finalizeBlueprint'])
+                ->name('blueprint.finalize');
+
+            // Internal seam for validating blueprint->fresh-tenant provisioning (no UI).
+            Route::post('/blueprint-provision-production-tenant', [OnboardingProvisioningApiController::class, 'provisionProductionTenant'])
+                ->middleware(['role:admin'])
+                ->name('blueprint.provision-production');
+
+            Route::get('/blueprint-provisioning-status', [OnboardingProvisioningApiController::class, 'provisioningStatus'])
+                ->middleware(['role:admin'])
+                ->name('blueprint.provisioning-status');
+
+            Route::get('/blueprint-provisioning-handoff', [OnboardingProvisioningApiController::class, 'provisioningHandoff'])
+                ->middleware(['role:admin'])
+                ->name('blueprint.provisioning-handoff');
+
+            Route::get('/blueprint-provisioning-handoff-payload', [OnboardingProvisioningApiController::class, 'provisioningHandoffPayload'])
+                ->middleware(['role:admin'])
+                ->name('blueprint.provisioning-handoff-payload');
+
+            Route::get('/blueprint-provisioning-open-context', [OnboardingProvisioningApiController::class, 'provisioningOpenContext'])
+                ->middleware(['role:admin'])
+                ->name('blueprint.provisioning-open-context');
+
+            Route::get('/blueprint-post-provisioning-summary', [OnboardingProvisioningApiController::class, 'postProvisioningSummary'])
+                ->middleware(['role:admin'])
+                ->name('blueprint.post-provisioning-summary');
+
+            Route::post('/acknowledge-first-open', [OnboardingProvisioningApiController::class, 'acknowledgeFirstOpen'])
+                ->middleware(['role:admin'])
+                ->name('acknowledge-first-open');
+        });
 
     /*
     |--------------------------------------------------------------------------

@@ -80,7 +80,7 @@ class GlobalSearchCoordinator
             'empty_state' => $results->isEmpty()
                 ? [
                     'title' => 'No exact match yet',
-                    'subtitle' => 'Try a customer name, order number, module, import type, or workflow.',
+                    'subtitle' => 'Try a customer name, order number, module, workflow, or workspace destination.',
                 ]
                 : null,
         ];

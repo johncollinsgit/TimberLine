@@ -13,6 +13,9 @@
     @php
         $payload = is_array($onboardingPayload ?? null) ? $onboardingPayload : [];
         $content = is_array($payload['content'] ?? null) ? $payload['content'] : [];
+        $onboardingMeta = is_array($payload['onboarding'] ?? null) ? $payload['onboarding'] : [];
+        $isFirstTouch = (bool) ($onboardingMeta['is_first_touch'] ?? false);
+        $recommendedPhase = (string) ($onboardingMeta['recommended_phase'] ?? 'ongoing_setup');
         $moduleStates = is_array($payload['module_states'] ?? null) ? $payload['module_states'] : [];
         $moduleOrder = is_array($payload['module_order'] ?? null) ? $payload['module_order'] : [];
         $checklist = is_array($payload['checklist'] ?? null) ? $payload['checklist'] : \App\Support\Tenancy\TenantModuleUi::checklist($moduleStates, $moduleOrder);
@@ -44,6 +47,13 @@
             <p class="start-here-copy">{{ $content['welcome_body'] ?? 'Use this page to complete setup quickly and move into customer value workflows.' }}</p>
 
             <div class="start-here-meta" aria-label="Current setup profile">
+                @if($isFirstTouch)
+                    <span class="start-here-pill">Start here</span>
+                @elseif($recommendedPhase === 'ongoing_setup')
+                    <span class="start-here-pill">Continue setup</span>
+                @else
+                    <span class="start-here-pill">Next best action</span>
+                @endif
                 <span class="start-here-pill">Plan · {{ $plan['label'] ?? 'Unknown' }}</span>
                 <span class="start-here-pill">Active now · {{ (int) ($checklistCounts['active'] ?? 0) }}</span>
                 <span class="start-here-pill">Setup next · {{ (int) ($checklistCounts['setup'] ?? 0) }}</span>
@@ -51,7 +61,9 @@
             </div>
 
             <div class="start-here-action is-journey">
-                <p class="start-here-action-title">Customer import status: {{ $importSummary['label'] ?? 'Not started' }}</p>
+                <p class="start-here-action-title">
+                    {{ $isFirstTouch ? 'First step: customer import' : 'Customer import status' }}: {{ $importSummary['label'] ?? 'Not started' }}
+                </p>
                 <p class="start-here-action-copy">{{ $importSummary['description'] ?? 'Import customers first to unlock customer management capabilities.' }}</p>
                 <p class="start-here-action-copy">{{ $importSummary['progress_note'] ?? 'No import has run yet for this store context.' }}</p>
                 <a class="start-here-action-link" href="{{ $embeddedUrl((string) ($importCta['href'] ?? route('shopify.app.integrations', [], false))) }}">

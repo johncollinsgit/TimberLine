@@ -22,6 +22,12 @@
                             Open Commercial Config
                         </a>
                         <a
+                            href="{{ route('landlord.onboarding.journey') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            Onboarding Diagnostics
+                        </a>
+                        <a
                             href="{{ route('landlord.tenants.index') }}"
                             class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                         >
