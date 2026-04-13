@@ -19,13 +19,15 @@ beforeEach(function (): void {
     config()->set('services.stripe.secret', 'sk_test_123');
 });
 
-function stripeSignatureHeader(string $payload, string $secret, ?int $timestamp = null): string
-{
-    $timestamp = $timestamp ?? time();
-    $signedPayload = $timestamp.'.'.$payload;
-    $signature = hash_hmac('sha256', $signedPayload, $secret);
+if (! function_exists('stripeSignatureHeader')) {
+    function stripeSignatureHeader(string $payload, string $secret, ?int $timestamp = null): string
+    {
+        $timestamp = $timestamp ?? time();
+        $signedPayload = $timestamp.'.'.$payload;
+        $signature = hash_hmac('sha256', $signedPayload, $secret);
 
-    return "t={$timestamp},v1={$signature}";
+        return "t={$timestamp},v1={$signature}";
+    }
 }
 
 test('valid signed webhook updates billing mapping for correct tenant and does not mutate entitlements', function (): void {
