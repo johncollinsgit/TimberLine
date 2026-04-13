@@ -321,7 +321,7 @@ Status-registry derivation constraints:
   - connector OAuth handshakes
   - external API sync writes
   - webhook-driven connector pipelines
-  - billing checkout/activation writes
+  - billing checkout/subscription mutation writes (Stripe checkout session creation + webhook confirmation/reference recording are allowed; entitlement mutation remains deferred)
 
 ## Landlord Commercial Configuration Layer (Phase 4)
 

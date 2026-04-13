@@ -44,7 +44,9 @@ Implemented:
   - `/start` is a non-embedded, authenticated Start Here surface (tenant-aware, entitlement-driven) built via `TenantCommercialExperienceService`
 
 Billing note:
-- plan/add-on truth remains landlord-controlled; customer-facing billing writes are intentionally deferred in this pass.
+- plan/add-on truth remains landlord-controlled.
+- hosted Stripe checkout + billing-portal handoff is now available only through guarded server-side session creation.
+- Stripe webhook ingest is now allowed only for confirmation/reference recording (`stripe.customer_reference`, `stripe.subscription_reference`) in `tenant_commercial_overrides.billing_mapping` — entitlement mutation and full billing lifecycle fulfillment remain deferred.
 
 ## Shopify Embedded AI Assistant Foundation (2026-04-10)
 

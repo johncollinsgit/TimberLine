@@ -832,6 +832,13 @@ Route::prefix('webhooks/sendgrid')->group(function () {
         ->name('marketing.webhooks.sendgrid-inbound');
 });
 
+Route::prefix('webhooks/stripe')->group(function () {
+    Route::post('/events', [\App\Http\Controllers\Billing\StripeWebhookController::class, 'events'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:60,1')
+        ->name('billing.webhooks.stripe-events');
+});
+
 Route::prefix('marketing/consent')->name('marketing.consent.')->middleware('throttle:30,1')->group(function () {
     Route::get('/optin', [MarketingConsentCaptureController::class, 'showOptin'])->name('optin');
     Route::post('/optin', [MarketingConsentCaptureController::class, 'storeOptin'])->name('optin.store');
