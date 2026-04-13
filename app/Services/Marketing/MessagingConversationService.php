@@ -8,6 +8,7 @@ use App\Models\MarketingProfile;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -136,13 +137,15 @@ class MessagingConversationService
     public function appendMessage(MessagingConversation $conversation, array $attributes): MessagingConversationMessage
     {
         $timestamp = $this->messageTimestamp($attributes);
+        $provider = $this->nullableString($attributes['provider'] ?? null) ?? 'unknown';
+        $providerMessageId = $this->nullableString($attributes['provider_message_id'] ?? null);
         $dedupeHash = $this->nullableString($attributes['dedupe_hash'] ?? null)
             ?? sha1(json_encode([
                 'conversation_id' => (int) $conversation->id,
                 'channel' => $attributes['channel'] ?? $conversation->channel,
                 'direction' => $attributes['direction'] ?? null,
-                'provider' => $attributes['provider'] ?? null,
-                'provider_message_id' => $attributes['provider_message_id'] ?? null,
+                'provider' => $provider,
+                'provider_message_id' => $providerMessageId,
                 'body' => $attributes['body'] ?? null,
                 'subject' => $attributes['subject'] ?? null,
                 'from_identity' => $attributes['from_identity'] ?? null,
@@ -151,37 +154,67 @@ class MessagingConversationService
                 'message_type' => $attributes['message_type'] ?? null,
             ]));
 
-        $message = MessagingConversationMessage::query()
-            ->where('dedupe_hash', $dedupeHash)
-            ->first();
+        $message = null;
+
+        if ($providerMessageId !== null) {
+            $message = MessagingConversationMessage::query()
+                ->where('provider', $provider)
+                ->where('provider_message_id', $providerMessageId)
+                ->first();
+        }
 
         if (! $message instanceof MessagingConversationMessage) {
-            $message = MessagingConversationMessage::query()->create([
-                'conversation_id' => (int) $conversation->id,
-                'tenant_id' => (int) $conversation->tenant_id,
-                'store_key' => $conversation->store_key,
-                'marketing_profile_id' => $attributes['marketing_profile_id'] ?? $conversation->marketing_profile_id,
-                'marketing_message_delivery_id' => $attributes['marketing_message_delivery_id'] ?? null,
-                'marketing_email_delivery_id' => $attributes['marketing_email_delivery_id'] ?? null,
-                'channel' => $attributes['channel'] ?? $conversation->channel,
-                'direction' => $attributes['direction'] ?? 'inbound',
-                'provider' => $attributes['provider'] ?? 'unknown',
-                'provider_message_id' => $this->nullableString($attributes['provider_message_id'] ?? null),
-                'dedupe_hash' => $dedupeHash,
-                'body' => trim((string) ($attributes['body'] ?? '')),
-                'normalized_body' => $this->nullableString($attributes['normalized_body'] ?? null),
-                'subject' => $this->nullableString($attributes['subject'] ?? null),
-                'from_identity' => $this->nullableString($attributes['from_identity'] ?? null),
-                'to_identity' => $this->nullableString($attributes['to_identity'] ?? null),
-                'received_at' => $attributes['direction'] === 'inbound' ? $timestamp : null,
-                'sent_at' => $attributes['direction'] !== 'inbound' ? $timestamp : null,
-                'delivery_status' => $this->nullableString($attributes['delivery_status'] ?? null),
-                'message_type' => $attributes['message_type'] ?? 'normal',
-                'operator_read_at' => $attributes['operator_read_at'] ?? null,
-                'created_by' => $attributes['created_by'] ?? null,
-                'raw_payload' => is_array($attributes['raw_payload'] ?? null) ? $attributes['raw_payload'] : [],
-                'metadata' => is_array($attributes['metadata'] ?? null) ? $attributes['metadata'] : [],
-            ]);
+            $message = MessagingConversationMessage::query()
+                ->where('dedupe_hash', $dedupeHash)
+                ->first();
+        }
+
+        if (! $message instanceof MessagingConversationMessage) {
+            try {
+                $message = MessagingConversationMessage::query()->create([
+                    'conversation_id' => (int) $conversation->id,
+                    'tenant_id' => (int) $conversation->tenant_id,
+                    'store_key' => $conversation->store_key,
+                    'marketing_profile_id' => $attributes['marketing_profile_id'] ?? $conversation->marketing_profile_id,
+                    'marketing_message_delivery_id' => $attributes['marketing_message_delivery_id'] ?? null,
+                    'marketing_email_delivery_id' => $attributes['marketing_email_delivery_id'] ?? null,
+                    'channel' => $attributes['channel'] ?? $conversation->channel,
+                    'direction' => $attributes['direction'] ?? 'inbound',
+                    'provider' => $provider,
+                    'provider_message_id' => $providerMessageId,
+                    'dedupe_hash' => $dedupeHash,
+                    'body' => trim((string) ($attributes['body'] ?? '')),
+                    'normalized_body' => $this->nullableString($attributes['normalized_body'] ?? null),
+                    'subject' => $this->nullableString($attributes['subject'] ?? null),
+                    'from_identity' => $this->nullableString($attributes['from_identity'] ?? null),
+                    'to_identity' => $this->nullableString($attributes['to_identity'] ?? null),
+                    'received_at' => $attributes['direction'] === 'inbound' ? $timestamp : null,
+                    'sent_at' => $attributes['direction'] !== 'inbound' ? $timestamp : null,
+                    'delivery_status' => $this->nullableString($attributes['delivery_status'] ?? null),
+                    'message_type' => $attributes['message_type'] ?? 'normal',
+                    'operator_read_at' => $attributes['operator_read_at'] ?? null,
+                    'created_by' => $attributes['created_by'] ?? null,
+                    'raw_payload' => is_array($attributes['raw_payload'] ?? null) ? $attributes['raw_payload'] : [],
+                    'metadata' => is_array($attributes['metadata'] ?? null) ? $attributes['metadata'] : [],
+                ]);
+            } catch (UniqueConstraintViolationException $exception) {
+                if ($providerMessageId !== null) {
+                    $message = MessagingConversationMessage::query()
+                        ->where('provider', $provider)
+                        ->where('provider_message_id', $providerMessageId)
+                        ->first();
+                }
+
+                if (! $message instanceof MessagingConversationMessage) {
+                    $message = MessagingConversationMessage::query()
+                        ->where('dedupe_hash', $dedupeHash)
+                        ->first();
+                }
+
+                if (! $message instanceof MessagingConversationMessage) {
+                    throw $exception;
+                }
+            }
         }
 
         $this->syncConversationSummary($conversation->fresh() ?? $conversation);
