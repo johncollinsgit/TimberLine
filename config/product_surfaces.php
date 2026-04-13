@@ -19,6 +19,52 @@ return [
                 'description' => 'Use plans, add-ons, and setup checklists to expand scope without disrupting core workflows.',
             ],
         ],
+        'preview_profiles' => [
+            [
+                'key' => 'landscaper',
+                'label' => 'Landscaper',
+                'summary' => 'Coordinate crews, route jobs, and keep post-service follow-ups tight.',
+                'signals' => [
+                    '86 scheduled jobs this month',
+                    'Next follow-up campaign in 2 days',
+                    'SMS reminders enabled for field teams',
+                ],
+            ],
+            [
+                'key' => 'electrician',
+                'label' => 'Electrician',
+                'summary' => 'Track service calls, dispatch load, and customer lifecycle touchpoints from one place.',
+                'signals' => [
+                    '24 active service tickets',
+                    '4 high-priority callbacks due today',
+                    'Billing handoff ready for Growth tier',
+                ],
+            ],
+            [
+                'key' => 'soap_maker',
+                'label' => 'Soap Maker',
+                'summary' => 'Run production batches, wholesale fulfillment, and repeat-order campaigns together.',
+                'signals' => [
+                    '12 production batches scheduled',
+                    'Wholesale reorder risk score: low',
+                    'Rewards + referrals suggested next',
+                ],
+            ],
+        ],
+        'preview_flow' => [
+            [
+                'title' => 'Preview',
+                'description' => 'Explore a safe example workspace with real-looking workflows and module state.',
+            ],
+            [
+                'title' => 'Request',
+                'description' => 'Choose demo or production intent and capture the right commercial context once.',
+            ],
+            [
+                'title' => 'Activate',
+                'description' => 'After approval, set your password and land directly in a tenant-aware Start Here surface.',
+            ],
+        ],
         'plan_order' => [
             'starter',
             'growth',
@@ -47,6 +93,30 @@ return [
             ],
         ],
         'disclaimer' => 'Modules marked coming soon remain roadmap-visible only and are not represented as fully live capabilities.',
+    ],
+
+    'access_request' => [
+        'business_types' => [
+            'landscaper' => 'Landscaper',
+            'electrician' => 'Electrician',
+            'soap_maker' => 'Soap maker',
+            'retail' => 'Retail',
+            'wholesale' => 'Wholesale',
+            'agency' => 'Agency / services',
+            'other' => 'Other',
+        ],
+        'team_sizes' => [
+            '1_5' => '1–5 people',
+            '6_20' => '6–20 people',
+            '21_50' => '21–50 people',
+            '51_plus' => '51+ people',
+        ],
+        'timelines' => [
+            'asap' => 'ASAP',
+            '30_days' => 'Within 30 days',
+            '60_90_days' => '60–90 days',
+            'researching' => 'Just researching',
+        ],
     ],
 
     'onboarding' => [
@@ -202,6 +272,7 @@ return [
         'eyebrow' => 'Live Demo',
         'headline' => 'See Forestry Backstage in action.',
         'summary' => 'Request access to a safe demo workspace. We keep demo and production flows separate and honest.',
+        'intent_note' => 'Demo access is for evaluation and does not convert demo tenants directly into production tenants.',
         'submit_label' => 'Request demo access',
         'footnote' => 'Demo access is granted manually. You will receive an email with a password-setup link once approved.',
     ],
@@ -210,6 +281,7 @@ return [
         'eyebrow' => 'Client Signup',
         'headline' => 'Start as a client.',
         'summary' => 'Request production access for your team. After approval, you will receive an activation email with a single password-setup link.',
+        'intent_note' => 'Production access follows approval + activation and lands you in a tenant-aware Start Here experience.',
         'submit_label' => 'Request production access',
         'footnote' => 'Plan assignment remains landlord-controlled during early rollout. You will land in Start Here after first login.',
     ],

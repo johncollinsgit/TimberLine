@@ -29,11 +29,21 @@
         $activeNow = is_array($journey['active_now'] ?? null) ? $journey['active_now'] : [];
         $availableNext = is_array($journey['available_next'] ?? null) ? $journey['available_next'] : [];
         $purchasable = is_array($journey['purchasable'] ?? null) ? $journey['purchasable'] : [];
+        $billingInterest = is_array($journey['billing_interest'] ?? null) ? $journey['billing_interest'] : [];
+        $billingNextStep = is_array($journey['billing_next_step'] ?? null) ? $journey['billing_next_step'] : [];
         $commercialSummary = is_array($journey['commercial_summary'] ?? null) ? (array) $journey['commercial_summary'] : [];
         $commercialLifecycle = (string) data_get($commercialSummary, 'lifecycle_state', '');
-        $customerMessage = is_array(data_get($commercialSummary, 'customer_message')) ? (array) data_get($commercialSummary, 'customer_message') : [];
-        $customerMessageTitle = trim((string) data_get($customerMessage, 'title', 'Billing'));
-        $customerMessageBody = trim((string) data_get($customerMessage, 'body', ''));
+        $planCatalog = (array) config('module_catalog.plans', []);
+        $addonCatalog = (array) config('module_catalog.addons', []);
+        $planLabelByKey = collect($planCatalog)
+            ->filter(fn ($definition) => is_array($definition))
+            ->mapWithKeys(fn ($definition, $key) => [strtolower(trim((string) $key)) => (string) ($definition['display_name'] ?? $definition['label'] ?? $key)])
+            ->all();
+        $addonLabelByKey = collect($addonCatalog)
+            ->filter(fn ($definition) => is_array($definition))
+            ->mapWithKeys(fn ($definition, $key) => [strtolower(trim((string) $key)) => (string) ($definition['display_name'] ?? $definition['label'] ?? $key)])
+            ->all();
+        $billingReturn = strtolower(trim((string) request()->query('billing', '')));
 
         $checklistCounts = is_array($checklist['counts'] ?? null) ? $checklist['counts'] : ['active' => 0, 'setup' => 0, 'locked' => 0, 'coming_soon' => 0];
 
@@ -78,18 +88,19 @@
 
             @if($commercialLifecycle !== '')
                 <div class="start-here-action is-journey" aria-label="Billing status">
-                    <p class="start-here-action-title">
-                        {{ $customerMessageTitle !== '' ? $customerMessageTitle : 'Billing' }}
-                        @if($commercialLifecycle !== '')
-                            <span class="start-here-pill ml-2">{{ str_replace('_', ' ', $commercialLifecycle) }}</span>
-                        @endif
-                    </p>
-                    @if($customerMessageBody !== '')
-                        <p class="start-here-action-copy">{{ $customerMessageBody }}</p>
-                    @else
-                        <p class="start-here-action-copy">Billing status is reflected here once checkout and fulfillment are complete.</p>
-                    @endif
-                    <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.plans', [], false)) }}">Review plans & add-ons</a>
+                    <x-tenancy.commercial-lifecycle-summary
+                        :commercial-summary="$commercialSummary"
+                        :billing-interest="$billingInterest"
+                        :billing-next-step="$billingNextStep"
+                        :plan-label-by-key="$planLabelByKey"
+                        :addon-label-by-key="$addonLabelByKey"
+                        :billing-return="$billingReturn"
+                    >
+                        <div class="flex flex-wrap gap-2">
+                            <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.plans', [], false)) }}">Review plans & add-ons</a>
+                            <a class="start-here-action-link" href="{{ route('platform.contact', ['intent' => 'billing']) }}">Talk to sales</a>
+                        </div>
+                    </x-tenancy.commercial-lifecycle-summary>
                 </div>
             @endif
 

@@ -8,19 +8,8 @@
     $billingInterest = is_array($journey['billing_interest'] ?? null) ? (array) $journey['billing_interest'] : [];
     $billingNextStep = is_array($journey['billing_next_step'] ?? null) ? (array) $journey['billing_next_step'] : [];
     $commercialSummary = is_array($journey['commercial_summary'] ?? null) ? (array) $journey['commercial_summary'] : [];
-    $commercialLifecycle = (string) data_get($commercialSummary, 'lifecycle_state', '');
-    $commercialReason = (string) data_get($commercialSummary, 'reason', '');
-    $customerMessage = is_array(data_get($commercialSummary, 'customer_message')) ? (array) data_get($commercialSummary, 'customer_message') : [];
-    $customerMessageTitle = trim((string) data_get($customerMessage, 'title', 'Billing'));
-    $customerMessageBody = trim((string) data_get($customerMessage, 'body', ''));
-    $stripeSummary = is_array(data_get($commercialSummary, 'stripe')) ? (array) data_get($commercialSummary, 'stripe') : [];
-    $fulfillmentSummary = is_array(data_get($commercialSummary, 'fulfillment')) ? (array) data_get($commercialSummary, 'fulfillment') : [];
     $plansPayload = is_array($plans ?? null) ? $plans : [];
     $billingNote = (string) data_get($plansPayload, 'content.billing_note', '');
-    $preferredPlanKey = strtolower(trim((string) data_get($billingInterest, 'preferred_plan_key', '')));
-    $addonsInterest = array_values(array_filter(array_map(fn ($value) => strtolower(trim((string) $value)), (array) data_get($billingInterest, 'addons_interest', [])), fn ($value) => $value !== ''));
-    $confirmedPlanKey = strtolower(trim((string) data_get($stripeSummary, 'confirmed_plan_key', '')));
-    $confirmedAddonKeys = array_values(array_filter(array_map(fn ($value) => strtolower(trim((string) $value)), (array) data_get($stripeSummary, 'confirmed_addon_keys', [])), fn ($value) => $value !== ''));
 
     $planCatalog = (array) config('module_catalog.plans', []);
     $addonCatalog = (array) config('module_catalog.addons', []);
@@ -63,6 +52,42 @@
                     </div>
                 </div>
             </header>
+
+            <section class="fb-panel mb-6">
+                <div class="fb-panel-head">
+                    <div>
+                        <div class="fb-panel-title">What happens next</div>
+                        <div class="fb-panel-copy">{{ $billingNote !== '' ? $billingNote : 'Commercial lifecycle, billing truth, and setup guidance are unified here.' }}</div>
+                    </div>
+                </div>
+                <div class="fb-panel-body">
+                    <x-tenancy.commercial-lifecycle-summary
+                        :commercial-summary="$commercialSummary"
+                        :billing-interest="$billingInterest"
+                        :billing-next-step="$billingNextStep"
+                        :plan-label-by-key="$planLabelByKey"
+                        :addon-label-by-key="$addonLabelByKey"
+                        :billing-return="$billingReturn"
+                    >
+                        <div class="flex flex-wrap gap-2">
+                            @if(is_array($billingNextStep['cta_route'] ?? null) && filled($billingNextStep['cta_route']['name'] ?? null))
+                                <form method="POST" action="{{ route((string) $billingNextStep['cta_route']['name']) }}">
+                                    @csrf
+                                    <button type="submit" class="fb-btn fb-btn-primary">
+                                        {{ $billingNextStep['cta_label'] ?? 'Continue' }}
+                                    </button>
+                                </form>
+                            @elseif(filled($billingNextStep['cta_url'] ?? null))
+                                <a href="{{ (string) $billingNextStep['cta_url'] }}" class="fb-btn fb-btn-primary">
+                                    {{ $billingNextStep['cta_label'] ?? 'Continue' }}
+                                </a>
+                            @endif
+                            <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
+                            <a href="{{ route('platform.contact', ['intent' => 'billing']) }}" class="fb-btn fb-btn-secondary">Talk to sales</a>
+                        </div>
+                    </x-tenancy.commercial-lifecycle-summary>
+                </div>
+            </section>
 
             <div class="fb-workflow-grid">
                 <section class="min-w-0">
@@ -125,117 +150,6 @@
                 </section>
             </div>
 
-            @if($billingNote !== '')
-                <section class="fb-panel mt-6">
-                    <div class="fb-panel-head">
-                        <div>
-                            <div class="fb-panel-title">Billing</div>
-                            <div class="fb-panel-copy">{{ $billingNote }}</div>
-                        </div>
-                    </div>
-                    <div class="fb-panel-body space-y-3">
-                        @if(in_array($billingReturn, ['success', 'cancel', 'return'], true))
-                            <div class="fb-state text-sm">
-                                @if($billingReturn === 'success')
-                                    Returned from checkout. We’re confirming billing—this may take a moment.
-                                @elseif($billingReturn === 'return')
-                                    Returned from the billing portal.
-                                @else
-                                    Checkout cancelled. You can return to billing whenever you’re ready.
-                                @endif
-                            </div>
-                        @endif
-
-                        @if($customerMessageTitle !== '' || $customerMessageBody !== '')
-                            @php
-                                $tone = 'fb-state';
-                                if ($commercialLifecycle === 'fulfilled') {
-                                    $tone = 'fb-state fb-state-success';
-                                } elseif (in_array($commercialLifecycle, ['billing_confirmed_pending_fulfillment', 'action_required'], true)) {
-                                    $tone = 'fb-state fb-state-warn';
-                                }
-                            @endphp
-                            <div class="{{ $tone }} text-sm">
-                                <div class="font-semibold">{{ $customerMessageTitle }}</div>
-                                @if($customerMessageBody !== '')
-                                    <div class="mt-1">{{ $customerMessageBody }}</div>
-                                @endif
-                            </div>
-                        @endif
-
-                        @if($confirmedPlanKey !== '' || $confirmedAddonKeys !== [])
-                            <div class="text-sm text-[var(--fb-text-secondary)]">
-                                <div class="font-semibold text-[var(--fb-text-primary)]">Confirmed billing</div>
-                                @if($confirmedPlanKey !== '')
-                                    <div class="mt-1">Tier: <span class="font-semibold text-[var(--fb-text-primary)]">{{ $planLabelByKey[$confirmedPlanKey] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $confirmedPlanKey)) }}</span></div>
-                                @endif
-                                @if($confirmedAddonKeys !== [])
-                                    <div class="mt-1">Add-ons:
-                                        <span class="font-semibold text-[var(--fb-text-primary)]">
-                                            {{ collect($confirmedAddonKeys)->map(fn ($key) => $addonLabelByKey[strtolower(trim((string) $key))] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', (string) $key)))->implode(', ') }}
-                                        </span>
-                                    </div>
-                                @endif
-                                @if($preferredPlanKey !== '' && $confirmedPlanKey !== '' && $preferredPlanKey !== $confirmedPlanKey)
-                                    <div class="mt-1">Note: your saved interest differs from the confirmed billing tier.</div>
-                                @endif
-                            </div>
-                        @endif
-
-                        @if($preferredPlanKey !== '' || $addonsInterest !== [])
-                            <div class="text-sm text-[var(--fb-text-secondary)]">
-                                <div class="font-semibold text-[var(--fb-text-primary)]">Your interest</div>
-                                @if($preferredPlanKey !== '')
-                                    <div class="mt-1">Preferred tier: <span class="font-semibold text-[var(--fb-text-primary)]">{{ $planLabelByKey[$preferredPlanKey] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $preferredPlanKey)) }}</span></div>
-                                @endif
-                                @if($addonsInterest !== [])
-                                    <div class="mt-1">Add-ons of interest:
-                                        <span class="font-semibold text-[var(--fb-text-primary)]">
-                                            {{ collect($addonsInterest)->map(fn ($key) => $addonLabelByKey[strtolower(trim((string) $key))] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', (string) $key)))->implode(', ') }}
-                                        </span>
-                                    </div>
-                                @endif
-                            </div>
-                        @endif
-
-                        <div class="flex flex-wrap gap-2">
-                            @if(is_array($billingNextStep['cta_route'] ?? null) && filled($billingNextStep['cta_route']['name'] ?? null))
-                                <form method="POST" action="{{ route((string) $billingNextStep['cta_route']['name']) }}">
-                                    @csrf
-                                    <button type="submit" class="fb-btn fb-btn-primary">
-                                        {{ $billingNextStep['cta_label'] ?? 'Continue' }}
-                                    </button>
-                                </form>
-                            @elseif(filled($billingNextStep['cta_url'] ?? null))
-                                <a href="{{ (string) $billingNextStep['cta_url'] }}" class="fb-btn fb-btn-primary">
-                                    {{ $billingNextStep['cta_label'] ?? 'Continue' }}
-                                </a>
-                            @endif
-
-                            <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
-                            <a href="{{ route('platform.contact', ['intent' => 'billing']) }}" class="fb-btn fb-btn-secondary">Talk to sales</a>
-                        </div>
-
-                        @if(filled($billingNextStep['title'] ?? null) || filled($billingNextStep['description'] ?? null))
-                            <div class="text-sm text-[var(--fb-text-secondary)]">
-                                <div class="font-semibold text-[var(--fb-text-primary)]">{{ (string) ($billingNextStep['title'] ?? 'Next step') }}</div>
-                                @if(filled($billingNextStep['description'] ?? null))
-                                    <div class="mt-1">{{ (string) $billingNextStep['description'] }}</div>
-                                @endif
-                            </div>
-                        @endif
-
-                        @if($commercialLifecycle !== '' && $commercialLifecycle !== 'unavailable')
-                            <div class="text-xs text-[var(--fb-text-secondary)]">
-                                Status: <span class="font-semibold text-[var(--fb-text-primary)]">{{ str_replace('_', ' ', $commercialLifecycle) }}</span>
-                                @if($commercialReason !== '')
-                                    · reason: {{ str_replace('_', ' ', $commercialReason) }}
-                                @endif
-                            </div>
-                        @endif
-                    </div>
-                </section>
-            @endif
         </div>
     </flux:main>
 </x-layouts::app.sidebar>

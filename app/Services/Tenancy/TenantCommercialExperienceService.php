@@ -46,6 +46,7 @@ class TenantCommercialExperienceService
 
     public function __construct(
         protected TenantModuleAccessResolver $accessResolver,
+        protected TenantModuleCatalogService $moduleCatalogService,
         protected LandlordCommercialConfigService $commercialConfigService,
         protected TenantDisplayLabelResolver $displayLabelResolver,
         protected TenantEmailSettingsService $tenantEmailSettingsService,
@@ -66,10 +67,14 @@ class TenantCommercialExperienceService
             preferredOrder: $this->normalizeKeys((array) ($promo['plan_order'] ?? [])),
             activePlanKey: null
         );
+        $catalog = $this->moduleCatalogService->publicCatalogPayload();
+        $moduleShowcase = $this->publicModuleShowcase((array) ($catalog['modules'] ?? []));
 
         return [
             'promo' => $promo,
             'plan_cards' => $planCards,
+            'catalog' => $catalog,
+            'module_showcase' => $moduleShowcase,
         ];
     }
 
@@ -91,6 +96,8 @@ class TenantCommercialExperienceService
             preferredOrder: $this->normalizeKeys((array) ($content['plan_order'] ?? [])),
             activePlanKey: null
         );
+        $catalog = $this->moduleCatalogService->publicCatalogPayload();
+        $moduleShowcase = $this->publicModuleShowcase((array) ($catalog['modules'] ?? []));
 
         $addonCatalog = (array) config('entitlements.addons', []);
         $addonCards = [];
@@ -135,7 +142,113 @@ class TenantCommercialExperienceService
             'plan_cards' => $planCards,
             'addon_cards' => $addonCards,
             'recommended_plan_key' => 'growth',
+            'catalog' => $catalog,
+            'module_showcase' => $moduleShowcase,
         ];
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $modules
+     * @return array{
+     *   available_now:array<int,array<string,mixed>>,
+     *   unlock_next:array<int,array<string,mixed>>,
+     *   coming_soon:array<int,array<string,mixed>>
+     * }
+     */
+    protected function publicModuleShowcase(array $modules): array
+    {
+        $availableNow = [];
+        $unlockNext = [];
+        $comingSoon = [];
+
+        foreach ($modules as $module) {
+            if (! is_array($module)) {
+                continue;
+            }
+
+            $status = strtolower(trim((string) ($module['status'] ?? 'disabled')));
+            $billingMode = strtolower(trim((string) ($module['billing_mode'] ?? 'unavailable')));
+            $marketState = strtoupper(trim((string) ($module['market_state'] ?? 'INTERNAL_ONLY')));
+
+            if (in_array($status, ['placeholder', 'roadmap'], true)) {
+                $comingSoon[] = [
+                    'key' => (string) ($module['key'] ?? ''),
+                    'label' => (string) ($module['display_name'] ?? 'Module'),
+                    'description' => (string) ($module['description'] ?? ''),
+                    'status' => $status,
+                    'billing_mode' => $billingMode,
+                    'included_in_plans' => $this->mapPlanLabels(
+                        $this->normalizeKeys((array) ($module['included_in_plans'] ?? []))
+                    ),
+                ];
+
+                continue;
+            }
+
+            if ($marketState !== 'SAFE_TO_MARKET') {
+                continue;
+            }
+
+            $entry = [
+                'key' => (string) ($module['key'] ?? ''),
+                'label' => (string) ($module['display_name'] ?? 'Module'),
+                'description' => (string) ($module['description'] ?? ''),
+                'status' => $status,
+                'billing_mode' => $billingMode,
+                'included_in_plans' => $this->mapPlanLabels(
+                    $this->normalizeKeys((array) ($module['included_in_plans'] ?? []))
+                ),
+            ];
+
+            if ($billingMode === 'add_on') {
+                $unlockNext[] = $entry;
+
+                continue;
+            }
+
+            $availableNow[] = $entry;
+        }
+
+        $sortByLabel = static function (array $left, array $right): int {
+            return strcmp(
+                strtolower(trim((string) ($left['label'] ?? ''))),
+                strtolower(trim((string) ($right['label'] ?? '')))
+            );
+        };
+
+        usort($availableNow, $sortByLabel);
+        usort($unlockNext, $sortByLabel);
+        usort($comingSoon, $sortByLabel);
+
+        return [
+            'available_now' => $availableNow,
+            'unlock_next' => $unlockNext,
+            'coming_soon' => $comingSoon,
+        ];
+    }
+
+    /**
+     * @param  array<int,string>  $planKeys
+     * @return array<int,string>
+     */
+    protected function mapPlanLabels(array $planKeys): array
+    {
+        $labels = [];
+
+        foreach ($planKeys as $planKey) {
+            $normalized = strtolower(trim((string) $planKey));
+            if ($normalized === '') {
+                continue;
+            }
+
+            $plan = is_array(config('module_catalog.plans.'.$normalized))
+                ? (array) config('module_catalog.plans.'.$normalized)
+                : [];
+
+            $labels[] = (string) ($plan['display_name'] ?? $plan['label'] ?? Str::title(str_replace('_', ' ', $normalized)));
+        }
+
+        return array_values(array_unique($labels));
     }
 
     /**

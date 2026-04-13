@@ -105,6 +105,7 @@ test('start here page renders for tenant members', function (): void {
         ->get('http://acme.backstage.local/start')
         ->assertOk()
         ->assertSeeText('Start Here')
+        ->assertSeeText('What happens next')
         ->assertSeeText('Available Now')
         ->assertSeeText('Acme Candle Co');
 });

@@ -5,6 +5,10 @@
     $recommendedPlanKey = (string) ($recommended_plan_key ?? 'growth');
     $promo = (array) config('product_surfaces.promo', []);
     $ctas = is_array($promo['ctas'] ?? null) ? (array) $promo['ctas'] : [];
+    $moduleShowcase = is_array($module_showcase ?? null) ? $module_showcase : [];
+    $availableNowModules = is_array($moduleShowcase['available_now'] ?? null) ? $moduleShowcase['available_now'] : [];
+    $unlockNextModules = is_array($moduleShowcase['unlock_next'] ?? null) ? $moduleShowcase['unlock_next'] : [];
+    $comingSoonModules = is_array($moduleShowcase['coming_soon'] ?? null) ? $moduleShowcase['coming_soon'] : [];
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -88,6 +92,67 @@
             </div>
         </section>
 
+        @if($availableNowModules !== [] || $unlockNextModules !== [] || $comingSoonModules !== [])
+            <section class="fb-section" aria-label="Module availability map" data-reveal>
+                <div class="fb-section-header">
+                    <p class="fb-section-kicker">Module Map</p>
+                    <h2>Included now, unlock next, and roadmap visibility.</h2>
+                    <p class="text-sm text-[var(--fb-text-secondary)]">Presentation is derived from canonical product catalog visibility and status.</p>
+                </div>
+                <div class="fb-grid fb-grid-3">
+                    <article class="fb-card" data-premium-surface>
+                        <h3 class="text-base font-semibold text-[var(--fb-text-primary)]">Included now</h3>
+                        @if($availableNowModules !== [])
+                            <ul class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)]">
+                                @foreach(array_slice($availableNowModules, 0, 8) as $module)
+                                    <li>
+                                        <span class="font-semibold text-[var(--fb-text-primary)]">{{ $module['label'] ?? 'Module' }}</span>
+                                        @if(! empty($module['included_in_plans']))
+                                            <div>Included in {{ collect((array) $module['included_in_plans'])->implode(', ') }}</div>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="mt-3 text-sm text-[var(--fb-text-secondary)]">No modules are currently marked as included on public surfaces.</p>
+                        @endif
+                    </article>
+
+                    <article class="fb-card" data-premium-surface>
+                        <h3 class="text-base font-semibold text-[var(--fb-text-primary)]">Unlock next</h3>
+                        @if($unlockNextModules !== [])
+                            <ul class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)]">
+                                @foreach(array_slice($unlockNextModules, 0, 8) as $module)
+                                    <li>
+                                        <span class="font-semibold text-[var(--fb-text-primary)]">{{ $module['label'] ?? 'Module' }}</span>
+                                        <div>{{ $module['description'] ?? 'Available through add-ons or plan expansion.' }}</div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="mt-3 text-sm text-[var(--fb-text-secondary)]">No add-on upgrades are currently highlighted.</p>
+                        @endif
+                    </article>
+
+                    <article class="fb-card" data-premium-surface>
+                        <h3 class="text-base font-semibold text-[var(--fb-text-primary)]">Coming soon</h3>
+                        @if($comingSoonModules !== [])
+                            <ul class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)]">
+                                @foreach(array_slice($comingSoonModules, 0, 8) as $module)
+                                    <li>
+                                        <span class="font-semibold text-[var(--fb-text-primary)]">{{ $module['label'] ?? 'Module' }}</span>
+                                        <div>Roadmap-visible; not marketed as live.</div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="mt-3 text-sm text-[var(--fb-text-secondary)]">No coming-soon modules are exposed on this surface.</p>
+                        @endif
+                    </article>
+                </div>
+            </section>
+        @endif
+
         @if(filled($content['billing_note'] ?? null))
             <section class="fb-section" aria-label="Billing note" data-reveal>
                 <div class="fb-card" data-premium-surface>
@@ -99,4 +164,3 @@
     </main>
 </body>
 </html>
-

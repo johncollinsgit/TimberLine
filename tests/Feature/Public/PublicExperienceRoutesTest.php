@@ -7,6 +7,10 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertOk()
         ->assertSee('class="fb-public-body"', false)
         ->assertSeeText('Customers, shipping, and wholesale in one place.')
+        ->assertSeeText('Illustrative preview states by business type.')
+        ->assertSeeText('Landscaper')
+        ->assertSeeText('Electrician')
+        ->assertSeeText('Soap Maker')
         ->assertSee('brand/forestry-backstage-lockup.svg?v=fb2', false)
         ->assertDontSeeText('Welcome back');
 });

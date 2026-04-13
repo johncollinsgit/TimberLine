@@ -22,6 +22,10 @@ class CustomerAccessRequestService
      *   email:string,
      *   company?:string,
      *   requested_tenant_slug?:string,
+     *   business_type?:string,
+     *   team_size?:string,
+     *   timeline?:string,
+     *   website?:string,
      *   message?:string,
      *   preferred_plan_key?:string,
      *   addons_interest?:array<int,string>
@@ -37,6 +41,10 @@ class CustomerAccessRequestService
         $email = strtolower(trim((string) ($input['email'] ?? '')));
         $name = trim((string) ($input['name'] ?? ''));
         $company = trim((string) ($input['company'] ?? ''));
+        $businessType = strtolower(trim((string) ($input['business_type'] ?? '')));
+        $teamSize = strtolower(trim((string) ($input['team_size'] ?? '')));
+        $timeline = strtolower(trim((string) ($input['timeline'] ?? '')));
+        $website = trim((string) ($input['website'] ?? ''));
         $message = trim((string) ($input['message'] ?? ''));
         $preferredPlanKey = strtolower(trim((string) ($input['preferred_plan_key'] ?? '')));
         $addonsInterest = array_values(array_filter(array_map(static function (mixed $value): ?string {
@@ -50,7 +58,7 @@ class CustomerAccessRequestService
             $requestedSlug = trim((string) config('tenancy.onboarding.demo_tenant_slug', 'demo'));
         }
 
-        return DB::transaction(function () use ($intent, $email, $name, $company, $message, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
+        return DB::transaction(function () use ($intent, $email, $name, $company, $businessType, $teamSize, $timeline, $website, $message, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
             $normalizedSlug = $this->normalizeSlug($requestedSlug);
 
             $existing = $this->findOpenRequest($email, $normalizedSlug);
@@ -68,6 +76,10 @@ class CustomerAccessRequestService
                     'intent' => $intent,
                     'requested_tenant_slug' => $normalizedSlug,
                     'metadata' => array_merge((array) ($existing->metadata ?? []), array_filter([
+                        'business_type' => $businessType !== '' ? $businessType : null,
+                        'team_size' => $teamSize !== '' ? $teamSize : null,
+                        'timeline' => $timeline !== '' ? $timeline : null,
+                        'website' => $website !== '' ? $website : null,
                         'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                         'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                     ], static fn (mixed $value): bool => $value !== null)),
@@ -100,6 +112,10 @@ class CustomerAccessRequestService
                 'message' => $message !== '' ? $message : null,
                 'metadata' => [
                     'requested_via' => 'platform',
+                    'business_type' => $businessType !== '' ? $businessType : null,
+                    'team_size' => $teamSize !== '' ? $teamSize : null,
+                    'timeline' => $timeline !== '' ? $timeline : null,
+                    'website' => $website !== '' ? $website : null,
                     'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                     'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                 ],

@@ -2,6 +2,12 @@
     $content = is_array($promo ?? null) ? $promo : [];
     $cta = is_array($content['ctas'] ?? null) ? $content['ctas'] : [];
     $planCards = is_array($plan_cards ?? null) ? $plan_cards : [];
+    $moduleShowcase = is_array($module_showcase ?? null) ? $module_showcase : [];
+    $availableNowModules = is_array($moduleShowcase['available_now'] ?? null) ? $moduleShowcase['available_now'] : [];
+    $unlockNextModules = is_array($moduleShowcase['unlock_next'] ?? null) ? $moduleShowcase['unlock_next'] : [];
+    $comingSoonModules = is_array($moduleShowcase['coming_soon'] ?? null) ? $moduleShowcase['coming_soon'] : [];
+    $previewProfiles = is_array($content['preview_profiles'] ?? null) ? $content['preview_profiles'] : [];
+    $previewFlow = is_array($content['preview_flow'] ?? null) ? $content['preview_flow'] : [];
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -137,6 +143,48 @@
             </div>
         </section>
 
+        @if($previewProfiles !== [])
+            <section class="fb-section" aria-label="Industry preview personas" data-reveal>
+                <div class="fb-section-header">
+                    <p class="fb-section-kicker">Public Preview</p>
+                    <h2>Illustrative preview states by business type.</h2>
+                    <p>These are guided sample views so teams can evaluate fit quickly before requesting demo or production access.</p>
+                </div>
+                <div class="fb-grid fb-grid-3">
+                    @foreach($previewProfiles as $profile)
+                        <article class="fb-card" data-premium-surface>
+                            <h3>{{ $profile['label'] ?? 'Business type' }}</h3>
+                            <p>{{ $profile['summary'] ?? '' }}</p>
+                            @if(! empty($profile['signals']))
+                                <ul class="mt-3 space-y-1 text-sm text-[var(--fb-text-secondary)]">
+                                    @foreach((array) $profile['signals'] as $signal)
+                                        <li>• {{ $signal }}</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        @if($previewFlow !== [])
+            <section class="fb-section" aria-label="Customer journey flow" data-reveal>
+                <div class="fb-section-header">
+                    <p class="fb-section-kicker">Journey</p>
+                    <h2>One flow from public preview to workspace activation.</h2>
+                </div>
+                <div class="fb-grid fb-grid-3">
+                    @foreach($previewFlow as $step)
+                        <article class="fb-card" data-premium-surface>
+                            <h3>{{ $step['title'] ?? 'Step' }}</h3>
+                            <p>{{ $step['description'] ?? '' }}</p>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <section class="fb-section" aria-label="Feature grid" data-reveal>
             <div class="fb-section-header">
                 <p class="fb-section-kicker">Capabilities</p>
@@ -153,6 +201,68 @@
                 <article class="fb-card"><h3>Admin Controls</h3><p>Manage imports, catalog data, and operational settings.</p></article>
             </div>
         </section>
+
+        @if($availableNowModules !== [] || $unlockNextModules !== [] || $comingSoonModules !== [])
+            <section class="fb-section" aria-label="Module status overview" data-reveal>
+                <div class="fb-section-header">
+                    <p class="fb-section-kicker">Module Access</p>
+                    <h2>Available now, unlock next, and coming soon.</h2>
+                    <p>Module visibility is canonical and entitlement-aware. Roadmap modules stay visible but are clearly marked.</p>
+                </div>
+
+                <div class="fb-grid fb-grid-3">
+                    <article class="fb-card" data-premium-surface>
+                        <h3>Available now</h3>
+                        @if($availableNowModules !== [])
+                            <ul class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)]">
+                                @foreach(array_slice($availableNowModules, 0, 6) as $module)
+                                    <li>
+                                        <span class="font-semibold text-[var(--fb-text-primary)]">{{ $module['label'] ?? 'Module' }}</span>
+                                        @if(filled($module['description'] ?? null))
+                                            <div>{{ $module['description'] }}</div>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="mt-3 text-sm text-[var(--fb-text-secondary)]">No public modules are currently marked as available.</p>
+                        @endif
+                    </article>
+
+                    <article class="fb-card" data-premium-surface>
+                        <h3>Unlock next</h3>
+                        @if($unlockNextModules !== [])
+                            <ul class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)]">
+                                @foreach(array_slice($unlockNextModules, 0, 6) as $module)
+                                    <li>
+                                        <span class="font-semibold text-[var(--fb-text-primary)]">{{ $module['label'] ?? 'Module' }}</span>
+                                        <div>{{ $module['description'] ?? 'Add-on module.' }}</div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="mt-3 text-sm text-[var(--fb-text-secondary)]">No add-on modules are highlighted right now.</p>
+                        @endif
+                    </article>
+
+                    <article class="fb-card" data-premium-surface>
+                        <h3>Coming soon</h3>
+                        @if($comingSoonModules !== [])
+                            <ul class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)]">
+                                @foreach(array_slice($comingSoonModules, 0, 6) as $module)
+                                    <li>
+                                        <span class="font-semibold text-[var(--fb-text-primary)]">{{ $module['label'] ?? 'Module' }}</span>
+                                        <div>{{ $module['description'] ?? 'Roadmap-visible module.' }}</div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="mt-3 text-sm text-[var(--fb-text-secondary)]">Roadmap modules are not currently listed for this surface.</p>
+                        @endif
+                    </article>
+                </div>
+            </section>
+        @endif
 
         <section id="workflows" class="fb-section" aria-label="Workflow and process section" data-reveal>
             <div class="fb-section-header">
