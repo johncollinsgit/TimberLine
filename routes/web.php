@@ -195,6 +195,8 @@ if ($landlordHost !== '') {
                 ->name('tenants.commercial.billing.stripe.subscription-prep');
             Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/subscription-live-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeLiveSubscription'])
                 ->name('tenants.commercial.billing.stripe.subscription-live-sync');
+            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/fulfillment-reconcile', [LandlordCommercialConfigurationController::class, 'reconcileTenantStripeFulfillment'])
+                ->name('tenants.commercial.billing.stripe.fulfillment-reconcile');
         });
 }
 

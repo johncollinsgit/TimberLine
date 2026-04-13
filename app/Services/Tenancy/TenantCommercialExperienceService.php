@@ -10,6 +10,7 @@ use App\Models\ShopifyImportRun;
 use App\Models\ShopifyStore;
 use App\Models\TenantOnboardingBlueprintProvisioning;
 use App\Models\TenantAccessAddon;
+use App\Models\TenantBillingFulfillment;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Onboarding\OnboardingJourneyTelemetryService;
@@ -251,6 +252,12 @@ class TenantCommercialExperienceService
             $onboarding = $this->onboardingMeta($tenantId, $checklist, $importSummary);
 
             $billingInterest = $this->billingInterestPayload($tenantId);
+            $commercialSummary = $this->commercialSummaryPayload(
+                tenantId: $tenantId,
+                billingInterest: $billingInterest,
+                localPlanKey: (string) ($resolved['plan_key'] ?? ''),
+                localOperatingMode: (string) ($resolved['operating_mode'] ?? '')
+            );
 
             return [
                 'tenant_id' => $tenantId,
@@ -278,6 +285,7 @@ class TenantCommercialExperienceService
                 )),
                 'billing_interest' => $billingInterest,
                 'billing_next_step' => $this->billingNextStepResolver->resolveForTenantId($tenantId, $billingInterest),
+                'commercial_summary' => $commercialSummary,
             ];
         });
 
@@ -363,6 +371,260 @@ class TenantCommercialExperienceService
             'source' => 'customer_access_request',
             'captured_at' => $request->created_at?->toIso8601String(),
             'access_request_id' => (int) $request->id,
+        ];
+    }
+
+    /**
+     * @param  array{
+     *   preferred_plan_key:?string,
+     *   addons_interest:array<int,string>,
+     *   source:?string,
+     *   captured_at:?string,
+     *   access_request_id:?int
+     * }  $billingInterest
+     * @param  array{
+     *   tenant_id:?int,
+     *   operating_mode:string,
+     *   plan_key:string,
+     *   modules:array<string,array<string,mixed>>
+     * }  $resolved
+     * @return array{
+     *   lifecycle_state:string,
+     *   billing_interest:array<string,mixed>,
+     *   local_access:array{plan_key:string,operating_mode:string},
+     *   stripe:array<string,mixed>,
+     *   fulfillment:array<string,mixed>,
+     *   flags:array<string,mixed>
+     * }
+     */
+    public function commercialSupportSummaryForTenant(int $tenantId, string $localPlanKey, string $localOperatingMode): array
+    {
+        $billingInterest = $this->billingInterestPayload($tenantId);
+
+        return $this->commercialSummaryPayload(
+            tenantId: $tenantId,
+            billingInterest: $billingInterest,
+            localPlanKey: $localPlanKey,
+            localOperatingMode: $localOperatingMode
+        );
+    }
+
+    protected function commercialSummaryPayload(?int $tenantId, array $billingInterest, string $localPlanKey, string $localOperatingMode): array
+    {
+        $flags = [
+            'hosted_checkout_enabled' => (bool) config('commercial.billing_readiness.checkout_active', false),
+            'lifecycle_mutations_enabled' => (bool) config('commercial.billing_readiness.lifecycle_mutations_enabled', false),
+        ];
+
+        $localAccess = [
+            'plan_key' => $localPlanKey,
+            'operating_mode' => $localOperatingMode,
+        ];
+
+        $stripe = [];
+        $fulfillment = [
+            'status' => 'none',
+            'last_attempted_at' => null,
+            'last_applied_at' => null,
+            'state_hash' => null,
+            'plan_key' => null,
+            'addon_keys' => [],
+            'triggered_by' => null,
+        ];
+
+        if ($tenantId !== null && $tenantId > 0 && Schema::hasTable('tenant_commercial_overrides')) {
+            $commercialProfile = $this->commercialConfigService->tenantCommercialProfile($tenantId);
+            $mapping = is_array($commercialProfile['billing_mapping'] ?? null) ? (array) $commercialProfile['billing_mapping'] : [];
+            $stripe = is_array($mapping['stripe'] ?? null) ? (array) $mapping['stripe'] : [];
+
+                $stripe = [
+                    'customer_reference' => (string) ($stripe['customer_reference'] ?? ''),
+                    'subscription_reference' => (string) ($stripe['subscription_reference'] ?? ''),
+                    'subscription_status' => (string) ($stripe['subscription_status'] ?? ''),
+                    'subscription_deleted_at' => $stripe['subscription_deleted_at'] ?? null,
+                    'checkout_session_id' => (string) ($stripe['checkout_session_id'] ?? ''),
+                    'checkout_completed_at' => $stripe['checkout_completed_at'] ?? null,
+                    'checkout_failed_at' => $stripe['checkout_failed_at'] ?? null,
+                    'checkout_payment_status' => (string) ($stripe['checkout_payment_status'] ?? ''),
+                    'billing_confirmed_at' => $stripe['billing_confirmed_at'] ?? null,
+                    'billing_ended_at' => $stripe['billing_ended_at'] ?? null,
+                    'confirmed_plan_key' => $stripe['confirmed_plan_key'] ?? null,
+                    'confirmed_addon_keys' => is_array($stripe['confirmed_addon_keys'] ?? null) ? (array) $stripe['confirmed_addon_keys'] : [],
+                    'action_required' => (bool) ($stripe['action_required'] ?? false),
+                    'last_invoice_paid_at' => $stripe['last_invoice_paid_at'] ?? null,
+                    'last_invoice_payment_failed_at' => $stripe['last_invoice_payment_failed_at'] ?? null,
+                'last_webhook_event_id' => (string) ($stripe['last_webhook_event_id'] ?? ''),
+                'last_webhook_event_type' => (string) ($stripe['last_webhook_event_type'] ?? ''),
+                'last_webhook_received_at' => $stripe['last_webhook_received_at'] ?? null,
+            ];
+        }
+
+        if ($tenantId !== null && $tenantId > 0 && Schema::hasTable('tenant_billing_fulfillments')) {
+            $last = TenantBillingFulfillment::query()
+                ->where('tenant_id', $tenantId)
+                ->where('provider', 'stripe')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($last) {
+                $fulfillment = [
+                    'status' => (string) ($last->status ?? 'attempted'),
+                    'last_attempted_at' => $last->attempted_at?->toIso8601String(),
+                    'last_applied_at' => $last->applied_at?->toIso8601String(),
+                    'state_hash' => (string) ($last->state_hash ?? ''),
+                    'plan_key' => (string) ($last->desired_plan_key ?? ''),
+                    'addon_keys' => is_array($last->desired_addon_keys) ? $last->desired_addon_keys : [],
+                    'triggered_by' => (string) ($last->triggered_by ?? ''),
+                ];
+            }
+        }
+
+        $lifecycleState = 'interest_captured';
+        $interestPresent = filled($billingInterest['preferred_plan_key'] ?? null) || ((array) ($billingInterest['addons_interest'] ?? [])) !== [];
+
+        $billingConfirmed = filled($stripe['billing_confirmed_at'] ?? null) || filled($stripe['checkout_completed_at'] ?? null);
+        $hasStripeCustomer = filled($stripe['customer_reference'] ?? null);
+        $hasStripeSubscription = filled($stripe['subscription_reference'] ?? null);
+        $actionRequired = (bool) ($stripe['action_required'] ?? false);
+        $subscriptionStatus = strtolower(trim((string) ($stripe['subscription_status'] ?? '')));
+        $subscriptionInactive = in_array($subscriptionStatus, ['canceled', 'unpaid', 'incomplete_expired'], true);
+
+        if (! $interestPresent) {
+            $lifecycleState = 'unavailable';
+        } elseif ($actionRequired) {
+            $lifecycleState = 'action_required';
+        } elseif ($subscriptionInactive) {
+            $lifecycleState = 'action_required';
+        } elseif (($fulfillment['status'] ?? null) === 'applied') {
+            $lifecycleState = 'fulfilled';
+        } elseif ($billingConfirmed) {
+            $lifecycleState = $flags['lifecycle_mutations_enabled'] ? 'billing_confirmed_pending_fulfillment' : 'billing_confirmed';
+        } elseif ($hasStripeCustomer || $hasStripeSubscription || filled($stripe['checkout_session_id'] ?? null)) {
+            $lifecycleState = 'checkout_in_progress';
+        } else {
+            $lifecycleState = 'billing_handoff_ready';
+        }
+
+        $narrative = $this->commercialLifecycleNarrative(
+            lifecycleState: $lifecycleState,
+            billingInterest: $billingInterest,
+            stripe: $stripe,
+            fulfillment: $fulfillment,
+            flags: $flags
+        );
+
+        return [
+            'lifecycle_state' => $lifecycleState,
+            'state' => $lifecycleState,
+            'reason' => (string) ($narrative['reason'] ?? ''),
+            'customer_message' => is_array($narrative['customer_message'] ?? null) ? (array) $narrative['customer_message'] : [],
+            'operator_note' => is_array($narrative['operator_note'] ?? null) ? (array) $narrative['operator_note'] : [],
+            'action_required' => (bool) ($narrative['action_required'] ?? false),
+            'operator_action_required' => (bool) ($narrative['operator_action_required'] ?? false),
+            'billing_interest' => $billingInterest,
+            'local_access' => $localAccess,
+            'stripe' => $stripe,
+            'fulfillment' => $fulfillment,
+            'flags' => $flags,
+        ];
+    }
+
+    /**
+     * @param  array{
+     *   preferred_plan_key:?string,
+     *   addons_interest:array<int,string>,
+     *   source:?string,
+     *   captured_at:?string,
+     *   access_request_id:?int
+     * }  $billingInterest
+     * @param  array<string,mixed>  $stripe
+     * @param  array<string,mixed>  $fulfillment
+     * @param  array<string,mixed>  $flags
+     * @return array{
+     *   reason:string,
+     *   action_required:bool,
+     *   operator_action_required:bool,
+     *   customer_message:array{title:string,body:string},
+     *   operator_note:array{title:string,body:string}
+     * }
+     */
+    protected function commercialLifecycleNarrative(string $lifecycleState, array $billingInterest, array $stripe, array $fulfillment, array $flags): array
+    {
+        $preferredPlanKey = strtolower(trim((string) ($billingInterest['preferred_plan_key'] ?? '')));
+        $subscriptionStatus = strtolower(trim((string) ($stripe['subscription_status'] ?? '')));
+        $paymentStatus = strtolower(trim((string) ($stripe['checkout_payment_status'] ?? '')));
+        $actionRequired = (bool) ($stripe['action_required'] ?? false);
+
+        $reason = 'unknown';
+        $customerTitle = 'Billing';
+        $customerBody = 'Billing status is being prepared.';
+        $operatorTitle = 'Billing lifecycle';
+        $operatorBody = 'Review billing mapping and fulfillment records.';
+        $customerActionRequired = false;
+        $operatorActionRequired = false;
+
+        if ($lifecycleState === 'unavailable') {
+            $reason = 'no_interest_captured';
+            $customerTitle = 'Billing unavailable';
+            $customerBody = 'No billing intent is saved for this tenant yet. Compare plans to continue.';
+            $operatorBody = 'No approved access-request commercial interest is present.';
+        } elseif ($lifecycleState === 'billing_handoff_ready') {
+            $reason = 'checkout_ready';
+            $customerTitle = 'Continue to billing';
+            $customerBody = $preferredPlanKey !== ''
+                ? 'Your plan selection is saved. Continue to secure checkout to activate billing.'
+                : 'Continue to secure checkout to activate billing.';
+            $operatorBody = 'Hosted checkout is available; no Stripe confirmation has been recorded yet.';
+        } elseif ($lifecycleState === 'checkout_in_progress') {
+            $reason = 'checkout_in_progress';
+            $customerTitle = 'Checkout in progress';
+            $customerBody = $paymentStatus === 'unpaid'
+                ? 'Checkout started. Payment is still pending—return to checkout or try again.'
+                : 'Checkout started. Once Stripe confirms payment, access updates automatically.';
+            $operatorBody = 'Stripe references exist but billing_confirmed_at is not set. Verify webhook delivery and Stripe event history.';
+            $operatorActionRequired = true;
+        } elseif ($lifecycleState === 'billing_confirmed') {
+            $reason = 'billing_confirmed';
+            $customerTitle = 'Billing confirmed';
+            $customerBody = 'Billing is confirmed. Access updates may still be finalized by the team.';
+            $operatorBody = 'Billing is confirmed but lifecycle mutations are disabled; fulfillment requires an operator decision.';
+            $operatorActionRequired = true;
+        } elseif ($lifecycleState === 'billing_confirmed_pending_fulfillment') {
+            $reason = 'pending_fulfillment';
+            $customerTitle = 'Activating access';
+            $customerBody = 'Billing is confirmed. Access is being activated now—refresh in a moment.';
+            $operatorBody = 'Billing confirmed; fulfillment not applied yet. Check tenant_billing_fulfillments and consider landlord reconcile.';
+            $operatorActionRequired = true;
+        } elseif ($lifecycleState === 'fulfilled') {
+            $reason = 'fulfilled';
+            $customerTitle = 'Billing active';
+            $customerBody = 'Billing is confirmed and access is active.';
+            $operatorBody = 'Fulfillment applied successfully. If customer reports mismatch, compare confirmed_plan_key/confirmed_addon_keys with local plan/add-ons.';
+        } elseif ($lifecycleState === 'action_required') {
+            $reason = $actionRequired ? 'stripe_action_required' : 'subscription_inactive';
+            $customerTitle = 'Action required';
+            $customerBody = $actionRequired
+                ? 'Billing needs attention before access can be fully activated. Update your payment method or contact the team.'
+                : 'Billing is no longer active for this tenant. Restart checkout or contact the team.';
+            $operatorBody = $reason === 'subscription_inactive'
+                ? 'Stripe subscription is inactive (status: '.$subscriptionStatus.'). Confirm whether access should be downgraded or restored.'
+                : 'Stripe signaled a payment issue. Verify invoice/payment state and advise the customer to update billing.';
+            $customerActionRequired = true;
+            $operatorActionRequired = true;
+        }
+
+        return [
+            'reason' => $reason,
+            'action_required' => $customerActionRequired,
+            'operator_action_required' => $operatorActionRequired,
+            'customer_message' => [
+                'title' => $customerTitle,
+                'body' => $customerBody,
+            ],
+            'operator_note' => [
+                'title' => $operatorTitle,
+                'body' => $operatorBody,
+            ],
         ];
     }
 

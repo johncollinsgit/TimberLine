@@ -82,11 +82,76 @@ class TenantBillingNextStepResolver
         }
         $stripeCustomerReference = trim((string) data_get($billingMapping, 'stripe.customer_reference', ''));
         $stripeSubscriptionReference = trim((string) data_get($billingMapping, 'stripe.subscription_reference', ''));
+        $actionRequired = (bool) data_get($billingMapping, 'stripe.action_required', false);
+        $billingConfirmedAt = trim((string) data_get($billingMapping, 'stripe.billing_confirmed_at', ''));
+        $checkoutCompletedAt = trim((string) data_get($billingMapping, 'stripe.checkout_completed_at', ''));
+        $subscriptionStatus = strtolower(trim((string) data_get($billingMapping, 'stripe.subscription_status', '')));
+        $subscriptionInactive = in_array($subscriptionStatus, ['canceled', 'unpaid', 'incomplete_expired'], true);
+        $fulfillmentStatus = strtolower(trim((string) data_get($billingMapping, 'stripe.fulfillment.status', '')));
+        $fulfilled = in_array($fulfillmentStatus, ['fulfilled', 'noop'], true);
 
         $readiness['stripe_customer_reference_present'] = $stripeCustomerReference !== '';
         $readiness['stripe_subscription_reference_present'] = $stripeSubscriptionReference !== '';
 
-        if ($stripeConfigured && $hostedBillingEnabled && $stripeCustomerReference !== '') {
+        if ($actionRequired) {
+            return [
+                'mode' => 'action_required',
+                'title' => 'Action required',
+                'description' => 'Billing needs attention before access can be fully activated. Update your payment method or contact the team.',
+                'cta_label' => $stripeConfigured && $hostedBillingEnabled && $stripeCustomerReference !== '' ? 'Open billing portal' : 'Talk to sales',
+                'cta_url' => $stripeConfigured && $hostedBillingEnabled && $stripeCustomerReference !== '' ? null : route('platform.contact', ['intent' => 'billing']),
+                'cta_route' => $stripeConfigured && $hostedBillingEnabled && $stripeCustomerReference !== '' ? ['name' => 'billing.portal', 'method' => 'post'] : null,
+                'reason' => 'stripe_action_required',
+                'readiness' => $readiness,
+            ];
+        }
+
+        $billingConfirmed = $billingConfirmedAt !== '' || $checkoutCompletedAt !== '';
+
+        if ($subscriptionInactive) {
+            $readiness['subscription_status'] = $subscriptionStatus;
+
+            if ($stripeConfigured && $hostedBillingEnabled && $preferredPlanKey !== '' && $this->planKeyAllowed($preferredPlanKey)) {
+                return [
+                    'mode' => 'hosted_checkout',
+                    'title' => 'Restart billing',
+                    'description' => 'Billing is inactive. Start a new hosted checkout to reactivate billing for your selected tier and add-ons.',
+                    'cta_label' => 'Restart secure checkout',
+                    'cta_url' => null,
+                    'cta_route' => ['name' => 'billing.checkout', 'method' => 'post'],
+                    'reason' => 'subscription_inactive',
+                    'readiness' => $readiness,
+                ];
+            }
+
+            return [
+                'mode' => 'landlord_follow_up',
+                'title' => 'Billing inactive',
+                'description' => 'Billing is inactive for this tenant. Contact the team to restore access.',
+                'cta_label' => 'Talk to sales',
+                'cta_url' => route('platform.contact', ['intent' => 'billing']),
+                'cta_route' => null,
+                'reason' => 'subscription_inactive',
+                'readiness' => $readiness,
+            ];
+        }
+
+        if ($stripeConfigured && $hostedBillingEnabled && $billingConfirmed && (bool) config('commercial.billing_readiness.lifecycle_mutations_enabled', false)) {
+            if (! $fulfilled) {
+                return [
+                    'mode' => 'billing_confirmed_pending_fulfillment',
+                    'title' => 'Activating access',
+                    'description' => 'Billing is confirmed. Access is being activated now—refresh in a moment.',
+                    'cta_label' => null,
+                    'cta_url' => null,
+                    'cta_route' => null,
+                    'reason' => 'billing_confirmed_pending_fulfillment',
+                    'readiness' => $readiness,
+                ];
+            }
+        }
+
+        if ($stripeConfigured && $hostedBillingEnabled && $stripeCustomerReference !== '' && $stripeSubscriptionReference !== '') {
             return [
                 'mode' => 'billing_portal',
                 'title' => 'Manage billing',

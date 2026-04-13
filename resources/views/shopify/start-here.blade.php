@@ -29,6 +29,11 @@
         $activeNow = is_array($journey['active_now'] ?? null) ? $journey['active_now'] : [];
         $availableNext = is_array($journey['available_next'] ?? null) ? $journey['available_next'] : [];
         $purchasable = is_array($journey['purchasable'] ?? null) ? $journey['purchasable'] : [];
+        $commercialSummary = is_array($journey['commercial_summary'] ?? null) ? (array) $journey['commercial_summary'] : [];
+        $commercialLifecycle = (string) data_get($commercialSummary, 'lifecycle_state', '');
+        $customerMessage = is_array(data_get($commercialSummary, 'customer_message')) ? (array) data_get($commercialSummary, 'customer_message') : [];
+        $customerMessageTitle = trim((string) data_get($customerMessage, 'title', 'Billing'));
+        $customerMessageBody = trim((string) data_get($customerMessage, 'body', ''));
 
         $checklistCounts = is_array($checklist['counts'] ?? null) ? $checklist['counts'] : ['active' => 0, 'setup' => 0, 'locked' => 0, 'coming_soon' => 0];
 
@@ -70,6 +75,23 @@
                     {{ $importCta['label'] ?? 'Import Customers' }}
                 </a>
             </div>
+
+            @if($commercialLifecycle !== '')
+                <div class="start-here-action is-journey" aria-label="Billing status">
+                    <p class="start-here-action-title">
+                        {{ $customerMessageTitle !== '' ? $customerMessageTitle : 'Billing' }}
+                        @if($commercialLifecycle !== '')
+                            <span class="start-here-pill ml-2">{{ str_replace('_', ' ', $commercialLifecycle) }}</span>
+                        @endif
+                    </p>
+                    @if($customerMessageBody !== '')
+                        <p class="start-here-action-copy">{{ $customerMessageBody }}</p>
+                    @else
+                        <p class="start-here-action-copy">Billing status is reflected here once checkout and fulfillment are complete.</p>
+                    @endif
+                    <a class="start-here-action-link" href="{{ $embeddedUrl(route('shopify.app.plans', [], false)) }}">Review plans & add-ons</a>
+                </div>
+            @endif
 
             <ul class="start-here-list" aria-label="Orientation notes">
                 <li>Complete customer import first so the rest of this workspace becomes actionable.</li>

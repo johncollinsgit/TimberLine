@@ -10,7 +10,10 @@ use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\TenantBillingFulfillment;
+use App\Services\Billing\StripeCommercialFulfillmentService;
 use App\Services\Tenancy\LandlordCommercialConfigService;
+use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -27,7 +30,8 @@ class LandlordCommercialConfigurationController extends Controller
 {
     public function index(
         LandlordCommercialConfigService $service,
-        TenantModuleAccessResolver $moduleAccessResolver
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantCommercialExperienceService $experienceService
     ): View
     {
         Gate::authorize('manage-landlord-commercial');
@@ -36,7 +40,7 @@ class LandlordCommercialConfigurationController extends Controller
         $templates = $service->catalog(LandlordCatalogEntry::TYPE_TEMPLATE);
         $setupPackages = $service->catalog(LandlordCatalogEntry::TYPE_SETUP_PACKAGE);
         $billingOverview = $service->billingReadinessOverview();
-        $tenantRows = $this->buildCommercialTenantRows($service, $moduleAccessResolver);
+        $tenantRows = $this->buildCommercialTenantRows($service, $moduleAccessResolver, $experienceService);
 
         $tenantManagement = $this->buildTenantManagementPayload(
             tenantRows: $tenantRows,
@@ -482,12 +486,41 @@ class LandlordCommercialConfigurationController extends Controller
         return back()->with('status', $statusMessage);
     }
 
+    public function reconcileTenantStripeFulfillment(
+        Request $request,
+        Tenant $tenant,
+        StripeCommercialFulfillmentService $service
+    ): RedirectResponse {
+        Gate::authorize('manage-landlord-commercial');
+
+        $result = $service->reconcileTenant(
+            tenantId: (int) $tenant->id,
+            triggeredBy: 'landlord_repair',
+            actorUserId: $request->user()?->id,
+            sourceEventId: null,
+            sourceEventType: null
+        );
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            return back()->with('status_error', (string) ($result['message'] ?? 'Stripe fulfillment reconcile failed.'));
+        }
+
+        $planKey = trim((string) ($result['plan_key'] ?? ''));
+        $status = (string) ($result['status'] ?? 'ok');
+        $message = $planKey !== ''
+            ? 'Stripe fulfillment reconcile: '.$status.' (plan: '.$planKey.')'
+            : 'Stripe fulfillment reconcile: '.$status;
+
+        return back()->with('status', $message);
+    }
+
     /**
      * @return array<int,array<string,mixed>>
      */
     protected function buildCommercialTenantRows(
         LandlordCommercialConfigService $service,
-        TenantModuleAccessResolver $moduleAccessResolver
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantCommercialExperienceService $experienceService
     ): array {
         $tenantRows = [];
         $moduleCatalogKeys = array_keys((array) config('module_catalog.modules', config('entitlements.modules', [])));
@@ -556,12 +589,33 @@ class LandlordCommercialConfigurationController extends Controller
             }
 
             $resolvedPlanKey = (string) ($resolvedModuleState['plan_key'] ?? config('entitlements.default_plan', 'starter'));
+            $operatingMode = (string) ($tenant->accessProfile?->operating_mode ?? config('entitlements.default_operating_mode', 'shopify'));
+
+            $commercialSummary = [];
+            try {
+                $commercialSummary = $experienceService->commercialSupportSummaryForTenant(
+                    tenantId: (int) $tenant->id,
+                    localPlanKey: $resolvedPlanKey,
+                    localOperatingMode: $operatingMode
+                );
+            } catch (\Throwable) {
+                $commercialSummary = [];
+            }
+
+            $lastFulfillment = null;
+            if (Schema::hasTable('tenant_billing_fulfillments')) {
+                $lastFulfillment = TenantBillingFulfillment::query()
+                    ->where('tenant_id', (int) $tenant->id)
+                    ->where('provider', 'stripe')
+                    ->orderByDesc('id')
+                    ->first();
+            }
 
             $tenantRows[] = [
                 'tenant' => $tenant,
                 'plan_key' => (string) ($tenant->accessProfile?->plan_key ?? config('entitlements.default_plan', 'starter')),
                 'resolved_plan_key' => $resolvedPlanKey,
-                'operating_mode' => (string) ($tenant->accessProfile?->operating_mode ?? config('entitlements.default_operating_mode', 'shopify')),
+                'operating_mode' => $operatingMode,
                 'template_key' => (string) ($commercial['template_key'] ?? ''),
                 'store_channel_allowance' => $commercial['store_channel_allowance'] ?? null,
                 'usage' => $usage,
@@ -600,6 +654,8 @@ class LandlordCommercialConfigurationController extends Controller
                     commercialProfile: $commercial,
                     billingOverview: $billingOverview
                 ),
+                'commercial_summary' => $commercialSummary,
+                'last_fulfillment' => $lastFulfillment,
             ];
         }
 

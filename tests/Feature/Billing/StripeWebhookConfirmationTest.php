@@ -143,13 +143,13 @@ test('unsupported event type does nothing to tenant billing mapping', function (
 
     $payload = json_encode([
         'id' => 'evt_unsupported',
-        'type' => 'invoice.payment_succeeded',
+        'type' => 'product.created',
         'created' => time(),
         'livemode' => false,
         'data' => [
             'object' => [
                 'id' => 'in_123',
-                'object' => 'invoice',
+                'object' => 'product',
                 'metadata' => [
                     'tenant_id' => (string) $tenant->id,
                 ],
@@ -192,4 +192,63 @@ test('invalid signature is rejected', function (): void {
         ->assertStatus(400);
 
     expect(StripeWebhookEvent::query()->where('event_id', 'evt_bad_sig')->exists())->toBeFalse();
+});
+
+test('invoice payment failed marks tenant as action required without mutating local plan', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+        'metadata' => [],
+    ]);
+
+    CustomerAccessRequest::query()->create([
+        'intent' => 'production',
+        'status' => 'approved',
+        'name' => 'Acme Ops',
+        'email' => 'ops@acme.example.com',
+        'tenant_id' => (int) $tenant->id,
+        'metadata' => [
+            'preferred_plan_key' => 'growth',
+            'addons_interest' => ['sms'],
+        ],
+    ]);
+
+    $payload = json_encode([
+        'id' => 'evt_failed_invoice',
+        'type' => 'invoice.payment_failed',
+        'created' => time(),
+        'livemode' => false,
+        'data' => [
+            'object' => [
+                'id' => 'in_failed_1',
+                'object' => 'invoice',
+                'customer' => 'cus_failed_1',
+                'subscription' => 'sub_failed_1',
+                'metadata' => [
+                    'tenant_id' => (string) $tenant->id,
+                ],
+            ],
+        ],
+    ], JSON_THROW_ON_ERROR);
+
+    $signature = stripeSignatureHeader($payload, (string) config('services.stripe.webhook_secret'));
+
+    $this->call('POST', 'http://app.backstage.local/webhooks/stripe/events', [], [], [], [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_STRIPE_SIGNATURE' => $signature,
+    ], $payload)
+        ->assertOk();
+
+    $override = TenantCommercialOverride::query()->where('tenant_id', (int) $tenant->id)->first();
+    expect((bool) data_get($override?->billing_mapping ?? [], 'stripe.action_required'))->toBeTrue();
+
+    expect((string) TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('starter');
+
+    $after = app(TenantCommercialExperienceService::class)->merchantJourneyPayload((int) $tenant->id);
+    expect((string) data_get($after, 'commercial_summary.lifecycle_state'))->toBe('action_required')
+        ->and((string) data_get($after, 'billing_next_step.mode'))->toBe('action_required');
 });

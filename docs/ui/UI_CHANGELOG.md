@@ -1,5 +1,24 @@
 # UI Changelog
 
+## 2026-04-13 — Commercial Fulfillment Truth in Start Here
+
+### What changed
+- Updated the non-embedded authenticated Start Here page (`/start`) to render billing state from canonical `merchantJourneyPayload.commercial_summary`:
+  - shows truthful lifecycle banners (`fulfilled`, `billing_confirmed_pending_fulfillment`, `action_required`, `checkout_in_progress`)
+  - displays “Confirmed billing” (Stripe-derived) alongside “Your interest” (access-request-derived) when available
+- Added a compact billing status block to Shopify embedded `Start Here` (`/shopify/app/start`) driven by the same canonical `merchantJourneyPayload.commercial_summary`.
+- Added a landlord-only “Stripe Fulfillment Reconcile” action to the commercial console tenant overrides section to replay fulfillment safely when needed.
+- Improved landlord operator visibility on `/landlord/commercial` tenant rows with a compact lifecycle/Stripe/fulfillment summary (no new dashboard).
+
+### Why
+- Customers need one honest “what happens next” view after hosted checkout and webhook confirmation.
+- Operators need a safe, auditable, replayable repair action without ad hoc DB edits.
+ - Support needs enough context on the landlord commercial surface to triage lifecycle state without digging through raw DB JSON.
+
+### Scope boundary
+- No new billing dashboard, no self-serve plan editing UI, and no marketing site expansion in this pass.
+- Stripe reconciliation/fulfillment is still backend-driven; UI only reflects canonical state.
+
 ## 2026-04-12 — Authenticated Onboarding Wizard + Workflow UI Primitives
 
 ### What changed

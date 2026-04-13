@@ -755,6 +755,54 @@
                                             · lifecycle: {{ (bool) ($tenantBillingReadiness['lifecycle_disabled'] ?? true) ? 'disabled' : 'enabled' }}
                                         </p>
 
+                                        @php
+                                            $commercialSummary = is_array($row['commercial_summary'] ?? null) ? (array) $row['commercial_summary'] : [];
+                                            $commercialLifecycle = (string) data_get($commercialSummary, 'lifecycle_state', '');
+                                            $commercialReason = (string) data_get($commercialSummary, 'reason', '');
+                                            $stripeSummary = is_array(data_get($commercialSummary, 'stripe')) ? (array) data_get($commercialSummary, 'stripe') : [];
+                                            $fulfillmentSummary = is_array(data_get($commercialSummary, 'fulfillment')) ? (array) data_get($commercialSummary, 'fulfillment') : [];
+                                            $enabledAddonKeys = collect((array) ($row['addon_states'] ?? []))
+                                                ->filter(fn ($enabled) => (bool) $enabled)
+                                                ->keys()
+                                                ->map(fn ($key) => strtolower(trim((string) $key)))
+                                                ->filter()
+                                                ->values()
+                                                ->all();
+                                        @endphp
+
+                                        @if($commercialLifecycle !== '')
+                                            <p class="mt-2 text-[11px] text-zinc-700">
+                                                Commercial lifecycle:
+                                                <span class="font-semibold text-zinc-900">{{ str_replace('_', ' ', $commercialLifecycle) }}</span>
+                                                @if($commercialReason !== '')
+                                                    · reason: {{ str_replace('_', ' ', $commercialReason) }}
+                                                @endif
+                                                · local: plan={{ $row['resolved_plan_key'] }}
+                                                @if($enabledAddonKeys !== [])
+                                                    · add-ons={{ implode(',', $enabledAddonKeys) }}
+                                                @endif
+                                            </p>
+                                            <p class="mt-1 text-[11px] text-zinc-600">
+                                                Stripe:
+                                                customer={{ trim((string) ($stripeSummary['customer_reference'] ?? '')) !== '' ? trim((string) ($stripeSummary['customer_reference'] ?? '')) : 'none' }}
+                                                · subscription={{ trim((string) ($stripeSummary['subscription_reference'] ?? '')) !== '' ? trim((string) ($stripeSummary['subscription_reference'] ?? '')) : 'none' }}
+                                                · last webhook={{ trim((string) ($stripeSummary['last_webhook_event_type'] ?? '')) !== '' ? trim((string) ($stripeSummary['last_webhook_event_type'] ?? '')) : 'none' }}
+                                                @if(filled($stripeSummary['last_webhook_received_at'] ?? null))
+                                                    · at={{ (string) $stripeSummary['last_webhook_received_at'] }}
+                                                @endif
+                                            </p>
+                                            <p class="mt-1 text-[11px] text-zinc-600">
+                                                Fulfillment:
+                                                {{ (string) ($fulfillmentSummary['status'] ?? 'none') }}
+                                                @if(filled($fulfillmentSummary['last_attempted_at'] ?? null))
+                                                    · attempted={{ (string) $fulfillmentSummary['last_attempted_at'] }}
+                                                @endif
+                                                @if(filled($fulfillmentSummary['last_applied_at'] ?? null))
+                                                    · applied={{ (string) $fulfillmentSummary['last_applied_at'] }}
+                                                @endif
+                                            </p>
+                                        @endif
+
                                         @if ((bool) ($row['template_missing'] ?? false))
                                             <p class="mt-1 text-[11px] text-zinc-800">
                                                 Assigned template key is missing from the catalog. Commercialization surfaces will fall back to entitlement defaults.
@@ -1016,8 +1064,47 @@
                                         {{ $stripeLiveSubscriptionReference !== '' ? 'Sync Stripe Live Subscription Reference' : 'Create Stripe Live Subscription Reference' }}
                                     </button>
                                     <p class="mt-2 text-[11px] text-zinc-600">
-                                        Checkout, payment-method collection UX, tenant self-serve billing, and broad update/cancel lifecycle flows remain disabled.
+                                        Broad self-serve plan mutation, update/cancel lifecycle orchestration, and billing management UI remain disabled. Hosted checkout + webhook-confirmed local fulfillment remain guarded by readiness flags.
                                     </p>
+                                </form>
+
+                                @php
+                                    $stripeFulfillmentLifecycleEnabled = ! (bool) ($tenantBillingReadiness['lifecycle_disabled'] ?? true);
+                                    $stripeFulfillmentReady = $stripeFulfillmentLifecycleEnabled && $stripeCustomerReference !== '' && $stripeLiveSubscriptionReference !== '';
+                                    $lastFulfillment = $row['last_fulfillment'] ?? null;
+                                @endphp
+
+                                <form method="POST" action="{{ route('landlord.tenants.commercial.billing.stripe.fulfillment-reconcile', ['tenant' => $tenant->id]) }}" class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                                    @csrf
+                                    <h5 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Stripe Fulfillment Reconcile (Landlord-Only)</h5>
+                                    <p class="mt-1 text-[11px] text-zinc-600">
+                                        Replays Stripe-confirmed billing state into canonical local access (plan + add-ons) using the module catalog as truth.
+                                        This is idempotent, auditable, and safe to replay. It does not change Stripe subscriptions.
+                                    </p>
+                                    <div class="mt-2 text-[11px] text-zinc-600">
+                                        <div>Lifecycle mutations: {{ $stripeFulfillmentLifecycleEnabled ? 'enabled' : 'disabled' }}</div>
+                                        <div>Customer reference: {{ $stripeCustomerReference !== '' ? $stripeCustomerReference : 'missing' }}</div>
+                                        <div>Subscription reference: {{ $stripeLiveSubscriptionReference !== '' ? $stripeLiveSubscriptionReference : 'missing' }}</div>
+                                        <div>Action readiness: {{ $stripeFulfillmentReady ? 'ready' : 'not ready' }}</div>
+                                        @if($lastFulfillment instanceof \App\Models\TenantBillingFulfillment)
+                                            <div class="mt-1">
+                                                Last fulfillment: {{ (string) ($lastFulfillment->status ?? 'unknown') }}
+                                                @if($lastFulfillment->attempted_at)
+                                                    · attempted={{ $lastFulfillment->attempted_at->toIso8601String() }}
+                                                @endif
+                                                @if(filled($lastFulfillment->message ?? null))
+                                                    · note={{ (string) $lastFulfillment->message }}
+                                                @endif
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        @disabled(! $stripeFulfillmentReady)
+                                        class="mt-3 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        Reconcile Stripe Fulfillment
+                                    </button>
                                 </form>
 
                                 <div class="mt-4 grid gap-4 xl:grid-cols-2">

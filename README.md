@@ -44,9 +44,14 @@ Implemented:
   - `/start` is a non-embedded, authenticated Start Here surface (tenant-aware, entitlement-driven) built via `TenantCommercialExperienceService`
 
 Billing note:
-- plan/add-on truth remains landlord-controlled.
-- hosted Stripe checkout + billing-portal handoff is now available only through guarded server-side session creation.
-- Stripe webhook ingest is now allowed only for confirmation/reference recording (`stripe.customer_reference`, `stripe.subscription_reference`) in `tenant_commercial_overrides.billing_mapping` — entitlement mutation and full billing lifecycle fulfillment remain deferred.
+- canonical product truth remains `config/module_catalog.php` (plans, add-ons, modules, capabilities).
+- hosted Stripe checkout + billing-portal handoff is available only through guarded server-side session creation (no client-controlled price IDs).
+- Stripe webhook ingest verifies signatures, stores idempotent receipts (`stripe_webhook_events`), and records Stripe references in `tenant_commercial_overrides.billing_mapping.stripe.*`.
+- when `commercial.billing_readiness.lifecycle_mutations_enabled=true`, Stripe confirmation can trigger canonical local fulfillment:
+  - `StripeCommercialFulfillmentService` reconciles confirmed tier/add-ons into `tenant_access_profiles` + `tenant_access_addons`
+  - fulfillment is idempotent (`tenant_billing_fulfillments`), auditable, and safe to replay (landlord-only reconcile action)
+- lifecycle edge states are now reflected honestly in Start Here via `merchantJourneyPayload.commercial_summary` (e.g. `action_required` for payment failures / inactive subscriptions, `billing_confirmed_pending_fulfillment` while processing).
+- out of scope (still deferred): full subscription lifecycle orchestration (upgrade/downgrade flows, cancellations, dunning), webhook-driven entitlement expansion beyond plan/add-on reconciliation, and billing UI beyond Start Here next-step CTAs.
 
 ## Shopify Embedded AI Assistant Foundation (2026-04-10)
 
