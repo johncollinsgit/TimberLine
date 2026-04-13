@@ -8,6 +8,7 @@ use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
@@ -54,6 +55,7 @@ test('merchant journey payload is cached for the same tenant within ttl', functi
 
     $service = new TenantCommercialExperienceService(
         $accessResolver,
+        \Mockery::mock(TenantModuleCatalogService::class),
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
@@ -107,6 +109,7 @@ test('merchant journey payload cache is tenant scoped', function () {
 
     $service = new TenantCommercialExperienceService(
         $accessResolver,
+        \Mockery::mock(TenantModuleCatalogService::class),
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
@@ -158,6 +161,7 @@ test('merchant journey payload cache expires after ttl', function () {
 
     $service = new TenantCommercialExperienceService(
         $accessResolver,
+        \Mockery::mock(TenantModuleCatalogService::class),
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
@@ -209,6 +213,7 @@ test('merchant journey payload cache can be invalidated for a tenant', function 
 
     $service = new TenantCommercialExperienceService(
         $accessResolver,
+        \Mockery::mock(TenantModuleCatalogService::class),
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
