@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Models\Tenant;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Support\Tenancy\TenantHostBuilder;
+use Illuminate\Support\Facades\Schema;
 
 class TenantBillingNextStepResolver
 {
@@ -39,6 +40,10 @@ class TenantBillingNextStepResolver
             return $this->unavailable('missing_tenant', $billingInterest, []);
         }
 
+        if (! Schema::hasTable('tenants')) {
+            return $this->unavailable('tenant_table_missing', $billingInterest, []);
+        }
+
         /** @var Tenant|null $tenant */
         $tenant = Tenant::query()->find($tenantId);
         if (! $tenant) {
@@ -68,10 +73,13 @@ class TenantBillingNextStepResolver
             'stripe_secret_format_valid' => $stripeSecretFormatValid,
         ];
 
-        $commercialProfile = $this->commercialConfigService->tenantCommercialProfile($tenantId);
-        $billingMapping = is_array($commercialProfile['billing_mapping'] ?? null)
-            ? (array) $commercialProfile['billing_mapping']
-            : [];
+        $billingMapping = [];
+        if (Schema::hasTable('tenant_commercial_overrides')) {
+            $commercialProfile = $this->commercialConfigService->tenantCommercialProfile($tenantId);
+            $billingMapping = is_array($commercialProfile['billing_mapping'] ?? null)
+                ? (array) $commercialProfile['billing_mapping']
+                : [];
+        }
         $stripeCustomerReference = trim((string) data_get($billingMapping, 'stripe.customer_reference', ''));
         $stripeSubscriptionReference = trim((string) data_get($billingMapping, 'stripe.subscription_reference', ''));
 

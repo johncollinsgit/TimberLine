@@ -49,7 +49,8 @@ class TenantCommercialExperienceService
         protected TenantDisplayLabelResolver $displayLabelResolver,
         protected TenantEmailSettingsService $tenantEmailSettingsService,
         protected TwilioSenderConfigService $twilioSenderConfigService,
-        protected OnboardingJourneyTelemetryService $journeyTelemetryService
+        protected OnboardingJourneyTelemetryService $journeyTelemetryService,
+        protected TenantBillingNextStepResolver $billingNextStepResolver,
     ) {
     }
 
@@ -249,6 +250,8 @@ class TenantCommercialExperienceService
             $importSummary = $summary['import_summary'];
             $onboarding = $this->onboardingMeta($tenantId, $checklist, $importSummary);
 
+            $billingInterest = $this->billingInterestPayload($tenantId);
+
             return [
                 'tenant_id' => $tenantId,
                 'onboarding' => $onboarding,
@@ -273,12 +276,10 @@ class TenantCommercialExperienceService
                     (array) ($checklist['locked'] ?? []),
                     static fn (array $module): bool => (bool) ($module['upgrade_prompt_eligible'] ?? false)
                 )),
+                'billing_interest' => $billingInterest,
+                'billing_next_step' => $this->billingNextStepResolver->resolveForTenantId($tenantId, $billingInterest),
             ];
         });
-
-        $billingInterest = $this->billingInterestPayload($tenantId);
-        $payload['billing_interest'] = $billingInterest;
-        $payload['billing_next_step'] = app(TenantBillingNextStepResolver::class)->resolveForTenantId($tenantId, $billingInterest);
 
         try {
             $this->journeyTelemetryService->observeTenantJourneyPayload($tenantId, 'merchant_journey', is_array($payload) ? (array) $payload : []);
@@ -364,6 +365,7 @@ class TenantCommercialExperienceService
             'access_request_id' => (int) $request->id,
         ];
     }
+
 
     /**
      * @return array{

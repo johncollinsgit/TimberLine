@@ -3,6 +3,7 @@
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Onboarding\OnboardingJourneyTelemetryService;
+use App\Services\Billing\TenantBillingNextStepResolver;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
@@ -39,13 +40,26 @@ test('merchant journey payload is cached for the same tenant within ttl', functi
         'template_missing' => false,
     ]);
 
+    $billingResolver = \Mockery::mock(TenantBillingNextStepResolver::class);
+    $billingResolver->shouldReceive('resolveForTenantId')->once()->with(42, \Mockery::type('array'))->andReturn([
+        'mode' => 'unavailable',
+        'title' => 'Billing unavailable',
+        'description' => 'Billing unavailable.',
+        'cta_label' => null,
+        'cta_url' => null,
+        'cta_route' => null,
+        'reason' => 'unit_test',
+        'readiness' => [],
+    ]);
+
     $service = new TenantCommercialExperienceService(
         $accessResolver,
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
         \Mockery::mock(TwilioSenderConfigService::class),
-        \Mockery::mock(OnboardingJourneyTelemetryService::class)
+        \Mockery::mock(OnboardingJourneyTelemetryService::class),
+        $billingResolver
     );
 
     $first = $service->merchantJourneyPayload(42);
@@ -76,13 +90,29 @@ test('merchant journey payload cache is tenant scoped', function () {
         'template_missing' => false,
     ]);
 
+    $billingResolver = \Mockery::mock(TenantBillingNextStepResolver::class);
+    $billingResolver->shouldReceive('resolveForTenantId')
+        ->twice()
+        ->with(\Mockery::on(fn ($value) => in_array($value, [42, 43], true)), \Mockery::type('array'))
+        ->andReturn([
+            'mode' => 'unavailable',
+            'title' => 'Billing unavailable',
+            'description' => 'Billing unavailable.',
+            'cta_label' => null,
+            'cta_url' => null,
+            'cta_route' => null,
+            'reason' => 'unit_test',
+            'readiness' => [],
+        ]);
+
     $service = new TenantCommercialExperienceService(
         $accessResolver,
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
         \Mockery::mock(TwilioSenderConfigService::class),
-        \Mockery::mock(OnboardingJourneyTelemetryService::class)
+        \Mockery::mock(OnboardingJourneyTelemetryService::class),
+        $billingResolver
     );
 
     $tenant42 = $service->merchantJourneyPayload(42);
@@ -114,13 +144,26 @@ test('merchant journey payload cache expires after ttl', function () {
         'template_missing' => false,
     ]);
 
+    $billingResolver = \Mockery::mock(TenantBillingNextStepResolver::class);
+    $billingResolver->shouldReceive('resolveForTenantId')->twice()->with(42, \Mockery::type('array'))->andReturn([
+        'mode' => 'unavailable',
+        'title' => 'Billing unavailable',
+        'description' => 'Billing unavailable.',
+        'cta_label' => null,
+        'cta_url' => null,
+        'cta_route' => null,
+        'reason' => 'unit_test',
+        'readiness' => [],
+    ]);
+
     $service = new TenantCommercialExperienceService(
         $accessResolver,
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
         \Mockery::mock(TwilioSenderConfigService::class),
-        \Mockery::mock(OnboardingJourneyTelemetryService::class)
+        \Mockery::mock(OnboardingJourneyTelemetryService::class),
+        $billingResolver
     );
 
     $service->merchantJourneyPayload(42);
@@ -152,13 +195,26 @@ test('merchant journey payload cache can be invalidated for a tenant', function 
         'template_missing' => false,
     ]);
 
+    $billingResolver = \Mockery::mock(TenantBillingNextStepResolver::class);
+    $billingResolver->shouldReceive('resolveForTenantId')->twice()->with(42, \Mockery::type('array'))->andReturn([
+        'mode' => 'unavailable',
+        'title' => 'Billing unavailable',
+        'description' => 'Billing unavailable.',
+        'cta_label' => null,
+        'cta_url' => null,
+        'cta_route' => null,
+        'reason' => 'unit_test',
+        'readiness' => [],
+    ]);
+
     $service = new TenantCommercialExperienceService(
         $accessResolver,
         \Mockery::mock(LandlordCommercialConfigService::class),
         $labelResolver,
         \Mockery::mock(TenantEmailSettingsService::class),
         \Mockery::mock(TwilioSenderConfigService::class),
-        \Mockery::mock(OnboardingJourneyTelemetryService::class)
+        \Mockery::mock(OnboardingJourneyTelemetryService::class),
+        $billingResolver
     );
 
     $first = $service->merchantJourneyPayload(42);
