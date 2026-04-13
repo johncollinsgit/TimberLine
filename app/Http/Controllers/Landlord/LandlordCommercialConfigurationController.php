@@ -65,7 +65,8 @@ class LandlordCommercialConfigurationController extends Controller
     public function tenantAnalyticsTable(
         Request $request,
         LandlordCommercialConfigService $service,
-        TenantModuleAccessResolver $moduleAccessResolver
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantCommercialExperienceService $experienceService
     ): JsonResponse {
         Gate::authorize('manage-landlord-commercial');
 
@@ -89,7 +90,7 @@ class LandlordCommercialConfigurationController extends Controller
         $plans = $service->catalog(LandlordCatalogEntry::TYPE_PLAN);
         $addons = $service->catalog(LandlordCatalogEntry::TYPE_ADDON);
         $payload = $this->buildTenantManagementPayload(
-            tenantRows: $this->buildCommercialTenantRows($service, $moduleAccessResolver),
+            tenantRows: $this->buildCommercialTenantRows($service, $moduleAccessResolver, $experienceService),
             plans: $plans,
             addons: $addons
         );
@@ -124,7 +125,8 @@ class LandlordCommercialConfigurationController extends Controller
     public function tenantAnalyticsActivity(
         Request $request,
         LandlordCommercialConfigService $service,
-        TenantModuleAccessResolver $moduleAccessResolver
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantCommercialExperienceService $experienceService
     ): JsonResponse {
         Gate::authorize('manage-landlord-commercial');
 
@@ -147,7 +149,7 @@ class LandlordCommercialConfigurationController extends Controller
         ]);
 
         $payload = $this->buildTenantManagementPayload(
-            tenantRows: $this->buildCommercialTenantRows($service, $moduleAccessResolver),
+            tenantRows: $this->buildCommercialTenantRows($service, $moduleAccessResolver, $experienceService),
             plans: $service->catalog(LandlordCatalogEntry::TYPE_PLAN),
             addons: $service->catalog(LandlordCatalogEntry::TYPE_ADDON)
         );
