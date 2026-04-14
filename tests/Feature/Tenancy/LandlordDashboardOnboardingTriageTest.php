@@ -9,7 +9,7 @@ use Carbon\CarbonImmutable;
 
 beforeEach(function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     config()->set('tenancy.landlord.primary_host', $landlordHost);
     config()->set('tenancy.landlord.hosts', [$landlordHost]);
@@ -19,7 +19,7 @@ beforeEach(function (): void {
 
 test('landlord dashboard renders onboarding triage cards with links into filtered tenant directory', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     $tenantNoTelemetry = Tenant::query()->create(['name' => 'No Telemetry', 'slug' => 'no-telemetry']);
     $tenantFirstOpen = Tenant::query()->create(['name' => 'First Open', 'slug' => 'first-open']);

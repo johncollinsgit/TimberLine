@@ -48,9 +48,11 @@ class ApprovalPasswordSetupNotification extends Notification
             return route('login');
         }
 
-        $scheme = parse_url((string) config('app.url', ''), PHP_URL_SCHEME);
-        $scheme = strtolower(trim((string) $scheme));
-        $scheme = in_array($scheme, ['http', 'https'], true) ? $scheme : 'https';
+        $scheme = strtolower(trim((string) config('tenancy.domains.canonical.scheme', 'https')));
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            $scheme = strtolower(trim((string) parse_url((string) config('app.url', ''), PHP_URL_SCHEME)));
+            $scheme = in_array($scheme, ['http', 'https'], true) ? $scheme : 'https';
+        }
 
         return $scheme.'://'.$host.$path;
     }

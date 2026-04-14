@@ -671,14 +671,70 @@ class OrderDetail extends Component
             return $url;
         }
 
-        $returnHost = parse_url($url, PHP_URL_HOST);
-        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        $returnHost = $this->normalizeHost(parse_url($url, PHP_URL_HOST));
+        if ($returnHost === null) {
+            return null;
+        }
 
-        if ($returnHost && $appHost && strtolower((string) $returnHost) === strtolower((string) $appHost)) {
+        if (in_array($returnHost, $this->allowedReturnHosts(), true)) {
             return $url;
         }
 
         return null;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function allowedReturnHosts(): array
+    {
+        $hosts = [];
+
+        $requestHost = $this->normalizeHost(request()->getHost());
+        if ($requestHost !== null) {
+            $hosts[] = $requestHost;
+        }
+
+        $appHost = $this->normalizeHost(parse_url((string) config('app.url', ''), PHP_URL_HOST));
+        if ($appHost !== null) {
+            $hosts[] = $appHost;
+        }
+
+        $landlordPrimaryHost = $this->normalizeHost((string) config('tenancy.landlord.primary_host', ''));
+        if ($landlordPrimaryHost !== null) {
+            $hosts[] = $landlordPrimaryHost;
+        }
+
+        foreach ((array) config('tenancy.landlord.hosts', []) as $host) {
+            $normalized = $this->normalizeHost($host);
+            if ($normalized !== null) {
+                $hosts[] = $normalized;
+            }
+        }
+
+        foreach ((array) config('tenancy.auth.flagship_hosts', []) as $host) {
+            $normalized = $this->normalizeHost($host);
+            if ($normalized !== null) {
+                $hosts[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique($hosts));
+    }
+
+    protected function normalizeHost(mixed $value): ?string
+    {
+        $host = strtolower(trim((string) $value));
+        if ($host === '') {
+            return null;
+        }
+
+        $host = preg_replace('#^https?://#', '', $host);
+        $host = explode('/', (string) $host)[0] ?? '';
+        $host = explode(':', (string) $host)[0] ?? '';
+        $host = trim((string) $host, '.');
+
+        return $host !== '' ? $host : null;
     }
 
     protected function appendCelebrateFlag(string $url): string

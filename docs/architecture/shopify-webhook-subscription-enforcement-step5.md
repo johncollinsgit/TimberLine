@@ -11,7 +11,7 @@ Configured in [`config/shopify_webhooks.php`](/Users/johncollins/Code/myapp/conf
 - `customers/create`
 - `customers/update`
 
-Each topic maps to an app route name and resolves to an absolute callback URL using `APP_URL`.
+Each topic maps to an app route name and resolves to an absolute callback URL on the canonical landlord host (`TENANCY_CANONICAL_LANDLORD_HOST` via tenancy host builder), with `APP_URL` only as a final fallback.
 
 ## Runtime Trigger
 
@@ -27,6 +27,7 @@ Use:
 
 ```bash
 php artisan shopify:webhooks:verify
+php artisan shopify:webhooks:verify --required-only
 php artisan shopify:webhooks:verify retail
 php artisan shopify:webhooks:verify --repair
 php artisan shopify:webhooks:verify retail --repair
@@ -35,7 +36,9 @@ php artisan shopify:webhooks:verify retail --repair
 Behavior:
 
 - `verify`: detect drift (`missing` / `mismatch`) and fail exit code when drift exists.
+- `verify --required-only`: launch-gate mode (checks only required store keys from config).
 - `--repair`: create missing subscriptions and repair mismatched callbacks idempotently.
+- Optional-store failures remain visible in output but are non-fatal unless that store is marked required.
 
 ## Safety Rules
 

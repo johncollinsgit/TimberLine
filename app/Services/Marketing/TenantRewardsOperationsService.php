@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Tenancy\TenantHostBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
@@ -31,7 +32,8 @@ class TenantRewardsOperationsService
         protected TenantRewardsReminderLogService $reminderLogService,
         protected TenantRewardsFinanceSummaryService $financeSummaryService,
         protected SendGridEmailService $sendGridEmailService,
-        protected LandlordCommercialConfigService $commercialConfigService
+        protected LandlordCommercialConfigService $commercialConfigService,
+        protected TenantHostBuilder $hostBuilder,
     ) {
     }
 
@@ -967,15 +969,36 @@ class TenantRewardsOperationsService
      */
     protected function signedExportUrl(int $tenantId, string $type, array $dateRange): string
     {
+        $expiresAt = now()->addDays(7);
+        $parameters = [
+            'tenant' => $tenantId,
+            'type' => $type,
+            'date_from' => $dateRange['date_from'] ?? null,
+            'date_to' => $dateRange['date_to'] ?? null,
+        ];
+        $canonicalHost = $this->hostBuilder->canonicalLandlordHost();
+        $canonicalScheme = $this->hostBuilder->canonicalScheme();
+
+        if (is_string($canonicalHost) && $canonicalHost !== '') {
+            URL::forceRootUrl($canonicalScheme.'://'.$canonicalHost);
+            URL::forceScheme($canonicalScheme);
+
+            try {
+                return URL::temporarySignedRoute(
+                    'rewards.policy.exports.signed',
+                    $expiresAt,
+                    $parameters
+                );
+            } finally {
+                URL::forceRootUrl(null);
+                URL::forceScheme(null);
+            }
+        }
+
         return URL::temporarySignedRoute(
             'rewards.policy.exports.signed',
-            now()->addDays(7),
-            [
-                'tenant' => $tenantId,
-                'type' => $type,
-                'date_from' => $dateRange['date_from'] ?? null,
-                'date_to' => $dateRange['date_to'] ?? null,
-            ]
+            $expiresAt,
+            $parameters
         );
     }
 

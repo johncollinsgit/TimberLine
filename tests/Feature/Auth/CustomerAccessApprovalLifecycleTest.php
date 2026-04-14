@@ -11,8 +11,8 @@ use Livewire\Livewire;
 
 beforeEach(function (): void {
     $this->withoutVite();
-    config()->set('app.url', 'https://app.backstage.local');
-    config()->set('tenancy.landlord.primary_host', 'app.backstage.local');
+    config()->set('app.url', 'https://app.grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
 });
 
 test('non-admin users cannot perform approve/reject/resend actions', function (): void {
@@ -124,7 +124,7 @@ test('resend activation uses tenant host and is throttled for repeated clicks', 
 
     Notification::assertSentTo($user, ApprovalPasswordSetupNotification::class, function (ApprovalPasswordSetupNotification $notification) use ($user): bool {
         $mail = $notification->toMail($user);
-        expect((string) $mail->actionUrl)->toContain('://acme.backstage.local/');
+        expect((string) $mail->actionUrl)->toContain('://acme.grovebud.com/');
 
         return true;
     });

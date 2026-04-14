@@ -2,10 +2,16 @@
 
 namespace App\Support\Auth;
 
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Request;
 
 class PasswordResetUrlFactory
 {
+    public function __construct(
+        protected TenantHostBuilder $hostBuilder,
+    ) {
+    }
+
     public function make(string $token, string $email, ?Request $request = null, ?string $preferredHost = null): string
     {
         $path = route('password.reset', [
@@ -38,6 +44,11 @@ class PasswordResetUrlFactory
 
     protected function resolveFallbackHost(): ?string
     {
+        $canonicalLandlordHost = $this->hostBuilder->canonicalLandlordHost();
+        if ($canonicalLandlordHost !== null) {
+            return $canonicalLandlordHost;
+        }
+
         $flagshipHost = collect((array) config('tenancy.auth.flagship_hosts', []))
             ->map(fn (mixed $candidate): string => strtolower(trim((string) $candidate)))
             ->first(fn (string $candidate): bool => $candidate !== '');
@@ -63,10 +74,7 @@ class PasswordResetUrlFactory
 
     protected function resolveAppScheme(): string
     {
-        $appScheme = parse_url((string) config('app.url', ''), PHP_URL_SCHEME);
-        $appScheme = strtolower(trim((string) $appScheme));
-
-        return in_array($appScheme, ['http', 'https'], true) ? $appScheme : 'https';
+        return $this->hostBuilder->canonicalScheme();
     }
 
     protected function normalizeHost(?string $value): ?string

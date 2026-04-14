@@ -1,5 +1,37 @@
 <?php
 
+$normalizeHost = static function (mixed $value): ?string {
+    $host = strtolower(trim((string) $value));
+    if ($host === '') {
+        return null;
+    }
+
+    $host = preg_replace('#^https?://#', '', $host);
+    $host = explode('/', (string) $host)[0] ?? '';
+    $host = explode(':', (string) $host)[0] ?? '';
+    $host = trim((string) $host, '.');
+
+    return $host !== '' ? $host : null;
+};
+
+$canonicalScheme = strtolower(trim((string) env('TENANCY_CANONICAL_SCHEME', '')));
+if (! in_array($canonicalScheme, ['http', 'https'], true)) {
+    $appScheme = strtolower(trim((string) parse_url((string) env('APP_URL', ''), PHP_URL_SCHEME)));
+    $canonicalScheme = in_array($appScheme, ['http', 'https'], true) ? $appScheme : 'https';
+}
+
+$canonicalLandlordHost = $normalizeHost(env('TENANCY_CANONICAL_LANDLORD_HOST', ''));
+if ($canonicalLandlordHost === null) {
+    $canonicalLandlordHost = $normalizeHost(parse_url((string) env('APP_URL', ''), PHP_URL_HOST));
+}
+
+$defaultGoogleRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/auth/google/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/auth/google/callback';
+$defaultGoogleGbpRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/marketing/candle-cash/google-business/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/marketing/candle-cash/google-business/callback';
+
 return [
 
     /*
@@ -32,7 +64,7 @@ return [
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect' => env('GOOGLE_REDIRECT_URI'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', $defaultGoogleRedirect),
         'enabled' => env('GOOGLE_LOGIN_ENABLED', false),
         'auto_provision' => env('GOOGLE_LOGIN_AUTO_PROVISION', true),
         'allowed_domains' => array_values(array_filter(array_map(
@@ -49,7 +81,7 @@ return [
     'google_gbp' => [
         'client_id' => env('GOOGLE_GBP_CLIENT_ID'),
         'client_secret' => env('GOOGLE_GBP_CLIENT_SECRET'),
-        'redirect_uri' => env('GOOGLE_GBP_REDIRECT_URI'),
+        'redirect_uri' => env('GOOGLE_GBP_REDIRECT_URI', $defaultGoogleGbpRedirect),
         'enabled' => env('GOOGLE_GBP_ENABLED', false),
         'scopes' => env('GOOGLE_GBP_SCOPES', 'https://www.googleapis.com/auth/business.manage'),
         'oauth_state_cache_store' => env('GOOGLE_GBP_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
@@ -112,8 +144,12 @@ return [
 
         'scopes' => env(
             'SHOPIFY_SCOPES',
-            'read_orders,read_products,read_customers,write_customers,read_discounts,write_discounts,read_webhooks,write_webhooks'
+            'read_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_discounts,write_discounts,read_webhooks,write_webhooks,read_pixels,write_pixels,read_customer_events'
         ),
+        // Stores used by default when commands run without an explicit store argument.
+        'active_store_keys' => env('SHOPIFY_ACTIVE_STORE_KEYS', 'retail'),
+        // Launch-critical store keys. Optional stores remain visible but do not fail launch gates.
+        'required_store_keys' => env('SHOPIFY_REQUIRED_STORE_KEYS', 'retail'),
 
         'stores' => [
 

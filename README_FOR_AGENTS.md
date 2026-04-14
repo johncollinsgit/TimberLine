@@ -136,8 +136,9 @@ Current implemented shell/diagnostics checkpoint:
 - multi-tenant completion estimate is currently `45%`
 - Landlord/admin Phase 1 host foundation is now in place:
   - pre-auth host tenant context is globally resolved via middleware
-  - landlord host (production): `app.forestrybackstage.com`
-  - tenant host pattern (production): `<slug>.forestrybackstage.com`
+  - canonical landlord host (production): `app.grovebud.com`
+  - canonical tenant host pattern (production): `<slug>.grovebud.com`
+  - legacy compatibility hosts during migration: `app.forestrybackstage.com`, `<slug>.forestrybackstage.com`
   - landlord routes (host-locked): `/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
   - landlord directory pages remain read-only
   - landlord commercial writes are limited to safe configuration scope (plan/add-on/template catalog, tenant assignment/overrides)
@@ -150,7 +151,8 @@ Commercial model normalization now in repo:
 - billing lifecycle remains guarded-first (Stripe primary with landlord-only guarded actions, Braintree secondary readiness, no checkout activation)
 
 Production DNS/TLS status (2026-03-27):
-- wildcard TLS for `*.forestrybackstage.com` was successfully issued via Forge DNS-01
+- canonical Grovebud TLS must exist for `*.grovebud.com`
+- legacy Forestry Backstage TLS should remain active during migration (`*.forestrybackstage.com`)
 - `_acme-challenge` CNAME must remain `DNS only` in Cloudflare
 - wildcard tenant DNS is active (`* -> 129.212.138.111`) and tenant HTTPS reaches app login routes
 
@@ -216,19 +218,30 @@ Reference implementation paths:
 - `tests/Feature/Tenancy/LandlordHostFoundationTest.php`
 
 Config:
+- `TENANCY_CANONICAL_BASE_DOMAIN`
+- `TENANCY_TENANT_BASE_DOMAINS` (comma-separated list for allowed tenant subdomain bases)
+- `TENANCY_LEGACY_BASE_DOMAINS`
+- `TENANCY_LANDLORD_PRIMARY_HOST`
 - `TENANCY_LANDLORD_HOSTS` (comma-separated list)
 - `TENANCY_LANDLORD_OPERATOR_ROLES` (comma-separated list, default `admin`)
 - `TENANCY_LANDLORD_OPERATOR_EMAILS` (optional comma-separated allowlist)
+- `config('tenancy.domains.canonical.*')`
+- `config('tenancy.domains.legacy.*')`
+- `config('tenancy.domains.tenant_base_domains')`
+- `config('tenancy.domains.public_redirect.*')`
 - `config('tenancy.landlord.primary_host')`
 - `config('tenancy.landlord.hosts')`
+- `config('tenancy.landlord.alias_hosts')`
 - `config('tenancy.landlord.operator_roles')`
 - `config('tenancy.landlord.operator_emails')`
 
 Local routing note:
-- `config('tenancy.landlord.primary_host')` is derived from the first host in `TENANCY_LANDLORD_HOSTS` and is what landlord `Route::domain(...)` bindings use.
+- `config('tenancy.landlord.primary_host')` is canonical (`TENANCY_LANDLORD_PRIMARY_HOST`) and is used for named route generation.
+- every host in `TENANCY_LANDLORD_HOSTS` is accepted inbound for host-locked landlord routes.
 - Distinguish host examples in docs:
-  - production example: `app.forestrybackstage.com`
-  - local example: `forestrybackstage.test`
+  - production canonical host: `app.grovebud.com`
+  - production legacy compatibility host: `app.forestrybackstage.com`
+  - local example host set: `app.grovebud.test,app.forestrybackstage.test`
 - Keep local examples explicit in docs/config comments so operators do not assume the full `hosts` list is domain-bound in routing.
 - Fast local auth bootstrap path already exists and should be preferred over ad-hoc DB edits:
   - `php artisan users:ensure-approved your-email@example.com 'your-password' --name='Your Name' --role=admin`
@@ -238,6 +251,11 @@ Authorization note:
 - Landlord routes use dedicated middleware `landlord.operator` instead of tenant-facing `role:admin,manager`.
 - Interim safety model: default `admin` role access only, with optional landlord operator email allowlist.
 - TODO for future hardening: replace role/email interim rules with a first-class landlord operator role/flag.
+
+Operational runbooks:
+- `docs/operations/domain-cutover-grovebud-runbook.md`
+- `docs/operations/domain-cutover-grovebud-rollback.md`
+- `docs/operations/domain-cutover-grovebud-smoke-checklist.md`
 
 Important guardrails for future edits:
 - Do not bypass host-locked landlord routing by making landlord pages globally available.

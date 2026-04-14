@@ -441,6 +441,10 @@ test('shopify sitewide review status defaults to most recent approved reviews ac
 });
 
 test('shopify product review submission creates native review, sends email, and awards candle cash once', function () {
+    config()->set('app.url', 'https://app.forestrybackstage.com');
+    config()->set('tenancy.domains.canonical.scheme', 'https');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
     config()->set('marketing.shopify.signing_secret', 'stage10-signing-secret');
@@ -534,7 +538,11 @@ test('shopify product review submission creates native review, sends email, and 
         ->count())->toBe(1);
 
     Mail::assertSent(ProductReviewSubmittedMail::class, function (ProductReviewSubmittedMail $mail) use ($review): bool {
-        return $mail->review->is($review);
+        $adminUrl = (string) ($mail->build()->buildViewData()['adminUrl'] ?? '');
+
+        return $mail->review->is($review)
+            && parse_url($adminUrl, PHP_URL_HOST) === 'app.grovebud.com'
+            && parse_url($adminUrl, PHP_URL_SCHEME) === 'https';
     });
 
     $this->postJson(route('marketing.shopify.v1.product-reviews.submit', productReviewSignedQuery([

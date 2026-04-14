@@ -9,6 +9,7 @@ use App\Services\Shopify\ShopifyStores;
 use App\Services\Shopify\ShopifyWebPixelConnectionService;
 use App\Services\Shopify\ShopifyWebhookSubscriptionService;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -31,7 +32,20 @@ class ShopifyAuthController extends Controller
         session()->put('shopify_oauth_state', $state);
         Cache::store('file')->put("shopify_oauth_state_{$config['key']}", $state, now()->addMinutes(15));
 
-        $redirectUri = route('shopify.callback', ['store' => $config['key']]);
+        $callbackPath = route('shopify.callback', ['store' => $config['key']], false);
+        $canonicalAppUrl = rtrim((string) config('app.url', ''), '/');
+        $redirectUri = $canonicalAppUrl !== ''
+            ? $canonicalAppUrl.$callbackPath
+            : app(TenantHostBuilder::class)->canonicalLandlordUrlForPath($callbackPath);
+        if (! is_string($redirectUri) || $redirectUri === '') {
+            Log::error('shopify oauth auth redirect missing canonical callback host', [
+                'store_key' => $config['key'],
+                'callback_path' => $callbackPath,
+            ]);
+
+            return response('Canonical Shopify callback host is not configured.', 500);
+        }
+
         $url = $oauth->buildAuthUrl($config, $redirectUri, $state);
 
         Log::info('shopify oauth auth redirect', [

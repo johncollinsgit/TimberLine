@@ -103,6 +103,61 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
+$normalizeHost = static function (mixed $value): ?string {
+    $host = strtolower(trim((string) $value));
+    if ($host === '') {
+        return null;
+    }
+
+    $host = preg_replace('#^https?://#', '', $host);
+    $host = explode('/', (string) $host)[0] ?? '';
+    $host = explode(':', (string) $host)[0] ?? '';
+    $host = trim((string) $host, '.');
+
+    return $host !== '' ? $host : null;
+};
+
+$canonicalPublicHost = $normalizeHost((string) config('tenancy.domains.canonical.public_host', ''));
+$canonicalPublicScheme = strtolower(trim((string) config('tenancy.domains.canonical.scheme', 'https')));
+$canonicalPublicScheme = in_array($canonicalPublicScheme, ['http', 'https'], true) ? $canonicalPublicScheme : 'https';
+$legacyPublicHosts = collect((array) config('tenancy.domains.legacy.public_hosts', []))
+    ->map(static fn (mixed $host): ?string => $normalizeHost($host))
+    ->filter(static fn (?string $host): bool => $host !== null)
+    ->unique()
+    ->values()
+    ->all();
+$legacyPublicRedirectEnabled = (bool) config('tenancy.domains.public_redirect.enabled', true);
+
+if ($legacyPublicRedirectEnabled && $canonicalPublicHost !== '') {
+    foreach ($legacyPublicHosts as $legacyPublicHost) {
+        if (! is_string($legacyPublicHost) || $legacyPublicHost === '' || $legacyPublicHost === $canonicalPublicHost) {
+            continue;
+        }
+
+        Route::domain($legacyPublicHost)
+            ->name('legacy-public-redirect.')
+            ->group(function () use ($canonicalPublicHost, $canonicalPublicScheme): void {
+                Route::get('/{path?}', function (Request $request, ?string $path = null) use ($canonicalPublicHost, $canonicalPublicScheme) {
+                    $normalizedPath = trim((string) ($path ?? ''), '/');
+                    $target = $canonicalPublicScheme.'://'.$canonicalPublicHost;
+                    $target .= $normalizedPath !== '' ? '/'.$normalizedPath : '/';
+
+                    $query = $request->getQueryString();
+                    if (is_string($query) && $query !== '') {
+                        $target .= '?'.$query;
+                    }
+
+                    $status = (int) config('tenancy.domains.public_redirect.status', 301);
+                    if (! in_array($status, [301, 302, 307, 308], true)) {
+                        $status = 301;
+                    }
+
+                    return redirect()->away($target, $status);
+                })->where('path', '.*');
+            });
+    }
+}
+
 Route::get('/', function (
     Request $request,
     ShopifyEmbeddedAppContext $contextService,
@@ -124,80 +179,106 @@ Route::get('/', function (
     return $platformPagesController->promo($experienceService);
 })->name('home');
 
-$landlordHost = strtolower(trim((string) config('tenancy.landlord.primary_host', 'app.forestrybackstage.com')));
+$landlordHosts = collect((array) config('tenancy.landlord.hosts', []))
+    ->map(static fn (mixed $host): ?string => $normalizeHost($host))
+    ->filter(static fn (?string $host): bool => $host !== null)
+    ->unique()
+    ->values()
+    ->all();
+$landlordPrimaryHost = $normalizeHost((string) config('tenancy.landlord.primary_host', '')) ?? '';
+if ($landlordPrimaryHost === '' && isset($landlordHosts[0]) && is_string($landlordHosts[0])) {
+    $landlordPrimaryHost = $landlordHosts[0];
+}
+if ($landlordPrimaryHost !== '' && ! in_array($landlordPrimaryHost, $landlordHosts, true)) {
+    array_unshift($landlordHosts, $landlordPrimaryHost);
+}
+$landlordHosts = array_values(array_unique(array_filter($landlordHosts, static fn (string $host): bool => $host !== '')));
+$landlordAliasHosts = array_values(array_filter(
+    $landlordHosts,
+    static fn (string $host): bool => $host !== $landlordPrimaryHost
+));
 
-if ($landlordHost !== '') {
-    Route::domain($landlordHost)
+$landlordRoutes = static function (): void {
+    Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
+        ->name('dashboard');
+    Route::get('/landlord/onboarding/journey', [LandlordOnboardingJourneyDiagnosticsController::class, 'index'])
+        ->name('onboarding.journey');
+    Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
+        ->name('commercial.index');
+    Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])
+        ->name('commercial.analytics.tenants');
+    Route::get('/landlord/commercial/analytics/activity', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsActivity'])
+        ->name('commercial.analytics.activity');
+    Route::post('/landlord/commercial/catalog/{type}/upsert', [LandlordCommercialConfigurationController::class, 'upsertCatalogEntry'])
+        ->name('commercial.catalog.upsert');
+    Route::post('/landlord/commercial/templates/{entryKey}/duplicate', [LandlordCommercialConfigurationController::class, 'duplicateTemplate'])
+        ->name('commercial.templates.duplicate');
+    Route::post('/landlord/commercial/templates/{entryKey}/state', [LandlordCommercialConfigurationController::class, 'setTemplateState'])
+        ->name('commercial.templates.state');
+    Route::post('/landlord/commercial/templates/reorder', [LandlordCommercialConfigurationController::class, 'reorderTemplates'])
+        ->name('commercial.templates.reorder');
+    Route::get('/landlord/tenants', [LandlordTenantDirectoryController::class, 'index'])
+        ->name('tenants.index');
+    Route::post('/landlord/tenants', [LandlordTenantDirectoryController::class, 'store'])
+        ->name('tenants.store');
+    Route::match(['put', 'patch'], '/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'update'])
+        ->name('tenants.update');
+    Route::delete('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'destroy'])
+        ->name('tenants.destroy');
+    Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
+        ->name('tenants.show');
+    Route::post('/landlord/tenants/{tenant}/role', [LandlordTenantDirectoryController::class, 'updateRole'])
+        ->name('tenants.role.update');
+    Route::post('/landlord/tenants/{tenant}/type', [LandlordTenantDirectoryController::class, 'updateType'])
+        ->name('tenants.type.update');
+    Route::post('/landlord/tenants/{tenant}/modules', [LandlordTenantDirectoryController::class, 'updateModules'])
+        ->name('tenants.modules.update');
+    Route::post('/landlord/tenants/{tenant}/users/remove', [LandlordTenantDirectoryController::class, 'removeUser'])
+        ->name('tenants.users.remove');
+    Route::post('/landlord/tenants/select', [LandlordTenantOperationsController::class, 'selectTenant'])
+        ->name('tenants.select');
+    Route::post('/landlord/tenants/{tenant}/operations/export', [LandlordTenantOperationsController::class, 'export'])
+        ->name('tenants.operations.export');
+    Route::post('/landlord/tenants/{tenant}/operations/restore', [LandlordTenantOperationsController::class, 'restore'])
+        ->name('tenants.operations.restore');
+    Route::post('/landlord/tenants/{tenant}/operations/customers/modify', [LandlordTenantOperationsController::class, 'modifyCustomer'])
+        ->name('tenants.operations.customers.modify');
+    Route::post('/landlord/tenants/{tenant}/operations/customers/archive', [LandlordTenantOperationsController::class, 'archiveCustomer'])
+        ->name('tenants.operations.customers.archive');
+    Route::get('/landlord/tenants/{tenant}/operations/exports/{action}', [LandlordTenantOperationsController::class, 'downloadExport'])
+        ->name('tenants.operations.exports.download');
+    Route::post('/landlord/tenants/{tenant}/commercial/plan', [LandlordCommercialConfigurationController::class, 'assignTenantPlan'])
+        ->name('tenants.commercial.plan');
+    Route::post('/landlord/tenants/{tenant}/commercial/entitlements/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleEntitlement'])
+        ->name('tenants.commercial.entitlements.update');
+    Route::post('/landlord/tenants/{tenant}/commercial/override', [LandlordCommercialConfigurationController::class, 'updateTenantCommercialOverride'])
+        ->name('tenants.commercial.override');
+    Route::post('/landlord/tenants/{tenant}/commercial/modules/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleState'])
+        ->name('tenants.commercial.modules.update');
+    Route::post('/landlord/tenants/{tenant}/commercial/addons/{addonKey}', [LandlordCommercialConfigurationController::class, 'updateTenantAddonState'])
+        ->name('tenants.commercial.addons.update');
+    Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/customer-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeCustomer'])
+        ->name('tenants.commercial.billing.stripe.customer-sync');
+    Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/subscription-prep', [LandlordCommercialConfigurationController::class, 'syncTenantStripeSubscriptionPrep'])
+        ->name('tenants.commercial.billing.stripe.subscription-prep');
+    Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/subscription-live-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeLiveSubscription'])
+        ->name('tenants.commercial.billing.stripe.subscription-live-sync');
+    Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/fulfillment-reconcile', [LandlordCommercialConfigurationController::class, 'reconcileTenantStripeFulfillment'])
+        ->name('tenants.commercial.billing.stripe.fulfillment-reconcile');
+};
+
+if ($landlordPrimaryHost !== '') {
+    Route::domain($landlordPrimaryHost)
         ->middleware(['auth', 'verified', 'landlord.operator'])
         ->name('landlord.')
-        ->group(function (): void {
-            Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
-                ->name('dashboard');
-            Route::get('/landlord/onboarding/journey', [LandlordOnboardingJourneyDiagnosticsController::class, 'index'])
-                ->name('onboarding.journey');
-            Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
-                ->name('commercial.index');
-            Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])
-                ->name('commercial.analytics.tenants');
-            Route::get('/landlord/commercial/analytics/activity', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsActivity'])
-                ->name('commercial.analytics.activity');
-            Route::post('/landlord/commercial/catalog/{type}/upsert', [LandlordCommercialConfigurationController::class, 'upsertCatalogEntry'])
-                ->name('commercial.catalog.upsert');
-            Route::post('/landlord/commercial/templates/{entryKey}/duplicate', [LandlordCommercialConfigurationController::class, 'duplicateTemplate'])
-                ->name('commercial.templates.duplicate');
-            Route::post('/landlord/commercial/templates/{entryKey}/state', [LandlordCommercialConfigurationController::class, 'setTemplateState'])
-                ->name('commercial.templates.state');
-            Route::post('/landlord/commercial/templates/reorder', [LandlordCommercialConfigurationController::class, 'reorderTemplates'])
-                ->name('commercial.templates.reorder');
-            Route::get('/landlord/tenants', [LandlordTenantDirectoryController::class, 'index'])
-                ->name('tenants.index');
-            Route::post('/landlord/tenants', [LandlordTenantDirectoryController::class, 'store'])
-                ->name('tenants.store');
-            Route::match(['put', 'patch'], '/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'update'])
-                ->name('tenants.update');
-            Route::delete('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'destroy'])
-                ->name('tenants.destroy');
-            Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
-                ->name('tenants.show');
-            Route::post('/landlord/tenants/{tenant}/role', [LandlordTenantDirectoryController::class, 'updateRole'])
-                ->name('tenants.role.update');
-            Route::post('/landlord/tenants/{tenant}/type', [LandlordTenantDirectoryController::class, 'updateType'])
-                ->name('tenants.type.update');
-            Route::post('/landlord/tenants/{tenant}/modules', [LandlordTenantDirectoryController::class, 'updateModules'])
-                ->name('tenants.modules.update');
-            Route::post('/landlord/tenants/{tenant}/users/remove', [LandlordTenantDirectoryController::class, 'removeUser'])
-                ->name('tenants.users.remove');
-            Route::post('/landlord/tenants/select', [LandlordTenantOperationsController::class, 'selectTenant'])
-                ->name('tenants.select');
-            Route::post('/landlord/tenants/{tenant}/operations/export', [LandlordTenantOperationsController::class, 'export'])
-                ->name('tenants.operations.export');
-            Route::post('/landlord/tenants/{tenant}/operations/restore', [LandlordTenantOperationsController::class, 'restore'])
-                ->name('tenants.operations.restore');
-            Route::post('/landlord/tenants/{tenant}/operations/customers/modify', [LandlordTenantOperationsController::class, 'modifyCustomer'])
-                ->name('tenants.operations.customers.modify');
-            Route::post('/landlord/tenants/{tenant}/operations/customers/archive', [LandlordTenantOperationsController::class, 'archiveCustomer'])
-                ->name('tenants.operations.customers.archive');
-            Route::get('/landlord/tenants/{tenant}/operations/exports/{action}', [LandlordTenantOperationsController::class, 'downloadExport'])
-                ->name('tenants.operations.exports.download');
-            Route::post('/landlord/tenants/{tenant}/commercial/plan', [LandlordCommercialConfigurationController::class, 'assignTenantPlan'])
-                ->name('tenants.commercial.plan');
-            Route::post('/landlord/tenants/{tenant}/commercial/entitlements/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleEntitlement'])
-                ->name('tenants.commercial.entitlements.update');
-            Route::post('/landlord/tenants/{tenant}/commercial/override', [LandlordCommercialConfigurationController::class, 'updateTenantCommercialOverride'])
-                ->name('tenants.commercial.override');
-            Route::post('/landlord/tenants/{tenant}/commercial/modules/{moduleKey}', [LandlordCommercialConfigurationController::class, 'updateTenantModuleState'])
-                ->name('tenants.commercial.modules.update');
-            Route::post('/landlord/tenants/{tenant}/commercial/addons/{addonKey}', [LandlordCommercialConfigurationController::class, 'updateTenantAddonState'])
-                ->name('tenants.commercial.addons.update');
-            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/customer-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeCustomer'])
-                ->name('tenants.commercial.billing.stripe.customer-sync');
-            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/subscription-prep', [LandlordCommercialConfigurationController::class, 'syncTenantStripeSubscriptionPrep'])
-                ->name('tenants.commercial.billing.stripe.subscription-prep');
-            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/subscription-live-sync', [LandlordCommercialConfigurationController::class, 'syncTenantStripeLiveSubscription'])
-                ->name('tenants.commercial.billing.stripe.subscription-live-sync');
-            Route::post('/landlord/tenants/{tenant}/commercial/billing/stripe/fulfillment-reconcile', [LandlordCommercialConfigurationController::class, 'reconcileTenantStripeFulfillment'])
-                ->name('tenants.commercial.billing.stripe.fulfillment-reconcile');
-        });
+        ->group($landlordRoutes);
+
+    foreach ($landlordAliasHosts as $index => $landlordAliasHost) {
+        Route::domain($landlordAliasHost)
+            ->middleware(['auth', 'verified', 'landlord.operator'])
+            ->name('landlord-legacy-'.$index.'.')
+            ->group($landlordRoutes);
+    }
 }
 
 Route::get('/rewards', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {

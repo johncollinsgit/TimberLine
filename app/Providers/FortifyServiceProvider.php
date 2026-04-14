@@ -9,12 +9,15 @@ use App\Http\Responses\FortifyPasswordResetResponse;
 use App\Http\Responses\FortifyRegisterResponse;
 use App\Http\Responses\FortifyTwoFactorLoginResponse;
 use App\Models\User;
+use App\Support\Tenancy\TenantHostBuilder;
 use App\Support\Auth\PasswordResetUrlFactory;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -40,6 +43,7 @@ class FortifyServiceProvider extends ServiceProvider
     {
         $this->configureActions();
         $this->configurePasswordResetLinks();
+        $this->configureEmailVerificationLinks();
         $this->configureViews();
         $this->configureRateLimiting();
     }
@@ -100,6 +104,38 @@ class FortifyServiceProvider extends ServiceProvider
                 : (string) ($notifiable->email ?? '');
 
             return app(PasswordResetUrlFactory::class)->make($token, $email);
+        });
+    }
+
+    /**
+     * Ensure email verification links emit the canonical landlord host by default.
+     */
+    private function configureEmailVerificationLinks(): void
+    {
+        VerifyEmail::createUrlUsing(function (object $notifiable): string {
+            $expiresAt = now()->addMinutes((int) config('auth.verification.expire', 60));
+            $parameters = [
+                'id' => $notifiable->getKey(),
+                'hash' => sha1($notifiable->getEmailForVerification()),
+            ];
+
+            $hostBuilder = app(TenantHostBuilder::class);
+            $host = $hostBuilder->canonicalLandlordHost();
+            $scheme = $hostBuilder->canonicalScheme();
+
+            if (! is_string($host) || $host === '') {
+                return URL::temporarySignedRoute('verification.verify', $expiresAt, $parameters);
+            }
+
+            URL::forceRootUrl($scheme.'://'.$host);
+            URL::forceScheme($scheme);
+
+            try {
+                return URL::temporarySignedRoute('verification.verify', $expiresAt, $parameters);
+            } finally {
+                URL::forceRootUrl(null);
+                URL::forceScheme(null);
+            }
         });
     }
 

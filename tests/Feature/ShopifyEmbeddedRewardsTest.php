@@ -1890,6 +1890,10 @@ test('shopify embedded rewards policy route includes automation alerts usage ind
 });
 
 test('scheduled tenant rewards finance reports send existing export links and update runtime state', function () {
+    config()->set('app.url', 'https://app.forestrybackstage.com');
+    config()->set('tenancy.domains.canonical.scheme', 'https');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+
     CandleCashTransaction::query()->create([
         'marketing_profile_id' => MarketingProfile::query()->create([
             'tenant_id' => $this->tenant->id,
@@ -1921,10 +1925,10 @@ test('scheduled tenant rewards finance reports send existing export links and up
             return $toEmail === 'finance.ops@example.com'
                 && str_contains($subject, 'Candle Cash rewards finance report')
                 && str_contains($body, 'Download links for the latest rewards finance exports:')
-                && str_contains($body, '/rewards/policy/exports/signed/'.$this->tenant->id.'/finance_summary')
-                && str_contains($body, '/rewards/policy/exports/signed/'.$this->tenant->id.'/reward_issuance')
-                && str_contains($body, '/rewards/policy/exports/signed/'.$this->tenant->id.'/reward_redemption')
-                && str_contains($body, '/rewards/policy/exports/signed/'.$this->tenant->id.'/expiring_rewards')
+                && str_contains($body, 'https://app.grovebud.com/rewards/policy/exports/signed/'.$this->tenant->id.'/finance_summary')
+                && str_contains($body, 'https://app.grovebud.com/rewards/policy/exports/signed/'.$this->tenant->id.'/reward_issuance')
+                && str_contains($body, 'https://app.grovebud.com/rewards/policy/exports/signed/'.$this->tenant->id.'/reward_redemption')
+                && str_contains($body, 'https://app.grovebud.com/rewards/policy/exports/signed/'.$this->tenant->id.'/expiring_rewards')
                 && data_get($options, 'campaign_type') === 'rewards_finance_report';
         })
         ->andReturn([

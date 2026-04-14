@@ -19,6 +19,7 @@ use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\LandlordTenantOperationsService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Tenancy\TenantHostBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -687,18 +688,14 @@ class LandlordTenantDirectoryController extends Controller
 
     protected function tenantBaseHost(): string
     {
-        $landlordHost = strtolower(trim((string) config('tenancy.landlord.primary_host', 'app.forestrybackstage.com')));
-        if ($landlordHost === '') {
-            return 'forestrybackstage.com';
+        $baseHost = app(TenantHostBuilder::class)->baseDomain();
+        if (is_string($baseHost) && trim($baseHost) !== '') {
+            return strtolower(trim($baseHost));
         }
 
-        if (str_starts_with($landlordHost, 'app.')) {
-            $base = substr($landlordHost, 4);
+        $configuredBaseHost = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', '')));
 
-            return $base !== '' ? $base : 'forestrybackstage.com';
-        }
-
-        return $landlordHost;
+        return $configuredBaseHost !== '' ? $configuredBaseHost : 'grovebud.com';
     }
 
     /**

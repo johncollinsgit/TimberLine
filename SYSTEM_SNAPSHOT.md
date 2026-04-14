@@ -80,14 +80,16 @@ Quick-scan summary for future agents:
 - Tenant-aware direction is established in shell + diagnostics, while full domain tenant isolation remains in progress.
 - Landlord/admin Phase 1 host foundation is implemented:
   - global pre-auth host context middleware resolves landlord/tenant/none host mode
-  - landlord host target in production is `app.forestrybackstage.com` (configurable)
-  - tenant host target in production is `<slug>.forestrybackstage.com`
+  - canonical landlord host target in production is `app.grovebud.com` (configurable)
+  - canonical tenant host target in production is `<slug>.grovebud.com`
+  - legacy compatibility hosts during migration remain accepted inbound (`app.forestrybackstage.com`, `<slug>.forestrybackstage.com`)
   - unknown hosts resolve safely to `none` (no first-tenant fallback)
   - landlord routes are host-locked: `/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
   - landlord directory remains read-only while commercial writes are constrained to safe configuration scope
   - landlord route auth uses dedicated `landlord.operator` middleware (default `admin` role; optional email allowlist) instead of tenant-facing role groups
 - Production DNS/TLS verification completed on 2026-03-27:
-  - wildcard cert for `*.forestrybackstage.com` is active
+  - canonical Grovebud cert should cover `*.grovebud.com`
+  - legacy Forestry Backstage cert should remain active for transition (`*.forestrybackstage.com`)
   - ACME `_acme-challenge` delegation is CNAME-based and must stay Cloudflare `DNS only`
   - wildcard tenant DNS (`*`) resolves and tenant HTTPS reaches Laravel (`/login` redirects observed)
 - Immediate next step is deploy + verify this release, not broad new feature expansion.

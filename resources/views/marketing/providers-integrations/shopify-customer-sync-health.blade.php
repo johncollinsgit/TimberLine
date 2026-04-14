@@ -15,6 +15,8 @@
             $recentEvents = collect((array) ($report['recent_events'] ?? []));
             $windowHours = (int) ($report['window_hours'] ?? 72);
             $requiredTopics = collect((array) ($report['required_topics'] ?? []));
+            $requiredStoreKeys = collect((array) ($report['required_store_keys'] ?? []));
+            $launchGate = (array) ($report['launch_gate'] ?? []);
             $statusCardStyles = [
                 'healthy' => 'border-zinc-300 bg-emerald-100 text-emerald-900',
                 'warning' => 'border-amber-300/35 bg-amber-100 text-amber-900',
@@ -49,6 +51,26 @@
             @endforeach
         </section>
 
+        @php
+            $launchGateStatus = (string) ($launchGate['status'] ?? 'failing');
+            $launchGateStyles = $statusCardStyles[$launchGateStatus] ?? $statusCardStyles['failing'];
+        @endphp
+        <section class="rounded-2xl border p-4 {{ $launchGateStyles }}">
+            <div class="text-xs uppercase tracking-[0.2em]">Launch Gate</div>
+            <div class="mt-2 text-lg font-semibold">
+                {{ $launchGate['label'] ?? 'Blocked' }}
+            </div>
+            <div class="mt-1 text-sm">
+                {{ $launchGate['hint'] ?? 'Required Shopify store health is not yet ready.' }}
+            </div>
+            <div class="mt-2 text-xs">
+                Required stores:
+                <span class="font-semibold">{{ $requiredStoreKeys->isNotEmpty() ? $requiredStoreKeys->implode(', ') : 'none configured' }}</span>
+                · Healthy/Warning/Failing/Unknown:
+                {{ (int) ($launchGate['required_healthy'] ?? 0) }}/{{ (int) ($launchGate['required_warning'] ?? 0) }}/{{ (int) ($launchGate['required_failing'] ?? 0) }}/{{ (int) ($launchGate['required_unknown'] ?? 0) }}
+            </div>
+        </section>
+
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -56,6 +78,10 @@
                     <p class="mt-1 text-sm text-zinc-600">
                         Required topics:
                         <span class="text-zinc-950">{{ $requiredTopics->isNotEmpty() ? $requiredTopics->implode(', ') : 'none configured' }}</span>
+                    </p>
+                    <p class="mt-1 text-sm text-zinc-600">
+                        Required stores:
+                        <span class="text-zinc-950">{{ $requiredStoreKeys->isNotEmpty() ? $requiredStoreKeys->implode(', ') : 'none configured' }}</span>
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
@@ -69,7 +95,7 @@
             </div>
 
             <x-admin.help-hint tone="neutral" title="How to interpret">
-                Healthy means required webhooks are aligned, auth appears valid, and no recent provisioning/ingestion failures were detected. Warning or failing stores should be reviewed before running customer identity backfills.
+                Required store issues block launch readiness. Optional store issues are still surfaced here, but they are non-blocking until that store is marked required.
             </x-admin.help-hint>
 
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
@@ -77,6 +103,7 @@
                     <thead class="bg-zinc-50 text-zinc-600">
                         <tr>
                             <th class="px-4 py-3 text-left">Store</th>
+                            <th class="px-4 py-3 text-left">Role</th>
                             <th class="px-4 py-3 text-left">Overall</th>
                             <th class="px-4 py-3 text-left">Webhook Subscriptions</th>
                             <th class="px-4 py-3 text-left">Last Customer Webhook</th>
@@ -103,6 +130,11 @@
                                         key={{ $row['store_key'] }} · tenant={{ $row['tenant_id'] ?? 'n/a' }}
                                     </div>
                                     <div class="mt-1 text-xs text-zinc-500">{{ $row['shop_domain'] ?: 'domain unavailable' }}</div>
+                                </td>
+                                <td class="px-4 py-3 align-top text-zinc-700">
+                                    <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold {{ ($row['is_required'] ?? false) ? 'border-zinc-300 bg-zinc-100 text-zinc-900' : 'border-amber-300/35 bg-amber-100 text-amber-900' }}">
+                                        {{ ($row['is_required'] ?? false) ? 'Required' : 'Optional' }}
+                                    </span>
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     <span class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold {{ $statusClass }}">
@@ -143,7 +175,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-6 text-center text-zinc-500">
+                                <td colspan="9" class="px-4 py-6 text-center text-zinc-500">
                                     No installed Shopify stores were found. Connect a store first to populate sync health diagnostics.
                                 </td>
                             </tr>

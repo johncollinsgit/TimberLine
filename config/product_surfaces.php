@@ -1,5 +1,11 @@
 <?php
 
+$contactDomain = strtolower(trim((string) env('PRODUCT_CONTACT_EMAIL_DOMAIN', 'grovebud.com')));
+$contactDomain = $contactDomain !== '' ? $contactDomain : 'grovebud.com';
+$salesContact = 'sales@'.$contactDomain;
+$upgradesContact = 'upgrades@'.$contactDomain;
+$helloContact = 'hello@'.$contactDomain;
+
 return [
     'promo' => [
         'eyebrow' => 'Shopify-First Customer Platform',
@@ -658,18 +664,18 @@ return [
         'channels' => [
             [
                 'label' => 'Book a demo',
-                'value' => 'sales@forestrybackstage.com',
-                'href' => 'mailto:sales@forestrybackstage.com?subject=Platform%20Demo%20Request',
+                'value' => $salesContact,
+                'href' => 'mailto:'.$salesContact.'?subject=Platform%20Demo%20Request',
             ],
             [
                 'label' => 'Discuss plan upgrades',
-                'value' => 'upgrades@forestrybackstage.com',
-                'href' => 'mailto:upgrades@forestrybackstage.com?subject=Plan%20Upgrade%20Request',
+                'value' => $upgradesContact,
+                'href' => 'mailto:'.$upgradesContact.'?subject=Plan%20Upgrade%20Request',
             ],
             [
                 'label' => 'General questions',
-                'value' => 'hello@forestrybackstage.com',
-                'href' => 'mailto:hello@forestrybackstage.com?subject=Platform%20Inquiry',
+                'value' => $helloContact,
+                'href' => 'mailto:'.$helloContact.'?subject=Platform%20Inquiry',
             ],
         ],
     ],

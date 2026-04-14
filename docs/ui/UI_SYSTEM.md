@@ -4,7 +4,7 @@
 Transform Forestry Backstage into a premium, calm, high-trust software experience with one coherent visual system across public marketing, login/auth, backstage admin, and Shopify embedded surfaces.
 
 ## User-Fed Requirements
-- Make the uploaded Forestry Backstage logo usable for the landing page for forestrybackstage.com
+- Make the uploaded Forestry Backstage logo usable for the landing page for grovebud.com (legacy forestrybackstage.com should redirect during migration)
 - The site should become a beautiful landing page rather than redirecting straight to login
 - Include everything a typical high-end software product site would include
 - Zendesk.com is a benchmark for functionality, visual polish, hierarchy, and clarity, but should not be copied

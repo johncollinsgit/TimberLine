@@ -10,7 +10,7 @@ Pre-checks:
 - keep `storage/logs/laravel.log` open while testing
 
 1. Modern Forestry password login
-- open `https://app.forestrybackstage.com/login`
+- open `https://app.grovebud.com/login` (canonical)
 - login with an active user who is a member of `modern-forestry`
 - expect successful login and normal landing page
 - check logs:
@@ -19,7 +19,7 @@ Pre-checks:
   - strategy should be `tenant_intent` (or `intended_url` if you purposely set an intended URL)
 
 2. Modern Forestry Google login
-- open `https://app.forestrybackstage.com/login`
+- open `https://app.grovebud.com/login` (canonical)
 - click `Continue with Google` and finish consent
 - expect successful login and normal landing page
 - check logs:
@@ -28,7 +28,8 @@ Pre-checks:
   - strategy should be `tenant_intent` (or `intended_url` when applicable)
 
 3. Non-flagship tenant password login
-- open tenant host login page, e.g. `http://acme.forestrybackstage.test/login` (local) or `https://acme.forestrybackstage.com/login` (production pattern)
+- open tenant host login page, e.g. `http://acme.grovebud.test/login` (local) or `https://acme.grovebud.com/login` (canonical production pattern)
+- legacy compatibility host (`https://acme.forestrybackstage.com/login`) should continue to work during migration
 - login with user who is a member of that tenant
 - expect successful login and tenant-correct landing
 - check logs:
@@ -36,7 +37,8 @@ Pre-checks:
   - `auth.post_login.redirect_decision` strategy `tenant_intent` (or `intended_url`)
 
 4. Non-member hitting tenant-branded login
-- open tenant host login page, e.g. `http://acme.forestrybackstage.test/login` (local) or `https://acme.forestrybackstage.com/login` (production pattern)
+- open tenant host login page, e.g. `http://acme.grovebud.test/login` (local) or `https://acme.grovebud.com/login` (canonical production pattern)
+- legacy compatibility host (`https://acme.forestrybackstage.com/login`) should continue to work during migration
 - login with user who is not a member of that tenant
 - expect successful auth but safe fallback landing (not tenant-forced)
 - check logs:

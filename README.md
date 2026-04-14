@@ -690,23 +690,33 @@ Current backend release-order note:
 
 ## Production Host Rules (Current Direction)
 
-- Public marketing site: `forestrybackstage.com`
-- Landlord/operator host: `app.forestrybackstage.com`
-- Tenant host pattern: `<slug>.forestrybackstage.com`
+- Canonical public marketing site: `grovebud.com`
+- Canonical landlord/operator host: `app.grovebud.com`
+- Canonical tenant host pattern: `<slug>.grovebud.com`
+- Legacy public host (redirect-only): `forestrybackstage.com` -> `grovebud.com`
+- Legacy landlord compatibility host: `app.forestrybackstage.com`
+- Legacy tenant compatibility host pattern: `<slug>.forestrybackstage.com`
 - Landlord routes are host-locked; tenant directory remains read-only while commercial config writes are limited to safe scope (`/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`).
 - Unknown hosts must not silently fall back to the first tenant.
 
 ## Production DNS + Wildcard TLS Verification (2026-03-27)
 
-Verified in production for Forestry Backstage:
-- Wildcard certificate issuance for `*.forestrybackstage.com` is working.
-- Tenant wildcard DNS now resolves through Cloudflare wildcard records.
-- Tenant HTTPS now negotiates the wildcard cert and routes into Laravel.
+Migration requirements for production cutover:
+- Canonical Grovebud cert/DNS must exist for `grovebud.com` and `*.grovebud.com`.
+- Forestry Backstage cert/DNS must remain active during transition for inbound compatibility.
+- Legacy public host should redirect to canonical Grovebud public URLs.
+
+Operator runbooks:
+- cutover: `docs/operations/domain-cutover-grovebud-runbook.md`
+- rollback: `docs/operations/domain-cutover-grovebud-rollback.md`
+- smoke checklist: `docs/operations/domain-cutover-grovebud-smoke-checklist.md`
 
 Working production host model:
-- public site: `forestrybackstage.com`
-- landlord app: `app.forestrybackstage.com`
-- tenant apps: `<slug>.forestrybackstage.com`
+- canonical public site: `grovebud.com`
+- canonical landlord app: `app.grovebud.com`
+- canonical tenant apps: `<slug>.grovebud.com`
+- legacy public alias (redirect): `forestrybackstage.com`
+- legacy app/tenant aliases (compatibility): `app.forestrybackstage.com`, `<slug>.forestrybackstage.com`
 
 Operator notes (important):
 - Forge DNS-01 challenge must use:
@@ -720,7 +730,7 @@ Operator notes (important):
 
 ## Historical Auth Findings (2026-03-25, Legacy Host Check)
 
-Observed during a historical live verification on legacy host `https://backstage.theforestrystudio.com/login` (kept for audit context; current production direction is `*.forestrybackstage.com`):
+Observed during a historical live verification on legacy host `https://backstage.theforestrystudio.com/login` (kept for audit context; canonical production direction is `*.grovebud.com` with Forestry Backstage aliases kept for transition-only compatibility):
 - Password resets run locally do not affect production.
 - Production user `johncollinsemail@gmail.com` exists, is active/approved, and password reset was successfully applied on production (`PASSWORD_MATCH=1`).
 - Google login failure is currently external-credential based, not route/UI based:
@@ -794,28 +804,39 @@ What was added:
   - `app/Http/Middleware/ResolveHostTenantContext.php`
 - Middleware is prepended to the `web` stack in `bootstrap/app.php` so host context is available before auth/login handling.
 - Host behavior now supports:
-  - landlord host (`app.forestrybackstage.com` in production, configurable) => landlord context (`isLandlordMode=true`), no tenant required
-  - tenant host (`<slug>.forestrybackstage.com` in production) => resolves tenant by slug/subdomain
+  - canonical landlord host (`app.grovebud.com` in production, configurable) => landlord context (`isLandlordMode=true`), no tenant required
+  - canonical tenant host (`<slug>.grovebud.com` in production) => resolves tenant by slug/subdomain
+  - legacy landlord/tenant hosts (`*.forestrybackstage.com`) remain accepted inbound during migration
   - unknown host => unresolved context, no fallback to first tenant
 - Existing auth tenant resolver (`GuestAuthTenantContextResolver`) now reuses this host resolver rather than duplicating host parsing logic.
 
 Configuration added:
-- `TENANCY_LANDLORD_HOSTS` env var (comma-separated, default `app.forestrybackstage.com`)
+- `TENANCY_CANONICAL_BASE_DOMAIN` env var (default `grovebud.com`)
+- `TENANCY_TENANT_BASE_DOMAINS` env var (default `grovebud.com,forestrybackstage.com`; restricts subdomain tenant resolution to approved base domains)
+- `TENANCY_LEGACY_BASE_DOMAINS` env var (default `forestrybackstage.com`)
+- `TENANCY_LANDLORD_PRIMARY_HOST` env var (default `app.grovebud.com`)
+- `TENANCY_LANDLORD_HOSTS` env var (comma-separated, default includes canonical + legacy landlord hosts)
 - `TENANCY_LANDLORD_OPERATOR_ROLES` env var (comma-separated, default `admin`)
 - `TENANCY_LANDLORD_OPERATOR_EMAILS` env var (comma-separated, optional allowlist)
 - `config/tenancy.php` now exposes:
+  - `tenancy.domains.canonical.*`
+  - `tenancy.domains.legacy.*`
+  - `tenancy.domains.public_redirect.*`
   - `tenancy.landlord.hosts`
   - `tenancy.landlord.primary_host`
+  - `tenancy.landlord.alias_hosts`
   - `tenancy.landlord.operator_roles`
   - `tenancy.landlord.operator_emails`
 
 Local setup note:
-- In this implementation, the first host in `TENANCY_LANDLORD_HOSTS` is treated as the landlord route domain (`tenancy.landlord.primary_host`) and is what `Route::domain(...)` uses for `/landlord*` routes.
+- In this implementation, `TENANCY_LANDLORD_PRIMARY_HOST` is the canonical landlord route domain (`tenancy.landlord.primary_host`) used for named route generation.
+- Every host listed in `TENANCY_LANDLORD_HOSTS` is accepted inbound for host-locked landlord routes during migration.
 - Host examples:
-  - production example: `TENANCY_LANDLORD_HOSTS=app.forestrybackstage.com`
-  - local example: `TENANCY_LANDLORD_HOSTS=forestrybackstage.test`
+  - production canonical + legacy compatibility: `TENANCY_LANDLORD_HOSTS=app.grovebud.com,app.forestrybackstage.com`
+  - local example: `TENANCY_LANDLORD_HOSTS=app.grovebud.test,app.forestrybackstage.test`
 - Recommended local baseline:
-  - `TENANCY_LANDLORD_HOSTS=forestrybackstage.test`
+  - `TENANCY_LANDLORD_PRIMARY_HOST=app.grovebud.test`
+  - `TENANCY_LANDLORD_HOSTS=app.grovebud.test,app.forestrybackstage.test`
   - `TENANCY_LANDLORD_OPERATOR_ROLES=admin`
   - `TENANCY_LANDLORD_OPERATOR_EMAILS=`
 - Fast local login bootstrap (if your expected admin login fails):
@@ -876,8 +897,10 @@ Required environment keys:
 - `SHOPIFY_WHOLESALE_CLIENT_ID`
 - `SHOPIFY_WHOLESALE_CLIENT_SECRET`
 - `SHOPIFY_API_VERSION` (default `2026-01`)
-- `SHOPIFY_SCOPES` (default `read_orders,read_products,read_customers`)
+- `SHOPIFY_SCOPES` (default `read_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_discounts,write_discounts,read_webhooks,write_webhooks,read_pixels,write_pixels,read_customer_events`)
 - `SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK` (default `false`, legacy only)
+- `SHOPIFY_ACTIVE_STORE_KEYS` (default `retail`)
+- `SHOPIFY_REQUIRED_STORE_KEYS` (default `retail`)
 
 OAuth (Admin) routes:
 - `/shopify/auth/{store}`
@@ -892,6 +915,8 @@ Notes:
 - OAuth access tokens are stored in `shopify_stores` and encrypted at rest.
 - CLI imports/sync use DB-installed OAuth tokens as primary source of truth.
 - Static env access tokens are legacy fallback only when `SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK=true`.
+- Launch gating should rely on `SHOPIFY_REQUIRED_STORE_KEYS` (current launch model: `retail` required, `wholesale` optional).
+- `shopify:webhooks:verify` still audits optional stores, but only required-store failures are fatal. Use `shopify:webhooks:verify --required-only` for launch-critical checks.
 - `shopify:sync-customer-metafields` requires Admin API `read_customers` or `write_customers` scope; Customer Account `customer_*` scopes are not sufficient for Admin `customers` queries.
 - Webhooks are verified with HMAC and dispatched to a sync queue (Phase 1).
 

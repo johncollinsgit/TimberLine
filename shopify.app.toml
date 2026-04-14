@@ -1,7 +1,7 @@
 client_id = "197d01d6597c938c96b3b35fae6a087c"
 name = "Modern Forestry Backstage"
 handle = "modernforestrybackstage"
-application_url = "https://backstage.theforestrystudio.com/shopify/app"
+application_url = "https://app.grovebud.com/shopify/app"
 embedded = true
 
 [build]
@@ -12,15 +12,15 @@ dev_store_url = "modernforestry.myshopify.com"
 api_version = "2026-01"
 
 [access_scopes]
-scopes = "read_products,read_orders,read_all_orders,read_reports,read_analytics,read_pixels,write_pixels,read_customer_events"
+scopes = "read_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_discounts,write_discounts,read_webhooks,write_webhooks,read_pixels,write_pixels,read_customer_events"
 
 [auth]
 redirect_urls = [
-  "https://backstage.theforestrystudio.com/shopify/callback/retail",
-  "https://backstage.theforestrystudio.com/shopify/callback/wholesale"
+  "https://app.grovebud.com/shopify/callback/retail",
+  "https://app.grovebud.com/shopify/callback/wholesale"
 ]
 
 [app_proxy]
-url = "https://backstage.theforestrystudio.com/shopify/marketing/v1"
+url = "https://app.grovebud.com/shopify/marketing/v1"
 subpath = "forestry"
 prefix = "apps"

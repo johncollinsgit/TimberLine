@@ -74,6 +74,16 @@ class AuthDoctorGoogle extends Command
             $this->errors[] = 'services.google.redirect is empty.';
         } elseif (filter_var($redirect, FILTER_VALIDATE_URL) === false) {
             $this->errors[] = 'services.google.redirect is not a valid URL.';
+        } else {
+            $expectedRedirect = $this->expectedCanonicalGoogleRedirect();
+            if ($expectedRedirect !== null) {
+                $actualHost = $this->normalizeHost((string) parse_url($redirect, PHP_URL_HOST));
+                $expectedHost = $this->normalizeHost((string) parse_url($expectedRedirect, PHP_URL_HOST));
+
+                if ($actualHost !== null && $expectedHost !== null && ! hash_equals($actualHost, $expectedHost)) {
+                    $this->warnings[] = 'services.google.redirect host does not match canonical landlord host (expected '.$expectedHost.', got '.$actualHost.').';
+                }
+            }
         }
 
         if ($clientId !== '' && $gbpClientId !== '' && hash_equals($clientId, $gbpClientId)) {
@@ -291,5 +301,26 @@ class AuthDoctorGoogle extends Command
 
         return $sanitized;
     }
-}
 
+    private function expectedCanonicalGoogleRedirect(): ?string
+    {
+        $scheme = strtolower(trim((string) config('tenancy.domains.canonical.scheme', 'https')));
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            $scheme = 'https';
+        }
+
+        $host = $this->normalizeHost((string) config('tenancy.landlord.primary_host', ''));
+        if ($host === null) {
+            $host = $this->normalizeHost((string) config('tenancy.domains.canonical.landlord_host', ''));
+        }
+
+        return $host !== null ? $scheme.'://'.$host.'/auth/google/callback' : null;
+    }
+
+    private function normalizeHost(string $host): ?string
+    {
+        $normalized = strtolower(trim($host));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+}

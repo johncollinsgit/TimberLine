@@ -179,3 +179,37 @@ it('moves order into pouring when any scent status enters active flow', function
         OrderLine::query()->where('order_id', $order->id)->first()?->pour_status
     )->toBe('laid_out');
 });
+
+it('accepts configured legacy landlord absolute return_to host during dual-domain transition', function (): void {
+    config()->set('app.url', 'https://app.grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+    config()->set('tenancy.landlord.hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
+    config()->set('tenancy.auth.flagship_hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
+
+    $order = Order::factory()->create([
+        'status' => 'submitted_to_pouring',
+        'order_type' => 'event',
+    ]);
+
+    Livewire::withQueryParams([
+        'return_to' => 'https://app.forestrybackstage.com/retail/plan?queue=retail',
+    ])->test(OrderDetail::class, ['order' => $order])
+        ->assertSet('returnTo', 'https://app.forestrybackstage.com/retail/plan?queue=retail');
+});
+
+it('rejects unknown absolute return_to host', function (): void {
+    config()->set('app.url', 'https://app.grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+    config()->set('tenancy.landlord.hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
+    config()->set('tenancy.auth.flagship_hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
+
+    $order = Order::factory()->create([
+        'status' => 'submitted_to_pouring',
+        'order_type' => 'event',
+    ]);
+
+    Livewire::withQueryParams([
+        'return_to' => 'https://unknown.example/retail/plan?queue=retail',
+    ])->test(OrderDetail::class, ['order' => $order])
+        ->assertSet('returnTo', null);
+});

@@ -201,17 +201,92 @@ class PreAuthTenantContextResolver
 
     protected function subdomainToken(string $host): ?string
     {
-        $parts = array_values(array_filter(explode('.', $host), static fn (string $part): bool => $part !== ''));
-        if (count($parts) < 3) {
+        $baseDomain = $this->matchingTenantBaseDomain($host);
+        if ($baseDomain === null || $host === $baseDomain) {
             return null;
         }
 
-        $token = $this->normalizeToken($parts[0]);
-        if ($token === null || in_array($token, ['www', 'backstage', 'app', 'admin'], true)) {
+        $suffix = '.'.$baseDomain;
+        if (! str_ends_with($host, $suffix)) {
+            return null;
+        }
+
+        $prefix = substr($host, 0, -strlen($suffix));
+        $prefix = strtolower(trim((string) $prefix, '.'));
+        if ($prefix === '' || str_contains($prefix, '.')) {
+            return null;
+        }
+
+        $token = $this->normalizeToken($prefix);
+        if ($token === null || in_array($token, ['www', 'backstage', 'app', 'admin', 'landlord'], true)) {
             return null;
         }
 
         return $token;
+    }
+
+    protected function matchingTenantBaseDomain(string $host): ?string
+    {
+        $candidates = $this->tenantBaseDomains();
+        usort($candidates, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === '') {
+                continue;
+            }
+
+            if ($host === $candidate || str_ends_with($host, '.'.$candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function tenantBaseDomains(): array
+    {
+        $configured = config('tenancy.domains.tenant_base_domains', config('tenancy.domains.base_domains', []));
+        $domains = [];
+
+        if (is_array($configured)) {
+            foreach ($configured as $candidate) {
+                $normalized = $this->normalizeHost((string) $candidate);
+                if ($normalized !== null) {
+                    $domains[] = $normalized;
+                }
+            }
+        }
+
+        $appBaseDomain = $this->baseDomainFromHost($this->appHost());
+        if ($appBaseDomain !== null) {
+            $domains[] = $appBaseDomain;
+        }
+
+        return array_values(array_unique($domains));
+    }
+
+    protected function baseDomainFromHost(?string $host): ?string
+    {
+        $normalized = $this->normalizeHost($host);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $parts = array_values(array_filter(explode('.', $normalized), static fn (string $part): bool => $part !== ''));
+        if (count($parts) <= 1) {
+            return $normalized;
+        }
+
+        if (count($parts) > 2 && in_array($parts[0], ['app', 'backstage', 'landlord', 'admin'], true)) {
+            array_shift($parts);
+        }
+
+        $baseDomain = implode('.', $parts);
+
+        return $baseDomain !== '' ? $baseDomain : null;
     }
 
     protected function normalizeHost(?string $value): ?string
@@ -222,7 +297,10 @@ class PreAuthTenantContextResolver
         }
 
         $host = preg_replace('#^https?://#', '', $host);
+        $host = explode('/', (string) $host)[0] ?? '';
+        $host = explode(':', (string) $host)[0] ?? '';
         $host = rtrim((string) $host, '/');
+        $host = trim((string) $host, '.');
 
         return $host !== '' ? $host : null;
     }

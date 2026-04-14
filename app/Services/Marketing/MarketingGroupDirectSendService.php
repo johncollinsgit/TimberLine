@@ -290,7 +290,13 @@ class MarketingGroupDirectSendService
         }
 
         try {
-            return route('marketing.webhooks.twilio-status');
+            $path = route('marketing.webhooks.twilio-status', [], false);
+            $canonical = app(\App\Support\Tenancy\TenantHostBuilder::class)
+                ->canonicalLandlordUrlForPath($path);
+
+            return is_string($canonical) && $canonical !== ''
+                ? $canonical
+                : route('marketing.webhooks.twilio-status');
         } catch (\Throwable) {
             return null;
         }

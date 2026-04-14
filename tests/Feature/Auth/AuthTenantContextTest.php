@@ -5,9 +5,12 @@ use Illuminate\Support\Facades\Log;
 
 beforeEach(function (): void {
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
+    config()->set('tenancy.domains.tenant_base_domains', ['grovebud.com', 'forestrybackstage.com']);
     config()->set('tenancy.auth.flagship_hosts', [
-        'backstage.theforestrystudio.com',
-        'theforestrystudio.com',
+        'app.grovebud.com',
+        'grovebud.com',
+        'app.forestrybackstage.com',
+        'forestrybackstage.com',
     ]);
     config()->set('tenancy.auth.host_map', []);
 });
@@ -18,7 +21,7 @@ test('tenant resolves from subdomain host on guest login route', function (): vo
         'slug' => 'acme',
     ]);
 
-    $response = $this->get('http://acme.backstage.local/login');
+    $response = $this->get('http://acme.grovebud.com/login');
 
     $response->assertOk();
     $response->assertViewHas('authTenantContext', function (array $context): bool {
@@ -48,7 +51,7 @@ test('flagship host resolves modern forestry flagship presentation path', functi
         'slug' => 'modern-forestry',
     ]);
 
-    $response = $this->get('http://backstage.theforestrystudio.com/login');
+    $response = $this->get('http://forestrybackstage.com/login');
 
     $response->assertOk();
     $response->assertViewHas('authTenantContext', function (array $context): bool {
@@ -69,7 +72,7 @@ test('non flagship tenant gets safe generic auth presentation', function (): voi
         'slug' => 'acme',
     ]);
 
-    $response = $this->get('http://acme.backstage.local/login');
+    $response = $this->get('http://acme.grovebud.com/login');
 
     $response->assertOk();
     $response->assertSee('Acme Candle Co', false);
@@ -99,7 +102,7 @@ test('guest auth submit path logs tenant resolution diagnostics', function (): v
                 && ($context['classification'] ?? null) === 'generic';
         });
 
-    $this->post('http://acme.backstage.local/login', [
+    $this->post('http://acme.grovebud.com/login', [
             'email' => 'nobody@example.com',
             'password' => 'not-the-right-password',
         ])
@@ -118,21 +121,29 @@ test('google redirect route receives auth tenant context middleware', function (
     config()->set('services.google.client_secret', '');
     config()->set('services.google.redirect', '');
 
-    Log::shouldReceive('debug')
-        ->once()
+    Log::spy();
+
+    $response = $this->get('http://app.forestrybackstage.com/auth/google/redirect');
+
+    $response->assertRedirect();
+
+    $location = (string) ($response->headers->get('Location') ?? '');
+    expect(parse_url($location, PHP_URL_HOST))->toBe('app.forestrybackstage.com')
+        ->and(parse_url($location, PHP_URL_PATH))->toBe('/login');
+
+    Log::shouldHaveReceived('debug')
         ->withArgs(function (string $message, array $context): bool {
             return $message === 'auth.tenant_context.resolved'
                 && ($context['route_name'] ?? null) === 'auth.google.redirect'
-                && ($context['classification'] ?? null) === 'flagship';
-        });
-    Log::shouldReceive('warning')
-        ->once()
+                && ($context['host'] ?? null) === 'app.forestrybackstage.com';
+        })
+        ->once();
+
+    Log::shouldHaveReceived('warning')
         ->withArgs(function (string $message, array $context): bool {
             return $message === 'auth.google.oauth.preflight_failed'
                 && ($context['phase'] ?? null) === 'redirect';
-        });
-
-    $this->get('http://backstage.theforestrystudio.com/auth/google/redirect')
-        ->assertRedirect(route('login'));
+        })
+        ->once();
 
 });

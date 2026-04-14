@@ -12,7 +12,7 @@ use App\Services\Tenancy\TenantCommercialExperienceService;
 beforeEach(function (): void {
     $this->withoutVite();
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     config()->set('app.url', 'https://'.$landlordHost);
     config()->set('tenancy.landlord.primary_host', $landlordHost);
@@ -117,7 +117,7 @@ test('checkout completion webhook can fulfill local plan and addons idempotently
 
 test('landlord reconcile endpoint is gated and replays fulfillment safely', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
 
@@ -231,7 +231,7 @@ test('subscription deleted webhook downgrades stripe-fulfilled access and keeps 
     $signature = stripeSignatureHeader($payload, (string) config('services.stripe.webhook_secret'));
 
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     $this->call('POST', "http://{$landlordHost}/webhooks/stripe/events", [], [], [], [
         'CONTENT_TYPE' => 'application/json',

@@ -380,12 +380,14 @@ class StripeHostedBillingService
             'billing' => $modeToken,
         ], false);
 
-        $scheme = strtolower(trim((string) parse_url((string) config('app.url', ''), PHP_URL_SCHEME)));
-        $scheme = $scheme !== '' ? $scheme : 'https';
+        $scheme = $this->hostBuilder->canonicalScheme();
 
         if ($host === null) {
-            $defaultHost = trim((string) parse_url((string) config('app.url', ''), PHP_URL_HOST));
-            $defaultHost = $defaultHost !== '' ? $defaultHost : trim((string) config('tenancy.landlord.primary_host', ''));
+            $defaultHost = $this->hostBuilder->canonicalLandlordHost();
+            if ($defaultHost === null) {
+                $defaultHost = trim((string) parse_url((string) config('app.url', ''), PHP_URL_HOST));
+                $defaultHost = $defaultHost !== '' ? $defaultHost : trim((string) config('tenancy.landlord.primary_host', ''));
+            }
             if ($defaultHost !== '') {
                 return $scheme.'://'.$defaultHost.$path;
             }

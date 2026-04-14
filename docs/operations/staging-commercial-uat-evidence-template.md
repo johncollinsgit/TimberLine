@@ -5,7 +5,8 @@ Use one copy of this template per tenant permutation run.
 ## Run Metadata
 - Operator: `modernforestryteam@gmail.com`
 - Date (YYYY-MM-DD): `2026-03-29`
-- Environment: `https://app.forestrybackstage.com`
+- Environment (canonical): `https://app.grovebud.com`
+- Legacy compatibility environment (transition-only): `https://app.forestrybackstage.com`
 - Tenant slug: `modern-forestry`
 - Tenant name: `Modern Forestry`
 - Evidence artifact directory:

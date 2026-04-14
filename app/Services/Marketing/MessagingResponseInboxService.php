@@ -8,6 +8,7 @@ use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
 use App\Models\User;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Validator;
@@ -22,7 +23,8 @@ class MessagingResponseInboxService
         protected MessagingEmailReplyAddressService $replyAddressService,
         protected TwilioSmsService $twilioSmsService,
         protected SendGridEmailService $sendGridEmailService,
-        protected MarketingIdentityNormalizer $identityNormalizer
+        protected MarketingIdentityNormalizer $identityNormalizer,
+        protected TenantHostBuilder $hostBuilder,
     ) {
     }
 
@@ -241,7 +243,7 @@ class MessagingResponseInboxService
 
         $result = $this->twilioSmsService->sendSms((string) $conversation->phone, $body, [
             'sender_key' => $this->nullableString(data_get($conversation->source_context, 'sender_key')),
-            'status_callback_url' => (string) config('marketing.twilio.status_callback_url'),
+            'status_callback_url' => $this->statusCallbackUrl(),
         ]);
 
         $success = (bool) ($result['success'] ?? false);
@@ -521,5 +523,24 @@ class MessagingResponseInboxService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function statusCallbackUrl(): ?string
+    {
+        $configured = trim((string) config('marketing.twilio.status_callback_url', ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        try {
+            $path = route('marketing.webhooks.twilio-status', [], false);
+            $canonical = $this->hostBuilder->canonicalLandlordUrlForPath($path);
+
+            return is_string($canonical) && $canonical !== ''
+                ? $canonical
+                : route('marketing.webhooks.twilio-status');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

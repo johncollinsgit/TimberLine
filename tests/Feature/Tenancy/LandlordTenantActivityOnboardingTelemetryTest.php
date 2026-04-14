@@ -10,7 +10,7 @@ use Carbon\CarbonImmutable;
 
 beforeEach(function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     config()->set('tenancy.landlord.primary_host', $landlordHost);
     config()->set('tenancy.landlord.hosts', [$landlordHost]);
@@ -20,7 +20,7 @@ beforeEach(function (): void {
 
 test('tenant activity tab includes onboarding journey telemetry with deep link when blueprint id exists', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Acme Candle Co',
@@ -63,7 +63,7 @@ test('tenant activity tab includes onboarding journey telemetry with deep link w
 
 test('tenant activity tab includes unlinked onboarding telemetry without a broken deep link', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Unlinked Tenant',
@@ -95,7 +95,7 @@ test('tenant activity tab includes unlinked onboarding telemetry without a broke
 
 test('tenant activity chronology remains unified across onboarding and operator actions', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.forestrybackstage.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Chronology Tenant',

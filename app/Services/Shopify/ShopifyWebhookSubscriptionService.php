@@ -3,6 +3,7 @@
 namespace App\Services\Shopify;
 
 use App\Services\Marketing\IntegrationHealthEventRecorder;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -12,7 +13,8 @@ use RuntimeException;
 class ShopifyWebhookSubscriptionService
 {
     public function __construct(
-        protected IntegrationHealthEventRecorder $healthEventRecorder
+        protected IntegrationHealthEventRecorder $healthEventRecorder,
+        protected TenantHostBuilder $hostBuilder,
     ) {
     }
 
@@ -479,6 +481,13 @@ class ShopifyWebhookSubscriptionService
                 $relativePath = route($value, [], false);
             } catch (\Throwable) {
                 return null;
+            }
+        }
+
+        if (is_string($relativePath) && $relativePath !== '') {
+            $canonicalCallback = $this->hostBuilder->canonicalLandlordUrlForPath($relativePath);
+            if (is_string($canonicalCallback) && $canonicalCallback !== '') {
+                return $this->normalizeAddress($canonicalCallback);
             }
         }
 

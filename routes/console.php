@@ -43,7 +43,9 @@ Schedule::command('queue:work database --queue=default --stop-when-empty --tries
     ->runInBackground();
 
 // Shopify webhook subscription drift audit (non-destructive; repair is manual).
-Schedule::command('shopify:webhooks:verify')
+Schedule::command('shopify:webhooks:verify', [
+    '--required-only' => true,
+])
     ->dailyAt('01:35')
     ->withoutOverlapping(60)
     ->runInBackground();

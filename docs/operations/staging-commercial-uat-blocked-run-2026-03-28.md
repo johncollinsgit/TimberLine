@@ -2,6 +2,7 @@
 
 Status: Blocked before guarded step 1.
 Run type: Repository-side operator-enablement pass (no real staging guarded sequence executed).
+Host note: This is a historical legacy-host record (`app.forestrybackstage.com`) kept for audit context; canonical migration direction is `app.grovebud.com` with legacy compatibility during transition.
 
 ## Scope Checked
 - Guarded landlord Stripe sequence path:

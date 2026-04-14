@@ -74,7 +74,7 @@ test("dynamic customer action executes navigation with embedded context", () => 
 
   globalThis.window = {
     location: {
-      origin: "https://app.forestrybackstage.com",
+      origin: "https://app.grovebud.com",
       search: "?shop=demo.myshopify.com&host=host-token&embedded=1",
       assign: (url) => {
         destination.value = String(url || "");
@@ -92,7 +92,7 @@ test("dynamic customer action executes navigation with embedded context", () => 
     assert.ok(action);
     action.execute();
 
-    const url = new URL(destination.value, "https://app.forestrybackstage.com");
+    const url = new URL(destination.value, "https://app.grovebud.com");
     assert.equal(url.pathname, "/shopify/app/customers/manage/123");
     assert.equal(url.searchParams.get("shop"), "demo.myshopify.com");
     assert.equal(url.searchParams.get("host"), "host-token");

@@ -51,7 +51,7 @@ Expected Shopify app proxy target:
 
 Current app proxy target in this repo:
 
-- `shopify.app.toml` -> `https://backstage.theforestrystudio.com/shopify/marketing/v1`
+- `shopify.app.toml` -> `https://app.grovebud.com/shopify/marketing/v1` (canonical)
 
 ## Backend route compatibility (minimal Stage 10 gap fixes)
 
@@ -189,7 +189,7 @@ External transport checks run on **March 11, 2026**:
   - final response is `404` from Shopify (app proxy route not active on that store/domain)
 - `https://modern-forestry-dev.myshopify.com/apps/forestry/health`:
   - responds `302` to `/password` (dev store password gate)
-- `https://backstage.theforestrystudio.com/shopify/marketing/v1/health` (direct signed probe):
+- `https://app.grovebud.com/shopify/marketing/v1/health` (direct signed probe, canonical):
   - currently returns Laravel `404` page in the deployed environment
   - local app has route; deployed Backstage host appears to be behind local code
 

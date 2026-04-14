@@ -7,6 +7,71 @@ use Illuminate\Support\Facades\Schema;
 
 class ShopifyStores
 {
+    /**
+     * @return array<int,string>
+     */
+    public static function activeStoreKeys(): array
+    {
+        $configured = self::configuredStoreKeys();
+        if ($configured === []) {
+            return [];
+        }
+
+        $requested = self::parseStoreKeyList(config('services.shopify.active_store_keys'));
+        if ($requested === []) {
+            return $configured;
+        }
+
+        $lookup = array_fill_keys($configured, true);
+        $active = array_values(array_filter(
+            $requested,
+            static fn (string $key): bool => isset($lookup[$key])
+        ));
+
+        return $active !== [] ? array_values(array_unique($active)) : $configured;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    public static function requiredStoreKeys(): array
+    {
+        $active = self::activeStoreKeys();
+        if ($active === []) {
+            return [];
+        }
+
+        $requested = self::parseStoreKeyList(config('services.shopify.required_store_keys'));
+        $lookup = array_fill_keys($active, true);
+
+        if ($requested !== []) {
+            $required = array_values(array_filter(
+                $requested,
+                static fn (string $key): bool => isset($lookup[$key])
+            ));
+
+            if ($required !== []) {
+                return array_values(array_unique($required));
+            }
+        }
+
+        if (in_array('retail', $active, true)) {
+            return ['retail'];
+        }
+
+        return [$active[0]];
+    }
+
+    public static function isRequiredStoreKey(?string $storeKey): bool
+    {
+        $normalized = self::normalizeStoreKeyValue($storeKey);
+        if ($normalized === null) {
+            return false;
+        }
+
+        return in_array($normalized, self::requiredStoreKeys(), true);
+    }
+
     public static function all(bool $allowMissingToken = false): array
     {
         [$stores] = self::resolvedStoresAndIssues(null, $allowMissingToken);
@@ -195,12 +260,12 @@ class ShopifyStores
     protected static function requestedStoreKeys(?string $storeKey, array $stores): array
     {
         if ($storeKey === null) {
-            return array_keys($stores);
+            return self::defaultRequestedStoreKeys($stores);
         }
 
         $normalized = strtolower(trim($storeKey));
         if ($normalized === '' || $normalized === 'all') {
-            return array_keys($stores);
+            return self::defaultRequestedStoreKeys($stores);
         }
 
         if (in_array($normalized, ['shopify_retail', 'retail'], true)) {
@@ -212,6 +277,26 @@ class ShopifyStores
         }
 
         return [];
+    }
+
+    /**
+     * @param  array<string,array<string,mixed>>  $stores
+     * @return array<int,string>
+     */
+    protected static function defaultRequestedStoreKeys(array $stores): array
+    {
+        $available = array_keys($stores);
+        if ($available === []) {
+            return [];
+        }
+
+        $lookup = array_fill_keys($available, true);
+        $active = array_values(array_filter(
+            self::activeStoreKeys(),
+            static fn (string $key): bool => isset($lookup[$key])
+        ));
+
+        return $active !== [] ? array_values(array_unique($active)) : $available;
     }
 
     /**
@@ -234,6 +319,52 @@ class ShopifyStores
     protected static function allowLegacyEnvTokenFallback(): bool
     {
         return (bool) config('services.shopify.allow_env_token_fallback', false);
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected static function configuredStoreKeys(): array
+    {
+        return array_keys(self::stores());
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected static function parseStoreKeyList(mixed $value): array
+    {
+        $items = is_array($value) ? $value : explode(',', (string) $value);
+        $keys = [];
+
+        foreach ($items as $item) {
+            $normalized = self::normalizeStoreKeyValue($item);
+            if ($normalized === null) {
+                continue;
+            }
+
+            $keys[] = $normalized;
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    protected static function normalizeStoreKeyValue(mixed $value): ?string
+    {
+        if (! is_scalar($value) && $value !== null) {
+            return null;
+        }
+
+        $normalized = strtolower(trim((string) $value));
+        if ($normalized === '' || $normalized === 'all') {
+            return null;
+        }
+
+        return match ($normalized) {
+            'shopify_retail' => 'retail',
+            'shopify_wholesale' => 'wholesale',
+            default => $normalized,
+        };
     }
 
     protected static function normalizeDomain(string $shopDomain): string

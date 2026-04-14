@@ -399,7 +399,7 @@ class MarketingPagesController extends Controller
             'sms_enabled' => (bool) config('marketing.sms.enabled'),
             'twilio_enabled' => (bool) config('marketing.twilio.enabled'),
             'verify_signature' => (bool) config('marketing.twilio.verify_signature'),
-            'status_callback_url' => trim((string) config('marketing.twilio.status_callback_url', '')) ?: route('marketing.webhooks.twilio-status'),
+            'status_callback_url' => $this->resolvedTwilioStatusCallbackUrl(),
             'test_number' => trim((string) config('marketing.sms.test_number', '')) ?: null,
             'senders' => $senders,
             'default_sender' => $defaultSender,
@@ -432,6 +432,26 @@ class MarketingPagesController extends Controller
     protected function bucketCount(array $summary, string $bucketKey): int
     {
         return (int) data_get($summary, $bucketKey . '.profile_count', 0);
+    }
+
+    protected function resolvedTwilioStatusCallbackUrl(): string
+    {
+        $configured = trim((string) config('marketing.twilio.status_callback_url', ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        try {
+            $path = route('marketing.webhooks.twilio-status', [], false);
+            $canonical = app(\App\Support\Tenancy\TenantHostBuilder::class)
+                ->canonicalLandlordUrlForPath($path);
+
+            return is_string($canonical) && $canonical !== ''
+                ? $canonical
+                : route('marketing.webhooks.twilio-status');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

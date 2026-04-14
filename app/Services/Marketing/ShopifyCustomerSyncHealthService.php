@@ -44,10 +44,12 @@ class ShopifyCustomerSyncHealthService
             ->get();
 
         if ($stores->isEmpty()) {
+            $requiredStoreKeys = ShopifyStores::requiredStoreKeys();
             return [
                 'generated_at' => now(),
                 'window_hours' => $windowHours,
                 'required_topics' => array_keys($this->webhookSubscriptionService->requiredTopicsWithCallbacks()),
+                'required_store_keys' => $requiredStoreKeys,
                 'signals' => $this->signalAvailability(),
                 'totals' => [
                     'stores' => 0,
@@ -55,6 +57,26 @@ class ShopifyCustomerSyncHealthService
                     'warning' => 0,
                     'failing' => 0,
                     'unknown' => 0,
+                    'required_stores' => 0,
+                    'required_healthy' => 0,
+                    'required_warning' => 0,
+                    'required_failing' => 0,
+                    'required_unknown' => 0,
+                    'optional_stores' => 0,
+                    'optional_healthy' => 0,
+                    'optional_warning' => 0,
+                    'optional_failing' => 0,
+                    'optional_unknown' => 0,
+                ],
+                'launch_gate' => [
+                    'status' => 'failing',
+                    'label' => 'Blocked',
+                    'hint' => 'No installed Shopify stores were found for the required launch path.',
+                    'required_total' => count($requiredStoreKeys),
+                    'required_healthy' => 0,
+                    'required_warning' => 0,
+                    'required_failing' => 0,
+                    'required_unknown' => 0,
                 ],
                 'stores' => [],
                 'recent_events' => [],
@@ -70,6 +92,8 @@ class ShopifyCustomerSyncHealthService
         $resolvedStoreContexts = collect(ShopifyStores::all(true))
             ->filter(fn (array $store): bool => $this->normalizeStoreKey($store['key'] ?? null) !== null)
             ->keyBy(fn (array $store): string => (string) $this->normalizeStoreKey($store['key'] ?? null));
+        $requiredStoreKeys = ShopifyStores::requiredStoreKeys();
+        $requiredStoreLookup = array_fill_keys($requiredStoreKeys, true);
 
         $lastWebhookByStore = $this->lastWebhookIngestionByStore($storeKeys);
         $persistedSignals = $this->persistedEventSignalsByStore($storeKeys, $windowStart);
@@ -133,6 +157,8 @@ class ShopifyCustomerSyncHealthService
             $rows[] = [
                 'store_key' => $storeKey,
                 'store_name' => $this->storeName($storeKey, $store->shop_domain),
+                'store_role' => isset($requiredStoreLookup[$storeKey]) ? 'required' : 'optional',
+                'is_required' => isset($requiredStoreLookup[$storeKey]),
                 'shop_domain' => (string) $store->shop_domain,
                 'tenant_id' => $store->tenant_id ? (int) $store->tenant_id : null,
                 'installed_at' => $store->installed_at,
@@ -157,6 +183,16 @@ class ShopifyCustomerSyncHealthService
             'warning' => 0,
             'failing' => 0,
             'unknown' => 0,
+            'required_stores' => 0,
+            'required_healthy' => 0,
+            'required_warning' => 0,
+            'required_failing' => 0,
+            'required_unknown' => 0,
+            'optional_stores' => 0,
+            'optional_healthy' => 0,
+            'optional_warning' => 0,
+            'optional_failing' => 0,
+            'optional_unknown' => 0,
         ];
 
         foreach ($rows as $row) {
@@ -166,14 +202,27 @@ class ShopifyCustomerSyncHealthService
             } else {
                 $totals['unknown']++;
             }
+
+            $isRequired = (bool) ($row['is_required'] ?? false);
+            $rolePrefix = $isRequired ? 'required' : 'optional';
+            $totals[$rolePrefix . '_stores']++;
+            if (in_array($status, ['healthy', 'warning', 'failing', 'unknown'], true)) {
+                $totals[$rolePrefix . '_' . $status]++;
+            } else {
+                $totals[$rolePrefix . '_unknown']++;
+            }
         }
+
+        $launchGate = $this->deriveLaunchGate($rows, $requiredStoreKeys);
 
         return [
             'generated_at' => now(),
             'window_hours' => $windowHours,
             'required_topics' => array_keys($this->webhookSubscriptionService->requiredTopicsWithCallbacks()),
+            'required_store_keys' => $requiredStoreKeys,
             'signals' => $this->signalAvailability(),
             'totals' => $totals,
+            'launch_gate' => $launchGate,
             'stores' => $rows,
             'recent_events' => $this->recentEventsFeed($storeKeys, $windowStart),
         ];
@@ -740,6 +789,74 @@ class ShopifyCustomerSyncHealthService
             'failing' => 'Failing',
             default => 'Unknown',
         };
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $rows
+     * @param  array<int,string>  $requiredStoreKeys
+     * @return array{
+     *   status:string,
+     *   label:string,
+     *   hint:string,
+     *   required_total:int,
+     *   required_healthy:int,
+     *   required_warning:int,
+     *   required_failing:int,
+     *   required_unknown:int
+     * }
+     */
+    protected function deriveLaunchGate(array $rows, array $requiredStoreKeys): array
+    {
+        $requiredRows = collect($rows)
+            ->filter(fn (array $row): bool => (bool) ($row['is_required'] ?? false))
+            ->values();
+
+        $counts = [
+            'required_total' => count($requiredStoreKeys),
+            'required_healthy' => 0,
+            'required_warning' => 0,
+            'required_failing' => 0,
+            'required_unknown' => 0,
+        ];
+
+        foreach ($requiredRows as $row) {
+            $status = (string) ($row['status'] ?? 'unknown');
+            if (in_array($status, ['healthy', 'warning', 'failing', 'unknown'], true)) {
+                $counts['required_' . $status]++;
+            } else {
+                $counts['required_unknown']++;
+            }
+        }
+
+        if ($counts['required_total'] <= 0) {
+            return array_merge([
+                'status' => 'failing',
+                'label' => 'Blocked',
+                'hint' => 'No required Shopify stores are configured for launch gating.',
+            ], $counts);
+        }
+
+        if ($requiredRows->isEmpty()) {
+            return array_merge([
+                'status' => 'failing',
+                'label' => 'Blocked',
+                'hint' => 'Required Shopify stores are configured but no installed records were found.',
+            ], $counts);
+        }
+
+        if ($counts['required_failing'] > 0 || $counts['required_warning'] > 0 || $counts['required_unknown'] > 0) {
+            return array_merge([
+                'status' => 'failing',
+                'label' => 'Blocked',
+                'hint' => 'One or more required Shopify stores are not healthy. Resolve required-store auth/webhook drift before launch.',
+            ], $counts);
+        }
+
+        return array_merge([
+            'status' => 'healthy',
+            'label' => 'Ready',
+            'hint' => 'All required Shopify stores are healthy. Optional store drift does not block launch.',
+        ], $counts);
     }
 
     /**

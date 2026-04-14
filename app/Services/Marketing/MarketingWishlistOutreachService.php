@@ -138,7 +138,7 @@ class MarketingWishlistOutreachService
         }
 
         $result = $this->twilioSmsService->sendSms($phone, $messageBody, [
-            'status_callback_url' => url('/marketing/twilio/status'),
+            'status_callback_url' => $this->statusCallbackUrl(),
         ]);
 
         $success = (bool) ($result['success'] ?? false);
@@ -201,6 +201,26 @@ class MarketingWishlistOutreachService
         return $offerType === 'percent_off'
             ? rtrim(rtrim(number_format($offerValue, 2, '.', ''), '0'), '.') . '% off'
             : '$' . number_format($offerValue, 2) . ' off';
+    }
+
+    protected function statusCallbackUrl(): string
+    {
+        $configured = trim((string) config('marketing.twilio.status_callback_url', ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        try {
+            $path = route('marketing.webhooks.twilio-status', [], false);
+            $canonical = app(\App\Support\Tenancy\TenantHostBuilder::class)
+                ->canonicalLandlordUrlForPath($path);
+
+            return is_string($canonical) && $canonical !== ''
+                ? $canonical
+                : route('marketing.webhooks.twilio-status');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     protected function normalizedChannel(mixed $value): string

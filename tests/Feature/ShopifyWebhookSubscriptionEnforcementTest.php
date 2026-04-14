@@ -10,11 +10,18 @@ use Symfony\Component\Console\Command\Command as ConsoleCommand;
 
 beforeEach(function (): void {
     config()->set('app.url', 'https://backstage.test');
+    config()->set('tenancy.domains.canonical.scheme', 'https');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
     config()->set('services.shopify.api_version', '2026-01');
     config()->set('services.shopify.allow_env_token_fallback', false);
+    config()->set('services.shopify.active_store_keys', 'retail,wholesale');
+    config()->set('services.shopify.required_store_keys', 'retail');
     config()->set('services.shopify.stores.retail.shop', 'retail-test.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'retail-client');
     config()->set('services.shopify.stores.retail.client_secret', 'retail-secret');
+    config()->set('services.shopify.stores.wholesale.shop', 'wholesale-test.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-client');
+    config()->set('services.shopify.stores.wholesale.client_secret', 'wholesale-secret');
     config()->set('services.shopify.scopes', 'read_orders,read_products,read_customers,write_customers,read_webhooks,write_webhooks');
 
     ShopifyStore::query()->updateOrCreate(
@@ -26,6 +33,22 @@ beforeEach(function (): void {
             'installed_at' => now(),
         ]
     );
+});
+
+test('required webhook callbacks use canonical landlord host even when app url is stale', function (): void {
+    config()->set('app.url', 'https://app.forestrybackstage.com');
+    config()->set('tenancy.domains.canonical.scheme', 'https');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+
+    $callbacks = app(ShopifyWebhookSubscriptionService::class)->requiredTopicsWithCallbacks();
+
+    expect($callbacks)->not->toBeEmpty();
+
+    foreach ($callbacks as $topic => $callback) {
+        expect((string) $topic)->not->toBe('')
+            ->and(parse_url((string) $callback, PHP_URL_HOST))->toBe('app.grovebud.com')
+            ->and(parse_url((string) $callback, PHP_URL_SCHEME))->toBe('https');
+    }
 });
 
 test('oauth callback triggers required webhook registration for connected store', function (): void {
@@ -242,6 +265,161 @@ test('verify command handles shopify API failure safely and logs details', funct
         })
         ->atLeast()
         ->once();
+});
+
+test('verify command treats optional wholesale failures as non-blocking in all-store mode', function (): void {
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'shop_domain' => 'wholesale-test.myshopify.com',
+            'access_token' => 'wholesale-token',
+            'scopes' => 'read_orders,read_products,read_webhooks,write_webhooks',
+            'installed_at' => now(),
+        ]
+    );
+
+    $mock = Mockery::mock(ShopifyWebhookSubscriptionService::class);
+    $mock->shouldReceive('verifyStore')
+        ->twice()
+        ->andReturnUsing(function (array $store, bool $repair): array {
+            expect($repair)->toBeFalse();
+            $storeKey = (string) ($store['key'] ?? '');
+
+            if ($storeKey === 'wholesale') {
+                return [
+                    'store_key' => 'wholesale',
+                    'status' => 'failed',
+                    'required_count' => 2,
+                    'counts' => [
+                        'ok' => 0,
+                        'missing' => 0,
+                        'mismatch' => 0,
+                        'created' => 0,
+                        'repaired' => 0,
+                        'failed' => 1,
+                        'duplicates' => 0,
+                    ],
+                    'topics' => [],
+                ];
+            }
+
+            return [
+                'store_key' => 'retail',
+                'status' => 'ok',
+                'required_count' => 2,
+                'counts' => [
+                    'ok' => 2,
+                    'missing' => 0,
+                    'mismatch' => 0,
+                    'created' => 0,
+                    'repaired' => 0,
+                    'failed' => 0,
+                    'duplicates' => 0,
+                ],
+                'topics' => [],
+            ];
+        });
+    app()->instance(ShopifyWebhookSubscriptionService::class, $mock);
+
+    $this->artisan('shopify:webhooks:verify')
+        ->expectsOutputToContain('store=retail')
+        ->expectsOutputToContain('store_role=required')
+        ->expectsOutputToContain('store=wholesale')
+        ->expectsOutputToContain('store_role=optional')
+        ->expectsOutputToContain('summary_required_failed_stores=0')
+        ->expectsOutputToContain('summary_optional_failed_stores=1')
+        ->expectsOutputToContain('Optional Shopify stores have webhook/auth drift. Launch gating remains based on required stores only.')
+        ->assertExitCode(ConsoleCommand::SUCCESS);
+});
+
+test('verify command required-only mode checks only required stores', function (): void {
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'shop_domain' => 'wholesale-test.myshopify.com',
+            'access_token' => 'wholesale-token',
+            'scopes' => 'read_orders,read_products,read_webhooks,write_webhooks',
+            'installed_at' => now(),
+        ]
+    );
+
+    $mock = Mockery::mock(ShopifyWebhookSubscriptionService::class);
+    $mock->shouldReceive('verifyStore')
+        ->once()
+        ->withArgs(function (array $store, bool $repair): bool {
+            return ($store['key'] ?? null) === 'retail' && $repair === false;
+        })
+        ->andReturn([
+            'store_key' => 'retail',
+            'status' => 'ok',
+            'required_count' => 2,
+            'counts' => [
+                'ok' => 2,
+                'missing' => 0,
+                'mismatch' => 0,
+                'created' => 0,
+                'repaired' => 0,
+                'failed' => 0,
+                'duplicates' => 0,
+            ],
+            'topics' => [],
+        ]);
+    app()->instance(ShopifyWebhookSubscriptionService::class, $mock);
+
+    $this->artisan('shopify:webhooks:verify --required-only')
+        ->expectsOutputToContain('summary_stores=1')
+        ->expectsOutputToContain('summary_required_stores=1')
+        ->expectsOutputToContain('summary_optional_stores=0')
+        ->assertExitCode(ConsoleCommand::SUCCESS);
+});
+
+test('verify command fails when required retail store is unresolved even if optional wholesale is healthy', function (): void {
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        [
+            'shop_domain' => 'retail-test.myshopify.com',
+            'access_token' => '',
+            'scopes' => 'read_orders,read_products,read_webhooks,write_webhooks',
+            'installed_at' => now(),
+        ]
+    );
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'shop_domain' => 'wholesale-test.myshopify.com',
+            'access_token' => 'wholesale-token',
+            'scopes' => 'read_orders,read_products,read_webhooks,write_webhooks',
+            'installed_at' => now(),
+        ]
+    );
+
+    $mock = Mockery::mock(ShopifyWebhookSubscriptionService::class);
+    $mock->shouldReceive('verifyStore')
+        ->once()
+        ->withArgs(function (array $store, bool $repair): bool {
+            return ($store['key'] ?? null) === 'wholesale' && $repair === false;
+        })
+        ->andReturn([
+            'store_key' => 'wholesale',
+            'status' => 'ok',
+            'required_count' => 2,
+            'counts' => [
+                'ok' => 2,
+                'missing' => 0,
+                'mismatch' => 0,
+                'created' => 0,
+                'repaired' => 0,
+                'failed' => 0,
+                'duplicates' => 0,
+            ],
+            'topics' => [],
+        ]);
+    app()->instance(ShopifyWebhookSubscriptionService::class, $mock);
+
+    $this->artisan('shopify:webhooks:verify')
+        ->expectsOutputToContain('required_store_issue=retail store token missing. Run /shopify/reinstall/retail.')
+        ->expectsOutputToContain('summary_required_resolution_issues=1')
+        ->assertExitCode(ConsoleCommand::FAILURE);
 });
 
 /**

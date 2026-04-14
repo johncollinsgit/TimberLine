@@ -11,9 +11,10 @@ use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
     $this->withoutVite();
-    config()->set('app.url', 'https://app.backstage.local');
-    config()->set('tenancy.landlord.primary_host', 'app.backstage.local');
-    config()->set('tenancy.auth.flagship_hosts', ['app.backstage.local']);
+    config()->set('app.url', 'https://app.grovebud.com');
+    config()->set('tenancy.domains.canonical.base_domain', 'grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+    config()->set('tenancy.auth.flagship_hosts', ['app.grovebud.com']);
     config()->set('services.stripe.api_base', 'https://stripe.test');
 });
 
@@ -165,8 +166,8 @@ test('hosted checkout endpoint creates session and redirects with tenant-safe ur
                 ->and((string) ($data['line_items[1][price]'] ?? ''))->toBe('price_sms')
                 ->and((string) ($data['metadata[tenant_id]'] ?? ''))->toBe((string) $tenantId)
                 ->and((string) ($data['metadata[preferred_plan_key]'] ?? ''))->toBe('growth')
-                ->and((string) ($data['success_url'] ?? ''))->toContain('https://acme.backstage.local/start?billing=success&session_id={CHECKOUT_SESSION_ID}')
-                ->and((string) ($data['cancel_url'] ?? ''))->toBe('https://acme.backstage.local/start?billing=cancel')
+                ->and((string) ($data['success_url'] ?? ''))->toContain('https://acme.grovebud.com/start?billing=success&session_id={CHECKOUT_SESSION_ID}')
+                ->and((string) ($data['cancel_url'] ?? ''))->toBe('https://acme.grovebud.com/start?billing=cancel')
                 ->and(json_encode($data))->not->toContain('price_evil');
 
             return Http::response([
@@ -179,7 +180,7 @@ test('hosted checkout endpoint creates session and redirects with tenant-safe ur
     });
 
     $this->actingAs($user)
-        ->post('http://acme.backstage.local/billing/checkout', [
+        ->post('http://acme.grovebud.com/billing/checkout', [
             'price_id' => 'price_evil',
             'line_items' => [['price' => 'price_evil']],
         ])
@@ -220,7 +221,7 @@ test('billing portal endpoint creates session and redirects', function (): void 
         if (str_contains($request->url(), '/v1/billing_portal/sessions')) {
             $data = $request->data();
             expect((string) ($data['customer'] ?? ''))->toBe('cus_123')
-                ->and((string) ($data['return_url'] ?? ''))->toBe('https://acme.backstage.local/start?billing=return');
+                ->and((string) ($data['return_url'] ?? ''))->toBe('https://acme.grovebud.com/start?billing=return');
 
             return Http::response([
                 'id' => 'ps_123',
@@ -232,7 +233,7 @@ test('billing portal endpoint creates session and redirects', function (): void 
     });
 
     $this->actingAs($user)
-        ->post('http://acme.backstage.local/billing/portal')
+        ->post('http://acme.grovebud.com/billing/portal')
         ->assertRedirect($portalUrl);
 });
 

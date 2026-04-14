@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\Shopify\ShopifyOAuth;
 use App\Services\Shopify\ShopifyStores;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -24,7 +25,16 @@ class ShopifyAuth extends Command
 
         $state = Str::random(32);
         Cache::store('file')->put("shopify_oauth_state_{$config['key']}", $state, now()->addMinutes(15));
-        $redirectUri = route('shopify.callback', ['store' => $config['key']]);
+        $callbackPath = route('shopify.callback', ['store' => $config['key']], false);
+        $canonicalAppUrl = rtrim((string) config('app.url', ''), '/');
+        $redirectUri = $canonicalAppUrl !== ''
+            ? $canonicalAppUrl.$callbackPath
+            : app(TenantHostBuilder::class)->canonicalLandlordUrlForPath($callbackPath);
+        if (! is_string($redirectUri) || $redirectUri === '') {
+            $this->error('Canonical Shopify callback host is not configured.');
+
+            return self::FAILURE;
+        }
         $url = $oauth->buildAuthUrl($config, $redirectUri, $state);
 
         $this->line($url);

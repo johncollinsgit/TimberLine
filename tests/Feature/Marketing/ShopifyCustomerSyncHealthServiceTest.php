@@ -18,6 +18,8 @@ beforeEach(function (): void {
     config()->set('services.shopify.stores.wholesale.shop', 'wholesale-test.myshopify.com');
     config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-client');
     config()->set('services.shopify.stores.wholesale.client_secret', 'wholesale-secret');
+    config()->set('services.shopify.active_store_keys', 'retail,wholesale');
+    config()->set('services.shopify.required_store_keys', 'retail');
     config()->set('shopify_webhooks.required_topics', [
         'customers/create' => 'shopify.webhooks.customers.create',
         'customers/update' => 'shopify.webhooks.customers.update',
@@ -307,6 +309,161 @@ test('health report uses persisted error events to mark store failing', function
         ->and($store['status'])->toBe('failing')
         ->and((int) $store['open_error_events'])->toBeGreaterThan(0)
         ->and((int) $store['recent_webhook_ingestion_failures'])->toBe(1);
+});
+
+test('launch gate passes when required retail is healthy and optional wholesale is failing', function (): void {
+    ShopifyStore::query()->create([
+        'store_key' => 'retail',
+        'shop_domain' => 'retail-test.myshopify.com',
+        'access_token' => 'retail-token',
+        'installed_at' => now(),
+    ]);
+    ShopifyStore::query()->create([
+        'store_key' => 'wholesale',
+        'shop_domain' => 'wholesale-test.myshopify.com',
+        'access_token' => '',
+        'installed_at' => now(),
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'provider' => 'shopify',
+        'integration' => 'shopify_customer',
+        'store_key' => 'retail',
+        'external_customer_id' => '2001',
+        'raw_metafields' => [
+            'shopify_customer_webhook' => [
+                'topic' => 'customers/update',
+                'received_at' => now()->subMinutes(30)->toIso8601String(),
+            ],
+        ],
+        'synced_at' => now(),
+    ]);
+
+    bindShopifyWebhookVerifier([
+        'retail' => [
+            'status' => 'ok',
+            'required_count' => 2,
+            'counts' => [
+                'ok' => 2,
+                'missing' => 0,
+                'mismatch' => 0,
+                'created' => 0,
+                'repaired' => 0,
+                'failed' => 0,
+                'duplicates' => 0,
+            ],
+            'drift_count' => 0,
+            'topics' => [],
+        ],
+        'wholesale' => [
+            'status' => 'failed',
+            'error' => 'store_credentials_missing',
+            'required_count' => 2,
+            'counts' => [
+                'ok' => 0,
+                'missing' => 0,
+                'mismatch' => 0,
+                'created' => 0,
+                'repaired' => 0,
+                'failed' => 1,
+                'duplicates' => 0,
+            ],
+            'drift_count' => 0,
+            'topics' => [],
+        ],
+    ]);
+
+    $report = app(ShopifyCustomerSyncHealthService::class)->report(refreshWebhooks: true, lookbackHours: 72);
+    $retail = collect($report['stores'])->firstWhere('store_key', 'retail');
+    $wholesale = collect($report['stores'])->firstWhere('store_key', 'wholesale');
+    $launchGate = (array) ($report['launch_gate'] ?? []);
+
+    expect($retail)->not->toBeNull()
+        ->and($retail['is_required'])->toBeTrue()
+        ->and($retail['status'])->toBe('healthy');
+
+    expect($wholesale)->not->toBeNull()
+        ->and($wholesale['is_required'])->toBeFalse()
+        ->and($wholesale['status'])->toBe('failing');
+
+    expect($launchGate['status'] ?? null)->toBe('healthy')
+        ->and((int) ($launchGate['required_healthy'] ?? -1))->toBe(1)
+        ->and((int) ($launchGate['required_failing'] ?? -1))->toBe(0)
+        ->and((int) (($report['totals']['optional_failing'] ?? -1)))->toBe(1);
+});
+
+test('launch gate fails when required retail auth is unhealthy', function (): void {
+    ShopifyStore::query()->create([
+        'store_key' => 'retail',
+        'shop_domain' => 'retail-test.myshopify.com',
+        'access_token' => '',
+        'installed_at' => now(),
+    ]);
+    ShopifyStore::query()->create([
+        'store_key' => 'wholesale',
+        'shop_domain' => 'wholesale-test.myshopify.com',
+        'access_token' => 'wholesale-token',
+        'installed_at' => now(),
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'provider' => 'shopify',
+        'integration' => 'shopify_customer',
+        'store_key' => 'wholesale',
+        'external_customer_id' => '2002',
+        'raw_metafields' => [
+            'shopify_customer_webhook' => [
+                'topic' => 'customers/create',
+                'received_at' => now()->subMinutes(20)->toIso8601String(),
+            ],
+        ],
+        'synced_at' => now(),
+    ]);
+
+    bindShopifyWebhookVerifier([
+        'retail' => [
+            'status' => 'failed',
+            'error' => 'store_credentials_missing',
+            'required_count' => 2,
+            'counts' => [
+                'ok' => 0,
+                'missing' => 0,
+                'mismatch' => 0,
+                'created' => 0,
+                'repaired' => 0,
+                'failed' => 1,
+                'duplicates' => 0,
+            ],
+            'drift_count' => 0,
+            'topics' => [],
+        ],
+        'wholesale' => [
+            'status' => 'ok',
+            'required_count' => 2,
+            'counts' => [
+                'ok' => 2,
+                'missing' => 0,
+                'mismatch' => 0,
+                'created' => 0,
+                'repaired' => 0,
+                'failed' => 0,
+                'duplicates' => 0,
+            ],
+            'drift_count' => 0,
+            'topics' => [],
+        ],
+    ]);
+
+    $report = app(ShopifyCustomerSyncHealthService::class)->report(refreshWebhooks: true, lookbackHours: 72);
+    $retail = collect($report['stores'])->firstWhere('store_key', 'retail');
+    $launchGate = (array) ($report['launch_gate'] ?? []);
+
+    expect($retail)->not->toBeNull()
+        ->and($retail['is_required'])->toBeTrue()
+        ->and($retail['status'])->toBe('failing');
+
+    expect($launchGate['status'] ?? null)->toBe('failing')
+        ->and((int) ($launchGate['required_failing'] ?? 0))->toBeGreaterThan(0);
 });
 
 /**
