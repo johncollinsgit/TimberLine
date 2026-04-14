@@ -159,7 +159,18 @@ class ShopifyStores
     {
         $normalized = self::normalizeDomain($shopDomain);
 
-        foreach (self::all(true) as $store) {
+        if ($normalized === '') {
+            return null;
+        }
+
+        // Domain-to-store resolution must remain global so optional stores can still
+        // resolve signed storefront/admin requests even when launch defaults are retail-only.
+        foreach (self::configuredStoreKeys() as $storeKey) {
+            $store = self::find($storeKey, true);
+            if (! is_array($store)) {
+                continue;
+            }
+
             $storeDomain = self::normalizeDomain((string) ($store['shop'] ?? ''));
 
             if ($storeDomain !== '' && $storeDomain === $normalized) {
