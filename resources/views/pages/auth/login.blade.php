@@ -43,7 +43,7 @@
 
         @if ($googleLoginEnabled)
             <div class="space-y-3">
-                <a href="{{ route('auth.google.redirect') }}" class="fb-auth-google-btn">
+                <a href="{{ route('auth.google.redirect', absolute: false) }}" class="fb-auth-google-btn">
                     <span aria-hidden="true" class="fb-auth-google-mark">G</span>
                     <span>Continue with Google</span>
                 </a>

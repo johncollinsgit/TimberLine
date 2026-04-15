@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Support\Auth\GoogleOAuthFailureClassifier;
 use App\Support\Auth\PostLoginRedirectResolver;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -22,7 +23,7 @@ class GoogleAuthController extends Controller
         }
 
         try {
-            return Socialite::driver('google')
+            return $this->googleProvider()
                 ->scopes(['openid', 'profile', 'email'])
                 ->redirect();
         } catch (Throwable $e) {
@@ -68,7 +69,7 @@ class GoogleAuthController extends Controller
         }
 
         try {
-            $googleUser = Socialite::driver('google')->user();
+            $googleUser = $this->googleProvider()->user();
         } catch (InvalidStateException $stateException) {
             $this->logGoogleOAuthFailure(
                 failureClass: GoogleOAuthFailureClassifier::STATE_ERROR,
@@ -81,7 +82,7 @@ class GoogleAuthController extends Controller
             $this->reportUnexpectedOAuthFailure($stateException, GoogleOAuthFailureClassifier::STATE_ERROR);
 
             try {
-                $googleUser = Socialite::driver('google')
+                $googleUser = $this->googleProvider()
                     ->stateless()
                     ->user();
             } catch (Throwable $fallback) {
@@ -234,6 +235,43 @@ class GoogleAuthController extends Controller
         ]);
 
         return false;
+    }
+
+    protected function googleProvider(): mixed
+    {
+        $provider = Socialite::driver('google');
+        $redirectOverride = $this->googleRedirectOverride();
+
+        if ($redirectOverride !== null && method_exists($provider, 'redirectUrl')) {
+            $provider->redirectUrl($redirectOverride);
+        }
+
+        return $provider;
+    }
+
+    protected function googleRedirectOverride(): ?string
+    {
+        if (app()->environment(['local', 'testing'])) {
+            return null;
+        }
+
+        $canonical = app(TenantHostBuilder::class)->canonicalLandlordUrlForPath('/auth/google/callback');
+        $canonical = is_string($canonical) ? trim($canonical) : '';
+        if ($canonical === '') {
+            return null;
+        }
+
+        $configured = trim((string) config('services.google.redirect', ''));
+        if ($configured !== '' && ! hash_equals($configured, $canonical)) {
+            Log::notice('auth.google.oauth.redirect_uri_override', [
+                'category' => 'auth.google.oauth',
+                'event' => 'redirect_uri_override',
+                'configured_redirect' => $this->sanitizeForLogs($configured),
+                'effective_redirect' => $canonical,
+            ]);
+        }
+
+        return $canonical;
     }
 
     /**

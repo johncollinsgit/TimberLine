@@ -138,3 +138,20 @@ test('google redirect route receives auth tenant context middleware', function (
         ->once();
 
 });
+
+test('login view uses a host relative google redirect link', function (): void {
+    Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    config()->set('services.google.enabled', true);
+    config()->set('services.google.client_id', 'test-google-client-id');
+    config()->set('services.google.client_secret', 'test-google-client-secret');
+    config()->set('services.google.redirect', 'https://app.theeverbranch.com/auth/google/callback');
+
+    $response = $this->get('http://theeverbranch.com/login');
+
+    $response->assertOk();
+    $response->assertSee('href="/auth/google/redirect"', false);
+});
