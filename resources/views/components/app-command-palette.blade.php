@@ -113,10 +113,11 @@
             }
 
             function bindPalette(root) {
-                if (root.dataset.commandPaletteBound === "1") {
-                    return;
+                const registry = window;
+                if (typeof registry.__appCommandPaletteCleanup === "function") {
+                    registry.__appCommandPaletteCleanup();
+                    registry.__appCommandPaletteCleanup = null;
                 }
-                root.dataset.commandPaletteBound = "1";
 
                 const overlay = root.querySelector("[data-command-overlay]");
                 const panel = root.querySelector("[data-command-panel]");
@@ -205,15 +206,46 @@
                     debounceId = setTimeout(executeSearch, 160);
                 };
 
-                document.addEventListener("keydown", (event) => {
+                const isEditableTarget = (target) => {
+                    if (!(target instanceof HTMLElement)) {
+                        return false;
+                    }
+
+                    if (target.isContentEditable) {
+                        return true;
+                    }
+
+                    return target.matches("input, textarea, select");
+                };
+
+                const isPaletteTarget = (target) => {
+                    return target instanceof HTMLElement
+                        && (
+                            target === input
+                            || target.matches("[data-command-input]")
+                            || target.matches("[data-command-field]")
+                            || target.closest("[data-app-command-palette]")
+                        );
+                };
+
+                const handleKeydown = (event) => {
+                    const target = event.target;
                     const isCommandKey = (event.metaKey || event.ctrlKey) && String(event.key).toLowerCase() === "k";
                     if (isCommandKey) {
+                        if (isEditableTarget(target) && !isPaletteTarget(target)) {
+                            return;
+                        }
+
                         event.preventDefault();
                         open({ search: input.value.trim() !== "" });
                         return;
                     }
 
                     if (event.key === "Escape" && !panel.classList.contains("hidden")) {
+                        if (isEditableTarget(target) && !isPaletteTarget(target)) {
+                            return;
+                        }
+
                         event.preventDefault();
                         close();
                     }
@@ -229,9 +261,10 @@
                             window.location.assign(first.href);
                         }
                     }
-                });
+                };
+                document.addEventListener("keydown", handleKeydown);
 
-                root.addEventListener("click", (event) => {
+                const handleRootClick = (event) => {
                     const target = event.target;
                     if (!(target instanceof HTMLElement)) return;
 
@@ -250,7 +283,8 @@
                     if (target.closest("[data-command-trigger]")) {
                         open({ search: input.value.trim() !== "" });
                     }
-                });
+                };
+                root.addEventListener("click", handleRootClick);
 
                 externalFields().forEach((field) => {
                     if (field.dataset.commandFieldBound === "1") {
@@ -284,20 +318,48 @@
                     });
                 });
 
-                document.addEventListener("app-command-palette:open", (event) => {
+                const handleCustomOpen = (event) => {
                     const detail = event instanceof CustomEvent ? event.detail : {};
                     open(detail);
-                });
-                input.addEventListener("input", () => {
+                };
+                document.addEventListener("app-command-palette:open", handleCustomOpen);
+                const handlePaletteInput = () => {
                     syncExternalFields(input.value);
                     debouncedSearch();
-                });
+                };
+                input.addEventListener("input", handlePaletteInput);
                 closeBtn.addEventListener("click", close);
                 overlay.addEventListener("click", close);
+
+                root.dataset.commandPaletteBound = "1";
+                registry.__appCommandPaletteCleanup = () => {
+                    document.removeEventListener("keydown", handleKeydown);
+                    document.removeEventListener("app-command-palette:open", handleCustomOpen);
+                    root.removeEventListener("click", handleRootClick);
+                    input.removeEventListener("input", handlePaletteInput);
+                    closeBtn.removeEventListener("click", close);
+                    overlay.removeEventListener("click", close);
+                    if (root.dataset.commandPaletteBound === "1") {
+                        delete root.dataset.commandPaletteBound;
+                    }
+                };
             }
 
             function initPalettes() {
-                document.querySelectorAll("[data-app-command-palette]").forEach(bindPalette);
+                const root = document.querySelector("[data-app-command-palette]");
+                if (!root) {
+                    if (typeof window.__appCommandPaletteCleanup === "function") {
+                        window.__appCommandPaletteCleanup();
+                        window.__appCommandPaletteCleanup = null;
+                    }
+                    return;
+                }
+
+                if (root.dataset.commandPaletteBound === "1") {
+                    return;
+                }
+
+                bindPalette(root);
             }
 
             initPalettes();
