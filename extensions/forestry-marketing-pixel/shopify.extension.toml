@@ -12,7 +12,7 @@ sale_of_data = "enabled"
 [settings]
 type = "object"
 
-[settings.fields.appProxyBase]
+[settings.fields.app_proxy_base]
 name = "App proxy base"
 description = "Storefront app proxy base path"
 type = "single_line_text_field"
