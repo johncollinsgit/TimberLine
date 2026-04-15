@@ -1,8 +1,8 @@
-# Staging Commercial UAT Blocked Run Record (2026-03-28)
+# Staging Commercial UAT Blocked Run Record (2026-03-28, Archived)
 
 Status: Blocked before guarded step 1.
 Run type: Repository-side operator-enablement pass (no real staging guarded sequence executed).
-Host note: This is a historical legacy-host record (`app.forestrybackstage.com`) kept for audit context; canonical migration direction is `app.grovebud.com` with legacy compatibility during transition.
+Host note: This is archived historical evidence from pre-cutover host behavior and is superseded by the hard Everbranch cutover model (`app.theeverbranch.com` canonical runtime host; legacy hosts edge-redirect only).
 
 ## Scope Checked
 - Guarded landlord Stripe sequence path:

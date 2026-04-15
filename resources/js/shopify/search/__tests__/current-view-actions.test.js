@@ -120,7 +120,7 @@ test("current-view harvesting includes explicit controls and excludes hidden/dis
 
   globalThis.window = {
     location: {
-      origin: "https://app.grovebud.com",
+      origin: "https://app.theeverbranch.com",
     },
     getComputedStyle(element) {
       return element._style;

@@ -9,7 +9,7 @@ use Carbon\CarbonImmutable;
 
 beforeEach(function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     config()->set('tenancy.landlord.primary_host', $landlordHost);
     config()->set('tenancy.landlord.hosts', [$landlordHost]);
@@ -19,7 +19,7 @@ beforeEach(function (): void {
 
 test('overview tab renders an onboarding status card with a blueprint deep link when linked telemetry exists', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Acme Candle Co',
@@ -59,7 +59,7 @@ test('overview tab renders an onboarding status card with a blueprint deep link 
 
 test('overview tab renders a clean empty state when no telemetry exists', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'No Telemetry Tenant',
@@ -82,7 +82,7 @@ test('overview tab renders a clean empty state when no telemetry exists', functi
 
 test('overview tab shows unlinked telemetry badge and a non-blueprint onboarding deep link when only unlinked events exist', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Unlinked Tenant',

@@ -6,38 +6,31 @@ use Illuminate\Support\Facades\URL;
 
 function canonicalLandlordHostForTests(): string
 {
-    return 'app.grovebud.com';
+    return 'app.theeverbranch.com';
 }
 
-function legacyLandlordHostForTests(): string
-{
-    return 'app.forestrybackstage.com';
-}
-
-function tenantHostForTests(string $slug, string $baseHost = 'grovebud.com'): string
+function tenantHostForTests(string $slug, string $baseHost = 'theeverbranch.com'): string
 {
     return strtolower(trim($slug)).'.'.strtolower(trim($baseHost));
 }
 
 beforeEach(function (): void {
     config()->set('tenancy.domains.canonical.scheme', 'https');
-    config()->set('tenancy.domains.canonical.base_domain', 'grovebud.com');
-    config()->set('tenancy.domains.canonical.public_host', 'grovebud.com');
+    config()->set('tenancy.domains.canonical.base_domain', 'theeverbranch.com');
+    config()->set('tenancy.domains.canonical.public_host', 'theeverbranch.com');
     config()->set('tenancy.domains.canonical.landlord_host', canonicalLandlordHostForTests());
-    config()->set('tenancy.domains.legacy.base_domains', ['forestrybackstage.com']);
-    config()->set('tenancy.domains.legacy.public_hosts', ['forestrybackstage.com']);
-    config()->set('tenancy.domains.legacy.landlord_hosts', [legacyLandlordHostForTests()]);
+    config()->set('tenancy.domains.legacy.base_domains', []);
+    config()->set('tenancy.domains.legacy.public_hosts', []);
+    config()->set('tenancy.domains.legacy.landlord_hosts', []);
     config()->set('tenancy.landlord.primary_host', canonicalLandlordHostForTests());
-    config()->set('tenancy.landlord.hosts', [canonicalLandlordHostForTests(), legacyLandlordHostForTests()]);
+    config()->set('tenancy.landlord.hosts', [canonicalLandlordHostForTests()]);
     config()->set('tenancy.landlord.operator_roles', ['admin']);
     config()->set('tenancy.landlord.operator_emails', []);
 
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
     config()->set('tenancy.auth.flagship_hosts', [
         canonicalLandlordHostForTests(),
-        'grovebud.com',
-        legacyLandlordHostForTests(),
-        'forestrybackstage.com',
+        'theeverbranch.com',
     ]);
     config()->set('tenancy.auth.host_map', []);
 });
@@ -68,14 +61,7 @@ test('canonical landlord host grants authorized operator access to landlord rout
     }
 });
 
-test('legacy landlord host remains accepted for landlord routes during migration', function (): void {
-    $landlordHost = legacyLandlordHostForTests();
-
-    $tenant = Tenant::query()->create([
-        'name' => 'Legacy Host Tenant',
-        'slug' => 'legacy-host-tenant',
-    ]);
-
+test('legacy landlord hosts are rejected at runtime', function (): void {
     $user = User::factory()->create([
         'role' => 'admin',
         'is_active' => true,
@@ -83,14 +69,12 @@ test('legacy landlord host remains accepted for landlord routes during migration
     ]);
 
     foreach ([
-        "http://{$landlordHost}/landlord",
-        "http://{$landlordHost}/landlord/commercial",
-        "http://{$landlordHost}/landlord/tenants",
-        "http://{$landlordHost}/landlord/tenants/{$tenant->id}",
+        'http://app.grovebud.com/landlord',
+        'http://app.forestrybackstage.com/landlord',
     ] as $url) {
-        $response = $this->actingAs($user)->get($url);
-        $response->assertOk();
-        $response->assertViewHas('isLandlordMode', true);
+        $this->actingAs($user)
+            ->get($url)
+            ->assertNotFound();
     }
 });
 
@@ -113,7 +97,7 @@ test('landlord dashboard presents admin navigation matching commercial console s
 });
 
 test('canonical tenant host resolves pre-auth tenant context from subdomain', function (): void {
-    $tenantHost = tenantHostForTests('acme', 'grovebud.com');
+    $tenantHost = tenantHostForTests('acme', 'theeverbranch.com');
 
     Tenant::query()->create([
         'name' => 'Acme Candle Co',
@@ -132,23 +116,14 @@ test('canonical tenant host resolves pre-auth tenant context from subdomain', fu
     $response->assertViewHas('isLandlordMode', false);
 });
 
-test('legacy tenant host resolves pre-auth tenant context during migration', function (): void {
-    $tenantHost = tenantHostForTests('acme', 'forestrybackstage.com');
-
+test('legacy tenant hosts are rejected at runtime', function (): void {
     Tenant::query()->create([
         'name' => 'Acme Candle Co',
         'slug' => 'acme',
     ]);
 
-    $response = $this->get("http://{$tenantHost}/login");
-
-    $response->assertOk();
-    $response->assertViewHas('hostTenantContext', function (array $context): bool {
-        return (bool) ($context['resolved'] ?? false)
-            && ! (bool) ($context['is_landlord'] ?? true)
-            && ($context['classification'] ?? null) === 'tenant'
-            && data_get($context, 'tenant.slug') === 'acme';
-    });
+    $this->get('http://acme.grovebud.com/login')->assertNotFound();
+    $this->get('http://acme.forestrybackstage.com/login')->assertNotFound();
 });
 
 test('landlord login host does not resolve tenant auth context', function (): void {
@@ -172,44 +147,18 @@ test('landlord login host does not resolve tenant auth context', function (): vo
     });
 });
 
-test('unknown host has no silent tenant fallback in pre-auth context', function (): void {
-    $unknownHost = tenantHostForTests('unknown', 'unknown.example');
-
+test('unknown hosts are rejected with no fallback', function (): void {
     Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
 
-    $response = $this->get("http://{$unknownHost}/login");
-
-    $response->assertOk();
-    $response->assertViewHas('hostTenantContext', function (array $context): bool {
-        return ! (bool) ($context['resolved'] ?? true)
-            && ($context['classification'] ?? null) === 'none'
-            && data_get($context, 'tenant') === null;
-    });
-});
-
-test('known tenant slug on an unknown base domain does not resolve', function (): void {
-    $unknownHost = tenantHostForTests('acme', 'unknown.example');
-
-    Tenant::query()->create([
-        'name' => 'Acme Candle Co',
-        'slug' => 'acme',
-    ]);
-
-    $response = $this->get("http://{$unknownHost}/login");
-
-    $response->assertOk();
-    $response->assertViewHas('hostTenantContext', function (array $context): bool {
-        return ! (bool) ($context['resolved'] ?? true)
-            && ($context['classification'] ?? null) === 'none'
-            && data_get($context, 'tenant') === null;
-    });
+    $this->get('http://unknown.example/login')->assertNotFound();
+    $this->get('http://acme.unknown.example/login')->assertNotFound();
 });
 
 test('tenant hosts cannot access landlord host routes', function (): void {
-    $tenantHost = tenantHostForTests('acme', 'grovebud.com');
+    $tenantHost = tenantHostForTests('acme', 'theeverbranch.com');
 
     $tenant = Tenant::query()->create([
         'name' => 'Acme Candle Co',
@@ -235,8 +184,8 @@ test('tenant hosts cannot access landlord host routes', function (): void {
 });
 
 test('signed exports default to canonical landlord host when generated out of request context', function (): void {
-    config()->set('app.url', 'https://app.grovebud.com');
-    URL::forceRootUrl('https://app.grovebud.com');
+    config()->set('app.url', 'https://app.theeverbranch.com');
+    URL::forceRootUrl('https://app.theeverbranch.com');
     URL::forceScheme('https');
 
     $signedUrl = URL::temporarySignedRoute(
@@ -250,7 +199,7 @@ test('signed exports default to canonical landlord host when generated out of re
         ]
     );
 
-    expect(parse_url($signedUrl, PHP_URL_HOST))->toBe('app.grovebud.com');
+    expect(parse_url($signedUrl, PHP_URL_HOST))->toBe('app.theeverbranch.com');
 
     URL::forceRootUrl(null);
     URL::forceScheme(null);

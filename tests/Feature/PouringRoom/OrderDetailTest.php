@@ -181,10 +181,10 @@ it('moves order into pouring when any scent status enters active flow', function
 });
 
 it('accepts configured legacy landlord absolute return_to host during dual-domain transition', function (): void {
-    config()->set('app.url', 'https://app.grovebud.com');
-    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
-    config()->set('tenancy.landlord.hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
-    config()->set('tenancy.auth.flagship_hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
+    config()->set('app.url', 'https://app.theeverbranch.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
+    config()->set('tenancy.landlord.hosts', ['app.theeverbranch.com', 'app.theeverbranch.com']);
+    config()->set('tenancy.auth.flagship_hosts', ['app.theeverbranch.com', 'app.theeverbranch.com']);
 
     $order = Order::factory()->create([
         'status' => 'submitted_to_pouring',
@@ -192,16 +192,16 @@ it('accepts configured legacy landlord absolute return_to host during dual-domai
     ]);
 
     Livewire::withQueryParams([
-        'return_to' => 'https://app.forestrybackstage.com/retail/plan?queue=retail',
+        'return_to' => 'https://app.theeverbranch.com/retail/plan?queue=retail',
     ])->test(OrderDetail::class, ['order' => $order])
-        ->assertSet('returnTo', 'https://app.forestrybackstage.com/retail/plan?queue=retail');
+        ->assertSet('returnTo', 'https://app.theeverbranch.com/retail/plan?queue=retail');
 });
 
 it('rejects unknown absolute return_to host', function (): void {
-    config()->set('app.url', 'https://app.grovebud.com');
-    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
-    config()->set('tenancy.landlord.hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
-    config()->set('tenancy.auth.flagship_hosts', ['app.grovebud.com', 'app.forestrybackstage.com']);
+    config()->set('app.url', 'https://app.theeverbranch.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
+    config()->set('tenancy.landlord.hosts', ['app.theeverbranch.com', 'app.theeverbranch.com']);
+    config()->set('tenancy.auth.flagship_hosts', ['app.theeverbranch.com', 'app.theeverbranch.com']);
 
     $order = Order::factory()->create([
         'status' => 'submitted_to_pouring',

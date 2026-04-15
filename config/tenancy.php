@@ -33,66 +33,45 @@ $parseHostList = static function (string $value) use ($normalizeHost): array {
     return array_values(array_unique($hosts));
 };
 
-$canonicalBaseDomain = $normalizeHost(env('TENANCY_CANONICAL_BASE_DOMAIN', 'grovebud.com')) ?? 'grovebud.com';
+$canonicalBaseDomain = $normalizeHost(env('TENANCY_CANONICAL_BASE_DOMAIN', 'theeverbranch.com')) ?? 'theeverbranch.com';
 $canonicalPublicHost = $normalizeHost(env('TENANCY_CANONICAL_PUBLIC_HOST', $canonicalBaseDomain)) ?? $canonicalBaseDomain;
 $canonicalLandlordHost = $normalizeHost(env('TENANCY_CANONICAL_LANDLORD_HOST', 'app.'.$canonicalBaseDomain)) ?? 'app.'.$canonicalBaseDomain;
 $canonicalScheme = strtolower(trim((string) env('TENANCY_CANONICAL_SCHEME', 'https')));
 $canonicalScheme = in_array($canonicalScheme, ['http', 'https'], true) ? $canonicalScheme : 'https';
 
-$legacyBaseDomains = $parseHostList((string) env('TENANCY_LEGACY_BASE_DOMAINS', 'forestrybackstage.com'));
+$legacyBaseDomains = $parseHostList((string) env('TENANCY_LEGACY_BASE_DOMAINS', ''));
 $legacyBaseDomains = array_values(array_filter(
     $legacyBaseDomains,
     static fn (string $host): bool => $host !== $canonicalBaseDomain
 ));
 
-$defaultLegacyPublicHosts = $legacyBaseDomains;
-$legacyPublicHosts = $parseHostList((string) env('TENANCY_LEGACY_PUBLIC_HOSTS', implode(',', $defaultLegacyPublicHosts)));
+$legacyPublicHosts = $parseHostList((string) env('TENANCY_LEGACY_PUBLIC_HOSTS', ''));
 $legacyPublicHosts = array_values(array_filter(
     $legacyPublicHosts,
     static fn (string $host): bool => $host !== $canonicalPublicHost
 ));
 
-$defaultLegacyLandlordHosts = array_values(array_filter(array_map(
-    static fn (string $domain): string => 'app.'.$domain,
-    $legacyBaseDomains
-)));
-$legacyLandlordHosts = $parseHostList((string) env('TENANCY_LEGACY_LANDLORD_HOSTS', implode(',', $defaultLegacyLandlordHosts)));
+$legacyLandlordHosts = $parseHostList((string) env('TENANCY_LEGACY_LANDLORD_HOSTS', ''));
 $legacyLandlordHosts = array_values(array_filter(
     $legacyLandlordHosts,
     static fn (string $host): bool => $host !== $canonicalLandlordHost
 ));
 
-$defaultLandlordHosts = array_values(array_unique(array_filter(array_merge(
-    [$canonicalLandlordHost],
-    $legacyLandlordHosts
-))));
-$landlordHosts = $parseHostList((string) env('TENANCY_LANDLORD_HOSTS', implode(',', $defaultLandlordHosts)));
+$landlordHosts = $parseHostList((string) env('TENANCY_LANDLORD_HOSTS', $canonicalLandlordHost));
 if ($landlordHosts === []) {
-    $landlordHosts = $defaultLandlordHosts !== [] ? $defaultLandlordHosts : [$canonicalLandlordHost];
+    $landlordHosts = [$canonicalLandlordHost];
 }
-$landlordHosts = array_values(array_unique(array_filter(array_merge(
-    $landlordHosts,
-    [$canonicalLandlordHost],
-    $legacyLandlordHosts
-))));
 
 $landlordPrimaryHost = $normalizeHost((string) env('TENANCY_LANDLORD_PRIMARY_HOST', $canonicalLandlordHost)) ?? $canonicalLandlordHost;
 if (! in_array($landlordPrimaryHost, $landlordHosts, true)) {
     array_unshift($landlordHosts, $landlordPrimaryHost);
 }
-$landlordHosts = array_values(array_unique($landlordHosts));
-$landlordHosts = array_values(array_filter($landlordHosts, static fn (string $host): bool => $host !== ''));
-$landlordAliasHosts = array_values(array_filter(
-    $landlordHosts,
-    static fn (string $host): bool => $host !== $landlordPrimaryHost
-));
+$landlordHosts = [$landlordPrimaryHost];
+$landlordAliasHosts = [];
 
-$defaultFlagshipHosts = array_values(array_unique(array_filter(array_merge(
+$defaultFlagshipHosts = array_values(array_unique(array_filter(
     [$canonicalLandlordHost, $canonicalPublicHost],
-    $legacyLandlordHosts,
-    $legacyPublicHosts,
-    $landlordHosts
-))));
+)));
 $flagshipHosts = $parseHostList((string) env('AUTH_FLAGSHIP_HOSTS', implode(',', $defaultFlagshipHosts)));
 if ($flagshipHosts === []) {
     $flagshipHosts = $defaultFlagshipHosts;
@@ -100,10 +79,10 @@ if ($flagshipHosts === []) {
 
 $tenantBaseDomains = $parseHostList((string) env(
     'TENANCY_TENANT_BASE_DOMAINS',
-    implode(',', array_values(array_unique(array_merge([$canonicalBaseDomain], $legacyBaseDomains))))
+    $canonicalBaseDomain
 ));
 if ($tenantBaseDomains === []) {
-    $tenantBaseDomains = array_values(array_unique(array_merge([$canonicalBaseDomain], $legacyBaseDomains)));
+    $tenantBaseDomains = [$canonicalBaseDomain];
 }
 
 $hostMap = [];
@@ -132,14 +111,14 @@ $landlordOperatorEmails = array_values(array_filter(array_map(
 )));
 
 $legacyPublicRedirectEnabled = filter_var(
-    env('TENANCY_LEGACY_PUBLIC_REDIRECT_ENABLED', true),
+    env('TENANCY_LEGACY_PUBLIC_REDIRECT_ENABLED', false),
     FILTER_VALIDATE_BOOL,
     FILTER_NULL_ON_FAILURE
 );
-$legacyPublicRedirectEnabled = $legacyPublicRedirectEnabled ?? true;
-$legacyPublicRedirectStatus = (int) env('TENANCY_LEGACY_PUBLIC_REDIRECT_STATUS', 301);
+$legacyPublicRedirectEnabled = $legacyPublicRedirectEnabled ?? false;
+$legacyPublicRedirectStatus = (int) env('TENANCY_LEGACY_PUBLIC_REDIRECT_STATUS', 302);
 if (! in_array($legacyPublicRedirectStatus, [301, 302, 307, 308], true)) {
-    $legacyPublicRedirectStatus = 301;
+    $legacyPublicRedirectStatus = 302;
 }
 
 $landlordSnapshotRetentionDays = (int) env('TENANCY_LANDLORD_TENANT_OPS_SNAPSHOT_RETENTION_DAYS', 14);
@@ -165,7 +144,7 @@ return [
             'public_hosts' => $legacyPublicHosts,
             'landlord_hosts' => $legacyLandlordHosts,
         ],
-        'base_domains' => array_values(array_unique(array_merge([$canonicalBaseDomain], $legacyBaseDomains))),
+        'base_domains' => [$canonicalBaseDomain],
         'tenant_base_domains' => array_values(array_unique($tenantBaseDomains)),
         'public_redirect' => [
             'enabled' => $legacyPublicRedirectEnabled,

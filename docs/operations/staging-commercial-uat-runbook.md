@@ -4,9 +4,9 @@ Status: Active for staging-UAT only.
 Scope: Validate commercialization assignment behavior without enabling checkout or live connector writes.
 
 Related domain migration runbooks:
-- `docs/operations/domain-cutover-grovebud-runbook.md`
-- `docs/operations/domain-cutover-grovebud-rollback.md`
-- `docs/operations/domain-cutover-grovebud-smoke-checklist.md`
+- `docs/operations/domain-cutover-everbranch-runbook.md`
+- `docs/operations/domain-cutover-everbranch-rollback.md`
+- `docs/operations/domain-cutover-everbranch-smoke-checklist.md`
 
 ## Guardrails (Do Not Violate During UAT)
 - Preserve Modern Forestry alpha behavior.
@@ -18,9 +18,9 @@ Related domain migration runbooks:
 
 ## Prerequisites
 - Staging host routing resolves correctly:
-  - Canonical landlord host: `app.grovebud.com` (or staging equivalent)
-  - Canonical tenant host: `<slug>.grovebud.com`
-  - Legacy compatibility hosts during migration: `app.forestrybackstage.com`, `<slug>.forestrybackstage.com`
+  - Canonical landlord host: `app.theeverbranch.com` (or staging equivalent)
+  - Canonical tenant host: `<slug>.theeverbranch.com`
+  - Legacy host testing is edge-redirect validation only (no direct runtime acceptance expected)
 - Operator account has landlord access (`admin` role or configured landlord operator allowlist).
 - At least one staging tenant exists and is mapped to a Shopify embedded store context.
 - Latest migrations are applied, including commercial foundation tables:

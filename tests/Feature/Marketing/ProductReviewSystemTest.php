@@ -441,9 +441,9 @@ test('shopify sitewide review status defaults to most recent approved reviews ac
 });
 
 test('shopify product review submission creates native review, sends email, and awards candle cash once', function () {
-    config()->set('app.url', 'https://app.forestrybackstage.com');
+    config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('tenancy.domains.canonical.scheme', 'https');
-    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
 
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'stage10-proxy-secret');
@@ -541,7 +541,7 @@ test('shopify product review submission creates native review, sends email, and 
         $adminUrl = (string) ($mail->build()->buildViewData()['adminUrl'] ?? '');
 
         return $mail->review->is($review)
-            && parse_url($adminUrl, PHP_URL_HOST) === 'app.grovebud.com'
+            && parse_url($adminUrl, PHP_URL_HOST) === 'app.theeverbranch.com'
             && parse_url($adminUrl, PHP_URL_SCHEME) === 'https';
     });
 

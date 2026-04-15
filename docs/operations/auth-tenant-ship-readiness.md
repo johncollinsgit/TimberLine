@@ -10,7 +10,7 @@ Pre-checks:
 - keep `storage/logs/laravel.log` open while testing
 
 1. Modern Forestry password login
-- open `https://app.grovebud.com/login` (canonical)
+- open `https://app.theeverbranch.com/login` (canonical)
 - login with an active user who is a member of `modern-forestry`
 - expect successful login and normal landing page
 - check logs:
@@ -19,7 +19,7 @@ Pre-checks:
   - strategy should be `tenant_intent` (or `intended_url` if you purposely set an intended URL)
 
 2. Modern Forestry Google login
-- open `https://app.grovebud.com/login` (canonical)
+- open `https://app.theeverbranch.com/login` (canonical)
 - click `Continue with Google` and finish consent
 - expect successful login and normal landing page
 - check logs:
@@ -28,8 +28,7 @@ Pre-checks:
   - strategy should be `tenant_intent` (or `intended_url` when applicable)
 
 3. Non-flagship tenant password login
-- open tenant host login page, e.g. `http://acme.grovebud.test/login` (local) or `https://acme.grovebud.com/login` (canonical production pattern)
-- legacy compatibility host (`https://acme.forestrybackstage.com/login`) should continue to work during migration
+- open tenant host login page, e.g. `http://acme.theeverbranch.test/login` (local) or `https://acme.theeverbranch.com/login` (canonical production pattern)
 - login with user who is a member of that tenant
 - expect successful login and tenant-correct landing
 - check logs:
@@ -37,8 +36,7 @@ Pre-checks:
   - `auth.post_login.redirect_decision` strategy `tenant_intent` (or `intended_url`)
 
 4. Non-member hitting tenant-branded login
-- open tenant host login page, e.g. `http://acme.grovebud.test/login` (local) or `https://acme.grovebud.com/login` (canonical production pattern)
-- legacy compatibility host (`https://acme.forestrybackstage.com/login`) should continue to work during migration
+- open tenant host login page, e.g. `http://acme.theeverbranch.test/login` (local) or `https://acme.theeverbranch.com/login` (canonical production pattern)
 - login with user who is not a member of that tenant
 - expect successful auth but safe fallback landing (not tenant-forced)
 - check logs:
@@ -78,11 +76,7 @@ Pre-checks:
 
 8. Fallback when tenant cannot be resolved
 - open `http://unknown.local/login` (or another unresolved host)
-- login with valid credentials
-- expect successful login using normal role/home fallback behavior
-- check logs:
-  - `auth.tenant_context.resolved` with `classification=none` and `tenant_resolved=false`
-  - `auth.post_login.redirect_decision` strategy `role_fallback` or `safe_fallback`
+- expect request rejected (`404`) due canonical runtime host guard
 
 ## Release Note (Operator-Facing)
 

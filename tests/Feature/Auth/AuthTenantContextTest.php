@@ -5,12 +5,10 @@ use Illuminate\Support\Facades\Log;
 
 beforeEach(function (): void {
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
-    config()->set('tenancy.domains.tenant_base_domains', ['grovebud.com', 'forestrybackstage.com']);
+    config()->set('tenancy.domains.tenant_base_domains', ['theeverbranch.com']);
     config()->set('tenancy.auth.flagship_hosts', [
-        'app.grovebud.com',
-        'grovebud.com',
-        'app.forestrybackstage.com',
-        'forestrybackstage.com',
+        'app.theeverbranch.com',
+        'theeverbranch.com',
     ]);
     config()->set('tenancy.auth.host_map', []);
 });
@@ -21,7 +19,7 @@ test('tenant resolves from subdomain host on guest login route', function (): vo
         'slug' => 'acme',
     ]);
 
-    $response = $this->get('http://acme.grovebud.com/login');
+    $response = $this->get('http://acme.theeverbranch.com/login');
 
     $response->assertOk();
     $response->assertViewHas('authTenantContext', function (array $context): bool {
@@ -35,14 +33,8 @@ test('tenant resolves from subdomain host on guest login route', function (): vo
     });
 });
 
-test('missing tenant host fails soft on login route', function (): void {
-    $response = $this->get('http://unknown.local/login');
-
-    $response->assertOk();
-    $response->assertViewHas('authTenantContext', function (array $context): bool {
-        return ! (bool) ($context['resolved'] ?? true)
-            && ($context['classification'] ?? null) === 'none';
-    });
+test('unknown hosts are rejected on login route', function (): void {
+    $this->get('http://unknown.local/login')->assertNotFound();
 });
 
 test('flagship host resolves modern forestry flagship presentation path', function (): void {
@@ -51,7 +43,7 @@ test('flagship host resolves modern forestry flagship presentation path', functi
         'slug' => 'modern-forestry',
     ]);
 
-    $response = $this->get('http://forestrybackstage.com/login');
+    $response = $this->get('http://theeverbranch.com/login');
 
     $response->assertOk();
     $response->assertViewHas('authTenantContext', function (array $context): bool {
@@ -72,20 +64,19 @@ test('non flagship tenant gets safe generic auth presentation', function (): voi
         'slug' => 'acme',
     ]);
 
-    $response = $this->get('http://acme.grovebud.com/login');
+    $response = $this->get('http://acme.theeverbranch.com/login');
 
     $response->assertOk();
     $response->assertSee('Acme Candle Co', false);
     $response->assertSee('Tenant Console', false);
 });
 
-test('login submit path still works when no tenant is resolved', function (): void {
-    $response = $this->post('http://unknown.local/login', [
+test('login submit path is rejected when host is not canonical', function (): void {
+    $this->post('http://unknown.local/login', [
             'email' => 'nobody@example.com',
             'password' => 'not-the-right-password',
-        ]);
-
-    $response->assertSessionHasErrors('email');
+        ])
+        ->assertNotFound();
 });
 
 test('guest auth submit path logs tenant resolution diagnostics', function (): void {
@@ -102,7 +93,7 @@ test('guest auth submit path logs tenant resolution diagnostics', function (): v
                 && ($context['classification'] ?? null) === 'generic';
         });
 
-    $this->post('http://acme.grovebud.com/login', [
+    $this->post('http://acme.theeverbranch.com/login', [
             'email' => 'nobody@example.com',
             'password' => 'not-the-right-password',
         ])
@@ -123,19 +114,19 @@ test('google redirect route receives auth tenant context middleware', function (
 
     Log::spy();
 
-    $response = $this->get('http://app.forestrybackstage.com/auth/google/redirect');
+    $response = $this->get('http://app.theeverbranch.com/auth/google/redirect');
 
     $response->assertRedirect();
 
     $location = (string) ($response->headers->get('Location') ?? '');
-    expect(parse_url($location, PHP_URL_HOST))->toBe('app.forestrybackstage.com')
+    expect(parse_url($location, PHP_URL_HOST))->toBe('app.theeverbranch.com')
         ->and(parse_url($location, PHP_URL_PATH))->toBe('/login');
 
     Log::shouldHaveReceived('debug')
         ->withArgs(function (string $message, array $context): bool {
             return $message === 'auth.tenant_context.resolved'
                 && ($context['route_name'] ?? null) === 'auth.google.redirect'
-                && ($context['host'] ?? null) === 'app.forestrybackstage.com';
+                && ($context['host'] ?? null) === 'app.theeverbranch.com';
         })
         ->once();
 

@@ -11,7 +11,7 @@ use Symfony\Component\Console\Command\Command as ConsoleCommand;
 beforeEach(function (): void {
     config()->set('app.url', 'https://backstage.test');
     config()->set('tenancy.domains.canonical.scheme', 'https');
-    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
     config()->set('services.shopify.api_version', '2026-01');
     config()->set('services.shopify.allow_env_token_fallback', false);
     config()->set('services.shopify.active_store_keys', 'retail,wholesale');
@@ -36,9 +36,9 @@ beforeEach(function (): void {
 });
 
 test('required webhook callbacks use canonical landlord host even when app url is stale', function (): void {
-    config()->set('app.url', 'https://app.forestrybackstage.com');
+    config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('tenancy.domains.canonical.scheme', 'https');
-    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
 
     $callbacks = app(ShopifyWebhookSubscriptionService::class)->requiredTopicsWithCallbacks();
 
@@ -46,7 +46,7 @@ test('required webhook callbacks use canonical landlord host even when app url i
 
     foreach ($callbacks as $topic => $callback) {
         expect((string) $topic)->not->toBe('')
-            ->and(parse_url((string) $callback, PHP_URL_HOST))->toBe('app.grovebud.com')
+            ->and(parse_url((string) $callback, PHP_URL_HOST))->toBe('app.theeverbranch.com')
             ->and(parse_url((string) $callback, PHP_URL_SCHEME))->toBe('https');
     }
 });

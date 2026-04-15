@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Notification;
 
 beforeEach(function (): void {
     $this->withoutVite();
-    config()->set('app.url', 'https://app.grovebud.com');
-    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
-    config()->set('tenancy.auth.flagship_hosts', ['app.grovebud.com']);
+    config()->set('app.url', 'https://app.theeverbranch.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
+    config()->set('tenancy.auth.flagship_hosts', ['app.theeverbranch.com']);
 });
 
 test('approving a production access request sends a tenant-host password setup link', function (): void {
@@ -56,7 +56,7 @@ test('approving a production access request sends a tenant-host password setup l
         ApprovalPasswordSetupNotification::class,
         function (ApprovalPasswordSetupNotification $notification) use ($user): bool {
             $mail = $notification->toMail($user);
-            expect((string) $mail->actionUrl)->toContain('://acme.grovebud.com/')
+            expect((string) $mail->actionUrl)->toContain('://acme.theeverbranch.com/')
                 ->and((string) $mail->actionUrl)->toContain('/reset-password/');
 
             return true;
@@ -77,9 +77,9 @@ test('customer users redirect to tenant-aware start here after login', function 
     ]);
     $user->tenants()->attach($tenant->id, ['role' => 'manager']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
-    $this->post('http://acme.grovebud.com/login', [
+    $this->post('http://acme.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
     ])
@@ -102,7 +102,7 @@ test('start here page renders for tenant members', function (): void {
     $user->tenants()->attach($tenant->id, ['role' => 'manager']);
 
     $this->actingAs($user)
-        ->get('http://acme.grovebud.com/start')
+        ->get('http://acme.theeverbranch.com/start')
         ->assertOk()
         ->assertSeeText('Start Here')
         ->assertSeeText('What happens next')
@@ -133,7 +133,7 @@ test('password setup stays on tenant host and first login lands on start here', 
 
     $mail = $notification->toMail($user);
     $resetUrl = (string) $mail->actionUrl;
-    expect($resetUrl)->toContain('://acme.grovebud.com/');
+    expect($resetUrl)->toContain('://acme.theeverbranch.com/');
 
     $this->get($resetUrl)
         ->assertOk()
@@ -143,14 +143,14 @@ test('password setup stays on tenant host and first login lands on start here', 
     $token = trim((string) basename($path));
     expect($token)->not->toBe('');
 
-    $this->post('http://acme.grovebud.com/reset-password', [
+    $this->post('http://acme.theeverbranch.com/reset-password', [
         'token' => $token,
         'email' => $user->email,
         'password' => 'new-password-123',
         'password_confirmation' => 'new-password-123',
     ])->assertRedirect('/login');
 
-    $this->post('http://acme.grovebud.com/login', [
+    $this->post('http://acme.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'new-password-123',
     ])

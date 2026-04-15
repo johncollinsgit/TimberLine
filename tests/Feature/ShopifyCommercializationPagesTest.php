@@ -32,7 +32,7 @@ test('contact placeholder page renders configured channels', function () {
         ->assertOk()
         ->assertSee('data-premium-motion="public"', false)
         ->assertSeeText('Contact Forestry Backstage')
-        ->assertSee('mailto:sales@grovebud.com?subject=Platform%20Demo%20Request', false)
+        ->assertSee('mailto:sales@theeverbranch.com?subject=Platform%20Demo%20Request', false)
         ->assertSeeText('Back to homepage');
 });
 

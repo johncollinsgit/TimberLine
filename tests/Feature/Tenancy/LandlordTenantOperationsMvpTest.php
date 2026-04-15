@@ -14,7 +14,7 @@ function landlordOpsHost(): string
 {
     $host = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
 
-    return is_string($host) && $host !== '' ? strtolower($host) : 'app.grovebud.com';
+    return is_string($host) && $host !== '' ? strtolower($host) : 'app.theeverbranch.com';
 }
 
 beforeEach(function (): void {

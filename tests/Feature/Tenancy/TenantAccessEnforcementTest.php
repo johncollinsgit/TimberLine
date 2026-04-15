@@ -116,7 +116,7 @@ test('invalid tenant context fails safely', function (): void {
 
 test('privileged user without membership is auto-linked to host tenant for tenant-scoped access', function (): void {
     config()->set('tenancy.auth.host_map', [
-        'portal.forestrybackstage.com' => 'modern-forestry',
+        'portal.theeverbranch.com' => 'modern-forestry',
     ]);
 
     $tenant = Tenant::query()->create([
@@ -130,7 +130,7 @@ test('privileged user without membership is auto-linked to host tenant for tenan
     ]);
 
     $this->actingAs($user)
-        ->get('http://portal.forestrybackstage.com/marketing/providers-integrations')
+        ->get('http://portal.theeverbranch.com/marketing/providers-integrations')
         ->assertOk();
 
     $this->assertDatabaseHas('tenant_user', [
@@ -142,7 +142,7 @@ test('privileged user without membership is auto-linked to host tenant for tenan
 
 test('non-privileged user without membership is not auto-linked to host tenant', function (): void {
     config()->set('tenancy.auth.host_map', [
-        'portal.forestrybackstage.com' => 'modern-forestry',
+        'portal.theeverbranch.com' => 'modern-forestry',
     ]);
 
     $tenant = Tenant::query()->create([
@@ -155,7 +155,7 @@ test('non-privileged user without membership is not auto-linked to host tenant',
         'email_verified_at' => now(),
     ]);
 
-    $request = Request::create('http://portal.forestrybackstage.com/marketing/providers-integrations');
+    $request = Request::create('http://portal.theeverbranch.com/marketing/providers-integrations');
     $request->attributes->set('host_tenant_id', $tenant->id);
     $request->attributes->set('host_tenant', $tenant);
     $request->setLaravelSession(app('session')->driver());

@@ -84,7 +84,7 @@ test("mount manager mounts once, marks root ready, and survives repeated init", 
       location: {
         pathname: "/shopify/app",
         search: "?host=host-token&shop=demo.myshopify.com&embedded=1",
-        origin: "https://app.grovebud.com",
+        origin: "https://app.theeverbranch.com",
       },
     },
     trackEvent: (name, payload) => {
@@ -116,7 +116,7 @@ test("mount manager emits failure event and marks root unready when render fails
       location: {
         pathname: "/shopify/app",
         search: "",
-        origin: "https://app.grovebud.com",
+        origin: "https://app.theeverbranch.com",
       },
     },
     trackEvent: (name, payload) => {
@@ -143,7 +143,7 @@ test("fallback submit navigates from search endpoint when mount is not ready", a
     location: {
       pathname: "/shopify/app",
       search: "?host=host-token&shop=demo.myshopify.com&embedded=1",
-      origin: "https://app.grovebud.com",
+      origin: "https://app.theeverbranch.com",
       assign(url) {
         assigned.value = String(url || "");
       },

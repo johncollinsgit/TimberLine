@@ -117,47 +117,6 @@ $normalizeHost = static function (mixed $value): ?string {
     return $host !== '' ? $host : null;
 };
 
-$canonicalPublicHost = $normalizeHost((string) config('tenancy.domains.canonical.public_host', ''));
-$canonicalPublicScheme = strtolower(trim((string) config('tenancy.domains.canonical.scheme', 'https')));
-$canonicalPublicScheme = in_array($canonicalPublicScheme, ['http', 'https'], true) ? $canonicalPublicScheme : 'https';
-$legacyPublicHosts = collect((array) config('tenancy.domains.legacy.public_hosts', []))
-    ->map(static fn (mixed $host): ?string => $normalizeHost($host))
-    ->filter(static fn (?string $host): bool => $host !== null)
-    ->unique()
-    ->values()
-    ->all();
-$legacyPublicRedirectEnabled = (bool) config('tenancy.domains.public_redirect.enabled', true);
-
-if ($legacyPublicRedirectEnabled && $canonicalPublicHost !== '') {
-    foreach ($legacyPublicHosts as $legacyPublicHost) {
-        if (! is_string($legacyPublicHost) || $legacyPublicHost === '' || $legacyPublicHost === $canonicalPublicHost) {
-            continue;
-        }
-
-        Route::domain($legacyPublicHost)
-            ->name('legacy-public-redirect.')
-            ->group(function () use ($canonicalPublicHost, $canonicalPublicScheme): void {
-                Route::get('/{path?}', function (Request $request, ?string $path = null) use ($canonicalPublicHost, $canonicalPublicScheme) {
-                    $normalizedPath = trim((string) ($path ?? ''), '/');
-                    $target = $canonicalPublicScheme.'://'.$canonicalPublicHost;
-                    $target .= $normalizedPath !== '' ? '/'.$normalizedPath : '/';
-
-                    $query = $request->getQueryString();
-                    if (is_string($query) && $query !== '') {
-                        $target .= '?'.$query;
-                    }
-
-                    $status = (int) config('tenancy.domains.public_redirect.status', 301);
-                    if (! in_array($status, [301, 302, 307, 308], true)) {
-                        $status = 301;
-                    }
-
-                    return redirect()->away($target, $status);
-                })->where('path', '.*');
-            });
-    }
-}
-
 Route::get('/', function (
     Request $request,
     ShopifyEmbeddedAppContext $contextService,
@@ -193,11 +152,6 @@ if ($landlordPrimaryHost !== '' && ! in_array($landlordPrimaryHost, $landlordHos
     array_unshift($landlordHosts, $landlordPrimaryHost);
 }
 $landlordHosts = array_values(array_unique(array_filter($landlordHosts, static fn (string $host): bool => $host !== '')));
-$landlordAliasHosts = array_values(array_filter(
-    $landlordHosts,
-    static fn (string $host): bool => $host !== $landlordPrimaryHost
-));
-
 $landlordRoutes = static function (): void {
     Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
         ->name('dashboard');
@@ -272,13 +226,6 @@ if ($landlordPrimaryHost !== '') {
         ->middleware(['auth', 'verified', 'landlord.operator'])
         ->name('landlord.')
         ->group($landlordRoutes);
-
-    foreach ($landlordAliasHosts as $index => $landlordAliasHost) {
-        Route::domain($landlordAliasHost)
-            ->middleware(['auth', 'verified', 'landlord.operator'])
-            ->name('landlord-legacy-'.$index.'.')
-            ->group($landlordRoutes);
-    }
 }
 
 Route::get('/rewards', function (Request $request, ShopifyEmbeddedUrlGenerator $urlGenerator) {

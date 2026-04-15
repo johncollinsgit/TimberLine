@@ -4,7 +4,7 @@ use App\Models\User;
 
 beforeEach(function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     config()->set('tenancy.landlord.primary_host', $landlordHost);
     config()->set('tenancy.landlord.hosts', [$landlordHost]);
@@ -14,7 +14,7 @@ beforeEach(function (): void {
 
 test('landlord onboarding journey diagnostics page requires landlord operator access', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $user = User::factory()->create([
         'role' => 'admin',
@@ -31,7 +31,7 @@ test('landlord onboarding journey diagnostics page requires landlord operator ac
 
 test('non operator users are forbidden from landlord onboarding journey diagnostics', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $user = User::factory()->create([
         'role' => 'manager',

@@ -11,12 +11,12 @@ use Laravel\Socialite\Two\User as SocialiteUser;
 
 beforeEach(function (): void {
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
-    config()->set('tenancy.domains.tenant_base_domains', ['grovebud.com', 'forestrybackstage.com']);
+    config()->set('tenancy.domains.tenant_base_domains', ['theeverbranch.com', 'theeverbranch.com']);
     config()->set('tenancy.auth.flagship_hosts', [
-        'app.grovebud.com',
-        'grovebud.com',
-        'app.forestrybackstage.com',
-        'forestrybackstage.com',
+        'app.theeverbranch.com',
+        'theeverbranch.com',
+        'app.theeverbranch.com',
+        'theeverbranch.com',
     ]);
     config()->set('tenancy.auth.host_map', []);
 
@@ -39,13 +39,13 @@ test('password login prefers safe intended url and applies tenant intent when me
     ]);
     $user->tenants()->attach($tenant->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
     Log::spy();
 
     $response = $this
         ->withSession(['url.intended' => route('marketing.customers', absolute: false)])
-        ->post('http://acme.grovebud.com/login', [
+        ->post('http://acme.theeverbranch.com/login', [
             'email' => $user->email,
             'password' => 'password',
         ]);
@@ -84,9 +84,9 @@ test('password login falls back safely when tenant intent exists but membership 
     ]);
     $user->tenants()->attach($beta->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
-    $response = $this->post('http://acme.grovebud.com/login', [
+    $response = $this->post('http://acme.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
     ]);
@@ -127,7 +127,7 @@ test('google callback preserves tenant intent and chooses tenant-aware landing',
         ->with('google')
         ->andReturn($redirectProvider);
 
-    $this->get('http://acme.grovebud.com/auth/google/redirect')
+    $this->get('http://acme.theeverbranch.com/auth/google/redirect')
         ->assertRedirect('https://accounts.google.com/o/oauth2/auth?client_id=test-google-client-id');
 
     $googleUser = (new SocialiteUser())
@@ -148,7 +148,7 @@ test('google callback preserves tenant intent and chooses tenant-aware landing',
         ->with('google')
         ->andReturn($callbackProvider);
 
-    $response = $this->get('http://acme.grovebud.com/auth/google/callback');
+    $response = $this->get('http://acme.theeverbranch.com/auth/google/callback');
 
     $response->assertRedirect(route('dashboard', absolute: false));
     $response->assertSessionHas('tenant_id', (int) $tenant->id);
@@ -174,7 +174,7 @@ test('google callback keeps original tenant intent when callback host differs', 
     ]);
     $user->tenants()->attach($tenant->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
     $googleUser = (new SocialiteUser())
         ->setRaw(['sub' => 'google-user-cross-host'])
@@ -194,7 +194,7 @@ test('google callback keeps original tenant intent when callback host differs', 
         ->with('google')
         ->andReturn($callbackProvider);
 
-    $response = $this->get('http://app.forestrybackstage.com/auth/google/callback');
+    $response = $this->get('http://app.theeverbranch.com/auth/google/callback');
 
     $response->assertRedirect(route('dashboard', absolute: false));
     $response->assertSessionHas('tenant_id', (int) $tenant->id);
@@ -221,9 +221,9 @@ test('password reset continuation preserves tenant intent until next successful 
     ]);
     $user->tenants()->attach($tenant->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
-    $this->post('http://acme.grovebud.com/forgot-password', [
+    $this->post('http://acme.theeverbranch.com/forgot-password', [
         'email' => $user->email,
     ])->assertSessionHasNoErrors();
 
@@ -236,10 +236,10 @@ test('password reset continuation preserves tenant intent until next successful 
 
     expect($token)->toBeString();
 
-    $this->get('http://app.forestrybackstage.com/reset-password/'.$token.'?email='.urlencode($user->email))
+    $this->get('http://app.theeverbranch.com/reset-password/'.$token.'?email='.urlencode($user->email))
         ->assertOk();
 
-    $this->post('http://app.forestrybackstage.com/reset-password', [
+    $this->post('http://app.theeverbranch.com/reset-password', [
         'token' => $token,
         'email' => $user->email,
         'password' => 'new-tenant-aware-password',
@@ -248,7 +248,7 @@ test('password reset continuation preserves tenant intent until next successful 
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('login', absolute: false));
 
-    $response = $this->post('http://app.forestrybackstage.com/login', [
+    $response = $this->post('http://app.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'new-tenant-aware-password',
     ]);
@@ -290,11 +290,11 @@ test('external intended urls are rejected and do not create open redirects', fun
     ]);
     $user->tenants()->attach($tenant->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
     $response = $this
         ->withSession(['url.intended' => 'https://evil.example/steal'])
-        ->post('http://acme.grovebud.com/login', [
+        ->post('http://acme.theeverbranch.com/login', [
             'email' => $user->email,
             'password' => 'password',
         ]);
@@ -321,11 +321,11 @@ test('cross tenant intended query tokens are rejected when user lacks membership
     ]);
     $user->tenants()->attach($beta->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
     $response = $this
         ->withSession(['url.intended' => route('marketing.customers', absolute: false).'?tenant=acme'])
-        ->post('http://acme.grovebud.com/login', [
+        ->post('http://acme.theeverbranch.com/login', [
             'email' => $user->email,
             'password' => 'password',
         ]);

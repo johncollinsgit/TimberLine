@@ -136,9 +136,9 @@ Current implemented shell/diagnostics checkpoint:
 - multi-tenant completion estimate is currently `45%`
 - Landlord/admin Phase 1 host foundation is now in place:
   - pre-auth host tenant context is globally resolved via middleware
-  - canonical landlord host (production): `app.grovebud.com`
-  - canonical tenant host pattern (production): `<slug>.grovebud.com`
-  - legacy compatibility hosts during migration: `app.forestrybackstage.com`, `<slug>.forestrybackstage.com`
+  - canonical landlord host (production): `app.theeverbranch.com`
+  - canonical tenant host pattern (production): `<slug>.theeverbranch.com`
+  - legacy domains are edge-redirect sources only (Cloudflare), not runtime-accepted hosts
   - landlord routes (host-locked): `/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`
   - landlord directory pages remain read-only
   - landlord commercial writes are limited to safe configuration scope (plan/add-on/template catalog, tenant assignment/overrides)
@@ -151,8 +151,8 @@ Commercial model normalization now in repo:
 - billing lifecycle remains guarded-first (Stripe primary with landlord-only guarded actions, Braintree secondary readiness, no checkout activation)
 
 Production DNS/TLS status (2026-03-27):
-- canonical Grovebud TLS must exist for `*.grovebud.com`
-- legacy Forestry Backstage TLS should remain active during migration (`*.forestrybackstage.com`)
+- canonical Everbranch TLS must exist for `theeverbranch.com`, `app.theeverbranch.com`, and `*.theeverbranch.com`
+- legacy domains must be redirected at edge with path/query preservation
 - `_acme-challenge` CNAME must remain `DNS only` in Cloudflare
 - wildcard tenant DNS is active (`* -> 129.212.138.111`) and tenant HTTPS reaches app login routes
 
@@ -237,11 +237,9 @@ Config:
 
 Local routing note:
 - `config('tenancy.landlord.primary_host')` is canonical (`TENANCY_LANDLORD_PRIMARY_HOST`) and is used for named route generation.
-- every host in `TENANCY_LANDLORD_HOSTS` is accepted inbound for host-locked landlord routes.
 - Distinguish host examples in docs:
-  - production canonical host: `app.grovebud.com`
-  - production legacy compatibility host: `app.forestrybackstage.com`
-  - local example host set: `app.grovebud.test,app.forestrybackstage.test`
+  - production canonical host: `app.theeverbranch.com`
+  - local example host set: `app.theeverbranch.test`
 - Keep local examples explicit in docs/config comments so operators do not assume the full `hosts` list is domain-bound in routing.
 - Fast local auth bootstrap path already exists and should be preferred over ad-hoc DB edits:
   - `php artisan users:ensure-approved your-email@example.com 'your-password' --name='Your Name' --role=admin`
@@ -253,9 +251,14 @@ Authorization note:
 - TODO for future hardening: replace role/email interim rules with a first-class landlord operator role/flag.
 
 Operational runbooks:
-- `docs/operations/domain-cutover-grovebud-runbook.md`
-- `docs/operations/domain-cutover-grovebud-rollback.md`
-- `docs/operations/domain-cutover-grovebud-smoke-checklist.md`
+- `docs/operations/domain-cutover-everbranch-runbook.md`
+- `docs/operations/domain-cutover-everbranch-rollback.md`
+- `docs/operations/domain-cutover-everbranch-smoke-checklist.md`
+
+Shopify cutover guardrails:
+- ship URL changes from source `shopify.app.toml` (do not trust stale generated deploy artifacts)
+- reauthorize required stores after cutover
+- verify/repair webhook callbacks after cutover
 
 Important guardrails for future edits:
 - Do not bypass host-locked landlord routing by making landlord pages globally available.

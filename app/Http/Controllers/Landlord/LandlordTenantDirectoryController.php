@@ -695,7 +695,7 @@ class LandlordTenantDirectoryController extends Controller
 
         $configuredBaseHost = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', '')));
 
-        return $configuredBaseHost !== '' ? $configuredBaseHost : 'grovebud.com';
+        return $configuredBaseHost !== '' ? $configuredBaseHost : 'theeverbranch.com';
     }
 
     /**

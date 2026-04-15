@@ -9,7 +9,7 @@ use Carbon\CarbonImmutable;
 
 beforeEach(function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     config()->set('tenancy.landlord.primary_host', $landlordHost);
     config()->set('tenancy.landlord.hosts', [$landlordHost]);
@@ -19,7 +19,7 @@ beforeEach(function (): void {
 
 test('tenant directory renders onboarding summaries and deep links into onboarding journey when blueprint context exists', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenantA = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
     $tenantB = Tenant::query()->create(['name' => 'Tenant B', 'slug' => 'tenant-b']);
@@ -71,7 +71,7 @@ test('tenant directory renders onboarding summaries and deep links into onboardi
 
 test('tenant directory supports lightweight onboarding stuck-point filtering', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenantA = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
     $tenantB = Tenant::query()->create(['name' => 'Tenant B', 'slug' => 'tenant-b']);
@@ -126,7 +126,7 @@ test('tenant directory supports lightweight onboarding stuck-point filtering', f
 
 test('tenant directory waiting_for_import filter includes both waiting_for_import and progressing states', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenantWaiting = Tenant::query()->create(['name' => 'Tenant Waiting Import', 'slug' => 'tenant-waiting-import']);
     $tenantProgressing = Tenant::query()->create(['name' => 'Tenant Import Progressing', 'slug' => 'tenant-import-progressing']);

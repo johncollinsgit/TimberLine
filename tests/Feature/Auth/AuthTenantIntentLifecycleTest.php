@@ -9,12 +9,12 @@ use Laravel\Socialite\Facades\Socialite;
 
 beforeEach(function (): void {
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
-    config()->set('tenancy.domains.tenant_base_domains', ['grovebud.com', 'forestrybackstage.com']);
+    config()->set('tenancy.domains.tenant_base_domains', ['theeverbranch.com', 'theeverbranch.com']);
     config()->set('tenancy.auth.flagship_hosts', [
-        'app.grovebud.com',
-        'grovebud.com',
-        'app.forestrybackstage.com',
-        'forestrybackstage.com',
+        'app.theeverbranch.com',
+        'theeverbranch.com',
+        'app.theeverbranch.com',
+        'theeverbranch.com',
     ]);
     config()->set('tenancy.auth.host_map', []);
 
@@ -49,18 +49,18 @@ test('failed login after reset-preserved intent does not lock stale tenant conte
         AuthTenantIntentStore::SESSION_KEY => [
             'tenant_id' => (int) $acme->id,
             'classification' => 'generic',
-            'host' => 'acme.grovebud.com',
+            'host' => 'acme.theeverbranch.com',
             'captured_at' => now()->toIso8601String(),
         ],
         AuthTenantIntentStore::PRESERVE_ON_LOGIN_SESSION_KEY => true,
-    ])->post('http://app.forestrybackstage.com/login', [
+    ])->post('http://app.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'wrong-password',
     ])->assertSessionHasErrors('email');
 
     expect((bool) session(AuthTenantIntentStore::PRESERVE_ON_LOGIN_SESSION_KEY, false))->toBeFalse();
 
-    $response = $this->post('http://beta.grovebud.com/login', [
+    $response = $this->post('http://beta.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
     ]);
@@ -88,8 +88,8 @@ test('logout then new login safely replaces prior tenant context', function (): 
     $user->tenants()->attach($acme->id, ['role' => 'admin']);
     $user->tenants()->attach($beta->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
-    $this->post('http://acme.grovebud.com/login', [
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
+    $this->post('http://acme.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
     ])->assertSessionHasNoErrors()
@@ -101,9 +101,9 @@ test('logout then new login safely replaces prior tenant context', function (): 
     $logout->assertSessionMissing(AuthTenantIntentStore::SESSION_KEY);
     $this->assertGuest();
 
-    $this->get('http://beta.grovebud.com/login')->assertOk();
+    $this->get('http://beta.theeverbranch.com/login')->assertOk();
 
-    $response = $this->post('http://beta.grovebud.com/login', [
+    $response = $this->post('http://beta.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
     ]);
@@ -130,7 +130,7 @@ test('google callback failure path does not escalate tenant landing on fallback 
     ]);
     $user->tenants()->attach($beta->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
     $provider = \Mockery::mock();
     $provider->shouldReceive('user')
@@ -141,11 +141,11 @@ test('google callback failure path does not escalate tenant landing on fallback 
         ->with('google')
         ->andReturn($provider);
 
-    $this->get('http://acme.grovebud.com/auth/google/callback')
+    $this->get('http://acme.theeverbranch.com/auth/google/callback')
         ->assertRedirect(route('login'))
         ->assertSessionHasErrors(['email']);
 
-    $response = $this->post('http://acme.grovebud.com/login', [
+    $response = $this->post('http://acme.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
     ]);
@@ -173,13 +173,13 @@ test('google callback provider error query path does not leave dangerous tenant 
     ]);
     $user->tenants()->attach($beta->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
 
-    $this->get('http://acme.grovebud.com/auth/google/callback?error=access_denied&error_description=user_denied')
+    $this->get('http://acme.theeverbranch.com/auth/google/callback?error=access_denied&error_description=user_denied')
         ->assertRedirect(route('login'))
         ->assertSessionHasErrors(['email']);
 
-    $response = $this->post('http://acme.grovebud.com/login', [
+    $response = $this->post('http://acme.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
     ]);
@@ -214,8 +214,8 @@ test('reset continuation does not leak tenant landing when membership check fail
     ]);
     $user->tenants()->attach($beta->id, ['role' => 'admin']);
 
-    $this->get('http://acme.grovebud.com/login')->assertOk();
-    $this->post('http://acme.grovebud.com/forgot-password', [
+    $this->get('http://acme.theeverbranch.com/login')->assertOk();
+    $this->post('http://acme.theeverbranch.com/forgot-password', [
         'email' => $user->email,
     ])->assertSessionHasNoErrors();
 
@@ -228,9 +228,9 @@ test('reset continuation does not leak tenant landing when membership check fail
 
     expect($token)->toBeString();
 
-    $this->get('http://app.forestrybackstage.com/reset-password/'.$token.'?email='.urlencode($user->email))
+    $this->get('http://app.theeverbranch.com/reset-password/'.$token.'?email='.urlencode($user->email))
         ->assertOk();
-    $this->post('http://app.forestrybackstage.com/reset-password', [
+    $this->post('http://app.theeverbranch.com/reset-password', [
         'token' => $token,
         'email' => $user->email,
         'password' => 'new-password-safe',
@@ -238,7 +238,7 @@ test('reset continuation does not leak tenant landing when membership check fail
     ])->assertSessionHasNoErrors()
         ->assertRedirect(route('login', absolute: false));
 
-    $response = $this->post('http://app.forestrybackstage.com/login', [
+    $response = $this->post('http://app.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'new-password-safe',
     ]);

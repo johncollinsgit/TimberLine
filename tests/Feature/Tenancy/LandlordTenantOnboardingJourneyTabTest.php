@@ -9,7 +9,7 @@ use Carbon\CarbonImmutable;
 
 beforeEach(function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     config()->set('tenancy.landlord.primary_host', $landlordHost);
     config()->set('tenancy.landlord.hosts', [$landlordHost]);
@@ -19,7 +19,7 @@ beforeEach(function (): void {
 
 test('landlord tenant workspace onboarding tab renders reduced milestones and raw events', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Acme Candle Co',
@@ -60,7 +60,7 @@ test('landlord tenant workspace onboarding tab renders reduced milestones and ra
 
 test('landlord tenant workspace onboarding tab returns not found when blueprint pair has no events', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Acme Candle Co',
@@ -80,7 +80,7 @@ test('landlord tenant workspace onboarding tab returns not found when blueprint 
 
 test('onboarding journey tab renders a blueprint selector only when multiple blueprint ids exist', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Selector Tenant',
@@ -146,7 +146,7 @@ test('onboarding journey tab renders a blueprint selector only when multiple blu
 
 test('onboarding journey tab renders raw event filters and payload expander content', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create([
         'name' => 'Filter Tenant',

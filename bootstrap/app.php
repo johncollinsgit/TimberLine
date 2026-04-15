@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(prepend: [
             \App\Http\Middleware\ProfileShopifyEmbeddedRequest::class,
             \App\Http\Middleware\ResolveHostTenantContext::class,
+            \App\Http\Middleware\EnforceCanonicalRuntimeHost::class,
         ]);
         $middleware->validateCsrfTokens(except: [
             'shopify/app/api/dashboard/candle-cash-reminders',

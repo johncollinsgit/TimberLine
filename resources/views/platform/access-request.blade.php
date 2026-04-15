@@ -130,16 +130,10 @@
                                     @if($intentValue === 'demo') disabled @endif
                                 />
                                 @php
-                                    $canonicalTenantDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'grovebud.com')));
-                                    $legacyTenantDomain = collect((array) config('tenancy.domains.legacy.base_domains', []))
-                                        ->map(fn (mixed $host): string => strtolower(trim((string) $host)))
-                                        ->first(fn (string $host): bool => $host !== '');
+                                    $canonicalTenantDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com')));
                                 @endphp
                                 <div class="fb-help">
                                     Used to route you to `&lt;slug&gt;.{{ $canonicalTenantDomain }}` after approval.
-                                    @if(is_string($legacyTenantDomain) && $legacyTenantDomain !== '' && $legacyTenantDomain !== $canonicalTenantDomain)
-                                        Legacy `&lt;slug&gt;.{{ $legacyTenantDomain }}` remains accepted during migration.
-                                    @endif
                                 </div>
                                 @error('requested_tenant_slug') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                             </div>

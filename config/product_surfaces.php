@@ -1,7 +1,7 @@
 <?php
 
-$contactDomain = strtolower(trim((string) env('PRODUCT_CONTACT_EMAIL_DOMAIN', 'grovebud.com')));
-$contactDomain = $contactDomain !== '' ? $contactDomain : 'grovebud.com';
+$contactDomain = strtolower(trim((string) env('PRODUCT_CONTACT_EMAIL_DOMAIN', 'theeverbranch.com')));
+$contactDomain = $contactDomain !== '' ? $contactDomain : 'theeverbranch.com';
 $salesContact = 'sales@'.$contactDomain;
 $upgradesContact = 'upgrades@'.$contactDomain;
 $helloContact = 'hello@'.$contactDomain;

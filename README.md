@@ -690,33 +690,35 @@ Current backend release-order note:
 
 ## Production Host Rules (Current Direction)
 
-- Canonical public marketing site: `grovebud.com`
-- Canonical landlord/operator host: `app.grovebud.com`
-- Canonical tenant host pattern: `<slug>.grovebud.com`
-- Legacy public host (redirect-only): `forestrybackstage.com` -> `grovebud.com`
-- Legacy landlord compatibility host: `app.forestrybackstage.com`
-- Legacy tenant compatibility host pattern: `<slug>.forestrybackstage.com`
+- Canonical public marketing site: `theeverbranch.com`
+- Canonical landlord/operator host: `app.theeverbranch.com`
+- Canonical tenant host pattern: `<slug>.theeverbranch.com`
+- Legacy host migration is edge redirect-only (Cloudflare), not app runtime host acceptance.
 - Landlord routes are host-locked; tenant directory remains read-only while commercial config writes are limited to safe scope (`/landlord`, `/landlord/commercial`, `/landlord/tenants`, `/landlord/tenants/{tenant}`).
 - Unknown hosts must not silently fall back to the first tenant.
 
 ## Production DNS + Wildcard TLS Verification (2026-03-27)
 
 Migration requirements for production cutover:
-- Canonical Grovebud cert/DNS must exist for `grovebud.com` and `*.grovebud.com`.
-- Forestry Backstage cert/DNS must remain active during transition for inbound compatibility.
-- Legacy public host should redirect to canonical Grovebud public URLs.
+- Canonical Everbranch cert/DNS must exist for `theeverbranch.com`, `app.theeverbranch.com`, and `*.theeverbranch.com`.
+- Legacy domains should be terminated/redirected at edge only (Cloudflare rules), not served by Laravel runtime.
 
 Operator runbooks:
-- cutover: `docs/operations/domain-cutover-grovebud-runbook.md`
-- rollback: `docs/operations/domain-cutover-grovebud-rollback.md`
-- smoke checklist: `docs/operations/domain-cutover-grovebud-smoke-checklist.md`
+- cutover: `docs/operations/domain-cutover-everbranch-runbook.md`
+- rollback: `docs/operations/domain-cutover-everbranch-rollback.md`
+- smoke checklist: `docs/operations/domain-cutover-everbranch-smoke-checklist.md`
+
+Shopify cutover requirements:
+- deploy Partner Dashboard URL changes from source-controlled `shopify.app.toml` values
+- avoid stale deploy bundles/manifests that still point to pre-cutover hosts
+- reauthorize required stores after cutover from canonical auth endpoints
+- verify/repair webhook registrations after cutover
 
 Working production host model:
-- canonical public site: `grovebud.com`
-- canonical landlord app: `app.grovebud.com`
-- canonical tenant apps: `<slug>.grovebud.com`
-- legacy public alias (redirect): `forestrybackstage.com`
-- legacy app/tenant aliases (compatibility): `app.forestrybackstage.com`, `<slug>.forestrybackstage.com`
+- canonical public site: `theeverbranch.com`
+- canonical landlord app: `app.theeverbranch.com`
+- canonical tenant apps: `<slug>.theeverbranch.com`
+- legacy aliases are edge-redirect sources only (`grovebud.com`, `app.grovebud.com`, `*.grovebud.com`, `forestrybackstage.com`, `app.forestrybackstage.com`, `*.forestrybackstage.com`)
 
 Operator notes (important):
 - Forge DNS-01 challenge must use:
@@ -730,7 +732,7 @@ Operator notes (important):
 
 ## Historical Auth Findings (2026-03-25, Legacy Host Check)
 
-Observed during a historical live verification on legacy host `https://backstage.theforestrystudio.com/login` (kept for audit context; canonical production direction is `*.grovebud.com` with Forestry Backstage aliases kept for transition-only compatibility):
+Observed during a historical live verification on legacy host `https://backstage.theforestrystudio.com/login` (kept for audit context; canonical production direction is `*.theeverbranch.com` with Forestry Backstage aliases kept for transition-only compatibility):
 - Password resets run locally do not affect production.
 - Production user `johncollinsemail@gmail.com` exists, is active/approved, and password reset was successfully applied on production (`PASSWORD_MATCH=1`).
 - Google login failure is currently external-credential based, not route/UI based:
@@ -804,18 +806,17 @@ What was added:
   - `app/Http/Middleware/ResolveHostTenantContext.php`
 - Middleware is prepended to the `web` stack in `bootstrap/app.php` so host context is available before auth/login handling.
 - Host behavior now supports:
-  - canonical landlord host (`app.grovebud.com` in production, configurable) => landlord context (`isLandlordMode=true`), no tenant required
-  - canonical tenant host (`<slug>.grovebud.com` in production) => resolves tenant by slug/subdomain
-  - legacy landlord/tenant hosts (`*.forestrybackstage.com`) remain accepted inbound during migration
-  - unknown host => unresolved context, no fallback to first tenant
+  - canonical landlord host (`app.theeverbranch.com` in production, configurable) => landlord context (`isLandlordMode=true`), no tenant required
+  - canonical tenant host (`<slug>.theeverbranch.com` in production) => resolves tenant by slug/subdomain
+  - unknown or unexpected hosts => rejected safely (`404`), no fallback to first tenant
 - Existing auth tenant resolver (`GuestAuthTenantContextResolver`) now reuses this host resolver rather than duplicating host parsing logic.
 
 Configuration added:
-- `TENANCY_CANONICAL_BASE_DOMAIN` env var (default `grovebud.com`)
-- `TENANCY_TENANT_BASE_DOMAINS` env var (default `grovebud.com,forestrybackstage.com`; restricts subdomain tenant resolution to approved base domains)
-- `TENANCY_LEGACY_BASE_DOMAINS` env var (default `forestrybackstage.com`)
-- `TENANCY_LANDLORD_PRIMARY_HOST` env var (default `app.grovebud.com`)
-- `TENANCY_LANDLORD_HOSTS` env var (comma-separated, default includes canonical + legacy landlord hosts)
+- `TENANCY_CANONICAL_BASE_DOMAIN` env var (default `theeverbranch.com`)
+- `TENANCY_TENANT_BASE_DOMAINS` env var (default `theeverbranch.com`; restricts subdomain tenant resolution to approved base domains)
+- `TENANCY_LEGACY_BASE_DOMAINS` env var (default empty)
+- `TENANCY_LANDLORD_PRIMARY_HOST` env var (default `app.theeverbranch.com`)
+- `TENANCY_LANDLORD_HOSTS` env var (comma-separated, default canonical-only)
 - `TENANCY_LANDLORD_OPERATOR_ROLES` env var (comma-separated, default `admin`)
 - `TENANCY_LANDLORD_OPERATOR_EMAILS` env var (comma-separated, optional allowlist)
 - `config/tenancy.php` now exposes:
@@ -830,13 +831,12 @@ Configuration added:
 
 Local setup note:
 - In this implementation, `TENANCY_LANDLORD_PRIMARY_HOST` is the canonical landlord route domain (`tenancy.landlord.primary_host`) used for named route generation.
-- Every host listed in `TENANCY_LANDLORD_HOSTS` is accepted inbound for host-locked landlord routes during migration.
 - Host examples:
-  - production canonical + legacy compatibility: `TENANCY_LANDLORD_HOSTS=app.grovebud.com,app.forestrybackstage.com`
-  - local example: `TENANCY_LANDLORD_HOSTS=app.grovebud.test,app.forestrybackstage.test`
+  - production canonical: `TENANCY_LANDLORD_HOSTS=app.theeverbranch.com`
+  - local example: `TENANCY_LANDLORD_HOSTS=app.theeverbranch.test`
 - Recommended local baseline:
-  - `TENANCY_LANDLORD_PRIMARY_HOST=app.grovebud.test`
-  - `TENANCY_LANDLORD_HOSTS=app.grovebud.test,app.forestrybackstage.test`
+  - `TENANCY_LANDLORD_PRIMARY_HOST=app.theeverbranch.test`
+  - `TENANCY_LANDLORD_HOSTS=app.theeverbranch.test`
   - `TENANCY_LANDLORD_OPERATOR_ROLES=admin`
   - `TENANCY_LANDLORD_OPERATOR_EMAILS=`
 - Fast local login bootstrap (if your expected admin login fails):

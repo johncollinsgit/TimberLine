@@ -68,8 +68,8 @@ test('already verified user visiting verification link is redirected without fir
 });
 
 test('verification signed url uses canonical app host when generated without request host context', function (): void {
-    config()->set('app.url', 'https://app.grovebud.com');
-    URL::forceRootUrl('https://app.grovebud.com');
+    config()->set('app.url', 'https://app.theeverbranch.com');
+    URL::forceRootUrl('https://app.theeverbranch.com');
     URL::forceScheme('https');
 
     $user = User::factory()->unverified()->create();
@@ -79,21 +79,21 @@ test('verification signed url uses canonical app host when generated without req
         ['id' => $user->id, 'hash' => sha1($user->email)]
     );
 
-    expect(parse_url($verificationUrl, PHP_URL_HOST))->toBe('app.grovebud.com');
+    expect(parse_url($verificationUrl, PHP_URL_HOST))->toBe('app.theeverbranch.com');
 
     URL::forceRootUrl(null);
     URL::forceScheme(null);
 });
 
 test('verify email notification link prefers canonical landlord host when app url is legacy', function (): void {
-    config()->set('app.url', 'https://app.forestrybackstage.com');
+    config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('tenancy.domains.canonical.scheme', 'https');
-    config()->set('tenancy.landlord.primary_host', 'app.grovebud.com');
-    config()->set('tenancy.domains.canonical.landlord_host', 'app.grovebud.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
+    config()->set('tenancy.domains.canonical.landlord_host', 'app.theeverbranch.com');
 
     $user = User::factory()->unverified()->create();
     $mail = (new VerifyEmail)->toMail($user);
 
-    expect(parse_url((string) $mail->actionUrl, PHP_URL_HOST))->toBe('app.grovebud.com')
+    expect(parse_url((string) $mail->actionUrl, PHP_URL_HOST))->toBe('app.theeverbranch.com')
         ->and(parse_url((string) $mail->actionUrl, PHP_URL_SCHEME))->toBe('https');
 });

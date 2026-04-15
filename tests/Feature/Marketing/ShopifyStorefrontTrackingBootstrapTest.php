@@ -22,7 +22,7 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
     $pixelCode = file_get_contents($pixelSource);
 
     expect($appConfig)->toContain('embedded = true')
-        ->toContain('application_url = "https://app.grovebud.com/shopify/app"')
+        ->toContain('application_url = "https://app.theeverbranch.com/shopify/app"')
         ->toContain('read_discounts')
         ->toContain('write_discounts')
         ->toContain('read_webhooks')
@@ -30,7 +30,7 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
         ->toContain('read_customer_events')
         ->toContain('subpath = "forestry"')
         ->toContain('prefix = "apps"')
-        ->toContain('url = "https://app.grovebud.com/shopify/marketing/v1"');
+        ->toContain('url = "https://app.theeverbranch.com/shopify/marketing/v1"');
 
     expect($embedConfig)->toContain('type = "theme"')
         ->and($embedLiquid)->toContain('/apps/forestry/funnel/event')

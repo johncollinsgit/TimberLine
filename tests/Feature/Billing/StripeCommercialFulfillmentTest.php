@@ -12,7 +12,7 @@ use App\Services\Tenancy\TenantCommercialExperienceService;
 beforeEach(function (): void {
     $this->withoutVite();
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     config()->set('app.url', 'https://'.$landlordHost);
     config()->set('tenancy.landlord.primary_host', $landlordHost);
@@ -38,6 +38,9 @@ if (! function_exists('stripeSignatureHeader')) {
 }
 
 test('checkout completion webhook can fulfill local plan and addons idempotently', function (): void {
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
+
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
 
     TenantAccessProfile::query()->create([
@@ -84,7 +87,7 @@ test('checkout completion webhook can fulfill local plan and addons idempotently
 
     $signature = stripeSignatureHeader($payload, (string) config('services.stripe.webhook_secret'));
 
-    $this->call('POST', 'http://app.backstage.local/webhooks/stripe/events', [], [], [], [
+    $this->call('POST', "http://{$landlordHost}/webhooks/stripe/events", [], [], [], [
         'CONTENT_TYPE' => 'application/json',
         'HTTP_STRIPE_SIGNATURE' => $signature,
     ], $payload)->assertOk();
@@ -107,7 +110,7 @@ test('checkout completion webhook can fulfill local plan and addons idempotently
     expect((string) data_get($journey, 'commercial_summary.lifecycle_state'))->toBe('fulfilled');
 
     // Duplicate event idempotent: no extra fulfillment row, no double apply.
-    $this->call('POST', 'http://app.backstage.local/webhooks/stripe/events', [], [], [], [
+    $this->call('POST', "http://{$landlordHost}/webhooks/stripe/events", [], [], [], [
         'CONTENT_TYPE' => 'application/json',
         'HTTP_STRIPE_SIGNATURE' => $signature,
     ], $payload)->assertOk();
@@ -117,7 +120,7 @@ test('checkout completion webhook can fulfill local plan and addons idempotently
 
 test('landlord reconcile endpoint is gated and replays fulfillment safely', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
 
@@ -231,7 +234,7 @@ test('subscription deleted webhook downgrades stripe-fulfilled access and keeps 
     $signature = stripeSignatureHeader($payload, (string) config('services.stripe.webhook_secret'));
 
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
-    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.grovebud.com';
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
 
     $this->call('POST', "http://{$landlordHost}/webhooks/stripe/events", [], [], [], [
         'CONTENT_TYPE' => 'application/json',
