@@ -14,7 +14,8 @@ class CandleCashRedemptionReconciliationService
     public function __construct(
         protected MarketingStorefrontEventLogger $eventLogger,
         protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
-        protected TenantResolver $tenantResolver
+        protected TenantResolver $tenantResolver,
+        protected CandleCashService $candleCashService
     ) {
     }
 
@@ -48,6 +49,8 @@ class CandleCashRedemptionReconciliationService
                 'order_id' => (int) $order->id,
                 'order_number' => (string) ($order->order_number ?? ''),
                 'shopify_order_id' => $order->shopify_order_id ? (string) $order->shopify_order_id : null,
+                'order_discount_total' => is_numeric($order->discount_total) ? round((float) $order->discount_total, 2) : null,
+                'coupon_signals' => $this->couponSignalsForShopifyOrder($order, $options),
                 'attribution_meta' => (array) ($options['attribution_meta'] ?? []),
             ],
             tenantId: $tenantId,
@@ -268,16 +271,16 @@ class CandleCashRedemptionReconciliationService
                 }
             }
 
-            if ($redemption->status === 'canceled' || $redemption->status === 'expired') {
+            if ($profileIds !== [] && ! in_array((int) $redemption->marketing_profile_id, $profileIds, true)) {
                 $summary['rejected']++;
-                    $this->logRejected(
-                        redemption: $redemption,
-                        reason: $redemption->status === 'canceled' ? 'code_canceled' : 'code_expired',
-                        code: $code,
-                        externalOrderSource: $externalOrderSource,
-                        externalOrderId: $externalOrderId,
-                        tenantId: $tenantId
-                    );
+                $this->logRejected(
+                    redemption: $redemption,
+                    reason: 'profile_mismatch',
+                    code: $code,
+                    externalOrderSource: $externalOrderSource,
+                    externalOrderId: $externalOrderId,
+                    tenantId: $tenantId
+                );
                 continue;
             }
 
@@ -316,11 +319,74 @@ class CandleCashRedemptionReconciliationService
                 continue;
             }
 
-            if ($profileIds !== [] && ! in_array((int) $redemption->marketing_profile_id, $profileIds, true)) {
+            if ($redemption->status === 'canceled') {
+                if (! $this->canFinalizeCanceledRedemption($redemption, $code, $externalOrderSource, $context)) {
+                    $summary['rejected']++;
+                    $this->logRejected(
+                        redemption: $redemption,
+                        reason: 'code_canceled',
+                        code: $code,
+                        externalOrderSource: $externalOrderSource,
+                        externalOrderId: $externalOrderId,
+                        tenantId: $tenantId
+                    );
+                    continue;
+                }
+
+                if (! $dryRun) {
+                    $result = $this->candleCashService->finalizeRedemptionFromVerifiedOrder(
+                        $redemption,
+                        $externalOrderSource,
+                        $externalOrderId,
+                        $redeemedChannel,
+                        $this->reconciliationContext($redemption, $context)
+                    );
+
+                    if (! (bool) ($result['ok'] ?? false)) {
+                        $summary['rejected']++;
+                        $this->logRejected(
+                            redemption: $redemption,
+                            reason: (string) ($result['error'] ?? 'code_canceled'),
+                            code: $code,
+                            externalOrderSource: $externalOrderSource,
+                            externalOrderId: $externalOrderId,
+                            tenantId: $tenantId
+                        );
+                        continue;
+                    }
+
+                    if ((bool) ($result['already_redeemed'] ?? false)) {
+                        $summary['already_reconciled']++;
+                        continue;
+                    }
+                }
+
+                $summary['reconciled']++;
+                $this->eventLogger->log('redemption_reconciled', [
+                    'status' => 'ok',
+                    'issue_type' => null,
+                    'source_surface' => 'ingestion',
+                    'endpoint' => $externalOrderSource,
+                    'marketing_profile_id' => (int) $redemption->marketing_profile_id,
+                    'candle_cash_redemption_id' => (int) $redemption->id,
+                    'source_type' => $externalOrderSource,
+                    'source_id' => $externalOrderId,
+                    'dedupe_key' => sha1('ok|' . $redemption->id . '|' . $externalOrderSource . '|' . $externalOrderId),
+                    'meta' => [
+                        'code' => $code,
+                        'channel' => $redeemedChannel,
+                        'recovered_from_canceled' => true,
+                    ],
+                    'resolution_status' => 'resolved',
+                ]);
+                continue;
+            }
+
+            if ($redemption->status === 'expired') {
                 $summary['rejected']++;
                 $this->logRejected(
                     redemption: $redemption,
-                    reason: 'profile_mismatch',
+                    reason: 'code_expired',
                     code: $code,
                     externalOrderSource: $externalOrderSource,
                     externalOrderId: $externalOrderId,
@@ -337,15 +403,7 @@ class CandleCashRedemptionReconciliationService
                     'external_order_source' => $externalOrderSource,
                     'external_order_id' => $externalOrderId,
                     'redeemed_at' => $redemption->redeemed_at ?: now(),
-                    'redemption_context' => $this->mergeContext((array) $redemption->redemption_context, array_merge(
-                        $context,
-                        [
-                            'attribution_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
-                                (array) (($redemption->redemption_context ?? [])['attribution_meta'] ?? []),
-                                is_array($context['attribution_meta'] ?? null) ? $context['attribution_meta'] : []
-                            ),
-                        ]
-                    )),
+                    'redemption_context' => $this->mergeContext((array) $redemption->redemption_context, $this->reconciliationContext($redemption, $context)),
                 ])->save();
             }
 
@@ -535,6 +593,78 @@ class CandleCashRedemptionReconciliationService
     protected function platformFromSource(string $externalOrderSource): string
     {
         return str_starts_with($externalOrderSource, 'square') ? 'square' : 'shopify';
+    }
+
+    /**
+     * @param  array<string,mixed>  $options
+     * @return array<int,string>
+     */
+    protected function couponSignalsForShopifyOrder(Order $order, array $options = []): array
+    {
+        $signals = [
+            ...(array) ($options['coupon_signals'] ?? []),
+            ...(array) data_get($options, 'attribution_meta.coupon_signals', []),
+            ...(array) data_get($order->attribution_meta, 'coupon_signals', []),
+            ...(array) ($options['codes'] ?? []),
+        ];
+
+        $textSignals = $this->extractCodesFromText(implode(' ', array_filter([
+            (string) ($order->internal_notes ?? ''),
+            (string) ($order->order_number ?? ''),
+            (string) ($order->shopify_name ?? ''),
+        ])));
+
+        return $this->normalizeCodes(array_merge($signals, $textSignals));
+    }
+
+    protected function canFinalizeCanceledRedemption(
+        CandleCashRedemption $redemption,
+        string $code,
+        string $externalOrderSource,
+        array $context = []
+    ): bool {
+        if (strtolower(trim($externalOrderSource)) !== 'order') {
+            return false;
+        }
+
+        $code = strtoupper(trim($code));
+        if ($code === '' || strtoupper(trim((string) ($redemption->redemption_code ?? ''))) !== $code) {
+            return false;
+        }
+
+        $discountTotal = data_get($context, 'order_discount_total');
+        $discountTotal = is_numeric($discountTotal) ? round((float) $discountTotal, 2) : 0.0;
+        if ($discountTotal <= 0) {
+            return false;
+        }
+
+        $couponSignals = $this->normalizeCodes((array) data_get($context, 'coupon_signals', []));
+        if (! in_array($code, $couponSignals, true)) {
+            return false;
+        }
+
+        $contextReasonCode = strtolower(trim((string) data_get($redemption->redemption_context, 'cancellation_reason_code', '')));
+        $notes = strtolower(trim((string) ($redemption->reconciliation_notes ?? '')));
+        $restorationApplied = (bool) data_get($redemption->redemption_context, 'restoration_applied', false);
+
+        return $contextReasonCode === 'shopify_discount_sync_failed'
+            || $restorationApplied
+            || ($notes !== '' && str_contains($notes, 'could not prepare the reward discount'));
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    protected function reconciliationContext(CandleCashRedemption $redemption, array $context): array
+    {
+        return [
+            ...$context,
+            'attribution_meta' => $this->attributionSourceMetaBuilder->mergeSourceMeta(
+                (array) (($redemption->redemption_context ?? [])['attribution_meta'] ?? []),
+                is_array($context['attribution_meta'] ?? null) ? $context['attribution_meta'] : []
+            ),
+        ];
     }
 
     /**

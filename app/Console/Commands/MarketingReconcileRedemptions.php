@@ -56,12 +56,13 @@ class MarketingReconcileRedemptions extends Command
                 ->when($since, fn ($query) => $query->where('updated_at', '>=', $since))
                 ->orderByDesc('updated_at')
                 ->limit($limit)
-                ->get(['id', 'shopify_order_id', 'shopify_store_key', 'shopify_store', 'order_number', 'shopify_name', 'internal_notes'])
+                ->get(['id', 'shopify_order_id', 'shopify_store_key', 'shopify_store', 'order_number', 'shopify_name', 'internal_notes', 'discount_total', 'attribution_meta'])
                 ->each(function (Order $order) use (&$summary, $service, $dryRun, $tenantId): void {
                     $summary['orders_scanned']++;
                     $this->mergeSummary($summary, $service->reconcileShopifyOrder($order, [
                         'dry_run' => $dryRun,
                         'tenant_id' => $tenantId,
+                        'attribution_meta' => is_array($order->attribution_meta) ? $order->attribution_meta : [],
                     ]));
                 });
         }

@@ -135,7 +135,7 @@ test('consent request confirm flow persists states and awards incentive only onc
         ->count())->toBe(1);
 });
 
-test('shopify redemption reconciliation validates codes and stays idempotent', function () {
+test('shopify redemption reconciliation validates codes, recovers sync-failed cancellations, and stays idempotent', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Stage8 Reconciliation Tenant',
         'slug' => 'stage8-reconciliation-tenant',
@@ -186,12 +186,64 @@ test('shopify redemption reconciliation validates codes and stays idempotent', f
 
     $issued2 = app(CandleCashService::class)->redeemReward($profile, $reward, 'shopify');
     $redemption2 = CandleCashRedemption::query()->findOrFail((int) ($issued2['redemption_id'] ?? 0));
-    $redemption2->forceFill(['status' => 'canceled', 'canceled_at' => now()])->save();
+    $restore = app(CandleCashService::class)->cancelIssuedRedemptionAndRestoreBalance($redemption2);
+    expect((bool) ($restore['restored'] ?? false))->toBeTrue();
 
-    $rejected = app(CandleCashRedemptionReconciliationService::class)->reconcileShopifyOrder($order, [
-        'codes' => [(string) ($issued2['code'] ?? '')],
+    $order2 = Order::query()->create([
+        'source' => 'shopify',
+        'tenant_id' => $tenant->id,
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 998878,
+        'order_number' => '#998878',
+        'status' => 'new',
+        'discount_total' => app(CandleCashService::class)->amountFromPoints((int) $redemption2->candle_cash_spent),
+        'internal_notes' => (string) ($issued2['code'] ?? ''),
     ]);
-    expect($rejected['rejected'])->toBe(1);
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order2->id,
+        'match_method' => 'exact_email',
+    ]);
+
+    $recovered = app(CandleCashRedemptionReconciliationService::class)->reconcileShopifyOrder($order2, [
+        'codes' => [(string) ($issued2['code'] ?? '')],
+        'coupon_signals' => [(string) ($issued2['code'] ?? '')],
+    ]);
+
+    $redemption2 = $redemption2->fresh();
+    $reversalCount = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('source', 'reward_reconciliation')
+        ->where('source_id', (string) $redemption2->id)
+        ->where('type', 'adjustment')
+        ->where('candle_cash_delta', -(int) $redemption2->candle_cash_spent)
+        ->count();
+
+    expect((int) ($recovered['reconciled'] ?? 0))->toBe(1)
+        ->and((string) ($redemption2->status ?? ''))->toBe('redeemed')
+        ->and((string) ($redemption2->external_order_source ?? ''))->toBe('order')
+        ->and((string) ($redemption2->external_order_id ?? ''))->toBe((string) $order2->id)
+        ->and($redemption2->canceled_at)->toBeNull()
+        ->and((bool) data_get($redemption2->redemption_context, 'restoration_reversed', false))->toBeTrue()
+        ->and($reversalCount)->toBe(1);
+
+    $againRecovered = app(CandleCashRedemptionReconciliationService::class)->reconcileShopifyOrder($order2, [
+        'codes' => [(string) ($issued2['code'] ?? '')],
+        'coupon_signals' => [(string) ($issued2['code'] ?? '')],
+    ]);
+
+    $reversalCountAfterRepeat = CandleCashTransaction::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('source', 'reward_reconciliation')
+        ->where('source_id', (string) $redemption2->id)
+        ->where('type', 'adjustment')
+        ->where('candle_cash_delta', -(int) $redemption2->candle_cash_spent)
+        ->count();
+
+    expect((int) ($againRecovered['already_reconciled'] ?? 0))->toBe(1)
+        ->and($reversalCountAfterRepeat)->toBe(1);
 });
 
 test('reconciliation command scopes by tenant and cannot reconcile another tenant redemption', function () {

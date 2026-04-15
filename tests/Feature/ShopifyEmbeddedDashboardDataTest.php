@@ -4,6 +4,7 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashBalance;
+use App\Models\CandleCashReward;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\CatalogItemCost;
@@ -20,6 +21,7 @@ use App\Models\ShopifyStore;
 use App\Models\Size;
 use App\Models\Tenant;
 use App\Models\TenantEmailSetting;
+use App\Services\Marketing\CandleCashRedemptionReconciliationService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\OrderProfitCalculator;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardQuery;
@@ -530,6 +532,76 @@ test('tenant scoped dashboard metrics keep empty states when current tenant has 
     expect((float) ($topMetrics->firstWhere('key', 'rewards_sales')['value'] ?? 0.0))->toEqual(0.0)
         ->and((float) ($topMetrics->firstWhere('key', 'candle_cash_used')['value'] ?? 0.0))->toEqual(0.0)
         ->and((float) ($topMetrics->firstWhere('key', 'candle_cash_earned')['value'] ?? 0.0))->toEqual(0.0);
+});
+
+test('candle cash used metric includes reconciled redemptions that were previously canceled after discount sync failure', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Dashboard Reconcile Tenant',
+        'slug' => 'dashboard-reconcile-tenant',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Recovered',
+        'email' => 'dashboard-recovered@example.com',
+        'normalized_email' => 'dashboard-recovered@example.com',
+    ]);
+
+    app(CandleCashService::class)->addPoints($profile, 500, 'earn', 'admin', 'seed-dashboard', 'seed');
+    $reward = CandleCashReward::query()->where('is_active', true)->orderBy('candle_cash_cost')->firstOrFail();
+    $issued = app(CandleCashService::class)->redeemReward($profile, $reward, 'shopify');
+    $redemption = CandleCashRedemption::query()->findOrFail((int) ($issued['redemption_id'] ?? 0));
+    $code = (string) ($issued['code'] ?? '');
+
+    app(CandleCashService::class)->cancelIssuedRedemptionAndRestoreBalance($redemption);
+
+    $order = Order::query()->create([
+        'tenant_id' => $tenant->id,
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 7701001,
+        'order_number' => '#7701001',
+        'status' => 'complete',
+        'discount_total' => app(CandleCashService::class)->amountFromPoints((int) $redemption->candle_cash_spent),
+        'internal_notes' => $code,
+        'ordered_at' => now()->subHour(),
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'order',
+        'source_id' => (string) $order->id,
+    ]);
+
+    $this->get(route('shopify.app', retailEmbeddedSignedQuery()))->assertOk();
+
+    $before = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'none',
+        'refresh' => 1,
+    ]));
+    $before->assertOk();
+
+    expect((float) (collect($before->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'] ?? 0.0))
+        ->toEqual(0.0);
+
+    app(CandleCashRedemptionReconciliationService::class)->reconcileShopifyOrder($order, [
+        'codes' => [$code],
+        'coupon_signals' => [$code],
+    ]);
+
+    $after = $this->withHeaders(retailDashboardApiHeaders())->getJson(route('shopify.app.api.dashboard', [
+        'timeframe' => 'last_30_days',
+        'comparison' => 'none',
+        'refresh' => 1,
+    ]));
+    $after->assertOk();
+
+    $expectedAmount = app(CandleCashService::class)->amountFromPoints((int) $redemption->fresh()->candle_cash_spent);
+    expect((float) (collect($after->json('data.topMetrics'))->firstWhere('key', 'candle_cash_used')['value'] ?? 0.0))
+        ->toEqual($expectedAmount);
 });
 
 test('embedded dashboard metrics fail closed when store tenant context is missing', function () {

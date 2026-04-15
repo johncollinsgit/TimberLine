@@ -437,13 +437,14 @@ class CandleCashService
 
             $balance->forceFill(['balance' => $nextBalance])->save();
 
+            $restoredAt = now();
             $lockedRedemption->forceFill([
                 'status' => 'canceled',
-                'canceled_at' => now(),
+                'canceled_at' => $restoredAt,
                 'reconciliation_notes' => $reason,
-            ])->save();
+            ]);
 
-            CandleCashTransaction::query()->create([
+            $restoreTransaction = CandleCashTransaction::query()->create([
                 'marketing_profile_id' => $profileId,
                 'type' => 'adjustment',
                 'candle_cash_delta' => $restorePoints,
@@ -452,9 +453,156 @@ class CandleCashService
                 'description' => $reason,
             ]);
 
+            $lockedRedemption->forceFill([
+                'redemption_context' => $this->mergeRedemptionContext((array) $lockedRedemption->redemption_context, [
+                    'cancellation_reason_code' => 'shopify_discount_sync_failed',
+                    'restoration_applied' => true,
+                    'restoration_transaction_id' => (int) $restoreTransaction->id,
+                    'restored_candle_cash_points' => $restorePoints,
+                    'restored_at' => $restoredAt->toIso8601String(),
+                ]),
+            ])->save();
+
             return [
                 'restored' => true,
                 'balance' => $nextBalance,
+            ];
+        });
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     * @return array{
+     *   ok:bool,
+     *   already_redeemed:bool,
+     *   restoration_reversed:bool,
+     *   balance:float,
+     *   error:?string
+     * }
+     */
+    public function finalizeRedemptionFromVerifiedOrder(
+        CandleCashRedemption $redemption,
+        string $externalOrderSource,
+        string $externalOrderId,
+        string $redeemedChannel = 'shopify_ingest',
+        array $context = []
+    ): array {
+        $externalOrderSource = strtolower(trim($externalOrderSource));
+        $externalOrderId = trim($externalOrderId);
+        $redeemedChannel = trim($redeemedChannel) !== '' ? trim($redeemedChannel) : 'shopify_ingest';
+
+        if ($externalOrderSource === '' || $externalOrderId === '') {
+            return [
+                'ok' => false,
+                'already_redeemed' => false,
+                'restoration_reversed' => false,
+                'balance' => 0.0,
+                'error' => 'missing_external_order_reference',
+            ];
+        }
+
+        return DB::transaction(function () use ($redemption, $externalOrderSource, $externalOrderId, $redeemedChannel, $context): array {
+            /** @var CandleCashRedemption|null $lockedRedemption */
+            $lockedRedemption = CandleCashRedemption::query()
+                ->lockForUpdate()
+                ->find($redemption->id);
+
+            if (! $lockedRedemption) {
+                return [
+                    'ok' => false,
+                    'already_redeemed' => false,
+                    'restoration_reversed' => false,
+                    'balance' => 0.0,
+                    'error' => 'redemption_not_found',
+                ];
+            }
+
+            $profileId = (int) $lockedRedemption->marketing_profile_id;
+            $balance = CandleCashBalance::query()->lockForUpdate()->firstOrCreate(
+                ['marketing_profile_id' => $profileId],
+                ['balance' => 0]
+            );
+            $currentBalance = CandleCashMeasurement::normalizeStoredAmount($balance->balance);
+
+            if ((string) $lockedRedemption->status === 'redeemed') {
+                $matchesExternalOrder = (string) ($lockedRedemption->external_order_source ?? '') === $externalOrderSource
+                    && (string) ($lockedRedemption->external_order_id ?? '') === $externalOrderId;
+
+                return [
+                    'ok' => $matchesExternalOrder,
+                    'already_redeemed' => $matchesExternalOrder,
+                    'restoration_reversed' => false,
+                    'balance' => $currentBalance,
+                    'error' => $matchesExternalOrder ? null : 'already_redeemed_for_different_order',
+                ];
+            }
+
+            if (! in_array((string) $lockedRedemption->status, ['issued', 'canceled'], true)) {
+                return [
+                    'ok' => false,
+                    'already_redeemed' => false,
+                    'restoration_reversed' => false,
+                    'balance' => $currentBalance,
+                    'error' => 'unsupported_redemption_status',
+                ];
+            }
+
+            $pointsSpent = max(0, (int) $lockedRedemption->candle_cash_spent);
+            $restorationReversed = false;
+            if ($pointsSpent > 0 && $this->restorationShouldBeReversed($lockedRedemption)) {
+                $alreadyReversed = CandleCashTransaction::query()
+                    ->where('marketing_profile_id', $profileId)
+                    ->where('source', 'reward_reconciliation')
+                    ->where('source_id', (string) $lockedRedemption->id)
+                    ->where('type', 'adjustment')
+                    ->where('candle_cash_delta', -$pointsSpent)
+                    ->exists();
+
+                if (! $alreadyReversed) {
+                    $nextBalance = CandleCashMeasurement::normalizeStoredAmount($currentBalance - $pointsSpent);
+                    $balance->forceFill(['balance' => $nextBalance])->save();
+                    $currentBalance = $nextBalance;
+
+                    CandleCashTransaction::query()->create([
+                        'marketing_profile_id' => $profileId,
+                        'type' => 'adjustment',
+                        'candle_cash_delta' => -$pointsSpent,
+                        'source' => 'reward_reconciliation',
+                        'source_id' => (string) $lockedRedemption->id,
+                        'description' => 'Re-applied reward redemption after verified order reconciliation.',
+                    ]);
+                    $restorationReversed = true;
+                }
+            }
+
+            $existingContext = (array) $lockedRedemption->redemption_context;
+            $incomingContext = [
+                ...$context,
+                'finalized_via_order_reconciliation' => true,
+                'finalized_external_order_source' => $externalOrderSource,
+                'finalized_external_order_id' => $externalOrderId,
+                'finalized_from_status' => (string) $lockedRedemption->status,
+                'restoration_reversed' => $restorationReversed,
+                'attribution_meta' => $this->attributionSourceMetaForContext($existingContext, $context),
+            ];
+
+            $lockedRedemption->forceFill([
+                'status' => 'redeemed',
+                'platform' => $this->platformForExternalOrderSource($externalOrderSource, (string) ($lockedRedemption->platform ?? '')),
+                'redeemed_channel' => $redeemedChannel,
+                'external_order_source' => $externalOrderSource,
+                'external_order_id' => $externalOrderId,
+                'redeemed_at' => $lockedRedemption->redeemed_at ?: now(),
+                'canceled_at' => null,
+                'redemption_context' => $this->mergeRedemptionContext($existingContext, $incomingContext),
+            ])->save();
+
+            return [
+                'ok' => true,
+                'already_redeemed' => false,
+                'restoration_reversed' => $restorationReversed,
+                'balance' => $currentBalance,
+                'error' => null,
             ];
         });
     }
@@ -791,5 +939,74 @@ class CandleCashService
         } while (CandleCashRedemption::query()->where('redemption_code', $code)->exists());
 
         return $code;
+    }
+
+    /**
+     * @param  array<string,mixed>  $existing
+     * @param  array<string,mixed>  $incoming
+     * @return array<string,mixed>
+     */
+    protected function mergeRedemptionContext(array $existing, array $incoming): array
+    {
+        return array_filter([
+            ...$existing,
+            ...$incoming,
+            'updated_at' => now()->toIso8601String(),
+        ], static fn ($value): bool => $value !== null && $value !== '');
+    }
+
+    protected function restorationShouldBeReversed(CandleCashRedemption $redemption): bool
+    {
+        $context = (array) $redemption->redemption_context;
+        if ((bool) ($context['restoration_applied'] ?? false)) {
+            return true;
+        }
+
+        $reasonCode = strtolower(trim((string) ($context['cancellation_reason_code'] ?? '')));
+        if ($reasonCode === 'shopify_discount_sync_failed') {
+            return true;
+        }
+
+        $notes = strtolower(trim((string) ($redemption->reconciliation_notes ?? '')));
+        if ($notes !== '' && str_contains($notes, 'could not prepare the reward discount')) {
+            return true;
+        }
+
+        return CandleCashTransaction::query()
+            ->where('marketing_profile_id', (int) $redemption->marketing_profile_id)
+            ->where('source', 'reward')
+            ->where('source_id', (string) $redemption->id)
+            ->where('type', 'adjustment')
+            ->where('candle_cash_delta', '>', 0)
+            ->exists();
+    }
+
+    protected function platformForExternalOrderSource(string $externalOrderSource, string $currentPlatform = ''): string
+    {
+        if (str_starts_with($externalOrderSource, 'square')) {
+            return 'square';
+        }
+
+        if (trim($currentPlatform) !== '') {
+            return trim($currentPlatform);
+        }
+
+        return 'shopify';
+    }
+
+    /**
+     * @param  array<string,mixed>  $existing
+     * @param  array<string,mixed>  $context
+     * @return array<string,mixed>
+     */
+    protected function attributionSourceMetaForContext(array $existing, array $context): array
+    {
+        $existingMeta = is_array($existing['attribution_meta'] ?? null) ? $existing['attribution_meta'] : [];
+        $incomingMeta = is_array($context['attribution_meta'] ?? null) ? $context['attribution_meta'] : [];
+
+        return array_filter([
+            ...$existingMeta,
+            ...$incomingMeta,
+        ], static fn ($value): bool => $value !== null && $value !== '');
     }
 }
