@@ -15,10 +15,12 @@ use App\Models\MarketingSegment;
 use App\Services\Marketing\MarketingApprovalService;
 use App\Services\Marketing\MarketingCampaignAudienceBuilder;
 use App\Services\Marketing\MarketingCampaignDeliveryDiagnostics;
+use App\Services\Marketing\MarketingCampaignRewardIssuanceService;
 use App\Services\Marketing\MarketingEmailExecutionService;
 use App\Services\Marketing\MarketingEmailReadiness;
 use App\Services\Marketing\MarketingPerformanceAnalyticsService;
 use App\Services\Marketing\MarketingRecommendationEngine;
+use App\Services\Marketing\MarketingSmsEligibilityService;
 use App\Services\Marketing\MarketingSmsExecutionService;
 use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Services\Marketing\MarketingTimingRecommendationService;
@@ -233,7 +235,8 @@ class MarketingCampaignsController extends Controller
         MarketingPerformanceAnalyticsService $performanceAnalyticsService,
         MarketingTimingRecommendationService $timingRecommendationService,
         MarketingEmailReadiness $readinessService,
-        MarketingCampaignDeliveryDiagnostics $diagnosticsService
+        MarketingCampaignDeliveryDiagnostics $diagnosticsService,
+        MarketingCampaignRewardIssuanceService $campaignRewardIssuanceService
     ): View
     {
         $tenantId = $this->resolveTenantId($request);
@@ -293,6 +296,7 @@ class MarketingCampaignsController extends Controller
 
         $emailReadiness = $readinessService->summary($tenantId);
         $diagnostics = $diagnosticsService->summarize($campaign, $emailReadiness, $emailDeliveryLog);
+        $rewardIssuanceSummary = $campaignRewardIssuanceService->summaryForCampaign($campaign, $tenantId, 5);
 
         $conversionsQuery = $campaign->conversions();
         if ($strict && $tenantId !== null) {
@@ -366,6 +370,7 @@ class MarketingCampaignsController extends Controller
             'timingInsight' => $timingInsight,
             'templates' => $templatesQuery->get(['id', 'name']),
             'emailReadiness' => $emailReadiness,
+            'rewardIssuanceSummary' => $rewardIssuanceSummary,
         ]);
     }
 
@@ -401,6 +406,43 @@ class MarketingCampaignsController extends Controller
                     (int) $summary['sent'],
                     (int) $summary['failed'],
                     (int) $summary['skipped']
+                ),
+            ]);
+    }
+
+    public function issueSubscriberReward(
+        MarketingCampaign $campaign,
+        Request $request,
+        MarketingCampaignRewardIssuanceService $rewardIssuanceService
+    ): RedirectResponse {
+        $tenantId = $this->resolveTenantId($request);
+        $this->assertCampaignAccess($campaign, $tenantId);
+
+        $data = $request->validate([
+            'amount' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'dry_run' => ['nullable', 'boolean'],
+        ]);
+
+        $summary = $rewardIssuanceService->issueForCampaign($campaign, [
+            'amount' => (int) ($data['amount'] ?? 5),
+            'dry_run' => (bool) ($data['dry_run'] ?? false),
+            'actor_id' => (int) auth()->id(),
+            'tenant_id' => $tenantId,
+        ]);
+
+        $dryRunLabel = (bool) ($summary['dry_run'] ?? false) ? 'Dry run ' : '';
+
+        return redirect()
+            ->route('marketing.campaigns.show', $campaign)
+            ->with('toast', [
+                'style' => ((int) ($summary['awarded'] ?? 0)) > 0 ? 'success' : 'warning',
+                'message' => sprintf(
+                    '%sreward grant complete. eligible=%d awarded=%d already_awarded=%d skipped=%d',
+                    $dryRunLabel,
+                    (int) ($summary['eligible_profiles'] ?? 0),
+                    (int) ($summary['awarded'] ?? 0),
+                    (int) ($summary['already_awarded'] ?? 0),
+                    (int) ($summary['skipped'] ?? 0)
                 ),
             ]);
     }
@@ -949,7 +991,8 @@ class MarketingCampaignsController extends Controller
     public function addProfileRecipient(
         MarketingCampaign $campaign,
         Request $request,
-        MarketingRecommendationEngine $recommendationEngine
+        MarketingRecommendationEngine $recommendationEngine,
+        MarketingSmsEligibilityService $smsEligibilityService
     ): RedirectResponse {
         $tenantId = $this->resolveTenantId($request);
         $this->assertCampaignAccess($campaign, $tenantId);
@@ -973,7 +1016,10 @@ class MarketingCampaignsController extends Controller
             ->where('marketing_profile_id', $profile->id)
             ->first();
 
-        [$status, $reasons] = $this->eligibilityForChannel($profile, (string) $campaign->channel);
+        $smsEvaluation = strtolower(trim((string) $campaign->channel)) === 'sms'
+            ? $smsEligibilityService->evaluateProfile($profile, $tenantId)
+            : null;
+        [$status, $reasons] = $this->eligibilityForChannel($profile, (string) $campaign->channel, $smsEvaluation);
         $reasons[] = 'manual_add';
         if ($existing && in_array($existing->status, ['approved', 'rejected'], true)) {
             $status = $existing->status;
@@ -1044,7 +1090,7 @@ class MarketingCampaignsController extends Controller
             'segment_id' => ['nullable', 'integer', 'exists:marketing_segments,id'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['integer', 'exists:marketing_groups,id'],
-            'objective' => ['nullable', 'in:winback,repeat_purchase,event_followup,consent_capture,review_request'],
+            'objective' => ['nullable', 'in:winback,repeat_purchase,event_followup,consent_capture,review_request,retention,reward_issuance'],
             'attribution_window_days' => ['nullable', 'integer', 'min:1', 'max:60'],
             'coupon_code' => ['nullable', 'string', 'max:120'],
             'send_window_start' => ['nullable', 'date_format:H:i'],
@@ -1087,13 +1133,25 @@ class MarketingCampaignsController extends Controller
     /**
      * @return array{0:string,1:array<int,string>}
      */
-    protected function eligibilityForChannel(MarketingProfile $profile, string $channel): array
+    protected function eligibilityForChannel(MarketingProfile $profile, string $channel, ?array $smsEvaluation = null): array
     {
         $channel = strtolower(trim($channel));
         $reasons = [];
         $eligible = true;
 
         if ($channel === 'sms') {
+            if ($smsEvaluation !== null && $smsEvaluation !== []) {
+                $eligible = (bool) ($smsEvaluation['eligible'] ?? false);
+                $reasons = collect((array) ($smsEvaluation['reason_codes'] ?? []))
+                    ->map(fn ($value): string => strtolower(trim((string) $value)))
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return [$eligible ? 'queued_for_approval' : 'skipped', $reasons];
+            }
+
             if (! $profile->accepts_sms_marketing) {
                 $eligible = false;
                 $reasons[] = 'sms_not_consented';

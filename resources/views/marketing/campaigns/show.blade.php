@@ -30,7 +30,7 @@
                 </div>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-6">
+            <div class="grid gap-4 md:grid-cols-7">
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Recipients</div>
                     <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ array_sum($recipientSummary) }}</div>
@@ -55,6 +55,13 @@
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Conversions</div>
                     <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ (int) ($conversionSummary['count'] ?? 0) }}</div>
                     <div class="mt-1 text-xs text-zinc-500">Revenue: ${{ number_format((float) ($conversionSummary['revenue'] ?? 0), 2) }}</div>
+                </article>
+                <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Campaign Rewards</div>
+                    <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ (int) ($rewardIssuanceSummary['issued_count'] ?? 0) }}</div>
+                    <div class="mt-1 text-xs text-zinc-500">
+                        Source: {{ $rewardIssuanceSummary['source_id'] ?? '—' }}
+                    </div>
                 </article>
             </div>
 
@@ -122,6 +129,18 @@
                     <input type="hidden" name="limit" value="1000" />
                     <button type="submit" class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">Prepare Recipients</button>
                 </form>
+                @if($campaign->channel === 'sms')
+                    <form method="POST" action="{{ route('marketing.campaigns.issue-subscriber-reward', $campaign) }}" class="inline-flex items-center gap-2">
+                        @csrf
+                        <input type="hidden" name="amount" value="5" />
+                        <button type="submit" class="inline-flex rounded-full border border-emerald-300/50 bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
+                            Grant $5 Candle Cash
+                        </button>
+                        <label class="inline-flex items-center gap-1 text-xs text-zinc-600">
+                            <input type="checkbox" name="dry_run" value="1" class="rounded border-zinc-300 bg-zinc-50" /> Dry run
+                        </label>
+                    </form>
+                @endif
                 <form method="POST" action="{{ route('marketing.campaigns.recommendations.generate', $campaign) }}">
                     @csrf
                     <button type="submit" class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-800">Generate Recommendations</button>

@@ -169,7 +169,7 @@ class MarketingMessageTemplatesController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'channel' => ['required', 'in:sms,email'],
-            'objective' => ['nullable', 'in:winback,repeat_purchase,event_followup,consent_capture,review_request'],
+            'objective' => ['nullable', 'in:winback,repeat_purchase,event_followup,consent_capture,review_request,retention,reward_issuance'],
             'tone' => ['nullable', 'string', 'max:100'],
             'template_text' => ['required', 'string', 'max:5000'],
             'variables_raw' => ['nullable', 'string', 'max:2000'],

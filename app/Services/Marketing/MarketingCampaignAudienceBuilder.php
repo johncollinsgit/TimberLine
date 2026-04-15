@@ -13,7 +13,8 @@ class MarketingCampaignAudienceBuilder
     public function __construct(
         protected MarketingSegmentEvaluator $segmentEvaluator,
         protected MarketingRecommendationEngine $recommendationEngine,
-        protected MarketingTenantOwnershipService $ownershipService
+        protected MarketingTenantOwnershipService $ownershipService,
+        protected MarketingSmsEligibilityService $smsEligibilityService
     ) {
     }
 
@@ -69,6 +70,9 @@ class MarketingCampaignAudienceBuilder
             ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
             ->get()
             ->keyBy('id');
+        $smsEligibility = strtolower(trim((string) $campaign->channel)) === 'sms'
+            ? $this->smsEligibilityService->evaluateProfiles($profiles->values(), $tenantId)
+            : collect();
 
         $defaultVariant = $this->defaultVariantForCampaign($campaign);
         $manualLookup = collect($manualProfileIds)->map(fn ($id) => (int) $id)->flip();
@@ -97,7 +101,10 @@ class MarketingCampaignAudienceBuilder
 
             $summary['processed']++;
 
-            [$status, $reasons] = $this->eligibilityForChannel($profile, $campaign->channel);
+            $smsEvaluation = strtolower(trim((string) $campaign->channel)) === 'sms'
+                ? (array) ($smsEligibility->get((int) $profile->id) ?? [])
+                : null;
+            [$status, $reasons] = $this->eligibilityForChannel($profile, $campaign->channel, $smsEvaluation);
             $existing = MarketingCampaignRecipient::query()
                 ->where('campaign_id', $campaign->id)
                 ->where('marketing_profile_id', $profile->id)
@@ -291,13 +298,25 @@ class MarketingCampaignAudienceBuilder
     /**
      * @return array{0:string,1:array<int,string>}
      */
-    protected function eligibilityForChannel(MarketingProfile $profile, string $channel): array
+    protected function eligibilityForChannel(MarketingProfile $profile, string $channel, ?array $smsEvaluation = null): array
     {
         $channel = strtolower(trim($channel));
         $reasons = [];
         $eligible = true;
 
         if ($channel === 'sms') {
+            if ($smsEvaluation !== null && $smsEvaluation !== []) {
+                $eligible = (bool) ($smsEvaluation['eligible'] ?? false);
+                $reasons = collect((array) ($smsEvaluation['reason_codes'] ?? []))
+                    ->map(fn ($value): string => strtolower(trim((string) $value)))
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return [$eligible ? 'queued_for_approval' : 'skipped', $reasons];
+            }
+
             if (! $profile->accepts_sms_marketing) {
                 $eligible = false;
                 $reasons[] = 'sms_not_consented';

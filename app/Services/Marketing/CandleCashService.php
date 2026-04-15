@@ -693,6 +693,88 @@ class CandleCashService
     }
 
     /**
+     * @param  array<string,mixed>  $extraAttributes
+     * @return array{balance:float,transaction_id:int,already_awarded:bool}
+     */
+    public function addPointsIdempotent(
+        MarketingProfile $profile,
+        int $points,
+        string $source,
+        string $sourceId,
+        string $type = 'gift',
+        ?string $description = null,
+        array $extraAttributes = []
+    ): array {
+        $points = (int) $points;
+        $source = trim($source);
+        $sourceId = trim($sourceId);
+
+        if ($source === '' || $sourceId === '') {
+            $result = $this->addPoints(
+                profile: $profile,
+                points: $points,
+                type: $type,
+                source: $source !== '' ? $source : 'admin',
+                sourceId: $sourceId !== '' ? $sourceId : null,
+                description: $description,
+                extraAttributes: $extraAttributes
+            );
+
+            return [
+                'balance' => round((float) ($result['balance'] ?? 0), 3),
+                'transaction_id' => (int) ($result['transaction_id'] ?? 0),
+                'already_awarded' => false,
+            ];
+        }
+
+        return DB::transaction(function () use ($profile, $points, $source, $sourceId, $type, $description, $extraAttributes): array {
+            MarketingProfile::query()
+                ->whereKey($profile->id)
+                ->lockForUpdate()
+                ->first();
+
+            $balance = CandleCashBalance::query()->lockForUpdate()->firstOrCreate(
+                ['marketing_profile_id' => $profile->id],
+                ['balance' => 0]
+            );
+
+            $existing = CandleCashTransaction::query()
+                ->where('marketing_profile_id', $profile->id)
+                ->where('source', $source)
+                ->where('source_id', $sourceId)
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing instanceof CandleCashTransaction) {
+                return [
+                    'balance' => CandleCashMeasurement::normalizeStoredAmount($balance->balance),
+                    'transaction_id' => (int) $existing->id,
+                    'already_awarded' => true,
+                ];
+            }
+
+            $next = CandleCashMeasurement::normalizeStoredAmount($balance->balance + $points);
+            $balance->forceFill(['balance' => $next])->save();
+
+            $transaction = CandleCashTransaction::query()->create(array_merge([
+                'marketing_profile_id' => $profile->id,
+                'type' => $type,
+                'candle_cash_delta' => $points,
+                'source' => $source,
+                'source_id' => $sourceId,
+                'description' => $description,
+            ], $extraAttributes));
+
+            return [
+                'balance' => $next,
+                'transaction_id' => (int) $transaction->id,
+                'already_awarded' => false,
+            ];
+        });
+    }
+
+    /**
      * @return array{ok:bool,balance:float,redemption_id:?int,code:?string,error:?string}
      */
     public function redeemReward(MarketingProfile $profile, CandleCashReward $reward, ?string $platform = null): array

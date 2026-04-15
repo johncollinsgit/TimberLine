@@ -722,7 +722,7 @@ class ShopifyEmbeddedCustomerDetailService
     protected function isCandleCashSend(CandleCashTransaction $transaction): bool
     {
         return $transaction->type === 'gift'
-            && in_array((string) $transaction->source, ['admin', 'shopify_embedded_admin'], true);
+            && in_array((string) $transaction->source, ['admin', 'shopify_embedded_admin', 'campaign_reward'], true);
     }
 
     /**

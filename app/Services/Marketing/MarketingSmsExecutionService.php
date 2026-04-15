@@ -6,7 +6,6 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingSetting;
-use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -16,7 +15,7 @@ class MarketingSmsExecutionService
         protected TwilioSmsService $twilioSmsService,
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
-        protected MarketingIdentityNormalizer $normalizer,
+        protected MarketingSmsEligibilityService $smsEligibilityService,
         protected MarketingTenantOwnershipService $ownershipService,
         protected MessageClickTrackingService $messageClickTrackingService
     ) {
@@ -202,12 +201,17 @@ class MarketingSmsExecutionService
             ];
         }
 
-        if (! (bool) $profile->accepts_sms_marketing) {
-            return $this->skipRecipient($recipient, 'sms_not_consented', 'Recipient no longer has SMS consent.');
+        $smsEvaluation = $this->smsEligibilityService->evaluateProfile($profile, $tenantId);
+        if (! (bool) ($smsEvaluation['eligible'] ?? false)) {
+            return $this->skipRecipient(
+                $recipient,
+                (string) ($smsEvaluation['blocking_reason'] ?? 'sms_not_consented'),
+                (string) ($smsEvaluation['note'] ?? 'Recipient is not currently eligible for SMS delivery.')
+            );
         }
 
-        $toPhone = $this->normalizer->toE164((string) ($profile->normalized_phone ?: $profile->phone));
-        if ($toPhone === null || $toPhone === '') {
+        $toPhone = $this->nullableString($smsEvaluation['normalized_phone'] ?? null);
+        if ($toPhone === null) {
             return $this->skipRecipient($recipient, 'missing_phone', 'Recipient has no sendable phone number.');
         }
 

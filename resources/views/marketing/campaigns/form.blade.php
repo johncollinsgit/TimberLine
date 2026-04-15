@@ -53,7 +53,7 @@
                         <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Objective</label>
                         <select name="objective" class="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-950">
                             <option value="">None</option>
-                            @foreach(['winback', 'repeat_purchase', 'event_followup', 'consent_capture', 'review_request'] as $objective)
+                            @foreach(['winback', 'repeat_purchase', 'event_followup', 'consent_capture', 'review_request', 'retention', 'reward_issuance'] as $objective)
                                 <option value="{{ $objective }}" @selected(old('objective', $campaign->objective) === $objective)>{{ $objective }}</option>
                             @endforeach
                         </select>
