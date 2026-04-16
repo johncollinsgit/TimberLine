@@ -7,6 +7,7 @@ use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingEmailDelivery;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class MarketingEmailExecutionService
 {
@@ -27,6 +28,11 @@ class MarketingEmailExecutionService
         $limit = max(1, (int) ($options['limit'] ?? 250));
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
+        $batchId = $this->nullableString($options['batch_id'] ?? null)
+            ?? ('cmp-'.$campaign->id.'-'.strtolower((string) Str::ulid()));
+        $sourceLabel = $this->nullableString($options['source_label'] ?? null)
+            ?? $this->nullableString($campaign->source_label)
+            ?? 'marketing_campaign';
         $requestedTenantId = $this->positiveInt($options['tenant_id'] ?? null);
         $strict = $this->ownershipService->strictModeEnabled();
         $tenantId = $requestedTenantId ?? ($strict ? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id) : null);
@@ -85,6 +91,8 @@ class MarketingEmailExecutionService
                 'dry_run' => $dryRun,
                 'actor_id' => $actorId,
                 'tenant_id' => $tenantId,
+                'batch_id' => $batchId,
+                'source_label' => $sourceLabel,
             ]);
             $summary['processed']++;
             if (($result['outcome'] ?? '') === 'sent') {
@@ -124,6 +132,8 @@ class MarketingEmailExecutionService
         $forceRetry = (bool) ($options['force_retry'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
         $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $batchId = $this->nullableString($options['batch_id'] ?? null);
+        $sourceLabel = $this->nullableString($options['source_label'] ?? null);
         $strict = $this->ownershipService->strictModeEnabled();
         $dispatchContext = null;
 
@@ -134,6 +144,12 @@ class MarketingEmailExecutionService
         if (! $campaign || ! $profile) {
             return ['outcome' => 'failed', 'reason' => 'missing_campaign_or_profile', 'dry_run' => $dryRun];
         }
+
+        $batchId = $batchId
+            ?? ('cmp-'.$campaign->id.'-'.strtolower((string) Str::ulid()));
+        $sourceLabel = $sourceLabel
+            ?? $this->nullableString($campaign->source_label)
+            ?? 'marketing_campaign';
 
         if ($strict && $tenantId === null) {
             $dispatchContext = $this->resolveProfileDispatchContext($profile);
@@ -221,7 +237,7 @@ class MarketingEmailExecutionService
             return ['outcome' => 'failed', 'reason' => 'missing_subject', 'dry_run' => $dryRun];
         }
 
-        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey): MarketingEmailDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $profile, $email, $actorId, $campaign, $resolvedProvider, $providerContext, $dispatchTenantId, $storeKey, $batchId, $sourceLabel, $subject): MarketingEmailDelivery {
             $recipient->forceFill([
                 'status' => 'sending',
                 'send_attempt_count' => ((int) $recipient->send_attempt_count) + 1,
@@ -232,6 +248,10 @@ class MarketingEmailExecutionService
                 'marketing_campaign_recipient_id' => $recipient->id,
                 'marketing_profile_id' => $profile->id,
                 'tenant_id' => $dispatchTenantId,
+                'store_key' => $storeKey,
+                'batch_id' => $batchId,
+                'source_label' => $sourceLabel,
+                'message_subject' => $subject,
                 'provider' => $resolvedProvider,
                 'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                 'template_key' => $recipient->variant?->variant_key,
@@ -244,6 +264,9 @@ class MarketingEmailExecutionService
                 'metadata' => [
                     'tenant_id' => $dispatchTenantId,
                     'customer_id' => $profile->id,
+                    'store_key' => $storeKey,
+                    'batch_id' => $batchId,
+                    'source_label' => $sourceLabel,
                     'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
                     'template_key' => $recipient->variant?->variant_key,
                     'coupon_code' => data_get($recipient->recommendation_snapshot, 'coupon_code'),
@@ -269,6 +292,8 @@ class MarketingEmailExecutionService
             'metadata' => [
                 'campaign_id' => $campaign->id,
                 'campaign_recipient_id' => $recipient->id,
+                'batch_id' => $batchId,
+                'source_label' => $sourceLabel,
                 'shopify_store_key' => $storeKey,
                 'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
                 'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
@@ -412,5 +437,12 @@ class MarketingEmailExecutionService
         $normalized = strtolower(trim((string) $value));
 
         return $normalized !== '' ? $normalized : null;
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

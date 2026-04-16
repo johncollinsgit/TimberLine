@@ -287,7 +287,12 @@ class ShopifyEmbeddedMessagingController extends Controller
 
         $messageKey = trim((string) $request->query('message_key', ''));
         $detail = (is_array($analyticsPayload) && $messageKey !== '' && $analyticsTab === 'performance')
-            ? $probe->time('page_payload', fn (): ?array => $messageAnalyticsService->detail($tenantId, $storeKey, $messageKey))
+            ? $probe->time('page_payload', fn (): ?array => $messageAnalyticsService->detail(
+                $tenantId,
+                $storeKey,
+                $messageKey,
+                (string) ($filters['scope'] ?? 'all')
+            ))
             : null;
         $storefrontTracking = $authorized
             ? $probe->time('page_payload', fn (): array => $storefrontTrackingSetupService->build($store, $context['host'] ?? null))
@@ -321,6 +326,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                         ? $filters['date_to']->format('Y-m-d')
                         : null,
                     'channel' => $filters['channel'] ?? 'all',
+                    'scope' => $filters['scope'] ?? 'all',
                     'opened' => $filters['opened'] ?? 'all',
                     'clicked' => $filters['clicked'] ?? 'all',
                     'has_orders' => (bool) ($filters['has_orders'] ?? false),

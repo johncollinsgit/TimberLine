@@ -62,6 +62,7 @@
             'date_from',
             'date_to',
             'channel',
+            'scope',
             'opened',
             'clicked',
             'has_orders',
@@ -689,6 +690,7 @@
                         <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
                     @endforeach
                     <input type="hidden" name="analytics_tab" value="home" />
+                    <input type="hidden" name="scope" value="{{ (string) ($filters['scope'] ?? 'all') }}" />
 
                     <div class="message-analytics-field">
                         <label for="analytics-date-from">Date from</label>

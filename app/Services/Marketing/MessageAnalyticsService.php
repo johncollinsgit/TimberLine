@@ -46,6 +46,8 @@ class MessageAnalyticsService
             $channel = 'all';
         }
 
+        $scope = $this->normalizedMessageScope(data_get($input, 'scope', 'all'));
+
         $opened = strtolower(trim((string) data_get($input, 'opened', 'all')));
         if (! in_array($opened, ['all', 'opened', 'not_opened'], true)) {
             $opened = 'all';
@@ -63,6 +65,7 @@ class MessageAnalyticsService
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
             'channel' => $channel,
+            'scope' => $scope,
             'q' => $this->nullableString(data_get($input, 'q')),
             'opened' => $opened,
             'clicked' => $clicked,
@@ -167,7 +170,7 @@ class MessageAnalyticsService
         ];
     }
 
-    public function detail(?int $tenantId, ?string $storeKey, string $messageKey): ?array
+    public function detail(?int $tenantId, ?string $storeKey, string $messageKey, string $scope = 'all'): ?array
     {
         $normalizedStoreKey = $this->nullableString($storeKey);
         if ($tenantId === null || $normalizedStoreKey === null) {
@@ -181,10 +184,11 @@ class MessageAnalyticsService
 
         $channel = (string) $parsed['channel'];
         $batchKey = (string) $parsed['batch_key'];
+        $normalizedScope = $this->normalizedMessageScope($scope);
 
         $deliveries = $channel === 'email'
-            ? $this->emailDeliveriesForMessageKey($tenantId, $normalizedStoreKey, $batchKey)
-            : $this->smsDeliveriesForMessageKey($tenantId, $normalizedStoreKey, $batchKey);
+            ? $this->emailDeliveriesForMessageKey($tenantId, $normalizedStoreKey, $batchKey, $normalizedScope)
+            : $this->smsDeliveriesForMessageKey($tenantId, $normalizedStoreKey, $batchKey, $normalizedScope);
 
         if ($deliveries->isEmpty()) {
             return null;
@@ -483,16 +487,17 @@ class MessageAnalyticsService
             ? $filters['date_to']
             : now()->toImmutable()->endOfDay();
         $channel = strtolower(trim((string) ($filters['channel'] ?? 'all')));
+        $scope = $this->normalizedMessageScope($filters['scope'] ?? 'all');
         $query = $this->nullableString($filters['q'] ?? null);
 
         $emailDeliveries = $channel === 'sms'
             ? collect()
-            : $this->emailDeliveriesQuery($tenantId, $storeKey, $from, $to, $query)
+            : $this->emailDeliveriesQuery($tenantId, $storeKey, $from, $to, $scope, $query)
                 ->get();
 
         $smsDeliveries = $channel === 'email'
             ? collect()
-            : $this->smsDeliveriesQuery($tenantId, $storeKey, $from, $to, $query)
+            : $this->smsDeliveriesQuery($tenantId, $storeKey, $from, $to, $scope, $query)
                 ->get();
         $smsMessageKeyByDeliveryId = $this->smsMessageKeys($smsDeliveries);
 
@@ -774,12 +779,12 @@ class MessageAnalyticsService
         string $storeKey,
         CarbonImmutable $from,
         CarbonImmutable $to,
+        string $scope = 'all',
         ?string $search = null
     ): Builder {
-        return MarketingEmailDelivery::query()
+        $query = MarketingEmailDelivery::query()
             ->forTenantId($tenantId)
             ->where('store_key', $storeKey)
-            ->where('campaign_type', 'direct_message')
             ->where(function (Builder $query) use ($from, $to): void {
                 $query->whereBetween('sent_at', [$from, $to])
                     ->orWhere(function (Builder $fallback) use ($from, $to): void {
@@ -815,6 +820,8 @@ class MessageAnalyticsService
                 'metadata',
                 'raw_payload',
             ]);
+
+        return $this->applyEmailMessageScope($query, $scope);
     }
 
     protected function smsDeliveriesQuery(
@@ -822,13 +829,13 @@ class MessageAnalyticsService
         string $storeKey,
         CarbonImmutable $from,
         CarbonImmutable $to,
+        string $scope = 'all',
         ?string $search = null
     ): Builder {
-        return MarketingMessageDelivery::query()
+        $query = MarketingMessageDelivery::query()
             ->forTenantId($tenantId)
             ->where('store_key', $storeKey)
             ->where('channel', 'sms')
-            ->whereNull('campaign_id')
             ->where(function (Builder $query) use ($from, $to): void {
                 $query->whereBetween('sent_at', [$from, $to])
                     ->orWhere(function (Builder $fallback) use ($from, $to): void {
@@ -865,6 +872,8 @@ class MessageAnalyticsService
                 'to_phone',
                 'from_identifier',
             ]);
+
+        return $this->applySmsMessageScope($query, $scope);
     }
 
     /**
@@ -2105,12 +2114,12 @@ class MessageAnalyticsService
     /**
      * @return Collection<int,MarketingEmailDelivery>
      */
-    protected function emailDeliveriesForMessageKey(int $tenantId, string $storeKey, string $batchKey): Collection
+    protected function emailDeliveriesForMessageKey(int $tenantId, string $storeKey, string $batchKey, string $scope = 'all'): Collection
     {
         $query = MarketingEmailDelivery::query()
             ->forTenantId($tenantId)
-            ->where('store_key', $storeKey)
-            ->where('campaign_type', 'direct_message');
+            ->where('store_key', $storeKey);
+        $query = $this->applyEmailMessageScope($query, $scope);
 
         $legacyId = $this->legacyIdFromBatchKey('email', $batchKey);
         if ($legacyId !== null) {
@@ -2128,13 +2137,13 @@ class MessageAnalyticsService
     /**
      * @return Collection<int,MarketingMessageDelivery>
      */
-    protected function smsDeliveriesForMessageKey(int $tenantId, string $storeKey, string $batchKey): Collection
+    protected function smsDeliveriesForMessageKey(int $tenantId, string $storeKey, string $batchKey, string $scope = 'all'): Collection
     {
         $query = MarketingMessageDelivery::query()
             ->forTenantId($tenantId)
             ->where('store_key', $storeKey)
-            ->where('channel', 'sms')
-            ->whereNull('campaign_id');
+            ->where('channel', 'sms');
+        $query = $this->applySmsMessageScope($query, $scope);
 
         $run = $this->parseSmsRunBatchKey($batchKey);
         if (is_array($run)) {
@@ -3026,6 +3035,39 @@ class MessageAnalyticsService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function normalizedMessageScope(mixed $value): string
+    {
+        $scope = strtolower(trim((string) $value));
+
+        return in_array($scope, ['all', 'direct', 'campaign'], true)
+            ? $scope
+            : 'all';
+    }
+
+    protected function applySmsMessageScope(Builder $query, string $scope): Builder
+    {
+        return match ($this->normalizedMessageScope($scope)) {
+            'direct' => $query->whereNull('campaign_id'),
+            'campaign' => $query->whereNotNull('campaign_id'),
+            default => $query,
+        };
+    }
+
+    protected function applyEmailMessageScope(Builder $query, string $scope): Builder
+    {
+        return match ($this->normalizedMessageScope($scope)) {
+            'direct' => $query
+                ->where('campaign_type', 'direct_message')
+                ->whereNull('marketing_campaign_recipient_id'),
+            'campaign' => $query->whereNotNull('marketing_campaign_recipient_id'),
+            default => $query->where(function (Builder $scopeQuery): void {
+                $scopeQuery
+                    ->where('campaign_type', 'direct_message')
+                    ->orWhereNotNull('marketing_campaign_recipient_id');
+            }),
+        };
     }
 
     protected function positiveInt(mixed $value): ?int

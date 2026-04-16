@@ -11,13 +11,16 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingRecommendation;
 use App\Models\Order;
+use App\Models\ShopifyStore;
 use App\Models\SquareOrder;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingRecommendationEngine;
 use App\Services\Marketing\MarketingSmsExecutionService;
 use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     config()->set('marketing.sms.enabled', true);
@@ -263,7 +266,23 @@ test('twilio provider errors redact sensitive configured values', function () {
 
 function makeSmsRecipient(array $overrides = []): MarketingCampaignRecipient
 {
+    $tenant = Tenant::query()->create([
+        'name' => $overrides['tenant_name'] ?? ('Stage 5 Tenant '.Str::upper(Str::random(4))),
+        'slug' => $overrides['tenant_slug'] ?? ('stage5-'.strtolower((string) Str::ulid())),
+    ]);
+    $storeKey = $overrides['store_key'] ?? ('retail-'.strtolower(Str::random(8)));
+
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => $storeKey,
+        'shop_domain' => $storeKey.'.myshopify.com',
+        'access_token' => 'test-token',
+        'installed_at' => now(),
+    ]);
+
     $campaign = MarketingCampaign::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => $storeKey,
         'name' => $overrides['campaign_name'] ?? 'Stage 5 Campaign',
         'status' => 'active',
         'channel' => 'sms',
@@ -272,6 +291,7 @@ function makeSmsRecipient(array $overrides = []): MarketingCampaignRecipient
     ]);
 
     $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
         'first_name' => 'Taylor',
         'last_name' => 'Stage5',
         'email' => 'taylor.stage5@example.com',
@@ -632,6 +652,12 @@ test('campaign send/retry pages and actions are role-gated with delivery visibil
     $admin = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $marketingManager = User::factory()->create(['role' => 'marketing_manager', 'email_verified_at' => now()]);
     $manager = User::factory()->create(['role' => 'manager', 'email_verified_at' => now()]);
+    $tenantId = (int) ($recipient->campaign->tenant_id ?? 0);
+
+    if ($tenantId > 0) {
+        $admin->tenants()->syncWithoutDetaching([$tenantId]);
+        $marketingManager->tenants()->syncWithoutDetaching([$tenantId]);
+    }
 
     foreach ([$admin, $marketingManager] as $user) {
         $this->actingAs($user)
@@ -716,9 +742,14 @@ test('consent capture recommendation is generated and manual consent update writ
 test('marketing send approved sms command runs and reports summary counts', function () {
     config()->set('marketing.sms.dry_run', true);
 
-    makeSmsRecipient();
+    $recipient = makeSmsRecipient();
+    $tenantId = (int) ($recipient->campaign->tenant_id ?? 0);
 
-    $this->artisan('marketing:send-approved-sms --limit=5 --dry-run')
+    $this->artisan('marketing:send-approved-sms', [
+        '--limit' => 5,
+        '--dry-run' => true,
+        '--tenant-id' => $tenantId > 0 ? $tenantId : null,
+    ])
         ->assertSuccessful()
         ->expectsOutputToContain('processed=')
         ->expectsOutputToContain('sent=')

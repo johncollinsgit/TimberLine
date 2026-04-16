@@ -5,12 +5,21 @@ namespace App\Services\Marketing;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingMessageDelivery;
+use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class MarketingSmsExecutionService
 {
+    /**
+     * @var array<int,?string>
+     */
+    protected array $singleStoreKeyByTenant = [];
+
     public function __construct(
         protected TwilioSmsService $twilioSmsService,
         protected MarketingTemplateRenderer $templateRenderer,
@@ -31,6 +40,14 @@ class MarketingSmsExecutionService
         $dryRun = (bool) ($options['dry_run'] ?? false);
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
         $senderKey = $this->nullableString($options['sender_key'] ?? null);
+        $batchId = $this->campaignBatchId((int) $campaign->id, $this->nullableString($options['batch_id'] ?? null));
+        $sourceLabel = $this->nullableString($options['source_label'] ?? null)
+            ?? $this->nullableString($campaign->source_label)
+            ?? 'marketing_campaign';
+        $messageSubject = $this->nullableString($options['message_subject'] ?? null)
+            ?? $this->nullableString($campaign->message_subject)
+            ?? $this->nullableString($campaign->name)
+            ?? 'Campaign SMS';
         $requestedTenantId = $this->positiveInt($options['tenant_id'] ?? null);
         $strict = $this->ownershipService->strictModeEnabled();
         $tenantId = $requestedTenantId ?? ($strict ? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id) : null);
@@ -95,6 +112,9 @@ class MarketingSmsExecutionService
                 'actor_id' => $actorId,
                 'sender_key' => $senderKey,
                 'tenant_id' => $tenantId,
+                'batch_id' => $batchId,
+                'source_label' => $sourceLabel,
+                'message_subject' => $messageSubject,
             ]);
             $summary['processed']++;
 
@@ -139,6 +159,9 @@ class MarketingSmsExecutionService
         $actorId = isset($options['actor_id']) ? (int) $options['actor_id'] : null;
         $senderKey = $this->nullableString($options['sender_key'] ?? null);
         $tenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $batchId = $this->nullableString($options['batch_id'] ?? null);
+        $sourceLabel = $this->nullableString($options['source_label'] ?? null);
+        $messageSubject = $this->nullableString($options['message_subject'] ?? null);
         $strict = $this->ownershipService->strictModeEnabled();
 
         $recipient->loadMissing(['campaign', 'profile', 'variant']);
@@ -159,16 +182,6 @@ class MarketingSmsExecutionService
                 ?? $this->ownershipService->campaignOwnerTenantId((int) $campaign->id);
         }
 
-        if ($strict && $tenantId === null) {
-            return [
-                'outcome' => 'skipped',
-                'reason' => 'tenant_context_required',
-                'recipient_id' => $recipient->id,
-                'status' => $recipient->status,
-                'dry_run' => $dryRun,
-            ];
-        }
-
         if (
             $strict
             && $tenantId !== null
@@ -181,6 +194,32 @@ class MarketingSmsExecutionService
                 'status' => $recipient->status,
                 'dry_run' => $dryRun,
             ];
+        }
+
+        $deliveryContext = $this->resolveDeliveryContext($campaign, $profile, [
+            'tenant_id' => $tenantId,
+            'batch_id' => $batchId,
+            'source_label' => $sourceLabel,
+            'message_subject' => $messageSubject,
+            'store_key' => $options['store_key'] ?? null,
+        ]);
+        if (! (bool) ($deliveryContext['ok'] ?? false)) {
+            return $this->failRecipientForMissingContext(
+                recipient: $recipient,
+                campaign: $campaign,
+                reason: (string) ($deliveryContext['reason'] ?? 'campaign_context_unresolved'),
+                note: (string) ($deliveryContext['note'] ?? 'Unable to resolve tenant-safe campaign delivery context.')
+            );
+        }
+
+        $tenantId = $this->positiveInt($deliveryContext['tenant_id'] ?? null);
+        if ($tenantId === null) {
+            return $this->failRecipientForMissingContext(
+                recipient: $recipient,
+                campaign: $campaign,
+                reason: 'campaign_context_unresolved',
+                note: 'Resolved campaign context did not include tenant ownership.'
+            );
         }
 
         if ($recipient->channel !== 'sms' || strtolower((string) $campaign->channel) !== 'sms') {
@@ -232,7 +271,8 @@ class MarketingSmsExecutionService
                 $recipient,
                 'missing_message',
                 'No message text is available from variant/template snapshot.',
-                $actorId
+                $actorId,
+                $deliveryContext
             );
         }
 
@@ -242,12 +282,13 @@ class MarketingSmsExecutionService
                 $recipient,
                 'empty_rendered_message',
                 'Rendered message is empty after template variable substitution.',
-                $actorId
+                $actorId,
+                $deliveryContext
             );
         }
 
         $attemptNumber = ((int) $recipient->send_attempt_count) + 1;
-        $delivery = DB::transaction(function () use ($recipient, $campaign, $profile, $toPhone, $renderedMessage, $attemptNumber, $actorId): MarketingMessageDelivery {
+        $delivery = DB::transaction(function () use ($recipient, $campaign, $profile, $toPhone, $renderedMessage, $attemptNumber, $actorId, $deliveryContext): MarketingMessageDelivery {
             $recipient->refresh();
 
             $recipient->forceFill([
@@ -260,6 +301,11 @@ class MarketingSmsExecutionService
                 'campaign_id' => $campaign->id,
                 'campaign_recipient_id' => $recipient->id,
                 'marketing_profile_id' => $profile->id,
+                'tenant_id' => $deliveryContext['tenant_id'],
+                'store_key' => $deliveryContext['store_key'],
+                'batch_id' => $deliveryContext['batch_id'],
+                'source_label' => $deliveryContext['source_label'],
+                'message_subject' => $deliveryContext['message_subject'],
                 'channel' => 'sms',
                 'provider' => 'twilio',
                 'to_phone' => $toPhone,
@@ -535,7 +581,8 @@ class MarketingSmsExecutionService
         MarketingCampaignRecipient $recipient,
         string $errorCode,
         string $errorMessage,
-        ?int $actorId = null
+        ?int $actorId = null,
+        array $deliveryContext = []
     ): array {
         $recipient->forceFill([
             'status' => 'failed',
@@ -547,6 +594,11 @@ class MarketingSmsExecutionService
             'campaign_id' => $recipient->campaign_id,
             'campaign_recipient_id' => $recipient->id,
             'marketing_profile_id' => $recipient->marketing_profile_id,
+            'tenant_id' => $this->positiveInt($deliveryContext['tenant_id'] ?? null),
+            'store_key' => $this->nullableString($deliveryContext['store_key'] ?? null),
+            'batch_id' => $this->nullableString($deliveryContext['batch_id'] ?? null),
+            'source_label' => $this->nullableString($deliveryContext['source_label'] ?? null),
+            'message_subject' => $this->nullableString($deliveryContext['message_subject'] ?? null),
             'channel' => 'sms',
             'provider' => 'twilio',
             'to_phone' => $recipient->profile?->normalized_phone ?: $recipient->profile?->phone,
@@ -663,5 +715,149 @@ class MarketingSmsExecutionService
         $parsed = (int) $value;
 
         return $parsed > 0 ? $parsed : null;
+    }
+
+    protected function failRecipientForMissingContext(
+        MarketingCampaignRecipient $recipient,
+        MarketingCampaign $campaign,
+        string $reason,
+        string $note
+    ): array {
+        $recipient->forceFill([
+            'status' => 'failed',
+            'last_status_note' => $note,
+            'failed_at' => $recipient->failed_at ?: now(),
+        ])->save();
+
+        Log::warning('marketing.sms.send.context_unresolved', [
+            'campaign_id' => (int) $campaign->id,
+            'recipient_id' => (int) $recipient->id,
+            'marketing_profile_id' => (int) ($recipient->marketing_profile_id ?? 0),
+            'reason' => $reason,
+            'note' => $note,
+        ]);
+
+        return [
+            'outcome' => 'failed',
+            'reason' => $reason,
+            'recipient_id' => $recipient->id,
+            'status' => $recipient->status,
+            'dry_run' => false,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $options
+     * @return array<string,mixed>
+     */
+    protected function resolveDeliveryContext(MarketingCampaign $campaign, MarketingProfile $profile, array $options = []): array
+    {
+        $requestedTenantId = $this->positiveInt($options['tenant_id'] ?? null);
+        $campaignTenantId = $this->positiveInt($campaign->tenant_id);
+        $profileTenantId = $this->positiveInt($profile->tenant_id);
+        $ownerTenantId = $this->ownershipService->campaignOwnerTenantId((int) $campaign->id);
+
+        $tenantCandidates = collect([$requestedTenantId, $campaignTenantId, $profileTenantId, $ownerTenantId])
+            ->filter(fn ($value): bool => $this->positiveInt($value) !== null)
+            ->map(fn ($value): int => (int) $value)
+            ->unique()
+            ->values();
+
+        if ($tenantCandidates->count() > 1) {
+            return [
+                'ok' => false,
+                'reason' => 'ambiguous_tenant_context',
+                'note' => 'Campaign tenant ownership is ambiguous; send aborted before provider dispatch.',
+            ];
+        }
+
+        $resolvedTenantId = $tenantCandidates->first();
+        if (! is_int($resolvedTenantId) || $resolvedTenantId <= 0) {
+            return [
+                'ok' => false,
+                'reason' => 'tenant_context_unresolved',
+                'note' => 'Campaign tenant ownership could not be resolved.',
+            ];
+        }
+
+        $requestedStoreKey = $this->nullableString($options['store_key'] ?? null);
+        $campaignStoreKey = $this->nullableString($campaign->store_key);
+        $fallbackStoreKey = $this->singleStoreKeyForTenant($resolvedTenantId);
+
+        $storeCandidates = collect([$requestedStoreKey, $campaignStoreKey, $fallbackStoreKey])
+            ->filter(fn ($value): bool => $this->nullableString($value) !== null)
+            ->map(fn ($value): string => strtolower(trim((string) $value)))
+            ->unique()
+            ->values();
+
+        if ($storeCandidates->count() > 1) {
+            return [
+                'ok' => false,
+                'reason' => 'ambiguous_store_context',
+                'note' => 'Campaign store ownership is ambiguous; send aborted before provider dispatch.',
+            ];
+        }
+
+        $resolvedStoreKey = $storeCandidates->first();
+        if (! is_string($resolvedStoreKey) || trim($resolvedStoreKey) === '') {
+            return [
+                'ok' => false,
+                'reason' => 'store_context_unresolved',
+                'note' => 'Campaign store ownership could not be resolved.',
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'tenant_id' => $resolvedTenantId,
+            'store_key' => $resolvedStoreKey,
+            'batch_id' => $this->campaignBatchId((int) $campaign->id, $this->nullableString($options['batch_id'] ?? null)),
+            'source_label' => $this->nullableString($options['source_label'] ?? null)
+                ?? $this->nullableString($campaign->source_label)
+                ?? 'marketing_campaign',
+            'message_subject' => $this->nullableString($options['message_subject'] ?? null)
+                ?? $this->nullableString($campaign->message_subject)
+                ?? $this->nullableString($campaign->name)
+                ?? 'Campaign SMS',
+        ];
+    }
+
+    protected function campaignBatchId(int $campaignId, ?string $requestedBatchId = null): string
+    {
+        $resolved = $this->nullableString($requestedBatchId);
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
+        return 'cmp-'.$campaignId.'-'.strtolower((string) Str::ulid());
+    }
+
+    protected function singleStoreKeyForTenant(?int $tenantId): ?string
+    {
+        $tenantId = $this->positiveInt($tenantId);
+        if ($tenantId === null) {
+            return null;
+        }
+
+        if (array_key_exists($tenantId, $this->singleStoreKeyByTenant)) {
+            return $this->singleStoreKeyByTenant[$tenantId];
+        }
+
+        if (! Schema::hasTable('shopify_stores')) {
+            return $this->singleStoreKeyByTenant[$tenantId] = null;
+        }
+
+        $storeKeys = DB::table('shopify_stores')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('store_key')
+            ->pluck('store_key')
+            ->map(fn ($value): ?string => $this->nullableString($value))
+            ->filter(fn (?string $value): bool => $value !== null)
+            ->unique()
+            ->values();
+
+        return $this->singleStoreKeyByTenant[$tenantId] = $storeKeys->count() === 1
+            ? (string) $storeKeys->first()
+            : null;
     }
 }
