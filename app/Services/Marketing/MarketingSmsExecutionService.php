@@ -196,32 +196,6 @@ class MarketingSmsExecutionService
             ];
         }
 
-        $deliveryContext = $this->resolveDeliveryContext($campaign, $profile, [
-            'tenant_id' => $tenantId,
-            'batch_id' => $batchId,
-            'source_label' => $sourceLabel,
-            'message_subject' => $messageSubject,
-            'store_key' => $options['store_key'] ?? null,
-        ]);
-        if (! (bool) ($deliveryContext['ok'] ?? false)) {
-            return $this->failRecipientForMissingContext(
-                recipient: $recipient,
-                campaign: $campaign,
-                reason: (string) ($deliveryContext['reason'] ?? 'campaign_context_unresolved'),
-                note: (string) ($deliveryContext['note'] ?? 'Unable to resolve tenant-safe campaign delivery context.')
-            );
-        }
-
-        $tenantId = $this->positiveInt($deliveryContext['tenant_id'] ?? null);
-        if ($tenantId === null) {
-            return $this->failRecipientForMissingContext(
-                recipient: $recipient,
-                campaign: $campaign,
-                reason: 'campaign_context_unresolved',
-                note: 'Resolved campaign context did not include tenant ownership.'
-            );
-        }
-
         if ($recipient->channel !== 'sms' || strtolower((string) $campaign->channel) !== 'sms') {
             return $this->skipRecipient($recipient, 'non_sms_channel', 'Recipient/campaign channel is not SMS.');
         }
@@ -263,6 +237,22 @@ class MarketingSmsExecutionService
                     (string) ($windowCheck['note'] ?? 'Outside allowed send window.')
                 );
             }
+        }
+
+        $deliveryContext = $this->resolveDeliveryContext($campaign, $profile, [
+            'tenant_id' => $tenantId,
+            'batch_id' => $batchId,
+            'source_label' => $sourceLabel,
+            'message_subject' => $messageSubject,
+            'store_key' => $options['store_key'] ?? null,
+        ]);
+        if (! (bool) ($deliveryContext['ok'] ?? false)) {
+            return $this->failRecipientForMissingContext(
+                recipient: $recipient,
+                campaign: $campaign,
+                reason: (string) ($deliveryContext['reason'] ?? 'campaign_context_unresolved'),
+                note: (string) ($deliveryContext['note'] ?? 'Unable to resolve tenant-safe campaign delivery context.')
+            );
         }
 
         $messageText = $this->resolveMessageText($campaign, $recipient);
@@ -752,6 +742,7 @@ class MarketingSmsExecutionService
      */
     protected function resolveDeliveryContext(MarketingCampaign $campaign, MarketingProfile $profile, array $options = []): array
     {
+        $strict = $this->ownershipService->strictModeEnabled();
         $requestedTenantId = $this->positiveInt($options['tenant_id'] ?? null);
         $campaignTenantId = $this->positiveInt($campaign->tenant_id);
         $profileTenantId = $this->positiveInt($profile->tenant_id);
@@ -763,7 +754,7 @@ class MarketingSmsExecutionService
             ->unique()
             ->values();
 
-        if ($tenantCandidates->count() > 1) {
+        if ($tenantCandidates->count() > 1 && $strict) {
             return [
                 'ok' => false,
                 'reason' => 'ambiguous_tenant_context',
@@ -771,8 +762,11 @@ class MarketingSmsExecutionService
             ];
         }
 
-        $resolvedTenantId = $tenantCandidates->first();
-        if (! is_int($resolvedTenantId) || $resolvedTenantId <= 0) {
+        $resolvedTenantId = $tenantCandidates->count() === 1
+            ? $this->positiveInt($tenantCandidates->first())
+            : null;
+
+        if ($strict && $resolvedTenantId === null) {
             return [
                 'ok' => false,
                 'reason' => 'tenant_context_unresolved',
@@ -790,7 +784,7 @@ class MarketingSmsExecutionService
             ->unique()
             ->values();
 
-        if ($storeCandidates->count() > 1) {
+        if ($storeCandidates->count() > 1 && $strict) {
             return [
                 'ok' => false,
                 'reason' => 'ambiguous_store_context',
@@ -798,8 +792,8 @@ class MarketingSmsExecutionService
             ];
         }
 
-        $resolvedStoreKey = $storeCandidates->first();
-        if (! is_string($resolvedStoreKey) || trim($resolvedStoreKey) === '') {
+        $resolvedStoreKey = $this->nullableString($storeCandidates->first());
+        if ($strict && $resolvedStoreKey === null) {
             return [
                 'ok' => false,
                 'reason' => 'store_context_unresolved',
