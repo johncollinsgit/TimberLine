@@ -48,7 +48,9 @@
 
  <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
  @foreach($heroMetrics as $metric)
- @php($tone = $toneClasses[$metric['tone']] ?? $toneClasses['emerald'])
+ @php
+ $tone = $toneClasses[$metric['tone']] ?? $toneClasses['emerald'];
+ @endphp
  <article class="rounded-[1.55rem] border p-4 shadow-sm {{ $tone['card'] }}">
  <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">{{ $metric['label'] }}</div>
  <div class="mt-3 text-3xl font-semibold text-zinc-950">{{ number_format((int) $metric['value']) }}</div>
@@ -69,7 +71,9 @@
  </div>
  <div class="grid gap-4 md:grid-cols-3">
  @foreach($sourceCards as $card)
- @php($tone = $toneClasses[$card['tone']] ?? $toneClasses['emerald'])
+ @php
+ $tone = $toneClasses[$card['tone']] ?? $toneClasses['emerald'];
+ @endphp
  <article class="rounded-[1.45rem] border p-4 {{ $tone['card'] }}">
  <div class="flex items-center justify-between gap-3">
  <div class="text-sm font-semibold text-zinc-950">{{ $card['label'] }}</div>
@@ -168,7 +172,9 @@
 
  <div class="mt-4 space-y-3">
  @forelse($focusActions as $action)
- @php($tone = $toneClasses[$action['tone']] ?? $toneClasses['emerald'])
+ @php
+ $tone = $toneClasses[$action['tone']] ?? $toneClasses['emerald'];
+ @endphp
  <div class="rounded-[1.35rem] border p-4 {{ $tone['card'] }}">
  <div class="flex items-start justify-between gap-3">
  <div>
@@ -202,7 +208,9 @@
 
  <div class="mt-4 grid gap-4 xl:grid-cols-3">
  @foreach($systemCards as $card)
- @php($tone = $toneClasses[$card['tone']] ?? $toneClasses['emerald'])
+ @php
+ $tone = $toneClasses[$card['tone']] ?? $toneClasses['emerald'];
+ @endphp
  <article class="rounded-[1.45rem] border p-4 {{ $tone['card'] }}">
  <div class="text-[11px] uppercase tracking-[0.22em] text-zinc-950/42">{{ $card['title'] }}</div>
  <div class="mt-3 text-sm font-semibold text-zinc-950">{{ $card['primary_label'] }}</div>
