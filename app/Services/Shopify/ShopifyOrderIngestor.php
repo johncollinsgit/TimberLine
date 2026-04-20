@@ -10,6 +10,7 @@ use App\Models\Scent;
 use App\Models\ShopifyImportException;
 use App\Models\WholesaleCustomScent;
 use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
+use App\Services\Marketing\StorefrontOrderLinkageService;
 use App\Services\Shipping\BusinessDayCalculator;
 use App\Support\Shopify\InfiniteOptionsParser;
 use Carbon\CarbonImmutable;
@@ -19,7 +20,8 @@ class ShopifyOrderIngestor
 {
     public function __construct(
         protected BusinessDayCalculator $calculator,
-        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder
+        protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
+        protected StorefrontOrderLinkageService $storefrontOrderLinkageService
     ) {
     }
 
@@ -27,7 +29,15 @@ class ShopifyOrderIngestor
      * @param array{key: string, source: string, tenant_id?:?int} $store
      * @param array<string, mixed> $orderData
      * @param array{tenant_id?:?int,dispatch_profile_sync?:bool} $options
-     * @return array{lines_count: int, merged_lines_count: int, mapping_exceptions_count: int, order_id?: ?int}
+     * @return array{
+     *   lines_count:int,
+     *   merged_lines_count:int,
+     *   mapping_exceptions_count:int,
+     *   order_id:?int,
+     *   storefront_linked?:bool,
+     *   storefront_link_confidence?:?float,
+     *   storefront_link_method?:?string
+     * }
      */
     public function ingest(array $store, array $orderData, array $options = []): array
     {
@@ -41,6 +51,9 @@ class ShopifyOrderIngestor
             'merged_lines_count' => 0,
             'mapping_exceptions_count' => 0,
             'order_id' => null,
+            'storefront_linked' => false,
+            'storefront_link_confidence' => null,
+            'storefront_link_method' => null,
         ];
 
         $noteText = $this->buildOrderNote($orderData);
@@ -155,6 +168,21 @@ class ShopifyOrderIngestor
                 (string) ($store['key'] ?? ''),
                 $resolvedTenantId
             );
+            $storefrontLink = $this->storefrontOrderLinkageService->linkOrder(
+                $order,
+                $orderData,
+                [
+                    'tenant_id' => $resolvedTenantId,
+                    'store_key' => (string) ($store['key'] ?? ''),
+                ]
+            );
+            $summary['storefront_linked'] = (bool) ($storefrontLink['linked'] ?? false);
+            $summary['storefront_link_confidence'] = isset($storefrontLink['confidence'])
+                ? (float) $storefrontLink['confidence']
+                : null;
+            $summary['storefront_link_method'] = isset($storefrontLink['method'])
+                ? (string) $storefrontLink['method']
+                : null;
 
             foreach ($mergedLines as $line) {
                 $lineModel = $this->upsertLine($order->id, $line);

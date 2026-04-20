@@ -1,5 +1,114 @@
 # Modern Forestry Backstage
 
+## Phase 4 Revenue Workflow Rollout (2026-04-20)
+
+This pass focuses only on lifecycle workflow shipping and rollout gating (no analytics redesign, no AI budget control).
+
+Implemented:
+- lifecycle workflow primitive service and rollout contract:
+  - new service: `app/Services/Marketing/LifecycleWorkflowRolloutService.php`
+  - audits six workflows in priority order:
+    - welcome
+    - winback
+    - post-purchase cross-sell
+    - wishlist-triggered offer
+    - cart abandonment
+    - checkout abandonment
+  - classifies each workflow as `can_ship_now` or `needs_small_build` with explicit blockers, dependencies, trigger/suppression logic, and QA steps
+- first launchable workflows now stage directly into campaign approval queues:
+  - welcome, winback, and post-purchase cross-sell can be staged from the Flows page
+  - staging creates/updates tenant-scoped lifecycle campaigns + default active variants
+  - recipients are queued non-destructively as `queued_for_approval` (manual-first) and ineligible/suppressed rows are explicitly tracked
+- workflow event logging:
+  - staging writes auditable lifecycle events into `marketing_automation_events` with dedupe rails and suppression reasons
+  - cooldown and suppression checks now gate re-queuing
+- flows UI now exposes operational workflow status/action surface:
+  - file: `resources/views/marketing/show.blade.php` (`automations` section)
+  - includes live eligibility counts, blockers, and one-click “Prepare approval queue” for top 3 workflows
+- route/controller wiring:
+  - new route: `POST /marketing/automations/{workflow}/prepare`
+  - controller action: `MarketingPagesController::prepareAutomationWorkflow`
+  - automation dashboard payload now resolves through `automationDashboard()` + rollout service audit
+- campaign/template objective rails expanded to support lifecycle objective keys used by staged workflows:
+  - `welcome`, `post_purchase_cross_sell`, `wishlist_triggered_offer`, `cart_abandonment`, `checkout_abandonment`
+
+Tests added:
+- `tests/Feature/Marketing/LifecycleWorkflowRolloutServiceTest.php`
+
+QA + handoff artifact:
+- `docs/qa/phase-4-workflow-rollout.md`
+
+## Phase 2 Event Integrity Hardening (2026-04-20)
+
+This pass focuses only on instrumentation trust and purchase linkage (no dashboard redesign).
+
+Implemented:
+- messaging analytics runtime crash fix:
+  - fixed React max-update-depth loop caused by unstable external-store snapshots in global command search provider
+  - file: `resources/js/shopify/search/ActionSearchProvider.js`
+- authenticated click-path QA expansion:
+  - added authenticated operator route coverage config:
+    - `tests/e2e/click-path-routes-auth.json`
+  - added script alias:
+    - `npm run qa:click-path:auth`
+- unbiased baseline funnel ingestion:
+  - storefront trackers no longer idle when campaign params are missing
+  - baseline `session_started`, `landing_page_viewed`, `product_viewed`, `add_to_cart` can now post without UTM campaign context
+  - explicit payload attribution fields are now accepted and preserved on backend
+  - files:
+    - `extensions/forestry-marketing-embed/assets/marketing-storefront-tracker.js`
+    - `extensions/forestry-marketing-pixel/src/index.js`
+    - `app/Http/Controllers/Marketing/MarketingShopifyIntegrationController.php`
+    - `app/Services/Marketing/MarketingStorefrontFunnelService.php`
+- purchase lineage + deterministic order linkage:
+  - introduced distinct `purchase` event (no longer aliased to `checkout_completed`)
+  - added order linkage service to connect Shopify orders to storefront sessions/events using deterministic keys (`checkout_token`, `cart_token`, `session_key`, `client_id`, `mf_delivery_id`) and confidence scoring
+  - created durable purchase events during order ingest (`source_type=shopify_storefront_purchase`)
+  - files:
+    - `app/Services/Marketing/StorefrontOrderLinkageService.php`
+    - `app/Services/Shopify/ShopifyOrderIngestor.php`
+    - `database/migrations/2026_04_20_150000_add_storefront_linkage_columns_to_orders_table.php`
+- Meta continuity:
+  - added end-to-end capture/persistence of `fbclid`, `fbc`, `fbp` in tracker payloads and funnel meta
+  - enriched order attribution source meta and linkage merge paths with Meta fields
+
+Tests added/updated:
+- `tests/Feature/Marketing/StorefrontFunnelTrackingTest.php`
+- `tests/Feature/Marketing/MarketingAttributionSourceMetaEnrichmentTest.php`
+- `resources/js/shopify/search/__tests__/action-search-provider.test.js`
+
+## Phase 3 Decision-Useful Analytics (2026-04-20)
+
+This pass keeps scope to analytics usefulness only (no lifecycle automation rollout).
+
+Implemented:
+- messaging analytics home now ships decision panels:
+  - Attribution Quality
+  - Acquisition Funnel
+  - Retention
+  - Action Queue
+- panel logic implemented in canonical messaging analytics service:
+  - `app/Services/Marketing/MessageAnalyticsService.php`
+- home-tab payload loading is explicit:
+  - `include_decision_panels=true` only on home tab
+  - file: `app/Http/Controllers/ShopifyEmbeddedMessagingController.php`
+- analytics UI updated to prioritize operator decisions and demote message-only operational cards:
+  - file: `resources/views/shopify/messaging-analytics.blade.php`
+
+Coverage includes:
+- UTM coverage, self-referrals, unattributed purchase %, linkage match %, linkage confidence distribution
+- Meta signal continuity (`fbclid`, `fbc`, `fbp`) for Meta-relevant purchases
+- funnel step counts + conversion rates + source/medium/campaign breakdown
+- first-time vs returning revenue, repeat share, time-to-second summary, simple cohorts
+- actionable operator queue with owner + next step recommendations
+
+QA + handoff artifact:
+- `docs/qa/phase-3-analytics-decision-useful.md`
+
+Tests added/updated:
+- `tests/Feature/Marketing/MessageAnalyticsDecisionPanelsTest.php`
+- `tests/Feature/ShopifyEmbeddedMessagingTest.php`
+
 ## Authenticated Onboarding Wizard + Workflow UI System (2026-04-12)
 
 This release adds the first real authenticated onboarding wizard surface and standardizes “workflow” UI polish so onboarding/setup/builder-style screens feel like one coherent product.

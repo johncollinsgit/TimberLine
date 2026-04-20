@@ -25,6 +25,7 @@ use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\ShopifyImportRun;
 use App\Models\Tenant;
+use App\Services\Marketing\LifecycleWorkflowRolloutService;
 use App\Services\Marketing\MarketingTenantOwnershipService;
 use App\Services\Marketing\MarketingSourceOverlapReportService;
 use App\Services\Marketing\TwilioSenderConfigService;
@@ -33,6 +34,7 @@ use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,7 +44,8 @@ class MarketingPagesController extends Controller
     public function __construct(
         protected MarketingSourceOverlapReportService $sourceOverlapReportService,
         protected TwilioSenderConfigService $senderConfigService,
-        protected MarketingTenantOwnershipService $ownershipService
+        protected MarketingTenantOwnershipService $ownershipService,
+        protected LifecycleWorkflowRolloutService $workflowRolloutService
     ) {
     }
 
@@ -86,7 +89,52 @@ class MarketingPagesController extends Controller
                 ? $this->customersDiscoverySummary((int) $tenantId)
                 : [],
             'candleCashDashboard' => $section === 'candle-cash' ? $this->candleCashDashboard() : [],
+            'automationDashboard' => $section === 'automations' && $tenantId !== null
+                ? $this->automationDashboard((int) $tenantId)
+                : [],
         ]);
+    }
+
+    public function prepareAutomationWorkflow(Request $request, string $workflow): RedirectResponse
+    {
+        $tenantId = $this->requireTenantId($request);
+        $limit = max(1, min(1000, (int) $request->input('limit', 400)));
+        $storeKey = trim((string) $request->input('store_key', ''));
+        if ($storeKey === '') {
+            $storeKey = $this->tenantShopifyStoreKeys($tenantId)[0] ?? null;
+        }
+
+        $result = $this->workflowRolloutService->stageWorkflow($workflow, $tenantId, $storeKey, [
+            'limit' => $limit,
+            'actor_id' => auth()->id(),
+        ]);
+
+        if (($result['status'] ?? null) !== 'ok') {
+            $message = (string) ($result['message'] ?? 'Workflow could not be prepared.');
+            if (($result['status'] ?? null) === 'no_candidates') {
+                $message = 'No eligible profiles currently match this workflow.';
+            }
+
+            return redirect()
+                ->route('marketing.automations')
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => $message,
+                ]);
+        }
+
+        return redirect()
+            ->route('marketing.campaigns.show', ['campaign' => (int) ($result['campaign_id'] ?? 0)])
+            ->with('toast', [
+                'style' => 'success',
+                'message' => sprintf(
+                    '%s queued=%d skipped=%d suppressed=%d',
+                    Str::headline((string) ($result['workflow'] ?? 'workflow')),
+                    (int) ($result['queued_for_approval'] ?? 0),
+                    (int) ($result['skipped'] ?? 0),
+                    (int) ($result['suppressed'] ?? 0)
+                ),
+            ]);
     }
 
     public function saveSettings(Request $request): RedirectResponse
@@ -876,5 +924,26 @@ class MarketingPagesController extends Controller
         $int = (int) $value;
 
         return $int > 0 ? $int : null;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function automationDashboard(int $tenantId): array
+    {
+        $storeKeys = $this->tenantShopifyStoreKeys($tenantId);
+        $storeKey = $storeKeys[0] ?? null;
+        $audit = $this->workflowRolloutService->audit($tenantId, $storeKey);
+
+        return [
+            'store_key' => $storeKey,
+            'store_keys' => $storeKeys,
+            'evaluated_at' => $audit['evaluated_at'] ?? null,
+            'launch_order' => (array) ($audit['launch_order'] ?? []),
+            'workflows' => collect((array) ($audit['workflows'] ?? []))
+                ->sortBy('priority')
+                ->values(),
+            'supporting_metrics' => (array) ($audit['supporting_metrics'] ?? []),
+        ];
     }
 }

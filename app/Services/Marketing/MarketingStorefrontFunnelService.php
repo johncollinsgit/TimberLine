@@ -31,7 +31,7 @@ class MarketingStorefrontFunnelService
         'checkout_started' => 'checkout_started',
         'checkout_complete' => 'checkout_completed',
         'checkout_completed' => 'checkout_completed',
-        'purchase' => 'checkout_completed',
+        'purchase' => 'purchase',
     ];
 
     /**
@@ -62,11 +62,15 @@ class MarketingStorefrontFunnelService
         $pageUrl = $this->nullableString($payload['page_url'] ?? $payload['landing_page'] ?? $payload['current_url'] ?? null);
         $landingPage = $this->nullableString($payload['landing_page'] ?? null) ?? $pageUrl;
         $referrer = $this->nullableString($payload['referrer'] ?? $payload['referring_site'] ?? null);
-        $campaignSignals = $this->campaignSignalsFromUrl($pageUrl)
-            ?: $this->campaignSignalsFromUrl($landingPage)
-            ?: $this->campaignSignalsFromUrl($referrer);
+        $campaignSignals = $this->resolveCampaignSignals($payload, [
+            $pageUrl,
+            $landingPage,
+            $referrer,
+        ]);
 
         $sessionKey = $this->nullableString($payload['session_key'] ?? $payload['session_id'] ?? null);
+        $sessionId = $this->nullableString($payload['session_id'] ?? null) ?? $sessionKey;
+        $clientId = $this->nullableString($payload['client_id'] ?? null);
         $checkoutToken = $this->nullableString($payload['checkout_token'] ?? null);
         $cartToken = $this->nullableString($payload['cart_token'] ?? null);
         $requestKey = $this->nullableString($payload['request_key'] ?? null);
@@ -88,7 +92,8 @@ class MarketingStorefrontFunnelService
             'referrer_path' => $this->urlPath($referrer),
             'page_type' => $this->nullableString($payload['page_type'] ?? null),
             'session_key' => $sessionKey,
-            'client_id' => $this->nullableString($payload['client_id'] ?? null),
+            'session_id' => $sessionId,
+            'client_id' => $clientId,
             'guest_token' => $this->nullableString($payload['guest_token'] ?? null),
             'product_id' => $productId,
             'product_handle' => $this->nullableString($payload['product_handle'] ?? null),
@@ -108,6 +113,9 @@ class MarketingStorefrontFunnelService
             'utm_campaign' => $this->nullableString($campaignSignals['utm_campaign'] ?? null),
             'utm_content' => $this->nullableString($campaignSignals['utm_content'] ?? null),
             'utm_term' => $this->nullableString($campaignSignals['utm_term'] ?? null),
+            'fbclid' => $this->nullableString($campaignSignals['fbclid'] ?? null),
+            'fbc' => $this->nullableString($campaignSignals['fbc'] ?? null),
+            'fbp' => $this->nullableString($campaignSignals['fbp'] ?? null),
             'mf_channel' => $this->nullableString($campaignSignals['mf_channel'] ?? null),
             'mf_source_label' => $this->nullableString($campaignSignals['mf_source_label'] ?? null),
             'mf_template_key' => $this->nullableString($campaignSignals['mf_template_key'] ?? null),
@@ -162,6 +170,42 @@ class MarketingStorefrontFunnelService
     }
 
     /**
+     * @param  array<string,mixed>  $payload
+     * @param  array<int,?string>  $urls
+     * @return array<string,string>
+     */
+    protected function resolveCampaignSignals(array $payload, array $urls): array
+    {
+        $payloadSignals = $this->campaignSignalsFromPayload($payload);
+        $urlSignals = array_map(fn (?string $url): array => $this->campaignSignalsFromUrl($url), $urls);
+        $resolved = [];
+
+        foreach ($this->campaignSignalKeys() as $key) {
+            $resolved[$key] = $this->resolveSignalValue($key, $payloadSignals, ...$urlSignals);
+        }
+
+        return array_filter($resolved, static fn ($value) => $value !== null);
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,string>
+     */
+    protected function campaignSignalsFromPayload(array $payload): array
+    {
+        $signals = [];
+
+        foreach ($this->campaignSignalKeys() as $key) {
+            $value = $this->nullableString($payload[$key] ?? null);
+            if ($value !== null) {
+                $signals[$key] = $value;
+            }
+        }
+
+        return $signals;
+    }
+
+    /**
      * @return array<string,string>
      */
     protected function campaignSignalsFromUrl(?string $url): array
@@ -187,6 +231,9 @@ class MarketingStorefrontFunnelService
             'utm_campaign',
             'utm_content',
             'utm_term',
+            'fbclid',
+            'fbc',
+            'fbp',
             'mf_channel',
             'mf_source_label',
             'mf_template_key',
@@ -207,6 +254,50 @@ class MarketingStorefrontFunnelService
         }
 
         return $signals;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function campaignSignalKeys(): array
+    {
+        return [
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_content',
+            'utm_term',
+            'fbclid',
+            'fbc',
+            'fbp',
+            'mf_channel',
+            'mf_source_label',
+            'mf_template_key',
+            'mf_campaign_id',
+            'mf_delivery_id',
+            'mf_profile_id',
+            'mf_campaign_recipient_id',
+            'mf_module_type',
+            'mf_module_position',
+            'mf_product_id',
+            'mf_tile_position',
+            'mf_link_label',
+        ];
+    }
+
+    /**
+     * @param  array<string,string>  ...$sources
+     */
+    protected function resolveSignalValue(string $key, array ...$sources): ?string
+    {
+        foreach ($sources as $source) {
+            $value = $this->nullableString($source[$key] ?? null);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     protected function urlPath(?string $url): ?string

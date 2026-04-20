@@ -6,10 +6,12 @@ use App\Models\CandleCashReferral;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\MarketingProfileSyncService;
+use App\Services\Marketing\StorefrontOrderLinkageService;
 use App\Services\Shopify\ShopifyOrderIngestor;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Queue;
@@ -217,6 +219,77 @@ test('shopify order ingest persists raw attribution meta on orders and downstrea
     expect($links['order']->source_meta['utm_source'])->toBe('google')
         ->and($links['shopify_order']->source_meta['utm_source'])->toBe('google')
         ->and($links['shopify_customer']->source_meta['utm_source'])->toBe('google');
+});
+
+test('storefront order linkage persists deterministic checkout linkage and purchase lineage', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Storefront Linkage Tenant',
+        'slug' => 'storefront-linkage-tenant',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'tenant_id' => $tenant->id,
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 7771,
+        'ordered_at' => now(),
+        'order_number' => '#7771',
+        'status' => 'complete',
+        'attribution_meta' => [
+            'checkout_token' => 'checkout-7771',
+            'session_key' => 'session-7771',
+            'client_id' => 'client-7771',
+        ],
+    ]);
+
+    $checkoutEvent = MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'checkout_completed',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'endpoint' => '/apps/forestry/funnel/event',
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'checkout:checkout-7771',
+        'meta' => [
+            'store_key' => 'retail',
+            'checkout_token' => 'checkout-7771',
+            'session_key' => 'session-7771',
+            'client_id' => 'client-7771',
+            'utm_source' => 'facebook',
+            'utm_medium' => 'paid_social',
+            'utm_campaign' => 'spring-retargeting',
+            'fbclid' => 'IwZXh0bgNHM',
+            'fbc' => 'fb.1.1700000000.IwZXh0bgNHM',
+            'fbp' => 'fb.1.1700000000.123456789',
+        ],
+        'occurred_at' => now()->subMinutes(8),
+        'resolution_status' => 'resolved',
+    ]);
+
+    $result = app(StorefrontOrderLinkageService::class)->linkOrder($order, [], [
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+    ]);
+
+    $order->refresh();
+    $purchaseEvent = MarketingStorefrontEvent::query()
+        ->where('event_type', 'purchase')
+        ->where('source_type', 'shopify_storefront_purchase')
+        ->latest('id')
+        ->first();
+
+    expect($result['linked'])->toBeTrue()
+        ->and($result['method'])->toBe('checkout_token_exact')
+        ->and((float) ($result['confidence'] ?? 0))->toBeGreaterThan(0.99)
+        ->and($order->storefront_checkout_token)->toBe('checkout-7771')
+        ->and($order->storefront_link_method)->toBe('checkout_token_exact')
+        ->and((float) ($order->storefront_link_confidence ?? 0))->toBeGreaterThan(0.99)
+        ->and((int) ($order->storefront_linked_event_id ?? 0))->toBe((int) ($purchaseEvent?->id ?? 0))
+        ->and((string) ($order->attribution_meta['utm_campaign'] ?? ''))->toBe('spring-retargeting')
+        ->and((string) ($order->attribution_meta['fbclid'] ?? ''))->toBe('IwZXh0bgNHM')
+        ->and($purchaseEvent)->not->toBeNull()
+        ->and((int) ($purchaseEvent?->meta['linked_storefront_event_id'] ?? 0))->toBe((int) $checkoutEvent->id);
 });
 
 test('attribution backfill command is dry run safe and enriches order linked records when executed', function () {

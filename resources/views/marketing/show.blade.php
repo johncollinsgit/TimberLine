@@ -386,6 +386,92 @@
  </article>
  </div>
  </section>
+ @elseif($currentSectionKey === 'automations')
+ <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
+ <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+ <div>
+ <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Lifecycle rollout</div>
+ <h2 class="mt-2 text-xl font-semibold text-zinc-950">Revenue workflows, staged for manual approval</h2>
+ <p class="mt-2 text-sm text-zinc-600">This ships Welcome, Winback, and Post-purchase as approval queues first. Wishlist remains operator-driven. Cart/checkout abandonment stay blocked until event continuity is stronger.</p>
+ </div>
+ <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-500">
+ Store context: {{ data_get($automationDashboard, 'store_key') ?: 'No Shopify store key detected' }}
+ </div>
+ </div>
+ </section>
+
+ <section class="grid gap-4 xl:grid-cols-2">
+ @foreach((array) data_get($automationDashboard, 'workflows', []) as $workflow)
+ @php
+ $status = (string) ($workflow['status'] ?? 'unknown');
+ $statusTone = match ($status) {
+ 'can_ship_now' => 'border-emerald-300/35 bg-emerald-100 text-emerald-900',
+ 'needs_small_build' => 'border-amber-300/35 bg-amber-100 text-amber-900',
+ 'needs_major_build' => 'border-rose-300/35 bg-rose-100 text-rose-900',
+ default => 'border-zinc-200 bg-zinc-50 text-zinc-600',
+ };
+ @endphp
+ <article class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
+ <div class="flex items-start justify-between gap-3">
+ <div>
+ <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Priority {{ (int) ($workflow['priority'] ?? 0) }}</div>
+ <h3 class="mt-1 text-lg font-semibold text-zinc-950">{{ $workflow['label'] ?? 'Workflow' }}</h3>
+ </div>
+ <span class="inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase {{ $statusTone }}">{{ strtoupper(str_replace('_', ' ', (string) ($workflow['status_label'] ?? $status))) }}</span>
+ </div>
+
+ <div class="grid gap-3 sm:grid-cols-2">
+ <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-3">
+ <div class="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Eligible now</div>
+ <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($workflow['eligible_now'] ?? 0)) }}</div>
+ </div>
+ <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-3">
+ <div class="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Launch mode</div>
+ <div class="mt-1 text-sm font-semibold text-zinc-900">{{ strtoupper(str_replace('_', ' ', (string) ($workflow['launch_mode'] ?? 'manual_first'))) }}</div>
+ </div>
+ </div>
+
+ <div>
+ <div class="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Trigger</div>
+ <p class="mt-1 text-sm text-zinc-700">{{ $workflow['trigger'] ?? 'No trigger configured.' }}</p>
+ </div>
+ <div>
+ <div class="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Suppression</div>
+ <p class="mt-1 text-sm text-zinc-700">{{ $workflow['suppression'] ?? 'No suppression rules configured.' }}</p>
+ </div>
+
+ @if(!empty($workflow['blockers']))
+ <div>
+ <div class="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Current blockers</div>
+ <ul class="mt-2 space-y-1 text-sm text-amber-900">
+ @foreach((array) $workflow['blockers'] as $blocker)
+ <li>• {{ $blocker }}</li>
+ @endforeach
+ </ul>
+ </div>
+ @endif
+
+ <div class="flex flex-wrap gap-2 pt-2">
+ @if((bool) ($workflow['can_prepare'] ?? false))
+ <form method="POST" action="{{ route('marketing.automations.prepare', ['workflow' => (string) ($workflow['key'] ?? '')]) }}">
+ @csrf
+ <input type="hidden" name="store_key" value="{{ data_get($automationDashboard, 'store_key') }}">
+ <button type="submit" class="inline-flex rounded-full border border-emerald-300/35 bg-emerald-100 px-4 py-2 text-xs font-semibold text-emerald-900">
+ Prepare approval queue
+ </button>
+ </form>
+ @elseif(!empty($workflow['operator_route']))
+ <a href="{{ (string) $workflow['operator_route'] }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-4 py-2 text-xs font-semibold text-zinc-700">
+ Open workflow surface
+ </a>
+ @endif
+ <a href="{{ route('marketing.campaigns.create') }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-4 py-2 text-xs font-semibold text-zinc-700">
+ Open campaigns
+ </a>
+ </div>
+ </article>
+ @endforeach
+ </section>
  @elseif($currentSectionKey === 'candle-cash')
  <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
  <x-admin.help-hint tone="neutral" title="Redemption lifecycle">

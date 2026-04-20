@@ -629,6 +629,10 @@ test('messaging analytics stays tenant and store scoped with attributed outcomes
     $homeResponse->assertOk()
         ->assertSeeText('Message Analytics')
         ->assertSeeText('Analytics tabs')
+        ->assertSeeText('Attribution Quality')
+        ->assertSeeText('Acquisition Funnel')
+        ->assertSeeText('Retention')
+        ->assertSeeText('Action Queue')
         ->assertSeeText('Storefront tracking health')
         ->assertSeeText('Raw tracking diagnostics')
         ->assertSeeText('Sales Success');

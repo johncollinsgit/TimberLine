@@ -24,3 +24,4 @@ yarn-error.log
 .tmp/
 .DS_Store
 **/.DS_Store
+/test-results/click-path/

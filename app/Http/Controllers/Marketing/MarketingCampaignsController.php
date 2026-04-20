@@ -1090,7 +1090,7 @@ class MarketingCampaignsController extends Controller
             'segment_id' => ['nullable', 'integer', 'exists:marketing_segments,id'],
             'group_ids' => ['nullable', 'array'],
             'group_ids.*' => ['integer', 'exists:marketing_groups,id'],
-            'objective' => ['nullable', 'in:winback,repeat_purchase,event_followup,consent_capture,review_request,retention,reward_issuance'],
+            'objective' => ['nullable', 'in:welcome,winback,repeat_purchase,post_purchase_cross_sell,wishlist_triggered_offer,cart_abandonment,checkout_abandonment,event_followup,consent_capture,review_request,retention,reward_issuance'],
             'attribution_window_days' => ['nullable', 'integer', 'min:1', 'max:60'],
             'coupon_code' => ['nullable', 'string', 'max:120'],
             'send_window_start' => ['nullable', 'date_format:H:i'],

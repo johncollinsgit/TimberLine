@@ -264,21 +264,25 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'include_messages' => true,
                 'include_history_outcomes' => false,
                 'include_sales_success' => false,
+                'include_decision_panels' => false,
             ],
             'history' => [
                 'include_messages' => false,
                 'include_history_outcomes' => true,
                 'include_sales_success' => false,
+                'include_decision_panels' => false,
             ],
             'sales_success' => [
                 'include_messages' => false,
                 'include_history_outcomes' => false,
                 'include_sales_success' => true,
+                'include_decision_panels' => false,
             ],
             default => [
                 'include_messages' => false,
                 'include_history_outcomes' => false,
                 'include_sales_success' => false,
+                'include_decision_panels' => true,
             ],
         };
         $analyticsPayload = ($authorized && $tenantId !== null && $hasMessagingAccess)

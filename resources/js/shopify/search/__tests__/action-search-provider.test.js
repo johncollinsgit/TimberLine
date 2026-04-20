@@ -38,3 +38,26 @@ test("action registration and unregistration works by id and scope", () => {
   provider.unregister("feature:products");
   assert.equal(provider.snapshot().length, 0);
 });
+
+test("snapshot reference remains stable until registry changes", () => {
+  const provider = new ActionSearchProvider();
+  const emptyA = provider.snapshot();
+  const emptyB = provider.snapshot();
+  assert.equal(emptyA, emptyB);
+
+  registerSearchActions(
+    "feature:stable-snapshot",
+    [{ id: "action:stable", title: "Stable", section: "actions", execute: () => {} }],
+    provider
+  );
+
+  const withActionA = provider.snapshot();
+  const withActionB = provider.snapshot();
+  assert.equal(withActionA, withActionB);
+  assert.notEqual(emptyA, withActionA);
+
+  provider.clear();
+  const cleared = provider.snapshot();
+  assert.notEqual(withActionA, cleared);
+  assert.equal(cleared.length, 0);
+});

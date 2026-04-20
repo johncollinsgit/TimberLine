@@ -22,6 +22,7 @@ class ShopifyStorefrontTrackingSetupService
         'add_to_cart',
         'checkout_started',
         'checkout_completed',
+        'purchase',
     ];
 
     public function __construct(
@@ -306,7 +307,7 @@ class ShopifyStorefrontTrackingSetupService
         $count = $events->count();
         $latest = $events->first();
         $checkoutCompleted = $events
-            ->first(fn (MarketingStorefrontEvent $event): bool => (string) $event->event_type === 'checkout_completed');
+            ->first(fn (MarketingStorefrontEvent $event): bool => in_array((string) $event->event_type, ['checkout_completed', 'purchase'], true));
 
         $eventTypeCounts = $events
             ->groupBy(fn (MarketingStorefrontEvent $event): string => (string) $event->event_type)

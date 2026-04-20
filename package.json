@@ -9,7 +9,9 @@
     "dev:full": "concurrently -k -n \"LARAVEL,VITE\" -c \"green,blue\" \"php artisan serve\" \"npm run dev\"",
     "shopify:app:dev": "shopify app dev",
     "shopify:app:deploy": "shopify app deploy",
-    "shopify:app:info": "shopify app info"
+    "shopify:app:info": "shopify app info",
+    "qa:click-path": "node scripts/qa/click-path-audit.mjs",
+    "qa:click-path:auth": "CLICK_PATH_CONFIG=tests/e2e/click-path-routes-auth.json node scripts/qa/click-path-audit.mjs"
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",
@@ -38,6 +40,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.7.0",
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "playwright": "^1.54.2"
   }
 }

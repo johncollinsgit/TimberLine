@@ -17,6 +17,9 @@ class MarketingAttributionSourceMetaBuilder
         'utm_campaign',
         'utm_content',
         'utm_term',
+        'fbclid',
+        'fbc',
+        'fbp',
         'referrer',
         'referring_site',
         'landing_site',
@@ -25,6 +28,11 @@ class MarketingAttributionSourceMetaBuilder
         'source_name',
         'source_type',
         'source_identifier',
+        'checkout_token',
+        'cart_token',
+        'session_key',
+        'session_id',
+        'client_id',
         'email_module_type',
         'email_module_position',
         'email_product_id',
@@ -50,10 +58,15 @@ class MarketingAttributionSourceMetaBuilder
         $this->setField($candidate, $fieldConfidence, 'source_identifier', $orderData['source_identifier'] ?? null, 'high');
         $this->setField($candidate, $fieldConfidence, 'source_url', $orderData['source_url'] ?? null, 'high');
         $this->setField($candidate, $fieldConfidence, 'landing_page', $orderData['landing_page'] ?? null, 'high');
+        $this->setField($candidate, $fieldConfidence, 'checkout_token', $orderData['checkout_token'] ?? null, 'high');
+        $this->setField($candidate, $fieldConfidence, 'cart_token', $orderData['cart_token'] ?? null, 'high');
+        $this->setField($candidate, $fieldConfidence, 'fbclid', $orderData['fbclid'] ?? null, 'high');
+        $this->setField($candidate, $fieldConfidence, 'fbc', $orderData['fbc'] ?? null, 'high');
+        $this->setField($candidate, $fieldConfidence, 'fbp', $orderData['fbp'] ?? null, 'high');
         $this->setField($candidate, $fieldConfidence, 'source_type', 'shopify_order_payload', 'medium');
 
         foreach ($this->extractClientSignals((array) ($orderData['client_details'] ?? []), $orderData) as $key => $value) {
-            $candidate[$key] = $value;
+            $this->setField($candidate, $fieldConfidence, $key, $value, 'medium');
         }
 
         $orderTags = $this->normalizeTags($orderData['tags'] ?? null);
@@ -257,6 +270,7 @@ class MarketingAttributionSourceMetaBuilder
                 str_contains($normalizedName, 'utm_campaign') => 'utm_campaign',
                 str_contains($normalizedName, 'utm_content') => 'utm_content',
                 str_contains($normalizedName, 'utm_term') => 'utm_term',
+                in_array($normalizedName, ['fbclid', 'fbc', 'fbp'], true) => $normalizedName,
                 in_array($normalizedName, ['referrer', 'referer'], true) => 'referrer',
                 $normalizedName === 'referring_site' => 'referring_site',
                 str_contains($normalizedName, 'landing_site') => 'landing_site',
@@ -265,6 +279,11 @@ class MarketingAttributionSourceMetaBuilder
                 str_contains($normalizedName, 'source_name') => 'source_name',
                 str_contains($normalizedName, 'source_type') => 'source_type',
                 str_contains($normalizedName, 'source_identifier') => 'source_identifier',
+                str_contains($normalizedName, 'checkout_token') => 'checkout_token',
+                str_contains($normalizedName, 'cart_token') => 'cart_token',
+                str_contains($normalizedName, 'session_key') => 'session_key',
+                $normalizedName === 'session_id' => 'session_id',
+                str_contains($normalizedName, 'client_id') => 'client_id',
                 str_contains($normalizedName, 'email_module_type') || str_contains($normalizedName, 'mf_module_type') => 'email_module_type',
                 str_contains($normalizedName, 'email_module_position') || str_contains($normalizedName, 'mf_module_position') => 'email_module_position',
                 str_contains($normalizedName, 'email_product_id') || str_contains($normalizedName, 'mf_product_id') => 'email_product_id',
@@ -301,7 +320,7 @@ class MarketingAttributionSourceMetaBuilder
         parse_str((string) $parts['query'], $query);
 
         $signals = [];
-        foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $field) {
+        foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'fbc', 'fbp'] as $field) {
             $value = $this->nullableString($query[$field] ?? null);
             if ($value !== null) {
                 $signals[$field] = $value;
@@ -339,6 +358,7 @@ class MarketingAttributionSourceMetaBuilder
             'mf_template_key' => 'email_template_key',
             'mf_source_label' => 'email_source_label',
             'mf_link_label' => 'email_link_label',
+            'mf_delivery_id' => 'source_identifier',
         ];
 
         $signals = [];
@@ -366,6 +386,8 @@ class MarketingAttributionSourceMetaBuilder
             'user_agent' => $clientDetails['user_agent'] ?? null,
             'accept_language' => $clientDetails['accept_language'] ?? null,
             'session_hash' => $clientDetails['session_hash'] ?? null,
+            'session_id' => $clientDetails['session_hash'] ?? $orderData['session_id'] ?? null,
+            'client_id' => $orderData['client_id'] ?? null,
         ] as $field => $value) {
             $value = $this->nullableString($value);
             if ($value !== null) {

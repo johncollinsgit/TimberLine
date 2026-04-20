@@ -31,6 +31,10 @@ class Order extends Model
         'refund_total' => 'decimal:2',
         'total_price' => 'decimal:2',
         'tenant_id' => 'integer',
+        'storefront_message_delivery_id' => 'integer',
+        'storefront_linked_event_id' => 'integer',
+        'storefront_link_confidence' => 'decimal:2',
+        'storefront_linked_at' => 'datetime',
     ];
 
     public function lines(): HasMany

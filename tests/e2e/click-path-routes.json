@@ -1,0 +1,94 @@
+{
+  "routes": [
+    {
+      "path": "/login",
+      "label": "Login"
+    },
+    {
+      "path": "/wiki",
+      "label": "Wiki Index",
+      "requiresAuth": true
+    },
+    {
+      "path": "/wiki/categories",
+      "label": "Wiki Categories",
+      "requiresAuth": true
+    },
+    {
+      "path": "/wiki/random",
+      "label": "Wiki Random",
+      "requiresAuth": true
+    },
+    {
+      "path": "/analytics",
+      "label": "Analytics",
+      "requiresAuth": true
+    },
+    {
+      "path": "/marketing",
+      "label": "Marketing Overview",
+      "requiresAuth": true
+    },
+    {
+      "path": "/marketing/messages",
+      "label": "Marketing Messages",
+      "requiresAuth": true
+    },
+    {
+      "path": "/marketing/campaigns",
+      "label": "Marketing Campaigns",
+      "requiresAuth": true
+    },
+    {
+      "path": "/marketing/automations",
+      "label": "Marketing Automations",
+      "requiresAuth": true
+    },
+    {
+      "path": "/marketing/recommendations",
+      "label": "Marketing Recommendations",
+      "requiresAuth": true
+    },
+    {
+      "path": "/marketing/wishlist",
+      "label": "Marketing Wishlist",
+      "requiresAuth": true
+    },
+    {
+      "path": "/marketing/providers-integrations",
+      "label": "Marketing Providers & Integrations",
+      "requiresAuth": true
+    },
+    {
+      "path": "/shopify/app/messaging/analytics?analytics_tab=home",
+      "label": "Shopify Embedded Messaging Analytics",
+      "requiresAuth": true
+    }
+  ],
+  "dangerousActionGuards": [
+    "delete",
+    "remove",
+    "archive",
+    "disconnect",
+    "sync now",
+    "sync",
+    "import",
+    "send",
+    "redeem",
+    "payout",
+    "save",
+    "update",
+    "create",
+    "submit",
+    "run",
+    "retry",
+    "trigger",
+    "approve",
+    "reject",
+    "activate",
+    "deactivate",
+    "reprocess"
+  ],
+  "maxLinksPerPage": 80,
+  "maxButtonsPerPage": 35
+}

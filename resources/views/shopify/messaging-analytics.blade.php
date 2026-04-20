@@ -48,6 +48,29 @@
         $salesSuccessRows = collect((array) ($salesSuccess['rows'] ?? []))
             ->filter(fn ($row) => is_array($row))
             ->values();
+        $decisionPanels = is_array($analytics['decision_panels'] ?? null) ? $analytics['decision_panels'] : [];
+        $attributionQualityPanel = is_array($decisionPanels['attribution_quality'] ?? null) ? $decisionPanels['attribution_quality'] : [];
+        $acquisitionFunnelPanel = is_array($decisionPanels['acquisition_funnel'] ?? null) ? $decisionPanels['acquisition_funnel'] : [];
+        $retentionPanel = is_array($decisionPanels['retention'] ?? null) ? $decisionPanels['retention'] : [];
+        $actionQueuePanel = is_array($decisionPanels['action_queue'] ?? null) ? $decisionPanels['action_queue'] : [];
+        $attributionQualityTotals = is_array($attributionQualityPanel['totals'] ?? null) ? $attributionQualityPanel['totals'] : [];
+        $attributionQualityLinkage = is_array($attributionQualityPanel['linkage_confidence'] ?? null) ? $attributionQualityPanel['linkage_confidence'] : [];
+        $attributionQualityMetaCoverage = is_array($attributionQualityPanel['meta_signal_coverage'] ?? null) ? $attributionQualityPanel['meta_signal_coverage'] : [];
+        $funnelTotals = is_array($acquisitionFunnelPanel['totals'] ?? null) ? $acquisitionFunnelPanel['totals'] : [];
+        $funnelSteps = collect((array) ($acquisitionFunnelPanel['steps'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $funnelSourceRows = collect((array) ($acquisitionFunnelPanel['source_breakdown'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $retentionTotals = is_array($retentionPanel['totals'] ?? null) ? $retentionPanel['totals'] : [];
+        $retentionTimeToSecond = is_array($retentionPanel['time_to_second_purchase'] ?? null) ? $retentionPanel['time_to_second_purchase'] : [];
+        $retentionCohorts = collect((array) ($retentionPanel['cohorts'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $actionQueueItems = collect((array) ($actionQueuePanel['items'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
         $messagesPaginator = $analytics['messages'] ?? null;
         $messages = $messagesPaginator instanceof \Illuminate\Pagination\LengthAwarePaginator
             ? $messagesPaginator
@@ -135,10 +158,88 @@
             background: rgba(180, 35, 24, 0.06);
         }
 
+        .message-analytics-card--secondary {
+            border-style: dashed;
+            border-color: rgba(15, 23, 42, 0.18);
+            box-shadow: none;
+            background: rgba(248, 250, 252, 0.72);
+        }
+
         .message-analytics-muted {
             color: rgba(15, 23, 42, 0.62);
             font-size: 13px;
             line-height: 1.5;
+        }
+
+        .message-analytics-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .message-analytics-kpi {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 10px;
+            background: rgba(248, 250, 252, 0.72);
+            padding: 10px;
+            display: grid;
+            gap: 4px;
+        }
+
+        .message-analytics-kpi span {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: rgba(15, 23, 42, 0.56);
+            font-weight: 700;
+        }
+
+        .message-analytics-kpi strong {
+            color: #0f172a;
+            font-size: 1.15rem;
+            line-height: 1.1;
+            font-weight: 800;
+        }
+
+        .message-analytics-priority {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            width: fit-content;
+        }
+
+        .message-analytics-priority[data-priority="high"] {
+            border-color: rgba(180, 35, 24, 0.3);
+            background: rgba(180, 35, 24, 0.08);
+            color: #b42318;
+        }
+
+        .message-analytics-priority[data-priority="medium"] {
+            border-color: rgba(180, 83, 9, 0.3);
+            background: rgba(180, 83, 9, 0.08);
+            color: #b45309;
+        }
+
+        .message-analytics-priority[data-priority="low"] {
+            border-color: rgba(15, 118, 110, 0.3);
+            background: rgba(15, 118, 110, 0.08);
+            color: #0f766e;
+        }
+
+        .message-analytics-action-item {
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 12px;
+            background: rgba(248, 250, 252, 0.72);
+            padding: 10px;
+            display: grid;
+            gap: 6px;
         }
 
         .message-analytics-summary {
@@ -492,6 +593,7 @@
         }
 
         @media (max-width: 1200px) {
+            .message-analytics-kpi-grid,
             .message-analytics-summary {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
@@ -507,6 +609,7 @@
         }
 
         @media (max-width: 760px) {
+            .message-analytics-kpi-grid,
             .message-analytics-summary,
             .message-analytics-filters {
                 grid-template-columns: minmax(0, 1fr);
@@ -539,7 +642,7 @@
             </article>
 
             @if($storefrontTracking !== [])
-                <article class="message-analytics-card">
+                <article class="message-analytics-card message-analytics-card--secondary">
                     <h3>Storefront tracking health</h3>
                     <p class="message-analytics-muted">
                         Snapshot from tracking config plus recent funnel events. This helps separate configured state from proven live signal flow.
@@ -599,7 +702,7 @@
                     </div>
 
                     <details class="message-analytics-setup-guide">
-                        <summary>Raw tracking diagnostics</summary>
+                        <summary>Raw tracking diagnostics (debug)</summary>
                         <pre class="message-analytics-muted" style="white-space: pre-wrap; margin: 0;">{{ json_encode($storefrontTracking, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
                     </details>
                 </article>
@@ -623,13 +726,240 @@
                     @endforeach
                 </div>
                 <p class="message-analytics-muted">
-                    Home keeps the first load focused on trend, filters, and summary. Use the other tabs for deeper operational tables.
+                    Home is now decision-first (acquisition, attribution, retention, and action queue). Use the other tabs for message-level operations.
                 </p>
             </article>
 
             @if($analyticsTab === 'home')
             <article class="message-analytics-card">
-                <h3>Engagement Trend</h3>
+                <h3>Attribution Quality</h3>
+                <p class="message-analytics-muted">
+                    Decision question: can we trust channel and campaign reporting enough to allocate spend?
+                </p>
+                <div class="message-analytics-kpi-grid" aria-label="Attribution quality metrics">
+                    <article class="message-analytics-kpi">
+                        <span>UTM coverage</span>
+                        <strong>{{ $formatPercent((float) ($attributionQualityTotals['utm_coverage_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Self-referral rate</span>
+                        <strong>{{ $formatPercent((float) ($attributionQualityTotals['self_referral_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Unattributed purchase rate</span>
+                        <strong>{{ $formatPercent((float) ($attributionQualityTotals['unattributed_purchase_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Purchase linkage match rate</span>
+                        <strong>{{ $formatPercent((float) ($attributionQualityTotals['purchase_linkage_match_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Meta relevant purchases</span>
+                        <strong>{{ number_format((int) ($attributionQualityTotals['meta_relevant_purchases'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Meta continuity rate</span>
+                        <strong>{{ $formatPercent((float) ($attributionQualityTotals['meta_continuity_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>fbclid continuity</span>
+                        <strong>{{ $formatPercent((float) ($attributionQualityMetaCoverage['fbclid_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>fbc / fbp continuity</span>
+                        <strong>{{ $formatPercent(max((float) ($attributionQualityMetaCoverage['fbc_rate'] ?? 0), (float) ($attributionQualityMetaCoverage['fbp_rate'] ?? 0))) }}</strong>
+                    </article>
+                </div>
+                <div class="message-analytics-meta-grid" aria-label="Linkage confidence distribution">
+                    <article class="message-analytics-meta-card">
+                        <span>High confidence links</span>
+                        <strong>{{ number_format((int) ($attributionQualityLinkage['high'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-meta-card">
+                        <span>Medium confidence links</span>
+                        <strong>{{ number_format((int) ($attributionQualityLinkage['medium'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-meta-card">
+                        <span>Low confidence links</span>
+                        <strong>{{ number_format((int) ($attributionQualityLinkage['low'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-meta-card">
+                        <span>Unlinked purchases</span>
+                        <strong>{{ number_format((int) ($attributionQualityLinkage['unlinked'] ?? 0)) }}</strong>
+                    </article>
+                </div>
+            </article>
+
+            <article class="message-analytics-card">
+                <h3>Acquisition Funnel</h3>
+                <p class="message-analytics-muted">
+                    Decision question: where are sessions dropping before purchase, and which source/medium/campaign paths convert?
+                </p>
+                @if($funnelSteps->isEmpty())
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No storefront funnel events are available for this date window yet.</p>
+                    </div>
+                @else
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:760px;" aria-label="Acquisition funnel steps">
+                            <thead>
+                                <tr>
+                                    <th>Step</th>
+                                    <th>Count</th>
+                                    <th>Conversion from previous</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($funnelSteps as $step)
+                                    <tr>
+                                        <td>{{ (string) ($step['label'] ?? 'Step') }}</td>
+                                        <td>{{ number_format((int) ($step['count'] ?? 0)) }}</td>
+                                        <td>
+                                            @if(isset($step['conversion_from_previous_rate']) && $step['conversion_from_previous_rate'] !== null)
+                                                {{ $formatPercent((float) $step['conversion_from_previous_rate']) }}
+                                            @else
+                                                —
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="message-analytics-kpi-grid">
+                        <article class="message-analytics-kpi">
+                            <span>Session to purchase</span>
+                            <strong>{{ $formatPercent((float) ($funnelTotals['session_to_purchase_rate'] ?? 0)) }}</strong>
+                        </article>
+                        <article class="message-analytics-kpi">
+                            <span>Checkout to purchase</span>
+                            <strong>{{ $formatPercent((float) ($funnelTotals['checkout_to_purchase_rate'] ?? 0)) }}</strong>
+                        </article>
+                    </div>
+                @endif
+
+                @if($funnelSourceRows->isNotEmpty())
+                    <h4>Top source / medium / campaign paths</h4>
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:1020px;" aria-label="Acquisition source breakdown">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Medium</th>
+                                    <th>Campaign</th>
+                                    <th>Sessions</th>
+                                    <th>Product views</th>
+                                    <th>Add to cart</th>
+                                    <th>Checkout started</th>
+                                    <th>Purchases</th>
+                                    <th>Checkout to purchase</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($funnelSourceRows as $row)
+                                    <tr>
+                                        <td>{{ (string) ($row['source'] ?? '(unattributed)') }}</td>
+                                        <td>{{ (string) ($row['medium'] ?? '(unattributed)') }}</td>
+                                        <td>{{ (string) ($row['campaign'] ?? '(none)') }}</td>
+                                        <td>{{ number_format((int) ($row['sessions'] ?? 0)) }}</td>
+                                        <td>{{ number_format((int) ($row['product_views'] ?? 0)) }}</td>
+                                        <td>{{ number_format((int) ($row['add_to_cart'] ?? 0)) }}</td>
+                                        <td>{{ number_format((int) ($row['checkout_started'] ?? 0)) }}</td>
+                                        <td>{{ number_format((int) ($row['purchases'] ?? 0)) }}</td>
+                                        <td>{{ $formatPercent((float) ($row['checkout_to_purchase_rate'] ?? 0)) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </article>
+
+            <article class="message-analytics-card">
+                <h3>Retention</h3>
+                <p class="message-analytics-muted">
+                    Decision question: are we growing mostly from first purchase, or from repeat behavior that should get lifecycle investment?
+                </p>
+                <div class="message-analytics-kpi-grid">
+                    <article class="message-analytics-kpi">
+                        <span>First-time revenue</span>
+                        <strong>{{ $formatMoney((int) ($retentionTotals['first_time_revenue_cents'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Returning revenue</span>
+                        <strong>{{ $formatMoney((int) ($retentionTotals['returning_revenue_cents'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Repeat order share</span>
+                        <strong>{{ $formatPercent((float) ($retentionTotals['repeat_order_share_pct'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Returning revenue share</span>
+                        <strong>{{ $formatPercent((float) ($retentionTotals['returning_revenue_share_pct'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Median days to 2nd order</span>
+                        <strong>{{ ($retentionTimeToSecond['median_days'] ?? null) !== null ? number_format((int) $retentionTimeToSecond['median_days']).'d' : '—' }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>P75 days to 2nd order</span>
+                        <strong>{{ ($retentionTimeToSecond['p75_days'] ?? null) !== null ? number_format((int) $retentionTimeToSecond['p75_days']).'d' : '—' }}</strong>
+                    </article>
+                </div>
+                @if($retentionCohorts->isNotEmpty())
+                    <h4>Simple cohorts (first order month)</h4>
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:760px;" aria-label="Retention cohorts">
+                            <thead>
+                                <tr>
+                                    <th>Cohort</th>
+                                    <th>New customers</th>
+                                    <th>Repeat within 30 days</th>
+                                    <th>Repeat within 60 days</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($retentionCohorts as $row)
+                                    <tr>
+                                        <td>{{ (string) ($row['cohort'] ?? '—') }}</td>
+                                        <td>{{ number_format((int) ($row['new_customers'] ?? 0)) }}</td>
+                                        <td>{{ number_format((int) ($row['repeat_30d'] ?? 0)) }} ({{ $formatPercent((float) ($row['repeat_30d_rate'] ?? 0)) }})</td>
+                                        <td>{{ number_format((int) ($row['repeat_60d'] ?? 0)) }} ({{ $formatPercent((float) ($row['repeat_60d_rate'] ?? 0)) }})</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </article>
+
+            <article class="message-analytics-card">
+                <h3>Action Queue</h3>
+                <p class="message-analytics-muted">
+                    Decision question: what should we fix, launch, or stop next based on this data?
+                </p>
+                @if($actionQueueItems->isEmpty())
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No priority actions generated in this window.</p>
+                    </div>
+                @else
+                    @foreach($actionQueueItems as $item)
+                        @php
+                            $priority = strtolower(trim((string) ($item['priority'] ?? 'low')));
+                        @endphp
+                        <article class="message-analytics-action-item">
+                            <span class="message-analytics-priority" data-priority="{{ $priority }}">{{ strtoupper($priority) }}</span>
+                            <strong>{{ (string) ($item['title'] ?? 'Action') }}</strong>
+                            <p class="message-analytics-muted">{{ (string) ($item['reason'] ?? '') }}</p>
+                            <p class="message-analytics-muted"><strong>Owner:</strong> {{ (string) ($item['owner'] ?? 'operator') }}</p>
+                            <p class="message-analytics-muted"><strong>Next step:</strong> {{ (string) ($item['action'] ?? '') }}</p>
+                        </article>
+                    @endforeach
+                @endif
+            </article>
+
+            <article class="message-analytics-card message-analytics-card--secondary">
+                <h3>Engagement Trend (Operational Detail)</h3>
                 <p class="message-analytics-muted">Toggle metrics on/off to compare email and text outcomes over time.</p>
                 @php
                     $series = collect((array) ($chart['series'] ?? []))
@@ -683,8 +1013,8 @@
                 @endif
             </article>
 
-            <article class="message-analytics-card">
-                <h3>Filters</h3>
+            <article class="message-analytics-card message-analytics-card--secondary">
+                <h3>Message Filters (Operational Detail)</h3>
                 <form method="GET" action="{{ route('shopify.app.messaging.analytics', [], false) }}" class="message-analytics-filters">
                     @foreach($embeddedContextQuery as $key => $value)
                         <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
@@ -767,8 +1097,8 @@
                 </form>
             </article>
 
-            <article class="message-analytics-card">
-                <h3>Summary</h3>
+            <article class="message-analytics-card message-analytics-card--secondary">
+                <h3>Message Summary (Operational Detail)</h3>
                 <div class="message-analytics-summary" aria-label="Message analytics summary cards">
                     <article class="message-analytics-summary-card">
                         <span>Messages sent</span>

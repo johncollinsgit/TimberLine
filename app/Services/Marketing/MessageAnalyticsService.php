@@ -8,6 +8,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
+use App\Models\MarketingProfileLink;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
@@ -87,6 +88,7 @@ class MessageAnalyticsService
         $includeMessages = (bool) ($options['include_messages'] ?? true);
         $includeHistoryOutcomes = (bool) ($options['include_history_outcomes'] ?? true);
         $includeSalesSuccess = (bool) ($options['include_sales_success'] ?? false);
+        $includeDecisionPanels = (bool) ($options['include_decision_panels'] ?? true);
         $normalizedStoreKey = $this->nullableString($storeKey);
         if ($tenantId === null || $normalizedStoreKey === null) {
             $emptyPaginator = new LengthAwarePaginator([], 0, (int) ($filters['per_page'] ?? 25), (int) ($filters['page'] ?? 1), [
@@ -100,11 +102,13 @@ class MessageAnalyticsService
                 'chart' => $this->emptyChart((array) $filters),
                 'history_outcomes' => $this->emptyHistoryOutcomes(),
                 'sales_success' => $this->emptySalesSuccess(),
+                'decision_panels' => $this->emptyDecisionPanels(),
                 'diagnostics' => [
                     'reason' => 'tenant_or_store_missing',
                     'include_messages' => $includeMessages,
                     'include_history_outcomes' => $includeHistoryOutcomes,
                     'include_sales_success' => $includeSalesSuccess,
+                    'include_decision_panels' => $includeDecisionPanels,
                 ],
                 'raw' => [
                     'email_deliveries' => collect(),
@@ -154,12 +158,16 @@ class MessageAnalyticsService
             'sales_success' => $includeSalesSuccess
                 ? $this->salesSuccess($tenantId, $dataset, $filteredRows)
                 : $this->emptySalesSuccess(),
+            'decision_panels' => $includeDecisionPanels
+                ? $this->decisionPanels($tenantId, $normalizedStoreKey, $filters)
+                : $this->emptyDecisionPanels(),
             'diagnostics' => [
                 'total_rows' => $rows->count(),
                 'filtered_rows' => $filteredRows->count(),
                 'include_messages' => $includeMessages,
                 'include_history_outcomes' => $includeHistoryOutcomes,
                 'include_sales_success' => $includeSalesSuccess,
+                'include_decision_panels' => $includeDecisionPanels,
             ],
             'raw' => [
                 'email_deliveries' => $dataset['email_deliveries'] ?? collect(),
@@ -2070,6 +2078,973 @@ class MessageAnalyticsService
     }
 
     /**
+     * @param  array<string,mixed>  $filters
+     * @return array<string,mixed>
+     */
+    protected function decisionPanels(int $tenantId, string $storeKey, array $filters): array
+    {
+        $from = $filters['date_from'] instanceof CarbonImmutable
+            ? $filters['date_from']
+            : now()->toImmutable()->subDays(30)->startOfDay();
+        $to = $filters['date_to'] instanceof CarbonImmutable
+            ? $filters['date_to']
+            : now()->toImmutable()->endOfDay();
+
+        $attributionQuality = $this->attributionQualityPanel($tenantId, $storeKey, $from, $to);
+        $acquisitionFunnel = $this->acquisitionFunnelPanel($tenantId, $storeKey, $from, $to);
+        $retention = $this->retentionPanel($tenantId, $storeKey, $from, $to);
+
+        return [
+            'attribution_quality' => $attributionQuality,
+            'acquisition_funnel' => $acquisitionFunnel,
+            'retention' => $retention,
+            'action_queue' => $this->actionQueuePanel($attributionQuality, $acquisitionFunnel, $retention),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function emptyDecisionPanels(): array
+    {
+        return [
+            'attribution_quality' => [
+                'totals' => [
+                    'purchases' => 0,
+                    'utm_coverage_rate' => 0.0,
+                    'self_referral_rate' => 0.0,
+                    'unattributed_purchase_rate' => 0.0,
+                    'purchase_linkage_match_rate' => 0.0,
+                    'meta_relevant_purchases' => 0,
+                    'meta_continuity_rate' => 0.0,
+                ],
+                'linkage_confidence' => [
+                    'high' => 0,
+                    'medium' => 0,
+                    'low' => 0,
+                    'unlinked' => 0,
+                ],
+                'meta_signal_coverage' => [
+                    'fbclid_rate' => 0.0,
+                    'fbc_rate' => 0.0,
+                    'fbp_rate' => 0.0,
+                ],
+                'empty' => true,
+            ],
+            'acquisition_funnel' => [
+                'steps' => [],
+                'totals' => [
+                    'sessions' => 0,
+                    'landing_page_views' => 0,
+                    'product_views' => 0,
+                    'add_to_cart' => 0,
+                    'checkout_started' => 0,
+                    'purchases' => 0,
+                    'session_to_purchase_rate' => 0.0,
+                    'checkout_to_purchase_rate' => 0.0,
+                ],
+                'source_breakdown' => [],
+                'empty' => true,
+            ],
+            'retention' => [
+                'totals' => [
+                    'orders' => 0,
+                    'identifiable_orders' => 0,
+                    'first_time_orders' => 0,
+                    'returning_orders' => 0,
+                    'unknown_orders' => 0,
+                    'first_time_revenue_cents' => 0,
+                    'returning_revenue_cents' => 0,
+                    'unknown_revenue_cents' => 0,
+                    'repeat_order_share_pct' => 0.0,
+                    'returning_revenue_share_pct' => 0.0,
+                ],
+                'time_to_second_purchase' => [
+                    'eligible_customers' => 0,
+                    'converted_customers' => 0,
+                    'conversion_rate_pct' => 0.0,
+                    'median_days' => null,
+                    'p75_days' => null,
+                ],
+                'cohorts' => [],
+                'empty' => true,
+            ],
+            'action_queue' => [
+                'items' => [],
+                'empty' => true,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function attributionQualityPanel(int $tenantId, string $storeKey, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $orders = Order::query()
+            ->forTenantId($tenantId)
+            ->where(function (Builder $query) use ($storeKey): void {
+                $query->where('shopify_store_key', $storeKey)
+                    ->orWhere('shopify_store', $storeKey);
+            })
+            ->whereBetween('ordered_at', [$from, $to])
+            ->orderByDesc('ordered_at')
+            ->get([
+                'id',
+                'ordered_at',
+                'attribution_meta',
+                'storefront_linked_event_id',
+                'storefront_link_confidence',
+                'storefront_checkout_token',
+                'storefront_cart_token',
+                'storefront_session_key',
+                'storefront_client_id',
+            ]);
+
+        if ($orders->isEmpty()) {
+            return $this->emptyDecisionPanels()['attribution_quality'];
+        }
+
+        $totals = [
+            'purchases' => (int) $orders->count(),
+            'utm_complete' => 0,
+            'self_referrals' => 0,
+            'unattributed_purchases' => 0,
+            'linked_purchases' => 0,
+            'meta_relevant_purchases' => 0,
+            'meta_continuity_purchases' => 0,
+            'with_fbclid' => 0,
+            'with_fbc' => 0,
+            'with_fbp' => 0,
+        ];
+        $linkageConfidence = [
+            'high' => 0,
+            'medium' => 0,
+            'low' => 0,
+            'unlinked' => 0,
+        ];
+
+        foreach ($orders as $order) {
+            $meta = is_array($order->attribution_meta ?? null) ? $order->attribution_meta : [];
+
+            $utmComplete = $this->nullableString($meta['utm_source'] ?? null) !== null
+                && $this->nullableString($meta['utm_medium'] ?? null) !== null
+                && $this->nullableString($meta['utm_campaign'] ?? null) !== null;
+            if ($utmComplete) {
+                $totals['utm_complete']++;
+            }
+
+            $selfReferral = $this->isOrderSelfReferral($meta);
+            if ($selfReferral) {
+                $totals['self_referrals']++;
+            }
+
+            if (! $this->orderHasAttributionSignals($meta, $selfReferral)) {
+                $totals['unattributed_purchases']++;
+            }
+
+            $confidence = $this->orderLinkConfidence($order, $meta);
+            if ($confidence === null) {
+                $linkageConfidence['unlinked']++;
+            } elseif ($confidence >= 0.80) {
+                $linkageConfidence['high']++;
+            } elseif ($confidence >= 0.50) {
+                $linkageConfidence['medium']++;
+            } else {
+                $linkageConfidence['low']++;
+            }
+
+            if ($this->orderHasDurableLinkage($order, $meta, $confidence)) {
+                $totals['linked_purchases']++;
+            }
+
+            $hasFbclid = $this->nullableString($meta['fbclid'] ?? null) !== null;
+            $hasFbc = $this->nullableString($meta['fbc'] ?? null) !== null;
+            $hasFbp = $this->nullableString($meta['fbp'] ?? null) !== null;
+
+            if ($this->isMetaRelevantOrder($meta, $hasFbclid, $hasFbc, $hasFbp)) {
+                $totals['meta_relevant_purchases']++;
+                if ($hasFbclid || $hasFbc || $hasFbp) {
+                    $totals['meta_continuity_purchases']++;
+                }
+                if ($hasFbclid) {
+                    $totals['with_fbclid']++;
+                }
+                if ($hasFbc) {
+                    $totals['with_fbc']++;
+                }
+                if ($hasFbp) {
+                    $totals['with_fbp']++;
+                }
+            }
+        }
+
+        $purchaseCount = max(1, (int) $totals['purchases']);
+        $metaRelevant = max(1, (int) $totals['meta_relevant_purchases']);
+
+        return [
+            'totals' => [
+                'purchases' => (int) $totals['purchases'],
+                'utm_coverage_rate' => round(((int) $totals['utm_complete'] / $purchaseCount) * 100, 1),
+                'self_referral_rate' => round(((int) $totals['self_referrals'] / $purchaseCount) * 100, 1),
+                'unattributed_purchase_rate' => round(((int) $totals['unattributed_purchases'] / $purchaseCount) * 100, 1),
+                'purchase_linkage_match_rate' => round(((int) $totals['linked_purchases'] / $purchaseCount) * 100, 1),
+                'meta_relevant_purchases' => (int) $totals['meta_relevant_purchases'],
+                'meta_continuity_rate' => (int) $totals['meta_relevant_purchases'] > 0
+                    ? round(((int) $totals['meta_continuity_purchases'] / $metaRelevant) * 100, 1)
+                    : 0.0,
+            ],
+            'linkage_confidence' => $linkageConfidence,
+            'meta_signal_coverage' => [
+                'fbclid_rate' => (int) $totals['meta_relevant_purchases'] > 0
+                    ? round(((int) $totals['with_fbclid'] / $metaRelevant) * 100, 1)
+                    : 0.0,
+                'fbc_rate' => (int) $totals['meta_relevant_purchases'] > 0
+                    ? round(((int) $totals['with_fbc'] / $metaRelevant) * 100, 1)
+                    : 0.0,
+                'fbp_rate' => (int) $totals['meta_relevant_purchases'] > 0
+                    ? round(((int) $totals['with_fbp'] / $metaRelevant) * 100, 1)
+                    : 0.0,
+            ],
+            'empty' => false,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function acquisitionFunnelPanel(int $tenantId, string $storeKey, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        if (! Schema::hasTable('marketing_storefront_events')) {
+            return $this->emptyDecisionPanels()['acquisition_funnel'];
+        }
+
+        $events = MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
+            ->whereBetween('occurred_at', [$from, $to])
+            ->whereIn('event_type', [
+                'session_started',
+                'landing_page_viewed',
+                'product_viewed',
+                'add_to_cart',
+                'checkout_started',
+                'purchase',
+            ])
+            ->where(function (Builder $query): void {
+                $query->where('source_type', 'shopify_storefront_funnel')
+                    ->orWhere('source_type', 'shopify_storefront_purchase');
+            })
+            ->get(['id', 'event_type', 'source_type', 'meta', 'occurred_at'])
+            ->filter(function (MarketingStorefrontEvent $event) use ($storeKey): bool {
+                $meta = is_array($event->meta ?? null) ? $event->meta : [];
+                $eventStoreKey = $this->nullableString($meta['store_key'] ?? null);
+
+                return $eventStoreKey === null || $eventStoreKey === $storeKey;
+            })
+            ->values();
+
+        if ($events->isEmpty()) {
+            return $this->emptyDecisionPanels()['acquisition_funnel'];
+        }
+
+        $totals = [
+            'sessions' => (int) $events->where('event_type', 'session_started')->count(),
+            'landing_page_views' => (int) $events->where('event_type', 'landing_page_viewed')->count(),
+            'product_views' => (int) $events->where('event_type', 'product_viewed')->count(),
+            'add_to_cart' => (int) $events->where('event_type', 'add_to_cart')->count(),
+            'checkout_started' => (int) $events->where('event_type', 'checkout_started')->count(),
+            'purchases' => (int) $events->where('event_type', 'purchase')->count(),
+        ];
+
+        $steps = [
+            [
+                'key' => 'sessions',
+                'label' => 'Sessions',
+                'count' => (int) $totals['sessions'],
+                'conversion_from_previous_rate' => null,
+            ],
+            [
+                'key' => 'landing_page_views',
+                'label' => 'Landing page views',
+                'count' => (int) $totals['landing_page_views'],
+                'conversion_from_previous_rate' => $this->ratio((int) $totals['landing_page_views'], (int) $totals['sessions']),
+            ],
+            [
+                'key' => 'product_views',
+                'label' => 'Product views',
+                'count' => (int) $totals['product_views'],
+                'conversion_from_previous_rate' => $this->ratio((int) $totals['product_views'], (int) $totals['landing_page_views']),
+            ],
+            [
+                'key' => 'add_to_cart',
+                'label' => 'Add to cart',
+                'count' => (int) $totals['add_to_cart'],
+                'conversion_from_previous_rate' => $this->ratio((int) $totals['add_to_cart'], (int) $totals['product_views']),
+            ],
+            [
+                'key' => 'checkout_started',
+                'label' => 'Checkout started',
+                'count' => (int) $totals['checkout_started'],
+                'conversion_from_previous_rate' => $this->ratio((int) $totals['checkout_started'], (int) $totals['add_to_cart']),
+            ],
+            [
+                'key' => 'purchases',
+                'label' => 'Purchases',
+                'count' => (int) $totals['purchases'],
+                'conversion_from_previous_rate' => $this->ratio((int) $totals['purchases'], (int) $totals['checkout_started']),
+            ],
+        ];
+
+        $sourceRows = [];
+        foreach ($events as $event) {
+            $meta = is_array($event->meta ?? null) ? $event->meta : [];
+            $source = $this->eventSourceValue($meta);
+            $medium = $this->eventMediumValue($meta);
+            $campaign = $this->eventCampaignValue($meta);
+            $groupKey = strtolower($source.'|'.$medium.'|'.$campaign);
+
+            if (! isset($sourceRows[$groupKey])) {
+                $sourceRows[$groupKey] = [
+                    'source' => $source,
+                    'medium' => $medium,
+                    'campaign' => $campaign,
+                    'sessions' => 0,
+                    'landing_page_views' => 0,
+                    'product_views' => 0,
+                    'add_to_cart' => 0,
+                    'checkout_started' => 0,
+                    'purchases' => 0,
+                ];
+            }
+
+            if ($event->event_type === 'session_started') {
+                $sourceRows[$groupKey]['sessions']++;
+            } elseif ($event->event_type === 'landing_page_viewed') {
+                $sourceRows[$groupKey]['landing_page_views']++;
+            } elseif ($event->event_type === 'product_viewed') {
+                $sourceRows[$groupKey]['product_views']++;
+            } elseif ($event->event_type === 'add_to_cart') {
+                $sourceRows[$groupKey]['add_to_cart']++;
+            } elseif ($event->event_type === 'checkout_started') {
+                $sourceRows[$groupKey]['checkout_started']++;
+            } elseif ($event->event_type === 'purchase') {
+                $sourceRows[$groupKey]['purchases']++;
+            }
+        }
+
+        $sourceBreakdown = collect($sourceRows)
+            ->map(function (array $row): array {
+                $row['session_to_purchase_rate'] = $this->ratio((int) $row['purchases'], (int) $row['sessions']);
+                $row['checkout_to_purchase_rate'] = $this->ratio((int) $row['purchases'], (int) $row['checkout_started']);
+
+                return $row;
+            })
+            ->sortByDesc(fn (array $row): int => ((int) $row['purchases'] * 10000) + (int) $row['sessions'])
+            ->take(8)
+            ->values()
+            ->all();
+
+        return [
+            'steps' => $steps,
+            'totals' => [
+                ...$totals,
+                'session_to_purchase_rate' => $this->ratio((int) $totals['purchases'], (int) $totals['sessions']),
+                'checkout_to_purchase_rate' => $this->ratio((int) $totals['purchases'], (int) $totals['checkout_started']),
+            ],
+            'source_breakdown' => $sourceBreakdown,
+            'empty' => false,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function retentionPanel(int $tenantId, string $storeKey, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $orders = Order::query()
+            ->forTenantId($tenantId)
+            ->where(function (Builder $query) use ($storeKey): void {
+                $query->where('shopify_store_key', $storeKey)
+                    ->orWhere('shopify_store', $storeKey);
+            })
+            ->where(function (Builder $query) use ($to): void {
+                $query->where(function (Builder $ordered) use ($to): void {
+                    $ordered->whereNotNull('ordered_at')
+                        ->where('ordered_at', '<=', $to);
+                })->orWhere(function (Builder $fallback) use ($to): void {
+                    $fallback->whereNull('ordered_at')
+                        ->where('created_at', '<=', $to);
+                });
+            })
+            ->orderBy('ordered_at')
+            ->orderBy('id')
+            ->get([
+                'id',
+                'ordered_at',
+                'created_at',
+                'total_price',
+                'shopify_customer_id',
+                'email',
+                'customer_email',
+                'shipping_email',
+                'billing_email',
+            ]);
+
+        if ($orders->isEmpty()) {
+            return $this->emptyDecisionPanels()['retention'];
+        }
+
+        $orderIds = $orders->pluck('id')
+            ->map(fn ($value): string => (string) (int) $value)
+            ->filter()
+            ->values()
+            ->all();
+
+        $profileByOrderId = Schema::hasTable('marketing_profile_links')
+            ? MarketingProfileLink::query()
+                ->forTenantId($tenantId)
+                ->where('source_type', 'order')
+                ->whereIn('source_id', $orderIds)
+                ->get(['source_id', 'marketing_profile_id'])
+                ->mapWithKeys(function (MarketingProfileLink $link): array {
+                    $orderId = (int) $link->source_id;
+
+                    return $orderId > 0
+                        ? [$orderId => (int) $link->marketing_profile_id]
+                        : [];
+                })
+                ->all()
+            : [];
+
+        $identityOrders = [];
+        $firstTimeRevenueCents = 0;
+        $returningRevenueCents = 0;
+        $unknownRevenueCents = 0;
+        $firstTimeOrders = 0;
+        $returningOrders = 0;
+        $unknownOrders = 0;
+        $windowOrders = 0;
+        $identifiableWindowOrders = 0;
+
+        foreach ($orders as $order) {
+            $orderAt = $this->dateOrNull($order->ordered_at) ?? $this->dateOrNull($order->created_at);
+            if (! $orderAt instanceof CarbonImmutable) {
+                continue;
+            }
+
+            $profileId = (int) ($profileByOrderId[(int) $order->id] ?? 0);
+            $identity = $this->orderIdentityKey($order, $profileId > 0 ? $profileId : null);
+            if ($identity === null) {
+                $identity = 'order:'.(string) $order->id;
+            }
+
+            if (! isset($identityOrders[$identity])) {
+                $identityOrders[$identity] = [];
+            }
+            $identityOrders[$identity][] = [
+                'order_id' => (int) $order->id,
+                'occurred_at' => $orderAt,
+            ];
+
+            if ($orderAt->lt($from) || $orderAt->gt($to)) {
+                continue;
+            }
+
+            $windowOrders++;
+            $revenueCents = (int) round((float) ($order->total_price ?? 0) * 100);
+            $orderSequence = count($identityOrders[$identity]);
+
+            if (str_starts_with($identity, 'order:')) {
+                $unknownOrders++;
+                $unknownRevenueCents += $revenueCents;
+                continue;
+            }
+
+            $identifiableWindowOrders++;
+            if ($orderSequence <= 1) {
+                $firstTimeOrders++;
+                $firstTimeRevenueCents += $revenueCents;
+            } else {
+                $returningOrders++;
+                $returningRevenueCents += $revenueCents;
+            }
+        }
+
+        $timeToSecondDays = [];
+        $cohorts = [];
+        $cohortStart = $to->subMonths(5)->startOfMonth();
+        $eligibleFirstOrderCustomers = 0;
+
+        foreach ($identityOrders as $identity => $events) {
+            if (str_starts_with($identity, 'order:')) {
+                continue;
+            }
+
+            usort($events, fn (array $left, array $right): int => $left['occurred_at']->greaterThan($right['occurred_at']) ? 1 : -1);
+            $firstAt = $events[0]['occurred_at'] ?? null;
+            $secondAt = $events[1]['occurred_at'] ?? null;
+            if (! $firstAt instanceof CarbonImmutable) {
+                continue;
+            }
+
+            if ($firstAt->betweenIncluded($from, $to) && $secondAt instanceof CarbonImmutable) {
+                $timeToSecondDays[] = $firstAt->diffInDays($secondAt);
+            }
+            if ($firstAt->betweenIncluded($from, $to)) {
+                $eligibleFirstOrderCustomers++;
+            }
+
+            if ($firstAt->lt($cohortStart) || $firstAt->gt($to)) {
+                continue;
+            }
+
+            $cohortKey = $firstAt->format('Y-m');
+            if (! isset($cohorts[$cohortKey])) {
+                $cohorts[$cohortKey] = [
+                    'cohort' => $cohortKey,
+                    'new_customers' => 0,
+                    'repeat_30d' => 0,
+                    'repeat_60d' => 0,
+                ];
+            }
+
+            $cohorts[$cohortKey]['new_customers']++;
+
+            if ($secondAt instanceof CarbonImmutable) {
+                $days = $firstAt->diffInDays($secondAt);
+                if ($days <= 30) {
+                    $cohorts[$cohortKey]['repeat_30d']++;
+                }
+                if ($days <= 60) {
+                    $cohorts[$cohortKey]['repeat_60d']++;
+                }
+            }
+        }
+
+        $cohortRows = collect($cohorts)
+            ->sortKeys()
+            ->map(function (array $row): array {
+                $base = max(1, (int) $row['new_customers']);
+                $row['repeat_30d_rate'] = round(((int) $row['repeat_30d'] / $base) * 100, 1);
+                $row['repeat_60d_rate'] = round(((int) $row['repeat_60d'] / $base) * 100, 1);
+
+                return $row;
+            })
+            ->values()
+            ->all();
+
+        sort($timeToSecondDays);
+        $timeToSecondCount = count($timeToSecondDays);
+
+        return [
+            'totals' => [
+                'orders' => $windowOrders,
+                'identifiable_orders' => $identifiableWindowOrders,
+                'first_time_orders' => $firstTimeOrders,
+                'returning_orders' => $returningOrders,
+                'unknown_orders' => $unknownOrders,
+                'first_time_revenue_cents' => $firstTimeRevenueCents,
+                'returning_revenue_cents' => $returningRevenueCents,
+                'unknown_revenue_cents' => $unknownRevenueCents,
+                'repeat_order_share_pct' => $this->ratio($returningOrders, $firstTimeOrders + $returningOrders),
+                'returning_revenue_share_pct' => $this->ratio($returningRevenueCents, $firstTimeRevenueCents + $returningRevenueCents),
+            ],
+            'time_to_second_purchase' => [
+                'eligible_customers' => $eligibleFirstOrderCustomers,
+                'converted_customers' => $timeToSecondCount,
+                'conversion_rate_pct' => $this->ratio($timeToSecondCount, $eligibleFirstOrderCustomers),
+                'median_days' => $timeToSecondCount > 0 ? $this->percentile($timeToSecondDays, 0.5) : null,
+                'p75_days' => $timeToSecondCount > 0 ? $this->percentile($timeToSecondDays, 0.75) : null,
+            ],
+            'cohorts' => $cohortRows,
+            'empty' => false,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $attributionQuality
+     * @param  array<string,mixed>  $acquisitionFunnel
+     * @param  array<string,mixed>  $retention
+     * @return array<string,mixed>
+     */
+    protected function actionQueuePanel(array $attributionQuality, array $acquisitionFunnel, array $retention): array
+    {
+        $items = [];
+
+        $utmCoverage = (float) data_get($attributionQuality, 'totals.utm_coverage_rate', 0.0);
+        if ($utmCoverage < 70.0) {
+            $items[] = [
+                'priority' => 'high',
+                'title' => 'Fix UTM discipline on outbound links',
+                'reason' => 'UTM coverage is '.$utmCoverage.'% of purchases.',
+                'owner' => 'marketing',
+                'action' => 'Enforce tagged links for every email, SMS, and paid-social destination URL.',
+            ];
+        }
+
+        $selfReferralRate = (float) data_get($attributionQuality, 'totals.self_referral_rate', 0.0);
+        if ($selfReferralRate > 8.0) {
+            $items[] = [
+                'priority' => 'high',
+                'title' => 'Clean up self-referrals before channel decisions',
+                'reason' => 'Self-referrals are '.$selfReferralRate.'% of purchases.',
+                'owner' => 'engineering',
+                'action' => 'Normalize referrer capture and prevent first-party domains from overriding acquisition source.',
+            ];
+        }
+
+        $unattributedRate = (float) data_get($attributionQuality, 'totals.unattributed_purchase_rate', 0.0);
+        if ($unattributedRate > 20.0) {
+            $items[] = [
+                'priority' => 'high',
+                'title' => 'Reduce unattributed purchases',
+                'reason' => 'Unattributed purchases are '.$unattributedRate.'% in this window.',
+                'owner' => 'engineering',
+                'action' => 'Audit order ingest attribution_meta hydration for missing landing/referrer/UTM context.',
+            ];
+        }
+
+        $linkageRate = (float) data_get($attributionQuality, 'totals.purchase_linkage_match_rate', 0.0);
+        if ($linkageRate < 85.0) {
+            $items[] = [
+                'priority' => 'high',
+                'title' => 'Increase checkout to purchase linkage reliability',
+                'reason' => 'Only '.$linkageRate.'% of purchases have durable linkage.',
+                'owner' => 'engineering',
+                'action' => 'Prioritize checkout_token/cart_token/session token persistence through order ingest.',
+            ];
+        }
+
+        $metaRelevant = (int) data_get($attributionQuality, 'totals.meta_relevant_purchases', 0);
+        $metaContinuityRate = (float) data_get($attributionQuality, 'totals.meta_continuity_rate', 0.0);
+        if ($metaRelevant >= 10 && $metaContinuityRate < 70.0) {
+            $items[] = [
+                'priority' => 'medium',
+                'title' => 'Improve Meta signal continuity',
+                'reason' => 'Only '.$metaContinuityRate.'% of Meta-relevant purchases carry fbclid/fbc/fbp.',
+                'owner' => 'engineering',
+                'action' => 'Verify fbclid/fbc/fbp handoff from landing through checkout and order ingestion.',
+            ];
+        }
+
+        $checkoutToPurchaseRate = (float) data_get($acquisitionFunnel, 'totals.checkout_to_purchase_rate', 0.0);
+        if ($checkoutToPurchaseRate > 0 && $checkoutToPurchaseRate < 45.0) {
+            $items[] = [
+                'priority' => 'medium',
+                'title' => 'Investigate checkout drop-off',
+                'reason' => 'Checkout to purchase conversion is '.$checkoutToPurchaseRate.'%.',
+                'owner' => 'operator',
+                'action' => 'Review checkout UX, shipping thresholds, and offer timing before scaling paid traffic.',
+            ];
+        }
+
+        $returningRevenueShare = (float) data_get($retention, 'totals.returning_revenue_share_pct', 0.0);
+        if ($returningRevenueShare >= 55.0) {
+            $items[] = [
+                'priority' => 'medium',
+                'title' => 'Lean into retention-led revenue',
+                'reason' => 'Returning customers drive '.$returningRevenueShare.'% of identified revenue.',
+                'owner' => 'marketing',
+                'action' => 'Prioritize post-purchase, winback, and repeat-buyer message sequencing in Phase 4.',
+            ];
+        }
+
+        if ($items === []) {
+            $items[] = [
+                'priority' => 'low',
+                'title' => 'Baseline is stable for Phase 4 workflow rollout',
+                'reason' => 'No critical attribution or funnel integrity alarms triggered in this window.',
+                'owner' => 'operator',
+                'action' => 'Proceed with lifecycle workflow rollout using this baseline as control.',
+            ];
+        }
+
+        $priorityOrder = ['high' => 0, 'medium' => 1, 'low' => 2];
+        usort($items, function (array $left, array $right) use ($priorityOrder): int {
+            $leftRank = $priorityOrder[$left['priority'] ?? 'low'] ?? 99;
+            $rightRank = $priorityOrder[$right['priority'] ?? 'low'] ?? 99;
+
+            return $leftRank <=> $rightRank;
+        });
+
+        return [
+            'items' => $items,
+            'empty' => false,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function orderHasAttributionSignals(array $meta, bool $selfReferral = false): bool
+    {
+        foreach ([
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_content',
+            'utm_term',
+            'source_name',
+            'source_type',
+            'source_identifier',
+            'fbclid',
+            'fbc',
+            'fbp',
+        ] as $field) {
+            if ($this->nullableString($meta[$field] ?? null) !== null) {
+                return true;
+            }
+        }
+
+        if ($selfReferral) {
+            return false;
+        }
+
+        foreach ([
+            'referrer',
+            'referring_site',
+            'landing_site',
+            'landing_page',
+        ] as $field) {
+            if ($this->nullableString($meta[$field] ?? null) !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function isOrderSelfReferral(array $meta): bool
+    {
+        $referrerHost = $this->normalizedHost(
+            $this->hostFromUrl(
+                $this->nullableString($meta['referrer'] ?? null)
+                ?? $this->nullableString($meta['referring_site'] ?? null)
+                ?? $this->nullableString($meta['referrer_url'] ?? null)
+            )
+        );
+        if ($referrerHost === null) {
+            return false;
+        }
+
+        $landingHost = $this->normalizedHost(
+            $this->hostFromUrl(
+                $this->nullableString($meta['landing_site'] ?? null)
+                ?? $this->nullableString($meta['landing_page'] ?? null)
+                ?? $this->nullableString($meta['shop_domain'] ?? null)
+            )
+        );
+        if ($landingHost !== null && $referrerHost === $landingHost) {
+            return true;
+        }
+
+        $sourceHost = $this->normalizedHost($this->hostFromUrl($this->nullableString($meta['source_url'] ?? null)));
+
+        return $sourceHost !== null && $sourceHost === $referrerHost;
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function orderLinkConfidence(Order $order, array $meta): ?float
+    {
+        $confidence = $order->storefront_link_confidence !== null
+            ? (float) $order->storefront_link_confidence
+            : null;
+        if ($confidence !== null) {
+            return $confidence;
+        }
+
+        $metaConfidence = data_get($meta, 'storefront_link.confidence');
+        if (is_numeric($metaConfidence)) {
+            return (float) $metaConfidence;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function orderHasDurableLinkage(Order $order, array $meta, ?float $confidence): bool
+    {
+        if ((int) ($order->storefront_linked_event_id ?? 0) > 0) {
+            return true;
+        }
+
+        if ((bool) data_get($meta, 'storefront_link.linked', false)) {
+            return true;
+        }
+
+        if ($confidence !== null && $confidence > 0.0) {
+            return true;
+        }
+
+        return $this->nullableString($order->storefront_checkout_token ?? null) !== null
+            || $this->nullableString($order->storefront_cart_token ?? null) !== null
+            || $this->nullableString($order->storefront_session_key ?? null) !== null
+            || $this->nullableString($order->storefront_client_id ?? null) !== null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function isMetaRelevantOrder(array $meta, bool $hasFbclid, bool $hasFbc, bool $hasFbp): bool
+    {
+        if ($hasFbclid || $hasFbc || $hasFbp) {
+            return true;
+        }
+
+        $signals = [
+            $this->nullableString($meta['utm_source'] ?? null),
+            $this->nullableString($meta['utm_medium'] ?? null),
+            $this->nullableString($meta['utm_campaign'] ?? null),
+            $this->nullableString($meta['source_name'] ?? null),
+            $this->nullableString($meta['source_type'] ?? null),
+            $this->nullableString($meta['referrer'] ?? null),
+            $this->nullableString($meta['referring_site'] ?? null),
+        ];
+
+        foreach ($signals as $signal) {
+            $value = strtolower(trim((string) $signal));
+            if ($value === '') {
+                continue;
+            }
+            if (str_contains($value, 'facebook')
+                || str_contains($value, 'instagram')
+                || str_contains($value, 'meta')
+                || str_contains($value, 'fb')
+                || str_contains($value, 'ig')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function eventSourceValue(array $meta): string
+    {
+        $source = $this->nullableString($meta['utm_source'] ?? null)
+            ?? $this->nullableString($meta['source_name'] ?? null)
+            ?? $this->normalizedHost(
+                $this->hostFromUrl(
+                    $this->nullableString($meta['referrer'] ?? null)
+                    ?? $this->nullableString($meta['referring_site'] ?? null)
+                )
+            );
+
+        return $source ?? '(unattributed)';
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function eventMediumValue(array $meta): string
+    {
+        $medium = $this->nullableString($meta['utm_medium'] ?? null)
+            ?? $this->nullableString($meta['source_type'] ?? null);
+
+        return $medium ?? '(unattributed)';
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     */
+    protected function eventCampaignValue(array $meta): string
+    {
+        return $this->nullableString($meta['utm_campaign'] ?? null) ?? '(none)';
+    }
+
+    protected function ratio(int|float $numerator, int|float $denominator): float
+    {
+        if ((float) $denominator <= 0.0) {
+            return 0.0;
+        }
+
+        return round(((float) $numerator / (float) $denominator) * 100, 1);
+    }
+
+    /**
+     * @param  array<int,int>  $values
+     */
+    protected function percentile(array $values, float $percentile): int
+    {
+        if ($values === []) {
+            return 0;
+        }
+
+        $index = (int) ceil(($percentile * count($values)) - 1);
+        $boundedIndex = max(0, min(count($values) - 1, $index));
+
+        return (int) $values[$boundedIndex];
+    }
+
+    /**
+     * @param  mixed  $order
+     */
+    protected function orderIdentityKey($order, ?int $profileId): ?string
+    {
+        if ($profileId !== null && $profileId > 0) {
+            return 'profile:'.$profileId;
+        }
+
+        $shopifyCustomerId = $this->nullableString($order->shopify_customer_id ?? null);
+        if ($shopifyCustomerId !== null) {
+            return 'shopify:'.$shopifyCustomerId;
+        }
+
+        $email = $this->nullableString(
+            $order->customer_email
+            ?? $order->email
+            ?? $order->shipping_email
+            ?? $order->billing_email
+            ?? null
+        );
+        if ($email !== null) {
+            return 'email:'.strtolower($email);
+        }
+
+        return null;
+    }
+
+    protected function hostFromUrl(?string $url): ?string
+    {
+        $value = $this->nullableString($url);
+        if ($value === null) {
+            return null;
+        }
+
+        $candidate = str_contains($value, '://') ? $value : ('https://'.$value);
+        $host = parse_url($candidate, PHP_URL_HOST);
+        if (! is_string($host) || trim($host) === '') {
+            return null;
+        }
+
+        return trim($host);
+    }
+
+    protected function normalizedHost(?string $value): ?string
+    {
+        $host = $this->nullableString($value);
+        if ($host === null) {
+            return null;
+        }
+
+        $host = strtolower($host);
+        if (str_starts_with($host, 'www.')) {
+            $host = substr($host, 4);
+        }
+
+        return $host !== '' ? $host : null;
+    }
+
+    /**
      * @return array<string,mixed>
      */
     protected function emptyHistoryOutcomes(): array
@@ -2547,6 +3522,7 @@ class MessageAnalyticsService
                 'add_to_cart' => 0,
                 'checkout_started' => 0,
                 'checkout_completed' => 0,
+                'purchases' => 0,
                 'checkout_abandoned_candidates' => 0,
             ],
             'products' => [],
@@ -2610,6 +3586,7 @@ class MessageAnalyticsService
                 'add_to_cart',
                 'checkout_started',
                 'checkout_completed',
+                'purchase',
             ])
             ->whereBetween('occurred_at', [$sentAt->subHour(), $lastSentAt->addDays($windowDays)])
             ->orderByDesc('occurred_at')
@@ -2638,6 +3615,7 @@ class MessageAnalyticsService
             'add_to_cart' => (int) $events->where('event_type', 'add_to_cart')->count(),
             'checkout_started' => (int) $events->where('event_type', 'checkout_started')->count(),
             'checkout_completed' => (int) $events->where('event_type', 'checkout_completed')->count(),
+            'purchases' => (int) $events->where('event_type', 'purchase')->count(),
             'checkout_abandoned_candidates' => 0,
         ];
 
@@ -2648,7 +3626,7 @@ class MessageAnalyticsService
             ->unique()
             ->values();
         $checkoutCompletedKeys = $events
-            ->where('event_type', 'checkout_completed')
+            ->filter(fn (MarketingStorefrontEvent $event): bool => in_array((string) $event->event_type, ['checkout_completed', 'purchase'], true))
             ->map(fn (MarketingStorefrontEvent $event): ?string => $this->storefrontJourneyKey((array) ($event->meta ?? [])))
             ->filter()
             ->unique()

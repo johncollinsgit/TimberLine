@@ -27,6 +27,39 @@ UI maintenance rules:
 ## Current Release State (Scan First)
 
 Current implemented shell/diagnostics checkpoint:
+- Phase 2 instrumentation hardening checkpoint (2026-04-20):
+  - fixed embedded React runtime crash on messaging analytics path by stabilizing action-search store snapshots
+  - baseline storefront funnel tracking is no longer campaign-gated (direct/organic sessions can post session, landing, product, cart events)
+  - explicit payload attribution fields now flow through funnel ingestion (UTM + Meta `fbclid`/`fbc`/`fbp`)
+  - `purchase` is now a distinct storefront event type (not aliased to `checkout_completed`)
+  - Shopify order ingest now records deterministic storefront linkage + confidence and writes a durable purchase lineage event (`shopify_storefront_purchase`)
+  - migration required: `2026_04_20_150000_add_storefront_linkage_columns_to_orders_table`
+  - authenticated click-path coverage config added: `tests/e2e/click-path-routes-auth.json` (`npm run qa:click-path:auth`)
+- Phase 3 analytics usefulness checkpoint (2026-04-20):
+  - messaging analytics home is now decision-first with four panels:
+    - Attribution Quality
+    - Acquisition Funnel
+    - Retention
+    - Action Queue
+  - panel computation lives in `MessageAnalyticsService` (`decision_panels` payload)
+  - controller now loads decision panels on home tab only (`include_decision_panels`)
+  - legacy message-only cards are still present but visually demoted as secondary operational detail
+  - QA/handoff notes: `docs/qa/phase-3-analytics-decision-useful.md`
+- Phase 4 workflow rollout checkpoint (2026-04-20):
+  - lifecycle rollout service is live: `app/Services/Marketing/LifecycleWorkflowRolloutService.php`
+  - Flows (`/marketing/automations`) now renders workflow-by-workflow status with blockers + one-click staging actions
+  - first three workflows are stageable into manual approval queues:
+    - `welcome`
+    - `winback`
+    - `post_purchase_cross_sell`
+  - staging route/action:
+    - `POST /marketing/automations/{workflow}/prepare`
+    - `MarketingPagesController::prepareAutomationWorkflow`
+  - lifecycle staging writes auditable rows to `marketing_automation_events` (queued/skipped/suppressed with reasons + cooldown checks)
+  - wishlist remains operator/manual-first through existing queue primitives; cart/checkout abandonment remain blocked until token/profile continuity thresholds are met
+  - QA/handoff notes: `docs/qa/phase-4-workflow-rollout.md`
+  - regression coverage:
+    - `tests/Feature/Marketing/LifecycleWorkflowRolloutServiceTest.php`
 - Embedded product shell is live and navigable:
   - `/shopify/app` (overview/dashboard)
   - `/shopify/app/start`

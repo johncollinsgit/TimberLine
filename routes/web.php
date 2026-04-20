@@ -586,6 +586,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/automations', [MarketingPagesController::class, 'show'])
                     ->defaults('section', 'automations')
                     ->name('automations');
+                Route::post('/automations/{workflow}/prepare', [MarketingPagesController::class, 'prepareAutomationWorkflow'])
+                    ->name('automations.prepare');
                 Route::get('/message-templates', [MarketingMessageTemplatesController::class, 'index'])->name('message-templates');
                 Route::get('/message-templates/create', [MarketingMessageTemplatesController::class, 'create'])->name('message-templates.create');
                 Route::post('/message-templates', [MarketingMessageTemplatesController::class, 'store'])->name('message-templates.store');

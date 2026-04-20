@@ -13,6 +13,7 @@ function emitChange() {
 export class ActionSearchProvider {
   constructor() {
     this.registry = new Map();
+    this.cachedSnapshot = [];
   }
 
   register(documents, scope = "global") {
@@ -43,6 +44,7 @@ export class ActionSearchProvider {
     });
 
     if (registeredIds.length > 0) {
+      this.cachedSnapshot = null;
       emitChange();
     }
 
@@ -77,12 +79,17 @@ export class ActionSearchProvider {
     });
 
     if (changed) {
+      this.cachedSnapshot = null;
       emitChange();
     }
   }
 
   snapshot() {
-    return Array.from(this.registry.values());
+    if (this.cachedSnapshot === null) {
+      this.cachedSnapshot = Array.from(this.registry.values());
+    }
+
+    return this.cachedSnapshot;
   }
 
   clear() {
@@ -91,6 +98,7 @@ export class ActionSearchProvider {
     }
 
     this.registry.clear();
+    this.cachedSnapshot = null;
     emitChange();
   }
 

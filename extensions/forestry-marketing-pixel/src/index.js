@@ -10,15 +10,7 @@ register(({analytics, browser, settings}) => {
 
   analytics.subscribe('page_viewed', async (event) => {
     const attribution = await resolveAttribution(event, browser);
-    if (!attribution || !hasCampaignSignals(attribution)) {
-      return;
-    }
-
     const url = event?.context?.document?.location?.href || null;
-    if (!hasCampaignSignals(signalsFromUrl(url))) {
-      return;
-    }
-
     const dedupeKey = 'landing:' + attribution.signature + ':' + (event?.context?.document?.location?.pathname || '/');
     if (await isDuplicate(browser, dedupeKey, 30 * 60 * 1000)) {
       return;
@@ -37,6 +29,9 @@ register(({analytics, browser, settings}) => {
       utm_campaign: attribution.utm_campaign || null,
       utm_content: attribution.utm_content || null,
       utm_term: attribution.utm_term || null,
+      fbclid: attribution.fbclid || null,
+      fbc: attribution.fbc || null,
+      fbp: attribution.fbp || null,
       mf_channel: attribution.mf_channel || null,
       mf_source_label: attribution.mf_source_label || null,
       mf_template_key: attribution.mf_template_key || null,
@@ -79,6 +74,9 @@ register(({analytics, browser, settings}) => {
       utm_source: attribution.utm_source || null,
       utm_medium: attribution.utm_medium || null,
       utm_campaign: attribution.utm_campaign || null,
+      fbclid: attribution.fbclid || null,
+      fbc: attribution.fbc || null,
+      fbp: attribution.fbp || null,
       mf_channel: attribution.mf_channel || null,
       mf_campaign_id: attribution.mf_campaign_id || null,
       mf_delivery_id: attribution.mf_delivery_id || null,
@@ -119,6 +117,9 @@ register(({analytics, browser, settings}) => {
       utm_source: attribution.utm_source || null,
       utm_medium: attribution.utm_medium || null,
       utm_campaign: attribution.utm_campaign || null,
+      fbclid: attribution.fbclid || null,
+      fbc: attribution.fbc || null,
+      fbp: attribution.fbp || null,
       mf_channel: attribution.mf_channel || null,
       mf_campaign_id: attribution.mf_campaign_id || null,
       mf_delivery_id: attribution.mf_delivery_id || null,
@@ -153,6 +154,9 @@ register(({analytics, browser, settings}) => {
       utm_source: attribution.utm_source || null,
       utm_medium: attribution.utm_medium || null,
       utm_campaign: attribution.utm_campaign || null,
+      fbclid: attribution.fbclid || null,
+      fbc: attribution.fbc || null,
+      fbp: attribution.fbp || null,
       mf_channel: attribution.mf_channel || null,
       mf_campaign_id: attribution.mf_campaign_id || null,
       mf_delivery_id: attribution.mf_delivery_id || null,
@@ -185,6 +189,9 @@ register(({analytics, browser, settings}) => {
       utm_source: attribution.utm_source || null,
       utm_medium: attribution.utm_medium || null,
       utm_campaign: attribution.utm_campaign || null,
+      fbclid: attribution.fbclid || null,
+      fbc: attribution.fbc || null,
+      fbp: attribution.fbp || null,
       mf_channel: attribution.mf_channel || null,
       mf_campaign_id: attribution.mf_campaign_id || null,
       mf_delivery_id: attribution.mf_delivery_id || null,
@@ -198,18 +205,38 @@ register(({analytics, browser, settings}) => {
 });
 
 async function resolveAttribution(event, browser) {
-  const currentSignals = signalsFromUrl(event?.context?.document?.location?.href || null);
+  const currentSignals = compactObject({
+    ...metaSignalsFromEvent(event),
+    ...signalsFromUrl(event?.context?.document?.location?.href || null),
+  });
   let stored = await readAttribution(browser);
 
-  if (hasCampaignSignals(currentSignals)) {
+  if (hasPersistableSignals(currentSignals)) {
     stored = await writeAttribution(browser, currentSignals, event?.context?.document?.location?.href || null, event?.context?.document?.referrer || null, stored);
   }
 
-  if (!stored || !stored.expires_at || Number(stored.expires_at) < Date.now()) {
-    return null;
+  if (!stored) {
+    stored = await writeAttribution(browser, {}, event?.context?.document?.location?.href || null, event?.context?.document?.referrer || null, null);
   }
 
-  return stored;
+  if (!stored || !stored.expires_at || Number(stored.expires_at) < Date.now()) {
+    return baselineAttribution(currentSignals, stored);
+  }
+
+  const merged = compactObject({
+    ...stored,
+    ...currentSignals,
+  });
+
+  if (!merged.fbc && merged.fbclid) {
+    merged.fbc = fbcFromFbclid(merged.fbclid);
+  }
+
+  if (!merged.signature) {
+    merged.signature = signature(merged);
+  }
+
+  return merged;
 }
 
 async function readAttribution(browser) {
@@ -232,6 +259,8 @@ async function readAttribution(browser) {
 }
 
 async function writeAttribution(browser, signals, landingUrl, referrer, existing) {
+  const fbclid = trimmed(signals.fbclid || existing?.fbclid || null);
+  const fbc = trimmed(signals.fbc || existing?.fbc || null) || fbcFromFbclid(fbclid);
   const payload = {
     ...(existing || {}),
     ...signals,
@@ -239,6 +268,9 @@ async function writeAttribution(browser, signals, landingUrl, referrer, existing
     referrer: referrer || existing?.referrer || null,
     expires_at: Date.now() + (WINDOW_DAYS * 24 * 60 * 60 * 1000),
     signature: signature(signals),
+    fbclid: fbclid || null,
+    fbc: fbc || null,
+    fbp: trimmed(signals.fbp || existing?.fbp || null) || null,
     session_key: existing?.session_key || randomId('pixel-session'),
     client_id: existing?.client_id || randomId('pixel-client'),
   };
@@ -295,6 +327,9 @@ function signalsFromUrl(url) {
       'utm_campaign',
       'utm_content',
       'utm_term',
+      'fbclid',
+      'fbc',
+      'fbp',
       'mf_channel',
       'mf_source_label',
       'mf_template_key',
@@ -319,12 +354,38 @@ function signalsFromUrl(url) {
   }
 }
 
-function hasCampaignSignals(value) {
+function metaSignalsFromEvent(event) {
+  const cookieValue = trimmed(event?.context?.document?.cookie || '');
+  if (!cookieValue) {
+    return {};
+  }
+
+  const output = {};
+  cookieValue.split(';').forEach((segment) => {
+    const [keyRaw, ...rest] = segment.split('=');
+    const key = trimmed(keyRaw);
+    const value = trimmed(rest.join('='));
+    if (!key || !value) {
+      return;
+    }
+
+    if (key === '_fbc') {
+      output.fbc = value;
+    }
+    if (key === '_fbp') {
+      output.fbp = value;
+    }
+  });
+
+  return output;
+}
+
+function hasPersistableSignals(value) {
   if (!value || typeof value !== 'object') {
     return false;
   }
 
-  return ['utm_campaign', 'utm_source', 'mf_campaign_id', 'mf_delivery_id', 'mf_channel', 'mf_template_key'].some((key) => Boolean(trimmed(value[key])));
+  return ['utm_campaign', 'utm_source', 'fbclid', 'fbc', 'fbp', 'mf_campaign_id', 'mf_delivery_id', 'mf_channel', 'mf_template_key'].some((key) => Boolean(trimmed(value[key])));
 }
 
 function signature(signals) {
@@ -333,8 +394,38 @@ function signature(signals) {
     trimmed(signals.mf_campaign_id),
     trimmed(signals.mf_delivery_id),
     trimmed(signals.mf_template_key),
-    trimmed(signals.mf_channel)
-  ].filter(Boolean).join(':') || 'unknown';
+    trimmed(signals.mf_channel),
+    trimmed(signals.fbclid),
+    trimmed(signals.fbc),
+    trimmed(signals.fbp)
+  ].filter(Boolean).join(':') || 'baseline';
+}
+
+function baselineAttribution(signals, existing) {
+  const fbclid = trimmed(signals?.fbclid || existing?.fbclid || null);
+  const fbc = trimmed(signals?.fbc || existing?.fbc || null) || fbcFromFbclid(fbclid);
+
+  return compactObject({
+    ...(existing || {}),
+    ...signals,
+    signature: signature(signals || existing || {}),
+    fbclid: fbclid || null,
+    fbc: fbc || null,
+    fbp: trimmed(signals?.fbp || existing?.fbp || null) || null,
+    session_key: existing?.session_key || randomId('pixel-session'),
+    client_id: existing?.client_id || randomId('pixel-client'),
+    landing_url: existing?.landing_url || null,
+    referrer: existing?.referrer || null,
+  });
+}
+
+function fbcFromFbclid(fbclid) {
+  const value = trimmed(fbclid);
+  if (!value) {
+    return null;
+  }
+
+  return `fb.1.${Math.floor(Date.now() / 1000)}.${value}`;
 }
 
 function normalizeShopifyId(value) {

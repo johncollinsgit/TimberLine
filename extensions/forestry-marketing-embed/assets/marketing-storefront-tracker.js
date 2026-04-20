@@ -12,16 +12,11 @@
     return;
   }
 
-  const currentCampaign = campaignSignalsFromUrl(window.location.href);
-  if (hasAttribution(currentCampaign)) {
-    persistAttribution(currentCampaign);
+  const currentSignals = captureCurrentSignals();
+  if (hasPersistableSignals(currentSignals)) {
+    persistAttribution(currentSignals);
   }
-
-  const attribution = activeAttribution();
-  if (!attribution) {
-    debug('No active attribution found; storefront tracker is idle.');
-    return;
-  }
+  const attribution = activeAttribution() || baselineAttribution(currentSignals);
 
   const pageKey = String(window.location.pathname || '/');
   const sessionKey = getSessionKey();
@@ -36,17 +31,15 @@
     },
   });
 
-  if (hasAttribution(currentCampaign)) {
-    postEvent('landing_page_viewed', {
-      dedupeKey: 'landing:' + sessionKey + ':' + pageKey + ':' + attribution.signature,
-      dedupeTtlMs: SESSION_TTL_MS,
-      page_url: window.location.href,
-      landing_page: attribution.landing_url || window.location.href,
-      properties: {
-        via: 'theme_app_embed',
-      },
-    });
-  }
+  postEvent('landing_page_viewed', {
+    dedupeKey: 'landing:' + sessionKey + ':' + pageKey + ':' + attribution.signature,
+    dedupeTtlMs: SESSION_TTL_MS,
+    page_url: window.location.href,
+    landing_page: attribution.landing_url || window.location.href,
+    properties: {
+      via: 'theme_app_embed',
+    },
+  });
 
   if (config.product && config.product.id) {
     postEvent('product_viewed', {
@@ -273,10 +266,7 @@
   }
 
   function buildPayload(eventType, overrides) {
-    const current = activeAttribution();
-    if (!current) {
-      return null;
-    }
+    const current = activeAttribution() || baselineAttribution(captureCurrentSignals());
 
     const pageUrl = stringOrNull(overrides.page_url) || window.location.href;
     const landingPage = stringOrNull(overrides.landing_page) || current.landing_url || window.location.href;
@@ -311,6 +301,9 @@
       utm_campaign: stringOrNull(current.utm_campaign),
       utm_content: stringOrNull(current.utm_content),
       utm_term: stringOrNull(current.utm_term),
+      fbclid: stringOrNull(current.fbclid),
+      fbc: stringOrNull(current.fbc),
+      fbp: stringOrNull(current.fbp),
       mf_channel: stringOrNull(current.mf_channel),
       mf_source_label: stringOrNull(current.mf_source_label),
       mf_template_key: stringOrNull(current.mf_template_key),
@@ -331,6 +324,7 @@
   }
 
   function persistAttribution(signals) {
+    const derivedFbc = stringOrNull(signals.fbc) || fbcFromFbclid(stringOrNull(signals.fbclid));
     const expiresAt = Date.now() + (config.attributionWindowDays * 24 * 60 * 60 * 1000);
     const payload = compactObject({
       signature: attributionSignature(signals),
@@ -344,6 +338,9 @@
       utm_campaign: stringOrNull(signals.utm_campaign),
       utm_content: stringOrNull(signals.utm_content),
       utm_term: stringOrNull(signals.utm_term),
+      fbclid: stringOrNull(signals.fbclid),
+      fbc: derivedFbc,
+      fbp: stringOrNull(signals.fbp),
       mf_channel: stringOrNull(signals.mf_channel),
       mf_source_label: stringOrNull(signals.mf_source_label),
       mf_template_key: stringOrNull(signals.mf_template_key),
@@ -385,6 +382,56 @@
     }
   }
 
+  function baselineAttribution(signals) {
+    const fallbackSignals = typeof signals === 'object' && signals !== null ? signals : {};
+    const fbclid = stringOrNull(fallbackSignals.fbclid);
+    const fbc = stringOrNull(fallbackSignals.fbc) || fbcFromFbclid(fbclid);
+    const payload = compactObject({
+      signature: attributionSignature(fallbackSignals),
+      landing_url: window.location.href,
+      landing_path: window.location.pathname,
+      referrer: document.referrer || null,
+      expires_at: Date.now() + (config.attributionWindowDays * 24 * 60 * 60 * 1000),
+      captured_at: Date.now(),
+      utm_source: stringOrNull(fallbackSignals.utm_source),
+      utm_medium: stringOrNull(fallbackSignals.utm_medium),
+      utm_campaign: stringOrNull(fallbackSignals.utm_campaign),
+      utm_content: stringOrNull(fallbackSignals.utm_content),
+      utm_term: stringOrNull(fallbackSignals.utm_term),
+      fbclid: fbclid,
+      fbc: fbc,
+      fbp: stringOrNull(fallbackSignals.fbp),
+      mf_channel: stringOrNull(fallbackSignals.mf_channel),
+      mf_source_label: stringOrNull(fallbackSignals.mf_source_label),
+      mf_template_key: stringOrNull(fallbackSignals.mf_template_key),
+      mf_campaign_id: stringOrNull(fallbackSignals.mf_campaign_id),
+      mf_delivery_id: stringOrNull(fallbackSignals.mf_delivery_id),
+      mf_profile_id: stringOrNull(fallbackSignals.mf_profile_id),
+      mf_campaign_recipient_id: stringOrNull(fallbackSignals.mf_campaign_recipient_id),
+      mf_module_type: stringOrNull(fallbackSignals.mf_module_type),
+      mf_module_position: stringOrNull(fallbackSignals.mf_module_position),
+      mf_product_id: stringOrNull(fallbackSignals.mf_product_id),
+      mf_tile_position: stringOrNull(fallbackSignals.mf_tile_position),
+      mf_link_label: stringOrNull(fallbackSignals.mf_link_label),
+    });
+
+    if (!payload.signature) {
+      payload.signature = 'baseline';
+    }
+
+    return payload;
+  }
+
+  function captureCurrentSignals() {
+    const urlSignals = campaignSignalsFromUrl(window.location.href);
+    const cookieSignals = metaSignalsFromCookies();
+
+    return compactObject({
+      ...cookieSignals,
+      ...urlSignals,
+    });
+  }
+
   function campaignSignalsFromUrl(url) {
     try {
       const parsed = new URL(url, window.location.origin);
@@ -395,6 +442,9 @@
         'utm_campaign',
         'utm_content',
         'utm_term',
+        'fbclid',
+        'fbc',
+        'fbp',
         'mf_channel',
         'mf_source_label',
         'mf_template_key',
@@ -420,7 +470,34 @@
     }
   }
 
-  function hasAttribution(signals) {
+  function metaSignalsFromCookies() {
+    const cookieValue = String(document.cookie || '');
+    if (!cookieValue) {
+      return {};
+    }
+
+    const segments = cookieValue.split(';');
+    const parsed = {};
+    segments.forEach(function (segment) {
+      const [keyRaw, ...rest] = segment.split('=');
+      const key = compactText(keyRaw || '');
+      const value = compactText(rest.join('='));
+      if (!key || !value) {
+        return;
+      }
+
+      if (key === '_fbc') {
+        parsed.fbc = value;
+      }
+      if (key === '_fbp') {
+        parsed.fbp = value;
+      }
+    });
+
+    return parsed;
+  }
+
+  function hasPersistableSignals(signals) {
     if (!signals || typeof signals !== 'object') {
       return false;
     }
@@ -428,6 +505,9 @@
     return [
       'utm_campaign',
       'utm_source',
+      'fbclid',
+      'fbc',
+      'fbp',
       'mf_campaign_id',
       'mf_delivery_id',
       'mf_template_key',
@@ -444,9 +524,21 @@
       compactText(signals.mf_delivery_id),
       compactText(signals.mf_template_key),
       compactText(signals.mf_channel),
+      compactText(signals.fbclid),
+      compactText(signals.fbc),
+      compactText(signals.fbp),
       compactText(signals.mf_product_id),
       compactText(signals.mf_tile_position)
-    ].filter(Boolean).join(':') || 'unknown';
+    ].filter(Boolean).join(':') || 'baseline';
+  }
+
+  function fbcFromFbclid(fbclid) {
+    const normalized = compactText(fbclid);
+    if (!normalized) {
+      return null;
+    }
+
+    return 'fb.1.' + Math.floor(Date.now() / 1000) + '.' + normalized;
   }
 
   function getClientId() {
