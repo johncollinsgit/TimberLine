@@ -100,6 +100,45 @@ return [
         'sms_run_gap_minutes' => max(1, (int) env('MARKETING_MESSAGE_SMS_RUN_GAP_MINUTES', 5)),
     ],
 
+    'meta_ads' => [
+        'enabled' => (bool) env('MARKETING_META_ADS_ENABLED', false),
+        'api_base_url' => env('MARKETING_META_ADS_API_BASE_URL', 'https://graph.facebook.com'),
+        'api_version' => env('MARKETING_META_ADS_API_VERSION', 'v21.0'),
+        'access_token' => env('MARKETING_META_ADS_ACCESS_TOKEN'),
+        'account_id' => env('MARKETING_META_ADS_ACCOUNT_ID'),
+        'default_lookback_days' => max(1, (int) env('MARKETING_META_ADS_DEFAULT_LOOKBACK_DAYS', 30)),
+        'timeout_seconds' => max(5, (int) env('MARKETING_META_ADS_TIMEOUT_SECONDS', 20)),
+        'max_pages' => max(1, (int) env('MARKETING_META_ADS_MAX_PAGES', 30)),
+        'limit' => max(100, (int) env('MARKETING_META_ADS_LIMIT', 500)),
+    ],
+
+    'ai_budget_readiness' => [
+        'minimum_purchase_sample' => max(1, (int) env('MARKETING_AI_BUDGET_MIN_PURCHASE_SAMPLE', 20)),
+        'minimum_workflow_attribution_sample' => max(1, (int) env('MARKETING_AI_BUDGET_MIN_WORKFLOW_ATTRIBUTION_SAMPLE', 10)),
+        'thresholds' => [
+            'utm_coverage_rate' => ['accept' => 85.0, 'warning' => 70.0, 'direction' => 'higher'],
+            'self_referral_rate' => ['accept' => 5.0, 'warning' => 12.0, 'direction' => 'lower'],
+            'unattributed_purchase_rate' => ['accept' => 15.0, 'warning' => 30.0, 'direction' => 'lower'],
+            'purchase_linkage_match_rate' => ['accept' => 90.0, 'warning' => 75.0, 'direction' => 'higher'],
+            'linkage_confident_rate' => ['accept' => 85.0, 'warning' => 70.0, 'direction' => 'higher'],
+            'meta_continuity_rate' => ['accept' => 70.0, 'warning' => 50.0, 'direction' => 'higher'],
+            'tagged_traffic_coverage_rate' => ['accept' => 70.0, 'warning' => 50.0, 'direction' => 'higher'],
+            'spend_ingestion_completeness_rate' => ['accept' => 90.0, 'warning' => 70.0, 'direction' => 'higher'],
+            'campaign_naming_compliance_rate' => ['accept' => 85.0, 'warning' => 70.0, 'direction' => 'higher'],
+            'workflow_attribution_confidence_rate' => ['accept' => 80.0, 'warning' => 60.0, 'direction' => 'higher'],
+            'data_freshness_lag_hours' => ['accept' => 24.0, 'warning' => 72.0, 'direction' => 'lower'],
+        ],
+        'guardrails' => [
+            'autonomous_budget_changes_enabled' => (bool) env('MARKETING_AI_BUDGET_AUTONOMOUS_ENABLED', false),
+            'max_daily_budget_shift_pct' => max(1, (int) env('MARKETING_AI_BUDGET_MAX_DAILY_SHIFT_PCT', 15)),
+            'max_weekly_budget_shift_pct' => max(1, (int) env('MARKETING_AI_BUDGET_MAX_WEEKLY_SHIFT_PCT', 25)),
+            'rollback_window_hours' => max(1, (int) env('MARKETING_AI_BUDGET_ROLLBACK_WINDOW_HOURS', 24)),
+            'anomaly_trigger_roas_drop_pct' => max(1, (int) env('MARKETING_AI_BUDGET_ANOMALY_ROAS_DROP_PCT', 30)),
+            'human_approval_required' => (bool) env('MARKETING_AI_BUDGET_HUMAN_APPROVAL_REQUIRED', true),
+            'audit_log_required' => (bool) env('MARKETING_AI_BUDGET_AUDIT_LOG_REQUIRED', true),
+        ],
+    ],
+
     'twilio' => [
         'enabled' => (bool) env('MARKETING_TWILIO_ENABLED', false),
         'account_sid' => env('TWILIO_ACCOUNT_SID'),

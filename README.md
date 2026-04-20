@@ -1,5 +1,66 @@
 # Modern Forestry Backstage
 
+## Phase 5 AI Budget Readiness (2026-04-20)
+
+This pass ships the minimum viable AI budget readiness layer in **advisory mode only** (no autonomous budget control).
+
+Implemented:
+- readiness scorecard + tiering:
+  - new service: `app/Services/Marketing/AiBudgetReadinessService.php`
+  - computes metric-by-metric pass/warn/fail with formulas, thresholds, and source-of-truth mappings for:
+    - UTM coverage
+    - self-referrals
+    - unattributed purchases
+    - purchase linkage match + confidence distribution
+    - Meta continuity (`fbclid`/`fbc`/`fbp`)
+    - tagged traffic coverage
+    - spend ingestion completeness
+    - campaign naming compliance
+    - data freshness lag
+    - workflow attribution confidence (when sample size is sufficient)
+- recommendation-only AI guidance:
+  - new service: `app/Services/Marketing/AiBudgetRecommendationService.php`
+  - generates human-review recommendations with confidence, inputs used, caveats, and watch metric
+  - does not mutate spend/campaigns
+- explicit guardrails/policy layer:
+  - advisory recommendations are blocked when readiness is below `advisory-ready`
+  - autonomous budget mutation, auto-pausing, and auto channel reallocation are hard blocked
+  - future automation guardrail thresholds are now config-defined only
+- Meta paid spend ingestion (minimum viable, rerunnable):
+  - new model/table:
+    - `app/Models/MarketingPaidMediaDailyStat.php`
+    - `database/migrations/2026_04_20_200000_create_marketing_paid_media_daily_stats_table.php`
+  - new service/command:
+    - `app/Services/Marketing/MetaAdsSpendSyncService.php`
+    - `app/Console/Commands/MarketingSyncMetaAdsSpend.php`
+  - command:
+    - `php artisan marketing:sync-meta-ads-spend --tenant-id=<id> --store-key=retail --account-id=<meta_account_id>`
+- operator-facing surface:
+  - Message Analytics Home now includes `AI Budget Readiness (Advisory only)` panel:
+    - readiness tier + score
+    - metric scorecard
+    - spend ingestion health
+    - policy/guardrail matrix
+    - recommendation queue
+    - next-fix list
+  - file: `resources/views/shopify/messaging-analytics.blade.php`
+- decision panel payload integration:
+  - `app/Services/Marketing/MessageAnalyticsService.php`
+
+Config/env additions:
+- `config/marketing.php`:
+  - `meta_ads` section (API/token/account/sync window controls)
+  - `ai_budget_readiness` thresholds + guardrail config
+- `.env.example` now includes Meta spend sync + AI budget guardrail keys
+
+QA + handoff artifact:
+- `docs/qa/phase-5-ai-budget-readiness.md`
+
+Tests added/updated:
+- `tests/Feature/Marketing/MetaAdsSpendSyncServiceTest.php`
+- `tests/Feature/Marketing/AiBudgetReadinessServiceTest.php`
+- `tests/Feature/Marketing/MessageAnalyticsDecisionPanelsTest.php`
+
 ## Phase 4 Revenue Workflow Rollout (2026-04-20)
 
 This pass focuses only on lifecycle workflow shipping and rollout gating (no analytics redesign, no AI budget control).

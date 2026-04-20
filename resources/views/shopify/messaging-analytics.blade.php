@@ -53,6 +53,7 @@
         $acquisitionFunnelPanel = is_array($decisionPanels['acquisition_funnel'] ?? null) ? $decisionPanels['acquisition_funnel'] : [];
         $retentionPanel = is_array($decisionPanels['retention'] ?? null) ? $decisionPanels['retention'] : [];
         $actionQueuePanel = is_array($decisionPanels['action_queue'] ?? null) ? $decisionPanels['action_queue'] : [];
+        $aiBudgetReadinessPanel = is_array($decisionPanels['ai_budget_readiness'] ?? null) ? $decisionPanels['ai_budget_readiness'] : [];
         $attributionQualityTotals = is_array($attributionQualityPanel['totals'] ?? null) ? $attributionQualityPanel['totals'] : [];
         $attributionQualityLinkage = is_array($attributionQualityPanel['linkage_confidence'] ?? null) ? $attributionQualityPanel['linkage_confidence'] : [];
         $attributionQualityMetaCoverage = is_array($attributionQualityPanel['meta_signal_coverage'] ?? null) ? $attributionQualityPanel['meta_signal_coverage'] : [];
@@ -70,6 +71,36 @@
             ->values();
         $actionQueueItems = collect((array) ($actionQueuePanel['items'] ?? []))
             ->filter(fn ($row) => is_array($row))
+            ->values();
+        $budgetReadinessMetrics = collect((array) ($aiBudgetReadinessPanel['metrics'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $budgetReadinessRecommendations = collect((array) ($aiBudgetReadinessPanel['recommendations'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $budgetReadinessBlockers = collect((array) ($aiBudgetReadinessPanel['blockers'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $budgetReadinessFixes = collect((array) ($aiBudgetReadinessPanel['next_fixes'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $budgetReadinessSpend = is_array($aiBudgetReadinessPanel['spend'] ?? null) ? $aiBudgetReadinessPanel['spend'] : [];
+        $budgetReadinessPolicy = is_array($aiBudgetReadinessPanel['policy'] ?? null) ? $aiBudgetReadinessPanel['policy'] : [];
+        $budgetReadinessTier = strtolower(trim((string) ($aiBudgetReadinessPanel['tier'] ?? 'blocked')));
+        $budgetReadinessScore = (float) ($aiBudgetReadinessPanel['score'] ?? 0.0);
+        $budgetReadinessBlockedReasons = collect((array) ($budgetReadinessPolicy['blocked_reasons'] ?? []))
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter()
+            ->values();
+        $budgetReadinessActionMatrix = collect((array) ($budgetReadinessPolicy['actions'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row, string $key): array {
+                return [
+                    'action' => $key,
+                    'allowed' => (bool) ($row['allowed'] ?? false),
+                    'reason' => trim((string) ($row['reason'] ?? '')),
+                ];
+            })
             ->values();
         $messagesPaginator = $analytics['messages'] ?? null;
         $messages = $messagesPaginator instanceof \Illuminate\Pagination\LengthAwarePaginator
@@ -788,6 +819,157 @@
                         <strong>{{ number_format((int) ($attributionQualityLinkage['unlinked'] ?? 0)) }}</strong>
                     </article>
                 </div>
+            </article>
+
+            <article class="message-analytics-card">
+                <h3>AI Budget Readiness (Advisory only)</h3>
+                <p class="message-analytics-muted">
+                    Decision question: is the data trustworthy enough for AI to suggest budget moves under human review?
+                </p>
+                <div class="message-analytics-kpi-grid" aria-label="AI budget readiness summary">
+                    <article class="message-analytics-kpi">
+                        <span>Readiness tier</span>
+                        <strong>{{ strtoupper($budgetReadinessTier) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Readiness score</span>
+                        <strong>{{ number_format($budgetReadinessScore, 1) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Meta spend rows</span>
+                        <strong>{{ number_format((int) ($budgetReadinessSpend['rows_count'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Spend ingestion completeness</span>
+                        <strong>{{ $formatPercent((float) ($budgetReadinessSpend['completeness_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Campaign naming compliance</span>
+                        <strong>{{ $formatPercent((float) ($budgetReadinessSpend['campaign_naming_compliance_rate'] ?? 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Last spend sync</span>
+                        <strong>{{ $formatDateTime($budgetReadinessSpend['last_synced_at'] ?? null) }}</strong>
+                    </article>
+                </div>
+
+                <h4>Readiness scorecard</h4>
+                @if($budgetReadinessMetrics->isEmpty())
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No readiness metrics are available yet.</p>
+                    </div>
+                @else
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:1180px;" aria-label="AI budget readiness scorecard">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Value</th>
+                                    <th>Status</th>
+                                    <th>Formula</th>
+                                    <th>Source of truth</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($budgetReadinessMetrics as $metric)
+                                    @php
+                                        $status = strtolower(trim((string) ($metric['status'] ?? 'insufficient')));
+                                        $priority = match ($status) {
+                                            'fail' => 'high',
+                                            'warn' => 'medium',
+                                            'pass' => 'low',
+                                            default => 'medium',
+                                        };
+                                    @endphp
+                                    <tr>
+                                        <td>{{ (string) ($metric['label'] ?? 'Metric') }}</td>
+                                        <td>{{ (string) ($metric['display_value'] ?? '—') }}</td>
+                                        <td>
+                                            <span class="message-analytics-priority" data-priority="{{ $priority }}">{{ strtoupper($status) }}</span>
+                                        </td>
+                                        <td>{{ (string) ($metric['formula'] ?? '—') }}</td>
+                                        <td>{{ (string) ($metric['source_of_truth'] ?? '—') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                <h4>Guardrails</h4>
+                @if($budgetReadinessActionMatrix->isEmpty())
+                    <p class="message-analytics-muted">No policy actions are configured.</p>
+                @else
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:860px;" aria-label="AI budget policy actions">
+                            <thead>
+                                <tr>
+                                    <th>Action</th>
+                                    <th>Allowed now</th>
+                                    <th>Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($budgetReadinessActionMatrix as $policyRow)
+                                    <tr>
+                                        <td>{{ str_replace('_', ' ', (string) ($policyRow['action'] ?? 'action')) }}</td>
+                                        <td>{{ (bool) ($policyRow['allowed'] ?? false) ? 'Yes' : 'No' }}</td>
+                                        <td>{{ (string) ($policyRow['reason'] ?? '—') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                @if($budgetReadinessBlockedReasons->isNotEmpty())
+                    <h4>Why budget control is blocked</h4>
+                    @foreach($budgetReadinessBlockedReasons as $reason)
+                        <article class="message-analytics-action-item">
+                            <span class="message-analytics-priority" data-priority="high">BLOCKED</span>
+                            <p class="message-analytics-muted">{{ $reason }}</p>
+                        </article>
+                    @endforeach
+                @endif
+
+                <h4>Recommendation queue (human review)</h4>
+                @if($budgetReadinessRecommendations->isEmpty())
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No advisory recommendations are available for this window.</p>
+                    </div>
+                @else
+                    @foreach($budgetReadinessRecommendations as $item)
+                        @php
+                            $confidence = strtolower(trim((string) ($item['confidence'] ?? 'low')));
+                            $priority = match ($confidence) {
+                                'high' => 'high',
+                                'medium' => 'medium',
+                                default => 'low',
+                            };
+                        @endphp
+                        <article class="message-analytics-action-item">
+                            <span class="message-analytics-priority" data-priority="{{ $priority }}">{{ strtoupper($confidence) }} CONFIDENCE</span>
+                            <strong>{{ str_replace('_', ' ', (string) ($item['type'] ?? 'recommendation')) }}</strong>
+                            <p class="message-analytics-muted">{{ (string) ($item['reason'] ?? '') }}</p>
+                            @if(!empty($item['blocking_caveats']))
+                                <p class="message-analytics-muted"><strong>Caveats:</strong> {{ implode(' | ', (array) ($item['blocking_caveats'] ?? [])) }}</p>
+                            @endif
+                            <p class="message-analytics-muted"><strong>Suggested action:</strong> {{ (string) ($item['suggested_human_action'] ?? '') }}</p>
+                            <p class="message-analytics-muted"><strong>Watch metric:</strong> {{ (string) ($item['expected_metric_to_watch'] ?? '') }}</p>
+                        </article>
+                    @endforeach
+                @endif
+
+                @if($budgetReadinessFixes->isNotEmpty())
+                    <h4>Next fixes to improve readiness</h4>
+                    @foreach($budgetReadinessFixes as $fix)
+                        <article class="message-analytics-action-item">
+                            <span class="message-analytics-priority" data-priority="medium">NEXT</span>
+                            <strong>{{ str_replace('_', ' ', (string) ($fix['metric'] ?? 'metric')) }}</strong>
+                            <p class="message-analytics-muted">{{ (string) ($fix['action'] ?? '') }}</p>
+                        </article>
+                    @endforeach
+                @endif
             </article>
 
             <article class="message-analytics-card">

@@ -185,5 +185,6 @@ test('message analytics decision panels expose attribution, funnel, retention, a
         ->and(data_get($panels, 'acquisition_funnel.totals.purchases'))->toBe(1)
         ->and(data_get($panels, 'retention.totals.first_time_orders'))->toBe(2)
         ->and(data_get($panels, 'retention.totals.returning_orders'))->toBe(1)
+        ->and((string) data_get($panels, 'ai_budget_readiness.tier'))->not->toBe('')
         ->and(count((array) data_get($panels, 'action_queue.items', [])))->toBeGreaterThan(0);
 });

@@ -1,5 +1,26 @@
 # UI Changelog
 
+## 2026-04-20 — Message Analytics AI Budget Readiness (Advisory Only)
+
+### What changed
+- Added a new `AI Budget Readiness (Advisory only)` panel to Shopify embedded Message Analytics Home:
+  - renders readiness tier + score
+  - renders a metric-by-metric scorecard (value/status/formula/source-of-truth)
+  - renders spend ingestion health summary
+  - renders policy/guardrail action matrix (allowed vs blocked)
+  - renders advisory recommendation queue with confidence + caveats + watch metric
+  - renders explicit blockers + next-fix list
+- Kept panel inside existing analytics home flow (no new standalone control center route).
+
+### Why
+- Operators needed one place to decide if budget advice is trustworthy before acting.
+- The product needed recommendation-only AI budget guidance without implying autonomous spend control.
+
+### Scope boundary
+- No autonomous budget mutation UI.
+- No automatic campaign pausing/reallocation UI.
+- No broad analytics redesign in this pass.
+
 ## 2026-04-13 — Commercial Fulfillment Truth in Start Here
 
 ### What changed

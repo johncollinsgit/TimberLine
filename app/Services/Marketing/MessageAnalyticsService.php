@@ -22,7 +22,8 @@ class MessageAnalyticsService
 {
     public function __construct(
         protected MessageLinkAggregationService $messageLinkAggregationService,
-        protected MessageAnalyticsShopifyOrderSignalService $messageAnalyticsShopifyOrderSignalService
+        protected MessageAnalyticsShopifyOrderSignalService $messageAnalyticsShopifyOrderSignalService,
+        protected AiBudgetReadinessService $aiBudgetReadinessService
     ) {}
 
     /**
@@ -2099,6 +2100,15 @@ class MessageAnalyticsService
             'acquisition_funnel' => $acquisitionFunnel,
             'retention' => $retention,
             'action_queue' => $this->actionQueuePanel($attributionQuality, $acquisitionFunnel, $retention),
+            'ai_budget_readiness' => $this->aiBudgetReadinessService->evaluate(
+                tenantId: $tenantId,
+                storeKey: $storeKey,
+                from: $from,
+                to: $to,
+                attributionQuality: $attributionQuality,
+                acquisitionFunnel: $acquisitionFunnel,
+                retention: $retention
+            ),
         ];
     }
 
@@ -2171,6 +2181,74 @@ class MessageAnalyticsService
             ],
             'action_queue' => [
                 'items' => [],
+                'empty' => true,
+            ],
+            'ai_budget_readiness' => [
+                'score' => 0.0,
+                'tier' => 'blocked',
+                'window' => [
+                    'date_from' => null,
+                    'date_to' => null,
+                ],
+                'metrics' => [],
+                'blockers' => [],
+                'warnings' => [],
+                'next_fixes' => [],
+                'spend' => [
+                    'rows_count' => 0,
+                    'days_with_rows' => 0,
+                    'expected_days' => 0,
+                    'completeness_rate' => 0.0,
+                    'campaigns_count' => 0,
+                    'compliant_campaigns_count' => 0,
+                    'campaign_naming_compliance_rate' => 0.0,
+                    'last_synced_at' => null,
+                    'freshness_lag_hours' => null,
+                    'latest_purchase_at' => null,
+                    'latest_funnel_event_at' => null,
+                    'funnel_match_coverage_rate' => 0.0,
+                    'campaign_performance' => [],
+                ],
+                'policy' => [
+                    'mode' => 'advisory_only',
+                    'actions' => [
+                        'advisory_budget_recommendations' => [
+                            'allowed' => false,
+                            'reason' => 'Readiness is below advisory-ready.',
+                        ],
+                        'audience_recommendations' => [
+                            'allowed' => true,
+                            'reason' => 'Advisory-only recommendations.',
+                        ],
+                        'creative_copy_suggestions' => [
+                            'allowed' => true,
+                            'reason' => 'Advisory-only recommendations.',
+                        ],
+                        'automatic_budget_mutation' => [
+                            'allowed' => false,
+                            'reason' => 'Autonomous budget mutation is blocked.',
+                        ],
+                        'automatic_campaign_pausing' => [
+                            'allowed' => false,
+                            'reason' => 'Autonomous campaign pausing is blocked.',
+                        ],
+                        'automatic_channel_reallocation' => [
+                            'allowed' => false,
+                            'reason' => 'Autonomous channel reallocation is blocked.',
+                        ],
+                    ],
+                    'blocked_reasons' => [],
+                    'future_automation_guardrails' => [
+                        'max_daily_budget_shift_pct' => 0,
+                        'max_weekly_budget_shift_pct' => 0,
+                        'rollback_window_hours' => 0,
+                        'anomaly_trigger_roas_drop_pct' => 0,
+                        'human_approval_required' => true,
+                        'audit_log_required' => true,
+                        'automation_enabled' => false,
+                    ],
+                ],
+                'recommendations' => [],
                 'empty' => true,
             ],
         ];
@@ -2557,6 +2635,7 @@ class MessageAnalyticsService
             if (str_starts_with($identity, 'order:')) {
                 $unknownOrders++;
                 $unknownRevenueCents += $revenueCents;
+
                 continue;
             }
 
@@ -3752,7 +3831,7 @@ class MessageAnalyticsService
         return $this->nullableString($meta['checkout_token'] ?? null)
             ?? $this->nullableString($meta['session_key'] ?? null)
             ?? ($this->positiveInt($meta['mf_delivery_id'] ?? null) !== null
-                ? 'delivery:' . (string) $this->positiveInt($meta['mf_delivery_id'] ?? null)
+                ? 'delivery:'.(string) $this->positiveInt($meta['mf_delivery_id'] ?? null)
                 : null);
     }
 

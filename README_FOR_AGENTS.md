@@ -60,6 +60,25 @@ Current implemented shell/diagnostics checkpoint:
   - QA/handoff notes: `docs/qa/phase-4-workflow-rollout.md`
   - regression coverage:
     - `tests/Feature/Marketing/LifecycleWorkflowRolloutServiceTest.php`
+- Phase 5 AI budget readiness checkpoint (2026-04-20):
+  - advisory-only budget readiness service is live:
+    - `app/Services/Marketing/AiBudgetReadinessService.php`
+    - `app/Services/Marketing/AiBudgetRecommendationService.php`
+  - Meta spend ingestion baseline is live:
+    - `app/Services/Marketing/MetaAdsSpendSyncService.php`
+    - `app/Console/Commands/MarketingSyncMetaAdsSpend.php`
+    - `app/Models/MarketingPaidMediaDailyStat.php`
+    - migration: `2026_04_20_200000_create_marketing_paid_media_daily_stats_table.php`
+  - Message Analytics Home now includes `AI Budget Readiness (Advisory only)`:
+    - readiness tier + scorecard + guardrail matrix + recommendation queue + next-fix list
+  - autonomous budget control remains blocked by policy:
+    - no auto budget mutation
+    - no auto pausing
+    - no auto channel reallocation
+  - QA/handoff notes: `docs/qa/phase-5-ai-budget-readiness.md`
+  - regression coverage:
+    - `tests/Feature/Marketing/AiBudgetReadinessServiceTest.php`
+    - `tests/Feature/Marketing/MetaAdsSpendSyncServiceTest.php`
 - Embedded product shell is live and navigable:
   - `/shopify/app` (overview/dashboard)
   - `/shopify/app/start`
