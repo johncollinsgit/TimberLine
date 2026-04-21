@@ -635,6 +635,13 @@ Storefront tracking hardening pass (2026-04-09):
 - Shopify-native analytics/reporting status is now surfaced explicitly as scope availability only.
   - Backstage still does **not** query Shopify native analytics/report APIs for storefront funnel reporting.
 
+Storefront instrumentation continuity patch (2026-04-20):
+- fixed Shopify web pixel connection settings to use the extension-defined key `app_proxy_base` (Shopify rejected the previous camelCase key).
+- web pixel runtime now accepts both `settings.app_proxy_base` and `settings.appProxyBase` for backward compatibility with already-connected pixels.
+- added focused storefront diagnostics command for production validation:
+  - `php artisan marketing:diagnose-storefront-tracking --tenant-id=1 --store=retail --days=30 --json`
+  - returns machine-readable funnel counts, identifier presence rates, verification failure reasons, and order linkage confidence snapshot.
+
 ## MT-4C Hardening Status (2026-03-30)
 
 MT-4C is now complete.

@@ -367,7 +367,7 @@ GRAPHQL, [
     protected function pixelSettings(): array
     {
         return [
-            'appProxyBase' => '/apps/forestry',
+            'app_proxy_base' => '/apps/forestry',
         ];
     }
 

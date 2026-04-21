@@ -79,7 +79,7 @@ test('embedded messaging endpoint connects the shopify web pixel', function () {
         }
 
         if (str_contains($query, 'mutation BackstageCreateWebPixel')) {
-            expect(data_get($request->data(), 'variables.webPixel.settings.appProxyBase'))->toBe('/apps/forestry');
+            expect(data_get($request->data(), 'variables.webPixel.settings.app_proxy_base'))->toBe('/apps/forestry');
 
             return Http::response([
                 'data' => [
@@ -88,7 +88,7 @@ test('embedded messaging endpoint connects the shopify web pixel', function () {
                         'webPixel' => [
                             'id' => 'gid://shopify/WebPixel/1',
                             'settings' => json_encode([
-                                'appProxyBase' => '/apps/forestry',
+                                'app_proxy_base' => '/apps/forestry',
                             ], JSON_THROW_ON_ERROR),
                         ],
                     ],
@@ -116,7 +116,7 @@ test('embedded messaging endpoint connects the shopify web pixel', function () {
         ->assertJsonPath('pixel.scope_source', 'live')
         ->assertJsonPath('tracking.web_pixel.connected', true)
         ->assertJsonPath('tracking.web_pixel.status', 'connected')
-        ->assertJsonPath('tracking.web_pixel.settings.appProxyBase', '/apps/forestry')
+        ->assertJsonPath('tracking.web_pixel.settings.app_proxy_base', '/apps/forestry')
         ->assertJsonPath('tracking.scope_state.verified', true)
         ->assertJsonPath('tracking.health_summary.web_pixel.connected', true)
         ->assertJsonPath('tracking.shopify_native.analytics_and_reports.api_calls_detected', false)

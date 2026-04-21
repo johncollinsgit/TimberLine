@@ -5,7 +5,7 @@ const DEDUPE_PREFIX = 'forestry:marketing:pixel:';
 const WINDOW_DAYS = 7;
 
 register(({analytics, browser, settings}) => {
-  const proxyBase = String(settings.appProxyBase || '/apps/forestry').replace(/\/$/, '');
+  const proxyBase = String(settings.app_proxy_base || settings.appProxyBase || '/apps/forestry').replace(/\/$/, '');
   const funnelEndpoint = proxyBase + '/funnel/event';
 
   analytics.subscribe('page_viewed', async (event) => {

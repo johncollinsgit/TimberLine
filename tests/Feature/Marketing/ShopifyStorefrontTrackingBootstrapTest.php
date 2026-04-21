@@ -36,6 +36,8 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
         ->and($embedLiquid)->toContain('/apps/forestry/funnel/event')
         ->and($embedLiquid)->toContain('"name": "Forestry tracking"')
         ->and($pixelConfig)->toContain('type = "web_pixel_extension"')
+        ->and($pixelConfig)->toContain('[settings.fields.app_proxy_base]')
         ->and($pixelCode)->toContain("analytics.subscribe('product_viewed'")
-        ->and($pixelCode)->toContain("analytics.subscribe('checkout_started'");
+        ->and($pixelCode)->toContain("analytics.subscribe('checkout_started'")
+        ->and($pixelCode)->toContain('settings.app_proxy_base');
 });
