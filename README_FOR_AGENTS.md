@@ -79,6 +79,17 @@ Current implemented shell/diagnostics checkpoint:
   - regression coverage:
     - `tests/Feature/Marketing/AiBudgetReadinessServiceTest.php`
     - `tests/Feature/Marketing/MetaAdsSpendSyncServiceTest.php`
+- Phase 7 live storefront activation checkpoint (2026-04-21):
+  - production app proxy runtime is healthy (`/apps/forestry/health` returns 200 from storefront context)
+  - Shopify Customer Events pixel is connected (`gid://shopify/WebPixel/2117271811`) but recent `web_pixel` event flow is still absent
+  - published theme embed for Forestry tracking is currently inactive on the live main theme (`settings_data.json` has no Forestry app-embed block)
+  - organic funnel emission remains sparse until merchant-side app embed activation is completed in Shopify Theme Editor
+  - diagnostics/verification commands:
+    - `php artisan marketing:diagnose-storefront-tracking --tenant-id=1 --store=retail --days=30 --json`
+  - latest runtime hardening shipped in extension assets:
+    - checkout_started now also emits on checkout form submit paths (not only click hooks)
+    - checkout token extraction now supports checkout URLs before navigation
+  - phase-7 verification notes: `docs/qa/phase-7-live-storefront-activation.md`
 - Embedded product shell is live and navigable:
   - `/shopify/app` (overview/dashboard)
   - `/shopify/app/start`

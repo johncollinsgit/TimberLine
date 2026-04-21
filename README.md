@@ -635,6 +635,26 @@ Storefront tracking hardening pass (2026-04-09):
 - Shopify-native analytics/reporting status is now surfaced explicitly as scope availability only.
   - Backstage still does **not** query Shopify native analytics/report APIs for storefront funnel reporting.
 
+Live storefront activation verification pass (2026-04-20):
+- Production verification now requires proving **published theme activation**, not just connected app state.
+- Exact Shopify Admin checks:
+  1. `Online Store -> Themes -> Customize (published theme) -> Theme settings -> App embeds`
+  2. Enable **Forestry tracking** (theme app embed), then **Save**.
+  3. `Settings -> Customer events` and confirm Forestry app pixel remains connected.
+- Live PDP verification checklist:
+  - confirm DOM contains `#forestry-storefront-tracking-config`
+  - confirm storefront loads `marketing-storefront-tracker.js`
+  - confirm network POSTs to `/apps/forestry/funnel/event` on page/add-to-cart/checkout actions
+  - confirm Backstage records `session_started`, `product_viewed`, `add_to_cart`, `checkout_started`
+- New production diagnostics command:
+  - `php artisan marketing:diagnose-storefront-tracking --tenant-id=1 --store=retail --days=30 --json`
+  - reports event volume, tracker mix, identifier presence, linkage confidence, and verification failure diagnostics.
+- phase-7 live verification artifact:
+  - `docs/qa/phase-7-live-storefront-activation.md`
+- Theme embed checkout continuity hardening:
+  - checkout_started now also emits on checkout **form submit** events (not only click hooks)
+  - checkout token extraction now supports action/href URL parsing before navigation.
+
 Storefront instrumentation continuity patch (2026-04-20):
 - fixed Shopify web pixel connection settings to use the extension-defined key `app_proxy_base` (Shopify rejected the previous camelCase key).
 - web pixel runtime now accepts both `settings.app_proxy_base` and `settings.appProxyBase` for backward compatibility with already-connected pixels.

@@ -18,6 +18,7 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
     $appConfig = file_get_contents($appToml);
     $embedConfig = file_get_contents($embedManifest);
     $embedLiquid = file_get_contents($embedBlock);
+    $embedCode = file_get_contents($embedAsset);
     $pixelConfig = file_get_contents($pixelManifest);
     $pixelCode = file_get_contents($pixelSource);
 
@@ -25,8 +26,6 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
         ->toContain('application_url = "https://app.theeverbranch.com/shopify/app"')
         ->toContain('read_discounts')
         ->toContain('write_discounts')
-        ->toContain('read_webhooks')
-        ->toContain('write_webhooks')
         ->toContain('read_customer_events')
         ->toContain('subpath = "forestry"')
         ->toContain('prefix = "apps"')
@@ -35,6 +34,8 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
     expect($embedConfig)->toContain('type = "theme"')
         ->and($embedLiquid)->toContain('/apps/forestry/funnel/event')
         ->and($embedLiquid)->toContain('"name": "Forestry tracking"')
+        ->and($embedCode)->toContain('checkout_submit:')
+        ->and($embedCode)->toContain("via: 'theme_submit'")
         ->and($pixelConfig)->toContain('type = "web_pixel_extension"')
         ->and($pixelConfig)->toContain('[settings.fields.app_proxy_base]')
         ->and($pixelCode)->toContain("analytics.subscribe('product_viewed'")

@@ -128,8 +128,9 @@
         ? actionable.href
         : stringOrNull(actionable.getAttribute('formaction'));
       const text = actionable.textContent || actionable.getAttribute('value') || '';
+      const checkoutToken = checkoutTokenFromUrl(href);
       const isCheckout = typeof href === 'string' && normalizeUrl(href).includes('/checkout');
-      const isNamedCheckout = ['checkout', 'name="checkout"'].some(function (needle) {
+      const isNamedCheckout = ['checkout', 'name="checkout"', "name='checkout'"].some(function (needle) {
         return String(actionable.outerHTML || '').toLowerCase().includes(needle);
       });
 
@@ -141,9 +142,44 @@
         dedupeKey: 'checkout_click:' + pageKey,
         dedupeTtlMs: SHORT_DEDUPE_MS,
         cart_token: stringOrNull(config.cart && config.cart.token),
+        checkout_token: checkoutToken,
         link_label: compactText(text) || 'Checkout',
         properties: {
           via: 'theme_click',
+        },
+      });
+    }, true);
+
+    document.addEventListener('submit', function (event) {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) {
+        return;
+      }
+
+      const action = normalizeUrl(form.getAttribute('action') || window.location.href);
+      const formHtml = String(form.outerHTML || '').toLowerCase();
+      const submitter = event.submitter instanceof Element ? event.submitter : null;
+      const submitterName = submitter ? compactText(submitter.getAttribute('name') || '') : '';
+      const submitterText = submitter
+        ? compactText(submitter.textContent || submitter.getAttribute('value') || '')
+        : '';
+      const isCheckoutAction = action.includes('/checkout');
+      const isCheckoutSubmit = submitterName.toLowerCase() === 'checkout'
+        || formHtml.includes('name="checkout"')
+        || formHtml.includes("name='checkout'");
+
+      if (!isCheckoutAction && !isCheckoutSubmit) {
+        return;
+      }
+
+      postEvent('checkout_started', {
+        dedupeKey: 'checkout_submit:' + pageKey,
+        dedupeTtlMs: SHORT_DEDUPE_MS,
+        cart_token: stringOrNull(config.cart && config.cart.token),
+        checkout_token: checkoutTokenFromUrl(action),
+        link_label: submitterText || 'Checkout',
+        properties: {
+          via: 'theme_submit',
         },
       });
     }, true);
@@ -286,7 +322,7 @@
       session_key: sessionKey,
       client_id: clientId,
       cart_token: stringOrNull(overrides.cart_token) || stringOrNull(config.cart && config.cart.token),
-      checkout_token: checkoutTokenFromLocation(),
+      checkout_token: stringOrNull(overrides.checkout_token) || checkoutTokenFromLocation(),
       product_id: stringOrNull(overrides.product_id),
       product_handle: stringOrNull(overrides.product_handle),
       product_title: stringOrNull(overrides.product_title),
@@ -620,8 +656,27 @@
   }
 
   function checkoutTokenFromLocation() {
-    const match = String(window.location.pathname || '').match(/\/checkouts\/([^/?#]+)/i);
-    return match && match[1] ? match[1] : null;
+    return checkoutTokenFromUrl(window.location.href);
+  }
+
+  function checkoutTokenFromUrl(value) {
+    const url = normalizeUrl(value || '');
+    if (!url) {
+      return null;
+    }
+
+    const pathMatch = String(url).match(/\/checkouts\/([^/?#]+)/i);
+    if (pathMatch && pathMatch[1]) {
+      return compactText(pathMatch[1]);
+    }
+
+    try {
+      const parsed = new URL(url, window.location.origin);
+      const queryToken = compactText(parsed.searchParams.get('token') || parsed.searchParams.get('checkout_token'));
+      return queryToken || null;
+    } catch (error) {
+      return null;
+    }
   }
 
   function normalizeUrl(value) {
