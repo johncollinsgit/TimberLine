@@ -60,6 +60,47 @@ test('attribution source meta builder captures email module query signals from l
         ->and($meta['email_link_label'])->toBe('Spring Favorite');
 });
 
+test('attribution source meta builder derives utm meta and linkage tokens from landing URLs when fields are missing', function () {
+    $builder = app(MarketingAttributionSourceMetaBuilder::class);
+
+    $meta = $builder->fromMeta([
+        'landing_site' => 'https://theforestrystudio.com/products/ember?utm_source=meta&utm_medium=paid_social&utm_campaign=spring-relaunch&fbclid=IwZXh0bgNHM&checkout_token=CHK-1234&cart_token=CART-6789&session_key=sess-42&client_id=client-55',
+        'capture_context' => 'shopify_order_payload',
+        'capture_contexts' => ['shopify_order_payload'],
+        'confidence' => 'medium',
+    ]);
+
+    expect($meta['utm_source'])->toBe('meta')
+        ->and($meta['utm_medium'])->toBe('paid_social')
+        ->and($meta['utm_campaign'])->toBe('spring-relaunch')
+        ->and($meta['fbclid'])->toBe('IwZXh0bgNHM')
+        ->and($meta['checkout_token'])->toBe('CHK-1234')
+        ->and($meta['cart_token'])->toBe('CART-6789')
+        ->and($meta['session_key'])->toBe('sess-42')
+        ->and($meta['session_id'])->toBe('sess-42')
+        ->and($meta['client_id'])->toBe('client-55');
+});
+
+test('source meta merge backfills missing attribution query signals from landing urls', function () {
+    $builder = app(MarketingAttributionSourceMetaBuilder::class);
+
+    $merged = $builder->mergeSourceMeta(
+        [
+            'landing_site' => 'https://theforestrystudio.com/products/ember?utm_source=facebook&utm_medium=paid_social&utm_campaign=spring-launch&fbclid=fbclid-123',
+            'capture_context' => 'shopify_order_payload',
+            'capture_contexts' => ['shopify_order_payload'],
+            'confidence' => 'medium',
+        ],
+        []
+    );
+
+    expect($merged['utm_source'])->toBe('facebook')
+        ->and($merged['utm_medium'])->toBe('paid_social')
+        ->and($merged['utm_campaign'])->toBe('spring-launch')
+        ->and($merged['fbclid'])->toBe('fbclid-123')
+        ->and((array) ($merged['field_confidence'] ?? []))->toHaveKey('utm_source');
+});
+
 test('source meta merge preserves stronger values and is idempotent', function () {
     Carbon::setTestNow('2026-03-17 09:00:00');
 
@@ -290,6 +331,52 @@ test('storefront order linkage persists deterministic checkout linkage and purch
         ->and((string) ($order->attribution_meta['fbclid'] ?? ''))->toBe('IwZXh0bgNHM')
         ->and($purchaseEvent)->not->toBeNull()
         ->and((int) ($purchaseEvent?->meta['linked_storefront_event_id'] ?? 0))->toBe((int) $checkoutEvent->id);
+});
+
+test('storefront order linkage normalizes checkout token formats before matching', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Storefront Linkage Normalize Tenant',
+        'slug' => 'storefront-linkage-normalize-tenant',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'tenant_id' => $tenant->id,
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 7781,
+        'ordered_at' => now(),
+        'order_number' => '#7781',
+        'status' => 'complete',
+        'attribution_meta' => [
+            'checkout_token' => 'gid://shopify/Checkout/chk_token_7781?key=abc123',
+        ],
+    ]);
+
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'checkout_completed',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'endpoint' => '/apps/forestry/funnel/event',
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'checkout:chk_token_7781',
+        'meta' => [
+            'store_key' => 'retail',
+            'checkout_token' => 'chk_token_7781',
+        ],
+        'occurred_at' => now()->subMinutes(4),
+        'resolution_status' => 'resolved',
+    ]);
+
+    $result = app(StorefrontOrderLinkageService::class)->linkOrder($order, [], [
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+    ]);
+
+    expect($result['linked'])->toBeTrue()
+        ->and((string) ($result['method'] ?? ''))->toBe('checkout_token_exact')
+        ->and((float) ($result['confidence'] ?? 0))->toBeGreaterThan(0.99);
 });
 
 test('attribution backfill command is dry run safe and enriches order linked records when executed', function () {

@@ -96,11 +96,18 @@ test('short link redirects record sms click events and create order attribution 
 
     preg_match('/https?:\/\/[^\s]+/i', (string) ($tracking['message'] ?? ''), $matches);
     $trackedUrl = (string) ($matches[0] ?? '');
+    $decoratedDestination = (string) data_get($tracking, 'links.0.destination_url', '');
 
-    expect($trackedUrl)->not->toBe('');
+    expect($trackedUrl)->not->toBe('')
+        ->and($decoratedDestination)->not->toBe('')
+        ->and($decoratedDestination)->toContain('/products/ember-drop')
+        ->and($decoratedDestination)->toContain('utm_source=backstage')
+        ->and($decoratedDestination)->toContain('utm_medium=sms')
+        ->and($decoratedDestination)->toContain('utm_campaign=')
+        ->and($decoratedDestination)->toContain('mf_delivery_id='.$delivery->id);
 
     $this->get($trackedUrl)
-        ->assertRedirect($link->destination_url);
+        ->assertRedirect($decoratedDestination);
 
     $event = MarketingMessageEngagementEvent::query()
         ->where('marketing_message_delivery_id', $delivery->id)

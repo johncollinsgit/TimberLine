@@ -83,7 +83,7 @@ class MarketingAttributionSourceMetaBuilder
         }
 
         foreach ([$candidate['landing_site'] ?? null, $candidate['landing_page'] ?? null, $candidate['source_url'] ?? null] as $url) {
-            foreach ($this->extractUtmQuerySignals($url) as $key => $value) {
+            foreach ($this->extractAttributionQuerySignals($url) as $key => $value) {
                 $this->setField($candidate, $fieldConfidence, $key, $value, 'high');
             }
             foreach ($this->extractEmailQuerySignals($url) as $key => $value) {
@@ -116,6 +116,7 @@ class MarketingAttributionSourceMetaBuilder
      */
     public function fromMeta(array $meta, ?string $captureContext = null): array
     {
+        $meta = $this->augmentMetaFromKnownUrls($meta);
         $candidate = [];
         $fieldConfidence = is_array($meta['field_confidence'] ?? null) ? $meta['field_confidence'] : [];
         $defaultConfidence = $this->normalizeConfidence($meta['confidence'] ?? null) ?? 'medium';
@@ -153,6 +154,8 @@ class MarketingAttributionSourceMetaBuilder
      */
     public function mergeSourceMeta(array $existing, array $candidate): array
     {
+        $existing = $this->augmentMetaFromKnownUrls($existing);
+        $candidate = $this->augmentMetaFromKnownUrls($candidate);
         $merged = $existing;
         $existingFieldConfidence = is_array($merged['field_confidence'] ?? null) ? $merged['field_confidence'] : [];
         $candidateFieldConfidence = is_array($candidate['field_confidence'] ?? null) ? $candidate['field_confidence'] : [];
@@ -305,7 +308,7 @@ class MarketingAttributionSourceMetaBuilder
     /**
      * @return array<string,string>
      */
-    protected function extractUtmQuerySignals(mixed $url): array
+    protected function extractAttributionQuerySignals(mixed $url): array
     {
         $url = $this->nullableString($url);
         if (! $url) {
@@ -320,7 +323,21 @@ class MarketingAttributionSourceMetaBuilder
         parse_str((string) $parts['query'], $query);
 
         $signals = [];
-        foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'fbc', 'fbp'] as $field) {
+        foreach ([
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_content',
+            'utm_term',
+            'fbclid',
+            'fbc',
+            'fbp',
+            'checkout_token',
+            'cart_token',
+            'session_key',
+            'session_id',
+            'client_id',
+        ] as $field) {
             $value = $this->nullableString($query[$field] ?? null);
             if ($value !== null) {
                 $signals[$field] = $value;
@@ -328,6 +345,86 @@ class MarketingAttributionSourceMetaBuilder
         }
 
         return $signals;
+    }
+
+    /**
+     * @param  array<string,mixed>  $meta
+     * @return array<string,mixed>
+     */
+    protected function augmentMetaFromKnownUrls(array $meta): array
+    {
+        if ($meta === []) {
+            return $meta;
+        }
+
+        $enriched = $meta;
+        $fieldConfidence = is_array($enriched['field_confidence'] ?? null) ? $enriched['field_confidence'] : [];
+        $defaultConfidence = $this->normalizeConfidence($enriched['confidence'] ?? null) ?? 'medium';
+        $changed = false;
+
+        $urls = [
+            $this->nullableString($enriched['landing_site'] ?? null),
+            $this->nullableString($enriched['landing_page'] ?? null),
+            $this->nullableString($enriched['source_url'] ?? null),
+        ];
+
+        foreach ($urls as $url) {
+            if ($url === null) {
+                continue;
+            }
+
+            foreach ($this->extractAttributionQuerySignals($url) as $field => $value) {
+                if (! in_array($field, $this->fields, true)) {
+                    continue;
+                }
+
+                if ($this->nullableString($enriched[$field] ?? null) !== null) {
+                    continue;
+                }
+
+                $enriched[$field] = $value;
+                $fieldConfidence[$field] = in_array($field, ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'fbc', 'fbp'], true)
+                    ? 'high'
+                    : $defaultConfidence;
+                $changed = true;
+            }
+
+            foreach ($this->extractEmailQuerySignals($url) as $field => $value) {
+                if (! in_array($field, $this->fields, true)) {
+                    continue;
+                }
+
+                if ($this->nullableString($enriched[$field] ?? null) !== null) {
+                    continue;
+                }
+
+                $enriched[$field] = $value;
+                $fieldConfidence[$field] = $defaultConfidence;
+                $changed = true;
+            }
+        }
+
+        $sessionKey = $this->nullableString($enriched['session_key'] ?? null);
+        $sessionId = $this->nullableString($enriched['session_id'] ?? null);
+        if ($sessionKey === null && $sessionId !== null) {
+            $enriched['session_key'] = $sessionId;
+            $fieldConfidence['session_key'] = $fieldConfidence['session_id'] ?? $defaultConfidence;
+            $changed = true;
+        } elseif ($sessionId === null && $sessionKey !== null) {
+            $enriched['session_id'] = $sessionKey;
+            $fieldConfidence['session_id'] = $fieldConfidence['session_key'] ?? $defaultConfidence;
+            $changed = true;
+        }
+
+        if (! $changed) {
+            return $meta;
+        }
+
+        $enriched['field_confidence'] = $fieldConfidence;
+        $enriched['confidence'] = $this->maxConfidence($fieldConfidence);
+        $enriched['last_enriched_at'] = now()->toIso8601String();
+
+        return $enriched;
     }
 
     /**

@@ -161,7 +161,10 @@ class StorefrontOrderLinkageService
             );
 
             if ($value !== null) {
-                $resolved[$field] = $value;
+                $normalized = $this->normalizeSignalValue($field, $value);
+                if ($normalized !== null) {
+                    $resolved[$field] = $normalized;
+                }
             }
         }
 
@@ -228,28 +231,29 @@ class StorefrontOrderLinkageService
     protected function scoreEventMatch(array $signals, MarketingStorefrontEvent $event, CarbonImmutable $orderAt): array
     {
         $meta = is_array($event->meta ?? null) ? $event->meta : [];
-        $eventCheckout = $this->nullableString($meta['checkout_token'] ?? null);
-        $eventCart = $this->nullableString($meta['cart_token'] ?? null);
-        $eventSession = $this->nullableString($meta['session_key'] ?? null) ?? $this->nullableString($meta['session_id'] ?? null);
-        $eventClient = $this->nullableString($meta['client_id'] ?? null);
-        $eventDeliveryId = $this->nullableString($meta['mf_delivery_id'] ?? null);
+        $eventCheckout = $this->normalizeSignalValue('checkout_token', $meta['checkout_token'] ?? null);
+        $eventCart = $this->normalizeSignalValue('cart_token', $meta['cart_token'] ?? null);
+        $eventSession = $this->normalizeSignalValue('session_key', $meta['session_key'] ?? null)
+            ?? $this->normalizeSignalValue('session_id', $meta['session_id'] ?? null);
+        $eventClient = $this->normalizeSignalValue('client_id', $meta['client_id'] ?? null);
+        $eventDeliveryId = $this->normalizeSignalValue('mf_delivery_id', $meta['mf_delivery_id'] ?? null);
 
         $score = 0.0;
         $method = null;
 
-        if (($signals['checkout_token'] ?? null) !== null && $eventCheckout !== null && hash_equals($signals['checkout_token'], $eventCheckout)) {
+        if ($this->signalsMatch('checkout_token', $signals['checkout_token'] ?? null, $eventCheckout)) {
             $score = 1.0;
             $method = 'checkout_token_exact';
-        } elseif (($signals['cart_token'] ?? null) !== null && $eventCart !== null && hash_equals($signals['cart_token'], $eventCart)) {
+        } elseif ($this->signalsMatch('cart_token', $signals['cart_token'] ?? null, $eventCart)) {
             $score = 0.92;
             $method = 'cart_token_exact';
-        } elseif (($signals['session_key'] ?? null) !== null && $eventSession !== null && hash_equals($signals['session_key'], $eventSession)) {
+        } elseif ($this->signalsMatch('session_key', $signals['session_key'] ?? null, $eventSession)) {
             $score = 0.82;
             $method = 'session_key_exact';
-        } elseif (($signals['client_id'] ?? null) !== null && $eventClient !== null && hash_equals($signals['client_id'], $eventClient)) {
+        } elseif ($this->signalsMatch('client_id', $signals['client_id'] ?? null, $eventClient)) {
             $score = 0.72;
             $method = 'client_id_exact';
-        } elseif (($signals['mf_delivery_id'] ?? null) !== null && $eventDeliveryId !== null && hash_equals($signals['mf_delivery_id'], $eventDeliveryId)) {
+        } elseif ($this->signalsMatch('mf_delivery_id', $signals['mf_delivery_id'] ?? null, $eventDeliveryId)) {
             $score = 0.68;
             $method = 'message_delivery_exact';
         }
@@ -512,6 +516,68 @@ class StorefrontOrderLinkageService
         }
 
         return null;
+    }
+
+    protected function signalsMatch(string $field, mixed $left, mixed $right): bool
+    {
+        $leftNormalized = $this->normalizeSignalValue($field, $left);
+        $rightNormalized = $this->normalizeSignalValue($field, $right);
+
+        return $leftNormalized !== null
+            && $rightNormalized !== null
+            && hash_equals($leftNormalized, $rightNormalized);
+    }
+
+    protected function normalizeSignalValue(string $field, mixed $value): ?string
+    {
+        $resolved = $this->nullableString($value);
+        if ($resolved === null) {
+            return null;
+        }
+
+        $normalized = $resolved;
+        if (in_array($field, ['checkout_token', 'cart_token'], true)) {
+            if (str_starts_with($normalized, 'gid://shopify/')) {
+                $tail = preg_replace('#^gid://shopify/[^/]+/#i', '', $normalized);
+                $normalized = $tail !== null ? $tail : $normalized;
+            }
+
+            $parts = parse_url($normalized);
+            if (is_array($parts)) {
+                if (! empty($parts['path'])) {
+                    $pathTail = trim((string) basename((string) $parts['path']));
+                    if ($pathTail !== '') {
+                        $normalized = $pathTail;
+                    }
+                }
+                if (! empty($parts['query'])) {
+                    parse_str((string) $parts['query'], $query);
+                    if (is_array($query)) {
+                        $tokenFromQuery = $this->nullableString($query['token'] ?? null)
+                            ?? $this->nullableString($query['checkout_token'] ?? null)
+                            ?? $this->nullableString($query['cart_token'] ?? null);
+                        if ($tokenFromQuery !== null) {
+                            $normalized = $tokenFromQuery;
+                        }
+                    }
+                }
+            }
+
+            $normalized = preg_replace('/[?#].*$/', '', $normalized) ?? $normalized;
+        }
+
+        if (in_array($field, ['session_key', 'session_id', 'client_id', 'fbclid', 'fbc', 'fbp'], true)) {
+            $normalized = strtolower($normalized);
+        }
+
+        if ($field === 'mf_delivery_id') {
+            $deliveryId = $this->positiveInt($normalized);
+            if ($deliveryId !== null) {
+                return (string) $deliveryId;
+            }
+        }
+
+        return $this->nullableString($normalized);
     }
 
     protected function nullableString(mixed $value): ?string

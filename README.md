@@ -61,6 +61,18 @@ Tests added/updated:
 - `tests/Feature/Marketing/AiBudgetReadinessServiceTest.php`
 - `tests/Feature/Marketing/MessageAnalyticsDecisionPanelsTest.php`
 
+### Phase 5c Production Truth Hardening (2026-04-20)
+
+Follow-up hardening for live readiness blockers (still advisory-only):
+- attribution meta enrichment now derives missing UTM, Meta (`fbclid`/`fbc`/`fbp`), and linkage tokens from persisted landing/source URLs during merge and backfill flows
+  - `app/Services/Marketing/MarketingAttributionSourceMetaBuilder.php`
+- storefront order linkage matching now normalizes checkout/cart/session/client signals before deterministic comparison
+  - `app/Services/Marketing/StorefrontOrderLinkageService.php`
+- outbound SMS links now enforce baseline UTM + MF tracking params before short-linking for stronger attribution discipline
+  - `app/Services/Marketing/MessageClickTrackingService.php`
+- production enablement runbook updated for Meta spend sync and readiness re-validation
+  - `docs/qa/phase-5-ai-budget-readiness.md`
+
 ## Phase 4 Revenue Workflow Rollout (2026-04-20)
 
 This pass focuses only on lifecycle workflow shipping and rollout gating (no analytics redesign, no AI budget control).

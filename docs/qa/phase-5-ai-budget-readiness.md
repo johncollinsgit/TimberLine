@@ -58,6 +58,43 @@ Optional tuning:
 - `MARKETING_META_ADS_DEFAULT_LOOKBACK_DAYS`
 - `MARKETING_META_ADS_TIMEOUT_SECONDS`
 
+## Phase 5c production enablement runbook
+
+1. Set production env (tenant/store live context):
+   - `MARKETING_META_ADS_ENABLED=true`
+   - `MARKETING_META_ADS_ACCESS_TOKEN=<long_lived_meta_system_user_token>`
+   - `MARKETING_META_ADS_ACCOUNT_ID=<meta_account_id_without_act_prefix>`
+2. Refresh runtime config:
+
+```bash
+php artisan config:cache
+```
+
+3. Validate preflight (safe):
+
+```bash
+php artisan marketing:sync-meta-ads-spend --tenant-id=1 --store-key=retail --dry-run
+```
+
+4. Run bounded initial sync:
+
+```bash
+php artisan marketing:sync-meta-ads-spend \
+  --tenant-id=1 \
+  --store-key=retail \
+  --account-id=<META_ACCOUNT_ID> \
+  --since=2026-01-01 \
+  --until=2026-04-20
+```
+
+5. Verify ingestion:
+   - rows exist in `marketing_paid_media_daily_stats`
+   - `last_synced_at` is recent
+   - campaign naming compliance and spend completeness metrics are non-zero
+6. Re-check readiness panel:
+   - `AI Budget Readiness` still remains advisory-only
+   - autonomous budget actions stay blocked.
+
 ## Readiness guardrails (current behavior)
 
 Allowed now:

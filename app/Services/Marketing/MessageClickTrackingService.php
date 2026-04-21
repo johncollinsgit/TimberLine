@@ -72,17 +72,18 @@ class MessageClickTrackingService
                 continue;
             }
 
-            $tracked = $trackedByOriginal[$cleanUrl] ?? null;
+            $decoratedUrl = $this->enforceSmsAttribution($cleanUrl, $delivery);
+            $tracked = $trackedByOriginal[$decoratedUrl] ?? null;
             if ($tracked === null) {
-                $resolved = $this->resolveShortLink($cleanUrl, $createdBy);
+                $resolved = $this->resolveShortLink($decoratedUrl, $createdBy);
                 if (! is_array($resolved)) {
                     continue;
                 }
 
                 $tracked = [
                     'original' => $cleanUrl,
-                    'destination_url' => (string) ($resolved['destination_url'] ?? $cleanUrl),
-                    'short_url' => (string) ($resolved['short_url'] ?? $cleanUrl),
+                    'destination_url' => (string) ($resolved['destination_url'] ?? $decoratedUrl),
+                    'short_url' => (string) ($resolved['short_url'] ?? $decoratedUrl),
                     'tracked_url' => $this->trackedShortUrl((string) ($resolved['code'] ?? ''), $delivery),
                     'code' => (string) ($resolved['code'] ?? ''),
                 ];
@@ -91,7 +92,7 @@ class MessageClickTrackingService
                     continue;
                 }
 
-                $trackedByOriginal[$cleanUrl] = $tracked;
+                $trackedByOriginal[$decoratedUrl] = $tracked;
                 $links[] = $tracked;
             }
 
@@ -242,6 +243,113 @@ class MessageClickTrackingService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    protected function enforceSmsAttribution(string $url, MarketingMessageDelivery $delivery): string
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts)) {
+            return $url;
+        }
+
+        $scheme = strtolower(trim((string) ($parts['scheme'] ?? '')));
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            return $url;
+        }
+
+        $query = [];
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        if (! is_array($query)) {
+            $query = [];
+        }
+
+        foreach ([
+            'utm_source',
+            'utm_medium',
+            'utm_campaign',
+            'utm_content',
+            'utm_term',
+            'mf_channel',
+            'mf_source_label',
+            'mf_campaign_id',
+            'mf_delivery_id',
+            'mf_profile_id',
+            'mf_campaign_recipient_id',
+        ] as $managedKey) {
+            unset($query[$managedKey]);
+        }
+
+        $campaignKey = $this->smsCampaignKey($delivery);
+        $query['utm_source'] = 'backstage';
+        $query['utm_medium'] = 'sms';
+        $query['utm_campaign'] = $campaignKey;
+        $query['utm_content'] = 'sms-link';
+        $query['mf_channel'] = 'sms';
+
+        $sourceLabel = $this->slug($delivery->source_label ?? null);
+        if ($sourceLabel !== null) {
+            $query['mf_source_label'] = $sourceLabel;
+        }
+        if ($campaignId = $this->positiveInt($delivery->campaign_id ?? null)) {
+            $query['mf_campaign_id'] = $campaignId;
+        }
+        if ($deliveryId = $this->positiveInt($delivery->id ?? null)) {
+            $query['mf_delivery_id'] = $deliveryId;
+        }
+        if ($profileId = $this->positiveInt($delivery->marketing_profile_id ?? null)) {
+            $query['mf_profile_id'] = $profileId;
+        }
+        if ($recipientId = $this->positiveInt($delivery->campaign_recipient_id ?? null)) {
+            $query['mf_campaign_recipient_id'] = $recipientId;
+        }
+
+        ksort($query);
+        $normalizedQuery = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+
+        $rebuilt = $scheme.'://'.strtolower((string) ($parts['host'] ?? ''));
+        if (isset($parts['port'])) {
+            $rebuilt .= ':'.(int) $parts['port'];
+        }
+
+        $path = trim((string) ($parts['path'] ?? ''));
+        $rebuilt .= $path !== '' ? '/'.ltrim($path, '/') : '/';
+
+        if ($normalizedQuery !== '') {
+            $rebuilt .= '?'.$normalizedQuery;
+        }
+
+        if (! empty($parts['fragment'])) {
+            $rebuilt .= '#'.(string) $parts['fragment'];
+        }
+
+        return $rebuilt;
+    }
+
+    protected function smsCampaignKey(MarketingMessageDelivery $delivery): string
+    {
+        $campaignId = $this->positiveInt($delivery->campaign_id ?? null);
+        if ($campaignId !== null) {
+            return 'backstage-sms-'.$campaignId;
+        }
+
+        $sourceLabel = $this->slug($delivery->source_label ?? null);
+        if ($sourceLabel !== null) {
+            return $sourceLabel;
+        }
+
+        return 'backstage-sms';
+    }
+
+    protected function slug(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+        if ($string === '') {
+            return null;
+        }
+
+        $slug = Str::slug($string, '-');
+
+        return $slug !== '' ? Str::limit($slug, 80, '') : null;
     }
 
     protected function trackedShortUrl(string $code, MarketingMessageDelivery $delivery): string
