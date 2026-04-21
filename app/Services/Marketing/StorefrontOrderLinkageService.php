@@ -127,6 +127,7 @@ class StorefrontOrderLinkageService
     protected function linkSignals(array $orderPayload, array $existingMeta): array
     {
         $noteSignals = $this->signalsFromNoteAttributes((array) ($orderPayload['note_attributes'] ?? []));
+        $lineItemSignals = $this->signalsFromLineItemProperties((array) ($orderPayload['line_items'] ?? []));
         $querySignals = array_merge(
             $this->signalsFromUrl($this->nullableString($orderPayload['landing_site'] ?? null)),
             $this->signalsFromUrl($this->nullableString($orderPayload['landing_page'] ?? null)),
@@ -156,6 +157,7 @@ class StorefrontOrderLinkageService
             $value = $this->firstNonEmpty(
                 $orderPayload[$field] ?? null,
                 $noteSignals[$field] ?? null,
+                $lineItemSignals[$field] ?? null,
                 $existingMeta[$field] ?? null,
                 $querySignals[$field] ?? null
             );
@@ -427,6 +429,59 @@ class StorefrontOrderLinkageService
             };
 
             if ($field !== null) {
+                $signals[$field] = $value;
+            }
+        }
+
+        return $signals;
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $lineItems
+     * @return array<string,string>
+     */
+    protected function signalsFromLineItemProperties(array $lineItems): array
+    {
+        $signals = [];
+
+        foreach ($lineItems as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+
+            foreach ((array) ($line['properties'] ?? []) as $property) {
+                if (! is_array($property)) {
+                    continue;
+                }
+
+                $name = strtolower(trim((string) ($property['name'] ?? '')));
+                $value = $this->nullableString($property['value'] ?? null);
+                if ($name === '' || $value === null) {
+                    continue;
+                }
+
+                $normalized = str_replace(['-', ' ', '[', ']'], '_', $name);
+                $normalized = preg_replace('/_+/', '_', $normalized) ?? $normalized;
+                $normalized = preg_replace('/^(properties|property|attributes|attribute)_/i', '', $normalized) ?? $normalized;
+                $normalized = ltrim((string) $normalized, '_');
+                if (str_starts_with((string) $normalized, 'mf_')) {
+                    $normalized = substr((string) $normalized, 3);
+                }
+
+                if (str_starts_with((string) $normalized, 'marketing_')) {
+                    $normalized = substr((string) $normalized, 10);
+                }
+
+                $field = match (true) {
+                    in_array($normalized, ['checkout_token', 'cart_token', 'session_key', 'session_id', 'client_id', 'fbclid', 'fbc', 'fbp', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'], true) => (string) $normalized,
+                    str_contains((string) $normalized, 'mf_delivery_id'), str_contains((string) $normalized, 'delivery_id') => 'mf_delivery_id',
+                    default => null,
+                };
+
+                if ($field === null || array_key_exists($field, $signals)) {
+                    continue;
+                }
+
                 $signals[$field] = $value;
             }
         }

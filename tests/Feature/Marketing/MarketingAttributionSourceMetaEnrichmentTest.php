@@ -100,6 +100,34 @@ test('attribution source meta builder derives checkout and cart tokens from land
         ->and($cartMeta['cart_token'])->toBe('hWNB3K0sZu20SHmugMzLMcC2');
 });
 
+test('attribution source meta builder captures linkage signals from line item properties', function () {
+    $builder = app(MarketingAttributionSourceMetaBuilder::class);
+
+    $meta = $builder->fromShopifyOrderPayload([
+        'line_items' => [[
+            'properties' => [
+                ['name' => '_mf_session_key', 'value' => 'sess-line-101'],
+                ['name' => '_mf_client_id', 'value' => 'client-line-101'],
+                ['name' => '_mf_cart_token', 'value' => 'cart-line-101'],
+                ['name' => '_mf_checkout_token', 'value' => 'chk-line-101'],
+                ['name' => '_mf_utm_source', 'value' => 'phase8'],
+                ['name' => '_mf_fbclid', 'value' => 'FBCLID_LINE_101'],
+            ],
+        ]],
+    ], 'retail');
+
+    expect($meta['session_key'])->toBe('sess-line-101')
+        ->and($meta['client_id'])->toBe('client-line-101')
+        ->and($meta['cart_token'])->toBe('cart-line-101')
+        ->and($meta['checkout_token'])->toBe('chk-line-101')
+        ->and($meta['utm_source'])->toBe('phase8')
+        ->and($meta['fbclid'])->toBe('FBCLID_LINE_101')
+        ->and((array) ($meta['line_item_property_signals'] ?? []))->toMatchArray([
+            'session_key' => 'sess-line-101',
+            'client_id' => 'client-line-101',
+        ]);
+});
+
 test('source meta merge backfills missing attribution query signals from landing urls', function () {
     $builder = app(MarketingAttributionSourceMetaBuilder::class);
 
@@ -444,6 +472,61 @@ test('storefront order linkage derives cart token from landing path and matches 
     expect($result['linked'])->toBeTrue()
         ->and((string) ($result['method'] ?? ''))->toBe('cart_token_exact')
         ->and((string) ($order->storefront_cart_token ?? ''))->toBe('hWNBCARTTOKEN123456');
+});
+
+test('storefront order linkage resolves session continuity from line item properties when note attributes are missing', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Storefront Linkage Line Item Tenant',
+        'slug' => 'storefront-linkage-line-item-tenant',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'tenant_id' => $tenant->id,
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 7799,
+        'ordered_at' => now(),
+        'order_number' => '#7799',
+        'status' => 'complete',
+        'attribution_meta' => [],
+    ]);
+
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'add_to_cart',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'endpoint' => '/apps/forestry/funnel/event',
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'add_to_cart:sess-line-link-01',
+        'meta' => [
+            'store_key' => 'retail',
+            'session_key' => 'sess-line-link-01',
+            'client_id' => 'client-line-link-01',
+        ],
+        'occurred_at' => now()->subMinutes(2),
+        'resolution_status' => 'resolved',
+    ]);
+
+    $result = app(StorefrontOrderLinkageService::class)->linkOrder($order, [
+        'line_items' => [[
+            'properties' => [
+                ['name' => '_mf_session_key', 'value' => 'sess-line-link-01'],
+                ['name' => '_mf_client_id', 'value' => 'client-line-link-01'],
+            ],
+        ]],
+    ], [
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+    ]);
+
+    $order->refresh();
+
+    expect($result['linked'])->toBeTrue()
+        ->and((string) ($result['method'] ?? ''))->toBe('session_key_exact')
+        ->and((string) ($order->storefront_session_key ?? ''))->toBe('sess-line-link-01')
+        ->and((string) ($order->storefront_client_id ?? ''))->toBe('client-line-link-01');
 });
 
 test('attribution backfill command is dry run safe and enriches order linked records when executed', function () {

@@ -82,6 +82,14 @@ class MarketingAttributionSourceMetaBuilder
             $candidate['note_attribute_signals'] = $noteSignals;
         }
 
+        $lineItemSignals = $this->extractLineItemPropertySignals((array) ($orderData['line_items'] ?? []));
+        foreach ($lineItemSignals as $key => $value) {
+            $this->setField($candidate, $fieldConfidence, $key, $value, 'medium');
+        }
+        if ($lineItemSignals !== []) {
+            $candidate['line_item_property_signals'] = $lineItemSignals;
+        }
+
         foreach ([$candidate['landing_site'] ?? null, $candidate['landing_page'] ?? null, $candidate['source_url'] ?? null] as $url) {
             foreach ($this->extractAttributionQuerySignals($url) as $key => $value) {
                 $this->setField($candidate, $fieldConfidence, $key, $value, 'high');
@@ -299,6 +307,66 @@ class MarketingAttributionSourceMetaBuilder
 
             if ($field) {
                 $signals[$field] = $value;
+            }
+        }
+
+        return $signals;
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $lineItems
+     * @return array<string,string>
+     */
+    protected function extractLineItemPropertySignals(array $lineItems): array
+    {
+        $signals = [];
+
+        foreach ($lineItems as $lineItem) {
+            if (! is_array($lineItem)) {
+                continue;
+            }
+
+            foreach ((array) ($lineItem['properties'] ?? []) as $property) {
+                if (! is_array($property)) {
+                    continue;
+                }
+
+                $name = strtolower(trim((string) ($property['name'] ?? '')));
+                $value = trim((string) ($property['value'] ?? ''));
+                if ($name === '' || $value === '') {
+                    continue;
+                }
+
+                $normalizedName = str_replace(['-', ' ', '[', ']'], '_', $name);
+                $normalizedName = preg_replace('/_+/', '_', $normalizedName) ?? $normalizedName;
+                $normalizedName = preg_replace('/^(properties|property|attributes|attribute)_/i', '', $normalizedName) ?? $normalizedName;
+                $normalizedName = ltrim((string) $normalizedName, '_');
+                if (str_starts_with((string) $normalizedName, 'mf_')) {
+                    $normalizedName = substr((string) $normalizedName, 3);
+                }
+                if (str_starts_with((string) $normalizedName, 'marketing_')) {
+                    $normalizedName = substr((string) $normalizedName, 10);
+                }
+
+                $field = match (true) {
+                    str_contains((string) $normalizedName, 'utm_source') => 'utm_source',
+                    str_contains((string) $normalizedName, 'utm_medium') => 'utm_medium',
+                    str_contains((string) $normalizedName, 'utm_campaign') => 'utm_campaign',
+                    str_contains((string) $normalizedName, 'utm_content') => 'utm_content',
+                    str_contains((string) $normalizedName, 'utm_term') => 'utm_term',
+                    in_array((string) $normalizedName, ['fbclid', 'fbc', 'fbp'], true) => (string) $normalizedName,
+                    str_contains((string) $normalizedName, 'checkout_token') => 'checkout_token',
+                    str_contains((string) $normalizedName, 'cart_token') => 'cart_token',
+                    str_contains((string) $normalizedName, 'session_key') => 'session_key',
+                    (string) $normalizedName === 'session_id' => 'session_id',
+                    str_contains((string) $normalizedName, 'client_id') => 'client_id',
+                    str_contains((string) $normalizedName, 'delivery_id') => 'source_identifier',
+                    default => null,
+                };
+
+                if ($field !== null && ! array_key_exists($field, $signals)) {
+                    $signals[$field] = $value;
+                }
             }
         }
 

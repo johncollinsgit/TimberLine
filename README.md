@@ -662,6 +662,13 @@ Storefront instrumentation continuity patch (2026-04-20):
   - `php artisan marketing:diagnose-storefront-tracking --tenant-id=1 --store=retail --days=30 --json`
   - returns machine-readable funnel counts, identifier presence rates, verification failure reasons, and order linkage confidence snapshot.
 
+Phase 8 linkage continuity patch (2026-04-21):
+- add-to-cart forms now inject hidden line-item linkage properties (`_mf_session_key`, `_mf_client_id`, `_mf_cart_token`, `_mf_checkout_token`, `_mf_fbclid`, `_mf_fbc`, `_mf_fbp`, plus `_mf_utm_*`) before submit.
+- order linkage service now reads fallback identifiers from `line_items[].properties[]` in Shopify order payloads when note attributes are absent.
+- attribution source-meta builder now records line-item property signals for diagnostics (`line_item_property_signals`) and enrichment continuity.
+- phase-8 verification artifact:
+  - `docs/qa/phase-8-linkage-continuity.md`
+
 ## MT-4C Hardening Status (2026-03-30)
 
 MT-4C is now complete.

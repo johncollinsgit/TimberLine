@@ -90,6 +90,13 @@ Current implemented shell/diagnostics checkpoint:
     - checkout_started now also emits on checkout form submit paths (not only click hooks)
     - checkout token extraction now supports checkout URLs before navigation
   - phase-7 verification notes: `docs/qa/phase-7-live-storefront-activation.md`
+- Phase 8 linkage continuity checkpoint (2026-04-21):
+  - storefront runtime now injects `_mf_*` linkage properties into add-to-cart forms to improve checkout/order continuity.
+  - order linkage service now reads fallback continuity signals from Shopify order `line_items[].properties[]`.
+  - attribution source-meta builder now records `line_item_property_signals` for diagnostics.
+  - diagnostics command remains:
+    - `php artisan marketing:diagnose-storefront-tracking --tenant-id=1 --store=retail --days=30 --json`
+  - phase-8 verification notes: `docs/qa/phase-8-linkage-continuity.md`
 - Embedded product shell is live and navigable:
   - `/shopify/app` (overview/dashboard)
   - `/shopify/app/start`

@@ -95,6 +95,10 @@
         return;
       }
 
+      // Mirror linkage signals into line-item properties so checkout/order ingest
+      // can recover continuity even when cart attribute updates are skipped.
+      appendLinkagePropertiesToForm(form);
+
       const formData = new FormData(form);
       const variantId = stringOrNull(formData.get('id'));
       const quantity = positiveInt(formData.get('quantity')) || 1;
@@ -375,14 +379,15 @@
   }
 
   function syncCartAttributes(overrides) {
+    const currentAttribution = activeAttribution() || attribution;
     const attributes = compactObject({
       session_key: sessionKey,
       client_id: clientId,
       cart_token: stringOrNull((overrides || {}).cart_token) || stringOrNull(config.cart && config.cart.token) || cartTokenFromLocation(),
       checkout_token: stringOrNull((overrides || {}).checkout_token) || checkoutTokenFromLocation(),
-      fbclid: stringOrNull(attribution.fbclid),
-      fbc: stringOrNull(attribution.fbc),
-      fbp: stringOrNull(attribution.fbp),
+      fbclid: stringOrNull(currentAttribution.fbclid),
+      fbc: stringOrNull(currentAttribution.fbc),
+      fbp: stringOrNull(currentAttribution.fbp),
     });
 
     if (Object.keys(attributes).length === 0) {
@@ -430,6 +435,63 @@
     }).catch(function () {
       debug('Unable to sync cart linkage attributes');
     });
+  }
+
+  function appendLinkagePropertiesToForm(form, overrides) {
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+
+    const linkage = linkagePropertyPayload(overrides || {});
+    Object.keys(linkage).forEach(function (key) {
+      appendHiddenInput(form, 'properties[' + key + ']', linkage[key]);
+    });
+  }
+
+  function linkagePropertyPayload(overrides) {
+    const currentAttribution = activeAttribution() || attribution;
+
+    return compactObject({
+      _mf_session_key: sessionKey,
+      _mf_client_id: clientId,
+      _mf_cart_token: stringOrNull(overrides.cart_token) || stringOrNull(config.cart && config.cart.token) || cartTokenFromLocation(),
+      _mf_checkout_token: stringOrNull(overrides.checkout_token) || checkoutTokenFromLocation(),
+      _mf_fbclid: stringOrNull(currentAttribution.fbclid),
+      _mf_fbc: stringOrNull(currentAttribution.fbc),
+      _mf_fbp: stringOrNull(currentAttribution.fbp),
+      _mf_utm_source: stringOrNull(currentAttribution.utm_source),
+      _mf_utm_medium: stringOrNull(currentAttribution.utm_medium),
+      _mf_utm_campaign: stringOrNull(currentAttribution.utm_campaign),
+      _mf_utm_content: stringOrNull(currentAttribution.utm_content),
+      _mf_utm_term: stringOrNull(currentAttribution.utm_term),
+    });
+  }
+
+  function appendHiddenInput(form, name, value) {
+    if (!name || value === null || value === undefined || value === '') {
+      return;
+    }
+
+    const selector = 'input[type="hidden"][name="' + cssEscape(name) + '"]';
+    const existing = form.querySelector(selector);
+    if (existing instanceof HTMLInputElement) {
+      existing.value = String(value);
+      return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = String(value);
+    form.appendChild(input);
+  }
+
+  function cssEscape(value) {
+    if (typeof window.CSS === 'object' && typeof window.CSS.escape === 'function') {
+      return window.CSS.escape(String(value));
+    }
+
+    return String(value).replace(/["\\]/g, '\\$&');
   }
 
   function cartAttributesRecentlySynced(signature) {
