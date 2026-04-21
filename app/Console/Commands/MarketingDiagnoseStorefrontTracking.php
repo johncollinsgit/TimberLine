@@ -85,7 +85,9 @@ class MarketingDiagnoseStorefrontTracking extends Command
             $funnelByType[$eventType] = (int) ($funnelByType[$eventType] ?? 0) + 1;
 
             $meta = is_array($row->meta ?? null) ? $row->meta : [];
-            $tracker = $this->nullableString($meta['tracker'] ?? null) ?? 'unknown';
+            $tracker = $this->nullableString($meta['tracker'] ?? null)
+                ?? $this->nullableString(data_get($meta, 'payload_meta.tracker'))
+                ?? 'unknown';
             $funnelByTracker[$tracker] = (int) ($funnelByTracker[$tracker] ?? 0) + 1;
 
             foreach ($this->identifierKeys as $key) {
