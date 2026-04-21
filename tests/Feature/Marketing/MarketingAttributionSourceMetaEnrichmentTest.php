@@ -81,6 +81,25 @@ test('attribution source meta builder derives utm meta and linkage tokens from l
         ->and($meta['client_id'])->toBe('client-55');
 });
 
+test('attribution source meta builder derives checkout and cart tokens from landing path segments', function () {
+    $builder = app(MarketingAttributionSourceMetaBuilder::class);
+
+    $checkoutMeta = $builder->fromMeta([
+        'landing_site' => 'https://theforestrystudio.com/20812479/checkouts/ac/hWNBF6W8cADAduMh4sE54fII/recover?key=abc123',
+        'capture_context' => 'shopify_order_payload',
+        'capture_contexts' => ['shopify_order_payload'],
+    ]);
+
+    $cartMeta = $builder->fromMeta([
+        'landing_site' => 'https://theforestrystudio.com/cart/c/hWNB3K0sZu20SHmugMzLMcC2?_fd=0',
+        'capture_context' => 'shopify_order_payload',
+        'capture_contexts' => ['shopify_order_payload'],
+    ]);
+
+    expect($checkoutMeta['checkout_token'])->toBe('hWNBF6W8cADAduMh4sE54fII')
+        ->and($cartMeta['cart_token'])->toBe('hWNB3K0sZu20SHmugMzLMcC2');
+});
+
 test('source meta merge backfills missing attribution query signals from landing urls', function () {
     $builder = app(MarketingAttributionSourceMetaBuilder::class);
 
@@ -377,6 +396,54 @@ test('storefront order linkage normalizes checkout token formats before matching
     expect($result['linked'])->toBeTrue()
         ->and((string) ($result['method'] ?? ''))->toBe('checkout_token_exact')
         ->and((float) ($result['confidence'] ?? 0))->toBeGreaterThan(0.99);
+});
+
+test('storefront order linkage derives cart token from landing path and matches cart signal events', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Storefront Linkage Cart Path Tenant',
+        'slug' => 'storefront-linkage-cart-path-tenant',
+    ]);
+
+    $order = Order::query()->create([
+        'source' => 'shopify_retail',
+        'tenant_id' => $tenant->id,
+        'shopify_store_key' => 'retail',
+        'shopify_store' => 'retail',
+        'shopify_order_id' => 7791,
+        'ordered_at' => now(),
+        'order_number' => '#7791',
+        'status' => 'complete',
+        'attribution_meta' => [
+            'landing_site' => 'https://theforestrystudio.com/cart/c/hWNBCARTTOKEN123456?_fd=0',
+        ],
+    ]);
+
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'checkout_started',
+        'status' => 'ok',
+        'source_surface' => 'shopify_storefront',
+        'endpoint' => '/apps/forestry/funnel/event',
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'checkout:hWNBCARTTOKEN123456',
+        'meta' => [
+            'store_key' => 'retail',
+            'cart_token' => 'hWNBCARTTOKEN123456',
+        ],
+        'occurred_at' => now()->subMinutes(3),
+        'resolution_status' => 'resolved',
+    ]);
+
+    $result = app(StorefrontOrderLinkageService::class)->linkOrder($order, [], [
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+    ]);
+
+    $order->refresh();
+
+    expect($result['linked'])->toBeTrue()
+        ->and((string) ($result['method'] ?? ''))->toBe('cart_token_exact')
+        ->and((string) ($order->storefront_cart_token ?? ''))->toBe('hWNBCARTTOKEN123456');
 });
 
 test('attribution backfill command is dry run safe and enriches order linked records when executed', function () {

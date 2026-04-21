@@ -477,6 +477,41 @@ class StorefrontOrderLinkageService
             }
         }
 
+        foreach ($this->tokenSignalsFromPath($parts['path'] ?? null) as $key => $value) {
+            if (! array_key_exists($key, $signals) && $value !== null) {
+                $signals[$key] = $value;
+            }
+        }
+
+        return $signals;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    protected function tokenSignalsFromPath(mixed $path): array
+    {
+        $path = $this->nullableString($path);
+        if ($path === null) {
+            return [];
+        }
+
+        $signals = [];
+
+        if (preg_match('~/checkouts/(?:[^/?#]+/)?([^/?#]+)~i', $path, $checkoutMatch) === 1) {
+            $checkoutToken = $this->normalizeSignalValue('checkout_token', $checkoutMatch[1] ?? null);
+            if ($checkoutToken !== null) {
+                $signals['checkout_token'] = $checkoutToken;
+            }
+        }
+
+        if (preg_match('~/cart/c/([^/?#]+)~i', $path, $cartMatch) === 1) {
+            $cartToken = $this->normalizeSignalValue('cart_token', $cartMatch[1] ?? null);
+            if ($cartToken !== null) {
+                $signals['cart_token'] = $cartToken;
+            }
+        }
+
         return $signals;
     }
 

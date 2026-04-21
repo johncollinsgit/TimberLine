@@ -4,6 +4,8 @@
   const CLIENT_KEY = 'forestry:marketing:client';
   const SESSION_KEY = 'forestry:marketing:session';
   const DEDUPE_PREFIX = 'forestry:marketing:dedupe:';
+  const CART_ATTR_SYNC_KEY = 'forestry:marketing:cart-attributes-sync';
+  const CART_ATTR_SYNC_TTL_MS = 5 * 60 * 1000;
   const SESSION_TTL_MS = 30 * 60 * 1000;
   const SHORT_DEDUPE_MS = 4000;
 
@@ -59,6 +61,7 @@
   wireCheckoutIntents();
   wireWishlistSignals();
   patchNetworkSignals();
+  syncCartAttributes();
 
   function readConfig() {
     const node = document.getElementById(CONFIG_ID);
@@ -109,6 +112,8 @@
           via: 'theme_form',
         },
       });
+
+      syncCartAttributes();
     }, true);
   }
 
@@ -141,12 +146,16 @@
       postEvent('checkout_started', {
         dedupeKey: 'checkout_click:' + pageKey,
         dedupeTtlMs: SHORT_DEDUPE_MS,
-        cart_token: stringOrNull(config.cart && config.cart.token),
+        cart_token: stringOrNull(config.cart && config.cart.token) || cartTokenFromLocation(),
         checkout_token: checkoutToken,
         link_label: compactText(text) || 'Checkout',
         properties: {
           via: 'theme_click',
         },
+      });
+
+      syncCartAttributes({
+        checkout_token: checkoutToken,
       });
     }, true);
 
@@ -175,12 +184,16 @@
       postEvent('checkout_started', {
         dedupeKey: 'checkout_submit:' + pageKey,
         dedupeTtlMs: SHORT_DEDUPE_MS,
-        cart_token: stringOrNull(config.cart && config.cart.token),
+        cart_token: stringOrNull(config.cart && config.cart.token) || cartTokenFromLocation(),
         checkout_token: checkoutTokenFromUrl(action),
         link_label: submitterText || 'Checkout',
         properties: {
           via: 'theme_submit',
         },
+      });
+
+      syncCartAttributes({
+        checkout_token: checkoutTokenFromUrl(action),
       });
     }, true);
   }
@@ -255,6 +268,8 @@
           via: 'network_fetch',
         },
       });
+
+      syncCartAttributes();
     }
 
     if (url.includes('/apps/forestry/wishlist/add')) {
@@ -321,7 +336,7 @@
       page_type: stringOrNull(config.pageType),
       session_key: sessionKey,
       client_id: clientId,
-      cart_token: stringOrNull(overrides.cart_token) || stringOrNull(config.cart && config.cart.token),
+      cart_token: stringOrNull(overrides.cart_token) || stringOrNull(config.cart && config.cart.token) || cartTokenFromLocation(),
       checkout_token: stringOrNull(overrides.checkout_token) || checkoutTokenFromLocation(),
       product_id: stringOrNull(overrides.product_id),
       product_handle: stringOrNull(overrides.product_handle),
@@ -357,6 +372,98 @@
         attribution_signature: current.signature,
       },
     });
+  }
+
+  function syncCartAttributes(overrides) {
+    const attributes = compactObject({
+      session_key: sessionKey,
+      client_id: clientId,
+      cart_token: stringOrNull((overrides || {}).cart_token) || stringOrNull(config.cart && config.cart.token) || cartTokenFromLocation(),
+      checkout_token: stringOrNull((overrides || {}).checkout_token) || checkoutTokenFromLocation(),
+      fbclid: stringOrNull(attribution.fbclid),
+      fbc: stringOrNull(attribution.fbc),
+      fbp: stringOrNull(attribution.fbp),
+    });
+
+    if (Object.keys(attributes).length === 0) {
+      return;
+    }
+
+    const signature = Object.keys(attributes).sort().map(function (key) {
+      return key + ':' + String(attributes[key]);
+    }).join('|');
+
+    if (cartAttributesRecentlySynced(signature)) {
+      return;
+    }
+
+    rememberCartAttributesSync(signature);
+
+    fetch('/cart/update.js', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        attributes: attributes,
+      }),
+    }).then(function (response) {
+      if (!response.ok) {
+        return null;
+      }
+
+      return response.json().catch(function () {
+        return null;
+      });
+    }).then(function (cart) {
+      const token = stringOrNull(cart && cart.token);
+      if (!token) {
+        return;
+      }
+
+      if (!config.cart || typeof config.cart !== 'object') {
+        config.cart = {};
+      }
+      config.cart.token = token;
+    }).catch(function () {
+      debug('Unable to sync cart linkage attributes');
+    });
+  }
+
+  function cartAttributesRecentlySynced(signature) {
+    try {
+      const raw = window.sessionStorage.getItem(CART_ATTR_SYNC_KEY);
+      if (!raw) {
+        return false;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') {
+        return false;
+      }
+
+      if (parsed.signature !== signature) {
+        return false;
+      }
+
+      const syncedAt = Number(parsed.synced_at || 0);
+      return syncedAt > 0 && (Date.now() - syncedAt) < CART_ATTR_SYNC_TTL_MS;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function rememberCartAttributesSync(signature) {
+    try {
+      window.sessionStorage.setItem(CART_ATTR_SYNC_KEY, JSON.stringify({
+        signature: signature,
+        synced_at: Date.now(),
+      }));
+    } catch (error) {
+      debug('Unable to persist cart linkage sync signature');
+    }
   }
 
   function persistAttribution(signals) {
@@ -659,6 +766,10 @@
     return checkoutTokenFromUrl(window.location.href);
   }
 
+  function cartTokenFromLocation() {
+    return cartTokenFromUrl(window.location.href);
+  }
+
   function checkoutTokenFromUrl(value) {
     const url = normalizeUrl(value || '');
     if (!url) {
@@ -673,6 +784,26 @@
     try {
       const parsed = new URL(url, window.location.origin);
       const queryToken = compactText(parsed.searchParams.get('token') || parsed.searchParams.get('checkout_token'));
+      return queryToken || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function cartTokenFromUrl(value) {
+    const url = normalizeUrl(value || '');
+    if (!url) {
+      return null;
+    }
+
+    const pathMatch = String(url).match(/\/cart\/c\/([^/?#]+)/i);
+    if (pathMatch && pathMatch[1]) {
+      return compactText(pathMatch[1]);
+    }
+
+    try {
+      const parsed = new URL(url, window.location.origin);
+      const queryToken = compactText(parsed.searchParams.get('cart_token'));
       return queryToken || null;
     } catch (error) {
       return null;

@@ -316,13 +316,16 @@ class MarketingAttributionSourceMetaBuilder
         }
 
         $parts = parse_url($url);
-        if (! is_array($parts) || empty($parts['query'])) {
+        if (! is_array($parts)) {
             return [];
         }
 
-        parse_str((string) $parts['query'], $query);
-
         $signals = [];
+        $query = [];
+        if (! empty($parts['query'])) {
+            parse_str((string) $parts['query'], $query);
+        }
+
         foreach ([
             'utm_source',
             'utm_medium',
@@ -341,6 +344,23 @@ class MarketingAttributionSourceMetaBuilder
             $value = $this->nullableString($query[$field] ?? null);
             if ($value !== null) {
                 $signals[$field] = $value;
+            }
+        }
+
+        $path = $this->nullableString($parts['path'] ?? null);
+        if ($path !== null) {
+            if (preg_match('~/checkouts/(?:[^/?#]+/)?([^/?#]+)~i', $path, $checkoutMatch) === 1) {
+                $token = $this->nullableString($checkoutMatch[1] ?? null);
+                if ($token !== null && ! array_key_exists('checkout_token', $signals)) {
+                    $signals['checkout_token'] = $token;
+                }
+            }
+
+            if (preg_match('~/cart/c/([^/?#]+)~i', $path, $cartMatch) === 1) {
+                $token = $this->nullableString($cartMatch[1] ?? null);
+                if ($token !== null && ! array_key_exists('cart_token', $signals)) {
+                    $signals['cart_token'] = $token;
+                }
             }
         }
 
