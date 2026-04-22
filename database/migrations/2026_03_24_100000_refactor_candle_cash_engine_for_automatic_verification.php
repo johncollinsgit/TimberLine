@@ -91,7 +91,7 @@ return new class extends Migration
                     'central_title' => 'Candle Cash Central',
                     'central_subtitle' => 'Earn Candle Cash through verified actions like signups, reviews, referrals, and Candle Club perks.',
                     'faq_approval_copy' => 'Most rewards land automatically as soon as the matching event is verified.',
-                    'faq_stack_copy' => 'Only one discount code can be used at a time unless a reward card says otherwise.',
+                    'faq_stack_copy' => 'One Candle Cash code can be used per order. It may combine with other discounts based on the current rewards stacking setting.',
                     'faq_pending_copy' => 'If a reward is still pending, we are waiting on the matching system event or integration to confirm it.',
                     'faq_verification_copy' => 'Every standard Candle Cash reward is tied to a verified event, not a manual claim.',
                 ]),

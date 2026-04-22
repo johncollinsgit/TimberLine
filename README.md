@@ -1,5 +1,25 @@
 # Modern Forestry Backstage
 
+## Candle Cash Combination Rules Update (2026-04-22)
+
+This update enables Shopify discount combinations for Candle Cash using Shopify `combinesWith` on the single Candle Cash discount code.
+
+- Policy-driven behavior is now applied from tenant `redemption_rules`:
+  - `no_stacking` => all `combinesWith` flags false
+  - `shipping_only` => shipping-only combinations enabled
+  - `selected_promo_types` => selected promo types map to Shopify `order/product/shipping` booleans
+- Existing issued Candle Cash codes are corrected when stored Shopify `combinesWith` state is stale.
+- Guardrails are unchanged:
+  - one Candle Cash reward code per order remains in place
+  - multi-code Candle Cash stacking is still intentionally blocked
+  - `platform_supports_multi_code` remains false unless explicitly and safely enabled elsewhere
+
+Primary implementation files:
+- `app/Services/Marketing/CandleCashShopifyDiscountService.php`
+- `tests/Feature/Marketing/CandleCashShopifyDiscountServiceTest.php`
+- `tests/Feature/Marketing/MarketingStage9StorefrontContractsAndOperationsTest.php`
+- `docs/architecture/tenant-rewards-management-layer.md`
+
 ## Phase 5 AI Budget Readiness (2026-04-20)
 
 This pass ships the minimum viable AI budget readiness layer in **advisory mode only** (no autonomous budget control).

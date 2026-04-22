@@ -272,6 +272,11 @@ test('reward redemption feedback loop returns code issued and already has active
         ->json();
 
     expect((string) data_get($second, 'data.redemption_code'))->toBe((string) data_get($first, 'data.redemption_code'));
+    expect(CandleCashRedemption::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('reward_id', $reward->id)
+        ->where('status', 'issued')
+        ->count())->toBe(1);
 });
 
 test('shopify reward redemption persists and uses verified storefront store context', function () {

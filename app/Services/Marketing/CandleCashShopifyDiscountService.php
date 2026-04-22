@@ -8,6 +8,7 @@ use App\Models\MarketingProfileLink;
 use App\Models\ShopifyStore;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use Carbon\Carbon;
 use RuntimeException;
 
@@ -23,6 +24,11 @@ query CandleCashDiscountByCode($code: String!) {
         title
         startsAt
         endsAt
+        combinesWith {
+          orderDiscounts
+          productDiscounts
+          shippingDiscounts
+        }
       }
     }
   }
@@ -40,6 +46,39 @@ mutation CandleCashDiscountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasic
           title
           startsAt
           endsAt
+          combinesWith {
+            orderDiscounts
+            productDiscounts
+            shippingDiscounts
+          }
+        }
+      }
+    }
+    userErrors {
+      field
+      message
+      code
+    }
+  }
+}
+GRAPHQL;
+
+    protected const UPDATE_BASIC_DISCOUNT_MUTATION = <<<'GRAPHQL'
+mutation CandleCashDiscountCodeBasicUpdate($id: ID!, $basicCodeDiscount: DiscountCodeBasicInput!) {
+  discountCodeBasicUpdate(id: $id, basicCodeDiscount: $basicCodeDiscount) {
+    codeDiscountNode {
+      id
+      codeDiscount {
+        __typename
+        ... on DiscountCodeBasic {
+          title
+          startsAt
+          endsAt
+          combinesWith {
+            orderDiscounts
+            productDiscounts
+            shippingDiscounts
+          }
         }
       }
     }
@@ -53,7 +92,8 @@ mutation CandleCashDiscountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasic
 GRAPHQL;
 
     public function __construct(
-        protected CandleCashService $candleCashService
+        protected CandleCashService $candleCashService,
+        protected TenantMarketingSettingsResolver $settingsResolver
     ) {
     }
 
@@ -77,6 +117,7 @@ GRAPHQL;
             trim((string) ($store['token'] ?? '')),
             trim((string) ($store['api_version'] ?? '')) ?: '2026-01'
         );
+        $desiredCombinesWith = $this->combinesWithInput($redemption);
 
         $lookup = $client->query(self::LOOKUP_BY_CODE_QUERY, [
             'code' => $rewardCode,
@@ -84,6 +125,14 @@ GRAPHQL;
 
         $existing = $this->discountIdentifiersFromPayload($lookup['codeDiscountNodeByCode'] ?? null);
         if ($existing !== null) {
+            if (! $this->combinesWithMatches($existing['combines_with'] ?? null, $desiredCombinesWith)) {
+                $existing = $this->updateDiscountCombinesWith(
+                    $client,
+                    $existing,
+                    $desiredCombinesWith
+                );
+            }
+
             return [
                 'discount_id' => $existing['discount_id'],
                 'discount_node_id' => $existing['discount_node_id'],
@@ -210,6 +259,7 @@ GRAPHQL;
             'endsAt' => optional($this->endsAtForDiscount($redemption))->toIso8601String(),
             'appliesOncePerCustomer' => true,
             'customerSelection' => ['all' => true],
+            'combinesWith' => $this->combinesWithInput($redemption),
             'customerGets' => [
                 'items' => ['all' => true],
                 'value' => [
@@ -239,7 +289,7 @@ GRAPHQL;
 
     /**
      * @param mixed $payload
-     * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface}|null
+     * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}|null
      */
     protected function discountIdentifiersFromPayload(mixed $payload): ?array
     {
@@ -255,6 +305,7 @@ GRAPHQL;
                 'discount_node_id' => $discountNodeId,
                 'starts_at' => null,
                 'ends_at' => null,
+                'combines_with' => null,
             ] : null;
         }
 
@@ -263,6 +314,9 @@ GRAPHQL;
             'discount_node_id' => $discountNodeId !== '' ? $discountNodeId : null,
             'starts_at' => trim((string) ($discount['startsAt'] ?? '')) ?: null,
             'ends_at' => ! empty($discount['endsAt']) ? Carbon::parse((string) $discount['endsAt']) : null,
+            'combines_with' => is_array($discount['combinesWith'] ?? null)
+                ? $this->normalizedCombinesWith((array) $discount['combinesWith'])
+                : null,
         ];
     }
 
@@ -283,6 +337,157 @@ GRAPHQL;
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
+     */
+    protected function combinesWithInput(CandleCashRedemption $redemption): array
+    {
+        return $this->desiredCombinationStateForTenant($this->tenantIdForRedemption($redemption));
+    }
+
+    /**
+     * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
+     */
+    protected function desiredCombinationStateForTenant(?int $tenantId): array
+    {
+        $default = $this->normalizedCombinesWith([]);
+        if ($tenantId === null || $tenantId <= 0) {
+            return $default;
+        }
+
+        $policy = $this->settingsResolver->array(TenantRewardsPolicyService::POLICY_KEY, $tenantId);
+        $redemptionRules = (array) ($policy['redemption_rules'] ?? []);
+        $stackingMode = strtolower(trim((string) ($redemptionRules['stacking_mode'] ?? 'no_stacking')));
+
+        return match ($stackingMode) {
+            'shipping_only' => [
+                'orderDiscounts' => false,
+                'productDiscounts' => false,
+                'shippingDiscounts' => true,
+            ],
+            'selected_promo_types' => $this->combinesWithFromSelectedPromoTypes(
+                (array) ($redemptionRules['selected_stackable_promo_types'] ?? [])
+            ),
+            default => $default,
+        };
+    }
+
+    /**
+     * @param array<int,mixed> $selectedPromoTypes
+     * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
+     */
+    protected function combinesWithFromSelectedPromoTypes(array $selectedPromoTypes): array
+    {
+        $normalized = collect($selectedPromoTypes)
+            ->map(function (mixed $value): ?string {
+                $normalizedValue = strtolower(trim((string) $value));
+                if ($normalizedValue === '') {
+                    return null;
+                }
+
+                return str_replace([' ', '-'], '_', $normalizedValue);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $orderDiscounts = false;
+        $productDiscounts = false;
+        $shippingDiscounts = false;
+
+        foreach ($normalized as $promoType) {
+            if (in_array($promoType, ['all', 'all_promotions', 'all_promo_types'], true)) {
+                $orderDiscounts = true;
+                $productDiscounts = true;
+                $shippingDiscounts = true;
+                break;
+            }
+
+            if (in_array($promoType, ['order', 'order_discount', 'order_discounts', 'cart', 'cart_discount', 'cart_discounts'], true)) {
+                $orderDiscounts = true;
+                continue;
+            }
+
+            if (in_array($promoType, ['product', 'product_discount', 'product_discounts', 'line_item', 'line_items', 'item', 'item_discounts'], true)) {
+                $productDiscounts = true;
+                continue;
+            }
+
+            if (in_array($promoType, ['shipping', 'shipping_discount', 'shipping_discounts', 'shipping_rate', 'shipping_rates'], true)) {
+                $shippingDiscounts = true;
+            }
+        }
+
+        return [
+            'orderDiscounts' => $orderDiscounts,
+            'productDiscounts' => $productDiscounts,
+            'shippingDiscounts' => $shippingDiscounts,
+        ];
+    }
+
+    /**
+     * @param array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}} $existingDiscount
+     * @param array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool} $desiredCombinesWith
+     * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}
+     */
+    protected function updateDiscountCombinesWith(
+        ShopifyGraphqlClient $client,
+        array $existingDiscount,
+        array $desiredCombinesWith
+    ): array {
+        $discountNodeId = trim((string) ($existingDiscount['discount_node_id'] ?? ''));
+        if ($discountNodeId === '') {
+            throw new RuntimeException('Shopify reward discount update failed: missing discount node identifier.');
+        }
+
+        $data = $client->query(self::UPDATE_BASIC_DISCOUNT_MUTATION, [
+            'id' => $discountNodeId,
+            'basicCodeDiscount' => [
+                'combinesWith' => $this->normalizedCombinesWith($desiredCombinesWith),
+            ],
+        ]);
+
+        $payload = $data['discountCodeBasicUpdate'] ?? null;
+        if (! is_array($payload)) {
+            throw new RuntimeException('Shopify reward discount update response was invalid.');
+        }
+
+        $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
+        if ($errors !== []) {
+            throw new RuntimeException('Shopify reward discount update failed: ' . implode(' | ', $errors));
+        }
+
+        $updated = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
+        if ($updated === null) {
+            throw new RuntimeException('Shopify reward discount update did not return a discount identifier.');
+        }
+
+        return $updated;
+    }
+
+    /**
+     * @param mixed $currentCombinesWith
+     * @param array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool} $desiredCombinesWith
+     */
+    protected function combinesWithMatches(mixed $currentCombinesWith, array $desiredCombinesWith): bool
+    {
+        return $this->normalizedCombinesWith($currentCombinesWith) === $this->normalizedCombinesWith($desiredCombinesWith);
+    }
+
+    /**
+     * @param mixed $combinesWith
+     * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
+     */
+    protected function normalizedCombinesWith(mixed $combinesWith): array
+    {
+        return [
+            'orderDiscounts' => (bool) data_get($combinesWith, 'orderDiscounts', false),
+            'productDiscounts' => (bool) data_get($combinesWith, 'productDiscounts', false),
+            'shippingDiscounts' => (bool) data_get($combinesWith, 'shippingDiscounts', false),
+        ];
     }
 
     protected function tenantIdForRedemption(CandleCashRedemption $redemption): ?int

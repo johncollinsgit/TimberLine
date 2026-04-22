@@ -571,6 +571,18 @@ Merchant-facing channel strategy now maps to explicit business options:
 
 This keeps the UI honest about what is supported today while preserving current reward execution behavior.
 
+### Shopify Discount Combination Runtime
+Candle Cash Shopify discount sync now applies tenant redemption stacking policy directly to Shopify `combinesWith` on each issued Candle Cash discount code.
+
+- `no_stacking` maps to all `combinesWith` flags `false`
+- `shipping_only` enables only `shippingDiscounts`
+- `selected_promo_types` maps selected stackable promo types to Shopify `orderDiscounts`, `productDiscounts`, and `shippingDiscounts`
+
+Runtime guardrails remain unchanged:
+- still one Candle Cash reward code per order (`max_codes_per_order=1`)
+- `platform_supports_multi_code` remains false unless separately and explicitly enabled through a proven platform-safe path
+- when an existing Shopify discount node is found, stale `combinesWith` config is corrected via update before returning
+
 ## 10) Audit, Versioning, and Runtime Traceability
 
 ### Policy Versioning

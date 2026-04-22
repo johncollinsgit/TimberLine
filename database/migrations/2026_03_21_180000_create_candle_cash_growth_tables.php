@@ -144,7 +144,7 @@ return new class extends Migration
                     'central_title' => 'Candle Cash Central',
                     'central_subtitle' => 'Earn low-lift rewards by helping us grow through reviews, referrals, and simple engagement.',
                     'faq_approval_copy' => 'Manual approvals usually land within 1 to 3 business days.',
-                    'faq_stack_copy' => 'Only one discount code can be used at a time unless a reward card says otherwise.',
+                    'faq_stack_copy' => 'One Candle Cash code can be used per order. It may combine with other discounts based on the current rewards stacking setting.',
                     'faq_pending_copy' => 'Pending tasks stay in your history until they are approved or declined.',
                 ]),
                 'description' => 'Customer-facing Candle Cash page copy and support text.',
