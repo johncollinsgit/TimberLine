@@ -138,7 +138,8 @@ class ShopifyEmbeddedAppContext
      *   auth_source:string,
      *   store?:array<string,mixed>,
      *   shopify_admin_user_id?:?string,
-     *   shopify_admin_session_id?:?string
+     *   shopify_admin_session_id?:?string,
+     *   shopify_admin_email?:?string
      * }
      */
     public function resolveAuthenticatedApiContext(Request $request): array

@@ -11,6 +11,12 @@
     @php
         $moduleStates = is_array($appNavigation['moduleStates'] ?? null) ? $appNavigation['moduleStates'] : [];
         $settingsModuleState = is_array($moduleStates['settings'] ?? null) ? $moduleStates['settings'] : null;
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrlGenerator */
+        $embeddedUrlGenerator = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $developmentNotesHref = $embeddedUrlGenerator->append(
+            route('shopify.app.development-notes', [], false),
+            $embeddedUrlGenerator->contextQuery(request(), filled($host) ? (string) $host : null)
+        );
     @endphp
 
     <style>
@@ -389,6 +395,16 @@
             </div>
         </article>
 
+        <article class="settings-card" id="development-notes-nav-card" hidden>
+            <h2>Development Notes</h2>
+            <p>
+                Internal implementation notes and change log workspace. This entry point appears only for allowlisted admin identities.
+            </p>
+            <div class="settings-actions">
+                <a class="settings-button settings-button--primary" href="{{ $developmentNotesHref }}">Open Development Notes</a>
+            </div>
+        </article>
+
         <article class="settings-card">
             <div class="settings-head">
                 <div>
@@ -565,6 +581,8 @@
             const testButton = document.getElementById("settings-test-send");
             const clearKeyButton = document.getElementById("settings-clear-key");
             const lastTestedLabel = document.getElementById("settings-last-tested");
+            const developmentNotesNavCard = document.getElementById("development-notes-nav-card");
+            const developmentNotesAccessEndpoint = @json(route('shopify.app.api.development-notes.access', [], false));
 
             const state = {
                 loading: false,
@@ -1279,6 +1297,21 @@
                 }
             }
 
+            async function loadDevelopmentNotesAccess() {
+                if (!developmentNotesNavCard || !developmentNotesAccessEndpoint) {
+                    return;
+                }
+
+                try {
+                    await fetchJson(developmentNotesAccessEndpoint, {
+                        method: "GET",
+                    });
+                    developmentNotesNavCard.hidden = false;
+                } catch (_error) {
+                    developmentNotesNavCard.hidden = true;
+                }
+            }
+
             async function saveWidgetSettings() {
                 if (!widgetBootstrap?.endpoints?.save || !widgetForm) {
                     return;
@@ -1503,6 +1536,7 @@
             if (!widgetBootstrap?.settings) {
                 scheduleIdleTask(loadWidgetSettings);
             }
+            scheduleIdleTask(loadDevelopmentNotesAccess);
 
             syncProviderDraftFromSettings();
             populateFormFromState();

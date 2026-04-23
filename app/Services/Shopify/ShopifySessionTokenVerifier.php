@@ -16,7 +16,8 @@ class ShopifySessionTokenVerifier
      *   auth_source:string,
      *   store?:array<string,mixed>,
      *   shopify_admin_user_id?:?string,
-     *   shopify_admin_session_id?:?string
+     *   shopify_admin_session_id?:?string,
+     *   shopify_admin_email?:?string
      * }
      */
     public function verify(string $token): array
@@ -95,6 +96,7 @@ class ShopifySessionTokenVerifier
             'store' => $store,
             'shopify_admin_user_id' => $this->normalizedNullableString($payload['sub'] ?? null),
             'shopify_admin_session_id' => $this->normalizedNullableString($payload['sid'] ?? null),
+            'shopify_admin_email' => $this->normalizedNullableEmail($payload['email'] ?? null),
         ];
     }
 
@@ -213,6 +215,16 @@ class ShopifySessionTokenVerifier
         $normalized = trim((string) $value);
 
         return $normalized !== '' ? $normalized : null;
+    }
+
+    protected function normalizedNullableEmail(mixed $value): ?string
+    {
+        $normalized = strtolower(trim((string) $value));
+        if ($normalized === '' || ! filter_var($normalized, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        return $normalized;
     }
 
     protected function failure(string $status, ?string $shopDomain = null): array

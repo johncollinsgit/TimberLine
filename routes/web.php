@@ -42,6 +42,7 @@ use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
 use App\Http\Controllers\ShopifyEmbeddedCustomersController;
+use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
@@ -1051,6 +1052,7 @@ Route::prefix('shopify/marketing/v1')
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
+        Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
         Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
         Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
             Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
@@ -1177,6 +1179,22 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'saveWidgetSettings'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('settings.widgets.save');
+        Route::get('/development-notes/access', [ShopifyEmbeddedDevelopmentNotesController::class, 'access'])
+            ->name('development-notes.access');
+        Route::get('/development-notes/bootstrap', [ShopifyEmbeddedDevelopmentNotesController::class, 'bootstrap'])
+            ->name('development-notes.bootstrap');
+        Route::post('/development-notes/notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'storeNote'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('development-notes.notes.store');
+        Route::patch('/development-notes/notes/{note}', [ShopifyEmbeddedDevelopmentNotesController::class, 'updateNote'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('development-notes.notes.update');
+        Route::delete('/development-notes/notes/{note}', [ShopifyEmbeddedDevelopmentNotesController::class, 'destroyNote'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('development-notes.notes.destroy');
+        Route::post('/development-notes/change-logs', [ShopifyEmbeddedDevelopmentNotesController::class, 'storeChangeLog'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('development-notes.change-logs.store');
         Route::get('/settings/email', [ShopifyEmbeddedSettingsController::class, 'emailSettings'])
             ->name('settings.email');
         Route::post('/settings/email', [ShopifyEmbeddedSettingsController::class, 'saveEmailSettings'])
