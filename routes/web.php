@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\AdminDevelopmentNotesController;
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
@@ -447,21 +446,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/admin/oils/abbreviations', AdminOilAbbreviationsCrud::class)->name('admin.oils.abbreviations');
         Route::get('/admin/master-data', [AdminMasterDataController::class, 'index'])->name('admin.master.ui');
         Route::get('/admin/scent-wizard', AdminScentWizard::class)->name('admin.scent-wizard');
-        Route::get('/admin/development-notes', [AdminDevelopmentNotesController::class, 'index'])
-            ->middleware(['role:admin'])
-            ->name('admin.development-notes.index');
-        Route::post('/admin/development-notes/notes', [AdminDevelopmentNotesController::class, 'storeNote'])
-            ->middleware(['role:admin'])
-            ->name('admin.development-notes.notes.store');
-        Route::put('/admin/development-notes/notes/{developmentNote}', [AdminDevelopmentNotesController::class, 'updateNote'])
-            ->middleware(['role:admin'])
-            ->name('admin.development-notes.notes.update');
-        Route::delete('/admin/development-notes/notes/{developmentNote}', [AdminDevelopmentNotesController::class, 'destroyNote'])
-            ->middleware(['role:admin'])
-            ->name('admin.development-notes.notes.destroy');
-        Route::post('/admin/development-notes/change-logs', [AdminDevelopmentNotesController::class, 'storeChangeLog'])
-            ->middleware(['role:admin'])
-            ->name('admin.development-notes.change-logs.store');
         Route::post('/admin/master-data/{resource}/bulk-update', [AdminMasterDataController::class, 'bulkUpdate'])->name('admin.master.bulk-update');
         Route::get('/admin/master/{resource}', [AdminMasterDataController::class, 'list'])->name('admin.master.index-data');
         Route::post('/admin/master/{resource}', [AdminMasterDataController::class, 'store'])->name('admin.master.store');
