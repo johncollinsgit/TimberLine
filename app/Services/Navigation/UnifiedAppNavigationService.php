@@ -234,6 +234,11 @@ class UnifiedAppNavigationService
                 'label' => 'Team Access',
                 'href' => route('admin.index', ['tab' => 'users']),
                 'current' => $adminActive && $adminTab === 'users',
+            ], [
+                'key' => 'development-notes',
+                'label' => 'Development Notes',
+                'href' => route('admin.development-notes.index'),
+                'current' => request()->routeIs('admin.development-notes.*'),
             ]] : []),
             [
                 'key' => 'imports',
