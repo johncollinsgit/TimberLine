@@ -9,67 +9,67 @@ $helloContact = 'hello@'.$contactDomain;
 
 return [
     'promo' => [
-        'eyebrow' => 'Shopify-First Customer Platform',
-        'headline' => 'Production, shipping, and wholesale in one place.',
-        'summary' => $productName.' keeps Shopify workflows strong while unifying operations, fulfillment, and customer programs.',
+        'eyebrow' => 'AI-Powered Small Business Workspace',
+        'headline' => 'Run the business you actually have.',
+        'summary' => $productName.' brings customers, work, money, materials, communication, and next steps into one intelligent workspace.',
         'how_it_works' => [
             [
-                'title' => 'Connect Shopify and operations',
-                'description' => 'Keep existing Shopify storefront and embedded workflows while giving teams one place to run daily operations.',
+                'title' => 'Bring the important signals together',
+                'description' => 'Connect Shopify, request CSV/manual setup, or shape a direct workspace around how your business already runs.',
             ],
             [
-                'title' => 'Turn on live modules',
-                'description' => 'Manage rewards, birthdays, reviews, and customer workflows from shared identity records.',
+                'title' => 'Choose the workflows that matter first',
+                'description' => 'Start with customers, work, orders, materials, reports, or requested setup paths without turning on anything risky automatically.',
             ],
             [
-                'title' => 'Scale with clear controls',
-                'description' => 'Use plans, add-ons, and setup checklists to expand scope without disrupting core workflows.',
+                'title' => 'Review the next step with Everbranch',
+                'description' => 'Plan interest, setup needs, and requested features stay clear before billing or advanced access is considered.',
             ],
         ],
         'preview_profiles' => [
             [
                 'key' => 'landscaper',
                 'label' => 'Landscaper',
-                'summary' => 'Coordinate crews, route jobs, and keep post-service follow-ups tight.',
+                'summary' => 'See customers, jobs, crew notes, materials, and follow-ups without scattering the day across tools.',
                 'signals' => [
-                    '86 scheduled jobs this month',
-                    'Next follow-up campaign in 2 days',
-                    'SMS reminders enabled for field teams',
+                    'Scheduled jobs and crew assignments',
+                    'Materials and job cost questions',
+                    'Before-and-after photo needs',
                 ],
             ],
             [
                 'key' => 'electrician',
                 'label' => 'Electrician',
-                'summary' => 'Track service calls, dispatch load, and customer lifecycle touchpoints from one place.',
+                'summary' => 'Track service work, customers, parts, notes, and next actions from one calm workspace.',
                 'signals' => [
-                    '24 active service tickets',
-                    '4 high-priority callbacks due today',
-                    'Billing handoff ready for Growth tier',
+                    'Service jobs and technician notes',
+                    'Parts, receipts, and estimates',
+                    'Follow-up reminders after the visit',
                 ],
             ],
             [
                 'key' => 'soap_maker',
                 'label' => 'Soap Maker',
-                'summary' => 'Run production batches, wholesale fulfillment, and repeat-order campaigns together.',
+                'summary' => 'Connect orders, batches, raw materials, wholesale needs, and repeat-customer moments.',
                 'signals' => [
-                    '12 production batches scheduled',
-                    'Wholesale reorder risk score: low',
-                    'Rewards + referrals suggested next',
+                    'Production batches and materials',
+                    'Orders, products, and inventory',
+                    'Repeat purchase and campaign ideas',
                 ],
             ],
         ],
         'preview_flow' => [
             [
                 'title' => 'Preview',
-                'description' => 'Explore a safe example workspace with real-looking workflows and module state.',
+                'description' => 'Explore a guided example with real-looking workflows and no private business data.',
             ],
             [
                 'title' => 'Request',
-                'description' => 'Choose demo or production intent and capture the right commercial context once.',
+                'description' => 'Share what kind of business you run, how your data should arrive, and what you want help with first.',
             ],
             [
-                'title' => 'Activate',
-                'description' => 'After approval, set your password and land directly in a workspace Start Here page.',
+                'title' => 'Start',
+                'description' => 'After review, your team lands in a Start Here guide with clear setup status and next actions.',
             ],
         ],
         'plan_order' => [
@@ -79,7 +79,7 @@ return [
         ],
         'ctas' => [
             'install' => [
-                'label' => 'Install on Shopify',
+                'label' => 'Shopify setup',
                 'href' => '/shopify/reinstall/retail',
             ],
             'demo' => [

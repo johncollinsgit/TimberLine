@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-05-22 — Premium Everbranch Public Splash and Marketing Shell
+
+### What changed
+- Rebuilt the public Everbranch landing page around a full-screen splash entry, official Everbranch mark/lockup assets, and the primary CTA “The Future of AI-Powered Small Business.”
+- Added lightweight CSS-only branch/node motion, ambient depth, and responsive premium public layout styles with reduced-motion support.
+- Reframed public copy around customers, work, money, materials, communication, next steps, Shopify support, CSV/manual setup, direct workspaces, security, and reviewed access.
+- Simplified public navigation to Product, Workflows, Customers, Integrations, Security, Plans, Login, and Start as a client.
+
+### What did not change
+- No Shopify Partner Dashboard/TOML identity, OAuth, scopes, callbacks, webhooks, deploy/release/dev behavior, or billing settings changed.
+- No billing, checkout, subscriptions, module installs, module access changes, imports, storage uploads, mobile APIs, Bud assistant, command search, customer profiles, or impersonation behavior was activated.
+- Modern Forestry remains tenant-specific context and is not rebranded in Shopify configuration.
+
 ## 2026-05-21 — Everbranch Brand System and Language Sweep
 
 ### What changed

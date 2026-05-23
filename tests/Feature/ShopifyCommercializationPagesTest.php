@@ -14,7 +14,7 @@ beforeEach(function () {
     $this->withoutVite();
 });
 
-test('promo page renders config-driven headline and pricing content', function () {
+test('promo page renders premium Everbranch splash and pricing content', function () {
     config()->set('product_surfaces.plans.cards.starter.price_display', 'From $777/mo');
 
     $this->get(route('platform.promo'))
@@ -22,9 +22,11 @@ test('promo page renders config-driven headline and pricing content', function (
         ->assertSee('data-premium-motion="public"', false)
         ->assertSee('id="intro-logo"', false)
         ->assertSee('id="site-ambient"', false)
-        ->assertSeeText('Customers, shipping, and wholesale in one place.')
+        ->assertSeeText('Run the business you actually have.')
+        ->assertSeeText('The Future of AI-Powered Small Business')
+        ->assertSeeText('Shopify is supported. It is not the whole product.')
         ->assertSeeText('From $777/mo')
-        ->assertSeeText('Install on Shopify');
+        ->assertSeeText('Start as a client');
 });
 
 test('contact placeholder page renders configured channels', function () {
