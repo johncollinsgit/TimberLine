@@ -48,10 +48,13 @@
   $opsAttention = is_array($navigationShell['ops_attention'] ?? null) ? $navigationShell['ops_attention'] : [];
   $unresolvedExceptions = (int) ($opsAttention['unresolved_exceptions'] ?? 0);
   $latestRun = $opsAttention['latest_run'] ?? null;
-  $hrefDashboard = route('dashboard');
+  $shellContext = (string) ($navigationShell['shell_context'] ?? 'tenant');
+  $isLandlordShell = $shellContext === 'landlord';
+  $showDataTools = $canAccessOps && ! $isLandlordShell;
+  $hrefDashboard = $isLandlordShell ? route('landlord.dashboard') : route('dashboard');
   $workspaceLabel = (string) ($workspace['label'] ?? 'Unified workspace');
   $workspaceSubtitle = (string) ($workspace['subtitle'] ?? 'One product surface that adapts to the tenant in front of it.');
-  $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search the workspace');
+  $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search or ask what you want to do...');
   $accountMode = strtolower(trim((string) ($experienceProfile['account_mode'] ?? 'production')));
   $accessLaneBanner = match ($accountMode) {
       'demo' => [
@@ -74,6 +77,14 @@
       'marketing' => $marketingActive,
       'birthdays' => $birthdaysActive,
   ];
+  $topbarContextPills = [];
+  if ($isLandlordShell) {
+      $topbarContextPills[] = 'Operator view';
+      $topbarContextPills[] = 'Safe controls';
+  } elseif (! empty($experienceProfile['tenant_name'] ?? null)) {
+      $topbarContextPills[] = (string) $experienceProfile['tenant_name'];
+      $topbarContextPills[] = strtoupper((string) ($experienceProfile['channel_type'] ?? 'direct'));
+  }
 @endphp
 
 <div class="min-h-screen flex">
@@ -102,11 +113,15 @@
             <span class="mf-sidebar-pin-icon" aria-hidden="true">‹</span>
           </button>
         </div>
+        <div class="mf-sidebar-context" data-shell-context="{{ $shellContext }}">
+          <span class="mf-sidebar-context-label">{{ $isLandlordShell ? 'Everbranch Admin' : 'Workspace' }}</span>
+          <span class="mf-sidebar-context-name">{{ $isLandlordShell ? 'Operator console' : $workspaceLabel }}</span>
+        </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
       <flux:sidebar.nav class="mf-sidebar-nav">
-        <flux:sidebar.group heading="Navigation" class="grid mf-sidebar-group-balanced">
+        <flux:sidebar.group :heading="$isLandlordShell ? 'Everbranch Admin' : 'Workspace'" class="grid mf-sidebar-group-balanced">
           <div class="space-y-1 mf-sidebar-main-list" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
             @foreach($orderedSidebarItems as $item)
               <div
@@ -143,13 +158,13 @@
                       <span class="mf-admin-group-main">
                         @switch($itemKey)
                           @case('production')
-                            <flux:icon.beaker class="size-4" />
+                            <flux:icon.briefcase class="size-4" />
                             @break
                           @case('administration')
-                            <flux:icon.wrench-screwdriver class="size-4" />
+                            <flux:icon.cog-6-tooth class="size-4" />
                             @break
                           @case('marketing')
-                            <flux:icon.megaphone class="size-4" />
+                            <flux:icon.users class="size-4" />
                             @break
                           @case('birthdays')
                             <flux:icon.gift class="size-4" />
@@ -203,8 +218,8 @@
           </div>
         </flux:sidebar.group>
 
-        @if($quickActions !== [] || $canAccessOps)
-        <flux:sidebar.group heading="Quick Actions" class="grid mt-3 mf-sidebar-group-balanced">
+        @if($quickActions !== [] || $showDataTools)
+        <flux:sidebar.group heading="Shortcuts" class="grid mt-3 mf-sidebar-group-balanced">
           <button
             type="button"
             class="fb-surface-inset w-full px-3 py-2 text-left text-sm font-semibold text-zinc-950 transition hover:bg-white"
@@ -228,10 +243,10 @@
             </a>
           @endforeach
 
-          @if($canAccessOps)
+          @if($showDataTools)
             <details class="mt-2 rounded-2xl border p-3 group mf-sidebar-panel">
               <summary class="cursor-pointer list-none flex items-center justify-between fb-kpi-label text-zinc-600">
-                <span>Import Tools</span>
+                <span>Data Tools</span>
                 <span class="text-[10px] text-zinc-500 transition-transform group-open:rotate-90">▸</span>
               </summary>
               <div class="mt-3 space-y-2">
@@ -287,29 +302,44 @@
     </flux:header>
 
     {{-- Main content --}}
-	    <main id="app-main" class="flex-1 min-w-0 overflow-y-auto p-6">
-	      <div class="mb-4 flex items-center justify-between gap-3">
-	        <button
-	          type="button"
-	          data-command-trigger
-	          class="fb-btn-soft rounded-full"
-	        >
-	          <span>Search everything</span>
-	          <span class="fb-chip fb-chip--quiet">Cmd/Ctrl + K</span>
-	        </button>
-	
-	        @if(! empty($experienceProfile['tenant_name'] ?? null))
-	          <div class="fb-chip fb-chip--quiet">
-	            {{ $experienceProfile['tenant_name'] }}
-	            · {{ strtoupper((string) ($experienceProfile['channel_type'] ?? 'direct')) }}
-	            · {{ strtoupper((string) ($experienceProfile['use_case_profile'] ?? 'ops')) }}
-	          </div>
-	        @endif
+    <main id="app-main" class="mf-app-main flex-1 min-w-0 overflow-y-auto">
+      <div class="mf-shell-topbar" data-app-shell-topbar>
+        <div class="mf-shell-location">
+          <span class="mf-shell-location-eyebrow">{{ $isLandlordShell ? 'Everbranch Admin' : 'Everbranch Workspace' }}</span>
+          <span class="mf-shell-location-title">{{ $workspaceLabel }}</span>
+        </div>
+
+        <button
+          type="button"
+          data-command-trigger
+          class="mf-shell-search"
+          aria-label="Search or ask what you want to do..."
+        >
+          <flux:icon.magnifying-glass class="size-4" />
+          <span class="mf-shell-search-placeholder">Search or ask what you want to do...</span>
+          <span class="mf-shell-search-shortcut">Cmd K</span>
+        </button>
+
+        <div class="mf-shell-actions">
+          @foreach($topbarContextPills as $pill)
+            <span class="mf-shell-context-pill">{{ $pill }}</span>
+          @endforeach
+          <button
+            type="button"
+            class="mf-bud-placeholder"
+            data-bud-placeholder
+            aria-label="Bud assistant shell coming soon"
+            title="Bud assistant shell coming soon"
+          >
+            <img src="{{ asset(config('everbranch.brand_assets.mark', 'brand/everbranch-mark.svg')) }}" alt="" aria-hidden="true" />
+            <span>Bud</span>
+          </button>
+        </div>
       </div>
 
       @if(is_array($accessLaneBanner))
         <div
-          class="mb-4 rounded-2xl border px-4 py-3 text-sm {{ $accessLaneBanner['classes'] }}"
+          class="mx-auto mb-4 max-w-[1180px] rounded-2xl border px-4 py-3 text-sm {{ $accessLaneBanner['classes'] }}"
           data-access-lane-banner="{{ $accountMode }}"
         >
           <div class="font-semibold">{{ $accessLaneBanner['label'] }}</div>
@@ -317,8 +347,8 @@
         </div>
       @endif
 
-      @if($canAccessOps && $unresolvedExceptions > 0)
-        <div class="mf-announcement mb-4 rounded-2xl border px-4 py-3 text-sm">
+      @if($showDataTools && $unresolvedExceptions > 0)
+        <div class="mf-announcement mx-auto mb-4 max-w-[1180px] rounded-2xl border px-4 py-3 text-sm">
           <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <span class="font-semibold">Import Attention:</span>
@@ -340,8 +370,10 @@
           </div>
         </div>
       @endif
-      <div class="rounded-3xl mf-app-card mf-app-glow p-6 md:p-7 text-[var(--fb-text)]">
+      <div class="mf-shell-content mx-auto text-[var(--fb-text)]">
+        <div class="rounded-2xl mf-app-card mf-app-glow p-5 md:p-7">
         {{ $slot }}
+        </div>
       </div>
     </main>
 
@@ -461,5 +493,6 @@
 @fluxScripts
 @livewireScripts
 @livewireScriptConfig
+@stack('scripts')
 </body>
 </html>

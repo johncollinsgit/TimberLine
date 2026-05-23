@@ -8,7 +8,7 @@
     'host' => null,
     'showSidebar' => true,
     'commandSearchEndpoint' => null,
-    'commandSearchPlaceholder' => 'Search actions, pages, and Shopify tools',
+    'commandSearchPlaceholder' => 'Search or ask what you want to do...',
     'commandSearchDocuments' => [],
     'commandSearchContext' => [],
     'commandPaletteVariant' => 'legacy',

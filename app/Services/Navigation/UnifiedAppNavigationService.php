@@ -29,6 +29,11 @@ class UnifiedAppNavigationService
     public function build(Request $request, ?User $user = null): array
     {
         $user ??= $request->user();
+
+        if ($this->isLandlordShell($request)) {
+            return $this->buildLandlordShell($request);
+        }
+
         $tenant = $user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null;
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
@@ -51,7 +56,7 @@ class UnifiedAppNavigationService
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
         if ($canAccessMarketing) {
-            $items[] = ['key' => 'marketing', 'icon' => 'megaphone', 'href' => route('marketing.overview'), 'label' => 'Customer Hub', 'current' => request()->routeIs('marketing.*')];
+            $items[] = ['key' => 'marketing', 'icon' => 'users', 'href' => route('marketing.overview'), 'label' => 'Customers', 'current' => request()->routeIs('marketing.*')];
 
             $birthdaysRelevant = $tenantId === null
                 || $this->moduleStateRelevant($moduleStates['birthdays'] ?? null);
@@ -60,7 +65,7 @@ class UnifiedAppNavigationService
             }
 
             if ($tenantId !== null) {
-                $items[] = ['key' => 'modules', 'icon' => 'squares-plus', 'href' => route('marketing.modules'), 'label' => 'Modules', 'current' => request()->routeIs('marketing.modules*')];
+                $items[] = ['key' => 'modules', 'icon' => 'squares-plus', 'href' => route('marketing.modules'), 'label' => 'Features', 'current' => request()->routeIs('marketing.modules*')];
             }
         }
 
@@ -78,8 +83,8 @@ class UnifiedAppNavigationService
             );
 
             $opsItems = [
-                ['key' => 'production', 'icon' => 'beaker', 'href' => route('retail.plan'), 'label' => 'Production', 'current' => $productionCurrent, 'children' => $productionChildren],
-                ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => route('analytics.index'), 'label' => 'Analytics', 'current' => request()->routeIs('analytics.*')],
+                ['key' => 'production', 'icon' => 'briefcase', 'href' => route('retail.plan'), 'label' => 'Work', 'current' => $productionCurrent, 'children' => $productionChildren],
+                ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => route('analytics.index'), 'label' => 'Reports', 'current' => request()->routeIs('analytics.*')],
             ];
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
@@ -91,10 +96,10 @@ class UnifiedAppNavigationService
         }
 
         if ($canAccessOps) {
-            $items[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => route('admin.index'), 'label' => 'Administration', 'current' => request()->routeIs('admin.*')];
+            $items[] = ['key' => 'administration', 'icon' => 'cog-6-tooth', 'href' => route('admin.index'), 'label' => 'Settings', 'current' => request()->routeIs('admin.*')];
         }
 
-        $items[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Workspace Wiki', 'current' => request()->routeIs('wiki.*')];
+        $items[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Workspace Guide', 'current' => request()->routeIs('wiki.*')];
 
         $items = $this->normalizeNavigationItems($items);
 
@@ -117,6 +122,61 @@ class UnifiedAppNavigationService
             'wiki_sections' => $this->wikiSections(),
             'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId),
             'ops_attention' => $canAccessOps ? $this->opsAttention() : ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'shell_context' => 'tenant',
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function buildLandlordShell(Request $request): array
+    {
+        $items = [
+            ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')],
+            ['key' => 'workspaces', 'icon' => 'building-office-2', 'href' => route('landlord.tenants.index'), 'label' => 'Workspaces', 'current' => $request->routeIs('landlord.tenants.*')],
+            ['key' => 'access-requests', 'icon' => 'inbox', 'href' => route('landlord.onboarding.intake'), 'label' => 'Access Requests', 'current' => $request->routeIs('landlord.onboarding.intake')],
+            ['key' => 'setup-reviews', 'icon' => 'clipboard-document-check', 'href' => route('landlord.onboarding.journey'), 'label' => 'Setup Reviews', 'current' => $request->routeIs('landlord.onboarding.journey') || $request->routeIs('landlord.onboarding.wizard')],
+            ['key' => 'features', 'icon' => 'squares-plus', 'href' => route('landlord.commercial.index'), 'label' => 'Features', 'current' => $request->routeIs('landlord.commercial.*')],
+            ['key' => 'custom-requests', 'icon' => 'chat-bubble-left-right', 'href' => route('landlord.custom-module-requests.index'), 'label' => 'Custom Requests', 'current' => $request->routeIs('landlord.custom-module-requests.*')],
+            ['key' => 'plan-billing-readiness', 'icon' => 'credit-card', 'href' => route('landlord.commercial-intent.index'), 'label' => 'Plan / Billing Readiness', 'current' => $request->routeIs('landlord.commercial-intent.*')],
+            ['key' => 'shopify-readiness', 'icon' => 'shopping-bag', 'href' => route('landlord.readiness').'#shopify-app-readiness', 'label' => 'Shopify Readiness', 'current' => false],
+            ['key' => 'system-readiness', 'icon' => 'shield-check', 'href' => route('landlord.readiness'), 'label' => 'System Readiness', 'current' => $request->routeIs('landlord.readiness')],
+            ['key' => 'settings', 'icon' => 'cog-6-tooth', 'href' => route('landlord.dashboard'), 'label' => 'Settings', 'current' => false],
+        ];
+
+        return [
+            'tenant' => null,
+            'tenant_id' => null,
+            'experience_profile' => [
+                'tenant_name' => 'Everbranch Admin',
+                'account_mode' => 'landlord',
+                'channel_type' => 'operator',
+                'use_case_profile' => 'admin',
+                'workspace' => [
+                    'label' => 'Everbranch Admin',
+                    'subtitle' => 'Operator controls for workspaces, setup, readiness, and safe launch decisions.',
+                    'command_placeholder' => 'Search or ask what you want to do...',
+                ],
+            ],
+            'items' => $this->orderedItems($this->normalizeNavigationItems($items), []),
+            'admin_sub_items' => [],
+            'marketing_sub_groups' => [],
+            'birthday_sub_groups' => [],
+            'wiki_sections' => [],
+            'quick_actions' => [
+                [
+                    'label' => 'Create workspace',
+                    'description' => 'Start a safe setup plan without billing or module activation.',
+                    'href' => route('landlord.tenants.create'),
+                ],
+                [
+                    'label' => 'Review setup',
+                    'description' => 'Check intake, next steps, and readiness blockers.',
+                    'href' => route('landlord.onboarding.journey'),
+                ],
+            ],
+            'ops_attention' => ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'shell_context' => 'landlord',
         ];
     }
 
@@ -154,6 +214,12 @@ class UnifiedAppNavigationService
             if ($normalizedKey !== '' && ! in_array($normalizedKey, $orderedKeys, true)) {
                 $orderedKeys[] = $normalizedKey;
             }
+        }
+
+        if (($homeIndex = array_search('home', $orderedKeys, true)) !== false) {
+            unset($orderedKeys[$homeIndex]);
+            array_unshift($orderedKeys, 'home');
+            $orderedKeys = array_values($orderedKeys);
         }
 
         return collect($orderedKeys)
@@ -249,7 +315,7 @@ class UnifiedAppNavigationService
             ],
             [
                 'key' => 'catalog',
-                'label' => 'Scent Catalog',
+                'label' => 'Product Catalog',
                 'href' => route('admin.index', ['tab' => 'catalog']),
                 'current' => $adminActive && $adminTab === 'catalog',
             ],
@@ -310,7 +376,7 @@ class UnifiedAppNavigationService
             ],
             [
                 'key' => 'market-room-process',
-                'label' => 'Market Room Process',
+                'label' => 'Market Room Guide',
                 'href' => route('wiki.article', ['slug' => 'market-room']),
                 'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'market-room',
             ],
@@ -325,15 +391,15 @@ class UnifiedAppNavigationService
         $actions = [
             [
                 'label' => 'Search everything',
-                'description' => 'Open global search and jump straight to customers, orders, modules, or actions.',
+                'description' => 'Open global search and jump straight to customers, orders, features, or actions.',
                 'intent' => 'open-command',
             ],
         ];
 
         if ($tenantId !== null && ($canAccessOps || $canAccessMarketing) && Route::has('onboarding.wizard')) {
             $actions[] = [
-                'label' => 'Onboarding wizard',
-                'description' => 'Create or continue an onboarding blueprint (contract + autosave + finalize).',
+                'label' => 'Setup plan',
+                'description' => 'Create or continue a workspace setup plan.',
                 'href' => route('onboarding.wizard'),
             ];
         }
@@ -346,8 +412,8 @@ class UnifiedAppNavigationService
             ];
             if ($tenantId !== null) {
                 $actions[] = [
-                    'label' => 'Browse modules',
-                    'description' => 'Review active, available, and request-only modules.',
+                    'label' => 'Browse features',
+                    'description' => 'Review active, available, and request-only features.',
                     'href' => route('marketing.modules'),
                 ];
             }
@@ -410,5 +476,10 @@ class UnifiedAppNavigationService
         }
 
         return ! in_array((string) ($state['reason'] ?? ''), ['channel_not_supported', 'module_unavailable'], true);
+    }
+
+    protected function isLandlordShell(Request $request): bool
+    {
+        return $request->routeIs('landlord.*');
     }
 }

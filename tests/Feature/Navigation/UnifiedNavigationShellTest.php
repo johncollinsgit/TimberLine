@@ -31,7 +31,8 @@ test('unified shell surfaces modules and customer hub for tenant-aware marketing
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSeeText('Customer Hub')
+        ->assertSeeText('Customers')
+        ->assertSeeText('Features')
         ->assertSee('data-sidebar-key="modules"', false)
         ->assertDontSeeText('Shopify workspace');
 });
@@ -43,5 +44,5 @@ test('unified shell keeps modules hidden when there is no tenant context', funct
         ->get(route('dashboard'))
         ->assertOk()
         ->assertDontSee('data-sidebar-key="modules"', false)
-        ->assertSeeText('Workspace Wiki');
+        ->assertSeeText('Workspace Guide');
 });

@@ -10,7 +10,7 @@
     'activeChild' => null,
     'workspaceLabel' => 'Unified workspace',
     'commandSearchEnabled' => false,
-    'commandSearchPlaceholder' => 'Search actions, pages, and Shopify tools',
+    'commandSearchPlaceholder' => 'Search or ask what you want to do...',
 ])
 
 @php
@@ -137,6 +137,15 @@
                         Search
                     </button>
                 @endif
+                <button
+                    type="button"
+                    class="app-topbar-action app-topbar-bud"
+                    data-bud-placeholder
+                    aria-label="Bud assistant shell coming soon"
+                    title="Bud assistant shell coming soon"
+                >
+                    Bud
+                </button>
             </div>
         </div>
     </div>
