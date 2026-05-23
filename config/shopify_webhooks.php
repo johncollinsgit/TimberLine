@@ -19,5 +19,21 @@ return [
         'customers/update' => 'shopify.webhooks.customers.update',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify Privacy Compliance Webhooks
+    |--------------------------------------------------------------------------
+    |
+    | These mandatory compliance topics are app-specific Shopify CLI/TOML
+    | subscriptions, not shop-specific Admin API subscriptions repaired by the
+    | operational webhook drift command above.
+    |
+    */
+    'privacy_topics' => [
+        'customers/data_request' => 'shopify.webhooks.customers.data-request',
+        'customers/redact' => 'shopify.webhooks.customers.redact',
+        'shop/redact' => 'shopify.webhooks.shop.redact',
+    ],
+
     'format' => 'json',
 ];

@@ -18,10 +18,10 @@
 >
     <div class="fb-workflow-shell">
         <header class="fb-workflow-header">
-            <div class="fb-eyebrow">Onboarding Wizard</div>
-            <h1 class="fb-title-xl">Set up your tenant</h1>
+            <div class="fb-eyebrow">{{ $wizardEyebrow ?? 'Workspace Blueprint' }}</div>
+            <h1 class="fb-title-xl">{{ $wizardTitle ?? 'Create Tenant Blueprint' }}</h1>
             <p class="fb-subtitle">
-                Build a blueprint from a few answers. This uses the existing onboarding seams (contract, autosave, finalize, post-provisioning summary).
+                {{ $wizardSubtitle ?? 'Create or revise the tenant setup blueprint. Customer-facing setup status lives in Start Here.' }}
             </p>
 
             <div class="fb-metric-grid">
@@ -369,4 +369,3 @@
         </div>
     </div>
 </div>
-

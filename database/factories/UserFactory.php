@@ -56,4 +56,34 @@ class UserFactory extends Factory
             'two_factor_confirmed_at' => now(),
         ]);
     }
+
+    public function platformAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'platform_admin',
+            'is_active' => true,
+        ]);
+    }
+
+    public function tenantAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'admin',
+            'is_active' => true,
+        ]);
+    }
+
+    public function demoUser(): static
+    {
+        return $this->tenantAdmin()->state(fn (array $attributes) => [
+            'requested_via' => 'customer_demo',
+        ]);
+    }
+
+    public function sandboxUser(): static
+    {
+        return $this->tenantAdmin()->state(fn (array $attributes) => [
+            'requested_via' => 'customer_sandbox',
+        ]);
+    }
 }

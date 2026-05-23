@@ -133,13 +133,13 @@
                     <h2 class="{{ $classes['title'] }}">{{ $resolvedRewardsLabel }}</h2>
                 </div>
                 <p class="{{ $classes['copy'] }}">
-                    This page reflects the live {{ $resolvedRewardsLabel === 'Candle Cash' ? 'Candle Cash tasks and reward rows' : 'earn and redeem rows' }} currently managed by Backstage.
+                    This page reflects the live {{ $resolvedRewardsLabel === 'Candle Cash' ? 'Candle Cash tasks and reward rows' : 'earn and redeem rows' }} currently managed by Everbranch.
                 </p>
                 <p class="{{ $classes['copy'] }}">
                     Use it to quickly review how the {{ $resolvedRewardsLabelLower }} program is currently structured, including how customers earn and what offers are available.
                 </p>
                 <p class="{{ $classes['copy'] }}">
-                    For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Backstage.
+                    For now, use Ways to Earn and Ways to Redeem in the sidebar to review and manage the live task and reward rows already maintained in Everbranch.
                 </p>
             </div>
         </section>

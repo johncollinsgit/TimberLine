@@ -1,35 +1,61 @@
 :root {
-  --fb-page-background: #f4f7f6;
-  --fb-surface: #ffffff;
-  --fb-surface-subtle: #f8fbfa;
-  --fb-surface-muted: #f1f5f4;
-  --fb-surface-strong: #eaf0ef;
-  --fb-border: #dbe4e3;
-  --fb-text-primary: #0f1c1f;
-  --fb-text-secondary: #32464b;
-  --fb-text-muted: #5d6b6a;
-  --fb-accent: #1e5a63;
-  --fb-success: #157347;
-  --fb-warning: #9a670f;
-  --fb-danger: #b42318;
-  --fb-focus-ring: rgba(30, 90, 99, 0.24);
-  --fb-shadow-sm: 0 10px 26px -20px rgba(10, 27, 31, 0.2);
-  --fb-shadow-md: 0 16px 36px -26px rgba(10, 27, 31, 0.24);
+  --eb-page-background: #f4f7f6;
+  --eb-surface: #ffffff;
+  --eb-surface-subtle: #f8fbfa;
+  --eb-surface-muted: #f1f5f4;
+  --eb-surface-strong: #eaf0ef;
+  --eb-border: #dbe4e3;
+  --eb-text-primary: #0f1c1f;
+  --eb-text-secondary: #32464b;
+  --eb-text-muted: #5d6b6a;
+  --eb-accent: #1e5a63;
+  --eb-brand: #123c43;
+  --eb-success: #157347;
+  --eb-warning: #9a670f;
+  --eb-danger: #b42318;
+  --eb-focus-ring: rgba(30, 90, 99, 0.24);
+  --eb-shadow-sm: 0 10px 26px -20px rgba(10, 27, 31, 0.18);
+  --eb-shadow-md: 0 16px 36px -26px rgba(10, 27, 31, 0.22);
+  --eb-radius-lg: 0.95rem;
+  --eb-radius-md: 0.72rem;
+  --eb-radius-sm: 0.55rem;
+  --eb-font-display: 'Fraunces', 'Iowan Old Style', 'Times New Roman', serif;
+  --eb-font-ui: 'Inter', 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --eb-motion-fast: 160ms;
+  --eb-motion-base: 220ms;
+  --eb-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --fb-page-background: var(--eb-page-background);
+  --fb-surface: var(--eb-surface);
+  --fb-surface-subtle: var(--eb-surface-subtle);
+  --fb-surface-muted: var(--eb-surface-muted);
+  --fb-surface-strong: var(--eb-surface-strong);
+  --fb-border: var(--eb-border);
+  --fb-text-primary: var(--eb-text-primary);
+  --fb-text-secondary: var(--eb-text-secondary);
+  --fb-text-muted: var(--eb-text-muted);
+  --fb-accent: var(--eb-accent);
+  --fb-success: var(--eb-success);
+  --fb-warning: var(--eb-warning);
+  --fb-danger: var(--eb-danger);
+  --fb-focus-ring: var(--eb-focus-ring);
+  --fb-shadow-sm: var(--eb-shadow-sm);
+  --fb-shadow-md: var(--eb-shadow-md);
 
   /* Legacy aliases kept for compatibility with existing classes/components. */
   --fb-bg: var(--fb-page-background);
   --fb-text: var(--fb-text-primary);
-  --fb-brand: #123c43;
+  --fb-brand: var(--eb-brand);
   --fb-brand-2: var(--fb-accent);
   --fb-muted: var(--fb-text-muted);
   --fb-ring: var(--fb-focus-ring);
   --fb-shadow-soft: var(--fb-shadow-sm);
   --fb-shadow-card: var(--fb-shadow-md);
-  --fb-radius-lg: 1.25rem;
-  --fb-radius-md: 0.9rem;
-  --fb-radius-sm: 0.72rem;
-  --fb-font-display: 'Fraunces', 'Iowan Old Style', 'Times New Roman', serif;
-  --fb-font-ui: 'Inter', 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --fb-radius-lg: var(--eb-radius-lg);
+  --fb-radius-md: var(--eb-radius-md);
+  --fb-radius-sm: var(--eb-radius-sm);
+  --fb-font-display: var(--eb-font-display);
+  --fb-font-ui: var(--eb-font-ui);
 }
 
 html {
@@ -1197,7 +1223,7 @@ body[data-premium-motion="public"].has-premium-motion [data-reveal].is-visible {
   width: 1.3rem;
 }
 
-/* Backstage shell */
+/* Everbranch shell */
 .mf-transition {
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
 }

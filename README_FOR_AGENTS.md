@@ -2,6 +2,39 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Everbranch Readiness Operating Rule (2026-05-21)
+
+- Everbranch is the product/platform brand.
+- Modern Forestry is the flagship tenant and must remain stable; do not treat Modern Forestry-specific code as generic platform capability unless that generalization is explicitly implemented and tested.
+- Product display labels live in `config/everbranch.php`; prefer those labels over new hardcoded platform-brand strings.
+- Route/page ownership for brand and navigation work is tracked in `docs/operations/everbranch-route-page-ownership-inventory.md`.
+- Agents must update the relevant README, `SYSTEM_SNAPSHOT.md`, readiness doc, runbook, or changelog after meaningful work. UI-affecting work must also update `docs/ui/UI_CHANGELOG.md`.
+- Shopify is the flagship integration path, but Everbranch must not require Shopify for every customer. Setup/readiness work should account for Shopify, Square, CSV import, manual import, and future connector paths.
+- Android and iOS mobile app readiness are product requirements. The current mobile API surface is Modern-Forestry-specific catalog support and is not yet a generic Everbranch mobile platform.
+- Module App Store work must use `config/module_catalog.php`, `TenantModuleCatalogService`, and `TenantModuleAccessResolver`. Module pricing, setup, mobile relevance, and entitlement labels are display-only until the matching activation work is explicitly approved and tested.
+- Custom module requests are intake/triage records only. Do not convert them into modules, entitlements, quotes, invoices, billing, or mobile/job/photo/messaging implementations without a separate approved PR.
+- Plan selection is commercial intent only until a future approved billing activation PR. Do not turn plan interest or billing lane interest into checkout, subscriptions, quotes, invoices, payment links, module installs, or entitlements.
+- The landlord commercial intent gate is decision support only. Do not add charge, checkout, subscription, invoice, module install, or entitlement activation actions to it without a separate approved billing activation PR.
+- Do not activate checkout or broad subscription lifecycle automation until the billing readiness gates pass and the activation is explicitly requested.
+- Billing lane rule: Shopify App Store merchant app charges should use Shopify App Pricing/Billing in a future approved PR; keep Stripe direct billing separate for direct SaaS, custom, service, manual contract, or non-Shopify lanes.
+- Shopify privacy webhook rule: compliance webhooks must verify `X-Shopify-Hmac-Sha256`, record minimal auditable evidence, and avoid destructive deletion/anonymization unless a separate tested privacy policy/runbook explicitly approves it.
+- Shopify external evidence rule: do not mark Partner Dashboard, Shopify CLI deploy/release, dev-store install/reinstall, app proxy, or live privacy webhook delivery evidence complete unless artifacts are stored under `docs/operations/evidence/shopify/`.
+- Shopify scope/branding rule: do not change TOML scopes, app name, or handle until `docs/operations/shopify-scope-branding-decision-record.md` has an approved decision and matching tests/evidence.
+- Current Shopify evidence target: use Partner/dev dashboard app `Modern Forestry Backstage`, handle `modernforestrybackstage`, and dev store `modernforestry.myshopify.com` until a future public Everbranch Shopify app branding decision is approved.
+- Current Shopify evidence packet: `docs/operations/evidence/shopify/2026-05-21/` contains PR 18 read-only CLI app-info evidence and partial app-proxy health evidence. Partner Dashboard screenshots, deploy/release output, dev-store install/reinstall, and live privacy webhook delivery rows are still pending.
+- Current Shopify screenshot pack: use `docs/operations/evidence/shopify/2026-05-21/screenshot-manifest.md` and `docs/operations/evidence/shopify/2026-05-21/operator-checklist.md` before any deploy/release decision.
+- Everbranch brand assets live in `public/brand/everbranch-*.svg` and are referenced through `config('everbranch.brand_assets')`; do not reintroduce hardcoded Forestry Backstage brand assets on Laravel platform surfaces.
+- Evergrove is the broader company/ecosystem name; Everbranch is the product/platform name. Use `config/everbranch.php` for product/company/landlord/flagship/legacy labels instead of scattering literal brand strings.
+- User-facing copy should prefer human labels from `config('everbranch.display_language')`: workspace address/type, setup, feature, access, status, setup plan, and plan interest. Avoid showing technical terms like `tenant slug`, `metadata`, `entitlement`, `canonical`, `module key`, or `provisioning` unless the surface is explicitly internal/operator-focused.
+- Self-service readiness dashboard rule: `/landlord/readiness` is status/control visibility only. Do not use it to approve launch, activate billing, install modules, change entitlements, or imply generic mobile readiness.
+- Access lane rule: keep the four doors distinct. Public Everbranch explains/request-access/demo/login; tenant app users work in their workspace and use `/start` only for setup status; landlord operators manage provisioning/control under `/landlord`; demo/sandbox tenants must be visibly labeled and must not be confused with Modern Forestry production-alpha usage.
+- Test access rule: `php artisan everbranch:seed-access-surfaces` is the safe local/staging entry for standard landlord, Modern Forestry, demo, and sandbox accounts. Do not add direct impersonation or login bypass controls unless they are audited, reversible, visibly bannered, and separately tested.
+- Tenant blueprint rule: landlord-created tenant blueprints live in `TenantAccessProfile.metadata.tenant_blueprint` plus existing `tenant_setup_statuses` fields. Use `config/tenant_blueprints.php` and `TenantBlueprintProfileService`; do not create industry-specific route forks, install modules, activate entitlements, or start connector/billing automation from blueprint choices.
+- Work management blueprint rule: project/task/assignment/communication/photo/file/mobile-capture fields are blueprint intent only. Do not create project/task/upload/message tables, storage flows, notifications, mobile APIs, modules, billing, or entitlements from these fields without a separate approved implementation PR.
+- Blueprint review rule: landlord blueprint review/edit state lives in `TenantAccessProfile.metadata.tenant_blueprint` and is landlord-only. Do not expose `blueprint_internal_notes` or `blueprint_next_action` on tenant-facing pages; use `onboarding_next_action` for tenant-facing guidance.
+- Blueprint module recommendation rule: use `TenantBlueprintModuleRecommendationService` for blueprint-driven module display states. Recommendations, requested/planned/future labels, and work-management module families are display-only; they must not create modules, install modules, grant entitlements, start billing, run imports, enable uploads/messaging, or create mobile APIs.
+- Do not add new modules, expose roadmap/internal modules, or rewrite navigation/UI broadly during readiness work. Prefer audits, guardrail tests, documentation, and narrow coherence fixes.
+
 ## UI Editing Guide (Required)
 
 Read these before any UI/theme change:
@@ -329,6 +362,9 @@ Shopify cutover guardrails:
 - ship URL changes from source `shopify.app.toml` (do not trust stale generated deploy artifacts)
 - reauthorize required stores after cutover
 - verify/repair webhook callbacks after cutover
+- keep Shopify App Store readiness evidence in sync with `docs/operations/everbranch-shopify-readiness-audit.md`
+- do not claim Shopify App Store readiness until Partner Dashboard values, privacy webhooks, scopes, and live install/reinstall evidence are verified
+- do not expose Stripe checkout inside Shopify embedded/App Store merchant flows unless a future compliance decision explicitly approves a non-App-Store distribution lane
 
 Important guardrails for future edits:
 - Do not bypass host-locked landlord routing by making landlord pages globally available.

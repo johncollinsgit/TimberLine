@@ -1203,7 +1203,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'referenceLinks' => $authorized
                 ? [
                     [
-                        'label' => 'Backstage Customers',
+                        'label' => 'Everbranch Customers',
                         'href' => route('marketing.customers'),
                     ],
                     [
@@ -1545,7 +1545,7 @@ class ShopifyEmbeddedRewardsController extends Controller
             'open_from_shopify' => 'Open the app from Shopify Admin to load this page.',
             'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload this program page from Shopify Admin and try again.',
             'missing_shop' => 'The Shopify shop context is missing from this request.',
-            'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
+            'unknown_shop' => 'This Shopify shop is not connected to an Everbranch store yet.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
             'invalid_session_token' => 'Shopify Admin verification failed. Reload this program page from Shopify Admin and try again.',
             'expired_session_token' => 'Your Shopify Admin session expired. Reload this program page from Shopify Admin and try again.',

@@ -206,7 +206,7 @@ async function requestDashboardJson<TData>(
 
   const payload = (await response.json().catch(() => ({
     ok: false,
-    message: "Unexpected response from Backstage.",
+    message: "Unexpected response from Everbranch.",
   }))) as DashboardJsonEnvelope<TData>;
 
   if (!response.ok || !payload.ok) {
@@ -418,7 +418,7 @@ export function useDashboardData(bootstrap: DashboardBootstrap): UseDashboardDat
             console.log("Query/timeframe", response.data.query);
             console.log("Interval/granularity", response.data.query?.interval);
             console.log("Comparison window", response.data.query?.comparisonWindow);
-            console.log("Freshness metadata", response.data.meta?.freshness);
+            console.log("Freshness details", response.data.meta?.freshness);
             console.log("Dashboard cache TTL (seconds)", response.data.meta?.cacheTtlSeconds ?? null);
             console.log("Chart series (normalized)", normalizedSeries);
             console.log("Chart series options", response.data.chart?.seriesOptions);

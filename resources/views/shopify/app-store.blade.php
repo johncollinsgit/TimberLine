@@ -119,13 +119,14 @@
 
     <section class="module-store-shell" data-module-store="shopify">
         <article class="module-store-summary">
-            <h2 class="plans-title">Tenant Module Catalog</h2>
-            <p class="plans-copy">Plan {{ $currentPlan['label'] ?? 'Unknown' }} · mode {{ strtoupper((string) ($currentPlan['operating_mode'] ?? 'shopify')) }}. This view only shows safe, tenant-visible modules from the canonical catalog.</p>
+            <h2 class="plans-title">Module Catalog</h2>
+            <p class="plans-copy">Plan {{ $currentPlan['label'] ?? 'Unknown' }} · {{ strtoupper((string) ($currentPlan['operating_mode'] ?? 'shopify')) }} workspace. This page shows modules available for this store, with setup and access guidance only.</p>
             <div class="module-store-meta">
                 <span class="module-store-pill">Active {{ count((array) ($sections['active'] ?? [])) }}</span>
                 <span class="module-store-pill">Available {{ count((array) ($sections['available'] ?? [])) }}</span>
                 <span class="module-store-pill">Upgrade {{ count((array) ($sections['upgrade'] ?? [])) }}</span>
                 <span class="module-store-pill">Request {{ count((array) ($sections['request'] ?? [])) }}</span>
+                <span class="module-store-pill">Checkout not active here</span>
             </div>
         </article>
 
@@ -159,13 +160,22 @@
                             </header>
 
                             <div class="module-store-meta">
+                                <span class="module-store-pill">{{ $module['category_label'] ?? 'Customer operations' }}</span>
+                                <span class="module-store-pill">{{ $module['lifecycle_label'] ?? 'Catalog' }}</span>
+                                <span class="module-store-pill">{{ $module['setup_effort_label'] ?? 'Standard setup' }}</span>
+                                <span class="module-store-pill">{{ $module['required_integrations_label'] ?? 'No required integration' }}</span>
                                 <span class="module-store-pill">{{ strtoupper(str_replace('_', ' ', (string) ($module['billing_mode'] ?? 'unavailable'))) }}</span>
                                 @foreach((array) ($module['included_in_plans'] ?? []) as $planKey)
                                     <span class="module-store-pill">{{ strtoupper((string) $planKey) }}</span>
                                 @endforeach
                             </div>
 
-                            <p class="module-store-copy">{{ $moduleState['reason_description'] ?? $moduleState['description'] ?? '' }}</p>
+                            <div>
+                                <p class="module-store-copy">{{ $module['product_summary'] ?? $moduleState['reason_description'] ?? $moduleState['description'] ?? '' }}</p>
+                                <p class="module-store-copy">Pricing: {{ $module['pricing_impact_label'] ?? 'Pricing impact not configured' }}</p>
+                                <p class="module-store-copy">Access: {{ $module['entitlement_requirement_label'] ?? 'Access review required' }}</p>
+                                <p class="module-store-copy">Mobile: {{ $module['mobile_relevance_label'] ?? 'Not mobile-specific' }}</p>
+                            </div>
 
                             <div class="module-store-actions">
                                 @if($cta === 'add')

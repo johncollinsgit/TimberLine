@@ -4,7 +4,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    @include('partials.head', ['title' => 'Contact Forestry Backstage'])
+    @include('partials.head', ['title' => 'Contact '.config('everbranch.product_name', 'Everbranch')])
 </head>
 <body class="fb-public-body" data-premium-motion="public">
     @include('platform.partials.premium-motion')
@@ -14,7 +14,7 @@
 
         <section class="fb-card fb-contact-overview" aria-label="Contact overview" data-reveal data-premium-surface>
             <p class="fb-section-kicker">Contact</p>
-            <h1 class="fb-contact-title">{{ $content['headline'] ?? 'Contact Forestry Backstage' }}</h1>
+            <h1 class="fb-contact-title">{{ $content['headline'] ?? 'Contact '.config('everbranch.product_name', 'Everbranch') }}</h1>
             <p class="fb-contact-summary">{{ $content['summary'] ?? 'Book a demo, ask about plans, or get rollout guidance for your team.' }}</p>
         </section>
 

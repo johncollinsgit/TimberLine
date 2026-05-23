@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
+use App\Models\CustomerAccessRequest;
 use App\Models\IntegrationHealthEvent;
 use App\Models\LandlordOperatorAction;
 use App\Models\MarketingProfile;
@@ -15,9 +16,12 @@ use App\Models\TenantOnboardingJourneyEvent;
 use App\Models\User;
 use App\Services\Onboarding\OnboardingJourneyDiagnosticsService;
 use App\Services\Onboarding\OnboardingJourneyEventPresenter;
+use App\Services\Onboarding\TenantSetupStatusService;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\LandlordTenantOperationsService;
+use App\Services\Tenancy\TenantBlueprintModuleRecommendationService;
+use App\Services\Tenancy\TenantBlueprintProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Support\Tenancy\TenantHostBuilder;
 use Carbon\CarbonImmutable;
@@ -29,6 +33,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class LandlordTenantDirectoryController extends Controller
@@ -143,22 +148,51 @@ class LandlordTenantDirectoryController extends Controller
         ]);
     }
 
-    public function store(Request $request, LandlordCommercialConfigService $commercialService): RedirectResponse
+    public function create(TenantBlueprintProfileService $blueprintService): View
     {
-        $validated = $request->validate([
+        return view('landlord.tenants.create', [
+            'blueprintOptions' => $blueprintService->formOptions(),
+            'defaultAccountMode' => 'production',
+            'defaultBusinessTemplate' => 'generic',
+            'defaultOperatingMode' => $this->defaultTenantType(),
+            'defaultDataSourcePreference' => 'undecided',
+            'tenantRoleOptions' => $this->tenantRoleOptions(),
+            'defaultTenantRole' => $this->defaultTenantRole(),
+            'tenantStatusOptions' => $this->tenantStatusOptions(),
+            'defaultTenantStatus' => 'active',
+        ]);
+    }
+
+    public function store(
+        Request $request,
+        LandlordCommercialConfigService $commercialService,
+        TenantSetupStatusService $setupStatusService,
+        TenantBlueprintProfileService $blueprintService
+    ): RedirectResponse
+    {
+        $blueprintOptions = $blueprintService->formOptions();
+        $operatingModeKeys = array_keys((array) ($blueprintOptions['operating_modes'] ?? []));
+
+        $validated = $request->validate(array_merge([
             'name' => ['required', 'string', 'max:120'],
             'slug' => ['nullable', 'string', 'max:120', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
             'primary_contact_email' => ['nullable', 'email', 'max:255'],
-            'tenant_type' => ['required', 'string', 'in:'.implode(',', array_keys($this->tenantTypeOptions()))],
+            'tenant_type' => ['nullable', 'string', Rule::in($operatingModeKeys)],
+        ], $blueprintService->validationRules(), [
             'role' => ['required', 'string', 'in:'.implode(',', array_keys($this->tenantRoleOptions()))],
             'status' => ['required', 'string', 'in:'.implode(',', array_keys($this->tenantStatusOptions()))],
-        ]);
+        ]));
 
         $requestedSlug = trim((string) ($validated['slug'] ?? ''));
         $slug = $this->uniqueTenantSlug($requestedSlug !== '' ? $requestedSlug : (string) $validated['name']);
         $tenantId = null;
+        $operatingMode = (string) ($validated['operating_mode'] ?? $validated['tenant_type'] ?? $this->defaultTenantType());
+        $accountMode = (string) ($validated['account_mode'] ?? 'production');
+        $blueprint = $blueprintService->blueprintFromInput(array_merge($validated, [
+            'operating_mode' => $operatingMode,
+        ]));
 
-        DB::transaction(function () use ($validated, $slug, $commercialService, $request, &$tenantId): void {
+        DB::transaction(function () use ($validated, $slug, $commercialService, $request, $setupStatusService, $blueprintService, $blueprint, $operatingMode, $accountMode, &$tenantId): void {
             $tenant = Tenant::query()->create([
                 'name' => trim((string) $validated['name']),
                 'slug' => $slug,
@@ -169,7 +203,7 @@ class LandlordTenantDirectoryController extends Controller
             $profile = $commercialService->assignTenantPlan(
                 tenantId: $tenantId,
                 planKey: (string) config('entitlements.default_plan', 'starter'),
-                operatingMode: (string) $validated['tenant_type'],
+                operatingMode: $operatingMode,
                 source: 'landlord_tenant_workspace',
                 actorId: $request->user()?->id
             );
@@ -191,6 +225,22 @@ class LandlordTenantDirectoryController extends Controller
             }
 
             $this->applyTenantRoleAcrossMemberships($tenant, (string) $validated['role']);
+
+            $accessRequest = $this->matchingAccessRequestForTenantCreate(
+                primaryContactEmail: (string) ($validated['primary_contact_email'] ?? ''),
+                slug: $slug
+            );
+
+            if ($accessRequest) {
+                $accessRequest->forceFill([
+                    'tenant_id' => $accessRequest->tenant_id ?: (int) $tenant->id,
+                ])->save();
+
+                $setupStatusService->seedFromAccessRequest($tenant, $accessRequest);
+            }
+
+            $setupStatus = $setupStatusService->forTenant($tenant);
+            $blueprintService->applyBlueprint($tenant, $profile->refresh(), $setupStatus, $blueprint, $accountMode);
         });
 
         if (! is_int($tenantId) || $tenantId <= 0) {
@@ -200,6 +250,54 @@ class LandlordTenantDirectoryController extends Controller
         return redirect()
             ->route('landlord.tenants.show', ['tenant' => $tenantId, 'tab' => 'overview'])
             ->with('status', 'Tenant created. You can now manage role, modules, and settings from this workspace.');
+    }
+
+    public function editBlueprint(
+        Tenant $tenant,
+        TenantBlueprintProfileService $blueprintService
+    ): View {
+        $hydratedTenant = $this->tenantDetailQuery()->findOrFail($tenant->getKey());
+        $summary = $this->presentTenant($hydratedTenant);
+
+        return view('landlord.tenants.blueprint-edit', [
+            'tenant' => $hydratedTenant,
+            'summary' => $summary,
+            'blueprintOptions' => $blueprintService->formOptions(),
+            'tenantBlueprint' => $blueprintService->payloadForTenant($hydratedTenant),
+            'testAccess' => $this->tenantTestAccess($hydratedTenant, $summary),
+        ]);
+    }
+
+    public function updateBlueprint(
+        Request $request,
+        Tenant $tenant,
+        TenantSetupStatusService $setupStatusService,
+        TenantBlueprintProfileService $blueprintService
+    ): RedirectResponse {
+        $operator = $request->user();
+        if (! $operator instanceof User) {
+            abort(403);
+        }
+
+        $validated = $request->validate($blueprintService->validationRules(includeReview: true));
+
+        DB::transaction(function () use ($tenant, $validated, $setupStatusService, $blueprintService, $operator): void {
+            $tenant->loadMissing('accessProfile');
+            $profile = $this->accessProfileForTenant($tenant);
+            $setupStatus = $setupStatusService->forTenant($tenant);
+
+            $blueprintService->updateBlueprint(
+                tenant: $tenant,
+                profile: $profile->refresh(),
+                status: $setupStatus,
+                input: $validated,
+                operator: $operator
+            );
+        });
+
+        return redirect()
+            ->route('landlord.tenants.show', ['tenant' => (int) $tenant->id, 'tab' => 'overview'])
+            ->with('status', 'Tenant blueprint updated.');
     }
 
     public function update(
@@ -430,7 +528,9 @@ class LandlordTenantDirectoryController extends Controller
         LandlordTenantOperationsService $operationsService,
         LandlordOperatorActionAuditService $auditService,
         TenantModuleAccessResolver $moduleAccessResolver,
-        OnboardingJourneyDiagnosticsService $journeyDiagnostics
+        OnboardingJourneyDiagnosticsService $journeyDiagnostics,
+        TenantBlueprintProfileService $blueprintService,
+        TenantBlueprintModuleRecommendationService $blueprintModuleRecommendations
     ): View {
         $hydratedTenant = $this->tenantDetailQuery()->findOrFail($tenant->getKey());
         $hydratedTenant->load([
@@ -438,10 +538,11 @@ class LandlordTenantDirectoryController extends Controller
                 ->select([
                     'users.id',
                     'users.name',
-                    'users.email',
-                    'users.role',
-                    'users.is_active',
-                ])
+                'users.email',
+                'users.role',
+                'users.is_active',
+                'users.requested_via',
+            ])
                 ->orderBy('users.name'),
         ]);
 
@@ -532,6 +633,9 @@ class LandlordTenantDirectoryController extends Controller
             'performance' => $this->tenantPerformance((int) $hydratedTenant->id, (string) $request->query('range', '30d')),
             'onboardingJourneyDetail' => $journeyDetail,
             'onboardingJourneyOverview' => $journeyOverview,
+            'testAccess' => $this->tenantTestAccess($hydratedTenant, $summary),
+            'tenantBlueprint' => $blueprintService->payloadForTenant($hydratedTenant),
+            'blueprintModuleRecommendations' => $blueprintModuleRecommendations->forTenantModel($hydratedTenant),
         ]);
     }
 
@@ -573,6 +677,10 @@ class LandlordTenantDirectoryController extends Controller
 
         if (Schema::hasTable('tenant_access_profiles')) {
             $query->with('accessProfile');
+        }
+
+        if (Schema::hasTable('tenant_setup_statuses')) {
+            $query->with('setupStatus');
         }
 
         if (Schema::hasTable('tenant_module_states')) {
@@ -727,6 +835,81 @@ class LandlordTenantDirectoryController extends Controller
         return $counts;
     }
 
+    /**
+     * @param  array<string,mixed>  $summary
+     * @return array<string,mixed>
+     */
+    protected function tenantTestAccess(Tenant $tenant, array $summary): array
+    {
+        $accountMode = strtolower(trim((string) data_get($tenant->accessProfile?->metadata, 'account_mode', 'production')));
+        $accountMode = $accountMode !== '' ? $accountMode : 'production';
+        $flagshipSlug = strtolower(trim((string) config('tenancy.auth.flagship_tenant_slug', 'modern-forestry')));
+        $isFlagship = strtolower(trim((string) $tenant->slug)) === $flagshipSlug;
+
+        $lane = match (true) {
+            $accountMode === 'demo' => 'demo',
+            in_array($accountMode, ['sandbox', 'test'], true) => 'sandbox',
+            $isFlagship => 'modern_forestry',
+            default => 'tenant',
+        };
+
+        $laneLabel = match ($lane) {
+            'demo' => 'Everbranch demo tenant',
+            'sandbox' => 'Sandbox/test tenant',
+            'modern_forestry' => 'Modern Forestry alpha tenant',
+            default => 'Customer tenant',
+        };
+
+        $warning = match ($lane) {
+            'demo' => 'Demo tenant: use for walkthroughs and sales evaluation. Do not treat this as production evidence.',
+            'sandbox' => 'Sandbox tenant: safe for destructive testing. Data and workflow results here may be disposable.',
+            'modern_forestry' => 'Modern Forestry is the flagship alpha tenant. Treat as production-like and do not use it for generic onboarding experiments.',
+            default => 'Customer tenant: use normal login and Start Here behavior. Do not bypass tenant permissions.',
+        };
+
+        $setupStatus = $tenant->setupStatus;
+        $setupReviewed = $setupStatus
+            ? (string) $setupStatus->landlord_review_status === 'reviewed'
+            : true;
+
+        $users = $tenant->users
+            ->map(function (User $user) use ($tenant, $setupReviewed): array {
+                $requestedVia = strtolower(trim((string) ($user->requested_via ?? '')));
+                $role = strtolower(trim((string) ($user->pivot->role ?? $user->role ?? 'member')));
+
+                $purpose = match (true) {
+                    $requestedVia === 'customer_demo' => 'Demo user',
+                    $requestedVia === 'customer_sandbox' => 'Sandbox test user',
+                    strtolower(trim((string) $tenant->slug)) === strtolower(trim((string) config('tenancy.auth.flagship_tenant_slug', 'modern-forestry'))) => 'Modern Forestry tenant user',
+                    default => 'Tenant user',
+                };
+
+                return [
+                    'id' => (int) $user->id,
+                    'name' => (string) $user->name,
+                    'email' => (string) $user->email,
+                    'role' => $role,
+                    'active' => (bool) $user->is_active,
+                    'requested_via' => $requestedVia !== '' ? $requestedVia : 'manual',
+                    'purpose' => $purpose,
+                    'landing' => $setupReviewed ? route('dashboard', absolute: false) : route('app.start', absolute: false),
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [
+            'lane' => $lane,
+            'lane_label' => $laneLabel,
+            'account_mode' => $accountMode,
+            'warning' => $warning,
+            'tenant_host' => (string) ($summary['subdomain'] ?? ((string) $tenant->slug.'.'.$this->tenantBaseHost())),
+            'users' => $users,
+            'impersonation_status' => 'deferred',
+            'impersonation_copy' => 'Direct impersonation is not active yet. Use the seeded test users and normal login until an audited, reversible impersonation flow is implemented.',
+        ];
+    }
+
     protected function derivedStatus(
         bool $hasAccessProfile,
         string $operatingMode,
@@ -789,10 +972,7 @@ class LandlordTenantDirectoryController extends Controller
      */
     protected function tenantTypeOptions(): array
     {
-        return [
-            'shopify' => 'Shopify',
-            'direct' => 'Direct',
-        ];
+        return app(TenantBlueprintProfileService::class)->operatingModeOptions();
     }
 
     /**
@@ -890,6 +1070,32 @@ class LandlordTenantDirectoryController extends Controller
         }
 
         return $candidate;
+    }
+
+    protected function matchingAccessRequestForTenantCreate(string $primaryContactEmail, string $slug): ?CustomerAccessRequest
+    {
+        if (! Schema::hasTable('customer_access_requests')) {
+            return null;
+        }
+
+        $email = strtolower(trim($primaryContactEmail));
+        $slug = strtolower(trim($slug));
+
+        if ($email === '' && $slug === '') {
+            return null;
+        }
+
+        return CustomerAccessRequest::query()
+            ->whereIn('status', ['pending', 'approved'])
+            ->when($email !== '', static function (Builder $query) use ($email): void {
+                $query->where('email', $email);
+            })
+            ->when($slug !== '', static function (Builder $query) use ($slug): void {
+                $query->where('requested_tenant_slug', $slug);
+            })
+            ->orderByRaw("case when status = 'approved' then 0 else 1 end")
+            ->orderByDesc('id')
+            ->first();
     }
 
     protected function accessProfileForTenant(Tenant $tenant): TenantAccessProfile

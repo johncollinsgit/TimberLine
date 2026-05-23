@@ -71,14 +71,14 @@
             <x-tenancy.module-state-card
                 :module-state="$messagingModuleState"
                 title="Messaging module state"
-                description="Visibility and access follow tenant entitlement + module-state conventions."
+                description="Visibility and access follow workspace access and module-state rules."
             />
         @endif
 
         @if(! $authorized)
             <article class="sf-messaging-card">
                 <h2>Messages requires Shopify context</h2>
-                <p>Open this page from Shopify Admin so Backstage can verify store access.</p>
+                <p>Open this page from Shopify Admin so Everbranch can verify store access.</p>
             </article>
         @elseif(! $messagingEnabled)
             <article class="sf-messaging-card" data-tone="error">

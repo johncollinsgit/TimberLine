@@ -1,7 +1,7 @@
-<x-layouts::app :title="'Backstage Wiki'">
+<x-layouts::app :title="'Workspace Wiki'">
     <div class="mx-auto w-full max-w-[1200px] px-4 md:px-6 py-8 mf-container space-y-6">
         <section class="rounded-3xl border border-zinc-200 bg-white p-6">
-            <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-800">Backstage Wiki</div>
+            <div class="text-[11px] uppercase tracking-[0.35em] text-emerald-800">Workspace Wiki</div>
             <div class="mt-2 text-3xl font-['Fraunces'] font-semibold text-zinc-950">Reference Library</div>
             <div class="mt-2 text-sm text-zinc-600">Read-only documentation sourced from live data.</div>
         </section>

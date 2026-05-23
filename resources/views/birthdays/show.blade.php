@@ -16,7 +16,7 @@
                 <article class="rounded-[1.7rem] border border-zinc-200 bg-zinc-50 p-5">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Club Size</div>
                     <div class="mt-3 text-4xl font-semibold text-zinc-950">{{ number_format((int) data_get($summary, 'with_birthday', 0)) }}</div>
-                    <p class="mt-2 text-sm text-zinc-600">Profiles with birthdays stored in Backstage.</p>
+                    <p class="mt-2 text-sm text-zinc-600">Profiles with birthdays stored in Everbranch.</p>
                 </article>
                 <article class="rounded-[1.7rem] border border-zinc-200 bg-zinc-50 p-5">
                     <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Today</div>
@@ -41,7 +41,7 @@
                         <div>
                             <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Import</div>
                             <h2 class="mt-2 text-lg font-semibold text-zinc-950">Birthday CSV import</h2>
-                            <p class="mt-2 text-sm text-zinc-600">Preview the file first, map the columns, then import into canonical profiles and birthday records.</p>
+                            <p class="mt-2 text-sm text-zinc-600">Preview the file first, map the columns, then import into customer profiles and birthday records.</p>
                         </div>
                     </div>
 

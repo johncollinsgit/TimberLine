@@ -94,7 +94,7 @@ class UnifiedAppNavigationService
             $items[] = ['key' => 'administration', 'icon' => 'wrench-screwdriver', 'href' => route('admin.index'), 'label' => 'Administration', 'current' => request()->routeIs('admin.*')];
         }
 
-        $items[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Backstage Wiki', 'current' => request()->routeIs('wiki.*')];
+        $items[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Workspace Wiki', 'current' => request()->routeIs('wiki.*')];
 
         $items = $this->normalizeNavigationItems($items);
 

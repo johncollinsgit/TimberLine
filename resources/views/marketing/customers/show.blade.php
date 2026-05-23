@@ -105,8 +105,8 @@
 
             <div class="flex flex-wrap gap-2 text-xs">
                 <span class="inline-flex rounded-full border border-blue-300/35 bg-blue-500/15 px-2.5 py-1 text-blue-100">Shopify Source</span>
-                <span class="inline-flex rounded-full border border-cyan-300/35 bg-cyan-500/15 px-2.5 py-1 text-cyan-100">Backstage Native Reviews</span>
-                <span class="inline-flex rounded-full border border-amber-300/35 bg-amber-100 px-2.5 py-1 text-amber-900">Backstage Native Wishlist</span>
+                <span class="inline-flex rounded-full border border-cyan-300/35 bg-cyan-500/15 px-2.5 py-1 text-cyan-100">Everbranch Native Reviews</span>
+                <span class="inline-flex rounded-full border border-amber-300/35 bg-amber-100 px-2.5 py-1 text-amber-900">Everbranch Native Wishlist</span>
                 @if($latestGrowaveExternal || $latestGrowaveReviewSummary)
                     <span class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-2.5 py-1 text-emerald-900">Legacy Growave Source</span>
                 @endif
@@ -117,7 +117,7 @@
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Active Review Source</div>
                     <div class="mt-2 text-sm text-zinc-950">
                         @if(($preferredReviewDataSource ?? 'none') === 'native')
-                            Native Backstage
+                            Native Everbranch
                         @elseif(($preferredReviewDataSource ?? 'none') === 'legacy_growave')
                             Legacy Growave
                         @else
@@ -172,7 +172,7 @@
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Active Wishlist Source</div>
                     <div class="mt-2 text-sm text-zinc-950">
                         @if(($preferredWishlistDataSource ?? 'none') === 'native')
-                            Native Backstage
+                            Native Everbranch
                         @elseif(($preferredWishlistDataSource ?? 'none') === 'legacy')
                             Legacy Import
                         @else
@@ -247,7 +247,7 @@
 
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
                 <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-500">
-                    Native Backstage Reviews
+                    Native Everbranch Reviews
                 </div>
                 <table class="min-w-full text-sm">
                     <thead class="bg-zinc-50 text-zinc-600">
@@ -280,7 +280,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-4 py-6 text-center text-zinc-500">No native Backstage review history yet.</td>
+                                <td colspan="6" class="px-4 py-6 text-center text-zinc-500">No native Everbranch review history yet.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -321,7 +321,7 @@
 
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
                 <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-500">
-                    Native Backstage Wishlist
+                    Native Everbranch Wishlist
                 </div>
                 <table class="min-w-full text-sm">
                     <thead class="bg-zinc-50 text-zinc-600">
@@ -346,7 +346,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-4 py-6 text-center text-zinc-500">No native Backstage wishlist items recorded yet.</td>
+                                <td colspan="6" class="px-4 py-6 text-center text-zinc-500">No native Everbranch wishlist items recorded yet.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -426,7 +426,7 @@
 
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <h2 class="text-lg font-semibold text-zinc-950">Birthday Management</h2>
-            <p class="text-sm text-zinc-600">Backstage is the canonical source for customer birthdays and annual reward issuance guardrails.</p>
+            <p class="text-sm text-zinc-600">Everbranch is the source for customer birthdays and annual reward issuance guardrails.</p>
 
             <div class="grid gap-3 md:grid-cols-4">
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">

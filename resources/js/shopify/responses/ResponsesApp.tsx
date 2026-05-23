@@ -500,7 +500,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                             {message.direction === "inbound"
                               ? "Customer"
                               : message.direction === "outbound"
-                                ? message.creator?.name ?? "Backstage"
+                                ? message.creator?.name ?? "Everbranch"
                                 : "System"}
                           </Text>
                           <Text as="span" variant="bodySm" tone="subdued">
@@ -541,7 +541,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                       disabled={!canReply}
                       helpText={
                         canReply
-                          ? "Replies are sent from Backstage and appended to this thread."
+                          ? "Replies are sent from Everbranch and appended to this thread."
                           : selectedConversation.channel === "sms"
                             ? "SMS replies are blocked because this contact is opted out or suppressed."
                             : "Email replies are blocked because this contact is unsubscribed, bounced, or suppressed."

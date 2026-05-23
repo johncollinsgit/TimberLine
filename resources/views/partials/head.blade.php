@@ -4,17 +4,19 @@
 
 @php
     $authTenantPresentation = $authTenantPresentation ?? [];
-    $appMetaName = (string) ($authTenantPresentation['app_name'] ?? 'Forestry Backstage');
+    $appMetaName = (string) ($authTenantPresentation['app_name'] ?? config('everbranch.product_name', 'Everbranch'));
     $resolvedTitle = trim((string) ($title ?? ''));
-    $mfAssetVersion = 'fb7';
+    $brandAssets = (array) config('everbranch.brand_assets', []);
+    $mfAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
     $mfPageTitle = ($resolvedTitle !== '' && mb_strtolower($resolvedTitle) !== mb_strtolower($appMetaName))
         ? $resolvedTitle.' · '.$appMetaName
         : $appMetaName;
-    $mfDescription = trim((string) ($description ?? config('product_surfaces.promo.summary', 'Forestry Backstage unifies production, shipping, and customer growth in one place.')));
-    $mfOgImage = asset('og-image.png').'?v=fb3';
-    $mfFaviconPng = asset('favicon.png').'?v='.$mfAssetVersion;
-    $mfFaviconIco = asset('favicon.ico').'?v='.$mfAssetVersion;
-    $mfAppleTouchIcon = asset('apple-touch-icon.png').'?v='.$mfAssetVersion;
+    $mfDescription = trim((string) ($description ?? config('product_surfaces.promo.summary', 'Everbranch unifies production, shipping, and customer growth in one place.')));
+    $mfOgImage = asset((string) ($brandAssets['og_image'] ?? 'og-image.png')).'?v='.$mfAssetVersion;
+    $mfFaviconSvg = asset((string) ($brandAssets['favicon_svg'] ?? 'brand/everbranch-favicon.svg')).'?v='.$mfAssetVersion;
+    $mfFaviconPng = asset((string) ($brandAssets['favicon_png'] ?? 'favicon.png')).'?v='.$mfAssetVersion;
+    $mfFaviconIco = asset((string) ($brandAssets['favicon_ico'] ?? 'favicon.ico')).'?v='.$mfAssetVersion;
+    $mfAppleTouchIcon = asset((string) ($brandAssets['apple_touch_icon'] ?? 'apple-touch-icon.png')).'?v='.$mfAssetVersion;
 @endphp
 
 <title>{{ $mfPageTitle }}</title>
@@ -32,6 +34,7 @@
 <meta name="twitter:description" content="{{ $mfDescription }}">
 <meta name="twitter:image" content="{{ $mfOgImage }}">
 
+<link rel="icon" href="{{ $mfFaviconSvg }}" type="image/svg+xml">
 <link rel="icon" href="{{ $mfFaviconPng }}" type="image/png" sizes="512x512">
 <link rel="icon" href="{{ $mfFaviconIco }}" type="image/x-icon" sizes="16x16 32x32 48x48">
 <link rel="shortcut icon" href="{{ $mfFaviconIco }}">

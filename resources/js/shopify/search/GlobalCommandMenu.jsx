@@ -135,7 +135,7 @@ export function GlobalCommandMenu({ placeholder, contextLabel, baseQuery }) {
 
   const heading = useMemo(() => {
     const label = String(contextLabel || "").trim();
-    return label === "" ? "Backstage" : label;
+    return label === "" ? "Everbranch" : label;
   }, [contextLabel]);
 
   const openMenu = (nextQuery = "", {

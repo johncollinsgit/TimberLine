@@ -143,7 +143,7 @@ class ShopifyWebPixelConnectionService
                 'ok' => false,
                 'status' => 'store_not_installed',
                 'connected' => false,
-                'message' => 'This Shopify store does not have a usable Backstage install/token yet.',
+                'message' => 'This Shopify store does not have a usable Everbranch install/token yet.',
             ];
         }
 
@@ -181,7 +181,7 @@ class ShopifyWebPixelConnectionService
                     'scope_source' => $source,
                     'scope_verified' => false,
                     'scope_lookup_error' => $lookupError,
-                    'message' => 'Backstage could not confirm the newly granted Shopify pixel scopes yet. If you already reauthorized, try Connect Shopify Pixel now.',
+                    'message' => 'Everbranch could not confirm the newly granted Shopify pixel scopes yet. If you already reauthorized, try Connect Shopify Pixel now.',
                 ];
             }
 
@@ -196,7 +196,7 @@ class ShopifyWebPixelConnectionService
                 'scope_source' => $source,
                 'scope_verified' => true,
                 'scope_lookup_error' => $lookupError,
-                'message' => 'Shopify still reports these pixel scopes as missing on the installed token: '.implode(', ', $missingScopes).'. If you already reauthorized, try Connect Shopify Pixel now and Backstage will verify it live.',
+                'message' => 'Shopify still reports these pixel scopes as missing on the installed token: '.implode(', ', $missingScopes).'. If you already reauthorized, try Connect Shopify Pixel now and Everbranch will verify it live.',
             ];
         }
 
@@ -507,7 +507,7 @@ GRAPHQL);
                 'connected' => false,
                 'label' => 'Reconnect Shopify required',
                 'can_connect' => false,
-                'message' => 'Backstage is still using an old Shopify Admin token for this store. Reconnect Shopify so the new token and scopes are stored, then connect the pixel again.',
+                'message' => 'Everbranch is still using an old Shopify Admin token for this store. Reconnect Shopify so the new token and scopes are stored, then connect the pixel again.',
                 'debug_message' => $message,
             ];
         }

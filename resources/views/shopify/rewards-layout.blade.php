@@ -73,7 +73,7 @@
             <x-tenancy.module-state-card
                 :module-state="$activeModuleState"
                 :title="$activeModuleUi['label']"
-                description="Module access and setup state is sourced from tenant entitlements."
+                description="Module access and setup state is sourced from workspace access."
             />
         @endif
 

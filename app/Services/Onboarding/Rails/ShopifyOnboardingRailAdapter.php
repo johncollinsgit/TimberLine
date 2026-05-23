@@ -74,8 +74,8 @@ class ShopifyOnboardingRailAdapter implements OnboardingRailAdapter
         return [
             'recommended_modules' => $recommended,
             'notes' => [
-                'Shopify rail defaults to Shopify sync as the primary intake path.',
-                'Locked and coming-soon modules remain visible via entitlements and module catalog state.',
+                'Shopify setup defaults to Shopify sync as the primary intake path.',
+                'Locked and coming-soon modules remain visible through access and module catalog state.',
             ],
         ];
     }
@@ -104,4 +104,3 @@ class ShopifyOnboardingRailAdapter implements OnboardingRailAdapter
         return $this->blueprintService->toBlueprint($validatedBlueprint);
     }
 }
-

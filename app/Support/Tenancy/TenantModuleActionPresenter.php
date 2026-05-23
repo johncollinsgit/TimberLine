@@ -36,7 +36,7 @@ class TenantModuleActionPresenter
         ],
         'channel_not_supported' => [
             'label' => 'Channel not supported',
-            'description' => 'This module is not supported for the current tenant channel or operating mode.',
+            'description' => 'This module is not supported for how this workspace is set up.',
         ],
         'module_unavailable' => [
             'label' => 'Unavailable',
@@ -51,8 +51,8 @@ class TenantModuleActionPresenter
             'description' => 'This module is explicitly disabled for the tenant.',
         ],
         'disabled_by_entitlement' => [
-            'label' => 'Disabled by entitlement',
-            'description' => 'This module is explicitly disabled in the entitlement layer.',
+            'label' => 'Access disabled',
+            'description' => 'This module is explicitly disabled for this workspace.',
         ],
         'not_enabled' => [
             'label' => 'Not enabled',

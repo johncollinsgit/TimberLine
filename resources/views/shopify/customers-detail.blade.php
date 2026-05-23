@@ -722,7 +722,7 @@
                         <div>
                             <h2 class="customers-detail-title" data-customer-display-name>{{ $customerDisplayName }}</h2>
                             <p class="customers-detail-subtitle">
-                                Customer Detail for one canonical marketing profile, with identity, loyalty, messaging, and recent source activity in one workspace.
+                                Customer Detail for one customer profile, with identity, loyalty, messaging, and recent source activity in one workspace.
                             </p>
                         </div>
                     </div>
@@ -1760,7 +1760,7 @@
 
                         const payload = await response.json().catch(() => ({
                             ok: false,
-                            message: "Unexpected response from Backstage.",
+                            message: "Unexpected response from Everbranch.",
                         }));
 
                         if (!response.ok || !payload.ok) {

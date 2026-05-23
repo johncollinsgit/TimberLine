@@ -9,7 +9,7 @@
   $wideLayout = !empty($prefs['wide_layout']);
   $compactTables = !empty($prefs['compact_tables']);
 @endphp
-<body data-mf-theme="forestry-backstage" class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }}">
+<body data-mf-theme="everbranch" class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }}">
 @php
   $user = auth()->user();
   $isAdmin = $user?->isAdmin() ?? true;
@@ -52,6 +52,20 @@
   $workspaceLabel = (string) ($workspace['label'] ?? 'Unified workspace');
   $workspaceSubtitle = (string) ($workspace['subtitle'] ?? 'One product surface that adapts to the tenant in front of it.');
   $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search the workspace');
+  $accountMode = strtolower(trim((string) ($experienceProfile['account_mode'] ?? 'production')));
+  $accessLaneBanner = match ($accountMode) {
+      'demo' => [
+          'label' => 'Viewing Demo Tenant',
+          'copy' => 'Sample workspace for evaluation. Keep production decisions in landlord review.',
+          'classes' => 'border-sky-200 bg-sky-50 text-sky-900',
+      ],
+      'sandbox', 'test' => [
+          'label' => 'Viewing Sandbox Test Tenant',
+          'copy' => 'Safe workspace for testing. Data and workflows here are allowed to be disposable.',
+          'classes' => 'border-amber-200 bg-amber-50 text-amber-950',
+      ],
+      default => null,
+  };
   $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
   $birthdaysActive = request()->routeIs('birthdays.*') || request()->is('birthdays*');
   $adminActive = request()->routeIs('admin.*') || request()->is('admin*');
@@ -291,7 +305,17 @@
 	            · {{ strtoupper((string) ($experienceProfile['use_case_profile'] ?? 'ops')) }}
 	          </div>
 	        @endif
-	      </div>
+      </div>
+
+      @if(is_array($accessLaneBanner))
+        <div
+          class="mb-4 rounded-2xl border px-4 py-3 text-sm {{ $accessLaneBanner['classes'] }}"
+          data-access-lane-banner="{{ $accountMode }}"
+        >
+          <div class="font-semibold">{{ $accessLaneBanner['label'] }}</div>
+          <div class="mt-1 text-xs opacity-80">{{ $accessLaneBanner['copy'] }}</div>
+        </div>
+      @endif
 
       @if($canAccessOps && $unresolvedExceptions > 0)
         <div class="mf-announcement mb-4 rounded-2xl border px-4 py-3 text-sm">

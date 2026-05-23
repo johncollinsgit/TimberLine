@@ -340,7 +340,7 @@
             <x-tenancy.module-state-card
                 :module-state="$settingsModuleState"
                 title="Settings module state"
-                description="Settings visibility and readiness now come from tenant entitlement + setup state."
+                description="Settings visibility and readiness now come from workspace access and setup state."
             />
         @endif
 
@@ -447,7 +447,7 @@
                 <div class="settings-toggle" style="margin-top: 10px;">
                     <div class="settings-toggle-copy">
                         <strong>Email Analytics Enabled</strong>
-                        <span>Keep metadata and provider delivery hooks ready for campaign reporting and troubleshooting.</span>
+                        <span>Keep delivery details and provider hooks ready for campaign reporting and troubleshooting.</span>
                     </div>
                     <input id="analytics-enabled" name="analytics_enabled" type="checkbox">
                 </div>
@@ -1014,7 +1014,7 @@
 
                 providerSettingsContent.innerHTML = `
                     <div class="settings-provider-help">
-                        Custom Provider is scaffolded for future implementation. You can save endpoint/auth metadata now,
+                        Custom Provider is scaffolded for future implementation. You can save endpoint/auth details now,
                         but send and test execution are not implemented yet.
                     </div>
                     <div class="settings-grid">
@@ -1222,7 +1222,7 @@
 
                 const payload = await response.json().catch(() => ({
                     ok: false,
-                    message: "Unexpected response from Backstage.",
+                    message: "Unexpected response from Everbranch.",
                 }));
 
                 if (!response.ok) {

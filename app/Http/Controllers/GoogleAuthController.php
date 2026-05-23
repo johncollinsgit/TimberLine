@@ -152,7 +152,7 @@ class GoogleAuthController extends Controller
         if (!$user) {
             if (!config('services.google.auto_provision', true)) {
                 return redirect()->route('login')
-                    ->withErrors(['email' => 'No Backstage account exists for that Google email. Ask an administrator to create one.']);
+                    ->withErrors(['email' => 'No Everbranch account exists for that Google email. Ask an administrator to create one.']);
             }
 
             $user = User::query()->create([

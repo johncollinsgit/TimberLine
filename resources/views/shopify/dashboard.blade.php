@@ -89,7 +89,7 @@
             <section class="shopify-dashboard-loading-shell" aria-label="Loading dashboard">
                 <strong>Loading dashboard</strong>
                 <p style="margin: 0.45rem 0 0; color: rgba(15, 23, 42, 0.62);">
-                    Backstage is loading fresh Shopify data in the background.
+                    Everbranch is loading fresh Shopify data in the background.
                 </p>
 
                 <div class="shopify-dashboard-loading-grid" aria-hidden="true">

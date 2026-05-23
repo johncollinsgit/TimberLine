@@ -70,8 +70,8 @@ class DirectOnboardingRailAdapter implements OnboardingRailAdapter
         return [
             'recommended_modules' => $recommended,
             'notes' => [
-                'Direct rail defaults to CSV/manual intake paths and keeps connector options roadmap-visible.',
-                'Modules remain entitlement-aware; recommendations do not override canonical access checks.',
+                'Direct setup defaults to CSV/manual intake paths and keeps connector options roadmap-visible.',
+                'Modules remain access-aware; recommendations do not override module access checks.',
             ],
         ];
     }

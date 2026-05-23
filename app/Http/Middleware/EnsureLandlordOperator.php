@@ -33,12 +33,18 @@ class EnsureLandlordOperator
         }
 
         $allowedEmails = $this->allowedEmails();
-        if ($allowedEmails !== []) {
-            $email = strtolower(trim((string) ($user->email ?? '')));
+        $email = strtolower(trim((string) ($user->email ?? '')));
 
+        if ($allowedEmails !== []) {
             if ($email === '' || ! in_array($email, $allowedEmails, true)) {
                 abort(403);
             }
+
+            return $next($request);
+        }
+
+        if ($role !== 'platform_admin' && $user->tenants()->exists()) {
+            abort(403);
         }
 
         return $next($request);

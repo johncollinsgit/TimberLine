@@ -183,7 +183,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                     ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Responses'),
-                'subheadline' => $this->subheadlineForStatus($status, 'Review inbound SMS and email replies in one Backstage inbox.'),
+                'subheadline' => $this->subheadlineForStatus($status, 'Review inbound SMS and email replies in one Everbranch inbox.'),
                 'appNavigation' => $appNavigation,
                 'pageSubnav' => $pageSubnav,
                 'pageActions' => [],

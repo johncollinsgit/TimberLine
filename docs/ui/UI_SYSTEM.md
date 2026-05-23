@@ -1,10 +1,10 @@
-# Forestry Backstage UI System
+# Everbranch UI System
 
 ## Project Goal
-Transform Forestry Backstage into a premium, calm, high-trust software experience with one coherent visual system across public marketing, login/auth, backstage admin, and Shopify embedded surfaces.
+Transform Everbranch into a premium, calm, high-trust software experience with one coherent visual system across public marketing, login/auth, tenant app, Everbranch Admin, and Shopify embedded surfaces.
 
 ## User-Fed Requirements
-- Make the uploaded Forestry Backstage logo usable for the landing page for theeverbranch.com (legacy domains should redirect at edge)
+- Use the official Everbranch logo assets for the landing page and product surfaces for theeverbranch.com (legacy domains should redirect at edge)
 - The site should become a beautiful landing page rather than redirecting straight to login
 - Include everything a typical high-end software product site would include
 - Zendesk.com is a benchmark for functionality, visual polish, hierarchy, and clarity, but should not be copied
@@ -31,7 +31,7 @@ Transform Forestry Backstage into a premium, calm, high-trust software experienc
 ## Feature Metadata
 1. Classification: Shared core
 2. Tenant scope: Mixed (public global landing + tenant-aware auth + tenant/store scoped admin and embedded)
-3. Entitlement/access level: UI layer is globally available; module/plan visibility remains driven by existing entitlement state
+3. Access level: UI layer is globally available; module/plan visibility remains driven by existing access state
 4. Canonical dependencies reused: `routes/web.php` home closure, `PlatformProductPagesController`, Fortify auth views, `ResolveAuthTenantContext`, `PostLoginRedirectResolver`, canonical admin shell, Shopify embedded controllers/shell
 5. Shopify hooks preserved: embedded context query handling, signed context checks, App Bridge bootstrap, existing embedded routes and subnav
 6. Setup/onboarding implications: merchant onboarding and guidance now use one canonical payload family (`onboardingPayload`, `merchantJourneyPayload`, `plansPayload`, `integrationsPayload`) from `TenantCommercialExperienceService`
@@ -113,7 +113,7 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Keep section boundaries explicit with subtle border separators on public pages.
 
 ## Shell Ownership
-- Canonical backstage shell: `resources/views/layouts/app/sidebar.blade.php`
+- Canonical tenant app shell: `resources/views/layouts/app/sidebar.blade.php`
 - Embedded wrapper shell: `resources/views/components/shopify-embedded-shell.blade.php`
 - Embedded frame primitives:
   - `resources/views/components/app-shell.blade.php`
@@ -185,17 +185,19 @@ Use clear titles plus concise subheadlines that answer:
 
 ## Logo Usage
 Brand asset directory: `public/brand/`
-- `forestry-backstage-lockup.svg`: horizontal lockup
-- `forestry-backstage-mark.svg`: primary mark
-- `forestry-backstage-favicon.svg`: favicon SVG
-- `forestry-backstage-auth.svg`: auth lockup variant
-- Current approved asset pass is cache-tagged as `v=fb2` where referenced in shared views.
+- `everbranch-lockup.svg`: public/product lockup
+- `everbranch-mark.svg`: primary mark for app shells, icons, and tab-sized uses
+- `everbranch-favicon.svg`: SVG favicon wrapper
+- `everbranch-auth.svg`: auth lockup variant
+- Current Everbranch asset pass is cache-tagged from `config('everbranch.brand_assets.cache_tag')`, currently `v=eb1`.
+- Legacy `forestry-backstage-*` assets remain in `public/brand/` for compatibility/history and should not be used on Everbranch platform surfaces.
 
 Primary usage points:
 - `<head>` icons/OG image: `resources/views/partials/head.blade.php`
 - App logo components:
   - `resources/views/components/app-logo.blade.php`
   - `resources/views/components/app-logo-icon.blade.php`
+- Brand asset paths should come from `config/everbranch.php` instead of hardcoded Blade strings.
 
 ## Landing Page Section Architecture
 `resources/views/platform/promo.blade.php` includes:

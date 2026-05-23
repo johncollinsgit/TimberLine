@@ -50,7 +50,7 @@
             >
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <div class="text-xs uppercase tracking-[0.28em] text-emerald-800">Customer master index</div>
+                        <div class="text-xs uppercase tracking-[0.28em] text-emerald-800">Customer index</div>
                         <h2 class="mt-2 text-lg font-semibold text-zinc-950">Manage Customers</h2>
                         <div class="mt-1 text-sm text-zinc-600">
                             {{ number_format((int) ($totalProfiles ?? 0)) }} customer profile{{ (int) ($totalProfiles ?? 0) === 1 ? '' : 's' }} indexed.
@@ -75,7 +75,7 @@
                 <h2 class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-900">Unified Profile Index Not Built</h2>
                 <p class="mt-2 text-sm text-amber-800">
                     No marketing profiles have been built yet, but upstream Shopify/Growave/Square customer candidates exist.
-                    Run profile sync to build the canonical customer index.
+                    Run profile sync to build the customer index.
                 </p>
                 <div class="mt-3 flex flex-wrap gap-2 text-xs text-amber-800">
                     <span class="inline-flex rounded-full border border-amber-200/30 bg-amber-100 px-2.5 py-1">

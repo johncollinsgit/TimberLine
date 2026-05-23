@@ -266,7 +266,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                         'href' => $actionUrlGenerator->url('customers.manage', [], $request),
                     ],
                     [
-                        'label' => 'Open in Backstage',
+                        'label' => 'Open customer profile',
                         'href' => route('marketing.customers.show', $marketingProfile),
                     ],
                 ] : [],
@@ -1232,7 +1232,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             'open_from_shopify' => 'Open the app from Shopify Admin to load this customer.',
             'missing_api_auth' => 'This embedded customer action requires a verified Shopify session token.',
             'missing_shop' => 'The Shopify shop context is missing from this request.',
-            'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
+            'unknown_shop' => 'This Shopify shop is not connected to an Everbranch store yet.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
             'invalid_session_token' => 'This Shopify session token could not be verified.',
             'expired_session_token' => 'This Shopify session expired. Reload the app from Shopify Admin.',

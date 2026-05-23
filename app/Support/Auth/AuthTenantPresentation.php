@@ -23,9 +23,9 @@ class AuthTenantPresentation
         $tenantName = trim((string) ($context->tenant?->name ?? ''));
         $resolvedTenantName = $tenantName !== ''
             ? $tenantName
-            : (string) config('tenancy.auth.fallback_tenant_label', 'Modern Forestry');
+            : (string) config('tenancy.auth.fallback_tenant_label', config('everbranch.flagship_tenant_name', 'Modern Forestry'));
 
-        $portalName = (string) config('tenancy.auth.portal_name', 'Forestry Backstage');
+        $portalName = (string) config('tenancy.auth.portal_name', config('everbranch.product_name', 'Everbranch'));
 
         if ($context->classification === AuthTenantContext::GENERIC) {
             return [
@@ -38,7 +38,7 @@ class AuthTenantPresentation
                 'hero_tagline' => 'Tenant Console',
                 'login_eyebrow' => 'Sign in',
                 'login_title' => 'Welcome back',
-                'login_subtitle' => 'Sign in to continue to your Forestry Backstage workspace.',
+                'login_subtitle' => 'Sign in to continue to your '.$portalName.' workspace.',
             ];
         }
 
@@ -55,7 +55,7 @@ class AuthTenantPresentation
             'hero_tagline' => 'Operations Console',
             'login_eyebrow' => 'Sign in',
             'login_title' => 'Welcome back',
-            'login_subtitle' => 'Sign in to continue to your Forestry Backstage workspace.',
+            'login_subtitle' => 'Sign in to continue to your '.$portalName.' workspace.',
         ];
     }
 }

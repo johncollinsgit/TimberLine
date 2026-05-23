@@ -197,7 +197,7 @@ test('public rewards account prefers native review and reward signals when avail
     ]))
         ->assertOk()
         ->assertSeeText('Source:')
-        ->assertSeeText('Native Backstage reviews')
+        ->assertSeeText('Native Everbranch reviews')
         ->assertSeeText('Native: 1 reviews')
         ->assertSeeText('Legacy Growave (read-only): 4 reviews');
 });

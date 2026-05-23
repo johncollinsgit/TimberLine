@@ -329,7 +329,7 @@ class ShopifyEmbeddedRewardsService
                 $primaryReward = $activeRedeemItems->first();
                 $programSummary = $primaryReward
                     ? 'Customers earn reward credit through live tasks, then redeem it for rewards like '.(string) data_get($primaryReward, 'title', 'configured rewards').'.'
-                    : 'Customers earn reward credit through live tasks and can redeem it against the reward rows configured in Backstage.';
+                    : 'Customers earn reward credit through live tasks and can redeem it against the reward rows configured in Everbranch.';
 
                 return [
                     'program_name' => 'Rewards',
@@ -679,7 +679,7 @@ class ShopifyEmbeddedRewardsService
                     'enabled' => 0,
                     'disabled' => 0,
                 ],
-                'message' => 'This section could not be loaded from Backstage right now.',
+                'message' => 'This section could not be loaded from Everbranch right now.',
             ];
         }
     }

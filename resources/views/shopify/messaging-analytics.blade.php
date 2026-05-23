@@ -656,7 +656,7 @@
         @if(! $authorized)
             <article class="message-analytics-card">
                 <h2>Message analytics requires Shopify context</h2>
-                <p class="message-analytics-muted">Open this page from Shopify Admin so Backstage can verify the store session and tenant scope.</p>
+                <p class="message-analytics-muted">Open this page from Shopify Admin so Everbranch can verify the store session and workspace access.</p>
             </article>
         @elseif(! $messagingEnabled)
             <article class="message-analytics-card" data-tone="error">
@@ -723,7 +723,7 @@
                         @endif
                         @if(! (bool) data_get($trackingNative, 'analytics_and_reports.api_calls_detected', false))
                             <p class="message-analytics-muted">
-                                Backstage does not currently query Shopify native analytics/report APIs for storefront funnel reporting.
+                                Everbranch does not currently query Shopify native analytics/report APIs for storefront funnel reporting.
                             </p>
                         @endif
                     </div>
@@ -1619,7 +1619,7 @@
 
                         <section class="message-analytics-detail-grid">
                             <article class="message-analytics-card">
-                                <h4>Message metadata</h4>
+                                <h4>Message details</h4>
                                 <div class="message-analytics-table-wrap">
                                     <table class="message-analytics-table" style="min-width:560px;">
                                         <tbody>

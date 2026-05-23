@@ -8,11 +8,14 @@
     $comingSoonModules = is_array($moduleShowcase['coming_soon'] ?? null) ? $moduleShowcase['coming_soon'] : [];
     $previewProfiles = is_array($content['preview_profiles'] ?? null) ? $content['preview_profiles'] : [];
     $previewFlow = is_array($content['preview_flow'] ?? null) ? $content['preview_flow'] : [];
+    $brandAssets = (array) config('everbranch.brand_assets', []);
+    $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
+    $brandLockupPath = (string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg');
 @endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    @include('partials.head', ['title' => 'Forestry Backstage'])
+    @include('partials.head', ['title' => config('everbranch.product_name', 'Everbranch')])
 </head>
 <body class="fb-public-body" data-premium-motion="public">
     @include('platform.partials.premium-motion')
@@ -26,7 +29,7 @@
         <div class="fb-site-nav-wrap">
             <nav class="fb-site-nav" aria-label="Primary navigation">
                 <a href="#top" class="fb-site-brand fb-site-brand--lockup">
-                    <img src="{{ asset('brand/forestry-backstage-lockup.svg') }}?v=fb2" alt="Forestry Backstage" />
+                    <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ config('everbranch.product_name', 'Everbranch') }}" />
                 </a>
                 <div class="fb-site-links">
                     <a href="#product">Product</a>
@@ -207,7 +210,7 @@
                 <div class="fb-section-header">
                     <p class="fb-section-kicker">Module Access</p>
                     <h2>Available now, unlock next, and coming soon.</h2>
-                    <p>Module visibility is canonical and entitlement-aware. Roadmap modules stay visible but are clearly marked.</p>
+                    <p>Feature visibility follows your workspace setup and plan access. Roadmap features stay visible but are clearly marked.</p>
                 </div>
 
                 <div class="fb-grid fb-grid-3">
@@ -402,7 +405,7 @@
         </section>
 
         <footer class="fb-footer" aria-label="Footer">
-            <div>Forestry Backstage · Operations software for production, shipping, and customer growth.</div>
+            <div>{{ config('everbranch.product_name', 'Everbranch') }} · Operations software for production, shipping, and customer growth.</div>
         </footer>
     </div>
 </body>

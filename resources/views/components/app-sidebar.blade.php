@@ -13,19 +13,23 @@
     if (is_array($homeItem)) {
         $brandHref = (string) ($homeItem['href'] ?? '#');
     }
+    $productName = config('everbranch.product_name', 'Everbranch');
+    $brandAssets = (array) config('everbranch.brand_assets', []);
+    $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
+    $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
 @endphp
 
 <nav class="app-sidebar app-sidebar-panel" aria-label="App navigation">
     <a href="{{ $brandHref }}" class="app-sidebar-brand app-sidebar-brand-link">
         <img
-            src="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb2"
-            alt="Forestry Backstage"
+            src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}"
+            alt="{{ $productName }}"
             class="app-sidebar-brand-mark"
             loading="eager"
             decoding="async"
         />
         <div class="app-sidebar-brand-copy">
-            <strong>Forestry Backstage</strong>
+            <strong>{{ $productName }}</strong>
         </div>
     </a>
     <ul class="app-sidebar-list">

@@ -147,7 +147,7 @@ export async function requestMessagingJson<TData>(
 
   const payload = (await response.json().catch(() => ({
     ok: false,
-    message: "Unexpected response from Backstage.",
+    message: "Unexpected response from Everbranch.",
   }))) as MessagingEnvelope<TData>;
 
   if (!response.ok || !payload.ok) {
@@ -183,7 +183,7 @@ export async function requestMessagingFormData<TData>(
 
   const payload = (await response.json().catch(() => ({
     ok: false,
-    message: "Unexpected response from Backstage.",
+    message: "Unexpected response from Everbranch.",
   }))) as MessagingEnvelope<TData>;
 
   if (!response.ok || !payload.ok) {

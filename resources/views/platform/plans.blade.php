@@ -97,7 +97,7 @@
                 <div class="fb-section-header">
                     <p class="fb-section-kicker">Module Map</p>
                     <h2>Included now, unlock next, and roadmap visibility.</h2>
-                    <p class="text-sm text-[var(--fb-text-secondary)]">Presentation is derived from canonical product catalog visibility and status.</p>
+                    <p class="text-sm text-[var(--fb-text-secondary)]">Presentation is derived from the current product catalog and availability status.</p>
                 </div>
                 <div class="fb-grid fb-grid-3">
                     <article class="fb-card" data-premium-surface>

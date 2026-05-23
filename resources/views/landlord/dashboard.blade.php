@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-xl font-semibold text-zinc-900">Landlord Console</h1>
+        <h1 class="text-xl font-semibold text-zinc-900">{{ config('everbranch.landlord_portal_name', 'Everbranch Admin') }}</h1>
     </x-slot>
 
     <div class="space-y-6">
@@ -9,7 +9,7 @@
                 <div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Landlord</p>
-                        <h2 class="mt-1 text-2xl font-semibold text-zinc-950">Landlord Operator Console</h2>
+                        <h2 class="mt-1 text-2xl font-semibold text-zinc-950">{{ config('everbranch.landlord_portal_name', 'Everbranch Admin') }} Console</h2>
                         <p class="mt-1 max-w-3xl text-sm text-zinc-600">
                             Operational overview for tenant health, commercial configuration access, and guarded landlord-only actions.
                         </p>
@@ -22,10 +22,34 @@
                             Open Commercial Config
                         </a>
                         <a
+                            href="{{ route('landlord.readiness') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            Readiness
+                        </a>
+                        <a
+                            href="{{ route('landlord.onboarding.intake') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            Intake Queue
+                        </a>
+                        <a
+                            href="{{ route('landlord.commercial-intent.index') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            Commercial Intent
+                        </a>
+                        <a
                             href="{{ route('landlord.onboarding.journey') }}"
                             class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                         >
                             Onboarding Diagnostics
+                        </a>
+                        <a
+                            href="{{ route('landlord.custom-module-requests.index') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            Custom Requests
                         </a>
                         <a
                             href="{{ route('landlord.tenants.index') }}"
@@ -90,7 +114,7 @@
                         <div>
                             <h3 class="text-lg font-semibold text-zinc-950">Onboarding triage</h3>
                             <p class="text-sm text-zinc-600">
-                                Queue-style view derived from canonical onboarding journey telemetry. Click a card to open the filtered tenant directory.
+                                Queue-style view derived from onboarding activity. Click a card to open the filtered tenant directory.
                             </p>
                         </div>
                         <div class="text-right text-xs text-zinc-600">

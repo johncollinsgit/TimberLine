@@ -47,10 +47,29 @@
                     $classification = 'uncategorized';
                 }
 
+                $status = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
+                $marketState = strtoupper(trim((string) ($definition['market_state'] ?? 'INTERNAL_ONLY')));
+                $appStoreVisible = (bool) data_get($definition, 'visibility.app_store', false);
+                $tenantVisible = $appStoreVisible && $marketState === 'SAFE_TO_MARKET' && in_array($status, ['live', 'beta'], true);
+                $billingMode = strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable')));
+                $requiredIntegrations = array_values(array_filter(array_map(
+                    static fn (mixed $integration): string => strtolower(trim((string) $integration)),
+                    (array) ($definition['required_integrations'] ?? [])
+                )));
+                if ($requiredIntegrations === [] && in_array('shopify', (array) ($definition['channels'] ?? []), true) && ! in_array('both', (array) ($definition['channels'] ?? []), true)) {
+                    $requiredIntegrations = ['shopify'];
+                }
+
                 return [
                     'module_key' => $moduleKey,
                     'label' => (string) ($definition['label'] ?? $definition['display_name'] ?? $moduleKey),
                     'classification' => $classification,
+                    'status' => $status,
+                    'market_state' => $marketState,
+                    'billing_mode' => $billingMode,
+                    'tenant_visibility' => $tenantVisible ? 'Tenant-visible' : 'Hidden from tenants',
+                    'setup_effort' => (string) ($definition['setup_effort'] ?? ($billingMode === 'add_on' ? 'Everbranch-assisted' : 'Standard')),
+                    'required_integrations' => $requiredIntegrations !== [] ? implode(', ', array_map('strtoupper', $requiredIntegrations)) : 'None',
                 ];
             })
             ->sortBy(fn (array $module): string => strtolower((string) ($module['label'] ?? $module['module_key'])))
@@ -299,12 +318,12 @@
                         <li>Checkout remains disabled.</li>
                         <li>Only one guarded live subscription create/sync action is available (landlord-triggered, prerequisite-gated).</li>
                         <li>Broad subscription update/cancel automation is still disabled.</li>
-                        <li>Billing mapping fields are metadata placeholders only.</li>
+                        <li>Billing mapping fields are future provider details only.</li>
                     </ul>
 
                     <p class="text-xs text-zinc-600">
                         Guarded Stripe actions in this phase are landlord-triggered only:
-                        customer reference sync, subscription-prep metadata sync, and narrow live subscription create/sync.
+                        customer reference sync, subscription-prep detail sync, and narrow live subscription create/sync.
                     </p>
 
                     @if ((array) ($billingReadiness['missing_global_requirements'] ?? []) !== [])
@@ -542,7 +561,7 @@
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-950">Modules and Add-ons</h3>
                         <p class="text-sm text-zinc-600">
-                            Canonical catalog references used by plan entitlements and tenant override controls.
+                            Catalog references used by plan access and tenant override controls.
                         </p>
                     </div>
 
@@ -553,7 +572,7 @@
                         >
                             <h4 class="text-base font-semibold text-zinc-950">Module catalog</h4>
                             <p class="mt-1 text-xs text-zinc-600">
-                                Modules are grouped by top-level classification to separate core, integration, and add-on linked information.
+                                Modules are grouped by top-level classification. Hidden/internal/roadmap rows are visible here for operators, but tenant App Store visibility still fails closed.
                             </p>
                             <div class="mt-3 flex flex-wrap gap-2">
                                 @foreach ($moduleCategories as $category)
@@ -590,6 +609,11 @@
                                                         <th class="px-3 py-2 text-left font-semibold">Module key</th>
                                                         <th class="px-3 py-2 text-left font-semibold">Label</th>
                                                         <th class="px-3 py-2 text-left font-semibold">Classification</th>
+                                                        <th class="px-3 py-2 text-left font-semibold">Lifecycle</th>
+                                                        <th class="px-3 py-2 text-left font-semibold">Tenant visibility</th>
+                                                        <th class="px-3 py-2 text-left font-semibold">Setup</th>
+                                                        <th class="px-3 py-2 text-left font-semibold">Integrations</th>
+                                                        <th class="px-3 py-2 text-left font-semibold">Pricing</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody class="divide-y divide-zinc-200 bg-white">
@@ -598,6 +622,11 @@
                                                             <td class="px-3 py-2 font-mono text-zinc-900">{{ $module['module_key'] }}</td>
                                                             <td class="px-3 py-2">{{ $module['label'] }}</td>
                                                             <td class="px-3 py-2">{{ str_replace('-', ' ', (string) ($module['classification'] ?? 'uncategorized')) }}</td>
+                                                            <td class="px-3 py-2">{{ strtoupper((string) ($module['status'] ?? 'disabled')) }} · {{ $module['market_state'] ?? 'INTERNAL_ONLY' }}</td>
+                                                            <td class="px-3 py-2">{{ $module['tenant_visibility'] ?? 'Hidden from tenants' }}</td>
+                                                            <td class="px-3 py-2">{{ $module['setup_effort'] ?? 'Standard' }}</td>
+                                                            <td class="px-3 py-2">{{ $module['required_integrations'] ?? 'None' }}</td>
+                                                            <td class="px-3 py-2">{{ strtoupper(str_replace('_', ' ', (string) ($module['billing_mode'] ?? 'unavailable'))) }}</td>
                                                         </tr>
                                                     @endforeach
                                                 </tbody>
@@ -772,7 +801,7 @@
 
                                         @if($commercialLifecycle !== '')
                                             <p class="mt-2 text-[11px] text-zinc-700">
-                                                Commercial lifecycle:
+                                                Billing stage:
                                                 <span class="font-semibold text-zinc-900">{{ str_replace('_', ' ', $commercialLifecycle) }}</span>
                                                 @if($commercialReason !== '')
                                                     · reason: {{ str_replace('_', ' ', $commercialReason) }}
@@ -805,7 +834,7 @@
 
                                         @if ((bool) ($row['template_missing'] ?? false))
                                             <p class="mt-1 text-[11px] text-zinc-800">
-                                                Assigned template key is missing from the catalog. Commercialization surfaces will fall back to entitlement defaults.
+                                                Assigned template key is missing from the catalog. Commercialization surfaces will fall back to access defaults.
                                             </p>
                                         @endif
 
@@ -981,15 +1010,15 @@
                                             <textarea name="billing_mapping_json" rows="2" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 font-mono text-xs text-zinc-900" placeholder='{"stripe":{"customer_reference":"cus_placeholder","subscription_reference":"sub_placeholder"}}'>{{ old('billing_mapping_json', (string) ($row['billing_mapping_json'] ?? '')) }}</textarea>
                                         </label>
                                         <p class="text-[11px] text-zinc-600">
-                                            This field stores future provider mapping metadata only. It does not activate checkout or mutate subscriptions.
+                                            This field stores future provider mapping details only. It does not activate checkout or mutate subscriptions.
                                             Required readiness keys: <code>stripe.customer_reference</code>, <code>stripe.subscription_reference</code>.
                                         </p>
                                         <label class="mt-2 block text-xs text-zinc-700">
-                                            Metadata JSON
+                                            Internal details JSON
                                             <textarea name="metadata_json" rows="2" class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1 font-mono text-xs text-zinc-900" placeholder='{"notes":"staging assignment"}'>{{ old('metadata_json', (string) ($row['metadata_json'] ?? '')) }}</textarea>
                                         </label>
                                         <button type="submit" class="mt-3 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800">Save overrides</button>
-                                        <p class="mt-2 text-[11px] text-zinc-600">If no template is assigned, module labels fall back to entitlement defaults.</p>
+                                        <p class="mt-2 text-[11px] text-zinc-600">If no template is assigned, module labels fall back to access defaults.</p>
 
                                         @if (filled($row['template_default_labels_json'] ?? null))
                                             <label class="mt-2 block text-xs text-zinc-700">
@@ -1029,7 +1058,7 @@
                                     @csrf
                                     <h5 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Guarded Stripe Subscription Prep (Landlord-Only)</h5>
                                     <p class="mt-1 text-[11px] text-zinc-600">
-                                        This guarded action syncs subscription-prep metadata only (plan/add-on mapping candidate state). It does not create a live subscription, run checkout, or collect payment methods.
+                                        This guarded action syncs subscription-prep details only (plan/add-on mapping candidate state). It does not create a live subscription, run checkout, or collect payment methods.
                                     </p>
                                     <div class="mt-2 text-[11px] text-zinc-600">
                                         <div>Customer reference prerequisite: {{ $stripeCustomerReference !== '' ? $stripeCustomerReference : 'missing' }}</div>
@@ -1078,7 +1107,7 @@
                                     @csrf
                                     <h5 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Stripe Fulfillment Reconcile (Landlord-Only)</h5>
                                     <p class="mt-1 text-[11px] text-zinc-600">
-                                        Replays Stripe-confirmed billing state into canonical local access (plan + add-ons) using the module catalog as truth.
+                                        Replays Stripe-confirmed billing state into local access (plan + add-ons) using the module catalog as truth.
                                         This is idempotent, auditable, and safe to replay. It does not change Stripe subscriptions.
                                     </p>
                                     <div class="mt-2 text-[11px] text-zinc-600">
@@ -1204,8 +1233,8 @@
                                     class="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4"
                                     x-data="{ moduleEntitlementTab: @js($defaultModuleCategoryTab) }"
                                 >
-                                    <h5 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Module entitlements & billing</h5>
-                                    <p class="mt-1 text-[11px] text-zinc-600">Write-backed tenant module entitlement rows with billing treatment, price overrides, and operator notes.</p>
+                                    <h5 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Module access & billing</h5>
+                                    <p class="mt-1 text-[11px] text-zinc-600">Write-backed tenant module access rows with billing treatment, price overrides, and operator notes.</p>
                                     <div class="mt-2 flex flex-wrap gap-2">
                                         @foreach ($moduleCategories as $category)
                                             @php
@@ -1301,10 +1330,10 @@
 
                                                             <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-600">
                                                                 <div>
-                                                                    entitlement source {{ $entitlement['entitlement_source'] ?? 'n/a' }}
+                                                                    access source {{ $entitlement['entitlement_source'] ?? 'n/a' }}
                                                                     · price source {{ $entitlement['price_source'] ?? 'n/a' }}
                                                                 </div>
-                                                                <button type="submit" class="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100">Save entitlement</button>
+                                                                <button type="submit" class="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100">Save access</button>
                                                             </div>
                                                         </form>
                                                     @endforeach

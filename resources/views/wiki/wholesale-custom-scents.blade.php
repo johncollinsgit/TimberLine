@@ -20,7 +20,7 @@
                         <span>Wholesale Custom Scents</span>
                     </nav>
                     <h1 class="mt-2 text-3xl font-semibold text-zinc-950">Wholesale Custom Scents</h1>
-                    <p class="mt-2 text-sm text-zinc-600">Account-specific names mapped to canonical scents. Managed in Admin -> Wholesale Custom Scents.</p>
+                    <p class="mt-2 text-sm text-zinc-600">Account-specific names mapped to master scent records. Managed in Admin -> Wholesale Custom Scents.</p>
                 </section>
 
                 <section id="account-list" class="space-y-6 rounded-3xl border border-zinc-200 bg-white p-5">

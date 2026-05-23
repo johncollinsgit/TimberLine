@@ -31,7 +31,7 @@ test('onboarding wizard UI is tenant-aware and renders endpoint wiring', functio
     $this->actingAs($user)
         ->get(route('onboarding.wizard', ['tenant' => 'tenant-a']))
         ->assertOk()
-        ->assertSee('Set up your tenant')
+        ->assertSee('Create Tenant Blueprint')
         ->assertSee('/api/onboarding/wizard-contract', false)
         ->assertSee('/api/onboarding/blueprint-draft', false)
         ->assertSee('/api/onboarding/blueprint-finalize', false)

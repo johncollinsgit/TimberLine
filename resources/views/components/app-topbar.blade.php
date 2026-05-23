@@ -54,6 +54,10 @@
     if (is_array($homeItem)) {
         $brandHref = (string) ($homeItem['href'] ?? '/');
     }
+    $productName = config('everbranch.product_name', 'Everbranch');
+    $brandAssets = (array) config('everbranch.brand_assets', []);
+    $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
+    $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
 @endphp
 
 <header class="app-topbar">
@@ -66,14 +70,14 @@
                 data-prefetch-priority="normal"
             >
                 <img
-                    src="{{ asset('brand/forestry-backstage-mark.svg') }}?v=fb2"
-                    alt="Forestry Backstage"
+                    src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}"
+                    alt="{{ $productName }}"
                     class="app-topbar-brand-mark"
                     loading="eager"
                     decoding="async"
                 />
                 <div class="app-topbar-brand-copy">
-                    <strong>Forestry Backstage</strong>
+                    <strong>{{ $productName }}</strong>
                 </div>
             </a>
             <nav class="app-topbar-nav" aria-label="Primary navigation">
@@ -99,7 +103,7 @@
             <div class="app-topbar-right">
                 @if($commandSearchEnabled)
                     <form class="app-topbar-search" role="search" data-command-form>
-                        <label class="sr-only" for="app-topbar-command-search">Search Backstage</label>
+                        <label class="sr-only" for="app-topbar-command-search">Search {{ $productName }}</label>
                         <input
                             id="app-topbar-command-search"
                             type="search"

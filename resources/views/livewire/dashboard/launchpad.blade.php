@@ -14,7 +14,7 @@
                 <div class="max-w-3xl">
                     <div class="text-[11px] uppercase tracking-[0.28em] text-[var(--fb-muted)]">{{ $workspace['label'] ?? 'Unified workspace' }}</div>
                     <h1 class="mt-3 text-2xl font-semibold text-[var(--fb-text)] sm:text-3xl">One home that adapts to the tenant in front of you.</h1>
-                    <p class="mt-3 text-sm leading-6 text-[var(--fb-muted)]">{{ $workspace['subtitle'] ?? 'Search, shortcuts, and recommendations shift with channel type, entitlements, and workflow relevance.' }}</p>
+                    <p class="mt-3 text-sm leading-6 text-[var(--fb-muted)]">{{ $workspace['subtitle'] ?? 'Search, shortcuts, and recommendations shift with channel type, workspace access, and workflow relevance.' }}</p>
                 </div>
 
                 <div class="w-full max-w-xl">
@@ -132,7 +132,7 @@
                         </a>
                     @empty
                         <div class="rounded-3xl border border-dashed border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 text-sm text-[var(--fb-muted)]">
-                            Module recommendations will appear here as tenant entitlements and App Store availability evolve.
+                            Module recommendations will appear here as workspace access and App Store availability evolve.
                         </div>
                     @endforelse
                 </div>

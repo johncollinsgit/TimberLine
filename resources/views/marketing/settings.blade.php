@@ -12,7 +12,7 @@
 
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <x-admin.help-hint tone="neutral" title="SMS sender configuration">
-                Sender numbers are environment-driven so production can stage future numbers safely. This page shows every configured sender and lets Backstage choose the default enabled sender.
+                Sender numbers are environment-driven so production can stage future numbers safely. This page shows every configured sender and lets Everbranch choose the default enabled sender.
             </x-admin.help-hint>
             <div class="grid gap-4 md:grid-cols-4">
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -26,7 +26,7 @@
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Default Sender</div>
                     <div class="mt-2 text-lg font-semibold text-zinc-950">{{ data_get($settingsDefaultSender, 'label', 'None') }}</div>
-                    <div class="mt-1 text-xs text-zinc-500">{{ data_get($settingsDashboard, 'default_source', 'config') === 'marketing_settings' ? 'Saved in Backstage settings' : 'Using config default' }}</div>
+                    <div class="mt-1 text-xs text-zinc-500">{{ data_get($settingsDashboard, 'default_source', 'config') === 'marketing_settings' ? 'Saved in Everbranch settings' : 'Using config default' }}</div>
                 </article>
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Status Callback</div>

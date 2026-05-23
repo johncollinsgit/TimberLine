@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Modern Forestry Backstage'),
+    'name' => env('APP_NAME', 'Everbranch'),
 
     /*
     |--------------------------------------------------------------------------

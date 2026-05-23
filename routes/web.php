@@ -2,11 +2,14 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
+use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
+use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
+use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
@@ -32,6 +35,7 @@ use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
+use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
 use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
@@ -46,6 +50,7 @@ use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
+use App\Http\Controllers\ShopifyPrivacyWebhookController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WikiAdminController;
@@ -156,8 +161,25 @@ $landlordHosts = array_values(array_unique(array_filter($landlordHosts, static f
 $landlordRoutes = static function (): void {
     Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
         ->name('dashboard');
+    Route::get('/landlord/readiness', LandlordSelfServiceReadinessController::class)
+        ->name('readiness');
     Route::get('/landlord/onboarding/journey', [LandlordOnboardingJourneyDiagnosticsController::class, 'index'])
         ->name('onboarding.journey');
+    Route::get('/landlord/onboarding/wizard', \App\Livewire\Onboarding\Wizard::class)
+        ->middleware('tenant.access')
+        ->name('onboarding.wizard');
+    Route::get('/landlord/onboarding/intake', [LandlordOnboardingJourneyDiagnosticsController::class, 'intake'])
+        ->name('onboarding.intake');
+    Route::post('/landlord/onboarding/setup-status/{tenant}', [LandlordOnboardingJourneyDiagnosticsController::class, 'updateSetupStatus'])
+        ->name('onboarding.setup-status.update');
+    Route::get('/landlord/commercial-intent', [LandlordOnboardingJourneyDiagnosticsController::class, 'commercialIntent'])
+        ->name('commercial-intent.index');
+    Route::post('/landlord/commercial-intent/{tenant}', [LandlordOnboardingJourneyDiagnosticsController::class, 'updateCommercialIntent'])
+        ->name('commercial-intent.update');
+    Route::get('/landlord/custom-module-requests', [LandlordCustomModuleRequestController::class, 'index'])
+        ->name('custom-module-requests.index');
+    Route::post('/landlord/custom-module-requests/{customModuleRequest}', [LandlordCustomModuleRequestController::class, 'update'])
+        ->name('custom-module-requests.update');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
     Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])
@@ -174,12 +196,18 @@ $landlordRoutes = static function (): void {
         ->name('commercial.templates.reorder');
     Route::get('/landlord/tenants', [LandlordTenantDirectoryController::class, 'index'])
         ->name('tenants.index');
+    Route::get('/landlord/tenants/create', [LandlordTenantDirectoryController::class, 'create'])
+        ->name('tenants.create');
     Route::post('/landlord/tenants', [LandlordTenantDirectoryController::class, 'store'])
         ->name('tenants.store');
     Route::match(['put', 'patch'], '/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'update'])
         ->name('tenants.update');
     Route::delete('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'destroy'])
         ->name('tenants.destroy');
+    Route::get('/landlord/tenants/{tenant}/blueprint/edit', [LandlordTenantDirectoryController::class, 'editBlueprint'])
+        ->name('tenants.blueprint.edit');
+    Route::match(['put', 'patch'], '/landlord/tenants/{tenant}/blueprint', [LandlordTenantDirectoryController::class, 'updateBlueprint'])
+        ->name('tenants.blueprint.update');
     Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
         ->name('tenants.show');
     Route::post('/landlord/tenants/{tenant}/role', [LandlordTenantDirectoryController::class, 'updateRole'])
@@ -296,6 +324,23 @@ Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalog
 Route::get('/.well-known/brand-discovery.json', [BrandDiscoveryController::class, 'wellKnown'])->name('discovery.well-known.brand');
 Route::get('/api/public/discovery/brand/{tenant}', [BrandDiscoveryController::class, 'byTenant'])->name('discovery.public.brand');
 Route::get('/api/public/discovery/structured/{tenant?}', [BrandDiscoveryController::class, 'structured'])->name('discovery.public.structured');
+Route::get('/api/mobile/v1/modern-forestry/home', [ModernForestryProductCatalogController::class, 'home'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.home');
+Route::get('/api/mobile/v1/modern-forestry/collections', [ModernForestryProductCatalogController::class, 'collections'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.collections');
+Route::get('/api/mobile/v1/modern-forestry/collections/{handle}/products', [ModernForestryProductCatalogController::class, 'collectionProducts'])
+    ->where('handle', '[A-Za-z0-9][A-Za-z0-9-]*')
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.collections.products');
+Route::get('/api/mobile/v1/modern-forestry/products', ModernForestryProductCatalogController::class)
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.products');
+Route::get('/api/mobile/v1/modern-forestry/products/{handle}', [ModernForestryProductCatalogController::class, 'show'])
+    ->where('handle', '[A-Za-z0-9][A-Za-z0-9-]*')
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.products.show');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -320,6 +365,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/start', [CustomerStartHereController::class, 'show'])
         ->name('app.start');
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->post('/start/setup-status', [CustomerStartHereController::class, 'updateSetupStatus'])
+        ->name('app.setup-status.update');
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->prefix('custom-module-requests')
+        ->name('custom-module-requests.')
+        ->group(function (): void {
+            Route::get('/', [CustomModuleRequestController::class, 'index'])->name('index');
+            Route::get('/create', [CustomModuleRequestController::class, 'create'])->name('create');
+            Route::post('/', [CustomModuleRequestController::class, 'store'])->name('store');
+            Route::get('/{customModuleRequest}', [CustomModuleRequestController::class, 'show'])->name('show');
+        });
 
     // Guarded hosted billing handoff (Stripe hosted checkout / billing portal). Read-only on our side; no plan mutation.
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
@@ -846,6 +904,15 @@ Route::prefix('webhooks/shopify')->group(function () {
     Route::post('/customers/update', [ShopifyWebhookController::class, 'customersUpdated'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.webhooks.customers.update');
+    Route::post('/customers/data-request', [ShopifyPrivacyWebhookController::class, 'customersDataRequest'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customers.data-request');
+    Route::post('/customers/redact', [ShopifyPrivacyWebhookController::class, 'customersRedact'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customers.redact');
+    Route::post('/shop/redact', [ShopifyPrivacyWebhookController::class, 'shopRedact'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.shop.redact');
 });
 
 Route::prefix('webhooks/twilio')->group(function () {

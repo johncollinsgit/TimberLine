@@ -6,13 +6,14 @@
     $rewardAmount = (int) ($review->reward_amount_cents ?? 0);
     $rewardLabel = $rewardAmount > 0 ? '$' . number_format($rewardAmount / 100, 2) : null;
     $mediaAssets = is_array($review->media_assets ?? null) ? $review->media_assets : [];
+    $merchantDisplayName = $merchantName ?? config('everbranch.product_name', 'Everbranch');
 @endphp
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New review for {{ $merchantName ?? 'Forestry Backstage' }}</title>
+    <title>New review for {{ $merchantDisplayName }}</title>
 </head>
 <body style="margin:0;background:#f6f6f6;color:#111111;font-family:Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f6f6;margin:0;padding:0;">
@@ -30,7 +31,7 @@
                     <tr>
                         <td style="padding:0 24px 34px;">
                             <p style="margin:0;font-size:22px;line-height:1.45;color:#111111;">
-                                You just received a new review for {{ $merchantName ?? 'Forestry Backstage' }}.
+                                You just received a new review for {{ $merchantDisplayName }}.
                             </p>
                         </td>
                     </tr>
@@ -88,7 +89,7 @@
                     <tr>
                         <td style="background:#132855;padding:34px 24px;text-align:center;">
                             <div style="font-size:18px;line-height:1.6;color:#ffffff;">
-                                Sent on behalf of {{ $merchantName ?? 'Forestry Backstage' }}
+                                Sent on behalf of {{ $merchantDisplayName }}
                             </div>
                         </td>
                     </tr>

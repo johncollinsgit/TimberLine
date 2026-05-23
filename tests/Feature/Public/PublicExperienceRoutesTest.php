@@ -11,7 +11,7 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSeeText('Landscaper')
         ->assertSeeText('Electrician')
         ->assertSeeText('Soap Maker')
-        ->assertSee('brand/forestry-backstage-lockup.svg?v=fb2', false)
+        ->assertSee('brand/everbranch-lockup.svg?v=eb1', false)
         ->assertDontSeeText('Welcome back');
 });
 
@@ -19,7 +19,7 @@ test('login route renders the dedicated light auth shell', function (): void {
     $this->get(route('login'))
         ->assertOk()
         ->assertSee('class="fb-auth-body antialiased"', false)
-        ->assertSee('brand/forestry-backstage-auth.svg?v=fb2', false)
+        ->assertSee('brand/everbranch-auth.svg?v=eb1', false)
         ->assertSeeText('Welcome back');
 });
 

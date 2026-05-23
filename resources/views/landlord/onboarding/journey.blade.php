@@ -3,6 +3,9 @@
         $filters = is_array($filters ?? null) ? $filters : [];
         $rows = is_array($rows ?? null) ? $rows : [];
         $meta = is_array($meta ?? null) ? $meta : [];
+        $setupRows = is_array($setupRows ?? null) ? $setupRows : [];
+        $setupOptions = is_array($setupOptions ?? null) ? $setupOptions : [];
+        $reviewStatuses = is_array($setupOptions['landlord_review_statuses'] ?? null) ? $setupOptions['landlord_review_statuses'] : [];
         $stuckPoint = (string) ($filters['stuck_point'] ?? '');
         $phase = (string) ($filters['phase'] ?? '');
         $formatDuration = static function (?int $seconds): string {
@@ -34,6 +37,118 @@
             </header>
 
             <div class="space-y-6 p-6">
+                @if (session('status'))
+                    <section class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                        {{ session('status') }}
+                    </section>
+                @endif
+
+                <section class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4" data-landlord-setup-status="true">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-zinc-950">Client setup status</h3>
+                            <p class="mt-1 max-w-4xl text-sm text-zinc-600">
+                                Readiness skeleton for import path, Shopify connection, Square/CSV/manual setup, module interests, and future Android/iOS mobile intent. This does not activate checkout or connector automation.
+                            </p>
+                        </div>
+                        <span class="rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">
+                            {{ count($setupRows) }} tenant{{ count($setupRows) === 1 ? '' : 's' }}
+                        </span>
+                    </div>
+
+                    <div class="mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+                        <table class="w-full divide-y divide-zinc-200 text-sm">
+                            <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-600">
+                                <tr>
+                                    <th class="px-4 py-3">Tenant</th>
+                                    <th class="px-4 py-3">Import</th>
+                                    <th class="px-4 py-3">Connections</th>
+                                    <th class="px-4 py-3">Modules / mobile</th>
+                                    <th class="px-4 py-3">Review</th>
+                                    <th class="px-4 py-3">Next action / notes</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-zinc-200">
+                                @forelse($setupRows as $setupRow)
+                                    @php
+                                        $tenantPayload = is_array($setupRow['tenant'] ?? null) ? (array) $setupRow['tenant'] : [];
+                                        $tenantId = (int) ($tenantPayload['id'] ?? 0);
+                                        $moduleLabels = (array) ($setupRow['module_interest_labels'] ?? []);
+                                    @endphp
+                                    <tr class="align-top text-zinc-700">
+                                        <td class="px-4 py-3">
+                                            <a href="{{ route('landlord.tenants.show', ['tenant' => $tenantId]) }}" class="font-semibold text-zinc-950 hover:text-zinc-600">
+                                                {{ $tenantPayload['name'] ?? 'Tenant' }}
+                                            </a>
+                                            <div class="mt-1 font-mono text-xs text-zinc-500">{{ $tenantPayload['slug'] ?? '' }}</div>
+                                            <div class="mt-2 text-xs text-zinc-600">Business: {{ $setupRow['business_profile_label'] ?? 'Not started' }}</div>
+                                            @if (! empty($setupRow['source_access_request_label']))
+                                                <div class="mt-1 text-xs font-semibold text-zinc-700">{{ $setupRow['source_access_request_label'] }}</div>
+                                            @endif
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="font-semibold text-zinc-950">{{ $setupRow['import_path_label'] ?? 'Undecided' }}</div>
+                                            <div class="mt-1 text-xs text-zinc-600">CSV/manual: {{ $setupRow['csv_manual_label'] ?? 'Not started' }}</div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div>Shopify: <span class="font-semibold text-zinc-950">{{ $setupRow['shopify_connection_label'] ?? 'Not connected' }}</span></div>
+                                            <div class="mt-1">Square: <span class="font-semibold text-zinc-950">{{ $setupRow['square_label'] ?? 'Not requested' }}</span></div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div>Mobile: <span class="font-semibold text-zinc-950">{{ $setupRow['mobile_interest_label'] ?? 'Undecided' }}</span></div>
+                                            <div class="mt-2 flex max-w-sm flex-wrap gap-1">
+                                                @forelse($moduleLabels as $label)
+                                                    <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs">{{ $label }}</span>
+                                                @empty
+                                                    <span class="text-xs text-zinc-500">No module interests yet</span>
+                                                @endforelse
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
+                                                {{ $setupRow['landlord_review_label'] ?? 'Pending review' }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <form method="POST" action="{{ route('landlord.onboarding.setup-status.update', ['tenant' => $tenantId]) }}" class="space-y-2">
+                                                @csrf
+                                                <label class="block text-xs font-semibold text-zinc-600">
+                                                    Review status
+                                                    <select name="landlord_review_status" class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-900">
+                                                    @foreach($reviewStatuses as $key => $label)
+                                                        <option value="{{ $key }}" @selected(($setupRow['landlord_review_status'] ?? 'pending_review') === $key)>{{ $label }}</option>
+                                                    @endforeach
+                                                    </select>
+                                                </label>
+                                                <label class="block text-xs font-semibold text-zinc-600">
+                                                    Next action
+                                                    <input
+                                                        type="text"
+                                                        name="next_recommended_action"
+                                                        value="{{ $setupRow['next_recommended_action'] ?? '' }}"
+                                                        class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-900"
+                                                    />
+                                                </label>
+                                                <label class="mt-2 block text-xs font-semibold text-zinc-600">
+                                                    Internal notes
+                                                    <textarea name="internal_notes" rows="2" class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-900">{{ $setupRow['internal_notes'] ?? '' }}</textarea>
+                                                </label>
+                                                <button type="submit" class="mt-2 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800">
+                                                    Save review
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-6 text-sm text-zinc-600">No tenants found for setup status review.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
                 <form method="GET" action="{{ route('landlord.onboarding.journey') }}" class="grid gap-3 lg:grid-cols-6">
                     <div class="lg:col-span-1">
                         <label class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-600">Tenant ID</label>

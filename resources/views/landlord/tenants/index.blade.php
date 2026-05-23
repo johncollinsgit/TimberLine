@@ -65,7 +65,13 @@
 
             <article class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <h3 class="text-base font-semibold text-zinc-900">Create tenant</h3>
-                <p class="mt-1 text-sm text-zinc-600">Short flow with only essential fields. Advanced options stay collapsed.</p>
+                <p class="mt-1 text-sm text-zinc-600">
+                    Use the setup plan flow for Shopify, direct, CSV, manual, Square-pending, demo, sandbox, and unknown setup paths.
+                </p>
+
+                <a href="{{ route('landlord.tenants.create') }}" class="mt-4 inline-flex rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">
+                    Create tenant setup plan
+                </a>
 
                 <form method="POST" action="{{ route('landlord.tenants.store') }}" class="mt-4 space-y-3">
                     @csrf

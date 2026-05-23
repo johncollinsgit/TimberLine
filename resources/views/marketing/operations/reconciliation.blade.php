@@ -6,7 +6,7 @@
             title="Reconciliation Operations"
             description="Operational queue for unresolved storefront/widget/public-flow and redemption reconciliation issues."
             hint-title="How this queue works"
-            hint-text="Backstage is the engine, Shopify is the online UI. This queue highlights unresolved link/reward/verification issues and supports safe manual resolution."
+            hint-text="Everbranch is the operating layer, Shopify is the online store. This queue highlights unresolved link/reward/verification issues and supports safe manual resolution."
         />
 
         <section class="grid gap-4 md:grid-cols-3">
@@ -209,4 +209,3 @@
         </section>
     </div>
 </x-layouts::app>
-

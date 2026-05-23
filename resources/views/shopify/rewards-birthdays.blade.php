@@ -380,7 +380,7 @@
                 <div>
                     <h2>Birthday Email Analytics</h2>
                     <p>
-                        Track the birthday funnel from reward issuance to delivery engagement and redemption revenue using canonical delivery records.
+                        Track the birthday funnel from reward issuance to delivery engagement and redemption revenue using delivery records.
                     </p>
                 </div>
             </div>
@@ -516,7 +516,7 @@
 
             <section class="birthday-analytics-card">
                 <h3>Top Failure Reasons</h3>
-                <p>Most common failure outcomes from canonical delivery metadata and webhook states.</p>
+                <p>Most common failure outcomes from delivery details and webhook states.</p>
                 <div class="birthday-analytics-list" id="birthday-analytics-failures"></div>
             </section>
         </div>
@@ -524,7 +524,7 @@
         <div class="birthday-analytics-grid">
             <section class="birthday-analytics-card">
                 <h3>Provider Resolution Context</h3>
-                <p>Tenant-configured vs fallback vs unresolved delivery attempts from canonical provider context stamps.</p>
+                <p>Workspace-configured vs fallback vs unresolved delivery attempts from provider context stamps.</p>
                 <div class="birthday-analytics-table" id="birthday-analytics-provider-resolution"></div>
             </section>
 
@@ -537,7 +537,7 @@
 
         <section class="birthday-analytics-card">
             <h3>Failure Reasons by Resolution Path</h3>
-            <p>Segmented failure reasons so fallback and unsupported paths stay visible without raw metadata inspection.</p>
+            <p>Segmented failure reasons so fallback and unsupported paths stay visible without raw detail inspection.</p>
             <div class="birthday-analytics-table" id="birthday-analytics-failures-by-resolution"></div>
         </section>
 
@@ -719,7 +719,7 @@
 
                 const payload = await response.json().catch(() => ({
                     ok: false,
-                    message: "Unexpected response from Backstage.",
+                    message: "Unexpected response from Everbranch.",
                 }));
 
                 if (!response.ok || payload?.ok === false) {

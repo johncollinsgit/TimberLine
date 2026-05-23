@@ -1435,7 +1435,7 @@ class ShopifyEmbeddedDashboardDataService
 
         return [
             'title' => 'Attribution',
-            'subtitle' => 'Revenue influence normalized from embedded marketing and rewards data already present in Backstage.',
+            'subtitle' => 'Revenue influence normalized from embedded marketing and rewards data already present in Everbranch.',
             'sources' => $sources,
             'empty' => collect($sources)->every(fn (array $row): bool => (float) $row['revenue'] <= 0.0),
         ];
@@ -1600,7 +1600,7 @@ class ShopifyEmbeddedDashboardDataService
 
         return [
             'title' => 'Financial summary',
-            'subtitle' => 'Net contribution now uses stored COGS where Backstage has them and degrades confidence conservatively when cost coverage is incomplete.',
+            'subtitle' => 'Net contribution now uses stored COGS where Everbranch has them and degrades confidence conservatively when cost coverage is incomplete.',
             'items' => $items,
             'netProfit' => [
                 'value' => (float) data_get($primarySnapshot, 'financials.netProfit', 0),

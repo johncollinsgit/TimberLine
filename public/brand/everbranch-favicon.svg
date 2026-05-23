@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Everbranch Favicon</title>
+  <desc id="desc">Compact Everbranch circuit-tree mark.</desc>
+  <rect width="128" height="128" rx="28" fill="#FFFFFF"/>
+  <g stroke="#050505" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 110V54" />
+    <path d="M45 110V86L26 67" />
+    <path d="M83 110V86L102 67" />
+    <path d="M51 72L40 61" />
+    <path d="M77 72L88 61" />
+    <path d="M52 110H76" />
+  </g>
+  <g fill="#050505">
+    <circle cx="64" cy="49" r="9" />
+    <circle cx="26" cy="67" r="9" />
+    <circle cx="102" cy="67" r="9" />
+    <circle cx="40" cy="61" r="6" />
+    <circle cx="88" cy="61" r="6" />
+    <circle cx="64" cy="29" r="6" />
+    <circle cx="45" cy="38" r="5.5" />
+    <circle cx="83" cy="38" r="5.5" />
+  </g>
+</svg>

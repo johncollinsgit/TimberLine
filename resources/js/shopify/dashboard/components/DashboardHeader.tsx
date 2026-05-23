@@ -63,7 +63,7 @@ export function DashboardHeader({
               Rewards performance, retention, and Candle Cash impact
             </Text>
             <Text as="p" variant="bodyMd" tone="subdued">
-              The dashboard is now reading from live Backstage data sources so the embedded home can
+              The dashboard is now reading from live Everbranch data sources so the embedded home can
               act like a real analytics surface instead of a placeholder.
             </Text>
             <Text as="p" variant="bodySm" tone="subdued" className="sf-dashboard-header__updated" aria-live="polite">

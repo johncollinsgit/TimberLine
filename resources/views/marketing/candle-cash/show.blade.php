@@ -135,7 +135,7 @@
             <section class="grid gap-4 md:grid-cols-3">
                 @foreach([
                     ['label' => 'Active rewards', 'value' => number_format((int) data_get($redeemSummary, 'enabled', 0)), 'detail' => 'Reward rows currently available to customers.'],
-                    ['label' => 'Inactive rewards', 'value' => number_format((int) data_get($redeemSummary, 'disabled', 0)), 'detail' => 'Rows kept in Backstage but not currently active.'],
+                    ['label' => 'Inactive rewards', 'value' => number_format((int) data_get($redeemSummary, 'disabled', 0)), 'detail' => 'Rows kept in Everbranch but not currently active.'],
                     ['label' => 'Reward rows', 'value' => number_format((int) data_get($redeemSummary, 'total', 0)), 'detail' => 'Total redeem options currently stored in the rewards program.'],
                 ] as $card)
                     <article class="rounded-[1.7rem] border border-zinc-200 bg-zinc-50 p-5">

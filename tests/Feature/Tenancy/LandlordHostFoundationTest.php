@@ -90,7 +90,7 @@ test('landlord dashboard presents admin navigation matching commercial console s
     $this->actingAs($user)
         ->get("http://{$landlordHost}/landlord")
         ->assertOk()
-        ->assertSeeText('Landlord Operator Console')
+        ->assertSeeText('Everbranch Admin Console')
         ->assertSeeText('Open Commercial Config')
         ->assertSeeText('Overview')
         ->assertSeeText('Recent tenants');

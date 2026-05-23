@@ -1,0 +1,54 @@
+<?php
+
+return [
+    'product_name' => env('EVERBRANCH_PRODUCT_NAME', 'Everbranch'),
+    'company_name' => env('EVERBRANCH_COMPANY_NAME', 'Evergrove'),
+    'ecosystem_name' => env('EVERBRANCH_ECOSYSTEM_NAME', 'Evergrove'),
+    'landlord_portal_name' => env('EVERBRANCH_LANDLORD_PORTAL_NAME', 'Everbranch Admin'),
+    'legacy_internal_name' => env('EVERBRANCH_LEGACY_INTERNAL_NAME', 'Forestry Backstage'),
+    'flagship_tenant_name' => env('EVERBRANCH_FLAGSHIP_TENANT_NAME', 'Modern Forestry'),
+    'brand_assets' => [
+        'cache_tag' => env('EVERBRANCH_BRAND_ASSET_VERSION', 'eb1'),
+        'mark' => 'brand/everbranch-mark.svg',
+        'lockup' => 'brand/everbranch-lockup.svg',
+        'auth' => 'brand/everbranch-auth.svg',
+        'favicon_svg' => 'brand/everbranch-favicon.svg',
+        'favicon_png' => 'favicon.png',
+        'favicon_ico' => 'favicon.ico',
+        'apple_touch_icon' => 'apple-touch-icon.png',
+        'og_image' => 'og-image.png',
+    ],
+    'brand_tokens' => [
+        'font_display' => env('EVERBRANCH_FONT_DISPLAY', 'Fraunces'),
+        'font_ui' => env('EVERBRANCH_FONT_UI', 'Inter'),
+        'colors' => [
+            'ink' => '#0f1c1f',
+            'deep_green' => '#123c43',
+            'evergreen' => '#1e5a63',
+            'mist' => '#f4f7f6',
+            'surface' => '#ffffff',
+            'border' => '#dbe4e3',
+        ],
+        'radius' => [
+            'large' => '0.95rem',
+            'medium' => '0.72rem',
+            'small' => '0.55rem',
+        ],
+        'motion' => [
+            'duration_fast' => '160ms',
+            'duration_base' => '220ms',
+            'easing' => 'cubic-bezier(0.22, 1, 0.36, 1)',
+        ],
+    ],
+    'display_language' => [
+        'tenant_slug' => 'workspace address',
+        'account_mode' => 'workspace type',
+        'operating_mode' => 'how this workspace runs',
+        'provisioning' => 'setup',
+        'entitlement' => 'access',
+        'blueprint' => 'setup plan',
+        'metadata' => 'details',
+        'lifecycle' => 'status',
+        'commercial_intent' => 'plan interest',
+    ],
+];

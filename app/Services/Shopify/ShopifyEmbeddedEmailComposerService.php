@@ -23,7 +23,7 @@ class ShopifyEmbeddedEmailComposerService
         $resolvedMode = $this->normalizedMode($mode);
         $normalizedSections = $this->normalizeSections($sections);
         $resolvedLegacyHtml = $this->nullableString($legacyHtml);
-        $resolvedSubject = $this->nullableString($subject) ?? 'Message from Backstage';
+        $resolvedSubject = $this->nullableString($subject) ?? 'Message from Everbranch';
         $resolvedBody = trim($body);
 
         if ($resolvedMode === self::MODE_LEGACY_HTML && $resolvedLegacyHtml !== null) {

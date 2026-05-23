@@ -39,7 +39,7 @@
  <div>
  <div class="text-[11px] uppercase tracking-[0.28em] text-zinc-500">Customer Universe</div>
  <h2 class="mt-2 text-xl font-semibold text-zinc-950 sm:text-2xl">What is actually resident in the marketing system</h2>
- <p class="mt-2 max-w-4xl text-sm text-zinc-600">This overview is now built from the imported Shopify, Square, Growave, loyalty, review, and messaging data already living in Backstage. No rollout placeholders.</p>
+ <p class="mt-2 max-w-4xl text-sm text-zinc-600">This overview is now built from the imported Shopify, Square, Growave, loyalty, review, and messaging data already living in Everbranch. No rollout placeholders.</p>
  </div>
  <div class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-500">
  Source overlap base: {{ number_format((int) data_get($overviewDashboard, 'source_overlap_total_profiles', 0)) }} canonical profiles

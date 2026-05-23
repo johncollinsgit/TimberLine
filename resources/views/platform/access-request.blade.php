@@ -10,9 +10,13 @@
     $businessTypes = is_array($formOptions['business_types'] ?? null) ? $formOptions['business_types'] : [];
     $teamSizes = is_array($formOptions['team_sizes'] ?? null) ? $formOptions['team_sizes'] : [];
     $timelines = is_array($formOptions['timelines'] ?? null) ? $formOptions['timelines'] : [];
+    $importPaths = is_array($formOptions['import_paths'] ?? null) ? $formOptions['import_paths'] : [];
+    $mobileInterests = is_array($formOptions['mobile_interests'] ?? null) ? $formOptions['mobile_interests'] : [];
     $selectedBusinessType = (string) old('business_type', '');
     $selectedTeamSize = (string) old('team_size', '');
     $selectedTimeline = (string) old('timeline', '');
+    $selectedImportPath = (string) old('import_path', 'undecided');
+    $selectedMobileInterest = (string) old('mobile_interest', 'undecided');
     $intentHeadline = $intentValue === 'demo'
         ? 'Demo access request'
         : 'Production access request';
@@ -120,7 +124,30 @@
 
                         <div class="grid gap-4 md:grid-cols-2">
                             <div>
-                                <label class="fb-form-label" for="requested_tenant_slug">Tenant slug (optional)</label>
+                                <label class="fb-form-label" for="import_path">Primary setup/import path</label>
+                                <select id="import_path" name="import_path" class="fb-input mt-2">
+                                    @foreach($importPaths as $key => $label)
+                                        <option value="{{ $key }}" @selected($selectedImportPath === $key)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <p class="mt-1 text-xs text-[var(--fb-text-secondary)]">Shopify is the flagship path, but Square, CSV, manual, and other setup paths can be reviewed manually.</p>
+                                @error('import_path') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                            </div>
+                            <div>
+                                <label class="fb-form-label" for="mobile_interest">Mobile app interest</label>
+                                <select id="mobile_interest" name="mobile_interest" class="fb-input mt-2">
+                                    @foreach($mobileInterests as $key => $label)
+                                        <option value="{{ $key }}" @selected($selectedMobileInterest === $key)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <p class="mt-1 text-xs text-[var(--fb-text-secondary)]">This records future Android/iOS interest only; generic Everbranch mobile access is not active yet.</p>
+                                @error('mobile_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                            </div>
+                        </div>
+
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div>
+                                <label class="fb-form-label" for="requested_tenant_slug">Preferred workspace address (optional)</label>
                                 <input
                                     id="requested_tenant_slug"
                                     name="requested_tenant_slug"
@@ -133,7 +160,7 @@
                                     $canonicalTenantDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com')));
                                 @endphp
                                 <div class="fb-help">
-                                    Used to route you to `&lt;slug&gt;.{{ $canonicalTenantDomain }}` after approval.
+                                    This becomes your team’s workspace URL after approval, like `your-workspace.{{ $canonicalTenantDomain }}`.
                                 </div>
                                 @error('requested_tenant_slug') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                             </div>

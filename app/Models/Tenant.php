@@ -101,6 +101,11 @@ class Tenant extends Model
         return $this->hasMany(TenantModuleAccessRequest::class);
     }
 
+    public function customModuleRequests(): HasMany
+    {
+        return $this->hasMany(CustomModuleRequest::class);
+    }
+
     public function commercialOverride(): HasOne
     {
         return $this->hasOne(TenantCommercialOverride::class);
@@ -119,5 +124,10 @@ class Tenant extends Model
     public function discoveryPages(): HasMany
     {
         return $this->hasMany(TenantDiscoveryPage::class);
+    }
+
+    public function setupStatus(): HasOne
+    {
+        return $this->hasOne(TenantSetupStatus::class);
     }
 }

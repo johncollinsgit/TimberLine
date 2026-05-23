@@ -1862,7 +1862,7 @@ class LandlordCommercialConfigService
             'name' => trim((string) ($tenant->name ?? '')) !== ''
                 ? trim((string) $tenant->name)
                 : 'Tenant #'.$tenantId,
-            'description' => 'Forestry Backstage tenant billing prep reference',
+            'description' => 'Everbranch tenant billing prep reference',
             'metadata' => [
                 'tenant_id' => (string) $tenantId,
                 'tenant_slug' => trim((string) ($tenant->slug ?? '')),

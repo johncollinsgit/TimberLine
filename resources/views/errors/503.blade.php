@@ -10,7 +10,7 @@
     <main class="mx-auto flex min-h-screen max-w-2xl items-center px-6">
         <section class="w-full rounded-3xl border border-zinc-200 bg-white/5 p-8 shadow-2xl">
             <p class="text-xs uppercase tracking-[0.3em] text-zinc-400">503</p>
-            <h1 class="mt-3 text-3xl font-semibold">Backstage is taking a breather.</h1>
+            <h1 class="mt-3 text-3xl font-semibold">{{ config('everbranch.product_name', 'Everbranch') }} is taking a breather.</h1>
             <p class="mt-3 text-sm text-zinc-300">
                 We are temporarily unavailable (maintenance or overload). Please try again shortly.
             </p>
@@ -18,7 +18,7 @@
             <div class="mt-6">
                 <a href="{{ route('home') }}"
                    class="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-500/25">
-                    Back to Backstage
+                    Back to {{ config('everbranch.product_name', 'Everbranch') }}
                 </a>
             </div>
         </section>

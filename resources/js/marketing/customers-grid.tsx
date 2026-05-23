@@ -557,11 +557,11 @@ function MarketingCustomersGridApp(props: RootDataset) {
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
                         <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">
-                            Customer master index
+                            Customer index
                         </div>
                         <h2 className="mt-2 text-2xl font-semibold text-white">Manage Customers</h2>
                         <p className="mt-2 max-w-3xl text-sm text-emerald-50/70">
-                            Search canonical profiles, keep Candle Cash separate from the legacy Growave loyalty balance,
+                            Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance,
                             and open full customer records without fighting a long static table.
                         </p>
                     </div>

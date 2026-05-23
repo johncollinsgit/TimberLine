@@ -283,12 +283,12 @@ test('customer detail shows native wishlist summary while keeping legacy wishlis
     $this->actingAs($admin)
         ->get(route('marketing.customers.show', $profile))
         ->assertOk()
-        ->assertSeeText('Backstage Native Wishlist')
-        ->assertSeeText('Native Backstage Wishlist')
+        ->assertSeeText('Everbranch Native Wishlist')
+        ->assertSeeText('Native Everbranch Wishlist')
         ->assertSeeText('Legacy Wishlist Rows')
         ->assertSeeText('Cedar Glow')
         ->assertSeeText('Heritage Pine')
-        ->assertSeeText('Native Backstage');
+        ->assertSeeText('Native Everbranch');
 });
 
 test('customer detail email timeline shows canonical provider context labels and diagnostics', function () {
@@ -1280,8 +1280,8 @@ test('customer detail prefers native review projections while keeping legacy gro
         ->get(route('marketing.customers.show', $profile))
         ->assertOk()
         ->assertSeeText('Active Review Source')
-        ->assertSeeText('Native Backstage')
-        ->assertSeeText('Native Backstage Reviews')
+        ->assertSeeText('Native Everbranch')
+        ->assertSeeText('Native Everbranch Reviews')
         ->assertSeeText('Legacy Growave Reviews (Read-Only)');
 });
 

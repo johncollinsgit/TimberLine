@@ -287,7 +287,7 @@
             <div class="mt-6">
                 <a href="{{ route('home') }}"
                    class="inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-500/25">
-                    Back to Backstage
+                    Back to {{ config('everbranch.product_name', 'Everbranch') }}
                 </a>
             </div>
 

@@ -201,7 +201,7 @@
 
             <div class="mt-4 grid gap-3 md:grid-cols-2">
               <flux:input wire:model.defer="editAccessRequest.company" label="Company" />
-              <flux:input wire:model.defer="editAccessRequest.requested_tenant_slug" label="Requested tenant slug" />
+              <flux:input wire:model.defer="editAccessRequest.requested_tenant_slug" label="Requested workspace address" />
               <div class="md:col-span-2">
                 <label class="text-xs text-[var(--fb-muted)]">Notes</label>
                 <textarea wire:model.defer="editAccessRequest.message" rows="4" class="mt-1 w-full rounded-xl border border-[var(--fb-border)] bg-white px-3 py-2 text-sm text-[var(--fb-text)]"></textarea>

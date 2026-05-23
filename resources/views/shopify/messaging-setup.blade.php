@@ -203,7 +203,7 @@
         @if(! $authorized)
             <article class="message-setup-card">
                 <h2>Messaging setup requires Shopify context</h2>
-                <p class="message-setup-muted">Open this page from Shopify Admin so Backstage can verify the store session and tenant scope.</p>
+                <p class="message-setup-muted">Open this page from Shopify Admin so Everbranch can verify the store session and workspace access.</p>
             </article>
         @elseif(! $messagingEnabled)
             <article class="message-setup-card" data-tone="error">
@@ -218,7 +218,7 @@
                 <x-tenancy.module-state-card
                     :module-state="$messagingModuleState"
                     title="Messaging module state"
-                    description="Visibility and access follow tenant entitlement + module-state conventions."
+                    description="Visibility and access follow workspace setup and module access rules."
                 >
                     <div class="message-setup-guide">
                         @if($setupConfigured)
@@ -443,7 +443,7 @@
 
                     const payload = await response.json().catch(() => ({
                         ok: false,
-                        message: 'Unexpected response from Backstage.',
+                        message: 'Unexpected response from Everbranch.',
                     }));
 
                     if (!response.ok) {

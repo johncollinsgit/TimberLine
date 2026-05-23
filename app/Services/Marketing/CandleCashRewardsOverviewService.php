@@ -50,7 +50,7 @@ class CandleCashRewardsOverviewService
         $primaryReward = $activeRewards->first();
         $programSummary = $primaryReward
             ? 'Customers earn reward credit through live tasks, then redeem it for rewards like '.$primaryReward->name.'.'
-            : 'Customers earn reward credit through live tasks and can redeem it against the reward rows configured in Backstage.';
+            : 'Customers earn reward credit through live tasks and can redeem it against the reward rows configured in Everbranch.';
 
         return [
             'program_name' => 'Rewards',

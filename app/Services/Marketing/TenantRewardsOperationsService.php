@@ -476,7 +476,7 @@ class TenantRewardsOperationsService
             'actions' => $actions,
             'headline' => $hasUserContext
                 ? 'Team access is enforced from the current signed-in user role.'
-                : 'Shopify admin access stays available. Team-role restrictions apply when a Backstage user is signed in.',
+                : 'Shopify admin access stays available. Team-role restrictions apply when an Everbranch user is signed in.',
         ];
     }
 

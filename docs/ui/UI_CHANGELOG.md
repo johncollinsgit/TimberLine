@@ -1,5 +1,333 @@
 # UI Changelog
 
+## 2026-05-21 — Everbranch Brand System and Language Sweep
+
+### What changed
+- Added Evergrove/Everbranch identity, font, color, radius, motion, and display-language tokens to `config/everbranch.php`.
+- Added `--eb-*` token aliases in `resources/css/forestry-ui.css` while preserving existing `--fb-*` compatibility variables.
+- Updated public access request copy from “tenant slug” to “preferred workspace address.”
+- Updated tenant-facing Module Store and `/start` copy from internal blueprint/entitlement wording to setup guidance, feature interests, and access language.
+- Updated Shopify embedded merchant copy where safe from generic Backstage language to Everbranch language without changing Shopify TOML app identity.
+- Updated landlord tenant setup-plan copy while keeping route names, internal fields, and review metadata stable.
+
+### Intentionally unchanged
+- `shopify.app.toml` still names the Partner/dev app `Modern Forestry Backstage` with handle `modernforestrybackstage`.
+- Modern Forestry remains the flagship tenant context.
+- Legacy `public/brand/forestry-backstage-*` files remain for compatibility/history and should not be used on Everbranch platform surfaces.
+- No billing, checkout, module installs, entitlement activation, Shopify deploy/release/dev, OAuth/scope changes, imports, storage uploads, mobile APIs, or privacy deletion behavior was activated.
+
+### Follow-up debt
+- The next UI passes should handle public splash, app shell/sidebar/search, Bud assistant shell, customer profile UX, and deeper Shopify embedded branding cleanup as separate PRs.
+
+## 2026-05-21 — Blueprint-Driven Module Catalog Alignment
+
+### What changed
+- Added blueprint-aware module recommendation display to the tenant Module Store.
+- Added landlord tenant detail visibility for blueprint-recommended, requested, planned, future, and not-active-yet module families.
+- Added tenant `/start` module guidance that uses the same recommended/requested/planned/not-active language as the Module Store.
+
+### What did not change
+- No modules were created, installed, enabled, or entitled from blueprint recommendations.
+- No billing, checkout, subscriptions, Shopify Billing, Stripe checkout, Shopify OAuth, Square automation, imports, storage uploads, messaging, notifications, mobile APIs, privacy deletion, or impersonation behavior changed.
+- Jobs, tasks, assignments, photos, files, materials, invoices, and communication remain display-only/future module families unless separately implemented later.
+
+### Next recommended UI/navigation step
+- Add a landlord filter or summary for tenants whose blueprints show future-module demand once real operator review volume exists.
+
+## 2026-05-21 — Landlord Blueprint Edit and Review Flow
+
+### What changed
+- Added landlord `/landlord/tenants/{tenant}/blueprint/edit` for editing existing tenant blueprint/profile metadata.
+- Added review status, reviewed by/at context, internal notes, internal next action, and an Edit Blueprint CTA to landlord tenant detail.
+- Kept tenant `/start` aligned to tenant-facing blueprint updates while hiding landlord-only blueprint internal notes and next actions.
+
+### What did not change
+- No modules were installed, enabled, or entitled from blueprint edits.
+- No billing, checkout, subscriptions, Shopify Billing, Stripe checkout, Shopify OAuth, Square automation, CSV imports, storage uploads, messaging, notifications, mobile APIs, privacy deletion, or impersonation behavior changed.
+- Work-management fields remain requested/planned setup intent only.
+
+### Next recommended UI/navigation step
+- Add a compact blueprint review summary/filter to the landlord tenant directory once operators have real reviewed/needs-follow-up blueprint volume.
+
+## 2026-05-21 — Work Management Blueprint Intent
+
+### What changed
+- Added work-management intent controls to landlord `/landlord/tenants/create` for project/work tracking, tasks, assignments, communication, uploads, and mobile field capture.
+- Added landlord tenant detail visibility for project/task/assignee/communication/upload labels, requested setup intent, notes, and recommended future modules.
+- Added tenant `/start` Work Management Setup guidance that marks project/task/assignment/photo/file/mobile capture needs as requested/planned and not active yet.
+
+### What did not change
+- No Projects, Tasks, Assignments, Comments, Messaging, Photo Upload, File Upload, Mobile Capture, Notification, Job Costing, Invoicing, Inventory, Reporting, storage upload, or mobile API workflow was built.
+- No modules were installed, enabled, or entitled from work-management intent.
+- No billing, checkout, subscriptions, Shopify Billing, Stripe checkout, Shopify OAuth, Square automation, CSV import execution, tenant resolution, or impersonation behavior changed.
+
+### Next recommended UI/navigation step
+- Add a landlord blueprint edit/review screen before building any real project/task/upload module.
+
+## 2026-05-21 — Tenant Blueprint Foundation
+
+### What changed
+- Added landlord `/landlord/tenants/create` as a blueprint-first tenant creation surface for Shopify, direct/manual, CSV, Square-pending, demo, sandbox, and unknown setup paths.
+- Added landlord tenant detail blueprint context: business template, account mode, operating mode, data source path, customer/work/money/material/stage labels, starter module recommendations, and next action.
+- Added tenant `/start` setup profile context so non-Shopify tenants see business-template and operating-mode guidance instead of Shopify-specific framing only.
+
+### What did not change
+- No business modules were built.
+- No modules were installed, enabled, or entitled from blueprint choices.
+- No billing, checkout, subscriptions, Shopify Billing, Stripe checkout, Shopify OAuth, Square automation, CSV import execution, or tenant resolution behavior changed.
+- Modern Forestry remains the flagship production-alpha tenant lane.
+
+### Next recommended UI/navigation step
+- Add a landlord blueprint edit/review screen only after the create/display path has been used against demo and sandbox tenants.
+
+## 2026-05-21 — Test Access and Seed Surface Pass
+
+### What changed
+- Added a landlord tenant detail "Test Access" panel that shows the tenant access lane, account mode, tenant host, available tenant users, expected landing route, and whether direct impersonation is deferred.
+- Added clear production/demo/sandbox/Modern Forestry warnings so operators know when they are looking at demo data, disposable test data, or the flagship alpha tenant.
+- Added `php artisan everbranch:seed-access-surfaces` to create/update safe local/staging landlord, Modern Forestry, demo, and sandbox access records.
+
+### What did not change
+- No direct impersonation, login bypass, password reset action, billing, checkout, module entitlement, Shopify deploy/release/dev, OAuth/scope, or privacy deletion behavior was activated.
+- Test access remains normal-login based until a future audited and reversible impersonation flow is deliberately implemented.
+
+### Next recommended UI/navigation step
+- Add a real audited impersonation flow only after a dedicated audit table/session design and exit banner are implemented and tested.
+
+## 2026-05-21 — Access Surface Separation Pass
+
+### What changed
+- Added a landlord-only provisioning entry at `/landlord/onboarding/wizard` while keeping tenant-facing `/start` as the customer setup/status page.
+- Reworded the authenticated onboarding wizard from ambiguous "Set up your tenant" language to blueprint/provisioning language.
+- Added demo and sandbox access-lane banners in the tenant app shell when the tenant access profile marks `account_mode` as `demo`, `sandbox`, or `test`.
+- Added a tenant management map on the landlord tenant detail page so Overview, Users & Access, Modules, Onboarding / Setup Status, Integrations, Commercial / Billing Intent, Diagnostics, and deferred Impersonation/Test Login are visibly separated.
+
+### What did not change
+- No Shopify app name, handle, OAuth, scopes, deploy/release, or privacy webhook behavior changed.
+- No billing, checkout, subscriptions, module installs, module entitlements, or tenant resolution fundamentals changed.
+- Modern Forestry remains the flagship tenant context; generic provisioning choices are no longer the default login destination for completed tenant users.
+
+### Next recommended UI/navigation step
+- Add a safe, audited impersonation/test-login workflow only after tenant boundary tests and operator audit logging are expanded for that action.
+
+## 2026-05-21 — Everbranch Logo and Brand Asset Rollout (PR 20)
+
+### What changed
+- Added a traced Everbranch SVG asset set:
+  - `public/brand/everbranch-mark.svg`
+  - `public/brand/everbranch-lockup.svg`
+  - `public/brand/everbranch-auth.svg`
+  - `public/brand/everbranch-favicon.svg`
+- Added config-backed brand asset paths and cache tag in `config/everbranch.php`.
+- Updated shared app logo components, sidebar/topbar branding, auth shell branding, public promo navigation, intro logo, head metadata/icons, product-review email fallback branding, and the legacy welcome fallback to use Everbranch assets/copy.
+- Refreshed `favicon.png`, `favicon.ico`, `apple-touch-icon.png`, and `og-image.png` from the same traced Everbranch mark.
+
+### What did not change
+- Shopify Partner Dashboard/TOML identity remains `Modern Forestry Backstage` / `modernforestrybackstage`.
+- Legacy Forestry Backstage assets remain in `public/brand/` for compatibility/history.
+- Modern Forestry tenant-specific catalog/mobile/product copy was intentionally preserved.
+- No routes, Shopify OAuth/scopes, billing, modules, entitlements, tenant resolution, or deploy behavior changed.
+
+### Next recommended UI/navigation step
+- Capture screenshots of public, auth, landlord, tenant, and Shopify embedded shells after deployment to verify the new mark is legible at small sizes.
+
+## 2026-05-21 — Self-Service Readiness Dashboard (PR 16)
+
+### What changed
+- Added landlord `/landlord/readiness` as an operator-only self-service readiness dashboard.
+- Added readiness cards for onboarding, intake, Module App Store, custom requests, commercial intent, billing, Shopify app, privacy webhooks, Shopify external evidence, mobile, and launch summary.
+- Added status labels for `ready`, `partial`, `blocked`, `pending_external`, `disabled`, and `not_started`.
+- Added a Readiness link to the landlord dashboard.
+
+### What did not change
+- No billing checkout activation.
+- No Shopify Billing, Stripe billing, charges, subscriptions, payment links, quotes, or invoices.
+- No Shopify OAuth, scope, app name/handle, or privacy webhook behavior changes.
+- No module installs or entitlement changes.
+- No generic Everbranch mobile app/API.
+- No public launch approval.
+
+### Next recommended UI/navigation step
+- Capture live Shopify evidence and keep the dashboard pointed at real evidence artifacts as they arrive.
+
+## 2026-05-21 — Landlord Commercial Intent Gate (PR 14)
+
+### What changed
+- Added landlord `/landlord/commercial-intent` as an operator-only summary for plan interest, billing lane interest, implementation help, custom request context, and billing lane blockers.
+- Added display-only billing lane decision statuses for intent, review, missing lane/plan, disabled billing posture, Shopify evidence, and manual follow-up.
+- Added review-only commercial status, next action, and notes updates from the commercial intent gate.
+- Added a Commercial Intent link to the landlord dashboard.
+
+### What did not change
+- No Shopify Billing, Stripe billing, checkout, payment links, quotes, invoices, or subscriptions.
+- No module installs or entitlement changes.
+- No Shopify OAuth/scope/privacy webhook behavior changes.
+- No tenant resolution changes.
+
+### Next recommended UI/navigation step
+- Capture Shopify Partner Dashboard/dev-store evidence or add a manual commercial follow-up SOP before any billing activation UI.
+
+## 2026-05-21 — Plan Selection Without Billing (PR 13)
+
+### What changed
+- Added tenant `/start` controls for plan interest, likely billing lane interest, implementation help interest, and commercial notes.
+- Added display-only guidance explaining that plan selection is intent only and does not start billing, checkout, subscriptions, quotes, invoices, module installs, or entitlement changes.
+- Added landlord intake queue visibility for commercial intent with review-only commercial status and next-action fields.
+
+### What did not change
+- No Shopify Billing, Stripe billing, checkout, payment links, quotes, invoices, or subscriptions.
+- No module installs or entitlement changes.
+- No Shopify OAuth/scope/privacy webhook behavior changes.
+- No tenant resolution changes.
+
+### Next recommended UI/navigation step
+- Add an operator-facing commercial intent summary/report before any billing activation work.
+
+## 2026-05-21 — Custom Module Request Workflow (PR 8)
+
+### What changed
+- Added tenant-facing custom module request pages:
+  - request list
+  - request form
+  - request detail
+- Added Module Store CTAs for "Request something custom" and per-card "Request customization".
+- Added landlord `/landlord/custom-module-requests` triage with filters, status updates, next action, and internal notes.
+- Added landlord dashboard access to Custom Requests.
+
+### What did not change
+- No new product modules.
+- No automatic conversion of requests into reusable modules.
+- No module installs or entitlement changes.
+- No billing checkout activation or paid module purchasing.
+- No quotes or invoices.
+- No jobs/projects/photos/messaging/mobile module implementation.
+- No Square automation, CSV import execution, Shopify OAuth changes, or generic Everbranch mobile API.
+
+### Next recommended UI/navigation step
+- Harden Shopify App Store readiness/compliance evidence and Partner Dashboard verification before public launch polish.
+
+## 2026-05-21 — Module App Store Productization (PR 7)
+
+### What changed
+- Added display-only product metadata to tenant and Shopify embedded Module Store cards:
+  - category
+  - lifecycle
+  - setup effort
+  - required integrations
+  - pricing impact
+  - entitlement requirement
+  - mobile relevance
+- Updated Module Store intro copy so tenants understand module cards are driven by the canonical catalog and entitlement resolver.
+- Updated Shopify embedded App Store copy to state that setup and entitlement context is guidance only.
+- Added landlord commercial module table columns for lifecycle, tenant visibility, setup, integrations, and pricing mode.
+
+### What did not change
+- No new modules.
+- No module installs or entitlement changes.
+- No billing checkout activation or paid module purchasing.
+- No custom module request workflow.
+- No mobile modules, jobs/projects/photos/quotes/invoices, or messaging workflows.
+- No Shopify OAuth/install behavior changes.
+- No generic Everbranch mobile API.
+
+### Next recommended UI/navigation step
+- Add a minimal custom module request workflow with tenant request capture and landlord triage.
+
+## 2026-05-21 — Tenant-Facing Setup Guidance Polish (PR 6)
+
+### What changed
+- Improved the tenant `/start` setup status section so it reads as setup guidance instead of a raw status editor.
+- Added display-only guidance for setup phase, import path, Shopify connection, Square/CSV/manual coordination, module interests, mobile interest, Everbranch review, and next recommended action.
+- Added an explicit "What is not active yet" block covering checkout, paid module activation, Square automation, CSV execution, and generic mobile app access.
+- Clarified that module interests are planning signals only and do not install, enable, entitle, or bill modules.
+- Clarified that Android/iOS mobile interest is future companion app planning only.
+
+### What did not change
+- No billing checkout activation.
+- No paid module activation, module additions, module movement, or entitlement changes.
+- No Shopify OAuth/install behavior changes.
+- No Square automation or CSV import execution.
+- No jobs/projects/photos/quotes/invoices/messaging workflows.
+- No generic Everbranch mobile API or native/mobile app scaffold.
+
+### Next recommended UI/navigation step
+- Productize the existing Module Store/App Store surfaces with clearer module lifecycle, visibility, setup complexity, and entitlement language.
+
+## 2026-05-21 — Landlord Intake Queue and Triage Views (PR 5)
+
+### What changed
+- Added `/landlord/onboarding/intake` as a landlord-only intake queue for tenant setup statuses.
+- Added filter chips for Everbranch review, Shopify selected but not connected, Square, CSV, manual, undecided import path, mobile interest, and reviewed statuses.
+- Added source access request context, last updated time, next action, internal notes, and review-only operator controls to the intake queue.
+- Added an Intake Queue link to the landlord dashboard.
+
+### What did not change
+- No billing checkout activation.
+- No module additions, module movement, or entitlement changes.
+- No Shopify OAuth/install behavior changes.
+- No Square automation, CSV import execution, or generic Everbranch mobile API.
+- No tenant-facing UI changes.
+
+### Next recommended UI/navigation step
+- Improve tenant-facing setup guidance copy on `/start` so each import path has a clear next step without implying automation is live.
+
+## 2026-05-21 — Access Request Provisioning Bridge (PR 4)
+
+### What changed
+- Landlord onboarding diagnostics now shows when a tenant setup status was seeded from an access request.
+- Setup status internal notes now carry the originating access request id and captured intake values for operator review.
+
+### What did not change
+- No billing checkout activation.
+- No new modules, module movement, or entitlement changes.
+- No Shopify OAuth/install behavior changes.
+- No Square automation, CSV import execution, or generic Everbranch mobile API.
+- No route names or URLs changed.
+
+### Next recommended UI/navigation step
+- Add landlord intake queue filters for tenants waiting on import/mobile review.
+
+## 2026-05-21 — Everbranch Intake and Setup Status Skeleton (PR 3)
+
+### What changed
+- Added a setup status section to the authenticated tenant `/start` page.
+- Added import path, Square/CSV/manual setup status, safe module interest, and Android/iOS mobile interest controls.
+- Added a client setup status table to landlord onboarding diagnostics with lightweight review status, next action, and internal notes.
+- Added public access request fields for setup/import path and mobile interest.
+
+### What did not change
+- No billing checkout activation.
+- No new modules or module movement.
+- No Shopify OAuth/install behavior changes.
+- No generic Everbranch mobile API.
+- No broad UI rewrite; this reuses existing Start Here and landlord diagnostics surfaces.
+
+### Next recommended UI/navigation step
+- Promote approved access-request metadata into tenant setup status during landlord provisioning, then add import-readiness filters for operator triage.
+
+## 2026-05-21 — Everbranch Brand and Navigation Coherence (PR 2)
+
+### What changed
+- Added a small centralized product label config in `config/everbranch.php`.
+- Updated obvious public/auth/shared shell/admin platform labels from Forestry Backstage/Backstage to Everbranch:
+  - public page title/footer/logo alt fallbacks
+  - contact/demo product copy
+  - auth meta and workspace subtitle fallback
+  - shared app topbar/sidebar/logo labels
+  - Shopify embedded shell fallback title
+  - landlord dashboard heading to Everbranch Admin
+  - error page back-link labels
+- Added `docs/operations/everbranch-route-page-ownership-inventory.md` to document route/page ownership and safe label recommendations.
+
+### What did not change
+- No route names, URLs, module catalog entries, module visibility, tenant resolution behavior, billing flags, or Shopify OAuth behavior changed.
+- Shopify app TOML still uses the current Modern Forestry Backstage app name/handle pending Partner Dashboard/app review decision.
+- Modern Forestry-scoped mobile catalog/API copy remains Modern Forestry-specific.
+- Tenant/internal Backstage operational copy in marketing, wiki, diagnostics, and mature feature pages was intentionally left for later page-by-page UX cleanup.
+
+### Next recommended UI/navigation step
+- Add setup/intake clarity for Shopify, Square, CSV, manual import, and Android/iOS mobile readiness without claiming self-service setup or generic mobile APIs are ready.
+
 ## 2026-04-20 — Message Analytics AI Budget Readiness (Advisory Only)
 
 ### What changed

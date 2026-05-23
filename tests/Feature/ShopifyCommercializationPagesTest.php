@@ -31,7 +31,7 @@ test('contact placeholder page renders configured channels', function () {
     $this->get(route('platform.contact'))
         ->assertOk()
         ->assertSee('data-premium-motion="public"', false)
-        ->assertSeeText('Contact Forestry Backstage')
+        ->assertSeeText('Talk with the Everbranch team')
         ->assertSee('mailto:sales@theeverbranch.com?subject=Platform%20Demo%20Request', false)
         ->assertSeeText('Back to homepage');
 });
@@ -489,10 +489,10 @@ test('embedded integrations page derives locked and coming soon states from enti
         ->assertSee('href="/shopify/app/plans?', false)
         ->assertSee('data-integration-cta-state="locked"', false)
         ->assertSeeText('Upgrade to unlock')
-        ->assertSeeText('SMS access follows tenant entitlements and provider readiness configuration.')
+        ->assertSeeText('SMS access follows workspace access and provider readiness configuration.')
         ->assertSee('data-integration-card-status="sms_gateway"', false)
         ->assertSee('data-integration-card-source="sms_gateway"', false)
-        ->assertSeeText('Data path: Plan entitlement')
+        ->assertSeeText('Data path: Plan access')
         ->assertSee('data-integration-cta-state="coming_soon"', false)
         ->assertSeeText('Coming soon')
         ->assertSeeText('QuickBooks is currently a roadmap-visible placeholder.')

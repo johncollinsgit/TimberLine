@@ -25,6 +25,8 @@ class CustomerAccessRequestService
      *   business_type?:string,
      *   team_size?:string,
      *   timeline?:string,
+     *   import_path?:string,
+     *   mobile_interest?:string,
      *   website?:string,
      *   message?:string,
      *   preferred_plan_key?:string,
@@ -44,6 +46,8 @@ class CustomerAccessRequestService
         $businessType = strtolower(trim((string) ($input['business_type'] ?? '')));
         $teamSize = strtolower(trim((string) ($input['team_size'] ?? '')));
         $timeline = strtolower(trim((string) ($input['timeline'] ?? '')));
+        $importPath = strtolower(trim((string) ($input['import_path'] ?? '')));
+        $mobileInterest = strtolower(trim((string) ($input['mobile_interest'] ?? '')));
         $website = trim((string) ($input['website'] ?? ''));
         $message = trim((string) ($input['message'] ?? ''));
         $preferredPlanKey = strtolower(trim((string) ($input['preferred_plan_key'] ?? '')));
@@ -58,7 +62,7 @@ class CustomerAccessRequestService
             $requestedSlug = trim((string) config('tenancy.onboarding.demo_tenant_slug', 'demo'));
         }
 
-        return DB::transaction(function () use ($intent, $email, $name, $company, $businessType, $teamSize, $timeline, $website, $message, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
+        return DB::transaction(function () use ($intent, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
             $normalizedSlug = $this->normalizeSlug($requestedSlug);
 
             $existing = $this->findOpenRequest($email, $normalizedSlug);
@@ -79,6 +83,8 @@ class CustomerAccessRequestService
                         'business_type' => $businessType !== '' ? $businessType : null,
                         'team_size' => $teamSize !== '' ? $teamSize : null,
                         'timeline' => $timeline !== '' ? $timeline : null,
+                        'import_path' => $importPath !== '' ? $importPath : null,
+                        'mobile_interest' => $mobileInterest !== '' ? $mobileInterest : null,
                         'website' => $website !== '' ? $website : null,
                         'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                         'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
@@ -115,6 +121,8 @@ class CustomerAccessRequestService
                     'business_type' => $businessType !== '' ? $businessType : null,
                     'team_size' => $teamSize !== '' ? $teamSize : null,
                     'timeline' => $timeline !== '' ? $timeline : null,
+                    'import_path' => $importPath !== '' ? $importPath : null,
+                    'mobile_interest' => $mobileInterest !== '' ? $mobileInterest : null,
                     'website' => $website !== '' ? $website : null,
                     'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                     'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,

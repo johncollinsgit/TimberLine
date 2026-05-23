@@ -1431,7 +1431,7 @@ class TenantCommercialExperienceService
                 ];
             }
             if ($upgradeMessage === '') {
-                $upgradeMessage = 'Upgrade and module entitlement determine when this integration can be activated.';
+                $upgradeMessage = 'Upgrade and module access determine when this integration can be activated.';
             }
 
             $cta = $this->integrationCtaForState(
@@ -1654,9 +1654,9 @@ class TenantCommercialExperienceService
         if ($state === 'coming_soon') {
             $notes[] = 'This connector is roadmap-visible only in the current phase.';
         } elseif ($state === 'locked') {
-            $notes[] = 'Access is controlled by tenant entitlement and plan/add-on profile.';
+            $notes[] = 'Access is controlled by workspace access and plan/add-on profile.';
         } elseif (! $configuredInApp) {
-            $notes[] = 'Status is derived from local configuration and entitlement context only.';
+            $notes[] = 'Status is derived from local configuration and access context only.';
         }
         $notes = array_values(array_unique($this->normalizeStringList($notes)));
 
@@ -1792,7 +1792,7 @@ class TenantCommercialExperienceService
         array $statusContext
     ): string {
         if ($state === 'locked') {
-            return 'Plan entitlement';
+            return 'Plan access';
         }
 
         if ($state === 'coming_soon') {

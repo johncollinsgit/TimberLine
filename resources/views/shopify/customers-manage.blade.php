@@ -1386,7 +1386,7 @@
 
                     const payload = await response.json().catch(() => ({
                         ok: false,
-                        message: 'Unexpected response from Backstage.',
+                        message: 'Unexpected response from Everbranch.',
                     }));
 
                     if (!response.ok || !payload.ok || !payload.data) {

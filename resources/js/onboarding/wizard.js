@@ -525,10 +525,10 @@ export function mountOnboardingWizardNow() {
         throw new Error("Finalize returned no final id.");
       }
       if (finalizeStatusEl) {
-        finalizeStatusEl.textContent = `Finalized blueprint #${state.final.id} (blueprint-only).`;
+        finalizeStatusEl.textContent = `Saved setup plan #${state.final.id} (setup-only).`;
       }
       await loadSummary();
-      window.dispatchEvent(new CustomEvent("toast", { detail: { message: "Blueprint finalized.", style: "success" } }));
+      window.dispatchEvent(new CustomEvent("toast", { detail: { message: "Setup plan saved.", style: "success" } }));
     } catch (error) {
       const payload = error?.response?.data || null;
       showErrors(payload || "Finalize failed.");

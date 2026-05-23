@@ -20,6 +20,7 @@ class CustomerAccessApprovalService
     public function __construct(
         protected LandlordOperatorActionAuditService $auditService,
         protected TenantHostBuilder $hostBuilder,
+        protected TenantSetupStatusService $setupStatusService,
     ) {
     }
 
@@ -68,6 +69,8 @@ class CustomerAccessApprovalService
                 $user->tenants()->syncWithoutDetaching([
                     (int) $tenant->id => ['role' => 'manager'],
                 ]);
+
+                $this->setupStatusService->seedFromAccessRequest($tenant, $request);
             }
 
             if ((string) ($request->status ?? '') !== 'approved') {
@@ -108,6 +111,7 @@ class CustomerAccessApprovalService
                     'email' => (string) ($request->email ?? ''),
                     'requested_tenant_slug' => $slug,
                     'preferred_host' => $preferredHost,
+                    'setup_status_seeded' => $tenant !== null,
                 ],
                 beforeState: $before,
                 afterState: $after,

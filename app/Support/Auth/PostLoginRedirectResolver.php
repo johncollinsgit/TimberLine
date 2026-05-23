@@ -3,6 +3,7 @@
 namespace App\Support\Auth;
 
 use App\Models\User;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -15,7 +16,8 @@ class PostLoginRedirectResolver
 
     public function resolve(Request $request, User $user, string $authMethod = 'password'): string
     {
-        $membershipMap = $this->membershipMap($user);
+        $memberships = $this->memberships($user);
+        $membershipMap = $this->membershipMap($memberships);
         $intent = $this->intentStore->pull($request);
 
         $tenantIntentExists = $intent !== null;
@@ -23,15 +25,20 @@ class PostLoginRedirectResolver
         $tenantMembershipPassed = is_int($tenantIntentId)
             ? in_array($tenantIntentId, $membershipMap['ids'], true)
             : false;
+        $preferredTenant = $tenantMembershipPassed
+            ? $this->membershipById($memberships, (int) $tenantIntentId)
+            : ($tenantIntentExists ? null : $this->preferredTenant($request, $memberships));
 
-        if ($tenantMembershipPassed && $request->hasSession()) {
-            $request->session()->put('tenant_id', $tenantIntentId);
+        if ($preferredTenant instanceof Tenant && $request->hasSession() && (! $tenantIntentExists || $tenantMembershipPassed)) {
+            $request->session()->put('tenant_id', (int) $preferredTenant->id);
         }
 
         $intendedDecision = $this->pullIntendedDecision($request, $membershipMap);
 
-        $target = HomeRedirect::pathFor($user);
-        $strategy = 'role_fallback';
+        $target = $this->shouldUseLegacyLandlordDoor($request, $user, $memberships)
+            ? route('landlord.dashboard', absolute: false)
+            : HomeRedirect::pathFor($user, $preferredTenant);
+        $strategy = $target === route('landlord.dashboard', absolute: false) ? 'landlord_operator' : 'role_fallback';
 
         if ($intendedDecision['accepted'] && is_string($intendedDecision['path'])) {
             $target = $intendedDecision['path'];
@@ -54,6 +61,7 @@ class PostLoginRedirectResolver
             'intended_accepted' => $intendedDecision['accepted'],
             'strategy' => $strategy,
             'target' => $target,
+            'preferred_tenant_id' => $preferredTenant instanceof Tenant ? (int) $preferredTenant->id : null,
         ]);
 
         return $target;
@@ -114,12 +122,20 @@ class PostLoginRedirectResolver
     /**
      * @return array{ids:array<int,int>,slugs:array<int,string>}
      */
-    protected function membershipMap(User $user): array
+    protected function memberships(User $user)
     {
-        $memberships = $user->tenants()
+        return $user->tenants()
+            ->with(['accessProfile', 'setupStatus'])
             ->select('tenants.id', 'tenants.slug')
             ->get();
+    }
 
+    /**
+     * @param  \Illuminate\Support\Collection<int,Tenant>  $memberships
+     * @return array{ids:array<int,int>,slugs:array<int,string>}
+     */
+    protected function membershipMap($memberships): array
+    {
         $ids = [];
         $slugs = [];
 
@@ -138,6 +154,34 @@ class PostLoginRedirectResolver
             'ids' => array_values(array_unique($ids)),
             'slugs' => array_values(array_unique($slugs)),
         ];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int,Tenant>  $memberships
+     */
+    protected function preferredTenant(Request $request, $memberships): ?Tenant
+    {
+        $sessionTenantId = $request->hasSession() ? $this->positiveInt($request->session()->get('tenant_id')) : null;
+        if ($sessionTenantId !== null) {
+            $tenant = $this->membershipById($memberships, $sessionTenantId);
+            if ($tenant instanceof Tenant) {
+                return $tenant;
+            }
+        }
+
+        $tenant = $memberships->first();
+
+        return $tenant instanceof Tenant ? $tenant : null;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int,Tenant>  $memberships
+     */
+    protected function membershipById($memberships, int $tenantId): ?Tenant
+    {
+        $tenant = $memberships->firstWhere('id', $tenantId);
+
+        return $tenant instanceof Tenant ? $tenant : null;
     }
 
     /**
@@ -225,6 +269,100 @@ class PostLoginRedirectResolver
         return array_values(array_unique($hosts));
     }
 
+    /**
+     * @param  \Illuminate\Support\Collection<int,Tenant>  $memberships
+     */
+    protected function shouldUseLegacyLandlordDoor(Request $request, User $user, $memberships): bool
+    {
+        if (! $this->isLandlordHost($request)) {
+            return false;
+        }
+
+        $role = strtolower(trim((string) ($user->role ?? '')));
+        if (! in_array($role, $this->landlordOperatorRoles(), true)) {
+            return false;
+        }
+
+        $allowedEmails = $this->landlordOperatorEmails();
+        $email = strtolower(trim((string) ($user->email ?? '')));
+
+        if ($allowedEmails !== []) {
+            return $email !== '' && in_array($email, $allowedEmails, true);
+        }
+
+        return $memberships->isEmpty();
+    }
+
+    protected function isLandlordHost(Request $request): bool
+    {
+        $host = $this->normalizeHost((string) $request->getHost());
+        if ($host === null) {
+            return false;
+        }
+
+        $landlordHosts = config('tenancy.landlord.hosts', []);
+        if (! is_array($landlordHosts)) {
+            $landlordHosts = [];
+        }
+
+        $primaryHost = $this->normalizeHost((string) config('tenancy.landlord.primary_host', ''));
+        if ($primaryHost !== null) {
+            $landlordHosts[] = $primaryHost;
+        }
+
+        foreach ($landlordHosts as $landlordHost) {
+            if ($host === $this->normalizeHost((string) $landlordHost)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function landlordOperatorRoles(): array
+    {
+        $configured = config('tenancy.landlord.operator_roles', ['platform_admin', 'admin']);
+
+        if (! is_array($configured)) {
+            return ['platform_admin', 'admin'];
+        }
+
+        $roles = [];
+        foreach ($configured as $candidate) {
+            $normalized = strtolower(trim((string) $candidate));
+            if ($normalized !== '') {
+                $roles[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique($roles));
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function landlordOperatorEmails(): array
+    {
+        $configured = config('tenancy.landlord.operator_emails', []);
+
+        if (! is_array($configured)) {
+            return [];
+        }
+
+        $emails = [];
+        foreach ($configured as $candidate) {
+            $normalized = strtolower(trim((string) $candidate));
+            if ($normalized !== '') {
+                $emails[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique($emails));
+    }
+
     protected function normalizeHost(?string $value): ?string
     {
         $host = strtolower(trim((string) $value));
@@ -237,5 +375,16 @@ class PostLoginRedirectResolver
         $token = strtolower(trim((string) $value));
 
         return $token !== '' ? $token : null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $cast = (int) $value;
+
+        return $cast > 0 ? $cast : null;
     }
 }

@@ -201,7 +201,7 @@
         @if(! $authorized)
             <article class="devnotes-card">
                 <h2>Development Notes requires Shopify context</h2>
-                <p>Open this page from Shopify Admin so Backstage can verify store access.</p>
+                <p>Open this page from Shopify Admin so Everbranch can verify store access.</p>
             </article>
         @else
             <div class="devnotes-alert" id="devnotes-alert" hidden></div>
@@ -354,7 +354,7 @@
 
                 const payload = await response.json().catch(() => ({
                     ok: false,
-                    message: "Unexpected response from Backstage.",
+                    message: "Unexpected response from Everbranch.",
                 }));
 
                 if (!response.ok) {

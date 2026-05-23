@@ -11,7 +11,7 @@
                         <x-app-logo-icon class="size-9 fill-current text-black dark:text-white" />
                     </span>
 
-                    <span class="sr-only">{{ config('app.name', 'Modern Forestry Backstage') }}</span>
+                    <span class="sr-only">{{ config('app.name', config('everbranch.product_name', 'Everbranch')) }}</span>
                 </a>
 
                 <div class="flex flex-col gap-6">

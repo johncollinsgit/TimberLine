@@ -252,7 +252,7 @@ class ShopifyEmbeddedShellPayloadBuilder
                 }
 
                 return [
-                    'type' => 'Backstage',
+                    'type' => config('everbranch.product_name', 'Everbranch'),
                     'subtype' => 'section',
                     'title' => $title,
                     'subtitle' => $subtitle,

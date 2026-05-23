@@ -15,7 +15,8 @@ class TenantModuleCatalogService
         protected TenantModuleAccessResolver $accessResolver,
         protected TenantDisplayLabelResolver $displayLabelResolver,
         protected LandlordCommercialConfigService $commercialConfigService,
-        protected LandlordOperatorActionAuditService $auditService
+        protected LandlordOperatorActionAuditService $auditService,
+        protected TenantBlueprintModuleRecommendationService $blueprintRecommendations
     ) {
     }
 
@@ -48,10 +49,31 @@ class TenantModuleCatalogService
                 continue;
             }
 
+            $productMetadata = $this->moduleProductMetadata($moduleKey, $definition, $moduleState);
+
             $modules[] = [
                 'module_key' => $moduleKey,
                 'display_name' => (string) ($moduleState['label'] ?? $definition['display_name'] ?? Str::headline($moduleKey)),
                 'description' => (string) ($definition['description'] ?? ''),
+                'short_description' => (string) ($productMetadata['short_description'] ?? ''),
+                'long_description' => (string) ($productMetadata['long_description'] ?? ''),
+                'category' => (string) ($productMetadata['category'] ?? 'operations'),
+                'category_label' => (string) ($productMetadata['category_label'] ?? 'Operations'),
+                'lifecycle' => (string) ($productMetadata['lifecycle'] ?? 'internal'),
+                'lifecycle_label' => (string) ($productMetadata['lifecycle_label'] ?? 'Internal'),
+                'setup_effort' => (string) ($productMetadata['setup_effort'] ?? 'standard'),
+                'setup_effort_label' => (string) ($productMetadata['setup_effort_label'] ?? 'Standard setup'),
+                'required_integrations' => (array) ($productMetadata['required_integrations'] ?? []),
+                'required_integrations_label' => (string) ($productMetadata['required_integrations_label'] ?? 'No required integration'),
+                'mobile_relevance' => (string) ($productMetadata['mobile_relevance'] ?? 'not_mobile_specific'),
+                'mobile_relevance_label' => (string) ($productMetadata['mobile_relevance_label'] ?? 'Not mobile-specific'),
+                'pricing_impact_label' => (string) ($productMetadata['pricing_impact_label'] ?? 'Pricing impact not configured'),
+                'entitlement_requirement_label' => (string) ($productMetadata['entitlement_requirement_label'] ?? 'Access review required'),
+                'tenant_visibility_label' => (string) ($productMetadata['tenant_visibility_label'] ?? 'Hidden unless explicitly safe'),
+                'product_summary' => (string) ($productMetadata['product_summary'] ?? ''),
+                'blueprint_display_state' => 'unavailable',
+                'blueprint_display_state_label' => 'Unavailable',
+                'blueprint_recommendation_reason' => 'Catalog display state only.',
                 'status' => strtolower(trim((string) ($definition['status'] ?? 'disabled'))),
                 'channels' => array_values(array_map('strval', (array) ($definition['channels'] ?? []))),
                 'included_in_plans' => array_values(array_map('strval', (array) ($definition['included_in_plans'] ?? []))),
@@ -63,13 +85,33 @@ class TenantModuleCatalogService
             ];
         }
 
+        $blueprintRecommendations = $this->blueprintRecommendations->forTenant($tenantId, $modules);
+        $modules = $this->blueprintRecommendations->decorateCatalogModules($modules, $blueprintRecommendations);
+
         usort($modules, function (array $left, array $right): int {
             $bucketOrder = ['active' => 0, 'available' => 1, 'upgrade' => 2, 'request' => 3];
+            $blueprintOrder = [
+                'recommended' => 0,
+                'requested' => 0,
+                'active' => 1,
+                'available' => 2,
+                'requires_setup' => 3,
+                'planned' => 4,
+                'future' => 5,
+                'not_active_yet' => 5,
+                'unavailable' => 9,
+            ];
 
             $bucketCompare = ($bucketOrder[$left['state_bucket'] ?? 'request'] ?? 99)
                 <=> ($bucketOrder[$right['state_bucket'] ?? 'request'] ?? 99);
             if ($bucketCompare !== 0) {
                 return $bucketCompare;
+            }
+
+            $blueprintCompare = ($blueprintOrder[$left['blueprint_display_state'] ?? 'unavailable'] ?? 99)
+                <=> ($blueprintOrder[$right['blueprint_display_state'] ?? 'unavailable'] ?? 99);
+            if ($blueprintCompare !== 0) {
+                return $blueprintCompare;
             }
 
             return strcmp(
@@ -92,6 +134,7 @@ class TenantModuleCatalogService
                 'operating_mode' => (string) ($resolved['operating_mode'] ?? config('module_catalog.defaults.operating_mode', 'shopify')),
             ],
             'modules' => $modules,
+            'blueprint_recommendations' => $blueprintRecommendations,
             'sections' => [
                 'active' => array_values(array_filter($modules, static fn (array $row): bool => ($row['state_bucket'] ?? '') === 'active')),
                 'available' => array_values(array_filter($modules, static fn (array $row): bool => ($row['state_bucket'] ?? '') === 'available')),
@@ -108,10 +151,18 @@ class TenantModuleCatalogService
     {
         $modules = [];
         foreach ($this->storeVisibleModuleDefinitions('public_site') as $moduleKey => $definition) {
+            $productMetadata = $this->moduleProductMetadata($moduleKey, $definition);
+
             $modules[] = [
                 'key' => $moduleKey,
                 'display_name' => (string) ($definition['display_name'] ?? Str::headline($moduleKey)),
                 'description' => (string) ($definition['description'] ?? ''),
+                'category_label' => (string) ($productMetadata['category_label'] ?? 'Operations'),
+                'lifecycle_label' => (string) ($productMetadata['lifecycle_label'] ?? 'Internal'),
+                'setup_effort_label' => (string) ($productMetadata['setup_effort_label'] ?? 'Standard setup'),
+                'required_integrations_label' => (string) ($productMetadata['required_integrations_label'] ?? 'No required integration'),
+                'mobile_relevance_label' => (string) ($productMetadata['mobile_relevance_label'] ?? 'Not mobile-specific'),
+                'pricing_impact_label' => (string) ($productMetadata['pricing_impact_label'] ?? 'Pricing impact not configured'),
                 'status' => strtolower(trim((string) ($definition['status'] ?? 'disabled'))),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
                 'channels' => array_values(array_map('strval', (array) ($definition['channels'] ?? []))),
@@ -147,11 +198,11 @@ class TenantModuleCatalogService
         return [
             'generated_at' => now()->toIso8601String(),
             'positioning' => [
-                'headline' => 'Forestry Backstage is a modular customer and business operating system.',
+                'headline' => 'Everbranch is a modular customer and business operating system.',
                 'themes' => [
                     'Works with Shopify or independently.',
                     'Start with one workflow, add modules over time.',
-                    'Keep product truth aligned with live entitlements and supported channels.',
+                    'Keep product truth aligned with plan access and supported channels.',
                 ],
                 'supported_channel_types' => ['shopify', 'direct', 'hybrid'],
             ],
@@ -382,11 +433,7 @@ class TenantModuleCatalogService
                 continue;
             }
 
-            $marketState = strtoupper(trim((string) ($definition['market_state'] ?? 'INTERNAL_ONLY')));
-            $status = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
-            $isVisible = (bool) data_get($definition, 'visibility.'.$visibilityKey, false);
-
-            if (! $isVisible || $marketState !== 'SAFE_TO_MARKET' || ! in_array($status, ['live', 'beta'], true)) {
+            if (! $this->isSafeForSurface($definition, $visibilityKey)) {
                 continue;
             }
 
@@ -404,6 +451,287 @@ class TenantModuleCatalogService
         $definitions = $this->storeVisibleModuleDefinitions('app_store');
 
         return is_array($definitions[$moduleKey] ?? null) ? (array) $definitions[$moduleKey] : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    public function isSafeForSurface(array $definition, string $surface = 'app_store'): bool
+    {
+        $marketState = strtoupper(trim((string) ($definition['market_state'] ?? 'INTERNAL_ONLY')));
+        $status = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
+        $isVisible = (bool) data_get($definition, 'visibility.'.strtolower(trim($surface)), false);
+
+        return $isVisible && $marketState === 'SAFE_TO_MARKET' && in_array($status, ['live', 'beta'], true);
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     * @param  array<string,mixed>|null  $moduleState
+     * @return array<string,mixed>
+     */
+    public function moduleProductMetadata(string $moduleKey, array $definition, ?array $moduleState = null): array
+    {
+        $billingMode = strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable')));
+        $channels = array_values(array_map(
+            static fn (mixed $channel): string => strtolower(trim((string) $channel)),
+            (array) ($definition['channels'] ?? [])
+        ));
+        $includedPlans = array_values(array_filter(array_map(
+            static fn (mixed $plan): string => strtolower(trim((string) $plan)),
+            (array) ($definition['included_in_plans'] ?? [])
+        )));
+        $category = $this->categoryKey($definition);
+        $requiredIntegrations = $this->requiredIntegrations($definition, $channels);
+        $shortDescription = trim((string) ($definition['short_description'] ?? $definition['description'] ?? ''));
+        $longDescription = trim((string) ($definition['long_description'] ?? $definition['description'] ?? $shortDescription));
+
+        return [
+            'category' => $category,
+            'category_label' => $this->categoryLabel($category),
+            'short_description' => $shortDescription,
+            'long_description' => $longDescription,
+            'lifecycle' => $this->lifecycleKey($definition),
+            'lifecycle_label' => $this->lifecycleLabel($definition),
+            'setup_effort' => $this->setupEffortKey($definition, $billingMode),
+            'setup_effort_label' => $this->setupEffortLabel($definition, $billingMode),
+            'required_integrations' => $requiredIntegrations,
+            'required_integrations_label' => $this->requiredIntegrationsLabel($requiredIntegrations),
+            'mobile_relevance' => $this->mobileRelevanceKey($definition),
+            'mobile_relevance_label' => $this->mobileRelevanceLabel($definition),
+            'pricing_impact_label' => $this->pricingImpactLabel($billingMode),
+            'entitlement_requirement_label' => $this->entitlementRequirementLabel($includedPlans, $billingMode),
+            'tenant_visibility_label' => $this->tenantVisibilityLabel($definition),
+            'product_summary' => $this->productSummary($definition, $moduleState, $billingMode),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function categoryKey(array $definition): string
+    {
+        $configured = strtolower(trim((string) ($definition['category'] ?? '')));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return match (strtolower(trim((string) ($definition['classification'] ?? 'shared-core')))) {
+            'shopify-only' => 'shopify_growth',
+            'integration-layer' => 'integrations',
+            'add-on' => 'growth_add_on',
+            'internal-admin' => 'operator_tools',
+            default => 'customer_operations',
+        };
+    }
+
+    protected function categoryLabel(string $category): string
+    {
+        return match (strtolower(trim($category))) {
+            'shopify_growth' => 'Shopify growth',
+            'integrations' => 'Integrations',
+            'growth_add_on' => 'Growth add-on',
+            'operator_tools' => 'Operator tools',
+            'analytics' => 'Analytics',
+            'customer_retention' => 'Customer retention',
+            'mobile' => 'Mobile companion',
+            default => 'Customer operations',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function lifecycleKey(array $definition): string
+    {
+        $status = strtolower(trim((string) ($definition['status'] ?? 'disabled')));
+        $marketState = strtoupper(trim((string) ($definition['market_state'] ?? 'INTERNAL_ONLY')));
+
+        if ($status === 'deprecated') {
+            return 'deprecated';
+        }
+
+        if ($marketState === 'INTERNAL_ONLY') {
+            return 'internal';
+        }
+
+        if ($status === 'beta' && $marketState === 'SAFE_TO_MARKET') {
+            return 'beta';
+        }
+
+        if ($status === 'live' && $marketState === 'SAFE_TO_MARKET') {
+            return 'live';
+        }
+
+        if ($marketState === 'SAFE_TO_MARKET') {
+            return 'safe_to_market';
+        }
+
+        return 'draft';
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function lifecycleLabel(array $definition): string
+    {
+        return match ($this->lifecycleKey($definition)) {
+            'deprecated' => 'Deprecated',
+            'internal' => 'Internal only',
+            'beta' => 'Beta',
+            'live' => 'Live',
+            'safe_to_market' => 'Safe to market',
+            default => 'Draft or planned',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function setupEffortKey(array $definition, string $billingMode): string
+    {
+        $configured = strtolower(trim((string) ($definition['setup_effort'] ?? '')));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return match ($billingMode) {
+            'add_on', 'custom' => 'everbranch_assisted',
+            default => 'standard',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function setupEffortLabel(array $definition, string $billingMode): string
+    {
+        return match ($this->setupEffortKey($definition, $billingMode)) {
+            'none' => 'No setup needed',
+            'light' => 'Light setup',
+            'standard' => 'Standard setup',
+            'everbranch_assisted' => 'Everbranch-assisted setup',
+            'custom' => 'Custom setup review',
+            default => Str::headline($this->setupEffortKey($definition, $billingMode)),
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     * @param  array<int,string>  $channels
+     * @return array<int,string>
+     */
+    protected function requiredIntegrations(array $definition, array $channels): array
+    {
+        $configured = array_values(array_filter(array_map(
+            static fn (mixed $integration): string => strtolower(trim((string) $integration)),
+            (array) ($definition['required_integrations'] ?? [])
+        )));
+
+        if ($configured !== []) {
+            return array_values(array_unique($configured));
+        }
+
+        if (in_array('shopify', $channels, true) && ! in_array('both', $channels, true)) {
+            return ['shopify'];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<int,string>  $requiredIntegrations
+     */
+    protected function requiredIntegrationsLabel(array $requiredIntegrations): string
+    {
+        if ($requiredIntegrations === []) {
+            return 'No required integration';
+        }
+
+        return implode(', ', array_map(
+            static fn (string $integration): string => match ($integration) {
+                'shopify' => 'Shopify',
+                'square' => 'Square',
+                'csv' => 'CSV/manual import',
+                default => Str::headline($integration),
+            },
+            $requiredIntegrations
+        ));
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function mobileRelevanceKey(array $definition): string
+    {
+        $configured = strtolower(trim((string) ($definition['mobile_relevance'] ?? '')));
+
+        return $configured !== '' ? $configured : 'not_mobile_specific';
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function mobileRelevanceLabel(array $definition): string
+    {
+        return match ($this->mobileRelevanceKey($definition)) {
+            'mobile_ready' => 'Mobile-ready when entitled',
+            'future_mobile_companion' => 'Future mobile companion candidate',
+            'mobile_admin' => 'Mobile operator candidate',
+            default => 'Not mobile-specific',
+        };
+    }
+
+    protected function pricingImpactLabel(string $billingMode): string
+    {
+        return match ($billingMode) {
+            'included' => 'Included with eligible plan',
+            'add_on' => 'Add-on pricing label only; checkout is not active here',
+            'custom' => 'Custom pricing discussion required',
+            default => 'No tenant pricing action available',
+        };
+    }
+
+    /**
+     * @param  array<int,string>  $includedPlans
+     */
+    protected function entitlementRequirementLabel(array $includedPlans, string $billingMode): string
+    {
+        if ($includedPlans !== []) {
+            return 'Included on '.implode(', ', array_map(static fn (string $plan): string => Str::headline($plan), $includedPlans));
+        }
+
+        return match ($billingMode) {
+            'add_on' => 'Requires add-on access or a request',
+            'custom' => 'Requires Everbranch review',
+            default => 'Requires access review',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function tenantVisibilityLabel(array $definition): string
+    {
+        return $this->isSafeForSurface($definition, 'app_store')
+            ? 'Visible in tenant App Store'
+            : 'Hidden from tenant App Store unless explicitly made safe';
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     * @param  array<string,mixed>|null  $moduleState
+     */
+    protected function productSummary(array $definition, ?array $moduleState, string $billingMode): string
+    {
+        $stateDescription = trim((string) ($moduleState['reason_description'] ?? $moduleState['description'] ?? ''));
+        if ($stateDescription !== '') {
+            return $stateDescription;
+        }
+
+        return $billingMode === 'add_on'
+            ? 'This module can be requested or added when access and billing readiness allow it.'
+            : 'This module follows workspace plan, setup, and access rules.';
     }
 
     /**

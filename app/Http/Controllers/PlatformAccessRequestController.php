@@ -14,6 +14,8 @@ class PlatformAccessRequestController extends Controller
         $businessTypeKeys = array_keys((array) config('product_surfaces.access_request.business_types', []));
         $teamSizeKeys = array_keys((array) config('product_surfaces.access_request.team_sizes', []));
         $timelineKeys = array_keys((array) config('product_surfaces.access_request.timelines', []));
+        $importPathKeys = array_keys((array) config('product_surfaces.access_request.import_paths', []));
+        $mobileInterestKeys = array_keys((array) config('product_surfaces.access_request.mobile_interests', []));
 
         $validated = $request->validate([
             'intent' => ['required', 'string', 'in:demo,production'],
@@ -24,6 +26,8 @@ class PlatformAccessRequestController extends Controller
             'business_type' => ['nullable', 'string', 'max:80', Rule::in($businessTypeKeys)],
             'team_size' => ['nullable', 'string', 'max:80', Rule::in($teamSizeKeys)],
             'timeline' => ['nullable', 'string', 'max:80', Rule::in($timelineKeys)],
+            'import_path' => ['nullable', 'string', 'max:80', Rule::in($importPathKeys)],
+            'mobile_interest' => ['nullable', 'string', 'max:80', Rule::in($mobileInterestKeys)],
             'website' => ['nullable', 'url', 'max:300'],
             'message' => ['nullable', 'string', 'max:2000'],
             'preferred_plan_key' => ['nullable', 'string', 'max:80'],
@@ -40,6 +44,8 @@ class PlatformAccessRequestController extends Controller
             'business_type' => (string) ($validated['business_type'] ?? ''),
             'team_size' => (string) ($validated['team_size'] ?? ''),
             'timeline' => (string) ($validated['timeline'] ?? ''),
+            'import_path' => (string) ($validated['import_path'] ?? ''),
+            'mobile_interest' => (string) ($validated['mobile_interest'] ?? ''),
             'website' => (string) ($validated['website'] ?? ''),
             'message' => (string) ($validated['message'] ?? ''),
             'preferred_plan_key' => (string) ($validated['preferred_plan_key'] ?? ''),

@@ -298,7 +298,7 @@ class MessagingResponseInboxService
             ]);
         }
 
-        $resolvedSubject = $this->replySubject($subject ?? $conversation->subject ?? 'Backstage reply');
+        $resolvedSubject = $this->replySubject($subject ?? $conversation->subject ?? 'Everbranch reply');
         $delivery = MarketingEmailDelivery::query()->create([
             'marketing_campaign_recipient_id' => null,
             'marketing_profile_id' => $conversation->marketing_profile_id,
@@ -508,7 +508,7 @@ class MessagingResponseInboxService
     {
         $subject = trim($value);
         if ($subject === '') {
-            return 'Re: Backstage conversation';
+            return 'Re: Everbranch conversation';
         }
 
         if (Str::startsWith(strtolower($subject), 're:')) {

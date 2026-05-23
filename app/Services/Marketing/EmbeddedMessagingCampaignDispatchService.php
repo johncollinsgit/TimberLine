@@ -1057,7 +1057,7 @@ class EmbeddedMessagingCampaignDispatchService
 
         $payload = (array) ($job->payload ?? []);
         $sourceLabel = $this->nullableString($payload['source_label'] ?? null) ?: 'shopify_embedded_messaging_group';
-        $subject = $this->nullableString($payload['subject'] ?? $campaign->message_subject ?? null) ?: 'Message from Backstage';
+        $subject = $this->nullableString($payload['subject'] ?? $campaign->message_subject ?? null) ?: 'Message from Everbranch';
         $body = trim((string) ($payload['body'] ?? $campaign->message_body ?? ''));
         $htmlBody = $this->nullableString($payload['html_body'] ?? $campaign->message_html ?? null);
 

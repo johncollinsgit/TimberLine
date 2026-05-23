@@ -131,7 +131,7 @@
                 <div class="mt-2 text-xs text-zinc-500">
                     Source:
                     @if(($reviewDataSource ?? 'none') === 'native')
-                        Native Backstage reviews
+                        Native Everbranch reviews
                     @elseif(($reviewDataSource ?? 'none') === 'legacy_growave')
                         Legacy Growave history
                     @else

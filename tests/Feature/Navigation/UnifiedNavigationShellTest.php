@@ -43,5 +43,5 @@ test('unified shell keeps modules hidden when there is no tenant context', funct
         ->get(route('dashboard'))
         ->assertOk()
         ->assertDontSee('data-sidebar-key="modules"', false)
-        ->assertSeeText('Backstage Wiki');
+        ->assertSeeText('Workspace Wiki');
 });

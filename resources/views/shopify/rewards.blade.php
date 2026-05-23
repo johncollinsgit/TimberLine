@@ -481,7 +481,7 @@
                     <div class="rewards-panel-head">
                         <div>
                             <h2>Ways to Earn</h2>
-                            <p>Live reward earn rules from Backstage. Edit titles, reward values, descriptions, status, and order without recreating rows.</p>
+                            <p>Live reward earn rules from Everbranch. Edit titles, reward values, descriptions, status, and order without recreating rows.</p>
                         </div>
                         <div id="earn-summary" class="rewards-panel-summary"></div>
                     </div>
@@ -492,7 +492,7 @@
                     <div class="rewards-panel-head">
                         <div>
                             <h2>Ways to Redeem</h2>
-                            <p>Current reward rows already used by the live system. Storefront redemption rules stay aligned with the existing Backstage logic.</p>
+                            <p>Current reward rows already used by the live system. Storefront redemption rules stay aligned with the existing Everbranch logic.</p>
                         </div>
                         <div id="redeem-summary" class="rewards-panel-summary"></div>
                     </div>
@@ -702,7 +702,7 @@
 
                     const payload = await response.json().catch(() => ({
                         ok: false,
-                        message: "Unexpected response from Backstage.",
+                        message: "Unexpected response from Everbranch.",
                     }));
 
                     if (!response.ok) {
@@ -816,7 +816,7 @@
                         : (item.reward_type_label || "Reward");
                     const typeNote = kind === "earn"
                         ? (item.task_type_label ? `Task type: ${item.task_type_label}` : "")
-                        : (item.is_storefront_reward ? "Current storefront redemption reward." : "Backstage redemption row.");
+                        : (item.is_storefront_reward ? "Current storefront redemption reward." : "Everbranch redemption row.");
                     const orderLabel = kind === "earn"
                         ? formatNumber(item.sort_order)
                         : (item.minimum_order_supported ? escapeHtml(item.minimum_order_amount) : "Unavailable");
@@ -848,7 +848,7 @@
                                 <div>
                                     <span>${kind === "earn" ? "Customer Status" : "Value Display"}</span>
                                     <strong>${kind === "earn" ? (item.customer_visible ? "Visible to customers" : "Hidden from customers") : escapeHtml(item.value_display || "—")}</strong>
-                                    <small>${kind === "earn" ? "Derived from rule metadata" : escapeHtml(item.reward_value || "No raw reward value stored")}</small>
+                                    <small>${kind === "earn" ? "Derived from reward rule details" : escapeHtml(item.reward_value || "No raw reward value stored")}</small>
                                 </div>
                                 <div>
                                     <span>${orderCaption}</span>

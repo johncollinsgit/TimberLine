@@ -1158,6 +1158,12 @@ Notes:
 - `shopify:sync-customer-metafields` requires Admin API `read_customers` or `write_customers` scope; Customer Account `customer_*` scopes are not sufficient for Admin `customers` queries.
 - Webhooks are verified with HMAC and dispatched to a sync queue (Phase 1).
 
+Mobile catalog local/testing mode:
+- `MOBILE_CATALOG_FAKE_ENABLED=true` enables fake Modern Forestry catalog responses only in `local` or `testing`.
+- Fake catalog mode is for iOS development only; it does not call Shopify and does not require Shopify tokens.
+- Staging and production must use the real Shopify-backed catalog path with an installed `modern-forestry` tenant/store token.
+- Do not add real Shopify tokens to docs, fixtures, seeders, or commits.
+
 ### Modern Forestry Native Reviews + Wishlist
 
 Modern Forestry now uses Backstage-owned canonical review and wishlist flows on the Shopify storefront. Growave remains import-only source data and must not be used as a runtime storefront dependency.

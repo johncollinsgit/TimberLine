@@ -68,6 +68,10 @@ class TenantExperienceProfileService
         if ($operatingMode === '') {
             $operatingMode = 'shopify';
         }
+        $accountMode = strtolower(trim((string) data_get($tenant?->accessProfile?->metadata, 'account_mode', 'production')));
+        if ($accountMode === '') {
+            $accountMode = 'production';
+        }
 
         $hasShopifyConnection = $this->hasShopifyConnection($tenantId, $tenant);
         $hasDirectSignals = $this->hasDirectSignals($tenantId, $operatingMode);
@@ -103,6 +107,7 @@ class TenantExperienceProfileService
             'tenant_id' => $tenantId,
             'tenant_name' => $tenant instanceof Tenant ? (string) $tenant->name : null,
             'operating_mode' => $operatingMode,
+            'account_mode' => $accountMode,
             'channel_type' => $channelType,
             'use_case_profile' => $useCaseProfile,
             'power_user_mode' => $powerUserMode,

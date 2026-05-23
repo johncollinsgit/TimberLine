@@ -418,7 +418,7 @@ test('landlord commercial page keeps billing lifecycle actions disabled', functi
         ->assertSeeText('Only one guarded live subscription create/sync action is available (landlord-triggered, prerequisite-gated).')
         ->assertSeeText('Broad subscription update/cancel automation is still disabled.')
         ->assertSeeText('Checkout remains disabled and broad lifecycle writes remain intentionally inactive in this phase.')
-        ->assertSeeText('customer reference sync, subscription-prep metadata sync, and narrow live subscription create/sync')
+        ->assertSeeText('customer reference sync, subscription-prep detail sync, and narrow live subscription create/sync')
         ->assertSeeText('No tenants are available yet. Create or sync a tenant before running commercial assignment UAT.')
         ->assertSeeText('docs/operations/pre-billing-readiness-gate.md')
         ->assertSeeText('docs/operations/billing-activation-checklist.md')
@@ -521,7 +521,7 @@ test('landlord commercial page shows effective label source and missing-template
         ->assertOk()
         ->assertSeeText('labels: tenant override')
         ->assertSeeText('Effective labels (read-only)')
-        ->assertSeeText('Assigned template key is missing from the catalog. Commercialization surfaces will fall back to entitlement defaults.');
+        ->assertSeeText('Assigned template key is missing from the catalog. Commercialization surfaces will fall back to access defaults.');
 });
 
 test('billing readiness config includes canonical stripe-first mapping for tiers and add-ons', function (): void {

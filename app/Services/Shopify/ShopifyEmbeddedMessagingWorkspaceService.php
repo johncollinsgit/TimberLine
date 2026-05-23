@@ -48,7 +48,7 @@ class ShopifyEmbeddedMessagingWorkspaceService
             'key' => 'announcement',
             'name' => 'Announcement',
             'description' => 'Clean launch/update announcement layout.',
-            'default_subject' => 'A quick update from Forestry Backstage',
+            'default_subject' => 'A quick update from Everbranch',
             'default_sections' => [
                 ['id' => 'heading_1', 'type' => 'heading', 'text' => 'Big news', 'align' => 'left'],
                 ['id' => 'body_1', 'type' => 'text', 'html' => 'Share your update in two or three concise paragraphs.'],

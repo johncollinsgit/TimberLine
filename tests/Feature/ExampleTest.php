@@ -5,5 +5,5 @@ test('returns a successful response', function () {
 
     $response
         ->assertOk()
-        ->assertSeeText('Forestry Backstage');
+        ->assertSeeText('Everbranch');
 });

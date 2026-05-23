@@ -85,6 +85,321 @@
             </div>
         </section>
 
+        <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Landlord control center</p>
+                    <h3 class="mt-2 text-lg font-semibold text-zinc-950">Tenant management map</h3>
+                    <p class="mt-1 max-w-3xl text-sm text-zinc-600">
+                        Operator-only controls stay here. Tenant users should use their workspace and Start Here instead of provisioning screens.
+                    </p>
+                </div>
+                <a href="{{ route('landlord.onboarding.wizard', ['tenant' => $tenant->slug]) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                    Setup plan
+                </a>
+            </div>
+
+            <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                @foreach ([
+                    ['label' => 'Overview', 'copy' => 'Identity, slug, type, status, health, and workspace summary.', 'href' => route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'overview'])],
+                    ['label' => 'Users & Access', 'copy' => 'Assigned users, tenant roles, and safe access removal.', 'href' => route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'settings'])],
+                    ['label' => 'Modules', 'copy' => 'Read and adjust existing guarded module access controls.', 'href' => route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'applications'])],
+                    ['label' => 'Onboarding / Setup Status', 'copy' => 'Journey diagnostics, setup status, import path, and next action.', 'href' => route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'onboarding_journey'])],
+                    ['label' => 'Integrations', 'copy' => 'Shopify stores and application connections for this tenant.', 'href' => route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'applications'])],
+                    ['label' => 'Commercial / Billing Intent', 'copy' => 'Plan and lane intent only; no checkout or subscriptions activate here.', 'href' => route('landlord.commercial-intent.index')],
+                    ['label' => 'Diagnostics', 'copy' => 'Activity, performance, import health, and operator audit evidence.', 'href' => route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'activity'])],
+                    ['label' => 'Impersonation / Test Login', 'copy' => 'No impersonation flow is active yet; use seeded demo/sandbox users for testing.', 'href' => null],
+                ] as $section)
+                    <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                        <div class="text-sm font-semibold text-zinc-950">{{ $section['label'] }}</div>
+                        <p class="mt-1 text-xs leading-5 text-zinc-600">{{ $section['copy'] }}</p>
+                        @if (! empty($section['href']))
+                            <a href="{{ $section['href'] }}" class="mt-3 inline-block text-xs font-semibold text-zinc-900 underline decoration-dotted underline-offset-2">
+                                Open
+                            </a>
+                        @else
+                            <span class="mt-3 inline-block rounded-full border border-zinc-300 px-2.5 py-1 text-[11px] font-semibold text-zinc-600">
+                                Deferred
+                            </span>
+                        @endif
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        @php
+            $tenantBlueprint = is_array($tenantBlueprint ?? null) ? $tenantBlueprint : [];
+            $starterModuleLabels = array_values((array) ($tenantBlueprint['starter_module_labels'] ?? []));
+            $workManagementIntentLabels = array_values((array) ($tenantBlueprint['work_management_intent_labels'] ?? []));
+            $workManagementModuleLabels = array_values((array) ($tenantBlueprint['work_management_module_labels'] ?? []));
+            $blueprintModuleRecommendations = is_array($blueprintModuleRecommendations ?? null) ? $blueprintModuleRecommendations : [];
+            $blueprintRecommendationRows = array_values((array) ($blueprintModuleRecommendations['rows'] ?? []));
+            $blueprintRecommendationSummary = is_array($blueprintModuleRecommendations['summary'] ?? null) ? $blueprintModuleRecommendations['summary'] : [];
+        @endphp
+
+        <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Tenant setup plan</p>
+                    <h3 class="mt-2 text-lg font-semibold text-zinc-950">{{ $tenantBlueprint['business_template_label'] ?? 'Generic' }} operating profile</h3>
+                    <p class="mt-1 max-w-3xl text-sm text-zinc-600">
+                        Shared Everbranch structure for customers, work, money, materials/resources, stages, and setup path. These values guide presentation and onboarding; they do not create industry-specific forks or activate modules.
+                    </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700">
+                        {{ $tenantBlueprint['account_mode_label'] ?? 'Production' }}
+                    </span>
+                    <span class="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700">
+                        {{ $tenantBlueprint['blueprint_review_status_label'] ?? 'Unreviewed' }}
+                    </span>
+                    <a href="{{ route('landlord.tenants.blueprint.edit', ['tenant' => $tenant->id]) }}" class="rounded-full bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">
+                        Edit setup plan
+                    </a>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Operating mode</p>
+                    <p class="mt-1 text-sm font-semibold text-zinc-950">{{ $tenantBlueprint['operating_mode_label'] ?? 'Not sure yet' }}</p>
+                </article>
+                <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Data source path</p>
+                    <p class="mt-1 text-sm font-semibold text-zinc-950">{{ $tenantBlueprint['data_source_preference_label'] ?? 'Not sure yet' }}</p>
+                </article>
+                <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Work label</p>
+                    <p class="mt-1 text-sm font-semibold text-zinc-950">{{ $tenantBlueprint['work_label'] ?? 'Work' }}</p>
+                </article>
+                <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Stage label</p>
+                    <p class="mt-1 text-sm font-semibold text-zinc-950">{{ $tenantBlueprint['stage_label'] ?? 'Stage' }}</p>
+                </article>
+                <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Setup review</p>
+                    <p class="mt-1 text-sm font-semibold text-zinc-950">{{ $tenantBlueprint['blueprint_review_status_label'] ?? 'Unreviewed' }}</p>
+                    @if(! empty($tenantBlueprint['blueprint_reviewed_by_label']) || ! empty($tenantBlueprint['blueprint_reviewed_at_label']))
+                        <p class="mt-1 text-xs text-zinc-500">
+                            {{ $tenantBlueprint['blueprint_reviewed_by_label'] ?? 'Landlord operator' }}
+                            @if(! empty($tenantBlueprint['blueprint_reviewed_at_label']))
+                                · {{ $tenantBlueprint['blueprint_reviewed_at_label'] }}
+                            @endif
+                        </p>
+                    @endif
+                </article>
+            </div>
+
+            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                <article class="rounded-2xl border border-zinc-200 bg-white p-4">
+                    <h4 class="text-sm font-semibold text-zinc-950">Shared labels</h4>
+                    <dl class="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
+                        <div><dt class="text-xs text-zinc-500">Customer</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['customer_label'] ?? 'Customer' }}</dd></div>
+                        <div><dt class="text-xs text-zinc-500">Money</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['money_label'] ?? 'Revenue' }}</dd></div>
+                        <div><dt class="text-xs text-zinc-500">Material/resource</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['material_label'] ?? 'Resources' }}</dd></div>
+                        <div><dt class="text-xs text-zinc-500">Primary outcome</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['primary_outcome'] ?? 'Understand customers, work, revenue, costs, and next steps.' }}</dd></div>
+                    </dl>
+                </article>
+                <article class="rounded-2xl border border-zinc-200 bg-white p-4">
+                    <h4 class="text-sm font-semibold text-zinc-950">Starter module recommendations</h4>
+                    <p class="mt-1 text-xs text-zinc-500">Recommendations only. No modules are installed and no access is changed from this setup plan.</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        @forelse ($starterModuleLabels as $label)
+                            <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">{{ $label }}</span>
+                        @empty
+                            <span class="text-sm text-zinc-500">No starter module recommendations yet.</span>
+                        @endforelse
+                    </div>
+                    <p class="mt-4 text-sm text-zinc-700">{{ $tenantBlueprint['onboarding_next_action'] ?? 'Review the tenant setup plan and choose the safest setup path.' }}</p>
+                </article>
+            </div>
+
+            <article class="mt-4 rounded-2xl border border-zinc-200 bg-white p-4" data-landlord-work-management-blueprint="true">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-zinc-950">Work management setup plan</h4>
+                        <p class="mt-1 text-xs text-zinc-500">
+                            Requested/planned context only. Projects, tasks, assignments, comments, messages, uploads, notifications, mobile capture, modules, and feature access are not activated from this setup plan.
+                        </p>
+                    </div>
+                    <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
+                        {{ ($tenantBlueprint['has_work_management_intent'] ?? false) ? 'Requested' : 'Not requested' }}
+                    </span>
+                </div>
+
+                <dl class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5 text-sm">
+                    <div><dt class="text-xs text-zinc-500">Project/work</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['project_label'] ?? 'Project' }}</dd></div>
+                    <div><dt class="text-xs text-zinc-500">Task</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['task_label'] ?? 'Task' }}</dd></div>
+                    <div><dt class="text-xs text-zinc-500">Assignee</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['assignee_label'] ?? 'Assignee' }}</dd></div>
+                    <div><dt class="text-xs text-zinc-500">Communication</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['communication_label'] ?? 'Updates' }}</dd></div>
+                    <div><dt class="text-xs text-zinc-500">Uploads</dt><dd class="font-semibold text-zinc-900">{{ $tenantBlueprint['upload_label'] ?? 'Files / Photos' }}</dd></div>
+                </dl>
+
+                <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Requested setup intent</div>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            @forelse ($workManagementIntentLabels as $label)
+                                <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">{{ $label }}</span>
+                            @empty
+                                <span class="text-sm text-zinc-500">No work-management intent selected yet.</span>
+                            @endforelse
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Recommended future modules</div>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            @forelse ($workManagementModuleLabels as $label)
+                                <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">{{ $label }}</span>
+                            @empty
+                                <span class="text-sm text-zinc-500">No work-management module recommendations yet.</span>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+
+                @if(! empty($tenantBlueprint['work_management_notes']))
+                    <p class="mt-4 text-sm text-zinc-700">{{ $tenantBlueprint['work_management_notes'] }}</p>
+                @endif
+            </article>
+
+            <article class="mt-4 rounded-2xl border border-zinc-200 bg-white p-4" data-landlord-blueprint-module-recommendations="true">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h4 class="text-sm font-semibold text-zinc-950">Setup-driven module recommendations</h4>
+                        <p class="mt-1 text-xs text-zinc-500">
+                            Display-only product guidance based on the tenant setup plan. These recommendations do not activate modules, feature access, billing, imports, uploads, messaging, notifications, mobile APIs, or connector automation.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">{{ (int) ($blueprintRecommendationSummary['recommended'] ?? 0) }} recommended</span>
+                        <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">{{ (int) ($blueprintRecommendationSummary['requested'] ?? 0) }} requested</span>
+                        <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">{{ (int) ($blueprintRecommendationSummary['planned_or_future'] ?? 0) }} planned/future</span>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    @forelse(array_slice($blueprintRecommendationRows, 0, 12) as $row)
+                        <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="text-sm font-semibold text-zinc-950">{{ $row['label'] ?? Str::headline((string) ($row['key'] ?? 'module')) }}</div>
+                                <span class="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-600">{{ $row['display_state_label'] ?? 'Planned' }}</span>
+                            </div>
+                            <p class="mt-2 text-xs leading-5 text-zinc-600">{{ $row['reason'] ?? 'Setup recommendation only.' }}</p>
+                        </div>
+                    @empty
+                        <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-500">No setup module recommendations yet.</div>
+                    @endforelse
+                </div>
+
+                <p class="mt-4 text-xs text-zinc-500">Setup recommendations do not activate modules or billing.</p>
+            </article>
+
+            <article class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4" data-landlord-blueprint-review="true">
+                <div class="grid gap-4 lg:grid-cols-2">
+                    <div>
+                        <h4 class="text-sm font-semibold text-zinc-950">Landlord review context</h4>
+                        <p class="mt-1 text-xs text-zinc-500">Internal notes and next actions stay landlord-only and are not exposed on tenant Start Here.</p>
+                        <p class="mt-3 text-sm font-semibold text-zinc-900">{{ $tenantBlueprint['blueprint_next_action'] ?? 'No internal blueprint next action set.' }}</p>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Internal notes</div>
+                        <p class="mt-2 text-sm text-zinc-700">{{ $tenantBlueprint['blueprint_internal_notes'] ?? 'No internal blueprint notes yet.' }}</p>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        @php
+            $testAccess = is_array($testAccess ?? null) ? $testAccess : [];
+            $testAccessUsers = is_array($testAccess['users'] ?? null) ? $testAccess['users'] : [];
+        @endphp
+
+        <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Test Access</p>
+                    <h3 class="mt-2 text-lg font-semibold text-zinc-950">Access lane and test users</h3>
+                    <p class="mt-1 max-w-3xl text-sm text-zinc-600">
+                        Use this panel to verify which door this tenant belongs to before logging in as a seeded test account.
+                    </p>
+                </div>
+                <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700">
+                    {{ $testAccess['lane_label'] ?? 'Tenant access lane' }}
+                </span>
+            </div>
+
+            <div class="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.4fr]">
+                <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <dl class="space-y-3 text-sm">
+                        <div>
+                            <dt class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Account mode</dt>
+                            <dd class="mt-1 font-semibold text-zinc-900">{{ str_replace('_', ' ', (string) ($testAccess['account_mode'] ?? 'production')) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Tenant host</dt>
+                            <dd class="mt-1 font-mono text-xs text-zinc-900">{{ $testAccess['tenant_host'] ?? $summary['subdomain'] }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Impersonation</dt>
+                            <dd class="mt-1 text-sm font-semibold text-amber-900">Deferred</dd>
+                            <dd class="mt-1 text-xs leading-5 text-zinc-600">{{ $testAccess['impersonation_copy'] ?? 'Direct impersonation is not active yet.' }}</dd>
+                        </div>
+                    </dl>
+
+                    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-950">
+                        {{ $testAccess['warning'] ?? 'Use normal login and tenant-scoped permissions for testing.' }}
+                    </div>
+                </article>
+
+                <article class="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+                    <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <h4 class="text-sm font-semibold text-zinc-950">Tenant users available for test login</h4>
+                        <p class="mt-1 text-xs text-zinc-600">
+                            Emails are shown for manual login or password reset. No direct login bypass is active here.
+                        </p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full divide-y divide-zinc-200 text-sm">
+                            <thead class="bg-white text-xs uppercase tracking-[0.12em] text-zinc-500">
+                                <tr>
+                                    <th class="px-4 py-2 text-left">User</th>
+                                    <th class="px-4 py-2 text-left">Purpose</th>
+                                    <th class="px-4 py-2 text-left">Landing</th>
+                                    <th class="px-4 py-2 text-left">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-zinc-100">
+                                @forelse ($testAccessUsers as $testUser)
+                                    <tr>
+                                        <td class="px-4 py-3">
+                                            <div class="font-semibold text-zinc-900">{{ $testUser['name'] }}</div>
+                                            <div class="mt-1 font-mono text-xs text-zinc-600">{{ $testUser['email'] }}</div>
+                                            <div class="mt-1 text-[11px] text-zinc-500">Role: {{ $testUser['role'] }} · Source: {{ $testUser['requested_via'] }}</div>
+                                        </td>
+                                        <td class="px-4 py-3 text-zinc-700">{{ $testUser['purpose'] }}</td>
+                                        <td class="px-4 py-3 font-mono text-xs text-zinc-700">{{ $testUser['landing'] }}</td>
+                                        <td class="px-4 py-3">
+                                            <span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold {{ $testUser['active'] ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900' }}">
+                                                {{ $testUser['active'] ? 'Active' : 'Inactive' }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="px-4 py-5 text-sm text-zinc-600">
+                                            No users are assigned to this tenant yet. Run <span class="font-mono text-xs">php artisan everbranch:seed-access-surfaces</span> in a safe environment to create the standard test accounts.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
+        </section>
+
         @if ($activeTab === 'overview')
             <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <article class="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -123,7 +438,7 @@
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <h3 class="text-base font-semibold text-zinc-900">Onboarding status</h3>
-                            <p class="mt-1 text-sm text-zinc-600">At-a-glance reduction from canonical onboarding telemetry.</p>
+                            <p class="mt-1 text-sm text-zinc-600">At-a-glance summary from onboarding activity.</p>
                         </div>
                         @if ($onboardingHasTelemetry)
                             <a
@@ -744,7 +1059,7 @@
                 <div class="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h3 class="text-lg font-semibold text-zinc-900">Tenant Performance</h3>
-                        <p class="mt-1 text-sm text-zinc-600">XY trend chart modeled on the Shopify Backstage performance graph concept.</p>
+                        <p class="mt-1 text-sm text-zinc-600">XY trend chart modeled on the Shopify performance view concept.</p>
                     </div>
                     <form method="GET" action="{{ route('landlord.tenants.show', ['tenant' => $tenant->id]) }}" class="flex items-end gap-2">
                         <input type="hidden" name="tab" value="performance">

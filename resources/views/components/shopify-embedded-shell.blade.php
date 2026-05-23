@@ -26,7 +26,7 @@
         $rewardsLabel = 'Rewards';
     }
     $moduleChecklist = \App\Support\Tenancy\TenantModuleUi::checklist($moduleStates);
-    $title = filled($headline) ? (string) $headline : 'Forestry Backstage';
+    $title = filled($headline) ? (string) $headline : config('everbranch.product_name', 'Everbranch');
     $workspaceLabel = trim((string) ($appNavigation['workspaceLabel'] ?? 'Commerce'));
     if ($workspaceLabel === '') {
         $workspaceLabel = 'Commerce';

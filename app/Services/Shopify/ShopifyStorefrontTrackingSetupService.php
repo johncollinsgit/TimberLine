@@ -107,7 +107,7 @@ class ShopifyStorefrontTrackingSetupService
                 'requested' => in_array('read_analytics', $requestedScopes, true) || in_array('read_reports', $requestedScopes, true),
                 'granted' => in_array('read_analytics', $grantedScopes, true) && in_array('read_reports', $grantedScopes, true),
                 'api_calls_detected' => false,
-                'notes' => 'Backstage verifies pixel/scopes in Shopify Admin. No Shopify native analytics/report query flow is wired for storefront funnel reporting yet.',
+                'notes' => 'Everbranch verifies pixel/scopes in Shopify Admin. No Shopify native analytics/report query flow is wired for storefront funnel reporting yet.',
             ],
             'customer_events' => [
                 'pixel_management_api' => true,
@@ -220,7 +220,7 @@ class ShopifyStorefrontTrackingSetupService
                     'done' => $proxyEnabled && $proxySecretPresent && $signingSecretPresent,
                     'hint' => $proxyEnabled && $proxySecretPresent && $signingSecretPresent
                         ? 'Storefront requests can use /apps/forestry/health and /apps/forestry/funnel/event.'
-                        : 'Backstage still needs Shopify app proxy signing config before storefront events can flow safely.',
+                        : 'Everbranch still needs Shopify app proxy signing config before storefront events can flow safely.',
                 ],
                 [
                     'key' => 'theme_embed_bundle',
@@ -261,7 +261,7 @@ class ShopifyStorefrontTrackingSetupService
                     'label' => 'Verify a tagged storefront visit creates funnel events',
                     'done' => (bool) ($recentSignal['has_events'] ?? false),
                     'hint' => (bool) ($recentSignal['has_events'] ?? false)
-                        ? sprintf('Backstage has already recorded %d recent storefront funnel event(s) for this shop.', (int) ($recentSignal['count'] ?? 0))
+                        ? sprintf('Everbranch has already recorded %d recent storefront funnel event(s) for this shop.', (int) ($recentSignal['count'] ?? 0))
                         : 'Open a tracked email-style URL, then confirm Message Analytics detail shows sessions, product views, cart activity, and checkout progression.',
                 ],
             ],
@@ -519,15 +519,15 @@ class ShopifyStorefrontTrackingSetupService
                 'known_gaps' => [],
             ],
             [
-                'source' => 'Backstage funnel ingestion (/apps/forestry/funnel/event)',
-                'runs_in' => 'Backstage app proxy endpoint',
+                'source' => 'Everbranch funnel ingestion (/apps/forestry/funnel/event)',
+                'runs_in' => 'Everbranch app proxy endpoint',
                 'tracks' => $this->funnelEventTypes,
                 'status' => (bool) ($recentSignal['has_events'] ?? false) ? 'events_recorded' : 'no_recent_events',
                 'known_gaps' => [],
             ],
             [
                 'source' => 'Message Analytics storefront funnel reporting',
-                'runs_in' => 'Backstage embedded admin (Messaging > Analytics detail)',
+                'runs_in' => 'Everbranch embedded admin (Messaging > Analytics detail)',
                 'tracks' => ['message-attributed storefront funnel progression', 'checkout_abandoned_candidates'],
                 'status' => 'enabled',
                 'known_gaps' => [
@@ -540,13 +540,13 @@ class ShopifyStorefrontTrackingSetupService
                 'tracks' => ['scope availability only'],
                 'status' => ((bool) data_get($shopifyNative, 'analytics_and_reports.granted', false)) ? 'scopes_granted' : 'not_granted_or_unverified',
                 'known_gaps' => [
-                    'Backstage does not yet query Shopify native analytics/reports APIs for storefront funnel reporting.',
+                    'Everbranch does not yet query Shopify native analytics/reports APIs for storefront funnel reporting.',
                     'Missing requested scopes: '.implode(', ', (array) ($scopeState['missing_requested'] ?? [])),
                 ],
             ],
             [
                 'source' => 'Web pixel flow verification (event signals)',
-                'runs_in' => 'Backstage event diagnostics',
+                'runs_in' => 'Everbranch event diagnostics',
                 'tracks' => ['recent web pixel-originated funnel events'],
                 'status' => (bool) Arr::get($webPixelSignal, 'has_events', false) ? 'flow_detected' : 'not_verified',
                 'known_gaps' => [],

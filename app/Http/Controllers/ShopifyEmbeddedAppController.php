@@ -745,7 +745,7 @@ class ShopifyEmbeddedAppController extends Controller
         $messages = [
             'open_from_shopify' => 'Open the app from Shopify Admin to load Home.',
             'missing_shop' => 'The Shopify shop context is missing from this request.',
-            'unknown_shop' => 'This Shopify shop is not mapped to a Backstage store.',
+            'unknown_shop' => 'This Shopify shop is not connected to an Everbranch store yet.',
             'invalid_hmac' => 'This Shopify request could not be verified.',
             'missing_api_auth' => 'Shopify Admin verification is unavailable. Reload Home from Shopify Admin and try again.',
             'invalid_session_token' => 'Shopify Admin verification failed. Reload Home from Shopify Admin and try again.',

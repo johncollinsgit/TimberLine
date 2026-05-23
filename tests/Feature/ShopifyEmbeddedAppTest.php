@@ -216,7 +216,7 @@ test('shopify embedded search reuses page context and returns embedded backstage
 
     $response->assertOk()
         ->assertJsonPath('query', 'settings')
-        ->assertJsonPath('groups.Backstage.0.title', 'Settings');
+        ->assertJsonPath('groups.Everbranch.0.title', 'Settings');
 
     expect(collect($response->json('results'))->pluck('url'))
         ->toContain('/shopify/app/settings?host=admin-host-token');

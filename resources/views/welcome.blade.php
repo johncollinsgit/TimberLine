@@ -1,22 +1,33 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
+    @php
+        $brandAssets = (array) config('everbranch.brand_assets', []);
+        $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
+        $brandFaviconSvg = asset((string) ($brandAssets['favicon_svg'] ?? 'brand/everbranch-favicon.svg')).'?v='.$brandAssetVersion;
+        $brandFaviconPng = asset((string) ($brandAssets['favicon_png'] ?? 'favicon.png')).'?v='.$brandAssetVersion;
+        $brandFaviconIco = asset((string) ($brandAssets['favicon_ico'] ?? 'favicon.ico')).'?v='.$brandAssetVersion;
+        $brandAppleTouchIcon = asset((string) ($brandAssets['apple_touch_icon'] ?? 'apple-touch-icon.png')).'?v='.$brandAssetVersion;
+        $brandOgImage = asset((string) ($brandAssets['og_image'] ?? 'og-image.png')).'?v='.$brandAssetVersion;
+        $brandMark = asset((string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg')).'?v='.$brandAssetVersion;
+    @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Modern Forestry Backstage</title>
-    <meta name="application-name" content="Modern Forestry Backstage">
-    <meta property="og:site_name" content="Modern Forestry Backstage">
-    <meta property="og:title" content="Modern Forestry Backstage">
+    <title>{{ config('everbranch.product_name', 'Everbranch') }}</title>
+    <meta name="application-name" content="{{ config('everbranch.product_name', 'Everbranch') }}">
+    <meta property="og:site_name" content="{{ config('everbranch.product_name', 'Everbranch') }}">
+    <meta property="og:title" content="{{ config('everbranch.product_name', 'Everbranch') }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ url('/') }}">
-    <meta property="og:image" content="{{ asset('apple-touch-icon.png') }}?v=fb7">
+    <meta property="og:image" content="{{ $brandOgImage }}">
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Modern Forestry Backstage">
-    <meta name="twitter:image" content="{{ asset('apple-touch-icon.png') }}?v=fb7">
-    <link rel="icon" href="{{ asset('favicon.png') }}?v=fb7" type="image/png" sizes="512x512">
-    <link rel="icon" href="{{ asset('favicon.ico') }}?v=fb7" type="image/x-icon" sizes="16x16 32x32 48x48">
-    <link rel="shortcut icon" href="{{ asset('favicon.ico') }}?v=fb7">
-    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}?v=fb7" sizes="180x180">
+    <meta name="twitter:title" content="{{ config('everbranch.product_name', 'Everbranch') }}">
+    <meta name="twitter:image" content="{{ $brandOgImage }}">
+    <link rel="icon" href="{{ $brandFaviconSvg }}" type="image/svg+xml">
+    <link rel="icon" href="{{ $brandFaviconPng }}" type="image/png" sizes="512x512">
+    <link rel="icon" href="{{ $brandFaviconIco }}" type="image/x-icon" sizes="16x16 32x32 48x48">
+    <link rel="shortcut icon" href="{{ $brandFaviconIco }}">
+    <link rel="apple-touch-icon" href="{{ $brandAppleTouchIcon }}" sizes="180x180">
     <style>
         :root {
             color-scheme: dark;
@@ -163,27 +174,23 @@
         <section class="hero">
             <div class="brand">
                 <div class="brand-badge" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 24" width="26" height="13" fill="currentColor">
-                        <path d="M8 4L2 14h4L1 22h6l-2 2h8l-2-2h6l-5-8h4L8 4z"/>
-                        <path d="M24 2l-8 10h4l-6 8h8l-3 4h10l-3-4h8l-6-8h4L24 2z"/>
-                        <path d="M40 6l-6 8h4l-5 7h6l-2 3h8l-2-3h6l-5-7h4l-6-8z"/>
-                    </svg>
+                    <img src="{{ $brandMark }}" alt="" width="26" height="26" />
                 </div>
                 <div>
-                    <p class="kicker">Modern Forestry</p>
-                    <h1>Backstage</h1>
+                    <p class="kicker">{{ config('everbranch.ecosystem_name', 'Evergrove') }}</p>
+                    <h1>{{ config('everbranch.product_name', 'Everbranch') }}</h1>
                 </div>
             </div>
 
             <p class="lead">
-                Internal operations hub for shipping, pouring, inventory, and market production workflows.
-                Sign in to access the Backstage tools.
+                A modular operating workspace for customers, work, money, materials, and next steps.
+                Sign in to continue to Everbranch.
             </p>
 
             <div class="actions">
                 <a class="btn btn-primary" href="{{ route('login') }}">Go to Login</a>
                 @if (Route::has('wiki.index'))
-                    <a class="btn btn-secondary" href="{{ route('wiki.index') }}">Backstage Wiki</a>
+                    <a class="btn btn-secondary" href="{{ route('wiki.index') }}">Workspace Wiki</a>
                 @endif
             </div>
         </section>
@@ -191,11 +198,7 @@
         <section class="trees" aria-label="Brand motif">
             @for ($i = 0; $i < 3; $i++)
                 <div class="tree-card">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 24" width="36" height="18" fill="none" aria-hidden="true">
-                        <path d="M8 4L2 14h4L1 22h6l-2 2h8l-2-2h6l-5-8h4L8 4z" fill="rgba(52,211,153,.88)"/>
-                        <path d="M24 2l-8 10h4l-6 8h8l-3 4h10l-3-4h8l-6-8h4L24 2z" fill="rgba(16,185,129,.92)"/>
-                        <path d="M40 6l-6 8h4l-5 7h6l-2 3h8l-2-3h6l-5-7h4l-6-8z" fill="rgba(245,158,11,.68)"/>
-                    </svg>
+                    <img src="{{ $brandMark }}" alt="" width="28" height="28" aria-hidden="true" />
                     <p>
                         {{ ['Shipping + fulfillment operations', 'Pour room planning + production flow', 'Retail, wholesale, and market coordination'][$i] }}
                     </p>

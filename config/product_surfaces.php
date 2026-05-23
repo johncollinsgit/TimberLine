@@ -1,5 +1,6 @@
 <?php
 
+$productName = (string) env('EVERBRANCH_PRODUCT_NAME', 'Everbranch');
 $contactDomain = strtolower(trim((string) env('PRODUCT_CONTACT_EMAIL_DOMAIN', 'theeverbranch.com')));
 $contactDomain = $contactDomain !== '' ? $contactDomain : 'theeverbranch.com';
 $salesContact = 'sales@'.$contactDomain;
@@ -10,7 +11,7 @@ return [
     'promo' => [
         'eyebrow' => 'Shopify-First Customer Platform',
         'headline' => 'Production, shipping, and wholesale in one place.',
-        'summary' => 'Forestry Backstage keeps Shopify workflows strong while unifying operations, fulfillment, and customer programs.',
+        'summary' => $productName.' keeps Shopify workflows strong while unifying operations, fulfillment, and customer programs.',
         'how_it_works' => [
             [
                 'title' => 'Connect Shopify and operations',
@@ -68,7 +69,7 @@ return [
             ],
             [
                 'title' => 'Activate',
-                'description' => 'After approval, set your password and land directly in a tenant-aware Start Here surface.',
+                'description' => 'After approval, set your password and land directly in a workspace Start Here page.',
             ],
         ],
         'plan_order' => [
@@ -123,14 +124,29 @@ return [
             '60_90_days' => '60–90 days',
             'researching' => 'Just researching',
         ],
+        'import_paths' => [
+            'shopify' => 'Shopify',
+            'square' => 'Square',
+            'csv' => 'CSV import',
+            'manual' => 'Manual entry',
+            'other' => 'Other',
+            'undecided' => 'Undecided',
+        ],
+        'mobile_interests' => [
+            'none' => 'No mobile app needed yet',
+            'android' => 'Android',
+            'ios' => 'iOS',
+            'both' => 'Android and iOS',
+            'undecided' => 'Undecided',
+        ],
     ],
 
     'onboarding' => [
         'welcome_title' => 'Start Here',
-        'welcome_body' => 'This workspace combines access profile, module setup state, and upgrade cues so teams can activate live modules first and track roadmap modules separately.',
+        'welcome_body' => 'This workspace combines plan access, feature setup, and upgrade cues so teams can activate live modules first and track roadmap modules separately.',
         'orientation_points' => [
             'Shopify flagship functionality remains live and unchanged while onboarding surfaces expand.',
-            'Module state comes from tenant entitlements plus setup status, not ad hoc page-level conditionals.',
+            'Module state comes from workspace access plus setup status, not ad hoc page-level conditionals.',
             'Locked and coming-soon modules stay visible for planning, but do not pretend to be complete.',
         ],
         'module_order' => [
@@ -184,8 +200,8 @@ return [
 
     'plans' => [
         'headline' => 'Plans & Add-ons',
-        'subtitle' => 'Informational access profile view built from tenant entitlements and module state. Billing writes are intentionally deferred.',
-        'billing_note' => 'Billing and payment-method capture are currently handled with the team. Plan/add-on truth in the app remains entitlement-driven and landlord-controlled.',
+        'subtitle' => 'Informational access profile view built from workspace access and module state. Billing writes are intentionally deferred.',
+        'billing_note' => 'Billing and payment-method capture are currently handled with the team. Plan and add-on availability in the app remains review-controlled.',
         'plan_order' => [
             'starter',
             'growth',
@@ -276,7 +292,7 @@ return [
 
     'demo' => [
         'eyebrow' => 'Live Demo',
-        'headline' => 'See Forestry Backstage in action.',
+        'headline' => 'See '.$productName.' in action.',
         'summary' => 'Request access to a safe demo workspace. We keep demo and production flows separate and honest.',
         'intent_note' => 'Demo access is for evaluation and does not convert demo tenants directly into production tenants.',
         'submit_label' => 'Request demo access',
@@ -287,14 +303,14 @@ return [
         'eyebrow' => 'Client Signup',
         'headline' => 'Start as a client.',
         'summary' => 'Request production access for your team. After approval, you will receive an activation email with a single password-setup link.',
-        'intent_note' => 'Production access follows approval + activation and lands you in a tenant-aware Start Here experience.',
+        'intent_note' => 'Production access follows approval + activation and lands you in a workspace Start Here experience.',
         'submit_label' => 'Request production access',
         'footnote' => 'Plan assignment remains landlord-controlled during early rollout. You will land in Start Here after first login.',
     ],
 
     'integrations' => [
         'headline' => 'Integrations',
-        'subtitle' => 'Placeholder-first connection surface. States are entitlement-aware and read-only in this phase.',
+        'subtitle' => 'Placeholder-first connection page. States follow workspace access and remain read-only in this phase.',
         'description' => 'No live connector sync runs from this page yet. Use fallback paths to stay operational while integrations mature.',
         'categories' => [
             'commerce' => 'Commerce',
@@ -379,7 +395,7 @@ return [
                 'setup' => [
                     'setup_steps' => [
                         'Review commerce data expectations for Square order/customer imports.',
-                        'Map fallback CSV columns to canonical profile fields before launch.',
+                        'Map fallback CSV columns to customer profile fields before launch.',
                         'Keep manual reconciliation steps documented in operations.',
                     ],
                     'required_fields' => [
@@ -402,7 +418,7 @@ return [
                 'key' => 'klaviyo',
                 'module_key' => 'email',
                 'title' => 'Klaviyo',
-                'description' => 'Future marketing connector for campaign orchestration while preserving canonical profile ownership.',
+                'description' => 'Future marketing connector for campaign orchestration while preserving customer profile ownership.',
                 'category' => 'marketing',
                 'availability' => 'available',
                 'fallback_mode' => 'manual_import',
@@ -444,7 +460,7 @@ return [
                 'key' => 'sms_gateway',
                 'module_key' => 'sms',
                 'title' => 'SMS Provider',
-                'description' => 'Route SMS lifecycle sends through tenant-configured providers with canonical event reporting.',
+                'description' => 'Route SMS lifecycle sends through tenant-configured providers with shared event reporting.',
                 'category' => 'marketing',
                 'availability' => 'available',
                 'fallback_mode' => 'none',
@@ -479,7 +495,7 @@ return [
                     'notes' => [
                         'This setup drawer is informational and does not send messages.',
                     ],
-                    'upgrade_message' => 'SMS access follows tenant entitlements and provider readiness configuration.',
+                    'upgrade_message' => 'SMS access follows workspace access and provider readiness configuration.',
                 ],
             ],
             'quickbooks' => [
@@ -522,7 +538,7 @@ return [
                     'notes' => [
                         'QuickBooks is currently a roadmap-visible placeholder.',
                     ],
-                    'upgrade_message' => 'QuickBooks is not live yet. Upgrade prompts indicate entitlement direction, not immediate connector availability.',
+                    'upgrade_message' => 'QuickBooks is not live yet. Upgrade prompts indicate access direction, not immediate connector availability.',
                 ],
             ],
             'csv_import' => [
@@ -550,7 +566,7 @@ return [
                     'setup_steps' => [
                         'Collect source export files from current business systems.',
                         'Validate required columns before upload.',
-                        'Run incremental imports and verify results in canonical modules.',
+                        'Run incremental imports and verify results in Everbranch modules.',
                     ],
                     'required_fields' => [
                         'Customer identifier column',
@@ -616,7 +632,7 @@ return [
                 'key' => 'mobile_connection',
                 'module_key' => 'mobile_connection',
                 'title' => 'Mobile App Connection',
-                'description' => 'Future mobile channel for field and owner workflows connected to the same canonical tenant data.',
+                'description' => 'Future mobile channel for field and owner workflows connected to the same workspace data.',
                 'category' => 'mobile',
                 'availability' => 'coming_soon',
                 'fallback_mode' => 'none',
@@ -659,7 +675,7 @@ return [
     ],
 
     'contact' => [
-        'headline' => 'Talk with the Forestry Backstage team',
+        'headline' => 'Talk with the '.$productName.' team',
         'summary' => 'Book a demo, ask about plans, or get rollout guidance for production, shipping, and customer workflows.',
         'channels' => [
             [

@@ -43,6 +43,7 @@ class Wizard extends Component
 
         $resolution = app(TenantModuleAccessResolver::class)->resolveForTenant((int) $tenant->id, $moduleKeys);
         $modules = is_array($resolution['modules'] ?? null) ? (array) $resolution['modules'] : [];
+        $isLandlordProvisioning = request()->routeIs('landlord.onboarding.wizard');
 
         $moduleCards = collect($moduleKeys)
             ->map(static function (string $moduleKey) use ($modules): array {
@@ -75,9 +76,13 @@ class Wizard extends Component
             'canProvision' => $canProvision,
             'requestedRail' => $requestedRail !== '' ? $requestedRail : null,
             'moduleCards' => $moduleCards,
+            'wizardEyebrow' => $isLandlordProvisioning ? 'Landlord Provisioning' : 'Workspace Blueprint',
+            'wizardTitle' => $isLandlordProvisioning ? 'Provision a Tenant' : 'Create Tenant Blueprint',
+            'wizardSubtitle' => $isLandlordProvisioning
+                ? 'Build a tenant blueprint from a few answers. Tenant creation, access, modules, and billing remain landlord-controlled and guarded.'
+                : 'Create or revise the tenant setup blueprint. Customer-facing setup status lives in Start Here.',
         ])->layout('layouts.app', [
-            'title' => 'Onboarding',
+            'title' => $isLandlordProvisioning ? 'Provision a Tenant' : 'Create Tenant Blueprint',
         ]);
     }
 }
-

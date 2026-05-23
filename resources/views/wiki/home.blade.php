@@ -1,4 +1,4 @@
-<x-layouts::app :title="'Backstage Wiki'">
+<x-layouts::app :title="'Workspace Wiki'">
     <div class="mx-auto w-full max-w-[1320px] px-4 py-6 md:px-6">
         <div class="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_260px]">
             <aside class="hidden lg:block">
@@ -15,7 +15,7 @@
                             <a href="{{ route('wiki.admin.category.create') }}" class="rounded-full border border-sky-300/40 bg-sky-100 px-3 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100">New Category</a>
                         </div>
                     @endif
-                    <div class="text-xs uppercase tracking-[0.26em] text-zinc-400">Backstage Wiki</div>
+                    <div class="text-xs uppercase tracking-[0.26em] text-zinc-400">Workspace Wiki</div>
                     <h1 class="mt-2 text-3xl font-semibold text-zinc-950 md:text-4xl">Knowledge hub</h1>
                     <p class="mt-2 max-w-3xl text-sm text-zinc-600">Find process docs, policy references, and operational guides across the organization.</p>
 

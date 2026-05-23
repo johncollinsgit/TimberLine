@@ -35,7 +35,7 @@ class CandleCashLedgerNormalizationService
             ],
             'manual_adjustment_earn' => [
                 'label' => 'Manual adjustment earn',
-                'definition' => 'Manually granted positive reward balance adjustments by Backstage operators.',
+                'definition' => 'Manually granted positive reward balance adjustments by Everbranch operators.',
             ],
             'other_earn' => [
                 'label' => 'Other earn',

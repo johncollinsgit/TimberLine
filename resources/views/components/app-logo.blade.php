@@ -1,15 +1,19 @@
 @props([
     'sidebar' => false,
     'logoSrc' => null,
-    'logoAlt' => 'Forestry Backstage',
+    'logoAlt' => config('everbranch.product_name', 'Everbranch'),
 ])
 
 @php
-    $brandLogoSrc = $logoSrc ?: asset('brand/forestry-backstage-mark.svg').'?v=fb2';
+    $brandAssets = (array) config('everbranch.brand_assets', []);
+    $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
+    $brandLogoPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
+    $brandLogoSrc = $logoSrc ?: asset($brandLogoPath).'?v='.$brandAssetVersion;
+    $productName = config('everbranch.product_name', 'Everbranch');
 @endphp
 
 @if($sidebar)
-    <flux:sidebar.brand name="Forestry Backstage" {{ $attributes }}>
+    <flux:sidebar.brand name="{{ $productName }}" {{ $attributes }}>
         <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-md overflow-hidden">
             <img
                 src="{{ $brandLogoSrc }}"
@@ -21,7 +25,7 @@
         </x-slot>
     </flux:sidebar.brand>
 @else
-    <flux:brand name="Forestry Backstage" {{ $attributes }}>
+    <flux:brand name="{{ $productName }}" {{ $attributes }}>
         <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-md overflow-hidden">
             <img
                 src="{{ $brandLogoSrc }}"

@@ -10,6 +10,10 @@
             $heroTitle = $authTenantPresentation['hero_title'] ?? 'Production, shipping, and wholesale in one place.';
             $heroSubtitle = $authTenantPresentation['hero_subtitle'] ?? 'Track orders, inventory, fulfillment, and customer growth from one place built for real operations.';
             $heroTagline = $authTenantPresentation['hero_tagline'] ?? 'Operations Console';
+            $productName = config('everbranch.product_name', 'Everbranch');
+            $brandAssets = (array) config('everbranch.brand_assets', []);
+            $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
+            $authLogoPath = (string) ($brandAssets['auth'] ?? 'brand/everbranch-auth.svg');
             $isLandlordMode = (bool) ($isLandlordMode ?? false);
             $hostTenantSlug = isset($hostTenant) && $hostTenant ? (string) ($hostTenant->slug ?? '') : (string) data_get($hostTenantContext ?? [], 'tenant.slug', '');
         @endphp
@@ -22,8 +26,8 @@
             <section class="fb-auth-brand-panel" aria-label="Brand and context">
                 <a href="{{ route('home') }}" class="fb-auth-brand fb-auth-brand--lockup" wire:navigate>
                     <img
-                        src="{{ asset('brand/forestry-backstage-auth.svg') }}?v=fb2"
-                        alt="Forestry Backstage"
+                        src="{{ asset($authLogoPath) }}?v={{ $brandAssetVersion }}"
+                        alt="{{ $productName }}"
                         class="fb-auth-brand-lockup"
                         loading="eager"
                         decoding="async"

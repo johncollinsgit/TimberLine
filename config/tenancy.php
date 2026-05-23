@@ -103,7 +103,7 @@ if (is_string($hostMapRaw) && trim($hostMapRaw) !== '') {
 
 $landlordOperatorRoles = array_values(array_filter(array_map(
     static fn (string $role): string => strtolower(trim($role)),
-    explode(',', (string) env('TENANCY_LANDLORD_OPERATOR_ROLES', 'admin'))
+    explode(',', (string) env('TENANCY_LANDLORD_OPERATOR_ROLES', 'platform_admin,admin'))
 )));
 $landlordOperatorEmails = array_values(array_filter(array_map(
     static fn (string $email): string => strtolower(trim($email)),
@@ -125,7 +125,7 @@ $landlordSnapshotRetentionDays = (int) env('TENANCY_LANDLORD_TENANT_OPS_SNAPSHOT
 $landlordSnapshotMaxBytes = (int) env('TENANCY_LANDLORD_TENANT_OPS_MAX_SNAPSHOT_BYTES', 1024 * 1024 * 20);
 
 if ($landlordOperatorRoles === []) {
-    $landlordOperatorRoles = ['admin'];
+    $landlordOperatorRoles = ['platform_admin', 'admin'];
 }
 
 $landlordSnapshotRetentionDays = max(1, min(365, $landlordSnapshotRetentionDays));
@@ -166,7 +166,7 @@ return [
         'flagship_tenant_slug' => env('AUTH_FLAGSHIP_TENANT_SLUG', 'modern-forestry'),
         'flagship_hosts' => $flagshipHosts,
         'host_map' => $hostMap,
-        'portal_name' => env('AUTH_PORTAL_NAME', 'Backstage'),
+        'portal_name' => env('AUTH_PORTAL_NAME', 'Everbranch'),
         'fallback_tenant_label' => env('AUTH_FALLBACK_TENANT_LABEL', 'Modern Forestry'),
     ],
     'onboarding' => [
