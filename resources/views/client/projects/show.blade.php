@@ -72,6 +72,9 @@
                     <a href="{{ route('client.projects.index') }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                         All projects
                     </a>
+                    <a href="{{ route('client.projects.requests.create', ['project' => $project]) }}" class="fb-btn fb-btn-primary">
+                        New request
+                    </a>
                 </div>
 
                 <div class="fb-metric-grid">
@@ -191,6 +194,35 @@
                 </section>
 
                 <aside class="space-y-6">
+                    <section class="fb-panel">
+                        <div class="fb-panel-head">
+                            <div>
+                                <div class="fb-panel-title">Requests</div>
+                                <div class="fb-panel-copy">Feature ideas, app requests, scope changes, and questions tied to this project.</div>
+                            </div>
+                        </div>
+                        <div class="fb-panel-body space-y-3">
+                            @forelse($project->tickets as $ticket)
+                                <a href="{{ route('client.projects.requests.show', ['ticket' => $ticket]) }}" class="block rounded-xl border border-zinc-200 bg-white p-4 hover:bg-zinc-50">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <div class="font-semibold text-zinc-950">{{ $ticket->title }}</div>
+                                            <div class="mt-1 text-xs text-zinc-500">
+                                                {{ $ticket->typeLabel() }}
+                                                @if($ticket->phase)
+                                                    &middot; {{ $ticket->phase->name }}
+                                                @endif
+                                            </div>
+                                        </div>
+                                        <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-semibold text-zinc-700">{{ $ticket->statusLabel() }}</span>
+                                    </div>
+                                </a>
+                            @empty
+                                <p class="text-sm text-zinc-600">No project requests have been submitted yet.</p>
+                            @endforelse
+                        </div>
+                    </section>
+
                     <section class="fb-panel">
                         <div class="fb-panel-head">
                             <div>

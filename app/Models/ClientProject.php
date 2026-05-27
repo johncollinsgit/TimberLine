@@ -58,6 +58,11 @@ class ClientProject extends Model
         return $this->hasMany(ClientProjectLink::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(ClientProjectTicket::class)->latest('id');
+    }
+
     public function scopeForTenantId(Builder $query, int $tenantId): Builder
     {
         return $query->where('tenant_id', $tenantId);

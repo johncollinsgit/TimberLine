@@ -46,4 +46,9 @@ class ClientProjectPhase extends Model
     {
         return $this->hasMany(ClientProjectMilestone::class)->orderBy('sort_order')->orderBy('due_on')->orderBy('id');
     }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(ClientProjectTicket::class)->latest('id');
+    }
 }

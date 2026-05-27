@@ -39,6 +39,16 @@ return [
     'hosts' => $publicHosts,
     'contact_email' => env('EVERGROVE_CONTACT_EMAIL', 'hello@evergrovesoftware.com'),
     'booking_url' => env('EVERGROVE_BOOKING_URL', ''),
+    'brand_assets' => [
+        'cache_tag' => env('EVERGROVE_BRAND_ASSET_VERSION', 'eg1'),
+        'mark' => 'brand/evergrove-mark.svg',
+        'lockup' => 'brand/evergrove-lockup.svg',
+        'favicon_svg' => 'brand/evergrove-favicon.svg',
+        'favicon_png' => 'favicon.png',
+        'favicon_ico' => 'favicon.ico',
+        'apple_touch_icon' => 'apple-touch-icon.png',
+        'og_image' => 'og-image.png',
+    ],
     'positioning' => [
         'eyebrow' => 'AI systems and custom software for practical businesses',
         'headline' => 'Turn scattered operations into useful software.',

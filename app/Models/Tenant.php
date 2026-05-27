@@ -111,6 +111,11 @@ class Tenant extends Model
         return $this->hasMany(ClientProject::class);
     }
 
+    public function clientProjectTickets(): HasMany
+    {
+        return $this->hasMany(ClientProjectTicket::class);
+    }
+
     public function commercialOverride(): HasOne
     {
         return $this->hasOne(TenantCommercialOverride::class);

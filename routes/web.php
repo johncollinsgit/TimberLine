@@ -4,6 +4,7 @@ use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\ClientProjectController;
+use App\Http\Controllers\ClientProjectTicketController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
+use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
@@ -201,6 +203,10 @@ $landlordRoutes = static function (): void {
         ->name('custom-module-requests.index');
     Route::post('/landlord/custom-module-requests/{customModuleRequest}', [LandlordCustomModuleRequestController::class, 'update'])
         ->name('custom-module-requests.update');
+    Route::get('/landlord/client-project-tickets', [LandlordClientProjectTicketController::class, 'index'])
+        ->name('client-project-tickets.index');
+    Route::post('/landlord/client-project-tickets/{ticket}', [LandlordClientProjectTicketController::class, 'update'])
+        ->name('client-project-tickets.update');
     Route::get('/landlord/service-inquiries', [LandlordServiceInquiryController::class, 'index'])
         ->name('service-inquiries.index');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
@@ -402,6 +408,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('client.projects.')
         ->group(function (): void {
             Route::get('/', [ClientProjectController::class, 'index'])->name('index');
+            Route::get('/requests', [ClientProjectTicketController::class, 'index'])->name('requests.index');
+            Route::get('/requests/{ticket}', [ClientProjectTicketController::class, 'show'])->name('requests.show');
+            Route::get('/{project}/requests/create', [ClientProjectTicketController::class, 'create'])->name('requests.create');
+            Route::post('/{project}/requests', [ClientProjectTicketController::class, 'store'])->name('requests.store');
             Route::get('/{project}', [ClientProjectController::class, 'show'])->name('show');
         });
 

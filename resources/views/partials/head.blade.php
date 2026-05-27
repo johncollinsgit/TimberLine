@@ -6,7 +6,7 @@
     $authTenantPresentation = $authTenantPresentation ?? [];
     $appMetaName = (string) ($app_name ?? $authTenantPresentation['app_name'] ?? config('everbranch.product_name', 'Everbranch'));
     $resolvedTitle = trim((string) ($title ?? ''));
-    $brandAssets = (array) config('everbranch.brand_assets', []);
+    $brandAssets = (array) ($brand_assets ?? config('everbranch.brand_assets', []));
     $mfAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
     $mfPageTitle = ($resolvedTitle !== '' && mb_strtolower($resolvedTitle) !== mb_strtolower($appMetaName))
         ? $resolvedTitle.' · '.$appMetaName

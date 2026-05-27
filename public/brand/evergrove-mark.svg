@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">Evergrove mark</title>
+  <desc id="desc">Leaf-accent Evergrove Software mark.</desc>
+  <rect width="160" height="160" rx="28" fill="#ffffff"/>
+  <g fill="none" stroke="#050505" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M73 70c-27-11-48-4-62 18 20 21 43 24 69 8"/>
+    <path d="M84 100c-16-27-13-52 9-75 24 18 32 43 22 72"/>
+    <path d="M72 70c17 13 29 28 37 47"/>
+  </g>
+  <text x="80" y="136" text-anchor="middle" fill="#050505" font-family="Georgia, 'Times New Roman', serif" font-size="36">eg</text>
+</svg>

@@ -18,6 +18,7 @@ class ClientProjectController extends Controller
             ->with([
                 'milestones' => fn ($query) => $query->orderBy('due_on')->orderBy('sort_order')->orderBy('id'),
                 'updates' => fn ($query) => $query->where('visibility', 'client')->latest('published_at')->latest('id'),
+                'tickets' => fn ($query) => $query->where('customer_visible', true)->latest('id'),
             ])
             ->orderBy('sort_order')
             ->orderByRaw('due_on is null')
@@ -43,6 +44,10 @@ class ClientProjectController extends Controller
             'milestones.phase',
             'updates' => fn ($query) => $query->where('visibility', 'client')->latest('published_at')->latest('id'),
             'links',
+            'tickets.phase',
+            'tickets.milestone',
+            'tickets.tasks',
+            'tickets.references',
         ]);
 
         return view('client.projects.show', [

@@ -5,29 +5,30 @@
     $businessSizes = is_array($content['business_sizes'] ?? null) ? $content['business_sizes'] : [];
     $timelines = is_array($content['timeline_options'] ?? null) ? $content['timeline_options'] : [];
     $budgetRanges = is_array($content['budget_ranges'] ?? null) ? $content['budget_ranges'] : [];
+    $brandAssets = (array) ($content['brand_assets'] ?? []);
 @endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
     @include('partials.head', [
-        'app_name' => 'Evergrove',
+        'app_name' => 'Evergrove Software',
         'title' => $tool['title'] ?? 'Evergrove Calculator',
         'description' => $tool['summary'] ?? 'Evergrove planning calculator.',
+        'brand_assets' => $brandAssets,
     ])
 </head>
-<body class="fb-public-body" data-premium-motion="public">
-    @include('platform.partials.premium-motion')
+<body class="eg-public-body">
+    @include('evergrove.partials.nav')
 
-    <main class="fb-public-shell fb-contact-shell">
-        <a href="/#tools" class="fb-btn fb-btn-secondary fb-contact-back">Back to Evergrove</a>
-
-        <section class="fb-card fb-contact-overview" aria-label="Calculator overview" data-reveal data-premium-surface>
-            <p class="fb-section-kicker">Example Tool</p>
-            <h1 class="fb-contact-title">{{ $tool['title'] ?? 'Calculator' }}</h1>
-            <p class="fb-contact-summary">{{ $tool['summary'] ?? '' }}</p>
+    <main class="eg-tool-page">
+        <section class="eg-tool-hero" aria-label="Calculator overview">
+            <a href="/#tools" class="eg-text-link">Back to Evergrove tools</a>
+            <p class="eg-kicker">Example Tool</p>
+            <h1>{{ $tool['title'] ?? 'Calculator' }}</h1>
+            <p>{{ $tool['summary'] ?? '' }}</p>
         </section>
 
-        <section class="fb-section" aria-label="Calculator" data-reveal>
+        <section class="eg-section" aria-label="Calculator">
             <div class="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
                 <article class="fb-card p-6" data-premium-surface>
                     <div data-evergrove-calculator data-tool-key="{{ $toolKey }}" class="space-y-5">

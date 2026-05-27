@@ -26,6 +26,9 @@
                 <div class="fb-eyebrow">Client Portal</div>
                 <h1 class="fb-title-xl">{{ $tenantName }} Projects</h1>
                 <p class="fb-subtitle">A clear view of active builds, milestones, status notes, and what is coming next.</p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <a href="{{ route('client.projects.requests.index') }}" class="fb-btn fb-btn-secondary">View requests</a>
+                </div>
 
                 <div class="fb-metric-grid">
                     <div class="fb-metric">
@@ -93,6 +96,14 @@
                                         <div class="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Next milestone</div>
                                         <div class="mt-1 font-semibold text-zinc-900">{{ $nextMilestone?->title ?? 'No open milestones' }}</div>
                                     </div>
+                                </div>
+
+                                <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
+                                    <div class="text-sm text-zinc-600">
+                                        <span class="font-semibold text-zinc-950">{{ $project->tickets->count() }}</span>
+                                        project request{{ $project->tickets->count() === 1 ? '' : 's' }}
+                                    </div>
+                                    <a href="{{ route('client.projects.requests.create', ['project' => $project]) }}" class="fb-btn fb-btn-secondary">New request</a>
                                 </div>
 
                                 <div class="mt-4">

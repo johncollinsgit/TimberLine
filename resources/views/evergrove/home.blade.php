@@ -6,282 +6,276 @@
     $businessSizes = is_array($content['business_sizes'] ?? null) ? $content['business_sizes'] : [];
     $timelines = is_array($content['timeline_options'] ?? null) ? $content['timeline_options'] : [];
     $budgetRanges = is_array($content['budget_ranges'] ?? null) ? $content['budget_ranges'] : [];
+    $brandAssets = (array) ($content['brand_assets'] ?? []);
+    $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg1');
+    $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/evergrove-lockup.svg')).'?v='.$assetVersion;
     $contactEmail = (string) ($content['contact_email'] ?? 'hello@evergrovesoftware.com');
+    $appBaseUrl = rtrim((string) config('app.url', url('/')), '/');
+    $loginUrl = $appBaseUrl.'/login';
 @endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
     @include('partials.head', [
-        'app_name' => 'Evergrove',
-        'title' => 'Evergrove | AI Systems and Custom Software',
+        'app_name' => 'Evergrove Software',
+        'title' => 'Evergrove Software | AI Systems and Custom Software',
         'description' => $positioning['summary'] ?? 'Evergrove builds practical AI systems and custom software for small and medium businesses.',
+        'brand_assets' => $brandAssets,
     ])
 </head>
-<body class="fb-public-body" data-premium-motion="public">
-    @include('platform.partials.premium-motion')
+<body class="eg-public-body">
+    @include('evergrove.partials.nav')
 
-    <div class="fb-public-shell fb-public-shell--wide">
-        <div class="fb-site-nav-wrap">
-            <nav class="fb-site-nav fb-site-nav--premium" aria-label="Primary navigation">
-                <a href="/" class="fb-site-brand">
-                    <span class="text-lg font-semibold text-[var(--fb-text-primary)]">Evergrove</span>
-                </a>
-                <div class="fb-site-links" aria-label="Public sections">
-                    <a href="#services">Services</a>
-                    <a href="#tools">Tools</a>
-                    <a href="#proof">Proof</a>
-                    <a href="#everbranch">Everbranch</a>
-                    <a href="#contact">Contact</a>
+    <main>
+        <section class="eg-hero" aria-label="Evergrove services">
+            <div class="eg-hero-copy">
+                <img src="{{ $lockup }}" alt="Evergrove Software" class="eg-hero-logo" />
+                <p class="eg-kicker">{{ $positioning['eyebrow'] ?? 'AI systems and custom software' }}</p>
+                <h1>AI systems and custom software for small and medium businesses.</h1>
+                <p class="eg-lede">Turn scattered operations into useful software. Evergrove plans, builds, and maintains practical AI workflows, Laravel applications, customer portals, and business systems that are designed around how your company actually works.</p>
+                <div class="eg-actions">
+                    <a href="#contact" class="eg-button eg-button-primary">Start a project</a>
+                    <a href="#tools" class="eg-button eg-button-secondary">Use the calculators</a>
+                    <a href="{{ $loginUrl }}" class="eg-button eg-button-secondary">Client portal</a>
                 </div>
-                <div class="fb-hero-cta fb-hero-cta--nav">
-                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-                    <a href="#contact" class="fb-btn fb-btn-primary">Start a project</a>
-                </div>
-            </nav>
-        </div>
-
-        <header class="min-h-[76vh] rounded-none border-b border-[var(--fb-border)] bg-[var(--fb-surface)] py-12 md:py-16" aria-label="Evergrove services">
-            <div class="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center">
-                <div class="max-w-3xl">
-                    <p class="fb-section-kicker">{{ $positioning['eyebrow'] ?? 'AI systems and custom software' }}</p>
-                    <h1 class="mt-4 text-4xl font-semibold leading-tight text-[var(--fb-text-primary)] md:text-6xl">
-                        {{ $positioning['headline'] ?? 'Turn scattered operations into useful software.' }}
-                    </h1>
-                    <p class="mt-5 text-lg leading-8 text-[var(--fb-text-secondary)]">
-                        {{ $positioning['summary'] ?? '' }}
-                    </p>
-                    <div class="mt-7 flex flex-wrap gap-3">
-                        <a href="#contact" class="fb-btn fb-btn-primary">Start a project</a>
-                        <a href="#tools" class="fb-btn fb-btn-secondary">Use the calculators</a>
-                        <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary">See Everbranch</a>
-                    </div>
-                    <dl class="mt-8 grid gap-3 sm:grid-cols-3">
-                        <div class="border-l border-[var(--fb-border)] pl-4">
-                            <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--fb-text-muted)]">Operator led</dt>
-                            <dd class="mt-1 text-sm font-semibold text-[var(--fb-text-primary)]">15 years building and running systems</dd>
-                        </div>
-                        <div class="border-l border-[var(--fb-border)] pl-4">
-                            <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--fb-text-muted)]">Stack</dt>
-                            <dd class="mt-1 text-sm font-semibold text-[var(--fb-text-primary)]">Laravel, AI workflows, integrations</dd>
-                        </div>
-                        <div class="border-l border-[var(--fb-border)] pl-4">
-                            <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--fb-text-muted)]">Best fit</dt>
-                            <dd class="mt-1 text-sm font-semibold text-[var(--fb-text-primary)]">Small to medium businesses</dd>
-                        </div>
-                    </dl>
-                </div>
-
-                <aside class="relative overflow-hidden border border-[var(--fb-border)] bg-[var(--fb-surface-subtle)] p-5 shadow-sm" aria-label="Evergrove project visibility preview">
-                    <div class="flex items-center justify-between border-b border-[var(--fb-border)] pb-4">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--fb-text-muted)]">Client progress</p>
-                            <h2 class="mt-1 text-xl font-semibold text-[var(--fb-text-primary)]">Website + AI workflow build</h2>
-                        </div>
-                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">On track</span>
-                    </div>
-                    <div class="mt-5 grid gap-3 sm:grid-cols-3">
-                        <div class="border border-[var(--fb-border)] bg-white p-3">
-                            <p class="text-xs text-[var(--fb-text-muted)]">Phase</p>
-                            <p class="mt-1 font-semibold">Build</p>
-                        </div>
-                        <div class="border border-[var(--fb-border)] bg-white p-3">
-                            <p class="text-xs text-[var(--fb-text-muted)]">Next review</p>
-                            <p class="mt-1 font-semibold">Friday</p>
-                        </div>
-                        <div class="border border-[var(--fb-border)] bg-white p-3">
-                            <p class="text-xs text-[var(--fb-text-muted)]">Open items</p>
-                            <p class="mt-1 font-semibold">3 decisions</p>
-                        </div>
-                    </div>
-                    <div class="mt-5 space-y-3">
-                        @foreach ([
-                            ['label' => 'Discovery', 'width' => '100%', 'tone' => 'bg-emerald-500'],
-                            ['label' => 'Architecture', 'width' => '100%', 'tone' => 'bg-emerald-500'],
-                            ['label' => 'Build', 'width' => '62%', 'tone' => 'bg-[var(--fb-accent)]'],
-                            ['label' => 'QA and launch', 'width' => '18%', 'tone' => 'bg-zinc-400'],
-                        ] as $row)
-                            <div>
-                                <div class="mb-1 flex justify-between text-xs font-semibold text-[var(--fb-text-secondary)]">
-                                    <span>{{ $row['label'] }}</span>
-                                    <span>{{ $row['width'] }}</span>
-                                </div>
-                                <div class="h-2 bg-white">
-                                    <div class="h-2 {{ $row['tone'] }}" style="width: {{ $row['width'] }}"></div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                    <div class="mt-5 border border-[var(--fb-border)] bg-white p-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--fb-text-muted)]">Latest update</p>
-                        <p class="mt-2 text-sm text-[var(--fb-text-secondary)]">Prototype screens are ready for review. Next step is connecting the estimate calculator to the inquiry workflow.</p>
-                    </div>
-                </aside>
             </div>
-        </header>
 
-        <main class="fb-public-main">
-            <section id="services" class="fb-section fb-section--public" aria-label="Services" data-reveal>
-                <div class="fb-section-header">
-                    <p class="fb-section-kicker">Services</p>
-                    <h2>Practical systems for businesses that have already outgrown duct tape.</h2>
-                    <p>Evergrove starts with the operational pain, then chooses the smallest useful build that can improve the week.</p>
-                </div>
-                <div class="fb-grid fb-grid-4">
-                    @foreach($services as $service)
-                        <article class="fb-card fb-card--public">
-                            <h3>{{ $service['title'] ?? 'Service' }}</h3>
-                            <p>{{ $service['summary'] ?? '' }}</p>
-                        </article>
-                    @endforeach
-                </div>
-            </section>
-
-            <section id="tools" class="fb-section fb-section--public" aria-label="Example calculators" data-reveal>
-                <div class="fb-section-header">
-                    <p class="fb-section-kicker">Example Tools</p>
-                    <h2>Start with a number, then talk through the real business case.</h2>
-                    <p>These calculators are intentionally lightweight. They help frame scope before a project becomes a proposal.</p>
-                </div>
-                <div class="fb-grid fb-grid-3">
-                    @foreach($tools as $key => $tool)
-                        @php
-                            $routeName = match ((string) $key) {
-                                'ai_roi' => 'evergrove.tools.ai-roi',
-                                'automation_savings' => 'evergrove.tools.automation-savings',
-                                default => 'evergrove.tools.project-estimate',
-                            };
-                        @endphp
-                        <article class="fb-card fb-card--public" data-premium-surface>
-                            <h3>{{ $tool['title'] ?? 'Calculator' }}</h3>
-                            <p>{{ $tool['summary'] ?? '' }}</p>
-                            <a href="{{ route($routeName) }}" class="mt-4 inline-flex text-sm font-semibold text-[var(--fb-brand)]">Open calculator</a>
-                        </article>
-                    @endforeach
-                </div>
-            </section>
-
-            <section id="proof" class="fb-section fb-section--public" aria-label="Founder proof" data-reveal>
-                <div class="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-                    <div class="fb-section-header">
-                        <p class="fb-section-kicker">Founder Story</p>
-                        <h2>Built by someone who has had to run the business after the software shipped.</h2>
-                        <p>Evergrove comes from 15 years of technical proficiency and the operator experience behind Modern Forestry. The work is grounded in real inventory, orders, customer programs, fulfillment, marketing, and systems that have to keep working on ordinary busy days.</p>
-                    </div>
-                    <div class="grid gap-3 sm:grid-cols-2">
-                        <article class="fb-card fb-card--public">
-                            <h3>Operator judgment</h3>
-                            <p>Recommendations account for workflow friction, staff adoption, cost, maintenance, and whether AI is actually the right tool.</p>
-                        </article>
-                        <article class="fb-card fb-card--public">
-                            <h3>Technical depth</h3>
-                            <p>Laravel, Shopify, data imports, dashboards, customer systems, automation, deployment, and long-term iteration.</p>
-                        </article>
-                    </div>
-                </div>
-            </section>
-
-            <section id="everbranch" class="fb-section fb-section--public" aria-label="Everbranch relationship" data-reveal>
-                <div class="fb-final-cta fb-final-cta--public" data-premium-surface>
+            <aside class="eg-portal-preview" aria-label="Client portal preview">
+                <div class="eg-preview-head">
                     <div>
-                        <p class="fb-section-kicker">Everbranch</p>
-                        <h2>Everbranch is the productized workspace behind the consulting.</h2>
-                        <p>Evergrove handles strategy and custom implementation. Everbranch gives clients a clean login for progress, onboarding, project visibility, and future business workspace features.</p>
+                        <p class="eg-preview-label">Client portal</p>
+                        <h2>Progress, scope, and requests in one place.</h2>
                     </div>
-                    <div class="fb-hero-cta">
-                        <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary">View Everbranch</a>
-                        <a href="{{ route('login') }}" class="fb-btn fb-btn-primary">Client login</a>
+                    <span>On track</span>
+                </div>
+                <div class="eg-preview-grid">
+                    <div>
+                        <p>Phase</p>
+                        <strong>Build</strong>
+                    </div>
+                    <div>
+                        <p>Next milestone</p>
+                        <strong>Homepage review</strong>
+                    </div>
+                    <div>
+                        <p>Open requests</p>
+                        <strong>3</strong>
                     </div>
                 </div>
-            </section>
+                <div class="eg-request-stack">
+                    <article>
+                        <span>Feature request</span>
+                        <strong>Quote calculator refinements</strong>
+                        <p>Scope, tasks, reference links, and client decisions stay attached to the project.</p>
+                    </article>
+                    <article>
+                        <span>Project task</span>
+                        <strong>Connect inquiry payload</strong>
+                        <p>Evergrove and the customer can see what is waiting, what is approved, and what changed.</p>
+                    </article>
+                </div>
+            </aside>
+        </section>
 
-            <section id="contact" class="fb-section fb-section--public" aria-label="Contact Evergrove" data-reveal>
-                <div class="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-                    <div class="fb-section-header">
-                        <p class="fb-section-kicker">Contact</p>
-                        <h2>Bring the messy version of the problem.</h2>
-                        <p>Share what is slow, repetitive, unclear, or expensive. Evergrove will help decide whether the right answer is AI, custom software, automation, or a simpler process.</p>
-                        <p class="mt-3 text-sm text-[var(--fb-text-secondary)]">Email: <a class="font-semibold text-[var(--fb-brand)]" href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a></p>
+        <section class="eg-proof-strip" aria-label="Evergrove proof points">
+            <div>
+                <span>15 years</span>
+                <p>technical proficiency and operating experience</p>
+            </div>
+            <div>
+                <span>Modern Forestry</span>
+                <p>real business systems, inventory, orders, customers, and automation</p>
+            </div>
+            <div>
+                <span>Laravel + AI</span>
+                <p>custom portals, workflow tools, integrations, and practical agents</p>
+            </div>
+        </section>
+
+        <section id="services" class="eg-section">
+            <div class="eg-section-head">
+                <p class="eg-kicker">Services</p>
+                <h2>Clean software for the work your business repeats every week.</h2>
+                <p>Evergrove starts with the operational pain, then chooses the smallest useful system that can improve the week.</p>
+            </div>
+            <div class="eg-card-grid eg-card-grid-4">
+                @foreach($services as $service)
+                    <article class="eg-card">
+                        <h3>{{ $service['title'] ?? 'Service' }}</h3>
+                        <p>{{ $service['summary'] ?? '' }}</p>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <section id="work" class="eg-section eg-section-contrast">
+            <div class="eg-section-head">
+                <p class="eg-kicker">Work</p>
+                <h2>Operator-led, not agency theater.</h2>
+                <p>Modern Forestry is the proof point: the software judgment comes from building systems for an actual business with real customers, orders, inventory, fulfillment, and marketing pressure.</p>
+            </div>
+            <div class="eg-split">
+                <article class="eg-card">
+                    <h3>What changes</h3>
+                    <p>Less retyping, fewer mystery handoffs, clearer project decisions, and dashboards that show the work instead of hiding it in messages and spreadsheets.</p>
+                </article>
+                <article class="eg-card">
+                    <h3>How it is built</h3>
+                    <p>Laravel applications, customer portals, Shopify and email integrations, AI-assisted workflows, structured data imports, and long-term maintenance.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="tools" class="eg-section">
+            <div class="eg-section-head">
+                <p class="eg-kicker">Example Tools</p>
+                <h2>Start with a planning range, then talk through the real business case.</h2>
+                <p>These calculators are lead magnets and scoping tools. They help frame the conversation before a project becomes a proposal.</p>
+            </div>
+            <div class="eg-card-grid eg-card-grid-3">
+                @foreach($tools as $key => $tool)
+                    @php
+                        $routeName = match ((string) $key) {
+                            'ai_roi' => 'evergrove.tools.ai-roi',
+                            'automation_savings' => 'evergrove.tools.automation-savings',
+                            default => 'evergrove.tools.project-estimate',
+                        };
+                    @endphp
+                    <article class="eg-card">
+                        <h3>{{ $tool['title'] ?? 'Calculator' }}</h3>
+                        <p>{{ $tool['summary'] ?? '' }}</p>
+                        <a href="{{ route($routeName) }}" class="eg-text-link">Open calculator</a>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <section id="pricing" class="eg-section eg-section-contrast">
+            <div class="eg-section-head">
+                <p class="eg-kicker">Pricing</p>
+                <h2>Useful budget anchors before anyone gets on a call.</h2>
+                <p>Exact scope still depends on the business, but most Evergrove work fits one of these lanes.</p>
+            </div>
+            <div class="eg-card-grid eg-card-grid-3">
+                <article class="eg-card eg-price-card">
+                    <p>Audit and blueprint</p>
+                    <h3>$750-$2,500</h3>
+                    <span>Workflow map, AI opportunities, system plan, and build priorities.</span>
+                </article>
+                <article class="eg-card eg-price-card">
+                    <p>Automation or portal build</p>
+                    <h3>$2,500-$15,000</h3>
+                    <span>Focused Laravel, AI, integration, calculator, or customer visibility projects.</span>
+                </article>
+                <article class="eg-card eg-price-card">
+                    <p>Ongoing systems care</p>
+                    <h3>Monthly</h3>
+                    <span>Maintenance, improvements, monitoring, new feature requests, and workflow support.</span>
+                </article>
+            </div>
+        </section>
+
+        <section id="everbranch" class="eg-section">
+            <div class="eg-product-bridge">
+                <div>
+                    <p class="eg-kicker">Everbranch</p>
+                    <h2>Everbranch is software made by Evergrove.</h2>
+                    <p>Evergrove is the company. Everbranch is the product and client workspace: project progress, customer requests, deliverables, onboarding, and future business tools under one login.</p>
+                </div>
+                <div class="eg-actions">
+                    <a href="{{ route('platform.promo') }}" class="eg-button eg-button-secondary">See Everbranch</a>
+                    <a href="{{ $loginUrl }}" class="eg-button eg-button-primary">Client portal</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="eg-section">
+            <div class="eg-contact-layout">
+                <div class="eg-section-head">
+                    <p class="eg-kicker">Start Project</p>
+                    <h2>Bring the messy version of the problem.</h2>
+                    <p>Share what is slow, repetitive, unclear, or expensive. Evergrove will help decide whether the right answer is AI, custom software, automation, or a simpler process.</p>
+                    <p>Email: <a class="eg-text-link" href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a></p>
+                </div>
+
+                <form method="POST" action="{{ route('evergrove.inquiries.store') }}" class="eg-form-card">
+                    @csrf
+                    <input type="hidden" name="source_page" value="evergrove_home" />
+
+                    @if (session('status'))
+                        <div class="fb-state fb-state--success text-sm">{{ session('status') }}</div>
+                    @endif
+
+                    <div class="eg-form-grid">
+                        <label>
+                            Name
+                            <input name="name" type="text" value="{{ old('name') }}" required class="fb-input" />
+                            @error('name') <span>{{ $message }}</span> @enderror
+                        </label>
+                        <label>
+                            Email
+                            <input name="email" type="email" value="{{ old('email') }}" required class="fb-input" />
+                            @error('email') <span>{{ $message }}</span> @enderror
+                        </label>
                     </div>
 
-                    <form method="POST" action="{{ route('evergrove.inquiries.store') }}" class="fb-card fb-card--public space-y-4" data-premium-surface>
-                        @csrf
-                        <input type="hidden" name="source_page" value="evergrove_home" />
-
-                        @if (session('status'))
-                            <div class="fb-state fb-state--success text-sm">{{ session('status') }}</div>
-                        @endif
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                                Name
-                                <input name="name" type="text" value="{{ old('name') }}" required class="fb-input mt-2" />
-                                @error('name') <span class="mt-1 block text-xs text-red-600">{{ $message }}</span> @enderror
-                            </label>
-                            <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                                Email
-                                <input name="email" type="email" value="{{ old('email') }}" required class="fb-input mt-2" />
-                                @error('email') <span class="mt-1 block text-xs text-red-600">{{ $message }}</span> @enderror
-                            </label>
-                        </div>
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                                Company
-                                <input name="company" type="text" value="{{ old('company') }}" class="fb-input mt-2" />
-                            </label>
-                            <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                                Website
-                                <input name="website" type="url" value="{{ old('website') }}" class="fb-input mt-2" placeholder="https://example.com" />
-                                @error('website') <span class="mt-1 block text-xs text-red-600">{{ $message }}</span> @enderror
-                            </label>
-                        </div>
-
-                        <div class="grid gap-4 md:grid-cols-3">
-                            <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                                Business size
-                                <select name="business_size" class="fb-input mt-2">
-                                    <option value="">Select one</option>
-                                    @foreach($businessSizes as $key => $label)
-                                        <option value="{{ $key }}" @selected(old('business_size') === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                                Timeline
-                                <select name="timeline" class="fb-input mt-2">
-                                    <option value="">Select one</option>
-                                    @foreach($timelines as $key => $label)
-                                        <option value="{{ $key }}" @selected(old('timeline') === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                                Budget range
-                                <select name="budget_range" class="fb-input mt-2">
-                                    <option value="">Select one</option>
-                                    @foreach($budgetRanges as $key => $label)
-                                        <option value="{{ $key }}" @selected(old('budget_range') === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                        </div>
-
-                        <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                            Current tools
-                            <input name="current_tools" type="text" value="{{ old('current_tools') }}" class="fb-input mt-2" placeholder="Shopify, spreadsheets, QuickBooks, email, Asana..." />
+                    <div class="eg-form-grid">
+                        <label>
+                            Company
+                            <input name="company" type="text" value="{{ old('company') }}" class="fb-input" />
                         </label>
-
-                        <label class="block text-sm font-semibold text-[var(--fb-text-primary)]">
-                            What should be easier?
-                            <textarea name="pain_point" rows="5" class="fb-input mt-2">{{ old('pain_point') }}</textarea>
-                            @error('pain_point') <span class="mt-1 block text-xs text-red-600">{{ $message }}</span> @enderror
+                        <label>
+                            Website
+                            <input name="website" type="url" value="{{ old('website') }}" class="fb-input" placeholder="https://example.com" />
+                            @error('website') <span>{{ $message }}</span> @enderror
                         </label>
+                    </div>
 
-                        <button type="submit" class="fb-btn fb-btn-primary">Send project notes</button>
-                    </form>
-                </div>
-            </section>
-        </main>
-    </div>
+                    <div class="eg-form-grid eg-form-grid-3">
+                        <label>
+                            Business size
+                            <select name="business_size" class="fb-input">
+                                <option value="">Select one</option>
+                                @foreach($businessSizes as $key => $label)
+                                    <option value="{{ $key }}" @selected(old('business_size') === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label>
+                            Timeline
+                            <select name="timeline" class="fb-input">
+                                <option value="">Select one</option>
+                                @foreach($timelines as $key => $label)
+                                    <option value="{{ $key }}" @selected(old('timeline') === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <label>
+                            Budget range
+                            <select name="budget_range" class="fb-input">
+                                <option value="">Select one</option>
+                                @foreach($budgetRanges as $key => $label)
+                                    <option value="{{ $key }}" @selected(old('budget_range') === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                    </div>
+
+                    <label>
+                        Current tools
+                        <input name="current_tools" type="text" value="{{ old('current_tools') }}" class="fb-input" placeholder="Shopify, spreadsheets, QuickBooks, email, Asana..." />
+                    </label>
+
+                    <label>
+                        What should be easier?
+                        <textarea name="pain_point" rows="5" class="fb-input">{{ old('pain_point') }}</textarea>
+                        @error('pain_point') <span>{{ $message }}</span> @enderror
+                    </label>
+
+                    <button type="submit" class="eg-button eg-button-primary">Send project notes</button>
+                </form>
+            </div>
+        </section>
+    </main>
 </body>
 </html>
