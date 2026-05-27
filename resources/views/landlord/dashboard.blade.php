@@ -52,6 +52,12 @@
                             Custom Requests
                         </a>
                         <a
+                            href="{{ route('landlord.service-inquiries.index') }}"
+                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                        >
+                            Service Inquiries
+                        </a>
+                        <a
                             href="{{ route('landlord.tenants.index') }}"
                             class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                         >

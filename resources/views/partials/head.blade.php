@@ -4,7 +4,7 @@
 
 @php
     $authTenantPresentation = $authTenantPresentation ?? [];
-    $appMetaName = (string) ($authTenantPresentation['app_name'] ?? config('everbranch.product_name', 'Everbranch'));
+    $appMetaName = (string) ($app_name ?? $authTenantPresentation['app_name'] ?? config('everbranch.product_name', 'Everbranch'));
     $resolvedTitle = trim((string) ($title ?? ''));
     $brandAssets = (array) config('everbranch.brand_assets', []);
     $mfAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');

@@ -106,6 +106,11 @@ class Tenant extends Model
         return $this->hasMany(CustomModuleRequest::class);
     }
 
+    public function clientProjects(): HasMany
+    {
+        return $this->hasMany(ClientProject::class);
+    }
+
     public function commercialOverride(): HasOne
     {
         return $this->hasOne(TenantCommercialOverride::class);

@@ -3,12 +3,16 @@
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\CustomModuleRequestController;
+use App\Http\Controllers\ClientProjectController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
+use App\Http\Controllers\EvergroveServiceInquiryController;
+use App\Http\Controllers\EvergroveServicesController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
+use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
@@ -123,8 +127,16 @@ $normalizeHost = static function (mixed $value): ?string {
     return $host !== '' ? $host : null;
 };
 
+$evergrovePublicHosts = collect((array) config('evergrove.hosts', []))
+    ->map(static fn (mixed $host): ?string => $normalizeHost($host))
+    ->filter(static fn (?string $host): bool => $host !== null)
+    ->unique()
+    ->values()
+    ->all();
+
 Route::get('/', function (
     Request $request,
+    EvergroveServicesController $evergroveController,
     ShopifyEmbeddedAppContext $contextService,
     ShopifyEmbeddedAppController $controller,
     TenantResolver $tenantResolver,
@@ -132,13 +144,22 @@ Route::get('/', function (
     PlatformProductPagesController $platformPagesController,
     TenantCommercialExperienceService $experienceService,
     ModernForestryAlphaBootstrapService $alphaBootstrapService
-) {
+) use ($evergrovePublicHosts, $normalizeHost) {
     if ($contextService->hasPageContext($request)) {
         return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService, $alphaBootstrapService);
     }
 
     if (auth()->check()) {
         return redirect()->to(HomeRedirect::pathFor(auth()->user()));
+    }
+
+    $requestHost = $normalizeHost($request->getHost()) ?? '';
+    if ($requestHost !== '' && in_array($requestHost, $evergrovePublicHosts, true)) {
+        return $evergroveController->home();
+    }
+
+    if ($requestHost !== '' && $requestHost === $normalizeHost((string) config('tenancy.landlord.primary_host', ''))) {
+        return redirect()->route('login');
     }
 
     return $platformPagesController->promo($experienceService);
@@ -180,6 +201,8 @@ $landlordRoutes = static function (): void {
         ->name('custom-module-requests.index');
     Route::post('/landlord/custom-module-requests/{customModuleRequest}', [LandlordCustomModuleRequestController::class, 'update'])
         ->name('custom-module-requests.update');
+    Route::get('/landlord/service-inquiries', [LandlordServiceInquiryController::class, 'index'])
+        ->name('service-inquiries.index');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
     Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])
@@ -313,6 +336,11 @@ Route::get('/assistant/activity', function (Request $request, ShopifyEmbeddedUrl
     return redirect()->to($urlGenerator->route('shopify.app.assistant.activity', [], false, $request));
 })->name('shopify.embedded.assistant.activity');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
+Route::get('/lander', [EvergroveServicesController::class, 'lander'])->name('evergrove.lander');
+Route::get('/tools/project-estimate', [EvergroveServicesController::class, 'projectEstimate'])->name('evergrove.tools.project-estimate');
+Route::get('/tools/ai-roi', [EvergroveServicesController::class, 'aiRoi'])->name('evergrove.tools.ai-roi');
+Route::get('/tools/automation-savings', [EvergroveServicesController::class, 'automationSavings'])->name('evergrove.tools.automation-savings');
+Route::post('/services/inquiries', [EvergroveServiceInquiryController::class, 'store'])->name('evergrove.inquiries.store');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
@@ -368,6 +396,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->post('/start/setup-status', [CustomerStartHereController::class, 'updateSetupStatus'])
         ->name('app.setup-status.update');
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->prefix('client/projects')
+        ->name('client.projects.')
+        ->group(function (): void {
+            Route::get('/', [ClientProjectController::class, 'index'])->name('index');
+            Route::get('/{project}', [ClientProjectController::class, 'show'])->name('show');
+        });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->prefix('custom-module-requests')

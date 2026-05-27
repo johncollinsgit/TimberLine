@@ -66,6 +66,18 @@ class EnforceCanonicalRuntimeHost
             }
         }
 
+        foreach ((array) config('evergrove.hosts', []) as $candidate) {
+            $normalized = $this->normalizeHost((string) $candidate);
+            if ($normalized !== null) {
+                $hosts[] = $normalized;
+            }
+        }
+
+        $evergroveCanonicalHost = $this->normalizeHost((string) config('evergrove.canonical_host', ''));
+        if ($evergroveCanonicalHost !== null) {
+            $hosts[] = $evergroveCanonicalHost;
+        }
+
         foreach (array_keys((array) config('tenancy.auth.host_map', [])) as $candidate) {
             $normalized = $this->normalizeHost((string) $candidate);
             if ($normalized !== null) {

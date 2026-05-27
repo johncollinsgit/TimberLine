@@ -21,8 +21,18 @@ class HomeRedirect
             return route('app.start', absolute: false);
         }
 
+        if ($tenant instanceof Tenant && self::isCustomerPortalUser($user)) {
+            if ($tenant->clientProjects()->exists()) {
+                return route('client.projects.index', absolute: false);
+            }
+
+            if (self::isProductionCustomerUser($user)) {
+                return route('app.start', absolute: false);
+            }
+        }
+
         $requestedVia = strtolower(trim((string) ($user->requested_via ?? '')));
-        if (! $tenant instanceof Tenant && $requestedVia !== '' && str_starts_with($requestedVia, 'customer_')) {
+        if (! $tenant instanceof Tenant && self::isProductionCustomerUser($user)) {
             return route('app.start', absolute: false);
         }
 
@@ -56,5 +66,19 @@ class HomeRedirect
         }
 
         return (string) ($setupStatus->landlord_review_status ?? '') !== 'reviewed';
+    }
+
+    protected static function isCustomerPortalUser(User $user): bool
+    {
+        $requestedVia = strtolower(trim((string) ($user->requested_via ?? '')));
+
+        return $requestedVia !== '' && str_starts_with($requestedVia, 'customer_');
+    }
+
+    protected static function isProductionCustomerUser(User $user): bool
+    {
+        $requestedVia = strtolower(trim((string) ($user->requested_via ?? '')));
+
+        return $requestedVia === 'customer_production';
     }
 }
