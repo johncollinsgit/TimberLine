@@ -1,6 +1,6 @@
 @php
     $brandAssets = (array) config('evergrove.brand_assets', []);
-    $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg2');
+    $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg3');
     $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/evergrove-logo.png')).'?v='.$assetVersion;
     $appBaseUrl = rtrim((string) config('app.url', url('/')), '/');
     $loginUrl = $appBaseUrl.'/login';

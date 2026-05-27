@@ -7,7 +7,7 @@
     $timelines = is_array($content['timeline_options'] ?? null) ? $content['timeline_options'] : [];
     $budgetRanges = is_array($content['budget_ranges'] ?? null) ? $content['budget_ranges'] : [];
     $brandAssets = (array) ($content['brand_assets'] ?? []);
-    $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg2');
+    $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg3');
     $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/evergrove-logo.png')).'?v='.$assetVersion;
     $contactEmail = (string) ($content['contact_email'] ?? 'hello@evergrovesoftware.com');
     $appBaseUrl = rtrim((string) config('app.url', url('/')), '/');

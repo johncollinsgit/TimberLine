@@ -13,7 +13,7 @@ test('evergrove public host renders the services site', function (): void {
     $this->get('http://evergrovesoftware.com/')
         ->assertOk()
         ->assertSeeText('Evergrove')
-        ->assertSee('brand/evergrove-logo.png?v=eg2', false)
+        ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('Sign Up')
         ->assertSeeText('Turn scattered operations into useful software.')
         ->assertSeeText('AI systems consulting')
@@ -42,7 +42,7 @@ test('app host sends guests toward login while lander redirects home', function 
 test('evergrove calculator pages render by tool path', function (): void {
     $this->get('http://evergrovesoftware.com/tools/project-estimate')
         ->assertOk()
-        ->assertSee('brand/evergrove-logo.png?v=eg2', false)
+        ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('Website and software project estimate')
         ->assertSee('data-tool-key="project_estimate"', false)
         ->assertSeeText('Estimated build range');
