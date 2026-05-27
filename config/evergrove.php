@@ -27,7 +27,7 @@ $parseHostList = static function (string $value) use ($normalizeHost): array {
     return array_values(array_unique($hosts));
 };
 
-$canonicalHost = $normalizeHost(env('EVERGROVE_CANONICAL_HOST', 'theevergrove.com')) ?? 'theevergrove.com';
+$canonicalHost = $normalizeHost(env('EVERGROVE_CANONICAL_HOST', 'evergrovesoftware.com')) ?? 'evergrovesoftware.com';
 $publicHosts = $parseHostList((string) env('EVERGROVE_PUBLIC_HOSTS', $canonicalHost.',www.'.$canonicalHost));
 if ($publicHosts === []) {
     $publicHosts = [$canonicalHost, 'www.'.$canonicalHost];
@@ -37,7 +37,7 @@ return [
     'name' => env('EVERGROVE_NAME', 'Evergrove'),
     'canonical_host' => $canonicalHost,
     'hosts' => $publicHosts,
-    'contact_email' => env('EVERGROVE_CONTACT_EMAIL', 'hello@theevergrove.com'),
+    'contact_email' => env('EVERGROVE_CONTACT_EMAIL', 'hello@evergrovesoftware.com'),
     'booking_url' => env('EVERGROVE_BOOKING_URL', ''),
     'positioning' => [
         'eyebrow' => 'AI systems and custom software for practical businesses',

@@ -8,9 +8,9 @@ beforeEach(function (): void {
 });
 
 test('evergrove public host renders the services site', function (): void {
-    config()->set('evergrove.hosts', ['theevergrove.com', 'www.theevergrove.com']);
+    config()->set('evergrove.hosts', ['evergrovesoftware.com', 'www.evergrovesoftware.com']);
 
-    $this->get('http://theevergrove.com/')
+    $this->get('http://evergrovesoftware.com/')
         ->assertOk()
         ->assertSeeText('Evergrove')
         ->assertSeeText('Turn scattered operations into useful software.')
@@ -32,24 +32,24 @@ test('app host sends guests toward login while lander redirects home', function 
     $this->get('http://app.theeverbranch.com/')
         ->assertRedirect(route('login', absolute: false));
 
-    $this->get('http://theevergrove.com/lander')
+    $this->get('http://evergrovesoftware.com/lander')
         ->assertRedirect('/')
         ->assertStatus(301);
 });
 
 test('evergrove calculator pages render by tool path', function (): void {
-    $this->get('http://theevergrove.com/tools/project-estimate')
+    $this->get('http://evergrovesoftware.com/tools/project-estimate')
         ->assertOk()
         ->assertSeeText('Website and software project estimate')
         ->assertSee('data-tool-key="project_estimate"', false)
         ->assertSeeText('Estimated build range');
 
-    $this->get('http://theevergrove.com/tools/ai-roi')
+    $this->get('http://evergrovesoftware.com/tools/ai-roi')
         ->assertOk()
         ->assertSeeText('AI opportunity ROI calculator')
         ->assertSee('data-tool-key="ai_roi"', false);
 
-    $this->get('http://theevergrove.com/tools/automation-savings')
+    $this->get('http://evergrovesoftware.com/tools/automation-savings')
         ->assertOk()
         ->assertSeeText('Automation savings calculator')
         ->assertSee('data-tool-key="automation_savings"', false);
@@ -64,7 +64,7 @@ test('service inquiry submission stores calculator planning payload', function (
         'note' => 'Monthly planning value after estimated tool cost.',
     ];
 
-    $this->from('http://theevergrove.com/tools/ai-roi')
+    $this->from('http://evergrovesoftware.com/tools/ai-roi')
         ->post('/services/inquiries', [
             'name' => 'Sarah Owner',
             'email' => 'sarah@example.com',
@@ -78,7 +78,7 @@ test('service inquiry submission stores calculator planning payload', function (
             'source_page' => 'ai_roi',
             'calculator_payload' => json_encode($payload),
         ])
-        ->assertRedirect('http://theevergrove.com/tools/ai-roi');
+        ->assertRedirect('http://evergrovesoftware.com/tools/ai-roi');
 
     $inquiry = ServiceInquiry::query()->firstOrFail();
 

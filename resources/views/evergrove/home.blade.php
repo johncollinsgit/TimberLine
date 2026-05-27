@@ -6,7 +6,7 @@
     $businessSizes = is_array($content['business_sizes'] ?? null) ? $content['business_sizes'] : [];
     $timelines = is_array($content['timeline_options'] ?? null) ? $content['timeline_options'] : [];
     $budgetRanges = is_array($content['budget_ranges'] ?? null) ? $content['budget_ranges'] : [];
-    $contactEmail = (string) ($content['contact_email'] ?? 'hello@theevergrove.com');
+    $contactEmail = (string) ($content['contact_email'] ?? 'hello@evergrovesoftware.com');
 @endphp
 <!DOCTYPE html>
 <html lang="en">
