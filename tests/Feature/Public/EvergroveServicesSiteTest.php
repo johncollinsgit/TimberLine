@@ -30,6 +30,22 @@ test('everbranch public host keeps the everbranch product surface', function ():
         ->assertDontSeeText('Turn scattered operations into useful software.');
 });
 
+test('authenticated users still see evergrove surface on evergrove public host', function (): void {
+    config()->set('evergrove.hosts', ['evergrovesoftware.com', 'www.evergrovesoftware.com']);
+
+    $user = User::factory()->create([
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get('http://evergrovesoftware.com/')
+        ->assertOk()
+        ->assertSee('brand/evergrove-logo.png?v=eg3', false)
+        ->assertSeeText('Turn scattered operations into useful software.')
+        ->assertDontSeeText('Run the business you actually have.');
+});
+
 test('app host sends guests toward login while lander redirects home', function (): void {
     $this->get('http://app.theeverbranch.com/')
         ->assertRedirect(route('login', absolute: false));

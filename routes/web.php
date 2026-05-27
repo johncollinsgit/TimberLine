@@ -151,13 +151,13 @@ Route::get('/', function (
         return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService, $alphaBootstrapService);
     }
 
-    if (auth()->check()) {
-        return redirect()->to(HomeRedirect::pathFor(auth()->user()));
-    }
-
     $requestHost = $normalizeHost($request->getHost()) ?? '';
     if ($requestHost !== '' && in_array($requestHost, $evergrovePublicHosts, true)) {
         return $evergroveController->home();
+    }
+
+    if (auth()->check()) {
+        return redirect()->to(HomeRedirect::pathFor(auth()->user()));
     }
 
     if ($requestHost !== '' && $requestHost === $normalizeHost((string) config('tenancy.landlord.primary_host', ''))) {
