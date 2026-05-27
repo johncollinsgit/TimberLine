@@ -1,7 +1,7 @@
 @php
     $brandAssets = (array) config('evergrove.brand_assets', []);
-    $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg1');
-    $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/evergrove-lockup.svg')).'?v='.$assetVersion;
+    $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg2');
+    $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/evergrove-logo.png')).'?v='.$assetVersion;
     $appBaseUrl = rtrim((string) config('app.url', url('/')), '/');
     $loginUrl = $appBaseUrl.'/login';
     $registerUrl = $appBaseUrl.'/register';

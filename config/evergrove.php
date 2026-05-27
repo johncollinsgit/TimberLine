@@ -40,9 +40,9 @@ return [
     'contact_email' => env('EVERGROVE_CONTACT_EMAIL', 'hello@evergrovesoftware.com'),
     'booking_url' => env('EVERGROVE_BOOKING_URL', ''),
     'brand_assets' => [
-        'cache_tag' => env('EVERGROVE_BRAND_ASSET_VERSION', 'eg1'),
+        'cache_tag' => env('EVERGROVE_BRAND_ASSET_VERSION', 'eg2'),
         'mark' => 'brand/evergrove-mark.svg',
-        'lockup' => 'brand/evergrove-lockup.svg',
+        'lockup' => 'brand/evergrove-logo.png',
         'favicon_svg' => 'brand/evergrove-favicon.svg',
         'favicon_png' => 'favicon.png',
         'favicon_ico' => 'favicon.ico',
