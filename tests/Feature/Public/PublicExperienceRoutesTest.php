@@ -3,7 +3,7 @@
 use App\Models\User;
 
 test('guest home route renders the marketing landing page by default', function (): void {
-    $response = $this->get(route('home'))
+    $response = $this->get('http://theeverbranch.com/')
         ->assertOk()
         ->assertSee('class="fb-public-body fb-public-body--splash"', false)
         ->assertSeeText('Run the business you actually have.')
@@ -58,6 +58,6 @@ test('authenticated users are still redirected away from the public home route',
     ]);
 
     $this->actingAs($user)
-        ->get(route('home'))
+        ->get('http://theeverbranch.com/')
         ->assertRedirect(route('dashboard', absolute: false));
 });

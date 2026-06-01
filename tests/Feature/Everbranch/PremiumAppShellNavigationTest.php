@@ -53,8 +53,10 @@ test('tenant app shell keeps Home first and shows premium search and Bud placeho
         ->assertSee('Search or ask what you want to do...', false)
         ->assertSee('data-bud-placeholder', false)
         ->assertSee('data-shell-context="tenant"', false)
+        ->assertSeeText('Current Console')
+        ->assertSeeText('Operator console')
+        ->assertSeeText('Everbranch Admin')
         ->assertSeeText('Features')
-        ->assertDontSeeText('Everbranch Admin')
         ->assertDontSeeText('Workspaces')
         ->assertDontSeeText('Forestry Backstage');
 
@@ -125,6 +127,8 @@ test('Modern Forestry remains tenant context rather than generic legacy branding
         ->assertOk()
         ->assertSeeText('Modern Forestry')
         ->assertSee('data-shell-context="tenant"', false)
+        ->assertSeeText('Current Console')
+        ->assertSeeText('Everbranch Admin')
         ->assertDontSeeText('Forestry Backstage')
-        ->assertDontSeeText('Everbranch Admin');
+        ->assertDontSeeText('Workspaces');
 });

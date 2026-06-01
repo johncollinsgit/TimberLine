@@ -193,7 +193,11 @@ test('marketing import legacy file command imports yotpo export from disk', func
         '"Cmd User","cmd@example.com","+15554445555","Nov 30, 2022","11:05 AM","Subscribed","Subscribed","Not Suppressed","Not Suppressed","checkout","Nov 30, 2022, 11:05 AM","signup","Nov 30, 2022, 11:05 AM"',
     ]));
 
-    $this->artisan('marketing:import-legacy-file yotpo_contacts_import ' . escapeshellarg($path) . ' --tenant-id=' . $tenant->id)
+    $this->artisan('marketing:import-legacy-file', [
+        'type' => 'yotpo_contacts_import',
+        'file' => $path,
+        '--tenant-id' => $tenant->id,
+    ])
         ->expectsOutputToContain('status=completed')
         ->expectsOutputToContain('processed=1')
         ->expectsOutputToContain('sms_marketable=1')
@@ -212,7 +216,10 @@ test('marketing import legacy file command fails closed without tenant ownership
         '"No Tenant","no-tenant@example.com","+15554445556"',
     ]));
 
-    $this->artisan('marketing:import-legacy-file yotpo_contacts_import ' . escapeshellarg($path))
+    $this->artisan('marketing:import-legacy-file', [
+        'type' => 'yotpo_contacts_import',
+        'file' => $path,
+    ])
         ->expectsOutputToContain('requires a tenant context')
         ->assertExitCode(1);
 

@@ -9,7 +9,7 @@ test('marketing manager users are redirected to marketing overview from home', f
     ]);
 
     $this->actingAs($user)
-        ->get(route('home'))
+        ->get('http://theeverbranch.com/')
         ->assertRedirect(route('marketing.overview', absolute: false));
 });
 

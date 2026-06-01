@@ -18,7 +18,7 @@ test('pouring users are redirected to pouring room after login and from home', f
 
     $this->assertAuthenticatedAs($user);
 
-    $this->get(route('home'))
+    $this->get('http://theeverbranch.com/')
         ->assertRedirect(route('pouring.index', absolute: false));
 });
 
