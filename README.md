@@ -1006,6 +1006,32 @@ Interpretation of smoke test results:
 Important:
 - Do not mix login keys (`GOOGLE_CLIENT_*`) with Google Business Profile keys (`GOOGLE_GBP_*`); they are separate integrations.
 
+## Zap Replacement: Workflow Automations (2026-06-01)
+
+Everbranch now includes a first-party workflow runner to replace task-billed Zapier flows for supported patterns.
+
+Primary command:
+- `php artisan automation:run`
+- Optional: `php artisan automation:run --workflow=asana_to_google_calendar`
+- Optional dry-run: `php artisan automation:run --workflow=asana_to_google_calendar --dry-run`
+
+Required env keys for the Asana -> Google Calendar workflow:
+- `AUTOMATION_WORKFLOWS_ENABLED=true`
+- `AUTOMATION_ASANA_TO_GCAL_ENABLED=true`
+- `AUTOMATION_ASANA_TENANT_ID=1`
+- `AUTOMATION_ASANA_PROJECT_GID=...`
+- `ASANA_PERSONAL_ACCESS_TOKEN=...`
+- `AUTOMATION_GCAL_CALENDAR_ID=...` (falls back to `ASANA_SKYLIGHT_CALENDAR_ID`)
+- `GOOGLE_CALENDAR_CLIENT_ID=...`
+- `GOOGLE_CALENDAR_CLIENT_SECRET=...`
+- `GOOGLE_CALENDAR_REFRESH_TOKEN=...`
+
+Notes:
+- The default activation path is a tenant-scoped entitlement for Modern Forestry tenant `1`, not a plan-wide module grant.
+- The scheduler runs `automation:run` every ten minutes via `routes/console.php`.
+- Asana polling uses `modified_since` with a small overlap window to avoid missed updates.
+- Event upserts are idempotent via the `automation_workflow_links` table (`asana_task` -> `google_calendar_event` mapping).
+
 ## Auth Redirect Diagnostics (2026-03-26)
 
 Ship-readiness manual validation and release checklist:

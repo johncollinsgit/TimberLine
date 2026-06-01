@@ -1,3 +1,7 @@
+@props([
+    'consoleSwitches' => [],
+])
+
 <flux:dropdown position="bottom" align="start">
     <flux:sidebar.profile
         {{ $attributes->only('name') }}
@@ -19,6 +23,15 @@
         </div>
         <flux:menu.separator />
         <flux:menu.radio.group>
+            @if(is_array($consoleSwitches) && count($consoleSwitches) > 1)
+                @foreach($consoleSwitches as $switch)
+                    @continue(! is_array($switch) || trim((string) ($switch['href'] ?? '')) === '')
+                    <flux:menu.item href="{{ $switch['href'] }}" icon="{{ ! empty($switch['active']) ? 'check-circle' : 'arrow-path' }}">
+                        {{ $switch['label'] ?? 'Console' }}
+                    </flux:menu.item>
+                @endforeach
+                <flux:menu.separator />
+            @endif
             <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                 {{ __('Settings') }}
             </flux:menu.item>

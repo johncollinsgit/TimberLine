@@ -456,6 +456,49 @@ return [
                     'upgrade_message' => 'Klaviyo guidance is available when the related module is entitled for the tenant.',
                 ],
             ],
+            'workflow_automations' => [
+                'key' => 'workflow_automations',
+                'module_key' => 'workflow_automations',
+                'title' => 'Workflow Automations',
+                'description' => 'Create Zap-style trigger/action workflows inside Everbranch to replace external task-based automations.',
+                'category' => 'marketing',
+                'availability' => 'available',
+                'fallback_mode' => 'manual_import',
+                'fallback_href' => '/shopify/app/start',
+                'plan_requirement' => 'starter',
+                'ctas' => [
+                    'connect_label' => 'Open automation setup',
+                    'manual_label' => 'Use setup checklist',
+                    'upgrade_label' => 'Upgrade to unlock',
+                    'coming_soon_label' => 'Coming soon',
+                ],
+                'status' => [
+                    'setup_mode' => 'direct',
+                    'source_label' => 'First-party workflow engine',
+                    'is_mocked' => false,
+                ],
+                'setup' => [
+                    'setup_steps' => [
+                        'Configure Asana and Google Calendar credentials in environment settings.',
+                        'Enable the workflow and run a dry-run command to verify mapping.',
+                        'Schedule the automation command and monitor run status.',
+                    ],
+                    'required_fields' => [
+                        'Asana project GID',
+                        'Google Calendar target calendar ID',
+                        'OAuth refresh token for Calendar write access',
+                    ],
+                    'fallback_options' => [
+                        'Keep using manual calendar updates until credentials are ready.',
+                        'Run one-off dry-run previews to validate task-to-event mapping.',
+                        'Disable workflow execution without impacting other modules.',
+                    ],
+                    'notes' => [
+                        'This workflow is run by scheduled Artisan jobs, not by third-party task billing.',
+                    ],
+                    'upgrade_message' => 'Automation access follows workspace module access and environment readiness.',
+                ],
+            ],
             'sms_gateway' => [
                 'key' => 'sms_gateway',
                 'module_key' => 'sms',

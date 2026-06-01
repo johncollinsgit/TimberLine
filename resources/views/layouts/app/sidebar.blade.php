@@ -55,6 +55,12 @@
   $workspaceLabel = (string) ($workspace['label'] ?? 'Unified workspace');
   $workspaceSubtitle = (string) ($workspace['subtitle'] ?? 'One product surface that adapts to the tenant in front of it.');
   $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search or ask what you want to do...');
+  $currentConsole = is_array($navigationShell['current_console'] ?? null) ? (array) $navigationShell['current_console'] : [];
+  $currentConsoleLabel = trim((string) ($currentConsole['label'] ?? ($isLandlordShell ? 'Everbranch Admin' : $workspaceLabel)));
+  $currentConsoleDescriptor = trim((string) ($currentConsole['descriptor'] ?? ($isLandlordShell ? 'Operator console' : 'Tenant console')));
+  $consoleSwitches = collect((array) ($navigationShell['console_switches'] ?? []))
+      ->filter(fn (mixed $switch): bool => is_array($switch) && trim((string) ($switch['href'] ?? '')) !== '')
+      ->values();
   $accountMode = strtolower(trim((string) ($experienceProfile['account_mode'] ?? 'production')));
   $accessLaneBanner = match ($accountMode) {
       'demo' => [
@@ -116,6 +122,25 @@
         <div class="mf-sidebar-context" data-shell-context="{{ $shellContext }}">
           <span class="mf-sidebar-context-label">{{ $isLandlordShell ? 'Everbranch Admin' : 'Workspace' }}</span>
           <span class="mf-sidebar-context-name">{{ $isLandlordShell ? 'Operator console' : $workspaceLabel }}</span>
+          <div class="mf-sidebar-context-meta">
+            <span class="mf-sidebar-context-label">Current Console</span>
+            <span class="mf-sidebar-context-name" title="{{ $currentConsoleLabel }}">{{ $currentConsoleLabel }}</span>
+            <span class="mf-sidebar-context-caption">{{ $currentConsoleDescriptor }}</span>
+          </div>
+          @if($consoleSwitches->count() > 1)
+            <div class="mf-console-switches" aria-label="Console switcher">
+              @foreach($consoleSwitches as $switch)
+                <a
+                  href="{{ $switch['href'] }}"
+                  class="mf-console-switch {{ ! empty($switch['active']) ? 'is-active' : '' }}"
+                  @if(! empty($switch['active'])) aria-current="page" @endif
+                >
+                  <span class="mf-console-switch-label">{{ $switch['label'] }}</span>
+                  <span class="mf-console-switch-caption">{{ $switch['descriptor'] ?? 'Console' }}</span>
+                </a>
+              @endforeach
+            </div>
+          @endif
         </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
@@ -285,7 +310,7 @@
 
       @auth
         <div class="mf-transition mf-sidebar-footer">
-          <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
+          <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" :console-switches="$consoleSwitches->all()" />
         </div>
       @endauth
     </div>

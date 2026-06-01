@@ -76,6 +76,15 @@ return [
     'google_calendar' => [
         'api_key' => env('GOOGLE_CALENDAR_API_KEY'),
         'asana_skylight_calendar_id' => env('ASANA_SKYLIGHT_CALENDAR_ID', 'e4790b1a07ff610489e40c5fb28d50f4f8b74dc2d4b24db2a9b13bef0df39541@group.calendar.google.com'),
+        'oauth_client_id' => env('GOOGLE_CALENDAR_CLIENT_ID', env('GOOGLE_CLIENT_ID')),
+        'oauth_client_secret' => env('GOOGLE_CALENDAR_CLIENT_SECRET', env('GOOGLE_CLIENT_SECRET')),
+        'oauth_refresh_token' => env('GOOGLE_CALENDAR_REFRESH_TOKEN'),
+        'oauth_access_token' => env('GOOGLE_CALENDAR_ACCESS_TOKEN'),
+    ],
+
+    'asana' => [
+        'personal_access_token' => env('ASANA_PERSONAL_ACCESS_TOKEN'),
+        'api_base' => env('ASANA_API_BASE', 'https://app.asana.com/api/1.0'),
     ],
 
     'google_gbp' => [

@@ -4,6 +4,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
+use App\Support\Tenancy\TenantHostBuilder;
 
 beforeEach(function (): void {
     config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
@@ -165,4 +166,37 @@ test('landlord tenant controls and provisioning wizard stay landlord only', func
     $this->actingAs($tenantAdmin)
         ->get("http://app.theeverbranch.com/landlord/onboarding/wizard?tenant={$tenant->slug}")
         ->assertForbidden();
+});
+
+test('platform admin attached to Modern Forestry can switch between operator and tenant consoles', function (): void {
+    $tenant = everbranchAccessLaneTenant('modern-forestry', 'Modern Forestry', 'production', 'reviewed');
+    $user = User::factory()->platformAdmin()->create([
+        'email' => 'johncollinemail@gmail.com',
+    ]);
+    $user->tenants()->attach((int) $tenant->id, ['role' => 'admin']);
+
+    $hostBuilder = app(TenantHostBuilder::class);
+    $tenantUrl = $hostBuilder->urlForHostPath(
+        $hostBuilder->hostForSlug('modern-forestry'),
+        route('dashboard', ['tenant' => 'modern-forestry'], absolute: false)
+    );
+    $landlordUrl = $hostBuilder->canonicalLandlordUrlForPath(route('landlord.dashboard', absolute: false));
+
+    $this->actingAs($user)
+        ->get('http://app.theeverbranch.com/landlord')
+        ->assertOk()
+        ->assertSee('Current Console')
+        ->assertSee('Everbranch Admin')
+        ->assertSee('Operator console')
+        ->assertSee('Modern Forestry')
+        ->assertSee($tenantUrl ?? '', false);
+
+    $this->actingAs($user)
+        ->get('http://modern-forestry.theeverbranch.com/dashboard?tenant=modern-forestry')
+        ->assertOk()
+        ->assertSee('Current Console')
+        ->assertSee('Modern Forestry')
+        ->assertSee('Tenant console')
+        ->assertSee('Everbranch Admin')
+        ->assertSee($landlordUrl ?? '', false);
 });

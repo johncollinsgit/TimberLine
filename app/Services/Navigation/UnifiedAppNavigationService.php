@@ -4,13 +4,16 @@ namespace App\Services\Navigation;
 
 use App\Models\MappingException;
 use App\Models\ShopifyImportRun;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Tenancy\TenantHostBuilder;
 use App\Support\Birthdays\BirthdaySectionRegistry;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,7 +22,8 @@ class UnifiedAppNavigationService
     public function __construct(
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
         protected TenantExperienceProfileService $experienceProfileService,
-        protected TenantModuleAccessResolver $moduleAccessResolver
+        protected TenantModuleAccessResolver $moduleAccessResolver,
+        protected TenantHostBuilder $tenantHostBuilder
     ) {
     }
 
@@ -31,7 +35,7 @@ class UnifiedAppNavigationService
         $user ??= $request->user();
 
         if ($this->isLandlordShell($request)) {
-            return $this->buildLandlordShell($request);
+            return $this->buildLandlordShell($request, $user);
         }
 
         $tenant = $user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null;
@@ -122,6 +126,8 @@ class UnifiedAppNavigationService
             'wiki_sections' => $this->wikiSections(),
             'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId),
             'ops_attention' => $canAccessOps ? $this->opsAttention() : ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'current_console' => $this->currentConsolePayload($tenant, $profile),
+            'console_switches' => $this->consoleSwitches($user, $tenant, false),
             'shell_context' => 'tenant',
         ];
     }
@@ -129,7 +135,7 @@ class UnifiedAppNavigationService
     /**
      * @return array<string,mixed>
      */
-    protected function buildLandlordShell(Request $request): array
+    protected function buildLandlordShell(Request $request, ?User $user = null): array
     {
         $items = [
             ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')],
@@ -176,8 +182,110 @@ class UnifiedAppNavigationService
                 ],
             ],
             'ops_attention' => ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'current_console' => [
+                'label' => 'Everbranch Admin',
+                'descriptor' => 'Operator console',
+            ],
+            'console_switches' => $this->consoleSwitches($user, null, true),
             'shell_context' => 'landlord',
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $profile
+     * @return array{label:string,descriptor:string}
+     */
+    protected function currentConsolePayload(?Tenant $tenant, array $profile): array
+    {
+        $label = $tenant instanceof Tenant
+            ? trim((string) $tenant->name)
+            : trim((string) ($profile['tenant_name'] ?? 'Workspace'));
+
+        if ($label === '') {
+            $label = trim((string) data_get($profile, 'workspace.label', 'Workspace'));
+        }
+
+        return [
+            'label' => $label !== '' ? $label : 'Workspace',
+            'descriptor' => 'Tenant console',
+        ];
+    }
+
+    /**
+     * @return array<int,array{key:string,label:string,descriptor:string,href:string,active:bool}>
+     */
+    protected function consoleSwitches(?User $user, ?Tenant $currentTenant = null, bool $isLandlordShell = false): array
+    {
+        if (! $user instanceof User) {
+            return [];
+        }
+
+        $switches = [];
+
+        if ($this->canAccessLandlordConsole($user)) {
+            $landlordPath = route('landlord.dashboard', absolute: false);
+            $landlordHref = $this->tenantHostBuilder->canonicalLandlordUrlForPath($landlordPath) ?? $landlordPath;
+
+            $switches[] = [
+                'key' => 'landlord',
+                'label' => 'Everbranch Admin',
+                'descriptor' => 'Operator console',
+                'href' => $landlordHref,
+                'active' => $isLandlordShell,
+            ];
+        }
+
+        $memberships = $user->tenants()
+            ->with(['setupStatus:id,tenant_id,landlord_review_status'])
+            ->orderBy('tenants.name')
+            ->get(['tenants.id', 'tenants.name', 'tenants.slug']);
+
+        foreach ($memberships as $tenant) {
+            if (! $tenant instanceof Tenant) {
+                continue;
+            }
+
+            $tenantPath = $this->tenantConsolePath($tenant);
+            $tenantHost = filled($tenant->slug) ? $this->tenantHostBuilder->hostForSlug((string) $tenant->slug) : null;
+            $tenantHref = $tenantHost !== null
+                ? ($this->tenantHostBuilder->urlForHostPath($tenantHost, $tenantPath) ?? $tenantPath)
+                : $tenantPath;
+
+            $switches[] = [
+                'key' => 'tenant-'.$tenant->id,
+                'label' => trim((string) $tenant->name) !== '' ? trim((string) $tenant->name) : 'Workspace',
+                'descriptor' => 'Tenant console',
+                'href' => $tenantHref,
+                'active' => ! $isLandlordShell && $currentTenant instanceof Tenant && (int) $currentTenant->id === (int) $tenant->id,
+            ];
+        }
+
+        return collect($switches)
+            ->unique('key')
+            ->values()
+            ->all();
+    }
+
+    protected function canAccessLandlordConsole(User $user): bool
+    {
+        return Gate::forUser($user)->allows('manage-landlord-commercial');
+    }
+
+    protected function tenantConsolePath(Tenant $tenant): string
+    {
+        $tenant->loadMissing('setupStatus');
+
+        $path = (string) ($tenant->setupStatus?->landlord_review_status ?? '') === 'reviewed'
+            ? route('dashboard', absolute: false)
+            : route('app.start', absolute: false);
+
+        $slug = trim((string) ($tenant->slug ?? ''));
+        if ($slug !== '') {
+            $separator = str_contains($path, '?') ? '&' : '?';
+            $path .= $separator.'tenant='.$slug;
+        }
+
+        return $path;
     }
 
     /**

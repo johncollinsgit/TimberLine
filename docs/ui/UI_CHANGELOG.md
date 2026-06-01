@@ -1448,3 +1448,14 @@
 - Do not reintroduce large inline style blocks in shell/layout files.
 - Update this changelog and `docs/ui/UI_SYSTEM.md` whenever ownership or token rules change.
 - Preserve root routing order: embedded context -> authenticated redirect -> guest landing.
+## 2026-06-01 - Dual Console Switcher and Sidebar Header Cleanup
+
+### What changed
+- Reworked the shared app-shell sidebar header into a compact "Current Console" card with clearer hierarchy and less wrapping pressure.
+- Added explicit console-switch actions in the sidebar so eligible shared accounts can move between Everbranch Admin and attached tenant consoles without guessing the correct host.
+- Tightened sidebar brand/header spacing so the Everbranch mark pill and landlord/tenant context no longer collide visually in narrow desktop widths.
+
+### What did not change
+- No impersonation flow, login bypass, tenant boundary relaxation, billing activation, module auto-install, or host-lane merge was introduced.
+- Landlord routes remain landlord-host only, and tenant routes remain tenant-host scoped.
+- Modern Forestry is still the flagship tenant, not the generic definition of the product shell.

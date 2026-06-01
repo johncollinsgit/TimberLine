@@ -90,3 +90,9 @@ Schedule::command('marketing:send-tenant-rewards-finance-reports')
     ->dailyAt('06:10')
     ->withoutOverlapping(120)
     ->runInBackground();
+
+// Zap-style internal workflow automations (Asana -> Google Calendar, etc).
+Schedule::command('automation:run')
+    ->everyTenMinutes()
+    ->withoutOverlapping(15)
+    ->runInBackground();

@@ -1294,7 +1294,7 @@ class TenantModuleAccessResolver
     {
         return match (strtolower(trim($source))) {
             'plan', 'addon', 'override', 'flag' => strtolower(trim($source)),
-            'manual', 'landlord_console', 'entitlement', 'contract', 'purchase' => 'override',
+            'manual', 'landlord_console', 'entitlement', 'contract', 'purchase', 'modern_forestry_default' => 'override',
             default => 'flag',
         };
     }

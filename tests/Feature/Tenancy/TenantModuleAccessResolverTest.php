@@ -89,6 +89,42 @@ test('resolver grants addon-enabled module access', function () {
         ->and($ai['ui_state'])->toBe('setup_needed');
 });
 
+test('workflow automations stay tenant-gated unless explicitly entitled', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Workflow Tenant',
+        'slug' => 'workflow-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    $before = app(TenantModuleAccessResolver::class)->module($tenant->id, 'workflow_automations');
+
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'workflow_automations',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'entitlement',
+        'price_source' => 'test',
+    ]);
+
+    app()->forgetInstance(TenantModuleAccessResolver::class);
+
+    $after = app(TenantModuleAccessResolver::class)->module($tenant->id, 'workflow_automations');
+
+    expect($before['has_access'])->toBeFalse()
+        ->and($before['reason'])->toBe('plan_upgrade_required')
+        ->and($after['has_access'])->toBeTrue()
+        ->and($after['source'])->toBe('override')
+        ->and($after['ui_state'])->toBe('active');
+});
+
 test('resolver keeps setup state distinct from entitlement access', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Setup Tenant',
