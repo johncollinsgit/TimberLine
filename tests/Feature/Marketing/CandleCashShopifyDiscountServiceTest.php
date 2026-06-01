@@ -192,6 +192,64 @@ test('candle cash shopify discount sync allows only shipping combinations for sh
     ]);
 });
 
+test('candle cash shopify discount sync forces shipping compatibility for flagship tenant even on legacy no stacking mode', function () {
+    $redemption = candleCashShopifyDiscountFixture([
+        'stacking_mode' => 'no_stacking',
+        'selected_stackable_promo_types' => [],
+    ]);
+
+    $tenantId = (int) ($redemption->profile?->tenant_id ?? 0);
+    $tenantSlug = (string) (Tenant::query()->whereKey($tenantId)->value('slug') ?? '');
+    config()->set('tenancy.auth.flagship_tenant_slug', $tenantSlug);
+
+    $createInput = null;
+
+    Http::fake(function (Request $request) use (&$createInput) {
+        $payload = $request->data();
+        $query = (string) ($payload['query'] ?? '');
+
+        if (str_contains($query, 'CandleCashDiscountByCode')) {
+            return Http::response([
+                'data' => [
+                    'codeDiscountNodeByCode' => null,
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'CandleCashDiscountCodeBasicCreate')) {
+            $createInput = data_get($payload, 'variables.basicCodeDiscount');
+
+            return Http::response([
+                'data' => [
+                    'discountCodeBasicCreate' => [
+                        'codeDiscountNode' => [
+                            'id' => 'gid://shopify/DiscountCodeNode/902A',
+                            'codeDiscount' => [
+                                '__typename' => 'DiscountCodeBasic',
+                                'title' => 'Reward Credit Applied',
+                                'startsAt' => now()->toIso8601String(),
+                                'endsAt' => now()->addDays(30)->toIso8601String(),
+                                'combinesWith' => data_get($payload, 'variables.basicCodeDiscount.combinesWith'),
+                            ],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        return Http::response(['data' => []], 200);
+    });
+
+    app(CandleCashShopifyDiscountService::class)->ensureDiscountForRedemption($redemption, 'retail');
+
+    expect(data_get($createInput, 'combinesWith'))->toBe([
+        'orderDiscounts' => false,
+        'productDiscounts' => false,
+        'shippingDiscounts' => true,
+    ]);
+});
+
 test('candle cash shopify discount sync maps selected promo types onto shopify combinesWith', function () {
     $redemption = candleCashShopifyDiscountFixture([
         'stacking_mode' => 'selected_promo_types',
@@ -321,4 +379,70 @@ test('candle cash shopify discount sync updates existing discount when combinesW
             'shippingDiscounts' => false,
         ])
         ->and((string) ($result['discount_node_id'] ?? ''))->toBe('gid://shopify/DiscountCodeNode/904');
+});
+
+test('candle cash shopify discount tenant sync updates issued shopify codes and skips non shopify rows', function () {
+    $redemption = candleCashShopifyDiscountFixture([
+        'stacking_mode' => 'shipping_only',
+        'selected_stackable_promo_types' => ['shipping_discounts'],
+    ]);
+
+    $profile = $redemption->profile()->firstOrFail();
+    CandleCashRedemption::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'reward_id' => $redemption->reward_id,
+        'candle_cash_spent' => 10,
+        'platform' => 'square',
+        'status' => 'issued',
+        'redemption_code' => 'CC-' . strtoupper(str()->random(10)),
+        'issued_at' => now()->subMinute(),
+        'expires_at' => now()->addDays(30),
+        'redemption_context' => [
+            'tenant_id' => $profile->tenant_id,
+            'shopify_store_key' => 'retail',
+        ],
+    ]);
+
+    Http::fake(function (Request $request) {
+        $payload = $request->data();
+        $query = (string) ($payload['query'] ?? '');
+
+        if (str_contains($query, 'CandleCashDiscountByCode')) {
+            return Http::response([
+                'data' => [
+                    'codeDiscountNodeByCode' => null,
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'CandleCashDiscountCodeBasicCreate')) {
+            return Http::response([
+                'data' => [
+                    'discountCodeBasicCreate' => [
+                        'codeDiscountNode' => [
+                            'id' => 'gid://shopify/DiscountCodeNode/950',
+                            'codeDiscount' => [
+                                '__typename' => 'DiscountCodeBasic',
+                                'title' => 'Reward Credit Applied',
+                                'startsAt' => now()->toIso8601String(),
+                                'endsAt' => now()->addDays(30)->toIso8601String(),
+                                'combinesWith' => data_get($payload, 'variables.basicCodeDiscount.combinesWith'),
+                            ],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        return Http::response(['data' => []], 200);
+    });
+
+    $result = app(CandleCashShopifyDiscountService::class)->syncIssuedDiscountsForTenant((int) $profile->tenant_id);
+
+    expect($result['processed'])->toBe(2)
+        ->and($result['synced'])->toBe(1)
+        ->and($result['failed'])->toBe(0)
+        ->and($result['skipped_non_shopify'])->toBe(1)
+        ->and($result['errors'])->toBe([]);
 });

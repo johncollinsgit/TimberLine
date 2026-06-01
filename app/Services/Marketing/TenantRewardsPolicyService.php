@@ -26,6 +26,7 @@ class TenantRewardsPolicyService
     public function __construct(
         protected TenantMarketingSettingsResolver $settingsResolver,
         protected CandleCashService $candleCashService,
+        protected CandleCashShopifyDiscountService $candleCashShopifyDiscountService,
         protected TenantRewardsPolicySummaryService $summaryService,
         protected TenantRewardsPolicyWarningService $warningService,
         protected TenantRewardsPolicyMessagePreviewService $previewService,
@@ -763,6 +764,8 @@ class TenantRewardsPolicyService
             ];
 
             $this->saveSetting($tenantId, self::POLICY_KEY, $policyPayload, 'Tenant rewards policy schema backing business-language admin controls.');
+
+            $this->syncIssuedRewardDiscountsIfNeeded($tenantId, $versionedChanges);
         }
 
         if ($versionedChanges !== [] || $operationalChanges !== []) {
@@ -1639,6 +1642,39 @@ class TenantRewardsPolicyService
     }
 
     /**
+     * @param  array<string,mixed>  $versionedChanges
+     */
+    protected function syncIssuedRewardDiscountsIfNeeded(int $tenantId, array $versionedChanges): void
+    {
+        if ($tenantId <= 0) {
+            return;
+        }
+
+        $relevantPaths = [
+            'redemption_rules.stacking_mode',
+            'redemption_rules.selected_stackable_promo_types',
+        ];
+
+        $shouldSync = false;
+        foreach ($relevantPaths as $path) {
+            if (array_key_exists($path, $versionedChanges)) {
+                $shouldSync = true;
+                break;
+            }
+        }
+
+        if (! $shouldSync) {
+            return;
+        }
+
+        try {
+            $this->candleCashShopifyDiscountService->syncIssuedDiscountsForTenant($tenantId, null, 500);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
      * @return array<string,mixed>
      */
     protected function alphaDefaultPatch(): array
@@ -1665,7 +1701,8 @@ class TenantRewardsPolicyService
             ],
             'redemption_rules' => [
                 'code_strategy' => 'unique_per_customer',
-                'stacking_mode' => 'no_stacking',
+                'stacking_mode' => 'shipping_only',
+                'selected_stackable_promo_types' => ['shipping_discounts'],
                 'max_codes_per_order' => 1,
                 'platform_supports_multi_code' => false,
                 'exclusions' => [

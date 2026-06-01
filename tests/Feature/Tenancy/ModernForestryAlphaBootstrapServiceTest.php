@@ -9,6 +9,7 @@ use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
+use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 
@@ -53,6 +54,10 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->where('tenant_id', $tenant->id)
         ->where('key', 'candle_cash_integration_config')
         ->value('value');
+    $rewardsPolicy = TenantMarketingSetting::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('key', TenantRewardsPolicyService::POLICY_KEY)
+        ->value('value');
     $discoveryProfile = TenantDiscoveryProfile::query()
         ->where('tenant_id', $tenant->id)
         ->first();
@@ -79,7 +84,10 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->and(in_array($emailSettings['provider_status'], ['configured', 'healthy'], true))->toBeTrue()
         ->and(is_array($marketingSettings))->toBeTrue()
         ->and(data_get($marketingSettings, 'sms_provider'))->toBe('twilio')
-        ->and((bool) data_get($marketingSettings, 'sms_provider_enabled'))->toBeTrue();
+        ->and((bool) data_get($marketingSettings, 'sms_provider_enabled'))->toBeTrue()
+        ->and((string) data_get($rewardsPolicy, 'redemption_rules.stacking_mode'))->toBe('shipping_only')
+        ->and(in_array('shipping_discounts', (array) data_get($rewardsPolicy, 'redemption_rules.selected_stackable_promo_types', []), true))->toBeTrue()
+        ->and((int) data_get($rewardsPolicy, 'redemption_rules.max_codes_per_order', 1))->toBe(1);
 
     expect($discoveryProfile)->not->toBeNull()
         ->and((string) ($discoveryProfile?->primary_brand_name ?? ''))->toBe('Modern Forestry')

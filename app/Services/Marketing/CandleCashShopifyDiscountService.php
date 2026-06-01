@@ -6,6 +6,7 @@ use App\Models\CandleCashRedemption;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
@@ -167,6 +168,77 @@ GRAPHQL;
             'store_key' => (string) ($store['key'] ?? ''),
             'starts_at' => $created['starts_at'],
             'ends_at' => $created['ends_at'],
+        ];
+    }
+
+    /**
+     * @return array{processed:int,synced:int,failed:int,skipped_non_shopify:int,errors:array<int,array{redemption_id:int,redemption_code:string,error:string}>}
+     */
+    public function syncIssuedDiscountsForTenant(int $tenantId, ?string $preferredStoreKey = null, int $limit = 250): array
+    {
+        if ($tenantId <= 0) {
+            return [
+                'processed' => 0,
+                'synced' => 0,
+                'failed' => 0,
+                'skipped_non_shopify' => 0,
+                'errors' => [],
+            ];
+        }
+
+        // Policy updates can occur in-request before this sync runs.
+        // Flush resolver cache so combinesWith is derived from latest tenant settings.
+        $this->settingsResolver->flushArrayCache();
+
+        $rows = CandleCashRedemption::query()
+            ->where('status', 'issued')
+            ->where(function ($query): void {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->whereHas('profile', function ($query) use ($tenantId): void {
+                $query->where('tenant_id', $tenantId);
+            })
+            ->with(['profile:id,tenant_id', 'reward:id,name,reward_type,reward_value'])
+            ->orderByDesc('id')
+            ->limit(max(1, min(2000, $limit)))
+            ->get();
+
+        $processed = 0;
+        $synced = 0;
+        $failed = 0;
+        $skippedNonShopify = 0;
+        $errors = [];
+
+        foreach ($rows as $row) {
+            $processed++;
+            $platform = strtolower(trim((string) ($row->platform ?? '')));
+            if ($platform !== '' && $platform !== 'shopify') {
+                $skippedNonShopify++;
+
+                continue;
+            }
+
+            try {
+                $this->ensureDiscountForRedemption($row, $preferredStoreKey);
+                $synced++;
+            } catch (\Throwable $e) {
+                $failed++;
+                if (count($errors) < 25) {
+                    $errors[] = [
+                        'redemption_id' => (int) $row->id,
+                        'redemption_code' => (string) ($row->redemption_code ?? ''),
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+        }
+
+        return [
+            'processed' => $processed,
+            'synced' => $synced,
+            'failed' => $failed,
+            'skipped_non_shopify' => $skippedNonShopify,
+            'errors' => $errors,
         ];
     }
 
@@ -361,6 +433,14 @@ GRAPHQL;
         $redemptionRules = (array) ($policy['redemption_rules'] ?? []);
         $stackingMode = strtolower(trim((string) ($redemptionRules['stacking_mode'] ?? 'no_stacking')));
 
+        if ($stackingMode === 'no_stacking' && $this->isFlagshipTenant($tenantId)) {
+            return [
+                'orderDiscounts' => false,
+                'productDiscounts' => false,
+                'shippingDiscounts' => true,
+            ];
+        }
+
         return match ($stackingMode) {
             'shipping_only' => [
                 'orderDiscounts' => false,
@@ -488,6 +568,22 @@ GRAPHQL;
             'productDiscounts' => (bool) data_get($combinesWith, 'productDiscounts', false),
             'shippingDiscounts' => (bool) data_get($combinesWith, 'shippingDiscounts', false),
         ];
+    }
+
+    protected function isFlagshipTenant(?int $tenantId): bool
+    {
+        if ($tenantId === null || $tenantId <= 0) {
+            return false;
+        }
+
+        $flagshipSlug = strtolower(trim((string) config('tenancy.auth.flagship_tenant_slug', 'modern-forestry')));
+        if ($flagshipSlug === '') {
+            return false;
+        }
+
+        $tenantSlug = strtolower(trim((string) (Tenant::query()->whereKey($tenantId)->value('slug') ?? '')));
+
+        return $tenantSlug !== '' && $tenantSlug === $flagshipSlug;
     }
 
     protected function tenantIdForRedemption(CandleCashRedemption $redemption): ?int

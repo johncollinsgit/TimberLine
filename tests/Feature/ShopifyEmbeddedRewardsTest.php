@@ -674,7 +674,7 @@ test('shopify embedded rewards alpha defaults endpoint applies starter policy', 
         ->assertJsonPath('data.value_model.minimum_purchase_dollars', 50)
         ->assertJsonPath('data.earning_rules.second_order_reward_amount', 10)
         ->assertJsonPath('data.redemption_rules.code_strategy', 'unique_per_customer')
-        ->assertJsonPath('data.redemption_rules.stacking_mode', 'no_stacking')
+        ->assertJsonPath('data.redemption_rules.stacking_mode', 'shipping_only')
         ->assertJsonPath('data.expiration_and_reminders.expiration_days', 90)
         ->assertJsonPath('data.expiration_and_reminders.reminder_offsets_days.0', 14)
         ->assertJsonPath('data.expiration_and_reminders.sms_reminder_offsets_days.0', 3)

@@ -8,8 +8,11 @@ use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Services\Discovery\TenantDiscoveryProfileService;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
+use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -48,7 +51,8 @@ class ModernForestryAlphaBootstrapService
 
     public function __construct(
         protected TenantEmailSettingsService $tenantEmailSettingsService,
-        protected TenantDiscoveryProfileService $tenantDiscoveryProfileService
+        protected TenantDiscoveryProfileService $tenantDiscoveryProfileService,
+        protected CandleCashShopifyDiscountService $candleCashShopifyDiscountService
     ) {
     }
 
@@ -110,6 +114,17 @@ class ModernForestryAlphaBootstrapService
             $this->ensureModuleStates((int) $tenant->id);
             $this->ensureEmailSettings((int) $tenant->id);
             $this->ensureSmsProviderSettings((int) $tenant->id);
+            $policyUpdated = $this->ensureRewardsPolicyDefaults((int) $tenant->id);
+            if ($policyUpdated) {
+                try {
+                    $this->candleCashShopifyDiscountService->syncIssuedDiscountsForTenant((int) $tenant->id, null, 500);
+                } catch (Throwable $e) {
+                    Log::warning('modern_forestry_alpha_bootstrap_reward_discount_sync_failed', [
+                        'tenant_id' => (int) $tenant->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
             $this->tenantDiscoveryProfileService->ensureModernForestryDefaults((int) $tenant->id);
 
             Cache::put($cacheKey, true, now()->addMinutes(10));
@@ -360,5 +375,68 @@ class ModernForestryAlphaBootstrapService
                 'description' => 'Modern Forestry alpha defaults for messaging-enabled tenant marketing settings.',
             ]
         );
+    }
+
+    protected function ensureRewardsPolicyDefaults(int $tenantId): bool
+    {
+        if (! Schema::hasTable('tenant_marketing_settings')) {
+            return false;
+        }
+
+        $existing = TenantMarketingSetting::query()
+            ->where('tenant_id', $tenantId)
+            ->where('key', TenantRewardsPolicyService::POLICY_KEY)
+            ->value('value');
+
+        $policy = is_array($existing) ? $existing : [];
+        $redemptionRules = is_array($policy['redemption_rules'] ?? null)
+            ? (array) $policy['redemption_rules']
+            : [];
+        $stackingMode = strtolower(trim((string) ($redemptionRules['stacking_mode'] ?? '')));
+
+        if ($stackingMode === 'no_stacking') {
+            $stackingMode = 'shipping_only';
+        }
+
+        if (! in_array($stackingMode, ['shipping_only', 'selected_promo_types'], true)) {
+            $stackingMode = 'shipping_only';
+        }
+
+        $selectedStackablePromoTypes = collect((array) ($redemptionRules['selected_stackable_promo_types'] ?? []))
+            ->map(static fn (mixed $value): ?string => strtolower(trim((string) $value)) ?: null)
+            ->filter()
+            ->values()
+            ->all();
+
+        if (! in_array('shipping_discounts', $selectedStackablePromoTypes, true)) {
+            $selectedStackablePromoTypes[] = 'shipping_discounts';
+        }
+
+        $nextPolicy = [
+            ...$policy,
+            'redemption_rules' => [
+                ...$redemptionRules,
+                'stacking_mode' => $stackingMode,
+                'selected_stackable_promo_types' => array_values(array_unique($selectedStackablePromoTypes)),
+                'max_codes_per_order' => max(1, (int) ($redemptionRules['max_codes_per_order'] ?? 1)),
+            ],
+        ];
+
+        if ($nextPolicy === $policy) {
+            return false;
+        }
+
+        TenantMarketingSetting::query()->updateOrCreate(
+            [
+                'tenant_id' => $tenantId,
+                'key' => TenantRewardsPolicyService::POLICY_KEY,
+            ],
+            [
+                'value' => $nextPolicy,
+                'description' => 'Modern Forestry alpha defaults for Candle Cash stacking and redemption safeguards.',
+            ]
+        );
+
+        return true;
     }
 }
