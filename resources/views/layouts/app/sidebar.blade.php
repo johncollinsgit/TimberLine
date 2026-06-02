@@ -22,29 +22,11 @@
   $workspace = is_array($experienceProfile['workspace'] ?? null) ? $experienceProfile['workspace'] : [];
   $orderedSidebarItems = collect((array) ($navigationShell['items'] ?? []));
   $adminSubItems = (array) ($navigationShell['admin_sub_items'] ?? []);
-  $marketingSubGroups = (array) ($navigationShell['marketing_sub_groups'] ?? []);
-  $birthdaySubGroups = (array) ($navigationShell['birthday_sub_groups'] ?? []);
-  $flattenNestedItems = static function (array $groups): array {
-      return collect($groups)
-          ->flatMap(function (array $group): array {
-              return collect((array) ($group['items'] ?? []))
-                  ->filter(fn (mixed $item): bool => is_array($item))
-                  ->values()
-                  ->all();
-          })
-          ->values()
-          ->all();
-  };
-  $marketingSubItems = $flattenNestedItems($marketingSubGroups);
-  $birthdaySubItems = $flattenNestedItems($birthdaySubGroups);
   $childMenuItems = [
       'administration' => $adminSubItems,
-      'marketing' => $marketingSubItems,
-      'birthdays' => $birthdaySubItems,
   ];
   $wikiSectionItems = (array) ($navigationShell['wiki_sections'] ?? []);
   $wikiSectionsActive = collect($wikiSectionItems)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
-  $quickActions = (array) ($navigationShell['quick_actions'] ?? []);
   $opsAttention = is_array($navigationShell['ops_attention'] ?? null) ? $navigationShell['ops_attention'] : [];
   $unresolvedExceptions = (int) ($opsAttention['unresolved_exceptions'] ?? 0);
   $latestRun = $opsAttention['latest_run'] ?? null;
@@ -61,6 +43,14 @@
   $consoleSwitches = collect((array) ($navigationShell['console_switches'] ?? []))
       ->filter(fn (mixed $switch): bool => is_array($switch) && trim((string) ($switch['href'] ?? '')) !== '')
       ->values();
+  $brandAssets = (array) config('everbranch.brand_assets', []);
+  $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
+  $brandLockupSrc = asset((string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg')).'?v='.$brandAssetVersion;
+  $brandMarkSrc = asset((string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg')).'?v='.$brandAssetVersion;
+  $assistantHref = route('shopify.embedded.assistant', absolute: false);
+  $footerUserName = trim((string) ($user?->name ?? '')) !== ''
+      ? trim((string) $user?->name)
+      : trim((string) ($user?->email ?? 'User'));
   $accountMode = strtolower(trim((string) ($experienceProfile['account_mode'] ?? 'production')));
   $accessLaneBanner = match ($accountMode) {
       'demo' => [
@@ -76,12 +66,10 @@
       default => null,
   };
   $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
-  $birthdaysActive = request()->routeIs('birthdays.*') || request()->is('birthdays*');
   $adminActive = request()->routeIs('admin.*') || request()->is('admin*');
   $childMenuOpenState = [
       'administration' => $adminActive,
       'marketing' => $marketingActive,
-      'birthdays' => $birthdaysActive,
   ];
   $topbarContextPills = [];
   if ($isLandlordShell) {
@@ -107,7 +95,27 @@
     <div class="relative mf-fade-in">
       <flux:sidebar.header class="mf-transition mf-sidebar-header">
         <div class="mf-sidebar-brand-row">
-          <x-app-logo :sidebar="true" href="{{ $hrefDashboard }}" wire:navigate class="mf-transition mf-home-pill" />
+          <a
+            href="{{ $hrefDashboard }}"
+            wire:navigate
+            class="mf-transition mf-sidebar-brand-lockup"
+            aria-label="{{ $isLandlordShell ? 'Open Everbranch Admin home' : 'Open workspace home' }}"
+          >
+            <img
+              src="{{ $brandLockupSrc }}"
+              alt="{{ config('everbranch.product_name', 'Everbranch') }}"
+              class="mf-sidebar-brand-lockup-image"
+              loading="eager"
+              decoding="async"
+            />
+            <img
+              src="{{ $brandMarkSrc }}"
+              alt="{{ config('everbranch.product_name', 'Everbranch') }}"
+              class="mf-sidebar-brand-mark-image"
+              loading="eager"
+              decoding="async"
+            />
+          </a>
           <button
             type="button"
             id="mf-sidebar-collapse-toggle"
@@ -116,42 +124,23 @@
             aria-label="Collapse sidebar"
             title="Collapse sidebar"
           >
-            <span class="mf-sidebar-pin-icon" aria-hidden="true">‹</span>
+            <flux:icon.chevron-left class="size-4 mf-sidebar-pin-icon" />
           </button>
         </div>
         <div class="mf-sidebar-context" data-shell-context="{{ $shellContext }}">
-          <span class="mf-sidebar-context-label">{{ $isLandlordShell ? 'Everbranch Admin' : 'Workspace' }}</span>
-          <span class="mf-sidebar-context-name">{{ $isLandlordShell ? 'Operator console' : $workspaceLabel }}</span>
-          <div class="mf-sidebar-context-meta">
-            <span class="mf-sidebar-context-label">Current Console</span>
-            <span class="mf-sidebar-context-name" title="{{ $currentConsoleLabel }}">{{ $currentConsoleLabel }}</span>
-            <span class="mf-sidebar-context-caption">{{ $currentConsoleDescriptor }}</span>
-          </div>
-          @if($consoleSwitches->count() > 1)
-            <div class="mf-console-switches" aria-label="Console switcher">
-              @foreach($consoleSwitches as $switch)
-                <a
-                  href="{{ $switch['href'] }}"
-                  class="mf-console-switch {{ ! empty($switch['active']) ? 'is-active' : '' }}"
-                  @if(! empty($switch['active'])) aria-current="page" @endif
-                >
-                  <span class="mf-console-switch-label">{{ $switch['label'] }}</span>
-                  <span class="mf-console-switch-caption">{{ $switch['descriptor'] ?? 'Console' }}</span>
-                </a>
-              @endforeach
-            </div>
-          @endif
+          <span class="mf-sidebar-context-label">{{ $isLandlordShell ? 'Operator Workspace' : 'Current Console' }}</span>
+          <span class="mf-sidebar-context-name" title="{{ $currentConsoleLabel }}">{{ $currentConsoleLabel }}</span>
+          <span class="mf-sidebar-context-caption">{{ $isLandlordShell ? $currentConsoleDescriptor : $workspaceLabel }}</span>
         </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>
 
       <flux:sidebar.nav class="mf-sidebar-nav">
         <flux:sidebar.group :heading="$isLandlordShell ? 'Everbranch Admin' : 'Workspace'" class="grid mf-sidebar-group-balanced">
-          <div class="space-y-1 mf-sidebar-main-list" data-sidebar-sortable data-sidebar-save-url="{{ route('ui.preferences.sidebar-order') }}" data-sidebar-csrf="{{ csrf_token() }}">
+          <div class="space-y-1 mf-sidebar-main-list">
             @foreach($orderedSidebarItems as $item)
               <div
-                class="mf-sidebar-sort-item"
-                data-sidebar-item
+                class="mf-sidebar-entry"
                 data-sidebar-key="{{ $item['key'] }}"
               >
                 @php
@@ -173,13 +162,14 @@
                       fn (array $child): bool => (bool) ($child['current'] ?? false)
                   );
                   $isGroupOpen = (bool) ($childMenuOpenState[$itemKey] ?? false)
-                      || (bool) ($item['current'] ?? false)
+                      || $hasActiveChild;
+                  $groupIsCurrent = (bool) ($item['current'] ?? false)
                       || $hasActiveChild;
                 @endphp
 
                 @if($hasChildren)
-                  <details class="mf-admin-group" {{ $isGroupOpen ? 'open' : '' }}>
-                    <summary class="mf-admin-group-summary {{ $item['current'] || $hasActiveChild ? 'mf-active-pill' : '' }}">
+                  <details class="mf-admin-group" data-sidebar-group-key="{{ $itemKey }}" {{ $isGroupOpen ? 'open' : '' }}>
+                    <summary class="mf-admin-group-summary {{ $groupIsCurrent ? 'is-current-group' : '' }}">
                       <span class="mf-admin-group-main">
                         @switch($itemKey)
                           @case('production')
@@ -191,9 +181,8 @@
                           @case('marketing')
                             <flux:icon.users class="size-4" />
                             @break
-                          @case('birthdays')
-                            <flux:icon.gift class="size-4" />
-                            @break
+                          @default
+                            <flux:icon.squares-plus class="size-4" />
                         @endswitch
                         <span class="mf-nav-label">{{ $item['label'] }}</span>
                       </span>
@@ -204,7 +193,9 @@
                         <a
                           href="{{ $subItem['href'] ?? '#' }}"
                           wire:navigate
+                          data-sidebar-child-key="{{ $subItem['key'] ?? 'section' }}"
                           class="mf-admin-subnav-link {{ ! empty($subItem['current']) ? 'mf-admin-subnav-link-active' : '' }}"
+                          @if(! empty($subItem['current'])) aria-current="page" @endif
                         >
                           <span>{{ $subItem['label'] ?? 'Section' }}</span>
                         </a>
@@ -218,9 +209,9 @@
                 @endif
               </div>
             @endforeach
-            <div class="mf-sidebar-sort-item">
-              <details class="mf-admin-group" {{ $wikiSectionsActive ? 'open' : '' }}>
-                <summary class="mf-admin-group-summary {{ $wikiSectionsActive ? 'mf-active-pill' : '' }}">
+            <div class="mf-sidebar-entry" data-sidebar-key="wiki-sections">
+              <details class="mf-admin-group" data-sidebar-group-key="wiki-sections" {{ $wikiSectionsActive ? 'open' : '' }}>
+                <summary class="mf-admin-group-summary {{ $wikiSectionsActive ? 'is-current-group' : '' }}">
                   <span class="mf-admin-group-main">
                     <flux:icon.book-open class="size-4" />
                     <span class="mf-nav-label">Wiki Sections</span>
@@ -232,7 +223,9 @@
                     <a
                       href="{{ $wikiSection['href'] }}"
                       wire:navigate
+                      data-sidebar-child-key="{{ $wikiSection['key'] ?? 'wiki-section' }}"
                       class="mf-admin-subnav-link {{ $wikiSection['current'] ? 'mf-admin-subnav-link-active' : '' }}"
+                      @if($wikiSection['current']) aria-current="page" @endif
                     >
                       <span>{{ $wikiSection['label'] }}</span>
                     </a>
@@ -242,75 +235,13 @@
             </div>
           </div>
         </flux:sidebar.group>
-
-        @if($quickActions !== [] || $showDataTools)
-        <flux:sidebar.group heading="Shortcuts" class="grid mt-3 mf-sidebar-group-balanced">
-          <button
-            type="button"
-            class="fb-surface-inset w-full px-3 py-2 text-left text-sm font-semibold text-zinc-950 transition hover:bg-white"
-            data-command-trigger
-          >
-            Search everything
-            <span class="mt-1 block text-xs font-normal text-zinc-500">Press Cmd/Ctrl + K</span>
-          </button>
-
-          @foreach($quickActions as $action)
-            @continue(($action['intent'] ?? null) === 'open-command')
-            <a
-              href="{{ $action['href'] ?? '#' }}"
-              wire:navigate
-              class="fb-surface-inset block px-3 py-2 text-left text-sm font-semibold text-zinc-950 transition hover:bg-white"
-            >
-              <span class="mf-nav-label">{{ $action['label'] ?? 'Action' }}</span>
-              @if(! empty($action['description']))
-                <span class="mt-1 block text-xs font-normal text-zinc-500">{{ $action['description'] }}</span>
-              @endif
-            </a>
-          @endforeach
-
-          @if($showDataTools)
-            <details class="mt-2 rounded-2xl border p-3 group mf-sidebar-panel">
-              <summary class="cursor-pointer list-none flex items-center justify-between fb-kpi-label text-zinc-600">
-                <span>Data Tools</span>
-                <span class="text-[10px] text-zinc-500 transition-transform group-open:rotate-90">▸</span>
-              </summary>
-              <div class="mt-3 space-y-2">
-                <form method="POST" action="{{ route('admin.tools.clear-orders') }}">
-                  @csrf
-                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
-                    Clear Orders
-                  </button>
-                </form>
-                <form method="POST" action="{{ route('admin.tools.import-retail') }}">
-                  @csrf
-                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
-                    Import Retail Orders
-                  </button>
-                </form>
-                <form method="POST" action="{{ route('admin.tools.import-wholesale') }}">
-                  @csrf
-                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
-                    Import Wholesale Orders
-                  </button>
-                </form>
-                <form method="POST" action="{{ route('admin.tools.import-market-boxes') }}">
-                  @csrf
-                  <button type="submit" class="w-full rounded-xl border px-3 py-2 text-xs mf-sidebar-action-btn">
-                    Reimport Market Boxes
-                  </button>
-                </form>
-              </div>
-            </details>
-          @endif
-        </flux:sidebar.group>
-        @endif
       </flux:sidebar.nav>
 
       <flux:spacer />
 
       @auth
         <div class="mf-transition mf-sidebar-footer">
-          <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" :console-switches="$consoleSwitches->all()" />
+          <x-desktop-user-menu class="hidden lg:block" position="top" :name="$footerUserName" :email="auth()->user()->email" :console-switches="$consoleSwitches->all()" />
         </div>
       @endauth
     </div>
@@ -349,16 +280,17 @@
           @foreach($topbarContextPills as $pill)
             <span class="mf-shell-context-pill">{{ $pill }}</span>
           @endforeach
-          <button
-            type="button"
-            class="mf-bud-placeholder"
-            data-bud-placeholder
-            aria-label="Bud assistant shell coming soon"
-            title="Bud assistant shell coming soon"
+          <a
+            href="{{ $assistantHref }}"
+            wire:navigate
+            class="mf-bud-entry"
+            data-assistant-entry
+            aria-label="Open Bud assistant"
+            title="Open Bud assistant"
           >
-            <img src="{{ asset(config('everbranch.brand_assets.mark', 'brand/everbranch-mark.svg')) }}" alt="" aria-hidden="true" />
+            <img src="{{ $brandMarkSrc }}" alt="" aria-hidden="true" />
             <span>Bud</span>
-          </button>
+          </a>
         </div>
       </div>
 

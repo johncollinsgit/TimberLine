@@ -31,9 +31,11 @@ test('unified shell surfaces modules and customer hub for tenant-aware marketing
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSeeText('Customers')
+        ->assertSeeText('Marketing')
         ->assertSeeText('Features')
-        ->assertSee('data-sidebar-key="modules"', false)
+        ->assertDontSee('data-sidebar-key="modules"', false)
+        ->assertDontSee('data-sidebar-sortable', false)
+        ->assertDontSeeText('Shortcuts')
         ->assertDontSeeText('Shopify workspace');
 });
 
@@ -45,4 +47,70 @@ test('unified shell keeps modules hidden when there is no tenant context', funct
         ->assertOk()
         ->assertDontSee('data-sidebar-key="modules"', false)
         ->assertSeeText('Workspace Guide');
+});
+
+test('marketing modules route opens marketing hub and only marks Features active', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Navigation Tenant',
+        'slug' => 'navigation-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $user = User::factory()->create(['role' => 'marketing_manager']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $response = $this->actingAs($user)
+        ->get('http://navigation-tenant.theeverbranch.com/marketing/modules')
+        ->assertOk()
+        ->assertSeeText('Marketing')
+        ->assertSee('data-sidebar-key="marketing"', false)
+        ->assertSee('data-sidebar-child-key="modules"', false)
+        ->assertDontSee('data-sidebar-key="modules"', false);
+
+    $html = $response->getContent();
+
+    expect(preg_match('/data-sidebar-child-key="modules"[^>]*mf-admin-subnav-link-active/', $html))->toBe(1)
+        ->and(preg_match('/data-sidebar-child-key="customers"[^>]*mf-admin-subnav-link-active/', $html))->toBe(0);
+});
+
+test('marketing customers route opens marketing hub and only marks Customers active', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Navigation Tenant',
+        'slug' => 'navigation-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Casey',
+        'last_name' => 'Ng',
+        'email' => 'casey@example.test',
+    ]);
+
+    $user = User::factory()->create(['role' => 'marketing_manager']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $response = $this->actingAs($user)
+        ->get('http://navigation-tenant.theeverbranch.com/marketing/customers')
+        ->assertOk()
+        ->assertSee('data-sidebar-key="marketing"', false)
+        ->assertSee('data-sidebar-child-key="customers"', false)
+        ->assertDontSee('data-sidebar-key="modules"', false);
+
+    $html = $response->getContent();
+
+    expect(preg_match('/data-sidebar-child-key="customers"[^>]*mf-admin-subnav-link-active/', $html))->toBe(1)
+        ->and(preg_match('/data-sidebar-child-key="modules"[^>]*mf-admin-subnav-link-active/', $html))->toBe(0);
 });

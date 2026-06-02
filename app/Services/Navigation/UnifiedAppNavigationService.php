@@ -60,17 +60,22 @@ class UnifiedAppNavigationService
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
         if ($canAccessMarketing) {
-            $items[] = ['key' => 'marketing', 'icon' => 'users', 'href' => route('marketing.overview'), 'label' => 'Customers', 'current' => request()->routeIs('marketing.*')];
-
             $birthdaysRelevant = $tenantId === null
                 || $this->moduleStateRelevant($moduleStates['birthdays'] ?? null);
-            if ($birthdaysRelevant) {
-                $items[] = ['key' => 'birthdays', 'icon' => 'gift', 'href' => route('birthdays.customers'), 'label' => 'Birthdays', 'current' => request()->routeIs('birthdays.*')];
-            }
 
-            if ($tenantId !== null) {
-                $items[] = ['key' => 'modules', 'icon' => 'squares-plus', 'href' => route('marketing.modules'), 'label' => 'Features', 'current' => request()->routeIs('marketing.modules*')];
-            }
+            $marketingChildren = $this->marketingNavigationChildren($tenantId !== null, $birthdaysRelevant);
+            $marketingCurrent = collect($marketingChildren)->contains(
+                fn (array $child): bool => (bool) ($child['current'] ?? false)
+            );
+
+            $items[] = [
+                'key' => 'marketing',
+                'icon' => 'users',
+                'href' => route('marketing.overview'),
+                'label' => 'Marketing',
+                'current' => $marketingCurrent,
+                'children' => $marketingChildren,
+            ];
         }
 
         if ($canAccessOps) {
@@ -448,6 +453,71 @@ class UnifiedAppNavigationService
             ->all();
 
         return MarketingSectionRegistry::groupNavigationItems($items);
+    }
+
+    /**
+     * @return array<int,array{key:string,label:string,href:string,current:bool}>
+     */
+    protected function marketingNavigationChildren(bool $includeFeatures, bool $includeBirthdays): array
+    {
+        $items = collect(MarketingSectionRegistry::sections())
+            ->reject(fn (array $section, string $key): bool => $key === 'modules' && ! $includeFeatures)
+            ->map(function (array $section, string $key): array {
+                $label = $key === 'modules'
+                    ? 'Features'
+                    : (string) $section['label'];
+
+                return [
+                    'key' => $key,
+                    'label' => $label,
+                    'href' => route($section['route']),
+                    'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
+                ];
+            })
+            ->values();
+
+        if ($includeBirthdays) {
+            $items->push([
+                'key' => 'birthdays',
+                'label' => 'Birthdays',
+                'href' => route('birthdays.customers'),
+                'current' => request()->routeIs('birthdays.*'),
+            ]);
+        }
+
+        $preferredOrder = [
+            'overview',
+            'customers',
+            'birthdays',
+            'modules',
+            'providers-integrations',
+            'messages',
+            'groups',
+            'segments',
+            'campaigns',
+            'automations',
+            'message-templates',
+            'recommendations',
+            'candle-cash',
+            'reviews',
+            'wishlist',
+            'suppression-consent',
+            'identity-review',
+            'orders',
+            'settings',
+        ];
+
+        $orderLookup = array_flip($preferredOrder);
+
+        return $items
+            ->sortBy(function (array $item) use ($orderLookup): array {
+                return [
+                    $orderLookup[$item['key']] ?? 999,
+                    strtolower((string) ($item['label'] ?? '')),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

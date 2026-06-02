@@ -60,6 +60,10 @@
     $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
 @endphp
 
+@php
+    $assistantHref = $appendEmbeddedContext(route('shopify.app.assistant.start', [], false));
+@endphp
+
 <header class="app-topbar">
     <div class="app-topbar-bar">
         <div class="app-topbar-shell">
@@ -137,15 +141,17 @@
                         Search
                     </button>
                 @endif
-                <button
-                    type="button"
+                <a
+                    href="{{ $assistantHref }}"
                     class="app-topbar-action app-topbar-bud"
-                    data-bud-placeholder
-                    aria-label="Bud assistant shell coming soon"
-                    title="Bud assistant shell coming soon"
+                    data-assistant-entry
+                    aria-label="Open Bud assistant"
+                    title="Open Bud assistant"
+                    data-embedded-prefetch-link="1"
+                    data-prefetch-priority="normal"
                 >
                     Bud
-                </button>
+                </a>
             </div>
         </div>
     </div>

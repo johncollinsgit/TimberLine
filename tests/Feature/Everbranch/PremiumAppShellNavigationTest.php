@@ -41,7 +41,7 @@ function pr27ShellTenant(string $slug, string $name, string $accountMode = 'prod
     return $tenant;
 }
 
-test('tenant app shell keeps Home first and shows premium search and Bud placeholders', function (): void {
+test('tenant app shell keeps Home first and renders the cleaned sidebar shell', function (): void {
     $tenant = pr27ShellTenant('shell-client', 'Shell Client');
     $user = User::factory()->tenantAdmin()->create();
     $user->tenants()->attach((int) $tenant->id, ['role' => 'admin']);
@@ -51,12 +51,19 @@ test('tenant app shell keeps Home first and shows premium search and Bud placeho
         ->assertOk()
         ->assertSee('data-app-shell-topbar', false)
         ->assertSee('Search or ask what you want to do...', false)
-        ->assertSee('data-bud-placeholder', false)
+        ->assertSee('data-assistant-entry', false)
+        ->assertSee('href="/assistant"', false)
         ->assertSee('data-shell-context="tenant"', false)
         ->assertSeeText('Current Console')
-        ->assertSeeText('Operator console')
+        ->assertSeeText('Shell Client')
         ->assertSeeText('Everbranch Admin')
+        ->assertSeeText('Marketing')
         ->assertSeeText('Features')
+        ->assertSeeText($user->email)
+        ->assertDontSee('data-sidebar-sortable', false)
+        ->assertDontSee('mf-console-switches', false)
+        ->assertDontSee('data-sidebar-key="modules"', false)
+        ->assertDontSeeText('Shortcuts')
         ->assertDontSeeText('Workspaces')
         ->assertDontSeeText('Forestry Backstage');
 
@@ -87,7 +94,10 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertSeeText('Shopify Readiness')
         ->assertSeeText('System Readiness')
         ->assertSee('Search or ask what you want to do...', false)
-        ->assertSee('data-bud-placeholder', false)
+        ->assertSee('data-assistant-entry', false)
+        ->assertSee('href="/assistant"', false)
+        ->assertDontSee('data-sidebar-sortable', false)
+        ->assertDontSeeText('Shortcuts')
         ->assertDontSeeText('Forestry Backstage');
 
     $html = $response->getContent();
@@ -129,6 +139,8 @@ test('Modern Forestry remains tenant context rather than generic legacy branding
         ->assertSee('data-shell-context="tenant"', false)
         ->assertSeeText('Current Console')
         ->assertSeeText('Everbranch Admin')
+        ->assertSeeText('Marketing')
+        ->assertDontSee('mf-console-switches', false)
         ->assertDontSeeText('Forestry Backstage')
         ->assertDontSeeText('Workspaces');
 });
