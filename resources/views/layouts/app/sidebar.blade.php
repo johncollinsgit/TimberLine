@@ -37,16 +37,13 @@
   $workspaceLabel = (string) ($workspace['label'] ?? 'Unified workspace');
   $workspaceSubtitle = (string) ($workspace['subtitle'] ?? 'One product surface that adapts to the tenant in front of it.');
   $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search or ask what you want to do...');
-  $currentConsole = is_array($navigationShell['current_console'] ?? null) ? (array) $navigationShell['current_console'] : [];
-  $currentConsoleLabel = trim((string) ($currentConsole['label'] ?? ($isLandlordShell ? 'Everbranch Admin' : $workspaceLabel)));
-  $currentConsoleDescriptor = trim((string) ($currentConsole['descriptor'] ?? ($isLandlordShell ? 'Operator console' : 'Tenant console')));
   $consoleSwitches = collect((array) ($navigationShell['console_switches'] ?? []))
       ->filter(fn (mixed $switch): bool => is_array($switch) && trim((string) ($switch['href'] ?? '')) !== '')
       ->values();
   $brandAssets = (array) config('everbranch.brand_assets', []);
   $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-  $brandLockupSrc = asset((string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg')).'?v='.$brandAssetVersion;
   $brandMarkSrc = asset((string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg')).'?v='.$brandAssetVersion;
+  $brandWordmark = trim((string) config('everbranch.product_name', 'Everbranch'));
   $assistantHref = route('shopify.embedded.assistant', absolute: false);
   $footerUserName = trim((string) ($user?->name ?? '')) !== ''
       ? trim((string) $user?->name)
@@ -93,7 +90,7 @@
     <div class="mf-sidebar-glow absolute inset-0"></div>
 
     <div class="relative mf-fade-in">
-      <flux:sidebar.header class="mf-transition mf-sidebar-header">
+      <flux:sidebar.header class="mf-transition mf-sidebar-header" data-shell-context="{{ $shellContext }}">
         <div class="mf-sidebar-brand-row">
           <a
             href="{{ $hrefDashboard }}"
@@ -102,19 +99,13 @@
             aria-label="{{ $isLandlordShell ? 'Open Everbranch Admin home' : 'Open workspace home' }}"
           >
             <img
-              src="{{ $brandLockupSrc }}"
-              alt="{{ config('everbranch.product_name', 'Everbranch') }}"
-              class="mf-sidebar-brand-lockup-image"
-              loading="eager"
-              decoding="async"
-            />
-            <img
               src="{{ $brandMarkSrc }}"
               alt="{{ config('everbranch.product_name', 'Everbranch') }}"
               class="mf-sidebar-brand-mark-image"
               loading="eager"
               decoding="async"
             />
+            <span class="mf-sidebar-brand-wordmark">{{ $brandWordmark }}</span>
           </a>
           <button
             type="button"
@@ -126,11 +117,6 @@
           >
             <flux:icon.chevron-left class="size-4 mf-sidebar-pin-icon" />
           </button>
-        </div>
-        <div class="mf-sidebar-context" data-shell-context="{{ $shellContext }}">
-          <span class="mf-sidebar-context-label">{{ $isLandlordShell ? 'Operator Workspace' : 'Current Console' }}</span>
-          <span class="mf-sidebar-context-name" title="{{ $currentConsoleLabel }}">{{ $currentConsoleLabel }}</span>
-          <span class="mf-sidebar-context-caption">{{ $isLandlordShell ? $currentConsoleDescriptor : $workspaceLabel }}</span>
         </div>
         <flux:sidebar.collapse class="lg:hidden mf-transition" />
       </flux:sidebar.header>

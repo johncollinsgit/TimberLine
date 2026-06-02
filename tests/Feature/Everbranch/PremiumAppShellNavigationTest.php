@@ -54,7 +54,8 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
         ->assertSee('data-assistant-entry', false)
         ->assertSee('href="/assistant"', false)
         ->assertSee('data-shell-context="tenant"', false)
-        ->assertSeeText('Current Console')
+        ->assertSee('mf-sidebar-brand-wordmark', false)
+        ->assertSeeText('Everbranch')
         ->assertSeeText('Shell Client')
         ->assertSeeText('Everbranch Admin')
         ->assertSeeText('Marketing')
@@ -62,7 +63,9 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
         ->assertSeeText($user->email)
         ->assertDontSee('data-sidebar-sortable', false)
         ->assertDontSee('mf-console-switches', false)
+        ->assertDontSee('mf-sidebar-context', false)
         ->assertDontSee('data-sidebar-key="modules"', false)
+        ->assertDontSeeText('Current Console')
         ->assertDontSeeText('Shortcuts')
         ->assertDontSeeText('Workspaces')
         ->assertDontSeeText('Forestry Backstage');
@@ -96,7 +99,10 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertSee('Search or ask what you want to do...', false)
         ->assertSee('data-assistant-entry', false)
         ->assertSee('href="/assistant"', false)
+        ->assertSee('mf-sidebar-brand-wordmark', false)
         ->assertDontSee('data-sidebar-sortable', false)
+        ->assertDontSee('mf-sidebar-context', false)
+        ->assertDontSeeText('Current Console')
         ->assertDontSeeText('Shortcuts')
         ->assertDontSeeText('Forestry Backstage');
 
@@ -137,10 +143,13 @@ test('Modern Forestry remains tenant context rather than generic legacy branding
         ->assertOk()
         ->assertSeeText('Modern Forestry')
         ->assertSee('data-shell-context="tenant"', false)
-        ->assertSeeText('Current Console')
+        ->assertSee('mf-sidebar-brand-wordmark', false)
+        ->assertSeeText('Everbranch')
         ->assertSeeText('Everbranch Admin')
         ->assertSeeText('Marketing')
         ->assertDontSee('mf-console-switches', false)
+        ->assertDontSee('mf-sidebar-context', false)
+        ->assertDontSeeText('Current Console')
         ->assertDontSeeText('Forestry Backstage')
         ->assertDontSeeText('Workspaces');
 });
