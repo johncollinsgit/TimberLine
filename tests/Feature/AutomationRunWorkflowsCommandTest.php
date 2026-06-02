@@ -3,10 +3,12 @@
 use App\Models\AutomationWorkflowLink;
 use App\Models\AutomationWorkflowState;
 use App\Models\Tenant;
+use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
@@ -151,4 +153,71 @@ test('automation run command fails when the required tenant module is unavailabl
         ->and(Artisan::output())->toContain('status=partial_failure');
 
     Http::assertNothingSent();
+});
+
+test('automation run command executes tenant saved workflow definitions when global config is off', function (): void {
+    config()->set('automation_workflows.enabled', false);
+
+    $tenant = Tenant::query()->firstOrFail();
+
+    TenantMarketingSetting::query()->updateOrCreate(
+        [
+            'tenant_id' => $tenant->id,
+            'key' => 'workflow_automation_asana_google_calendar',
+        ],
+        [
+            'value' => [
+                'workflow_key' => 'asana_to_google_calendar',
+                'enabled' => true,
+                'trigger' => [
+                    'project_gid' => '1201541082238924',
+                    'modified_overlap_minutes' => 5,
+                    'bootstrap_lookback_days' => 14,
+                    'poll_limit' => 100,
+                    'max_tasks_per_run' => 500,
+                ],
+                'action' => [
+                    'calendar_id' => 'calendar@example.com',
+                    'timezone' => 'America/New_York',
+                    'default_start_time' => '12:00:00',
+                    'default_duration_minutes' => 60,
+                    'skip_completed_tasks' => true,
+                ],
+                'credentials' => [
+                    'asana_personal_access_token_encrypted' => Crypt::encryptString('tenant-asana-token'),
+                    'google_calendar_client_id_encrypted' => Crypt::encryptString('tenant-google-client-id'),
+                    'google_calendar_client_secret_encrypted' => Crypt::encryptString('tenant-google-client-secret'),
+                    'google_calendar_refresh_token_encrypted' => Crypt::encryptString('tenant-google-refresh-token'),
+                ],
+            ],
+            'description' => 'Tenant workflow automation test definition.',
+        ]
+    );
+
+    Http::fake([
+        'https://app.asana.com/api/1.0/tasks*' => Http::response([
+            'data' => [fakeAsanaTaskPayload()],
+            'next_page' => null,
+        ], 200),
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'google-access-token',
+            'expires_in' => 3600,
+            'token_type' => 'Bearer',
+        ], 200),
+        'https://www.googleapis.com/calendar/v3/calendars/*/events' => Http::response([
+            'id' => 'google-event-tenant-1',
+        ], 200),
+    ]);
+
+    $exit = Artisan::call('automation:run', [
+        '--workflow' => 'asana_to_google_calendar',
+    ]);
+
+    expect($exit)->toBe(0)
+        ->and(Artisan::output())->toContain('workflow=asana_to_google_calendar::tenant:'.$tenant->id);
+
+    expect(AutomationWorkflowLink::query()
+        ->where('workflow_key', 'asana_to_google_calendar::tenant:'.$tenant->id)
+        ->where('source_id', '343049949')
+        ->value('destination_id'))->toBe('google-event-tenant-1');
 });

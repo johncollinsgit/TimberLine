@@ -31,6 +31,9 @@ $defaultGoogleRedirect = $canonicalLandlordHost !== null
 $defaultGoogleGbpRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/marketing/candle-cash/google-business/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/marketing/candle-cash/google-business/callback';
+$defaultGoogleCalendarRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/marketing/providers-integrations/workflow-automations/google-calendar/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/marketing/providers-integrations/workflow-automations/google-calendar/callback';
 
 return [
 
@@ -80,6 +83,9 @@ return [
         'oauth_client_secret' => env('GOOGLE_CALENDAR_CLIENT_SECRET', env('GOOGLE_CLIENT_SECRET')),
         'oauth_refresh_token' => env('GOOGLE_CALENDAR_REFRESH_TOKEN'),
         'oauth_access_token' => env('GOOGLE_CALENDAR_ACCESS_TOKEN'),
+        'redirect_uri' => env('GOOGLE_CALENDAR_REDIRECT_URI', $defaultGoogleCalendarRedirect),
+        'oauth_state_cache_store' => env('GOOGLE_CALENDAR_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+        'oauth_scopes' => env('GOOGLE_CALENDAR_OAUTH_SCOPES', 'https://www.googleapis.com/auth/calendar'),
     ],
 
     'asana' => [

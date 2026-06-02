@@ -15,7 +15,7 @@
             :section="$section"
             :sections="$sections"
             title="Connections"
-            description="Square sync, legacy importer workflows, and event source mapping administration for marketing attribution."
+            description="Native workflow automations, Square sync, legacy importer workflows, and event source mapping administration for marketing attribution."
             hint-title="How this page works"
             hint-text="All imports and syncs are additive. Identity merges still follow exact email/phone rules, and ambiguous matches are routed to Identity Review."
         />
@@ -25,6 +25,348 @@
                 Shopify Customer Sync Health
             </a>
         </div>
+
+        @if(is_array($workflowAutomationSetup ?? null))
+            @php
+                $workflowSetup = $workflowAutomationSetup;
+                $workflowModule = is_array($workflowAutomationModule ?? null) ? $workflowAutomationModule : [];
+                $workflowRunResult = is_array($workflowAutomationRunResult ?? null) ? $workflowAutomationRunResult : [];
+                $workflowState = is_array($workflowSetup['state'] ?? null) ? $workflowSetup['state'] : [];
+                $workflowCounts = is_array($workflowState['counts'] ?? null) ? $workflowState['counts'] : [];
+                $workflowDryRunCounts = is_array($workflowState['dry_run_counts'] ?? null) ? $workflowState['dry_run_counts'] : [];
+                $asanaCredential = is_array(data_get($workflowSetup, 'credentials.asana_personal_access_token')) ? data_get($workflowSetup, 'credentials.asana_personal_access_token') : [];
+                $googleClientIdCredential = is_array(data_get($workflowSetup, 'credentials.google_calendar_client_id')) ? data_get($workflowSetup, 'credentials.google_calendar_client_id') : [];
+                $googleClientSecretCredential = is_array(data_get($workflowSetup, 'credentials.google_calendar_client_secret')) ? data_get($workflowSetup, 'credentials.google_calendar_client_secret') : [];
+                $googleRefreshTokenCredential = is_array(data_get($workflowSetup, 'credentials.google_calendar_refresh_token')) ? data_get($workflowSetup, 'credentials.google_calendar_refresh_token') : [];
+                $googleCalendarConnection = is_array($googleCalendarWorkflowConnection ?? null) ? $googleCalendarWorkflowConnection : [];
+                $googleCalendarOptions = is_array($googleCalendarConnection['calendars'] ?? null) ? $googleCalendarConnection['calendars'] : [];
+                $googleCalendarConnected = (bool) ($googleCalendarConnection['connected'] ?? false);
+                $googleCalendarOauthReady = (bool) ($googleCalendarConnection['oauth_ready'] ?? false);
+                $moduleEnabled = (bool) ($workflowModule['enabled'] ?? false);
+                $workflowEnabled = (bool) ($workflowSetup['enabled'] ?? false);
+                $lastFinishedAt = filled($workflowState['last_finished_at'] ?? null)
+                    ? \Illuminate\Support\Carbon::parse((string) $workflowState['last_finished_at'])->format('M j, Y g:i A')
+                    : 'Never';
+                $lastStartedAt = filled($workflowState['last_started_at'] ?? null)
+                    ? \Illuminate\Support\Carbon::parse((string) $workflowState['last_started_at'])->format('M j, Y g:i A')
+                    : 'Not running';
+                $workflowLastStatus = trim((string) ($workflowState['last_status'] ?? ''));
+                if ($workflowLastStatus === '') {
+                    $workflowLastStatus = trim((string) ($workflowState['status'] ?? 'idle'));
+                }
+                $selectedCalendarId = (string) old('calendar_id', (string) data_get($workflowSetup, 'action.calendar_id', ''));
+            @endphp
+
+            <section class="rounded-[2rem] border border-emerald-300/40 bg-[linear-gradient(135deg,rgba(236,253,245,0.95),rgba(240,249,255,0.96))] p-5 sm:p-6 space-y-5 shadow-[0_20px_60px_-45px_rgba(15,118,110,0.55)]">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div class="max-w-3xl space-y-3">
+                        <div class="inline-flex w-fit rounded-full border border-emerald-300/40 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-900">
+                            Native Zap Replacement
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-semibold text-zinc-950">{{ $workflowSetup['title'] ?? 'Workflow Automations' }}</h2>
+                            <p class="mt-2 text-sm text-zinc-700">{{ $workflowSetup['description'] ?? 'Configure tenant-native workflow automations.' }}</p>
+                        </div>
+                    </div>
+                    <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                        <div class="rounded-2xl border px-4 py-3 text-sm {{ $workflowEnabled ? 'border-emerald-300/40 bg-emerald-100 text-emerald-950' : 'border-amber-300/40 bg-amber-100 text-amber-950' }}">
+                            <div class="text-[11px] uppercase tracking-[0.22em] opacity-75">Scheduler</div>
+                            <div class="mt-1 font-semibold">{{ $workflowEnabled ? 'Enabled for scheduled runs' : 'Saved but disabled' }}</div>
+                        </div>
+                        <div class="rounded-2xl border px-4 py-3 text-sm {{ $moduleEnabled ? 'border-sky-300/40 bg-sky-100 text-sky-950' : 'border-rose-300/40 bg-rose-100 text-rose-950' }}">
+                            <div class="text-[11px] uppercase tracking-[0.22em] opacity-75">Module Access</div>
+                            <div class="mt-1 font-semibold">{{ $moduleEnabled ? 'Workflow module active' : 'Workflow module not enabled' }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div class="rounded-2xl border border-white/70 bg-white/80 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Last Run Status</div>
+                        <div class="mt-2 text-lg font-semibold text-zinc-950">{{ \Illuminate\Support\Str::of($workflowLastStatus)->replace('_', ' ')->headline() }}</div>
+                        <div class="mt-1 text-xs text-zinc-500">Finished {{ $lastFinishedAt }}</div>
+                    </div>
+                    <div class="rounded-2xl border border-white/70 bg-white/80 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Tracked Links</div>
+                        <div class="mt-2 text-lg font-semibold text-zinc-950">{{ number_format((int) ($workflowSetup['link_count'] ?? 0)) }}</div>
+                        <div class="mt-1 text-xs text-zinc-500">Stored Asana task to calendar event relationships.</div>
+                    </div>
+                    <div class="rounded-2xl border border-white/70 bg-white/80 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Last Started</div>
+                        <div class="mt-2 text-lg font-semibold text-zinc-950">{{ $lastStartedAt }}</div>
+                        <div class="mt-1 text-xs text-zinc-500">Workflow instance: {{ $workflowSetup['instance_key'] ?? 'n/a' }}</div>
+                    </div>
+                    <div class="rounded-2xl border border-white/70 bg-white/80 p-4">
+                        <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Recent Counts</div>
+                        <div class="mt-2 text-lg font-semibold text-zinc-950">
+                            {{ number_format((int) ($workflowCounts['created'] ?? 0)) }} created /
+                            {{ number_format((int) ($workflowCounts['updated'] ?? 0)) }} updated
+                        </div>
+                        <div class="mt-1 text-xs text-zinc-500">
+                            Dry run forecast: {{ number_format((int) ($workflowDryRunCounts['would_create'] ?? 0)) }} create, {{ number_format((int) ($workflowDryRunCounts['would_update'] ?? 0)) }} update.
+                        </div>
+                    </div>
+                </div>
+
+                @if($workflowRunResult !== [])
+                    @php
+                        $runCounts = is_array($workflowRunResult['counts'] ?? null) ? $workflowRunResult['counts'] : [];
+                        $runDryRunCounts = is_array($workflowRunResult['dry_run_counts'] ?? null) ? $workflowRunResult['dry_run_counts'] : [];
+                    @endphp
+                    <div class="rounded-2xl border border-zinc-200/70 bg-white/80 p-4">
+                        <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <h3 class="text-sm font-semibold text-zinc-950">Most Recent Button Run</h3>
+                                <p class="mt-1 text-sm text-zinc-600">Status: {{ \Illuminate\Support\Str::of((string) ($workflowRunResult['status'] ?? 'unknown'))->replace('_', ' ')->headline() }}</p>
+                            </div>
+                            <div class="text-xs text-zinc-500">
+                                fetched {{ (int) ($runCounts['fetched'] ?? 0) }},
+                                processed {{ (int) ($runCounts['processed'] ?? 0) }},
+                                created {{ (int) ($runCounts['created'] ?? 0) }},
+                                updated {{ (int) ($runCounts['updated'] ?? 0) }},
+                                would create {{ (int) ($runDryRunCounts['would_create'] ?? 0) }},
+                                would update {{ (int) ($runDryRunCounts['would_update'] ?? 0) }}
+                            </div>
+                        </div>
+                        @if(filled($workflowRunResult['message'] ?? null))
+                            <div class="mt-3 text-sm text-zinc-600">{{ $workflowRunResult['message'] }}</div>
+                        @endif
+                    </div>
+                @endif
+
+                <x-admin.help-hint title="How this setup works">
+                    Save Setup stores tenant-specific workflow settings. Dry Run fetches matching Asana tasks without writing Google events. Run Live writes the events immediately. Leaving credential fields blank keeps the current saved value.
+                </x-admin.help-hint>
+
+                @if(! $moduleEnabled)
+                    <div class="rounded-2xl border border-rose-300/35 bg-rose-100 px-4 py-3 text-sm text-rose-900">
+                        This tenant does not currently have the `workflow_automations` module enabled, so scheduled or manual runs will fail until module access is active.
+                    </div>
+                @endif
+
+                @if(filled($workflowState['last_error'] ?? null))
+                    <div class="rounded-2xl border border-amber-300/35 bg-amber-100 px-4 py-3 text-sm text-amber-900">
+                        Last workflow error: {{ $workflowState['last_error'] }}
+                    </div>
+                @endif
+
+                <form method="POST" action="{{ route('marketing.providers-integrations.workflow-automations.save') }}" class="space-y-6">
+                    @csrf
+                    <input type="hidden" name="workflow_key" value="{{ $workflowSetup['workflow_key'] ?? 'asana_to_google_calendar' }}" />
+
+                    <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr),minmax(0,1fr)]">
+                        <div class="space-y-4">
+                            <div class="rounded-2xl border border-zinc-200/70 bg-white/80 p-4 space-y-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 class="text-base font-semibold text-zinc-950">Workflow Settings</h3>
+                                        <p class="mt-1 text-sm text-zinc-600">Set the Asana source, Google Calendar target, and default event timing for this tenant.</p>
+                                    </div>
+                                    <label class="inline-flex items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-950">
+                                        <input type="checkbox" name="enabled" value="1" class="rounded border-emerald-400" @checked((bool) old('enabled', $workflowEnabled)) />
+                                        Enable automation
+                                    </label>
+                                </div>
+
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Asana Project GID</label>
+                                        <input type="text" name="project_gid" value="{{ old('project_gid', (string) data_get($workflowSetup, 'trigger.project_gid', '')) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" placeholder="1201541082238924" />
+                                        <div class="mt-1 text-[11px] text-zinc-500">The Asana project this workflow watches for updated tasks.</div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Google Calendar ID</label>
+                                        @if($googleCalendarOptions !== [])
+                                            <select name="calendar_id" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950">
+                                                <option value="">Choose a writable Google calendar</option>
+                                                @foreach($googleCalendarOptions as $calendar)
+                                                    @php
+                                                        $calendarId = (string) ($calendar['id'] ?? '');
+                                                        $calendarSummary = (string) ($calendar['summary'] ?? $calendarId);
+                                                        $calendarAccessRole = (string) ($calendar['access_role'] ?? 'writer');
+                                                        $calendarTimeZone = trim((string) ($calendar['time_zone'] ?? ''));
+                                                    @endphp
+                                                    <option value="{{ $calendarId }}" @selected($selectedCalendarId === $calendarId)>
+                                                        {{ $calendarSummary }}{{ !empty($calendar['primary']) ? ' (Primary)' : '' }}{{ $calendarTimeZone !== '' ? ' - ' . $calendarTimeZone : '' }}{{ $calendarAccessRole !== '' ? ' - ' . \Illuminate\Support\Str::of($calendarAccessRole)->replace('_', ' ')->headline() : '' }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="mt-1 text-[11px] text-zinc-500">Pick from writable calendars discovered through Google OAuth.</div>
+                                        @else
+                                            <input type="text" name="calendar_id" value="{{ $selectedCalendarId }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" placeholder="calendar@group.calendar.google.com" />
+                                            <div class="mt-1 text-[11px] text-zinc-500">The destination calendar that receives created or updated events. Connect Google below to turn this into a picker.</div>
+                                        @endif
+                                    </div>
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Timezone</label>
+                                        <input type="text" name="timezone" value="{{ old('timezone', (string) data_get($workflowSetup, 'action.timezone', 'America/New_York')) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" placeholder="America/New_York" />
+                                    </div>
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Default Start Time</label>
+                                        <input type="time" name="default_start_time" value="{{ old('default_start_time', (string) data_get($workflowSetup, 'action.default_start_time', '12:00')) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" />
+                                    </div>
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Default Duration (Minutes)</label>
+                                        <input type="number" name="default_duration_minutes" min="1" max="1440" value="{{ old('default_duration_minutes', (int) data_get($workflowSetup, 'action.default_duration_minutes', 60)) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" />
+                                    </div>
+                                    <label class="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-700">
+                                        <input type="checkbox" name="skip_completed_tasks" value="1" class="rounded border-zinc-300 bg-white" @checked((bool) old('skip_completed_tasks', (bool) data_get($workflowSetup, 'action.skip_completed_tasks', true))) />
+                                        Skip completed Asana tasks
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="rounded-2xl border border-zinc-200/70 bg-white/80 p-4 space-y-4">
+                                <div>
+                                    <h3 class="text-base font-semibold text-zinc-950">Polling Defaults</h3>
+                                    <p class="mt-1 text-sm text-zinc-600">These control how aggressively Everbranch scans Asana for changed tasks.</p>
+                                </div>
+                                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Modified Overlap</label>
+                                        <input type="number" name="modified_overlap_minutes" min="0" max="1440" value="{{ old('modified_overlap_minutes', (int) data_get($workflowSetup, 'trigger.modified_overlap_minutes', 5)) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" />
+                                        <div class="mt-1 text-[11px] text-zinc-500">Minutes of overlap between polls to avoid missed edits.</div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Bootstrap Lookback</label>
+                                        <input type="number" name="bootstrap_lookback_days" min="1" max="365" value="{{ old('bootstrap_lookback_days', (int) data_get($workflowSetup, 'trigger.bootstrap_lookback_days', 14)) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" />
+                                        <div class="mt-1 text-[11px] text-zinc-500">Days to scan on the first run before a cursor exists.</div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Poll Limit</label>
+                                        <input type="number" name="poll_limit" min="1" max="100" value="{{ old('poll_limit', (int) data_get($workflowSetup, 'trigger.poll_limit', 100)) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" />
+                                        <div class="mt-1 text-[11px] text-zinc-500">Tasks requested per Asana page.</div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Max Tasks Per Run</label>
+                                        <input type="number" name="max_tasks_per_run" min="1" max="5000" value="{{ old('max_tasks_per_run', (int) data_get($workflowSetup, 'trigger.max_tasks_per_run', 500)) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" />
+                                        <div class="mt-1 text-[11px] text-zinc-500">Safety cap for a single execution.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="rounded-2xl border border-zinc-200/70 bg-white/80 p-4 space-y-4">
+                                <div>
+                                    <h3 class="text-base font-semibold text-zinc-950">Credentials</h3>
+                                    <p class="mt-1 text-sm text-zinc-600">Credentials are encrypted at rest. Leave fields blank to keep the current saved value. Google can be connected with OAuth once a client ID and client secret are available.</p>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Asana Personal Access Token</label>
+                                    <input type="password" name="asana_personal_access_token" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" autocomplete="new-password" />
+                                    <div class="mt-1 text-[11px] text-zinc-500">
+                                        {{ $asanaCredential['source_label'] ?? 'Not configured yet' }}
+                                        @if(filled($asanaCredential['masked_value'] ?? null))
+                                            - {{ $asanaCredential['masked_value'] }}
+                                        @endif
+                                    </div>
+                                    <label class="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                                        <input type="checkbox" name="clear_asana_personal_access_token" value="1" class="rounded border-zinc-300 bg-white" />
+                                        Clear saved token
+                                    </label>
+                                    <div class="mt-2 text-[11px] text-zinc-500">Create this token in Asana under `My Settings -> Apps -> Manage Developer Apps -> Personal access tokens`.</div>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Google Calendar Client ID</label>
+                                    <input type="password" name="google_calendar_client_id" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" autocomplete="new-password" />
+                                    <div class="mt-1 text-[11px] text-zinc-500">
+                                        {{ $googleClientIdCredential['source_label'] ?? 'Not configured yet' }}
+                                        @if(filled($googleClientIdCredential['masked_value'] ?? null))
+                                            - {{ $googleClientIdCredential['masked_value'] }}
+                                        @endif
+                                    </div>
+                                    <label class="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                                        <input type="checkbox" name="clear_google_calendar_client_id" value="1" class="rounded border-zinc-300 bg-white" />
+                                        Clear saved client ID
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Google Calendar Client Secret</label>
+                                    <input type="password" name="google_calendar_client_secret" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" autocomplete="new-password" />
+                                    <div class="mt-1 text-[11px] text-zinc-500">
+                                        {{ $googleClientSecretCredential['source_label'] ?? 'Not configured yet' }}
+                                        @if(filled($googleClientSecretCredential['masked_value'] ?? null))
+                                            - {{ $googleClientSecretCredential['masked_value'] }}
+                                        @endif
+                                    </div>
+                                    <label class="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                                        <input type="checkbox" name="clear_google_calendar_client_secret" value="1" class="rounded border-zinc-300 bg-white" />
+                                        Clear saved client secret
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Google Calendar Refresh Token</label>
+                                    <input type="password" name="google_calendar_refresh_token" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" autocomplete="new-password" />
+                                    <div class="mt-1 text-[11px] text-zinc-500">
+                                        {{ $googleRefreshTokenCredential['source_label'] ?? 'Not configured yet' }}
+                                        @if(filled($googleRefreshTokenCredential['masked_value'] ?? null))
+                                            - {{ $googleRefreshTokenCredential['masked_value'] }}
+                                        @endif
+                                    </div>
+                                    <label class="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                                        <input type="checkbox" name="clear_google_calendar_refresh_token" value="1" class="rounded border-zinc-300 bg-white" />
+                                        Clear saved refresh token
+                                    </label>
+                                </div>
+
+                                <div class="rounded-2xl border {{ $googleCalendarConnected ? 'border-emerald-300/35 bg-emerald-100/60' : ($googleCalendarOauthReady ? 'border-sky-300/35 bg-sky-100/60' : 'border-amber-300/35 bg-amber-100/60') }} px-4 py-3 text-sm">
+                                    <div class="font-semibold text-zinc-950">
+                                        @if($googleCalendarConnected)
+                                            Connected via Google OAuth
+                                        @elseif($googleCalendarOauthReady)
+                                            Ready to connect Google Calendar
+                                        @else
+                                            Google OAuth needs client credentials
+                                        @endif
+                                    </div>
+                                    <div class="mt-1 text-zinc-700">
+                                        @if($googleCalendarConnected)
+                                            {{ count($googleCalendarOptions) }} writable calendar(s) loaded.
+                                            @if(filled($googleCalendarConnection['selected_calendar_summary'] ?? null))
+                                                Current selection: {{ $googleCalendarConnection['selected_calendar_summary'] }}.
+                                            @endif
+                                        @elseif($googleCalendarOauthReady)
+                                            Save your client settings, then connect Google to pull in writable calendars automatically.
+                                        @else
+                                            Add a Google client ID and client secret first, or rely on the server fallback if one is configured.
+                                        @endif
+                                    </div>
+                                    @if(filled($googleCalendarConnection['error'] ?? null))
+                                        <div class="mt-2 text-xs text-amber-900">Calendar load issue: {{ $googleCalendarConnection['error'] }}</div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                        <button type="submit" name="submit_action" value="connect_google" class="inline-flex justify-center rounded-full border border-sky-300/40 bg-sky-100 px-5 py-2.5 text-sm font-semibold text-sky-950">
+                            Save + Connect Google
+                        </button>
+                        <button type="submit" name="submit_action" value="refresh_google_calendars" class="inline-flex justify-center rounded-full border border-zinc-300 bg-zinc-50 px-5 py-2.5 text-sm font-semibold text-zinc-950">
+                            Save + Refresh Calendars
+                        </button>
+                        <button type="submit" name="submit_action" value="disconnect_google" class="inline-flex justify-center rounded-full border border-rose-300/40 bg-rose-100 px-5 py-2.5 text-sm font-semibold text-rose-950">
+                            Save + Disconnect Google
+                        </button>
+                        <button type="submit" name="submit_action" value="save" class="inline-flex justify-center rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-950">
+                            Save Setup
+                        </button>
+                        <button type="submit" name="submit_action" value="dry_run" class="inline-flex justify-center rounded-full border border-sky-300/40 bg-sky-100 px-5 py-2.5 text-sm font-semibold text-sky-950">
+                            Save + Dry Run
+                        </button>
+                        <button type="submit" name="submit_action" value="run_now" class="inline-flex justify-center rounded-full border border-emerald-300/40 bg-emerald-100 px-5 py-2.5 text-sm font-semibold text-emerald-950">
+                            Save + Run Live
+                        </button>
+                    </div>
+                </form>
+            </section>
+        @endif
 
         <section class="grid gap-4 lg:grid-cols-2">
             <article class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">

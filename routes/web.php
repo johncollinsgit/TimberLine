@@ -773,6 +773,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                         ->name('providers-integrations');
                     Route::get('/providers-integrations/shopify-customer-sync-health', [MarketingProvidersIntegrationsController::class, 'shopifyCustomerSyncHealth'])
                         ->name('providers-integrations.shopify-customer-sync-health');
+                    Route::post('/providers-integrations/workflow-automations', [MarketingProvidersIntegrationsController::class, 'saveWorkflowAutomation'])
+                        ->name('providers-integrations.workflow-automations.save');
                     Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
                         ->name('providers-integrations.sync-square');
                     Route::post('/providers-integrations/import-legacy', [MarketingProvidersIntegrationsController::class, 'importLegacy'])
@@ -794,6 +796,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/marketing/candle-cash/google-business/callback', [GoogleBusinessProfileController::class, 'callback'])
         ->name('marketing.candle-cash.google-business.callback');
+    Route::get('/marketing/providers-integrations/workflow-automations/google-calendar/callback', [MarketingProvidersIntegrationsController::class, 'workflowGoogleCalendarCallback'])
+        ->name('marketing.providers-integrations.workflow-automations.google-calendar.callback');
 
     // Keep accepting the older callback paths already registered in Google Cloud
     // so production OAuth can recover without waiting on a console-side change.

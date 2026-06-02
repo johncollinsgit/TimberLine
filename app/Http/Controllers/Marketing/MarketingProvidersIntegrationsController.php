@@ -13,12 +13,16 @@ use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\Tenant;
+use App\Services\Automation\AutomationWorkflowEngine;
+use App\Services\Automation\GoogleCalendarWorkflowConnectionService;
+use App\Services\Automation\TenantWorkflowAutomationSettingsService;
 use App\Services\Marketing\MarketingEventAttributionService;
 use App\Services\Marketing\MarketingLegacyImportService;
 use App\Services\Marketing\MarketingSourceOverlapReportService;
 use App\Services\Marketing\ShopifyCustomerSyncHealthService;
 use App\Services\Marketing\SquareMarketingSyncService;
 use App\Support\Marketing\MarketingSectionRegistry;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\RedirectResponse;
@@ -34,7 +38,10 @@ class MarketingProvidersIntegrationsController extends Controller
     public function index(
         Request $request,
         MarketingEventAttributionService $attributionService,
-        MarketingSourceOverlapReportService $sourceOverlapReportService
+        MarketingSourceOverlapReportService $sourceOverlapReportService,
+        TenantWorkflowAutomationSettingsService $workflowAutomationSettingsService,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        GoogleCalendarWorkflowConnectionService $googleCalendarConnectionService
     ): View
     {
         $tenantId = $this->currentTenantId($request);
@@ -162,6 +169,16 @@ class MarketingProvidersIntegrationsController extends Controller
             'squareMinSpendDollars' => number_format($squareMinSpendCents / 100, 2, '.', ''),
             'sourceOverlap' => $sourceOverlap,
             'consentRules' => $this->consentRules(),
+            'workflowAutomationSetup' => $tenantId !== null
+                ? $workflowAutomationSettingsService->forTenant($tenantId)
+                : null,
+            'workflowAutomationModule' => $tenantId !== null
+                ? $moduleAccessResolver->module($tenantId, 'workflow_automations')
+                : null,
+            'workflowAutomationRunResult' => session('workflowAutomationRunResult'),
+            'googleCalendarWorkflowConnection' => $tenantId !== null
+                ? $googleCalendarConnectionService->status($tenantId)
+                : null,
         ]);
     }
 
@@ -373,6 +390,191 @@ class MarketingProvidersIntegrationsController extends Controller
         return redirect()
             ->route('marketing.providers-integrations')
             ->with('toast', ['style' => 'success', 'message' => 'Legacy import completed and logged.']);
+    }
+
+    public function saveWorkflowAutomation(
+        Request $request,
+        TenantWorkflowAutomationSettingsService $workflowAutomationSettingsService,
+        AutomationWorkflowEngine $workflowEngine,
+        GoogleCalendarWorkflowConnectionService $googleCalendarConnectionService
+    ): RedirectResponse {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'error',
+                    'message' => 'Workflow automation setup requires an explicit tenant context before saving.',
+                ]);
+        }
+
+        $submitAction = trim((string) $request->input('submit_action', 'save'));
+        $data = $request->validate([
+            'workflow_key' => ['required', 'in:asana_to_google_calendar'],
+            'submit_action' => ['required', 'in:save,dry_run,run_now,connect_google,disconnect_google,refresh_google_calendars'],
+            'enabled' => ['nullable', 'boolean'],
+            'project_gid' => [in_array($submitAction, ['save', 'dry_run', 'run_now'], true) ? 'required' : 'nullable', 'string', 'max:120'],
+            'calendar_id' => ['nullable', 'string', 'max:255'],
+            'timezone' => ['required', 'string', 'max:100'],
+            'default_start_time' => ['required', 'date_format:H:i'],
+            'default_duration_minutes' => ['required', 'integer', 'min:1', 'max:1440'],
+            'skip_completed_tasks' => ['nullable', 'boolean'],
+            'modified_overlap_minutes' => ['required', 'integer', 'min:0', 'max:1440'],
+            'bootstrap_lookback_days' => ['required', 'integer', 'min:1', 'max:365'],
+            'poll_limit' => ['required', 'integer', 'min:1', 'max:100'],
+            'max_tasks_per_run' => ['required', 'integer', 'min:1', 'max:5000'],
+            'asana_personal_access_token' => ['nullable', 'string', 'max:5000'],
+            'clear_asana_personal_access_token' => ['nullable', 'boolean'],
+            'google_calendar_client_id' => ['nullable', 'string', 'max:5000'],
+            'clear_google_calendar_client_id' => ['nullable', 'boolean'],
+            'google_calendar_client_secret' => ['nullable', 'string', 'max:5000'],
+            'clear_google_calendar_client_secret' => ['nullable', 'boolean'],
+            'google_calendar_refresh_token' => ['nullable', 'string', 'max:5000'],
+            'clear_google_calendar_refresh_token' => ['nullable', 'boolean'],
+        ]);
+
+        $workflowKey = (string) $data['workflow_key'];
+
+        $workflowAutomationSettingsService->saveForTenant($tenantId, $workflowKey, [
+            'enabled' => array_key_exists('enabled', $data) ? (bool) $data['enabled'] : false,
+            'trigger' => [
+                'project_gid' => trim((string) $data['project_gid']),
+                'modified_overlap_minutes' => (int) $data['modified_overlap_minutes'],
+                'bootstrap_lookback_days' => (int) $data['bootstrap_lookback_days'],
+                'poll_limit' => (int) $data['poll_limit'],
+                'max_tasks_per_run' => (int) $data['max_tasks_per_run'],
+            ],
+            'action' => [
+                'calendar_id' => trim((string) $data['calendar_id']),
+                'timezone' => trim((string) $data['timezone']),
+                'default_start_time' => trim((string) $data['default_start_time']),
+                'default_duration_minutes' => (int) $data['default_duration_minutes'],
+                'skip_completed_tasks' => array_key_exists('skip_completed_tasks', $data) ? (bool) $data['skip_completed_tasks'] : false,
+            ],
+            'credentials' => [
+                'asana_personal_access_token' => $data['asana_personal_access_token'] ?? null,
+                'clear_asana_personal_access_token' => array_key_exists('clear_asana_personal_access_token', $data) ? (bool) $data['clear_asana_personal_access_token'] : false,
+                'google_calendar_client_id' => $data['google_calendar_client_id'] ?? null,
+                'clear_google_calendar_client_id' => array_key_exists('clear_google_calendar_client_id', $data) ? (bool) $data['clear_google_calendar_client_id'] : false,
+                'google_calendar_client_secret' => $data['google_calendar_client_secret'] ?? null,
+                'clear_google_calendar_client_secret' => array_key_exists('clear_google_calendar_client_secret', $data) ? (bool) $data['clear_google_calendar_client_secret'] : false,
+                'google_calendar_refresh_token' => $data['google_calendar_refresh_token'] ?? null,
+                'clear_google_calendar_refresh_token' => array_key_exists('clear_google_calendar_refresh_token', $data) ? (bool) $data['clear_google_calendar_refresh_token'] : false,
+            ],
+        ]);
+
+        if ($submitAction === 'save') {
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'success',
+                    'message' => 'Workflow automation setup saved.',
+                ]);
+        }
+
+        if ($submitAction === 'connect_google') {
+            try {
+                $connectUrl = $googleCalendarConnectionService->buildConnectUrl($tenantId, $request->user(), $workflowKey);
+            } catch (\Throwable $exception) {
+                return redirect()
+                    ->route('marketing.providers-integrations')
+                    ->with('toast', [
+                        'style' => 'warning',
+                        'message' => $exception->getMessage(),
+                    ]);
+            }
+
+            return redirect()->away($connectUrl);
+        }
+
+        if ($submitAction === 'disconnect_google') {
+            $googleCalendarConnectionService->disconnect($tenantId, $workflowKey);
+
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'success',
+                    'message' => 'Google Calendar OAuth was disconnected for this workflow.',
+                ]);
+        }
+
+        if ($submitAction === 'refresh_google_calendars') {
+            try {
+                $calendars = $googleCalendarConnectionService->calendarOptions($tenantId, $workflowKey, true);
+            } catch (\Throwable $exception) {
+                return redirect()
+                    ->route('marketing.providers-integrations')
+                    ->with('toast', [
+                        'style' => 'warning',
+                        'message' => $exception->getMessage(),
+                    ]);
+            }
+
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'success',
+                    'message' => sprintf('Google Calendar list refreshed. %d writable calendar(s) loaded.', count($calendars)),
+                ]);
+        }
+
+        $dryRun = $submitAction === 'dry_run';
+        $result = $workflowEngine->runTenantWorkflow(
+            workflowKey: $workflowKey,
+            tenantId: $tenantId,
+            dryRun: $dryRun,
+            forceEnabled: true
+        );
+
+        return redirect()
+            ->route('marketing.providers-integrations')
+            ->with('workflowAutomationRunResult', $result)
+            ->with('toast', [
+                'style' => $this->workflowAutomationToastStyle($result),
+                'message' => $this->workflowAutomationToastMessage($submitAction, $result),
+            ]);
+    }
+
+    public function workflowGoogleCalendarCallback(
+        Request $request,
+        GoogleCalendarWorkflowConnectionService $googleCalendarConnectionService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'code' => ['required', 'string'],
+            'state' => ['required', 'string'],
+        ]);
+
+        try {
+            $result = $googleCalendarConnectionService->connectFromCallback(
+                code: $data['code'],
+                state: $data['state']
+            );
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => $exception->getMessage(),
+                ]);
+        }
+
+        $tenantId = (int) ($result['tenant_id'] ?? 0);
+        if ($tenantId > 0) {
+            $request->session()->put('tenant_id', $tenantId);
+            $request->attributes->set('current_tenant_id', $tenantId);
+        }
+
+        $calendars = is_array($result['calendars'] ?? null) ? $result['calendars'] : [];
+        $message = (bool) ($result['auto_selected'] ?? false)
+            ? 'Google Calendar connected and the only writable calendar was selected automatically.'
+            : sprintf('Google Calendar connected. %d writable calendar(s) are ready to choose from.', count($calendars));
+
+        return redirect()
+            ->route('marketing.providers-integrations')
+            ->with('toast', [
+                'style' => 'success',
+                'message' => $message,
+            ]);
     }
 
     /**
@@ -909,6 +1111,58 @@ class MarketingProvidersIntegrationsController extends Controller
             })
             ->where('total_money_amount', '>=', $minSpendCents)
             ->count();
+    }
+
+    /**
+     * @param  array<string,mixed>  $result
+     */
+    protected function workflowAutomationToastStyle(array $result): string
+    {
+        return (bool) ($result['ok'] ?? false) ? 'success' : 'warning';
+    }
+
+    /**
+     * @param  array<string,mixed>  $result
+     */
+    protected function workflowAutomationToastMessage(string $submitAction, array $result): string
+    {
+        $label = $submitAction === 'run_now' ? 'Live run' : 'Dry run';
+        $message = trim((string) ($result['message'] ?? ''));
+        $counts = is_array($result['counts'] ?? null) ? (array) $result['counts'] : [];
+        $dryRunCounts = is_array($result['dry_run_counts'] ?? null) ? (array) $result['dry_run_counts'] : [];
+
+        $summaryParts = [];
+
+        if ($counts !== []) {
+            $summaryParts[] = sprintf(
+                'fetched %d, processed %d, created %d, updated %d, unchanged %d, skipped %d, failed %d',
+                (int) ($counts['fetched'] ?? 0),
+                (int) ($counts['processed'] ?? 0),
+                (int) ($counts['created'] ?? 0),
+                (int) ($counts['updated'] ?? 0),
+                (int) ($counts['unchanged'] ?? 0),
+                (int) ($counts['skipped'] ?? 0),
+                (int) ($counts['failed'] ?? 0)
+            );
+        }
+
+        if ($dryRunCounts !== []) {
+            $summaryParts[] = sprintf(
+                'would create %d and update %d',
+                (int) ($dryRunCounts['would_create'] ?? 0),
+                (int) ($dryRunCounts['would_update'] ?? 0)
+            );
+        }
+
+        if ($message !== '') {
+            $summaryParts[] = $message;
+        }
+
+        $summary = $summaryParts !== []
+            ? implode('. ', $summaryParts).'.'
+            : 'No workflow diagnostics were returned.';
+
+        return 'Workflow automation setup saved. '.$label.' '.((bool) ($result['ok'] ?? false) ? 'completed' : 'finished with issues').': '.$summary;
     }
 
     protected function currentTenantId(Request $request): ?int

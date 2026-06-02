@@ -12,7 +12,8 @@ use Throwable;
 class AutomationWorkflowEngine
 {
     public function __construct(
-        protected TenantModuleAccessResolver $moduleAccessResolver
+        protected TenantModuleAccessResolver $moduleAccessResolver,
+        protected TenantWorkflowAutomationSettingsService $workflowSettingsService
     ) {
     }
 
@@ -21,17 +22,18 @@ class AutomationWorkflowEngine
      */
     public function run(?string $onlyWorkflow = null, bool $dryRun = false): array
     {
-        $globalEnabled = (bool) config('automation_workflows.enabled', false);
-        if (! $globalEnabled) {
+        $definitions = $this->resolvedDefinitions($onlyWorkflow);
+        if ($definitions === []) {
             return [
                 'ok' => false,
-                'status' => 'disabled',
-                'message' => 'Automation workflows are disabled by config.',
+                'status' => $onlyWorkflow !== null ? 'missing_workflow' : 'disabled',
+                'message' => $onlyWorkflow !== null
+                    ? 'Workflow not found in config or tenant automation settings.'
+                    : 'Automation workflows are disabled or not configured.',
                 'workflows' => [],
             ];
         }
 
-        $definitions = (array) config('automation_workflows.workflows', []);
         $results = [];
 
         foreach ($definitions as $workflowKey => $definition) {
@@ -39,17 +41,8 @@ class AutomationWorkflowEngine
                 continue;
             }
 
-            $normalizedKey = strtolower(trim((string) $workflowKey));
-            if ($normalizedKey === '') {
-                continue;
-            }
-
-            if ($onlyWorkflow !== null && strtolower(trim($onlyWorkflow)) !== $normalizedKey) {
-                continue;
-            }
-
             if (! (bool) ($definition['enabled'] ?? false)) {
-                $results[$normalizedKey] = [
+                $results[$workflowKey] = [
                     'ok' => true,
                     'status' => 'skipped',
                     'message' => 'Workflow is disabled.',
@@ -58,16 +51,7 @@ class AutomationWorkflowEngine
                 continue;
             }
 
-            $results[$normalizedKey] = $this->runWorkflow($normalizedKey, $definition, $dryRun);
-        }
-
-        if ($onlyWorkflow !== null && $results === []) {
-            return [
-                'ok' => false,
-                'status' => 'missing_workflow',
-                'message' => 'Workflow not found in config.',
-                'workflows' => [],
-            ];
+            $results[$workflowKey] = $this->runWorkflow((string) $workflowKey, $definition, $dryRun);
         }
 
         $failed = array_filter($results, static fn (array $result): bool => ! (bool) ($result['ok'] ?? false));
@@ -78,6 +62,37 @@ class AutomationWorkflowEngine
             'dry_run' => $dryRun,
             'workflows' => $results,
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function runTenantWorkflow(string $workflowKey, int $tenantId, bool $dryRun = false, bool $forceEnabled = true): array
+    {
+        $definition = $this->workflowSettingsService->runtimeDefinitionForTenant($workflowKey, $tenantId);
+        if (! is_array($definition) || $definition === []) {
+            return [
+                'ok' => false,
+                'status' => 'missing_workflow',
+                'message' => 'Workflow setup has not been saved for this tenant yet.',
+            ];
+        }
+
+        $instanceKey = $this->workflowSettingsService->instanceKey($workflowKey, $tenantId);
+        if (! $forceEnabled && ! (bool) ($definition['enabled'] ?? false)) {
+            return [
+                'ok' => true,
+                'status' => 'skipped',
+                'workflow_key' => $instanceKey,
+                'message' => 'Workflow is disabled.',
+            ];
+        }
+
+        if ($forceEnabled) {
+            $definition['enabled'] = true;
+        }
+
+        return $this->runWorkflow($instanceKey, $definition, $dryRun);
     }
 
     /**
@@ -109,12 +124,15 @@ class AutomationWorkflowEngine
                 'last_finished_at' => null,
                 'last_status' => null,
                 'last_error' => null,
+                'last_result' => null,
             ])->save();
         }
 
         try {
             $driver = $this->resolveDriver($driverKey);
             $result = $driver->run($workflowKey, $definition, $dryRun);
+            $resolvedOk = (bool) ($result['ok'] ?? true);
+            $resolvedStatus = (string) ($result['status'] ?? ($resolvedOk ? 'success' : 'failed'));
 
             if (! $dryRun && $state !== null) {
                 $cursor = trim((string) ($result['cursor'] ?? ''));
@@ -125,16 +143,16 @@ class AutomationWorkflowEngine
                     'cursor' => $cursor !== '' ? $cursor : $state->cursor,
                     'context' => $context !== [] ? $context : $state->context,
                     'last_finished_at' => now(),
-                    'last_status' => 'success',
-                    'last_error' => null,
+                    'last_status' => $resolvedStatus,
+                    'last_error' => $resolvedOk ? null : $this->resultErrorMessage($result),
                     'last_result' => $result,
                 ])->save();
             }
 
             return [
                 ...$result,
-                'ok' => (bool) ($result['ok'] ?? true),
-                'status' => (string) ($result['status'] ?? 'success'),
+                'ok' => $resolvedOk,
+                'status' => $resolvedStatus,
             ];
         } catch (Throwable $exception) {
             if (! $dryRun && $state !== null) {
@@ -152,6 +170,72 @@ class AutomationWorkflowEngine
                 'message' => $exception->getMessage(),
             ];
         }
+    }
+
+    /**
+     * @return array<string,array<string,mixed>>
+     */
+    protected function resolvedDefinitions(?string $onlyWorkflow = null): array
+    {
+        $definitions = [];
+        $tenantDefinitions = $this->workflowSettingsService->runtimeDefinitions($onlyWorkflow, includeDisabled: true);
+        $tenantWorkflowKeys = array_values(array_unique(array_map(
+            fn (string $workflowKey): string => $this->workflowSettingsService->normalizeBaseWorkflowKey($workflowKey),
+            array_keys($tenantDefinitions)
+        )));
+
+        $globalEnabled = (bool) config('automation_workflows.enabled', false);
+        if ($globalEnabled) {
+            $filterWorkflowKey = $onlyWorkflow !== null
+                ? $this->workflowSettingsService->normalizeBaseWorkflowKey($onlyWorkflow)
+                : null;
+
+            foreach ((array) config('automation_workflows.workflows', []) as $workflowKey => $definition) {
+                if (! is_array($definition)) {
+                    continue;
+                }
+
+                $normalizedKey = strtolower(trim((string) $workflowKey));
+                if ($normalizedKey === '') {
+                    continue;
+                }
+
+                if ($filterWorkflowKey !== null && $filterWorkflowKey !== $normalizedKey) {
+                    continue;
+                }
+
+                if (in_array($normalizedKey, $tenantWorkflowKeys, true)) {
+                    continue;
+                }
+
+                $definitions[$normalizedKey] = $definition;
+            }
+        }
+
+        foreach ($tenantDefinitions as $workflowKey => $definition) {
+            if (! is_array($definition) || $definition === []) {
+                continue;
+            }
+
+            $definitions[$workflowKey] = $definition;
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * @param  array<string,mixed>  $result
+     */
+    protected function resultErrorMessage(array $result): ?string
+    {
+        $message = trim((string) ($result['message'] ?? ''));
+        if ($message !== '') {
+            return $message;
+        }
+
+        $errors = array_values(array_filter((array) ($result['errors'] ?? []), static fn (mixed $value): bool => is_string($value) && trim($value) !== ''));
+
+        return $errors !== [] ? trim((string) $errors[0]) : null;
     }
 
     protected function resolveDriver(string $driverKey): AutomationWorkflowDriver

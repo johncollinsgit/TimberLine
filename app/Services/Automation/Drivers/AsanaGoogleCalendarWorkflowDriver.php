@@ -22,6 +22,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
     {
         $projectGid = trim((string) data_get($definition, 'trigger.project_gid', ''));
         $calendarId = trim((string) data_get($definition, 'action.calendar_id', ''));
+        $credentials = is_array($definition['credentials'] ?? null) ? (array) $definition['credentials'] : [];
 
         if ($projectGid === '') {
             throw new AutomationWorkflowException('AUTOMATION_ASANA_PROJECT_GID is required.');
@@ -51,7 +52,8 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
             projectGid: $projectGid,
             modifiedSince: $modifiedSince,
             pollLimit: $pollLimit,
-            maxTasksPerRun: $maxTasksPerRun
+            maxTasksPerRun: $maxTasksPerRun,
+            credentials: $credentials
         );
 
         $counts = [
@@ -132,11 +134,11 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
             try {
                 $destinationId = $link !== null ? trim((string) $link->destination_id) : '';
                 $eventId = $destinationId !== ''
-                    ? $this->updateGoogleEvent($calendarId, $destinationId, $eventPayload)
+                    ? $this->updateGoogleEvent($calendarId, $destinationId, $eventPayload, $credentials)
                     : null;
 
                 if ($eventId === null) {
-                    $eventId = $this->createGoogleEvent($calendarId, $eventPayload);
+                    $eventId = $this->createGoogleEvent($calendarId, $eventPayload, $credentials);
                     $counts['created']++;
                 } else {
                     $counts['updated']++;
@@ -192,7 +194,8 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         string $projectGid,
         CarbonImmutable $modifiedSince,
         int $pollLimit,
-        int $maxTasksPerRun
+        int $maxTasksPerRun,
+        array $credentials = []
     ): array {
         $tasks = [];
         $offset = null;
@@ -218,7 +221,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
                 $query['offset'] = $offset;
             }
 
-            $response = $this->asanaRequest()->get($this->asanaApiBase().'/tasks', $query);
+            $response = $this->asanaRequest($credentials)->get($this->asanaApiBase().'/tasks', $query);
             $payload = $this->decodeResponse($response, 'Asana tasks fetch failed');
 
             $data = array_values(array_filter((array) ($payload['data'] ?? []), 'is_array'));
@@ -298,10 +301,11 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 
     /**
      * @param  array<string,mixed>  $payload
+     * @param  array<string,mixed>  $credentials
      */
-    protected function createGoogleEvent(string $calendarId, array $payload): string
+    protected function createGoogleEvent(string $calendarId, array $payload, array $credentials = []): string
     {
-        $response = $this->googleCalendarRequest()->post(
+        $response = $this->googleCalendarRequest($credentials)->post(
             $this->googleCalendarApiBase().'/calendars/'.rawurlencode($calendarId).'/events',
             $payload
         );
@@ -318,9 +322,9 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
     /**
      * @param  array<string,mixed>  $payload
      */
-    protected function updateGoogleEvent(string $calendarId, string $eventId, array $payload): ?string
+    protected function updateGoogleEvent(string $calendarId, string $eventId, array $payload, array $credentials = []): ?string
     {
-        $response = $this->googleCalendarRequest()->patch(
+        $response = $this->googleCalendarRequest($credentials)->patch(
             $this->googleCalendarApiBase().'/calendars/'.rawurlencode($calendarId).'/events/'.rawurlencode($eventId),
             $payload
         );
@@ -335,9 +339,9 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         return $resolvedId !== '' ? $resolvedId : $eventId;
     }
 
-    protected function asanaRequest(): PendingRequest
+    protected function asanaRequest(array $credentials = []): PendingRequest
     {
-        $token = trim((string) config('services.asana.personal_access_token', ''));
+        $token = trim((string) ($credentials['asana_personal_access_token'] ?? config('services.asana.personal_access_token', '')));
         if ($token === '') {
             throw new AutomationWorkflowException('ASANA_PERSONAL_ACCESS_TOKEN is required.');
         }
@@ -348,9 +352,9 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
             ->retry(2, 250, throw: false);
     }
 
-    protected function googleCalendarRequest(): PendingRequest
+    protected function googleCalendarRequest(array $credentials = []): PendingRequest
     {
-        $accessToken = $this->googleAccessToken();
+        $accessToken = $this->googleAccessToken($credentials);
 
         return Http::acceptJson()
             ->withToken($accessToken)
@@ -359,16 +363,16 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
             ->retry(2, 250, throw: false);
     }
 
-    protected function googleAccessToken(): string
+    protected function googleAccessToken(array $credentials = []): string
     {
-        $configuredAccessToken = trim((string) config('services.google_calendar.oauth_access_token', ''));
+        $configuredAccessToken = trim((string) ($credentials['google_calendar_access_token'] ?? config('services.google_calendar.oauth_access_token', '')));
         if ($configuredAccessToken !== '') {
             return $configuredAccessToken;
         }
 
-        $clientId = trim((string) config('services.google_calendar.oauth_client_id', ''));
-        $clientSecret = trim((string) config('services.google_calendar.oauth_client_secret', ''));
-        $refreshToken = trim((string) config('services.google_calendar.oauth_refresh_token', ''));
+        $clientId = trim((string) ($credentials['google_calendar_client_id'] ?? config('services.google_calendar.oauth_client_id', '')));
+        $clientSecret = trim((string) ($credentials['google_calendar_client_secret'] ?? config('services.google_calendar.oauth_client_secret', '')));
+        $refreshToken = trim((string) ($credentials['google_calendar_refresh_token'] ?? config('services.google_calendar.oauth_refresh_token', '')));
 
         if ($clientId === '' || $clientSecret === '' || $refreshToken === '') {
             throw new AutomationWorkflowException(
