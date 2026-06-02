@@ -157,19 +157,9 @@
                   <details class="mf-admin-group" data-sidebar-group-key="{{ $itemKey }}" {{ $isGroupOpen ? 'open' : '' }}>
                     <summary class="mf-admin-group-summary {{ $groupIsCurrent ? 'is-current-group' : '' }}">
                       <span class="mf-admin-group-main">
-                        @switch($itemKey)
-                          @case('production')
-                            <flux:icon.briefcase class="size-4" />
-                            @break
-                          @case('administration')
-                            <flux:icon.cog-6-tooth class="size-4" />
-                            @break
-                          @case('marketing')
-                            <flux:icon.users class="size-4" />
-                            @break
-                          @default
-                            <flux:icon.squares-plus class="size-4" />
-                        @endswitch
+                        <span class="mf-leaf-icon-badge" aria-hidden="true">
+                          <x-brand.leaf-icon />
+                        </span>
                         <span class="mf-nav-label">{{ $item['label'] }}</span>
                       </span>
                       <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
@@ -189,9 +179,20 @@
                     </div>
                   </details>
                 @else
-                  <flux:sidebar.item icon="{{ $item['icon'] }}" href="{{ $item['href'] }}" :current="$item['current']" wire:navigate class="mf-transition mf-nav-item {{ $item['current'] ? 'mf-active-pill' : '' }}">
-                    <span class="mf-nav-label">{{ $item['label'] }}</span>
-                  </flux:sidebar.item>
+                  <a
+                    href="{{ $item['href'] }}"
+                    wire:navigate
+                    data-flux-sidebar-item
+                    @if(! empty($item['current'])) data-current="data-current" aria-current="page" @endif
+                    class="mf-transition mf-nav-item {{ ! empty($item['current']) ? 'mf-active-pill' : '' }}"
+                  >
+                    <span class="mf-nav-item-copy">
+                      <span class="mf-leaf-icon-badge" aria-hidden="true">
+                        <x-brand.leaf-icon />
+                      </span>
+                      <span class="mf-nav-label">{{ $item['label'] }}</span>
+                    </span>
+                  </a>
                 @endif
               </div>
             @endforeach
@@ -199,7 +200,9 @@
               <details class="mf-admin-group" data-sidebar-group-key="wiki-sections" {{ $wikiSectionsActive ? 'open' : '' }}>
                 <summary class="mf-admin-group-summary {{ $wikiSectionsActive ? 'is-current-group' : '' }}">
                   <span class="mf-admin-group-main">
-                    <flux:icon.book-open class="size-4" />
+                    <span class="mf-leaf-icon-badge" aria-hidden="true">
+                      <x-brand.leaf-icon />
+                    </span>
                     <span class="mf-nav-label">Wiki Sections</span>
                   </span>
                   <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
@@ -257,7 +260,9 @@
           class="mf-shell-search"
           aria-label="Search or ask what you want to do..."
         >
-          <flux:icon.magnifying-glass class="size-4" />
+          <span class="mf-shell-search-icon" aria-hidden="true">
+            <x-brand.leaf-icon />
+          </span>
           <span class="mf-shell-search-placeholder">Search or ask what you want to do...</span>
           <span class="mf-shell-search-shortcut">Cmd K</span>
         </button>

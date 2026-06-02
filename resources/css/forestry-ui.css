@@ -1839,6 +1839,15 @@ body.mf-app-shell {
 }
 
 .mf-nav-item {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+}
+
+.mf-nav-item-copy {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.75rem;
   min-width: 0;
 }
 
@@ -1906,6 +1915,40 @@ body.mf-app-shell {
   display: flex;
   gap: 0.75rem;
   min-width: 0;
+}
+
+.mf-leaf-icon {
+  display: block;
+  flex: 0 0 auto;
+  height: 1rem;
+  width: 1rem;
+}
+
+.mf-leaf-icon-badge,
+.mf-shell-search-icon,
+.mf-menu-leaf {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(236, 244, 242, 0.96));
+  border: 1px solid rgba(18, 60, 67, 0.12);
+  border-radius: 0.56rem;
+  box-shadow: 0 12px 22px -22px rgba(10, 27, 31, 0.4);
+  color: var(--fb-brand-2);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 1.42rem;
+  justify-content: center;
+  width: 1.42rem;
+}
+
+.mf-admin-group-summary.is-current-group .mf-leaf-icon-badge,
+.mf-admin-group[open] > .mf-admin-group-summary .mf-leaf-icon-badge,
+.mf-nav-item[data-current] .mf-leaf-icon-badge,
+.mf-nav-item:hover .mf-leaf-icon-badge,
+.mf-shell-search:hover .mf-shell-search-icon,
+.mf-shell-search:focus-visible .mf-shell-search-icon {
+  background: linear-gradient(180deg, rgba(18, 60, 67, 0.96), rgba(30, 90, 99, 0.96));
+  border-color: rgba(18, 60, 67, 0.32);
+  color: #ffffff;
 }
 
 .mf-admin-group-chevron {
@@ -2092,6 +2135,19 @@ body.mf-app-shell {
   font-weight: 700 !important;
 }
 
+.mf-menu-leaf-copy {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.mf-menu-leaf {
+  border-radius: 0.48rem;
+  height: 1.2rem;
+  width: 1.2rem;
+}
+
 #app-sidebar[data-flux-sidebar-collapsed-desktop] {
   overflow: hidden;
 }
@@ -2122,6 +2178,10 @@ body.mf-app-shell {
   min-width: 2.5rem;
   padding: 0.15rem;
   width: 2.5rem;
+}
+
+#app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-leaf-icon-badge {
+  margin-inline: auto;
 }
 
 #app-sidebar[data-flux-sidebar-collapsed-desktop] .mf-sidebar-pin-btn {
@@ -2233,6 +2293,11 @@ body.mf-app-shell {
   border-color: rgba(18, 60, 67, 0.28);
   box-shadow: 0 0 0 3px var(--fb-focus-ring), 0 18px 42px -32px rgba(10, 27, 31, 0.45);
   outline: none;
+}
+
+.mf-shell-search-icon {
+  height: 1.55rem;
+  width: 1.55rem;
 }
 
 .mf-shell-search-placeholder {
@@ -3126,10 +3191,13 @@ body.mf-app-shell {
 }
 
 .app-topbar-action {
+  align-items: center;
   background: #ffffff;
   border: 1px solid var(--fb-border);
   border-radius: 999px;
   color: var(--fb-brand);
+  display: inline-flex;
+  gap: 0.42rem;
   font-size: 0.74rem;
   font-weight: 700;
   padding: 0.45rem 0.8rem;

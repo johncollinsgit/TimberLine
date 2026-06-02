@@ -150,6 +150,9 @@
                     data-embedded-prefetch-link="1"
                     data-prefetch-priority="normal"
                 >
+                    <span class="mf-menu-leaf" aria-hidden="true">
+                        <x-brand.leaf-icon />
+                    </span>
                     Bud
                 </a>
             </div>

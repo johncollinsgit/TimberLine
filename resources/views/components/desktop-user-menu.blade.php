@@ -53,30 +53,40 @@
             <div class="mf-user-menu-panel-section">Switch Console</div>
             @foreach($consoleSwitches as $switch)
                 @continue(! is_array($switch) || trim((string) ($switch['href'] ?? '')) === '')
-                <flux:menu.item
-                    href="{{ $switch['href'] }}"
-                    icon="{{ ! empty($switch['active']) ? 'check-circle' : 'arrow-path' }}"
-                    class="{{ ! empty($switch['active']) ? 'mf-user-menu-item-active' : '' }}"
-                >
-                    {{ $switch['label'] ?? 'Console' }}
+                <flux:menu.item href="{{ $switch['href'] }}" class="{{ ! empty($switch['active']) ? 'mf-user-menu-item-active' : '' }}">
+                    <span class="mf-menu-leaf-copy">
+                        <span class="mf-menu-leaf" aria-hidden="true">
+                            <x-brand.leaf-icon />
+                        </span>
+                        <span>{{ $switch['label'] ?? 'Console' }}</span>
+                    </span>
                 </flux:menu.item>
             @endforeach
         @endif
 
         <flux:menu.separator />
-        <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
-            {{ __('Settings') }}
+        <flux:menu.item :href="route('profile.edit')" wire:navigate>
+            <span class="mf-menu-leaf-copy">
+                <span class="mf-menu-leaf" aria-hidden="true">
+                    <x-brand.leaf-icon />
+                </span>
+                <span>{{ __('Settings') }}</span>
+            </span>
         </flux:menu.item>
         <form method="POST" action="{{ route('logout') }}" class="w-full">
             @csrf
             <flux:menu.item
                 as="button"
                 type="submit"
-                icon="arrow-right-start-on-rectangle"
                 class="w-full cursor-pointer"
                 data-test="logout-button"
             >
-                {{ __('Log Out') }}
+                <span class="mf-menu-leaf-copy">
+                    <span class="mf-menu-leaf" aria-hidden="true">
+                        <x-brand.leaf-icon />
+                    </span>
+                    <span>{{ __('Log Out') }}</span>
+                </span>
             </flux:menu.item>
         </form>
     </flux:menu>
