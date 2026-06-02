@@ -35,9 +35,17 @@
                 $workflowCounts = is_array($workflowState['counts'] ?? null) ? $workflowState['counts'] : [];
                 $workflowDryRunCounts = is_array($workflowState['dry_run_counts'] ?? null) ? $workflowState['dry_run_counts'] : [];
                 $asanaCredential = is_array(data_get($workflowSetup, 'credentials.asana_personal_access_token')) ? data_get($workflowSetup, 'credentials.asana_personal_access_token') : [];
+                $asanaOauthClientIdCredential = is_array(data_get($workflowSetup, 'credentials.asana_oauth_client_id')) ? data_get($workflowSetup, 'credentials.asana_oauth_client_id') : [];
+                $asanaOauthClientSecretCredential = is_array(data_get($workflowSetup, 'credentials.asana_oauth_client_secret')) ? data_get($workflowSetup, 'credentials.asana_oauth_client_secret') : [];
+                $asanaOauthRefreshTokenCredential = is_array(data_get($workflowSetup, 'credentials.asana_oauth_refresh_token')) ? data_get($workflowSetup, 'credentials.asana_oauth_refresh_token') : [];
                 $googleClientIdCredential = is_array(data_get($workflowSetup, 'credentials.google_calendar_client_id')) ? data_get($workflowSetup, 'credentials.google_calendar_client_id') : [];
                 $googleClientSecretCredential = is_array(data_get($workflowSetup, 'credentials.google_calendar_client_secret')) ? data_get($workflowSetup, 'credentials.google_calendar_client_secret') : [];
                 $googleRefreshTokenCredential = is_array(data_get($workflowSetup, 'credentials.google_calendar_refresh_token')) ? data_get($workflowSetup, 'credentials.google_calendar_refresh_token') : [];
+                $asanaConnection = is_array($asanaWorkflowConnection ?? null) ? $asanaWorkflowConnection : [];
+                $asanaProjectOptions = is_array($asanaConnection['projects'] ?? null) ? $asanaConnection['projects'] : [];
+                $asanaOauthConnected = (bool) ($asanaConnection['oauth_connected'] ?? false);
+                $asanaOauthReady = (bool) ($asanaConnection['oauth_ready'] ?? false);
+                $asanaTokenReady = (bool) ($asanaConnection['token_ready'] ?? false);
                 $googleCalendarConnection = is_array($googleCalendarWorkflowConnection ?? null) ? $googleCalendarWorkflowConnection : [];
                 $googleCalendarOptions = is_array($googleCalendarConnection['calendars'] ?? null) ? $googleCalendarConnection['calendars'] : [];
                 $googleCalendarConnected = (bool) ($googleCalendarConnection['connected'] ?? false);
@@ -54,6 +62,7 @@
                 if ($workflowLastStatus === '') {
                     $workflowLastStatus = trim((string) ($workflowState['status'] ?? 'idle'));
                 }
+                $selectedProjectGid = (string) old('project_gid', (string) data_get($workflowSetup, 'trigger.project_gid', ''));
                 $selectedCalendarId = (string) old('calendar_id', (string) data_get($workflowSetup, 'action.calendar_id', ''));
             @endphp
 
@@ -135,7 +144,7 @@
                 @endif
 
                 <x-admin.help-hint title="How this setup works">
-                    Save Setup stores tenant-specific workflow settings. Dry Run fetches matching Asana tasks without writing Google events. Run Live writes the events immediately. Leaving credential fields blank keeps the current saved value.
+                    Save Setup stores tenant-specific workflow settings. Connect Asana and Google to turn raw IDs into pickers. Dry Run fetches matching Asana tasks without writing Google events. Run Live writes the events immediately. Leaving credential fields blank keeps the current saved value.
                 </x-admin.help-hint>
 
                 @if(! $moduleEnabled)
@@ -171,8 +180,26 @@
                                 <div class="grid gap-4 md:grid-cols-2">
                                     <div>
                                         <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Asana Project GID</label>
-                                        <input type="text" name="project_gid" value="{{ old('project_gid', (string) data_get($workflowSetup, 'trigger.project_gid', '')) }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" placeholder="1201541082238924" />
-                                        <div class="mt-1 text-[11px] text-zinc-500">The Asana project this workflow watches for updated tasks.</div>
+                                        @if($asanaProjectOptions !== [])
+                                            <select name="project_gid" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950">
+                                                <option value="">Choose an Asana project</option>
+                                                @foreach($asanaProjectOptions as $project)
+                                                    @php
+                                                        $projectGid = (string) ($project['gid'] ?? '');
+                                                        $projectName = (string) ($project['name'] ?? $projectGid);
+                                                        $workspaceName = trim((string) ($project['workspace_name'] ?? ''));
+                                                        $teamName = trim((string) ($project['team_name'] ?? ''));
+                                                    @endphp
+                                                    <option value="{{ $projectGid }}" @selected($selectedProjectGid === $projectGid)>
+                                                        {{ $projectName }}{{ $workspaceName !== '' ? ' - ' . $workspaceName : '' }}{{ $teamName !== '' ? ' - ' . $teamName : '' }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="mt-1 text-[11px] text-zinc-500">Pick from projects visible to the connected Asana account.</div>
+                                        @else
+                                            <input type="text" name="project_gid" value="{{ $selectedProjectGid }}" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" placeholder="1201541082238924" />
+                                            <div class="mt-1 text-[11px] text-zinc-500">The Asana project this workflow watches for updated tasks. Connect Asana below to turn this into a picker.</div>
+                                        @endif
                                     </div>
                                     <div>
                                         <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Google Calendar ID</label>
@@ -250,7 +277,7 @@
                             <div class="rounded-2xl border border-zinc-200/70 bg-white/80 p-4 space-y-4">
                                 <div>
                                     <h3 class="text-base font-semibold text-zinc-950">Credentials</h3>
-                                    <p class="mt-1 text-sm text-zinc-600">Credentials are encrypted at rest. Leave fields blank to keep the current saved value. Google can be connected with OAuth once a client ID and client secret are available.</p>
+                                    <p class="mt-1 text-sm text-zinc-600">Credentials are encrypted at rest. Leave fields blank to keep the current saved value. Asana and Google can both be connected with OAuth once client credentials are available.</p>
                                 </div>
 
                                 <div>
@@ -266,7 +293,83 @@
                                         <input type="checkbox" name="clear_asana_personal_access_token" value="1" class="rounded border-zinc-300 bg-white" />
                                         Clear saved token
                                     </label>
-                                    <div class="mt-2 text-[11px] text-zinc-500">Create this token in Asana under `My Settings -> Apps -> Manage Developer Apps -> Personal access tokens`.</div>
+                                    <div class="mt-2 text-[11px] text-zinc-500">PAT remains a fallback, but OAuth is the smoother option because it can load projects directly into a picker.</div>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Asana OAuth Client ID</label>
+                                    <input type="password" name="asana_oauth_client_id" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" autocomplete="new-password" />
+                                    <div class="mt-1 text-[11px] text-zinc-500">
+                                        {{ $asanaOauthClientIdCredential['source_label'] ?? 'Not configured yet' }}
+                                        @if(filled($asanaOauthClientIdCredential['masked_value'] ?? null))
+                                            - {{ $asanaOauthClientIdCredential['masked_value'] }}
+                                        @endif
+                                    </div>
+                                    <label class="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                                        <input type="checkbox" name="clear_asana_oauth_client_id" value="1" class="rounded border-zinc-300 bg-white" />
+                                        Clear saved client ID
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Asana OAuth Client Secret</label>
+                                    <input type="password" name="asana_oauth_client_secret" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" autocomplete="new-password" />
+                                    <div class="mt-1 text-[11px] text-zinc-500">
+                                        {{ $asanaOauthClientSecretCredential['source_label'] ?? 'Not configured yet' }}
+                                        @if(filled($asanaOauthClientSecretCredential['masked_value'] ?? null))
+                                            - {{ $asanaOauthClientSecretCredential['masked_value'] }}
+                                        @endif
+                                    </div>
+                                    <label class="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                                        <input type="checkbox" name="clear_asana_oauth_client_secret" value="1" class="rounded border-zinc-300 bg-white" />
+                                        Clear saved client secret
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-zinc-500">Asana OAuth Refresh Token</label>
+                                    <input type="password" name="asana_oauth_refresh_token" class="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950" autocomplete="new-password" />
+                                    <div class="mt-1 text-[11px] text-zinc-500">
+                                        {{ $asanaOauthRefreshTokenCredential['source_label'] ?? 'Not configured yet' }}
+                                        @if(filled($asanaOauthRefreshTokenCredential['masked_value'] ?? null))
+                                            - {{ $asanaOauthRefreshTokenCredential['masked_value'] }}
+                                        @endif
+                                    </div>
+                                    <label class="mt-2 flex items-center gap-2 text-xs text-zinc-600">
+                                        <input type="checkbox" name="clear_asana_oauth_refresh_token" value="1" class="rounded border-zinc-300 bg-white" />
+                                        Clear saved refresh token
+                                    </label>
+                                </div>
+
+                                <div class="rounded-2xl border {{ $asanaOauthConnected ? 'border-emerald-300/35 bg-emerald-100/60' : ($asanaOauthReady ? 'border-sky-300/35 bg-sky-100/60' : ($asanaTokenReady ? 'border-zinc-300/60 bg-zinc-100/80' : 'border-amber-300/35 bg-amber-100/60')) }} px-4 py-3 text-sm">
+                                    <div class="font-semibold text-zinc-950">
+                                        @if($asanaOauthConnected)
+                                            Connected via Asana OAuth
+                                        @elseif($asanaOauthReady)
+                                            Ready to connect Asana
+                                        @elseif($asanaTokenReady)
+                                            Using Asana personal access token
+                                        @else
+                                            Asana needs OAuth credentials or a PAT
+                                        @endif
+                                    </div>
+                                    <div class="mt-1 text-zinc-700">
+                                        @if($asanaProjectOptions !== [])
+                                            {{ count($asanaProjectOptions) }} project(s) loaded.
+                                            @if(filled($asanaConnection['selected_project_name'] ?? null))
+                                                Current selection: {{ $asanaConnection['selected_project_name'] }}{{ filled($asanaConnection['selected_workspace_name'] ?? null) ? ' in ' . $asanaConnection['selected_workspace_name'] : '' }}.
+                                            @endif
+                                        @elseif($asanaOauthReady)
+                                            Save your client settings, then connect Asana to pull in project choices automatically.
+                                        @elseif($asanaTokenReady)
+                                            A token is available, but no project list is cached yet. Refresh projects to load them.
+                                        @else
+                                            Add an Asana OAuth client ID and secret first, or rely on a personal access token fallback.
+                                        @endif
+                                    </div>
+                                    @if(filled($asanaConnection['error'] ?? null))
+                                        <div class="mt-2 text-xs text-amber-900">Project load issue: {{ $asanaConnection['error'] }}</div>
+                                    @endif
                                 </div>
 
                                 <div>
@@ -345,6 +448,15 @@
                     </div>
 
                     <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                        <button type="submit" name="submit_action" value="connect_asana" class="inline-flex justify-center rounded-full border border-sky-300/40 bg-sky-100 px-5 py-2.5 text-sm font-semibold text-sky-950">
+                            Save + Connect Asana
+                        </button>
+                        <button type="submit" name="submit_action" value="refresh_asana_projects" class="inline-flex justify-center rounded-full border border-zinc-300 bg-zinc-50 px-5 py-2.5 text-sm font-semibold text-zinc-950">
+                            Save + Refresh Projects
+                        </button>
+                        <button type="submit" name="submit_action" value="disconnect_asana" class="inline-flex justify-center rounded-full border border-rose-300/40 bg-rose-100 px-5 py-2.5 text-sm font-semibold text-rose-950">
+                            Save + Disconnect Asana
+                        </button>
                         <button type="submit" name="submit_action" value="connect_google" class="inline-flex justify-center rounded-full border border-sky-300/40 bg-sky-100 px-5 py-2.5 text-sm font-semibold text-sky-950">
                             Save + Connect Google
                         </button>

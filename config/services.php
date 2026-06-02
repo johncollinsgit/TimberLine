@@ -34,6 +34,9 @@ $defaultGoogleGbpRedirect = $canonicalLandlordHost !== null
 $defaultGoogleCalendarRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/marketing/providers-integrations/workflow-automations/google-calendar/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/marketing/providers-integrations/workflow-automations/google-calendar/callback';
+$defaultAsanaWorkflowRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/marketing/providers-integrations/workflow-automations/asana/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/marketing/providers-integrations/workflow-automations/asana/callback';
 
 return [
 
@@ -91,6 +94,13 @@ return [
     'asana' => [
         'personal_access_token' => env('ASANA_PERSONAL_ACCESS_TOKEN'),
         'api_base' => env('ASANA_API_BASE', 'https://app.asana.com/api/1.0'),
+        'oauth_client_id' => env('ASANA_OAUTH_CLIENT_ID'),
+        'oauth_client_secret' => env('ASANA_OAUTH_CLIENT_SECRET'),
+        'oauth_refresh_token' => env('ASANA_OAUTH_REFRESH_TOKEN'),
+        'oauth_access_token' => env('ASANA_OAUTH_ACCESS_TOKEN'),
+        'redirect_uri' => env('ASANA_OAUTH_REDIRECT_URI', $defaultAsanaWorkflowRedirect),
+        'oauth_state_cache_store' => env('ASANA_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+        'oauth_scopes' => env('ASANA_OAUTH_SCOPES', 'projects:read,tasks:read,workspaces:read'),
     ],
 
     'google_gbp' => [

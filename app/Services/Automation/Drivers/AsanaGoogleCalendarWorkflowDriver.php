@@ -341,10 +341,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 
     protected function asanaRequest(array $credentials = []): PendingRequest
     {
-        $token = trim((string) ($credentials['asana_personal_access_token'] ?? config('services.asana.personal_access_token', '')));
-        if ($token === '') {
-            throw new AutomationWorkflowException('ASANA_PERSONAL_ACCESS_TOKEN is required.');
-        }
+        $token = $this->asanaAccessToken($credentials);
 
         return Http::acceptJson()
             ->withToken($token)
@@ -399,6 +396,49 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         }
 
         return $accessToken;
+    }
+
+    protected function asanaAccessToken(array $credentials = []): string
+    {
+        $configuredAccessToken = trim((string) ($credentials['asana_access_token'] ?? config('services.asana.oauth_access_token', '')));
+        if ($configuredAccessToken !== '') {
+            return $configuredAccessToken;
+        }
+
+        $clientId = trim((string) ($credentials['asana_oauth_client_id'] ?? config('services.asana.oauth_client_id', '')));
+        $clientSecret = trim((string) ($credentials['asana_oauth_client_secret'] ?? config('services.asana.oauth_client_secret', '')));
+        $refreshToken = trim((string) ($credentials['asana_oauth_refresh_token'] ?? config('services.asana.oauth_refresh_token', '')));
+
+        if ($clientId !== '' && $clientSecret !== '' && $refreshToken !== '') {
+            $response = Http::asForm()
+                ->acceptJson()
+                ->timeout(20)
+                ->retry(2, 250, throw: false)
+                ->post('https://app.asana.com/-/oauth_token', [
+                    'client_id' => $clientId,
+                    'client_secret' => $clientSecret,
+                    'refresh_token' => $refreshToken,
+                    'grant_type' => 'refresh_token',
+                ]);
+
+            $payload = $this->decodeResponse($response, 'Asana OAuth token refresh failed');
+            $accessToken = trim((string) ($payload['access_token'] ?? ''));
+
+            if ($accessToken === '') {
+                throw new AutomationWorkflowException('Asana OAuth token response did not include access_token.');
+            }
+
+            return $accessToken;
+        }
+
+        $personalAccessToken = trim((string) ($credentials['asana_personal_access_token'] ?? config('services.asana.personal_access_token', '')));
+        if ($personalAccessToken === '') {
+            throw new AutomationWorkflowException(
+                'Asana is not configured. Add an Asana OAuth connection or set an ASANA_PERSONAL_ACCESS_TOKEN fallback.'
+            );
+        }
+
+        return $personalAccessToken;
     }
 
     protected function asanaApiBase(): string

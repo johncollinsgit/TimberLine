@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Http;
 beforeEach(function (): void {
     config()->set('automation_workflows.enabled', false);
     config()->set('services.asana.personal_access_token', '');
+    config()->set('services.asana.oauth_client_id', '');
+    config()->set('services.asana.oauth_client_secret', '');
+    config()->set('services.asana.oauth_refresh_token', '');
+    config()->set('services.asana.oauth_access_token', '');
     config()->set('services.google_calendar.oauth_access_token', '');
     config()->set('services.google_calendar.oauth_client_id', '');
     config()->set('services.google_calendar.oauth_client_secret', '');
@@ -39,6 +43,9 @@ function workflowAutomationFormData(array $overrides = []): array
         'poll_limit' => '100',
         'max_tasks_per_run' => '500',
         'asana_personal_access_token' => 'asana-token-1234',
+        'asana_oauth_client_id' => 'asana-oauth-client-id-1234',
+        'asana_oauth_client_secret' => 'asana-oauth-client-secret-1234',
+        'asana_oauth_refresh_token' => '',
         'google_calendar_client_id' => 'google-client-id-1234',
         'google_calendar_client_secret' => 'google-client-secret-1234',
         'google_calendar_refresh_token' => 'google-refresh-token-1234',
@@ -198,6 +205,113 @@ test('workflow automation setup can run live from the connections page using ten
         && str_contains($request->url(), '/calendar/v3/calendars/calendar%40example.com/events'));
 });
 
+test('workflow automation setup can run live from the connections page using tenant saved asana oauth credentials', function (): void {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'workflow_automations',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'entitlement',
+        'price_source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
+
+    Http::fake([
+        'https://app.asana.com/-/oauth_token' => Http::response([
+            'access_token' => 'asana-access-token',
+            'expires_in' => 3600,
+            'token_type' => 'bearer',
+        ], 200),
+        'https://app.asana.com/api/1.0/tasks*' => Http::response([
+            'data' => [fakeWorkflowAsanaTaskPayload()],
+            'next_page' => null,
+        ], 200),
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'google-access-token',
+            'expires_in' => 3600,
+            'token_type' => 'Bearer',
+        ], 200),
+        'https://www.googleapis.com/calendar/v3/calendars/*/events' => Http::response([
+            'id' => 'google-event-oauth-1',
+        ], 200),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('marketing.providers-integrations.workflow-automations.save'), workflowAutomationFormData([
+            'submit_action' => 'run_now',
+            'asana_personal_access_token' => '',
+            'asana_oauth_refresh_token' => 'asana-oauth-refresh-token-1234',
+        ]))
+        ->assertRedirect(route('marketing.providers-integrations'))
+        ->assertSessionHas('toast', function (array $toast): bool {
+            return ($toast['style'] ?? null) === 'success'
+                && str_contains((string) ($toast['message'] ?? ''), 'Live run completed');
+        });
+
+    $instanceKey = 'asana_to_google_calendar::tenant:'.$tenant->id;
+
+    expect(AutomationWorkflowLink::query()
+        ->where('workflow_key', $instanceKey)
+        ->where('source_system', 'asana_task')
+        ->where('source_id', '343049949')
+        ->value('destination_id'))->toBe('google-event-oauth-1');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && $request->url() === 'https://app.asana.com/-/oauth_token'
+        && ($request['grant_type'] ?? null) === 'refresh_token');
+});
+
+test('workflow automation setup can launch asana oauth from the connections page', function (): void {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'workflow_automations',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'entitlement',
+        'price_source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
+
+    $response = $this->actingAs($user)
+        ->post(route('marketing.providers-integrations.workflow-automations.save'), workflowAutomationFormData([
+            'submit_action' => 'connect_asana',
+            'asana_personal_access_token' => '',
+        ]));
+
+    $response->assertRedirect();
+
+    $redirect = $response->headers->get('Location');
+
+    expect($redirect)->not->toBeNull()
+        ->and($redirect)->toStartWith('https://app.asana.com/-/oauth_authorize?')
+        ->and(urldecode((string) $redirect))->toContain((string) config('services.asana.redirect_uri'))
+        ->and(urldecode((string) $redirect))->toContain('code_challenge_method=S256')
+        ->and(urldecode((string) $redirect))->toContain('projects:read')
+        ->and(urldecode((string) $redirect))->toContain('tasks:read');
+});
+
 test('workflow automation setup can launch google calendar oauth from the connections page', function (): void {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
@@ -233,6 +347,109 @@ test('workflow automation setup can launch google calendar oauth from the connec
         ->and($redirect)->toStartWith('https://accounts.google.com/o/oauth2/v2/auth?')
         ->and(urldecode((string) $redirect))->toContain((string) config('services.google_calendar.redirect_uri'))
         ->and(urldecode((string) $redirect))->toContain('https://www.googleapis.com/auth/calendar');
+});
+
+test('asana oauth callback stores refresh token and auto-selects the only visible project', function (): void {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'workflow_automations',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'entitlement',
+        'price_source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id]);
+
+    $connectResponse = $this->actingAs($user)
+        ->post(route('marketing.providers-integrations.workflow-automations.save'), workflowAutomationFormData([
+            'submit_action' => 'connect_asana',
+            'project_gid' => '',
+            'asana_personal_access_token' => '',
+        ]))
+        ->assertRedirect();
+
+    $redirect = $connectResponse->headers->get('Location');
+    parse_str((string) parse_url((string) $redirect, PHP_URL_QUERY), $query);
+    $state = (string) ($query['state'] ?? '');
+
+    expect($state)->not->toBe('');
+
+    Http::fake([
+        'https://app.asana.com/-/oauth_token' => Http::response([
+            'access_token' => 'connected-asana-access-token',
+            'refresh_token' => 'connected-asana-refresh-token',
+            'expires_in' => 3600,
+            'token_type' => 'bearer',
+            'scope' => 'projects:read tasks:read workspaces:read',
+            'data' => [
+                'gid' => '999',
+                'name' => 'John Collins',
+                'email' => 'johncollinemail@gmail.com',
+            ],
+        ], 200),
+        'https://app.asana.com/api/1.0/workspaces/1200605651567450/projects*' => Http::response([
+            'data' => [
+                [
+                    'gid' => '1201541082238924',
+                    'name' => 'EVENT CALENDAR',
+                    'permalink_url' => 'https://app.asana.com/0/1200605651567450/1201541082238924',
+                    'workspace' => ['name' => 'Events'],
+                    'team' => ['name' => 'Marketing'],
+                    'archived' => false,
+                ],
+            ],
+            'next_page' => null,
+        ], 200),
+        'https://app.asana.com/api/1.0/workspaces*' => Http::response([
+            'data' => [
+                [
+                    'gid' => '1200605651567450',
+                    'name' => 'Events',
+                    'is_organization' => false,
+                ],
+            ],
+            'next_page' => null,
+        ], 200),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('marketing.providers-integrations.workflow-automations.asana.callback', [
+            'code' => 'asana-oauth-code-123',
+            'state' => $state,
+        ]))
+        ->assertRedirect(route('marketing.providers-integrations'))
+        ->assertSessionHas('toast', function (array $toast): bool {
+            return ($toast['style'] ?? null) === 'success'
+                && str_contains((string) ($toast['message'] ?? ''), 'selected automatically');
+        });
+
+    $setting = TenantMarketingSetting::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('key', 'workflow_automation_asana_google_calendar')
+        ->firstOrFail();
+
+    expect(Crypt::decryptString((string) data_get($setting->value, 'credentials.asana_oauth_refresh_token_encrypted')))
+        ->toBe('connected-asana-refresh-token')
+        ->and(data_get($setting->value, 'trigger.project_gid'))->toBe('1201541082238924');
+
+    $this->actingAs($user)
+        ->withSession(['tenant_id' => $tenant->id])
+        ->get(route('marketing.providers-integrations'))
+        ->assertOk()
+        ->assertSeeText('Connected via Asana OAuth')
+        ->assertSeeText('EVENT CALENDAR')
+        ->assertSeeText('Events');
 });
 
 test('google calendar oauth callback stores refresh token and auto-selects the only writable calendar', function (): void {

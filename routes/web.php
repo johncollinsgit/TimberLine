@@ -796,6 +796,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/marketing/candle-cash/google-business/callback', [GoogleBusinessProfileController::class, 'callback'])
         ->name('marketing.candle-cash.google-business.callback');
+    Route::get('/marketing/providers-integrations/workflow-automations/asana/callback', [MarketingProvidersIntegrationsController::class, 'workflowAsanaCallback'])
+        ->name('marketing.providers-integrations.workflow-automations.asana.callback');
     Route::get('/marketing/providers-integrations/workflow-automations/google-calendar/callback', [MarketingProvidersIntegrationsController::class, 'workflowGoogleCalendarCallback'])
         ->name('marketing.providers-integrations.workflow-automations.google-calendar.callback');
 

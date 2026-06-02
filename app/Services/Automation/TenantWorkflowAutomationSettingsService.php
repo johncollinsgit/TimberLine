@@ -31,11 +31,17 @@ class TenantWorkflowAutomationSettingsService
         $instanceKey = $this->instanceKey($workflowKey, $tenantId);
 
         $storedAsanaToken = $this->decryptNullable($stored['credentials']['asana_personal_access_token_encrypted'] ?? null);
+        $storedAsanaClientId = $this->decryptNullable($stored['credentials']['asana_oauth_client_id_encrypted'] ?? null);
+        $storedAsanaClientSecret = $this->decryptNullable($stored['credentials']['asana_oauth_client_secret_encrypted'] ?? null);
+        $storedAsanaRefreshToken = $this->decryptNullable($stored['credentials']['asana_oauth_refresh_token_encrypted'] ?? null);
         $storedGoogleClientId = $this->decryptNullable($stored['credentials']['google_calendar_client_id_encrypted'] ?? null);
         $storedGoogleClientSecret = $this->decryptNullable($stored['credentials']['google_calendar_client_secret_encrypted'] ?? null);
         $storedGoogleRefreshToken = $this->decryptNullable($stored['credentials']['google_calendar_refresh_token_encrypted'] ?? null);
 
         $fallbackAsanaToken = $this->nullableString(config('services.asana.personal_access_token'));
+        $fallbackAsanaClientId = $this->nullableString(config('services.asana.oauth_client_id'));
+        $fallbackAsanaClientSecret = $this->nullableString(config('services.asana.oauth_client_secret'));
+        $fallbackAsanaRefreshToken = $this->nullableString(config('services.asana.oauth_refresh_token'));
         $fallbackGoogleClientId = $this->nullableString(config('services.google_calendar.oauth_client_id'));
         $fallbackGoogleClientSecret = $this->nullableString(config('services.google_calendar.oauth_client_secret'));
         $fallbackGoogleRefreshToken = $this->nullableString(config('services.google_calendar.oauth_refresh_token'));
@@ -71,6 +77,9 @@ class TenantWorkflowAutomationSettingsService
             ],
             'credentials' => [
                 'asana_personal_access_token' => $this->credentialPreview($storedAsanaToken, $fallbackAsanaToken),
+                'asana_oauth_client_id' => $this->credentialPreview($storedAsanaClientId, $fallbackAsanaClientId),
+                'asana_oauth_client_secret' => $this->credentialPreview($storedAsanaClientSecret, $fallbackAsanaClientSecret),
+                'asana_oauth_refresh_token' => $this->credentialPreview($storedAsanaRefreshToken, $fallbackAsanaRefreshToken),
                 'google_calendar_client_id' => $this->credentialPreview($storedGoogleClientId, $fallbackGoogleClientId),
                 'google_calendar_client_secret' => $this->credentialPreview($storedGoogleClientSecret, $fallbackGoogleClientSecret),
                 'google_calendar_refresh_token' => $this->credentialPreview($storedGoogleRefreshToken, $fallbackGoogleRefreshToken),
@@ -128,6 +137,21 @@ class TenantWorkflowAutomationSettingsService
                 newValue: $payload['credentials']['asana_personal_access_token'] ?? null,
                 clearValue: $payload['credentials']['clear_asana_personal_access_token'] ?? false,
                 existingEncryptedValue: $existing['credentials']['asana_personal_access_token_encrypted'] ?? null,
+            ),
+            'asana_oauth_client_id_encrypted' => $this->resolvedEncryptedSecret(
+                newValue: $payload['credentials']['asana_oauth_client_id'] ?? null,
+                clearValue: $payload['credentials']['clear_asana_oauth_client_id'] ?? false,
+                existingEncryptedValue: $existing['credentials']['asana_oauth_client_id_encrypted'] ?? null,
+            ),
+            'asana_oauth_client_secret_encrypted' => $this->resolvedEncryptedSecret(
+                newValue: $payload['credentials']['asana_oauth_client_secret'] ?? null,
+                clearValue: $payload['credentials']['clear_asana_oauth_client_secret'] ?? false,
+                existingEncryptedValue: $existing['credentials']['asana_oauth_client_secret_encrypted'] ?? null,
+            ),
+            'asana_oauth_refresh_token_encrypted' => $this->resolvedEncryptedSecret(
+                newValue: $payload['credentials']['asana_oauth_refresh_token'] ?? null,
+                clearValue: $payload['credentials']['clear_asana_oauth_refresh_token'] ?? false,
+                existingEncryptedValue: $existing['credentials']['asana_oauth_refresh_token_encrypted'] ?? null,
             ),
             'google_calendar_client_id_encrypted' => $this->resolvedEncryptedSecret(
                 newValue: $payload['credentials']['google_calendar_client_id'] ?? null,
@@ -255,22 +279,36 @@ class TenantWorkflowAutomationSettingsService
         $stored = $this->storedValue($tenantId, $workflowKey);
 
         $tenantAsanaToken = $this->decryptNullable($stored['credentials']['asana_personal_access_token_encrypted'] ?? null);
+        $tenantAsanaClientId = $this->decryptNullable($stored['credentials']['asana_oauth_client_id_encrypted'] ?? null);
+        $tenantAsanaClientSecret = $this->decryptNullable($stored['credentials']['asana_oauth_client_secret_encrypted'] ?? null);
+        $tenantAsanaRefreshToken = $this->decryptNullable($stored['credentials']['asana_oauth_refresh_token_encrypted'] ?? null);
         $tenantGoogleClientId = $this->decryptNullable($stored['credentials']['google_calendar_client_id_encrypted'] ?? null);
         $tenantGoogleClientSecret = $this->decryptNullable($stored['credentials']['google_calendar_client_secret_encrypted'] ?? null);
         $tenantGoogleRefreshToken = $this->decryptNullable($stored['credentials']['google_calendar_refresh_token_encrypted'] ?? null);
 
         $globalAsanaToken = $this->nullableString(config('services.asana.personal_access_token'));
+        $globalAsanaClientId = $this->nullableString(config('services.asana.oauth_client_id'));
+        $globalAsanaClientSecret = $this->nullableString(config('services.asana.oauth_client_secret'));
+        $globalAsanaRefreshToken = $this->nullableString(config('services.asana.oauth_refresh_token'));
+        $globalAsanaAccessToken = $this->nullableString(config('services.asana.oauth_access_token'));
         $globalGoogleClientId = $this->nullableString(config('services.google_calendar.oauth_client_id'));
         $globalGoogleClientSecret = $this->nullableString(config('services.google_calendar.oauth_client_secret'));
         $globalGoogleRefreshToken = $this->nullableString(config('services.google_calendar.oauth_refresh_token'));
 
         return [
             'asana_personal_access_token' => $tenantAsanaToken ?? $globalAsanaToken,
+            'asana_oauth_client_id' => $tenantAsanaClientId ?? $globalAsanaClientId,
+            'asana_oauth_client_secret' => $tenantAsanaClientSecret ?? $globalAsanaClientSecret,
+            'asana_oauth_refresh_token' => $tenantAsanaRefreshToken ?? $globalAsanaRefreshToken,
+            'asana_access_token' => $globalAsanaAccessToken,
             'google_calendar_client_id' => $tenantGoogleClientId ?? $globalGoogleClientId,
             'google_calendar_client_secret' => $tenantGoogleClientSecret ?? $globalGoogleClientSecret,
             'google_calendar_refresh_token' => $tenantGoogleRefreshToken ?? $globalGoogleRefreshToken,
             'sources' => [
                 'asana_personal_access_token' => $tenantAsanaToken !== null ? 'tenant' : ($globalAsanaToken !== null ? 'global' : 'missing'),
+                'asana_oauth_client_id' => $tenantAsanaClientId !== null ? 'tenant' : ($globalAsanaClientId !== null ? 'global' : 'missing'),
+                'asana_oauth_client_secret' => $tenantAsanaClientSecret !== null ? 'tenant' : ($globalAsanaClientSecret !== null ? 'global' : 'missing'),
+                'asana_oauth_refresh_token' => $tenantAsanaRefreshToken !== null ? 'tenant' : ($globalAsanaRefreshToken !== null ? 'global' : 'missing'),
                 'google_calendar_client_id' => $tenantGoogleClientId !== null ? 'tenant' : ($globalGoogleClientId !== null ? 'global' : 'missing'),
                 'google_calendar_client_secret' => $tenantGoogleClientSecret !== null ? 'tenant' : ($globalGoogleClientSecret !== null ? 'global' : 'missing'),
                 'google_calendar_refresh_token' => $tenantGoogleRefreshToken !== null ? 'tenant' : ($globalGoogleRefreshToken !== null ? 'global' : 'missing'),
@@ -382,6 +420,9 @@ class TenantWorkflowAutomationSettingsService
     {
         return array_filter([
             'asana_personal_access_token' => $this->decryptNullable($stored['credentials']['asana_personal_access_token_encrypted'] ?? null),
+            'asana_oauth_client_id' => $this->decryptNullable($stored['credentials']['asana_oauth_client_id_encrypted'] ?? null),
+            'asana_oauth_client_secret' => $this->decryptNullable($stored['credentials']['asana_oauth_client_secret_encrypted'] ?? null),
+            'asana_oauth_refresh_token' => $this->decryptNullable($stored['credentials']['asana_oauth_refresh_token_encrypted'] ?? null),
             'google_calendar_client_id' => $this->decryptNullable($stored['credentials']['google_calendar_client_id_encrypted'] ?? null),
             'google_calendar_client_secret' => $this->decryptNullable($stored['credentials']['google_calendar_client_secret_encrypted'] ?? null),
             'google_calendar_refresh_token' => $this->decryptNullable($stored['credentials']['google_calendar_refresh_token_encrypted'] ?? null),

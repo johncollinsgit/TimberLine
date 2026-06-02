@@ -13,6 +13,7 @@ use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\Tenant;
+use App\Services\Automation\AsanaWorkflowConnectionService;
 use App\Services\Automation\AutomationWorkflowEngine;
 use App\Services\Automation\GoogleCalendarWorkflowConnectionService;
 use App\Services\Automation\TenantWorkflowAutomationSettingsService;
@@ -41,6 +42,7 @@ class MarketingProvidersIntegrationsController extends Controller
         MarketingSourceOverlapReportService $sourceOverlapReportService,
         TenantWorkflowAutomationSettingsService $workflowAutomationSettingsService,
         TenantModuleAccessResolver $moduleAccessResolver,
+        AsanaWorkflowConnectionService $asanaConnectionService,
         GoogleCalendarWorkflowConnectionService $googleCalendarConnectionService
     ): View
     {
@@ -176,6 +178,9 @@ class MarketingProvidersIntegrationsController extends Controller
                 ? $moduleAccessResolver->module($tenantId, 'workflow_automations')
                 : null,
             'workflowAutomationRunResult' => session('workflowAutomationRunResult'),
+            'asanaWorkflowConnection' => $tenantId !== null
+                ? $asanaConnectionService->status($tenantId)
+                : null,
             'googleCalendarWorkflowConnection' => $tenantId !== null
                 ? $googleCalendarConnectionService->status($tenantId)
                 : null,
@@ -396,6 +401,7 @@ class MarketingProvidersIntegrationsController extends Controller
         Request $request,
         TenantWorkflowAutomationSettingsService $workflowAutomationSettingsService,
         AutomationWorkflowEngine $workflowEngine,
+        AsanaWorkflowConnectionService $asanaConnectionService,
         GoogleCalendarWorkflowConnectionService $googleCalendarConnectionService
     ): RedirectResponse {
         $tenantId = $this->currentTenantId($request);
@@ -411,7 +417,7 @@ class MarketingProvidersIntegrationsController extends Controller
         $submitAction = trim((string) $request->input('submit_action', 'save'));
         $data = $request->validate([
             'workflow_key' => ['required', 'in:asana_to_google_calendar'],
-            'submit_action' => ['required', 'in:save,dry_run,run_now,connect_google,disconnect_google,refresh_google_calendars'],
+            'submit_action' => ['required', 'in:save,dry_run,run_now,connect_asana,disconnect_asana,refresh_asana_projects,connect_google,disconnect_google,refresh_google_calendars'],
             'enabled' => ['nullable', 'boolean'],
             'project_gid' => [in_array($submitAction, ['save', 'dry_run', 'run_now'], true) ? 'required' : 'nullable', 'string', 'max:120'],
             'calendar_id' => ['nullable', 'string', 'max:255'],
@@ -425,6 +431,12 @@ class MarketingProvidersIntegrationsController extends Controller
             'max_tasks_per_run' => ['required', 'integer', 'min:1', 'max:5000'],
             'asana_personal_access_token' => ['nullable', 'string', 'max:5000'],
             'clear_asana_personal_access_token' => ['nullable', 'boolean'],
+            'asana_oauth_client_id' => ['nullable', 'string', 'max:5000'],
+            'clear_asana_oauth_client_id' => ['nullable', 'boolean'],
+            'asana_oauth_client_secret' => ['nullable', 'string', 'max:5000'],
+            'clear_asana_oauth_client_secret' => ['nullable', 'boolean'],
+            'asana_oauth_refresh_token' => ['nullable', 'string', 'max:5000'],
+            'clear_asana_oauth_refresh_token' => ['nullable', 'boolean'],
             'google_calendar_client_id' => ['nullable', 'string', 'max:5000'],
             'clear_google_calendar_client_id' => ['nullable', 'boolean'],
             'google_calendar_client_secret' => ['nullable', 'string', 'max:5000'],
@@ -438,14 +450,14 @@ class MarketingProvidersIntegrationsController extends Controller
         $workflowAutomationSettingsService->saveForTenant($tenantId, $workflowKey, [
             'enabled' => array_key_exists('enabled', $data) ? (bool) $data['enabled'] : false,
             'trigger' => [
-                'project_gid' => trim((string) $data['project_gid']),
+                'project_gid' => trim((string) ($data['project_gid'] ?? '')),
                 'modified_overlap_minutes' => (int) $data['modified_overlap_minutes'],
                 'bootstrap_lookback_days' => (int) $data['bootstrap_lookback_days'],
                 'poll_limit' => (int) $data['poll_limit'],
                 'max_tasks_per_run' => (int) $data['max_tasks_per_run'],
             ],
             'action' => [
-                'calendar_id' => trim((string) $data['calendar_id']),
+                'calendar_id' => trim((string) ($data['calendar_id'] ?? '')),
                 'timezone' => trim((string) $data['timezone']),
                 'default_start_time' => trim((string) $data['default_start_time']),
                 'default_duration_minutes' => (int) $data['default_duration_minutes'],
@@ -454,6 +466,12 @@ class MarketingProvidersIntegrationsController extends Controller
             'credentials' => [
                 'asana_personal_access_token' => $data['asana_personal_access_token'] ?? null,
                 'clear_asana_personal_access_token' => array_key_exists('clear_asana_personal_access_token', $data) ? (bool) $data['clear_asana_personal_access_token'] : false,
+                'asana_oauth_client_id' => $data['asana_oauth_client_id'] ?? null,
+                'clear_asana_oauth_client_id' => array_key_exists('clear_asana_oauth_client_id', $data) ? (bool) $data['clear_asana_oauth_client_id'] : false,
+                'asana_oauth_client_secret' => $data['asana_oauth_client_secret'] ?? null,
+                'clear_asana_oauth_client_secret' => array_key_exists('clear_asana_oauth_client_secret', $data) ? (bool) $data['clear_asana_oauth_client_secret'] : false,
+                'asana_oauth_refresh_token' => $data['asana_oauth_refresh_token'] ?? null,
+                'clear_asana_oauth_refresh_token' => array_key_exists('clear_asana_oauth_refresh_token', $data) ? (bool) $data['clear_asana_oauth_refresh_token'] : false,
                 'google_calendar_client_id' => $data['google_calendar_client_id'] ?? null,
                 'clear_google_calendar_client_id' => array_key_exists('clear_google_calendar_client_id', $data) ? (bool) $data['clear_google_calendar_client_id'] : false,
                 'google_calendar_client_secret' => $data['google_calendar_client_secret'] ?? null,
@@ -469,6 +487,52 @@ class MarketingProvidersIntegrationsController extends Controller
                 ->with('toast', [
                     'style' => 'success',
                     'message' => 'Workflow automation setup saved.',
+                ]);
+        }
+
+        if ($submitAction === 'connect_asana') {
+            try {
+                $connectUrl = $asanaConnectionService->buildConnectUrl($tenantId, $request->user(), $workflowKey);
+            } catch (\Throwable $exception) {
+                return redirect()
+                    ->route('marketing.providers-integrations')
+                    ->with('toast', [
+                        'style' => 'warning',
+                        'message' => $exception->getMessage(),
+                    ]);
+            }
+
+            return redirect()->away($connectUrl);
+        }
+
+        if ($submitAction === 'disconnect_asana') {
+            $asanaConnectionService->disconnect($tenantId, $workflowKey);
+
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'success',
+                    'message' => 'Asana OAuth was disconnected for this workflow.',
+                ]);
+        }
+
+        if ($submitAction === 'refresh_asana_projects') {
+            try {
+                $projects = $asanaConnectionService->projectOptions($tenantId, $workflowKey, true);
+            } catch (\Throwable $exception) {
+                return redirect()
+                    ->route('marketing.providers-integrations')
+                    ->with('toast', [
+                        'style' => 'warning',
+                        'message' => $exception->getMessage(),
+                    ]);
+            }
+
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'success',
+                    'message' => sprintf('Asana project list refreshed. %d project(s) loaded.', count($projects)),
                 ]);
         }
 
@@ -568,6 +632,48 @@ class MarketingProvidersIntegrationsController extends Controller
         $message = (bool) ($result['auto_selected'] ?? false)
             ? 'Google Calendar connected and the only writable calendar was selected automatically.'
             : sprintf('Google Calendar connected. %d writable calendar(s) are ready to choose from.', count($calendars));
+
+        return redirect()
+            ->route('marketing.providers-integrations')
+            ->with('toast', [
+                'style' => 'success',
+                'message' => $message,
+            ]);
+    }
+
+    public function workflowAsanaCallback(
+        Request $request,
+        AsanaWorkflowConnectionService $asanaConnectionService
+    ): RedirectResponse {
+        $data = $request->validate([
+            'code' => ['required', 'string'],
+            'state' => ['required', 'string'],
+        ]);
+
+        try {
+            $result = $asanaConnectionService->connectFromCallback(
+                code: $data['code'],
+                state: $data['state']
+            );
+        } catch (\Throwable $exception) {
+            return redirect()
+                ->route('marketing.providers-integrations')
+                ->with('toast', [
+                    'style' => 'warning',
+                    'message' => $exception->getMessage(),
+                ]);
+        }
+
+        $tenantId = (int) ($result['tenant_id'] ?? 0);
+        if ($tenantId > 0) {
+            $request->session()->put('tenant_id', $tenantId);
+            $request->attributes->set('current_tenant_id', $tenantId);
+        }
+
+        $projects = is_array($result['projects'] ?? null) ? $result['projects'] : [];
+        $message = (bool) ($result['auto_selected'] ?? false)
+            ? 'Asana connected and the only available project was selected automatically.'
+            : sprintf('Asana connected. %d project(s) are ready to choose from.', count($projects));
 
         return redirect()
             ->route('marketing.providers-integrations')

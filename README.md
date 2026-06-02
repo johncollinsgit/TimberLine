@@ -1020,7 +1020,7 @@ Required env keys for the Asana -> Google Calendar workflow:
 - `AUTOMATION_ASANA_TO_GCAL_ENABLED=true`
 - `AUTOMATION_ASANA_TENANT_ID=1`
 - `AUTOMATION_ASANA_PROJECT_GID=...`
-- `ASANA_PERSONAL_ACCESS_TOKEN=...`
+- `ASANA_PERSONAL_ACCESS_TOKEN=...` or an Asana OAuth connection
 - `AUTOMATION_GCAL_CALENDAR_ID=...` (falls back to `ASANA_SKYLIGHT_CALENDAR_ID`)
 - `GOOGLE_CALENDAR_CLIENT_ID=...`
 - `GOOGLE_CALENDAR_CLIENT_SECRET=...`
@@ -1028,8 +1028,9 @@ Required env keys for the Asana -> Google Calendar workflow:
 
 Notes:
 - Modern Forestry now has a click-based setup path in `Marketing -> Connections -> Native Zap Replacement`.
+- Asana can now be connected through OAuth from that page; once connected, Everbranch can load visible projects into a picker instead of requiring a raw project GID.
 - Google Calendar can be connected through OAuth from that page; once connected, Everbranch can load writable calendars into a picker instead of requiring a raw calendar ID.
-- Asana still uses a personal access token for the tenant-scoped setup flow.
+- Personal access tokens still work as a fallback, but OAuth is now the smoother setup path for both sides.
 - The default activation path is a tenant-scoped entitlement for Modern Forestry tenant `1`, not a plan-wide module grant.
 - The scheduler runs `automation:run` every ten minutes via `routes/console.php`.
 - Asana polling uses `modified_since` with a small overlap window to avoid missed updates.
