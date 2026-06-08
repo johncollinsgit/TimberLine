@@ -1,5 +1,31 @@
 <?php
 
+$defaultBrandAssetVersion = (static function (): string {
+    $assets = [
+        'brand/everbranch-mark.png',
+        'brand/everbranch-mark.svg',
+        'brand/everbranch-lockup.svg',
+        'brand/everbranch-auth.svg',
+        'brand/everbranch-favicon.svg',
+        'favicon.png',
+        'favicon.ico',
+        'apple-touch-icon.png',
+        'og-image.png',
+    ];
+
+    $latestTimestamp = 0;
+
+    foreach ($assets as $asset) {
+        $resolved = public_path(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $asset));
+
+        if (is_file($resolved)) {
+            $latestTimestamp = max($latestTimestamp, (int) filemtime($resolved));
+        }
+    }
+
+    return $latestTimestamp > 0 ? 'eb'.$latestTimestamp : 'eb1';
+})();
+
 return [
     'product_name' => env('EVERBRANCH_PRODUCT_NAME', 'Everbranch'),
     'company_name' => env('EVERBRANCH_COMPANY_NAME', 'Evergrove'),
@@ -8,8 +34,8 @@ return [
     'legacy_internal_name' => env('EVERBRANCH_LEGACY_INTERNAL_NAME', 'Forestry Backstage'),
     'flagship_tenant_name' => env('EVERBRANCH_FLAGSHIP_TENANT_NAME', 'Modern Forestry'),
     'brand_assets' => [
-        'cache_tag' => env('EVERBRANCH_BRAND_ASSET_VERSION', 'eb1'),
-        'mark' => 'brand/everbranch-mark.svg',
+        'cache_tag' => env('EVERBRANCH_BRAND_ASSET_VERSION', $defaultBrandAssetVersion),
+        'mark' => 'brand/everbranch-mark.png',
         'lockup' => 'brand/everbranch-lockup.svg',
         'auth' => 'brand/everbranch-auth.svg',
         'favicon_svg' => 'brand/everbranch-favicon.svg',

@@ -1728,6 +1728,7 @@ body.mf-app-shell {
   display: block;
   flex: 0 0 auto;
   height: 1.9rem;
+  object-fit: contain;
   width: 1.9rem;
 }
 
@@ -1918,9 +1919,18 @@ body.mf-app-shell {
 }
 
 .mf-leaf-icon {
+  background-color: currentColor;
   display: block;
   flex: 0 0 auto;
   height: 1rem;
+  mask-image: var(--mf-leaf-icon-url);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-image: var(--mf-leaf-icon-url);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
   width: 1rem;
 }
 
@@ -3027,6 +3037,7 @@ body.mf-app-shell {
   border-radius: 0.6rem;
   display: block;
   height: 2.1rem;
+  object-fit: contain;
   width: 2.1rem;
 }
 
