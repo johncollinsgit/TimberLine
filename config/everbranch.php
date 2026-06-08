@@ -35,7 +35,7 @@ return [
     'flagship_tenant_name' => env('EVERBRANCH_FLAGSHIP_TENANT_NAME', 'Modern Forestry'),
     'brand_assets' => [
         'cache_tag' => env('EVERBRANCH_BRAND_ASSET_VERSION', $defaultBrandAssetVersion),
-        'mark' => 'brand/everbranch-mark.png',
+        'mark' => 'brand/everbranch-mark.svg',
         'lockup' => 'brand/everbranch-lockup.svg',
         'auth' => 'brand/everbranch-auth.svg',
         'favicon_svg' => 'brand/everbranch-favicon.svg',

@@ -6,8 +6,7 @@
 @php
     $brandAssets = (array) config('everbranch.brand_assets', []);
     $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-    $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.png');
-    $brandMarkUrl = asset($brandMarkPath).'?v='.$brandAssetVersion;
+    $brandMarkUrl = asset('brand/everbranch-mark.png').'?v='.$brandAssetVersion;
 @endphp
 
 <span

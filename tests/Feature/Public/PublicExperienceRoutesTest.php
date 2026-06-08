@@ -3,6 +3,8 @@
 use App\Models\User;
 
 test('guest home route renders the marketing landing page by default', function (): void {
+    $cacheTag = (string) config('everbranch.brand_assets.cache_tag');
+
     $response = $this->get('http://theeverbranch.com/')
         ->assertOk()
         ->assertSee('class="fb-public-body fb-public-body--splash"', false)
@@ -17,8 +19,8 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSeeText('Landscaper')
         ->assertSeeText('Electrician')
         ->assertSeeText('Soap Maker')
-        ->assertSee('brand/everbranch-lockup.svg?v=eb1', false)
-        ->assertSee('brand/everbranch-mark.svg?v=eb1', false)
+        ->assertSee('brand/everbranch-lockup.svg?v='.$cacheTag, false)
+        ->assertSee('brand/everbranch-mark.svg?v='.$cacheTag, false)
         ->assertDontSeeText('Forestry Backstage')
         ->assertDontSeeText('Backstage')
         ->assertDontSeeText('Welcome back');
@@ -45,10 +47,12 @@ test('guest home route renders the marketing landing page by default', function 
 });
 
 test('login route renders the dedicated light auth shell', function (): void {
+    $cacheTag = (string) config('everbranch.brand_assets.cache_tag');
+
     $this->get(route('login'))
         ->assertOk()
         ->assertSee('class="fb-auth-body antialiased"', false)
-        ->assertSee('brand/everbranch-auth.svg?v=eb1', false)
+        ->assertSee('brand/everbranch-auth.svg?v='.$cacheTag, false)
         ->assertSeeText('Welcome back');
 });
 
