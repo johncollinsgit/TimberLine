@@ -2,6 +2,8 @@
 
 use App\Models\CustomerAccessRequest;
 use App\Models\User;
+use App\Notifications\WholesaleApplicationReviewNotification;
+use Illuminate\Support\Facades\Notification;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -111,6 +113,36 @@ test('production access request submission preserves requested tenant slug', fun
         ->and((string) data_get($request->metadata, 'team_size'))->toBe('6_20')
         ->and((string) data_get($request->metadata, 'timeline'))->toBe('30_days')
         ->and((string) data_get($request->metadata, 'website'))->toBe('https://acme.example.com');
+});
+
+test('production access request submission notifies wholesale reviewers with a direct admin link', function (): void {
+    Notification::fake();
+
+    $this->post(route('platform.access-request'), [
+        'intent' => 'production',
+        'name' => 'Acme Ops',
+        'email' => 'ops-review@acme.example.com',
+        'company' => 'Acme Candle Co',
+        'requested_tenant_slug' => 'acme',
+        'message' => 'Please approve us for production.',
+    ])->assertRedirect(route('platform.request-submitted', ['intent' => 'production'], absolute: false));
+
+    Notification::assertSentOnDemand(WholesaleApplicationReviewNotification::class, function (
+        WholesaleApplicationReviewNotification $notification,
+        array $channels,
+        \Illuminate\Notifications\AnonymousNotifiable $notifiable
+    ): bool {
+        $mailMessage = $notification->toMail($notifiable);
+        $expectedUrl = route('admin.users', ['search' => 'ops-review@acme.example.com']);
+
+        expect($channels)->toContain('mail')
+            ->and($notifiable->routes['mail'] ?? null)->toBe('modernforestryteam@gmail.com')
+            ->and((string) $mailMessage->subject)->toBe('New wholesale application submitted')
+            ->and((string) $mailMessage->actionUrl)->toBe($expectedUrl)
+            ->and(implode(' ', $mailMessage->introLines))->toContain('ops-review@acme.example.com');
+
+        return true;
+    });
 });
 
 test('duplicate public submissions reuse the existing pending request', function (): void {

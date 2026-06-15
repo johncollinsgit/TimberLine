@@ -1045,6 +1045,9 @@ Route::prefix('shopify/marketing')
         Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('consent.confirm');
+        Route::post('/wholesale/application', [PlatformAccessRequestController::class, 'storeForWholesaleStorefront'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.application');
         Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
         Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
             ->withoutMiddleware([VerifyCsrfToken::class])
@@ -1104,6 +1107,9 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/consent/confirm', [MarketingShopifyIntegrationController::class, 'confirmConsentOptin'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('consent.confirm');
+        Route::post('/wholesale/application', [PlatformAccessRequestController::class, 'storeForWholesaleStorefront'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.application');
         Route::get('/birthday/status', [MarketingShopifyIntegrationController::class, 'birthdayStatus'])->name('birthday.status');
         Route::post('/birthday/capture', [MarketingShopifyIntegrationController::class, 'captureBirthday'])
             ->withoutMiddleware([VerifyCsrfToken::class])

@@ -29,8 +29,21 @@ class CustomerAccessRequestService
      *   mobile_interest?:string,
      *   website?:string,
      *   message?:string,
+     *   phone?:string,
+     *   city?:string,
+     *   state?:string,
+     *   zip?:string,
+     *   country?:string,
+     *   address?:string,
+     *   address2?:string,
+     *   retail_license_number?:string,
+     *   position?:string,
+     *   referral?:string,
+     *   current_suppliers?:string,
+     *   contact_preference?:string,
+     *   agreement?:bool,
      *   preferred_plan_key?:string,
-     *   addons_interest?:array<int,string>
+     *   addons_interest?:array<int,string>,
      * }  $input
      */
     public function submit(array $input): CustomerAccessRequest
@@ -50,6 +63,19 @@ class CustomerAccessRequestService
         $mobileInterest = strtolower(trim((string) ($input['mobile_interest'] ?? '')));
         $website = trim((string) ($input['website'] ?? ''));
         $message = trim((string) ($input['message'] ?? ''));
+        $phone = trim((string) ($input['phone'] ?? ''));
+        $city = trim((string) ($input['city'] ?? ''));
+        $state = trim((string) ($input['state'] ?? ''));
+        $zip = trim((string) ($input['zip'] ?? ''));
+        $country = trim((string) ($input['country'] ?? ''));
+        $address = trim((string) ($input['address'] ?? ''));
+        $address2 = trim((string) ($input['address2'] ?? ''));
+        $retailLicenseNumber = trim((string) ($input['retail_license_number'] ?? ''));
+        $position = trim((string) ($input['position'] ?? ''));
+        $referral = trim((string) ($input['referral'] ?? ''));
+        $currentSuppliers = trim((string) ($input['current_suppliers'] ?? ''));
+        $contactPreference = trim((string) ($input['contact_preference'] ?? ''));
+        $agreementAccepted = (bool) ($input['agreement'] ?? false);
         $preferredPlanKey = strtolower(trim((string) ($input['preferred_plan_key'] ?? '')));
         $addonsInterest = array_values(array_filter(array_map(static function (mixed $value): ?string {
             $token = strtolower(trim((string) $value));
@@ -62,7 +88,7 @@ class CustomerAccessRequestService
             $requestedSlug = trim((string) config('tenancy.onboarding.demo_tenant_slug', 'demo'));
         }
 
-        return DB::transaction(function () use ($intent, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
+        return DB::transaction(function () use ($intent, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $phone, $city, $state, $zip, $country, $address, $address2, $retailLicenseNumber, $position, $referral, $currentSuppliers, $contactPreference, $agreementAccepted, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
             $normalizedSlug = $this->normalizeSlug($requestedSlug);
 
             $existing = $this->findOpenRequest($email, $normalizedSlug);
@@ -86,6 +112,19 @@ class CustomerAccessRequestService
                         'import_path' => $importPath !== '' ? $importPath : null,
                         'mobile_interest' => $mobileInterest !== '' ? $mobileInterest : null,
                         'website' => $website !== '' ? $website : null,
+                        'phone' => $phone !== '' ? $phone : null,
+                        'city' => $city !== '' ? $city : null,
+                        'state' => $state !== '' ? $state : null,
+                        'zip' => $zip !== '' ? $zip : null,
+                        'country' => $country !== '' ? $country : null,
+                        'address' => $address !== '' ? $address : null,
+                        'address2' => $address2 !== '' ? $address2 : null,
+                        'retail_license_number' => $retailLicenseNumber !== '' ? $retailLicenseNumber : null,
+                        'position' => $position !== '' ? $position : null,
+                        'referral' => $referral !== '' ? $referral : null,
+                        'current_suppliers' => $currentSuppliers !== '' ? $currentSuppliers : null,
+                        'contact_preference' => $contactPreference !== '' ? $contactPreference : null,
+                        'agreement' => $agreementAccepted,
                         'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                         'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                     ], static fn (mixed $value): bool => $value !== null)),
@@ -124,6 +163,19 @@ class CustomerAccessRequestService
                     'import_path' => $importPath !== '' ? $importPath : null,
                     'mobile_interest' => $mobileInterest !== '' ? $mobileInterest : null,
                     'website' => $website !== '' ? $website : null,
+                    'phone' => $phone !== '' ? $phone : null,
+                    'city' => $city !== '' ? $city : null,
+                    'state' => $state !== '' ? $state : null,
+                    'zip' => $zip !== '' ? $zip : null,
+                    'country' => $country !== '' ? $country : null,
+                    'address' => $address !== '' ? $address : null,
+                    'address2' => $address2 !== '' ? $address2 : null,
+                    'retail_license_number' => $retailLicenseNumber !== '' ? $retailLicenseNumber : null,
+                    'position' => $position !== '' ? $position : null,
+                    'referral' => $referral !== '' ? $referral : null,
+                    'current_suppliers' => $currentSuppliers !== '' ? $currentSuppliers : null,
+                    'contact_preference' => $contactPreference !== '' ? $contactPreference : null,
+                    'agreement' => $agreementAccepted,
                     'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                     'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                 ],

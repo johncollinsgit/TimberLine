@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
+use App\Services\Shopify\ShopifyWholesaleCustomerApprovalService;
 use App\Support\Tenancy\TenantHostBuilder;
 use DomainException;
 use Illuminate\Support\Carbon;
@@ -21,6 +22,7 @@ class CustomerAccessApprovalService
         protected LandlordOperatorActionAuditService $auditService,
         protected TenantHostBuilder $hostBuilder,
         protected TenantSetupStatusService $setupStatusService,
+        protected ShopifyWholesaleCustomerApprovalService $shopifyWholesaleCustomerApprovalService,
     ) {
     }
 
@@ -129,6 +131,17 @@ class CustomerAccessApprovalService
         });
 
         if ($result['should_send']) {
+            try {
+                $this->syncShopifyWholesaleCustomer(
+                    user: $result['user'],
+                    request: $result['request'],
+                    actorUserId: $actorUserId,
+                    source: 'customer_access_request.approve'
+                );
+            } catch (\Throwable) {
+                // Keep the approval path moving; storefront access remains blocked until the tag is applied.
+            }
+
             $this->sendActivationEmail(
                 request: $result['request'],
                 user: $result['user'],
@@ -140,6 +153,75 @@ class CustomerAccessApprovalService
         }
 
         return $result['request']->fresh() ?? $result['request'];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function syncShopifyWholesaleCustomer(
+        User $user,
+        CustomerAccessRequest $request,
+        int $actorUserId,
+        string $source
+    ): array {
+        try {
+            $result = $this->shopifyWholesaleCustomerApprovalService->syncByEmail((string) $user->email, [
+                'name' => (string) ($request->name ?: $user->name),
+                'company' => (string) ($request->company ?? ''),
+            ]);
+
+            $this->auditService->record(
+                tenantId: $request->tenant_id ? (int) $request->tenant_id : null,
+                actorUserId: $actorUserId,
+                actionType: 'customer_access_request.shopify_sync',
+                status: 'success',
+                targetType: 'customer_access_request',
+                targetId: (int) $request->id,
+                context: [
+                    'source' => $source,
+                    'email' => (string) $user->email,
+                    'request_status' => (string) ($request->status ?? ''),
+                    'store_key' => (string) ($result['store_key'] ?? 'wholesale'),
+                    'shop_domain' => (string) ($result['shop_domain'] ?? ''),
+                    'customer_id' => (string) ($result['customer_id'] ?? ''),
+                    'customer_gid' => (string) ($result['customer_gid'] ?? ''),
+                    'tag_added' => (bool) ($result['tag_added'] ?? false),
+                    'customer_created' => (bool) ($result['customer_created'] ?? false),
+                    'customer_updated' => (bool) ($result['customer_updated'] ?? false),
+                    'customer_tags' => array_values(array_map(
+                        static fn (mixed $value): string => (string) $value,
+                        is_array($result['customer_tags'] ?? null) ? $result['customer_tags'] : []
+                    )),
+                ],
+                beforeState: null,
+                afterState: null,
+                result: $result,
+            );
+
+            return $result;
+        } catch (\Throwable $e) {
+            report($e);
+
+            $this->auditService->record(
+                tenantId: $request->tenant_id ? (int) $request->tenant_id : null,
+                actorUserId: $actorUserId,
+                actionType: 'customer_access_request.shopify_sync',
+                status: 'failed',
+                targetType: 'customer_access_request',
+                targetId: (int) $request->id,
+                context: [
+                    'source' => $source,
+                    'email' => (string) $user->email,
+                    'request_status' => (string) ($request->status ?? ''),
+                    'error' => (string) $e->getMessage(),
+                ],
+                beforeState: null,
+                afterState: null,
+                result: ['error' => (string) $e->getMessage()],
+            );
+
+            throw $e;
+        }
     }
 
     public function reject(int $requestId, int $actorUserId, ?string $rejectionNote = null): CustomerAccessRequest

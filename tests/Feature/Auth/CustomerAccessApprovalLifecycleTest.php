@@ -3,9 +3,12 @@
 use App\Livewire\Admin\Users\UsersIndex;
 use App\Models\CustomerAccessRequest;
 use App\Models\Tenant;
+use App\Models\ShopifyStore;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
 use App\Services\Onboarding\CustomerAccessApprovalService;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
@@ -13,7 +16,77 @@ beforeEach(function (): void {
     $this->withoutVite();
     config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
+    seedWholesaleShopifyStoreForApprovalLifecycleTest();
+
+    Http::fake(function (Request $request) {
+        $payload = json_decode($request->body(), true);
+        $query = (string) data_get($payload, 'query', '');
+
+        if (str_contains($query, 'FindWholesaleCustomerByEmail')) {
+            return Http::response([
+                'data' => [
+                    'customers' => [
+                        'edges' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'UpsertWholesaleCustomer')) {
+            return Http::response([
+                'data' => [
+                    'customerSet' => [
+                        'customer' => [
+                            'id' => 'gid://shopify/Customer/999',
+                            'legacyResourceId' => '999',
+                            'email' => 'default-wholesale@example.com',
+                            'firstName' => 'Default',
+                            'lastName' => 'Wholesale',
+                            'phone' => null,
+                            'tags' => ['wholesale'],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'AddWholesaleCustomerTag')) {
+            return Http::response([
+                'data' => [
+                    'tagsAdd' => [
+                        'node' => [
+                            'id' => 'gid://shopify/Customer/999',
+                            'legacyResourceId' => '999',
+                            'email' => 'default-wholesale@example.com',
+                            'firstName' => 'Default',
+                            'lastName' => 'Wholesale',
+                            'phone' => null,
+                            'tags' => ['wholesale'],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        throw new \RuntimeException('Unexpected Shopify request in approval lifecycle default fake.');
+    });
 });
+
+function seedWholesaleShopifyStoreForApprovalLifecycleTest(): void
+{
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'tenant_id' => null,
+            'shop_domain' => 'wholesale-test.myshopify.com',
+            'access_token' => 'wholesale-token',
+            'scopes' => 'read_customers,write_customers',
+            'installed_at' => now(),
+        ]
+    );
+}
 
 test('non-admin users cannot perform approve/reject/resend actions', function (): void {
     Notification::fake();
@@ -132,6 +205,79 @@ test('resend activation uses tenant host and is throttled for repeated clicks', 
 
 test('admin surface routes through Livewire component for approval actions', function (): void {
     Notification::fake();
+    seedWholesaleShopifyStoreForApprovalLifecycleTest();
+
+    $shopifyRequests = [];
+    Http::fake(function (Request $request) use (&$shopifyRequests) {
+        $payload = json_decode($request->body(), true);
+        $shopifyRequests[] = [
+            'query' => (string) data_get($payload, 'query', ''),
+            'variables' => data_get($payload, 'variables', []),
+        ];
+
+        $query = (string) data_get($payload, 'query', '');
+        if (str_contains($query, 'FindWholesaleCustomerByEmail')) {
+            return Http::response([
+                'data' => [
+                    'customers' => [
+                        'edges' => [
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Customer/123',
+                                    'legacyResourceId' => '123',
+                                    'email' => 'ops-livewire@example.com',
+                                    'firstName' => 'Ops',
+                                    'lastName' => 'Livewire',
+                                    'phone' => null,
+                                    'tags' => ['vip'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'UpsertWholesaleCustomer')) {
+            return Http::response([
+                'data' => [
+                    'customerSet' => [
+                        'customer' => [
+                            'id' => 'gid://shopify/Customer/123',
+                            'legacyResourceId' => '123',
+                            'email' => 'ops-livewire@example.com',
+                            'firstName' => 'Ops',
+                            'lastName' => 'Livewire',
+                            'phone' => null,
+                            'tags' => ['vip'],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'AddWholesaleCustomerTag')) {
+            return Http::response([
+                'data' => [
+                    'tagsAdd' => [
+                        'node' => [
+                            'id' => 'gid://shopify/Customer/123',
+                            'legacyResourceId' => '123',
+                            'email' => 'ops-livewire@example.com',
+                            'firstName' => 'Ops',
+                            'lastName' => 'Livewire',
+                            'phone' => null,
+                            'tags' => ['vip', 'wholesale'],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        throw new \RuntimeException('Unexpected Shopify request during approval test.');
+    });
 
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
     $this->actingAs($admin)->get(route('admin.users'))->assertOk();
@@ -157,4 +303,82 @@ test('admin surface routes through Livewire component for approval actions', fun
 
     $user->refresh();
     expect((bool) $user->is_active)->toBeTrue();
+    expect($shopifyRequests)->toHaveCount(2);
+    $shopifyQueryList = collect($shopifyRequests)->pluck('query')->join("\n");
+    expect($shopifyQueryList)->toContain('FindWholesaleCustomerByEmail');
+    expect($shopifyQueryList)->toContain('UpsertWholesaleCustomer');
+});
+
+test('approval still completes when Shopify sync fails', function (): void {
+    Notification::fake();
+    seedWholesaleShopifyStoreForApprovalLifecycleTest();
+
+    $shopifyRequests = [];
+    Http::fake(function (Request $request) use (&$shopifyRequests) {
+        $payload = json_decode($request->body(), true);
+        $shopifyRequests[] = (string) data_get($payload, 'query', '');
+
+        $query = (string) data_get($payload, 'query', '');
+        if (str_contains($query, 'FindWholesaleCustomerByEmail')) {
+            return Http::response([
+                'data' => [
+                    'customers' => [
+                        'edges' => [
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Customer/456',
+                                    'legacyResourceId' => '456',
+                                    'email' => 'ops-failure@example.com',
+                                    'firstName' => 'Ops',
+                                    'lastName' => 'Failure',
+                                    'phone' => null,
+                                    'tags' => ['vip'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'UpsertWholesaleCustomer')) {
+            return Http::response([
+                'data' => [
+                    'customerSet' => [
+                        'customer' => null,
+                        'userErrors' => [
+                            [
+                                'field' => ['email'],
+                                'message' => 'Customer does not exist',
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200);
+        }
+
+        throw new \RuntimeException('Unexpected Shopify request during approval failure test.');
+    });
+
+    $approver = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+    $accessRequest = CustomerAccessRequest::query()->create([
+        'intent' => 'production',
+        'status' => 'pending',
+        'name' => 'Ops Failure',
+        'email' => 'ops-failure@example.com',
+        'company' => 'Acme Candle Co',
+        'requested_tenant_slug' => 'acme',
+    ]);
+
+    $service = app(CustomerAccessApprovalService::class);
+    $service->approve((int) $accessRequest->id, (int) $approver->id);
+
+    $accessRequest->refresh();
+    $user = User::query()->where('email', 'ops-failure@example.com')->firstOrFail();
+
+    expect((string) $accessRequest->status)->toBe('approved')
+        ->and((bool) $user->is_active)->toBeTrue()
+        ->and($shopifyRequests)->toHaveCount(2);
+
+    Notification::assertSentToTimes($user, ApprovalPasswordSetupNotification::class, 1);
 });

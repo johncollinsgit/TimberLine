@@ -103,6 +103,7 @@ return [
     ],
 
     'access_request' => [
+        'review_email' => env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com'),
         'business_types' => [
             'landscaper' => 'Landscaper',
             'electrician' => 'Electrician',

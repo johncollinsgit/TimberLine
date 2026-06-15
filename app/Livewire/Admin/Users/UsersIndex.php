@@ -171,6 +171,8 @@ class UsersIndex extends Component
                 } catch (Throwable $e) {
                     report($e);
                 }
+
+                $this->syncWholesaleApprovalIfPossible($fresh, 'admin.users.save');
             }
         }
 
@@ -216,6 +218,7 @@ class UsersIndex extends Component
 
         $user = User::query()->findOrFail($id);
         $success = false;
+        $emailSent = false;
         $request = $this->latestPendingAccessRequest($user);
 
         try {
@@ -231,7 +234,14 @@ class UsersIndex extends Component
                         'approved_by' => auth()->id(),
                     ])->save();
 
-                    $user->notify(new ApprovalPasswordSetupNotification($user, $this->preferredHostForUser($user)));
+                    try {
+                        $user->notify(new ApprovalPasswordSetupNotification($user, $this->preferredHostForUser($user)));
+                        $emailSent = true;
+                    } catch (Throwable $e) {
+                        report($e);
+                    }
+
+                    $this->syncWholesaleApprovalIfPossible($user, 'admin.users.approve');
                     $success = true;
                 }
             }
@@ -241,9 +251,9 @@ class UsersIndex extends Component
 
         $this->dispatch('toast', [
             'message' => $success
-                ? 'Approval processed.'
+                ? ($emailSent || $request !== null ? 'Approval processed.' : 'Approval processed. Approval email could not be sent.')
                 : 'Approval failed. See logs for details.',
-            'style' => $success ? 'success' : 'warning',
+            'style' => $success ? (($request === null && ! $emailSent) ? 'warning' : 'success') : 'warning',
         ]);
     }
 
@@ -349,7 +359,7 @@ class UsersIndex extends Component
 
     protected function preferredHostForUser(User $user): ?string
     {
-        $request = $this->latestPendingAccessRequest($user);
+        $request = $this->latestPendingAccessRequest($user) ?? $this->latestApprovedAccessRequest($user);
         if (! $request) {
             return null;
         }
@@ -373,6 +383,24 @@ class UsersIndex extends Component
             ->where('status', 'approved')
             ->orderByDesc('id')
             ->first();
+    }
+
+    protected function syncWholesaleApprovalIfPossible(User $user, string $source): void
+    {
+        $request = $this->latestApprovedAccessRequest($user);
+        if (! $request) {
+            return;
+        }
+
+        try {
+            app(CustomerAccessApprovalService::class)->syncShopifyWholesaleCustomer(
+                user: $user,
+                request: $request,
+                actorUserId: (int) (auth()->id() ?: 0),
+                source: $source
+            );
+        } catch (Throwable $e) {
+        }
     }
 
     protected function assertApprovalActor(): void
