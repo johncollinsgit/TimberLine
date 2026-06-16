@@ -10,7 +10,7 @@
     $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
     $productName = (string) config('everbranch.product_name', 'Everbranch');
     $companyName = (string) config('everbranch.company_name', 'Evergrove');
-    $headline = (string) ($content['headline'] ?? 'Your business, Under your control');
+    $headline = (string) ($content['headline'] ?? 'All of your business, in one place');
     $summary = (string) ($content['summary'] ?? 'Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent app.');
 @endphp
 <!DOCTYPE html>
@@ -25,30 +25,6 @@
     @include('platform.partials.premium-motion')
 
     <div class="fb-public-shell fb-public-shell--wide">
-        <div class="fb-site-nav-wrap">
-            <nav class="fb-site-nav fb-site-nav--premium" aria-label="Primary navigation">
-                <a href="#splash" class="fb-site-brand fb-site-brand--lockup">
-                    <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
-                </a>
-                <div class="fb-site-links" aria-label="Public sections">
-                    <a href="#tab-product" data-public-tab-link="product">Product</a>
-                    <a href="#tab-workflows" data-public-tab-link="workflows">Workflows</a>
-                    <a href="#tab-customers" data-public-tab-link="customers">Customers</a>
-                    <a href="#tab-integrations" data-public-tab-link="integrations">Integrations</a>
-                    <a href="#tab-security" data-public-tab-link="security">Security</a>
-                    <a href="#tab-plans" data-public-tab-link="plans">Plans</a>
-                </div>
-                <div class="fb-hero-cta fb-hero-cta--nav">
-                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-                    @if(is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null))
-                        <a href="{{ $cta['start_client']['href'] }}" class="fb-btn fb-btn-primary">{{ $cta['start_client']['label'] ?? 'Start as a client' }}</a>
-                    @else
-                        <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Start as a client</a>
-                    @endif
-                </div>
-            </nav>
-        </div>
-
         <header id="splash" class="fb-splash" aria-label="Everbranch entry">
             <div class="fb-splash__field" aria-hidden="true">
                 <span class="fb-splash__branch fb-splash__branch--one"></span>
@@ -74,23 +50,32 @@
             </div>
         </header>
 
+        <div class="fb-site-nav-wrap">
+            <nav class="fb-site-nav fb-site-nav--premium" aria-label="Primary navigation">
+                <a href="#splash" class="fb-site-brand fb-site-brand--lockup">
+                    <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
+                </a>
+                <div class="fb-site-links" role="tablist" aria-label="Public sections">
+                    <a id="tab-product" href="#everbranch-public" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">Product</a>
+                    <a id="tab-workflows" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">Workflows</a>
+                    <a id="tab-customers" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-customers" data-public-tab-trigger="customers">Customers</a>
+                    <a id="tab-integrations" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-integrations" data-public-tab-trigger="integrations">Integrations</a>
+                    <a id="tab-security" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-security" data-public-tab-trigger="security">Security</a>
+                    <a id="tab-plans" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-plans" data-public-tab-trigger="plans">Plans</a>
+                </div>
+                <div class="fb-hero-cta fb-hero-cta--nav">
+                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
+                    @if(is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null))
+                        <a href="{{ $cta['start_client']['href'] }}" class="fb-btn fb-btn-primary">{{ $cta['start_client']['label'] ?? 'Start as a client' }}</a>
+                    @else
+                        <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Start as a client</a>
+                    @endif
+                </div>
+            </nav>
+        </div>
+
         <main id="everbranch-public" class="fb-public-main" tabindex="-1">
             <section class="fb-public-tabs" aria-label="Everbranch overview tabs" data-public-tabs data-reveal>
-                <div class="fb-section-header fb-public-tabs__header">
-                    <p class="fb-section-kicker">Explore Everbranch</p>
-                    <h2>Choose the part of the business you want to understand first.</h2>
-                    <p>The same information is grouped into tabs now, so the page feels more like an app and less like a long scroll.</p>
-                </div>
-
-                <div class="fb-public-tabs__nav" role="tablist" aria-label="Everbranch sections">
-                    <button id="tab-product" type="button" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">Product</button>
-                    <button id="tab-workflows" type="button" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">Workflows</button>
-                    <button id="tab-customers" type="button" role="tab" aria-selected="false" aria-controls="panel-customers" data-public-tab-trigger="customers">Customers</button>
-                    <button id="tab-integrations" type="button" role="tab" aria-selected="false" aria-controls="panel-integrations" data-public-tab-trigger="integrations">Integrations</button>
-                    <button id="tab-security" type="button" role="tab" aria-selected="false" aria-controls="panel-security" data-public-tab-trigger="security">Security</button>
-                    <button id="tab-plans" type="button" role="tab" aria-selected="false" aria-controls="panel-plans" data-public-tab-trigger="plans">Plans</button>
-                </div>
-
                 <div class="fb-public-tabs__panels">
                     <article id="panel-product" class="fb-public-tab-panel is-active" role="tabpanel" aria-labelledby="tab-product" data-public-tab-panel="product">
                         <div class="fb-public-hero">

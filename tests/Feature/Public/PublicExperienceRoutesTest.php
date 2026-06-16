@@ -8,7 +8,7 @@ test('guest home route renders the marketing landing page by default', function 
     $response = $this->get('http://theeverbranch.com/')
         ->assertOk()
         ->assertSee('class="fb-public-body fb-public-body--splash"', false)
-        ->assertSeeText('Your business, Under your control')
+        ->assertSeeText('All of your business, in one place')
         ->assertSeeText('The Future of AI-Powered Small Business')
         ->assertSee('href="#everbranch-public"', false)
         ->assertSee('id="everbranch-public"', false)
@@ -17,6 +17,14 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('role="tablist"', false)
         ->assertSee('data-public-tab-trigger="product"', false)
         ->assertSee('data-public-tab-panel="plans"', false)
+        ->assertSeeInOrder([
+            'id="splash"',
+            'class="fb-site-nav-wrap"',
+            'id="everbranch-public"',
+        ], false)
+        ->assertDontSee('fb-public-tabs__nav', false)
+        ->assertDontSeeText('Explore Everbranch')
+        ->assertDontSeeText('Choose the part of the business you want to understand first.')
         ->assertSeeText('Shopify is supported. It is not the whole product.')
         ->assertSeeText('Start as a client')
         ->assertSeeText('Login')

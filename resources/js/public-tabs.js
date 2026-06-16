@@ -1,5 +1,6 @@
 function activateTab(root, key, updateHash = true) {
-  const triggers = Array.from(root.querySelectorAll("[data-public-tab-trigger]"));
+  const scope = root.closest(".fb-public-shell") || document;
+  const triggers = Array.from(scope.querySelectorAll("[data-public-tab-trigger]"));
   const panels = Array.from(root.querySelectorAll("[data-public-tab-panel]"));
   const selectedTrigger = triggers.find((trigger) => trigger.dataset.publicTabTrigger === key) || triggers[0];
   const selectedKey = selectedTrigger?.dataset.publicTabTrigger;
@@ -25,10 +26,11 @@ function activateTab(root, key, updateHash = true) {
 }
 
 function tabKeyFromHash(root) {
+  const scope = root.closest(".fb-public-shell") || document;
   const id = window.location.hash.replace("#", "");
   if (!id) return null;
 
-  return root.querySelector(`#${CSS.escape(id)}[data-public-tab-trigger]`)?.dataset.publicTabTrigger || null;
+  return scope.querySelector(`#${CSS.escape(id)}[data-public-tab-trigger]`)?.dataset.publicTabTrigger || null;
 }
 
 export function mountPublicTabsNow() {
@@ -36,12 +38,17 @@ export function mountPublicTabsNow() {
     if (root.__mfPublicTabsMounted) return;
     root.__mfPublicTabsMounted = true;
 
-    const triggers = Array.from(root.querySelectorAll("[data-public-tab-trigger]"));
-    const navLinks = Array.from(document.querySelectorAll("[data-public-tab-link]"));
+    const scope = root.closest(".fb-public-shell") || document;
+    const triggers = Array.from(scope.querySelectorAll("[data-public-tab-trigger]"));
+    const panelAnchor = document.getElementById("everbranch-public");
 
     triggers.forEach((trigger, index) => {
       trigger.tabIndex = trigger.classList.contains("is-active") ? 0 : -1;
-      trigger.addEventListener("click", () => activateTab(root, trigger.dataset.publicTabTrigger));
+      trigger.addEventListener("click", (event) => {
+        event.preventDefault();
+        activateTab(root, trigger.dataset.publicTabTrigger);
+        panelAnchor?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
       trigger.addEventListener("keydown", (event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
@@ -55,12 +62,6 @@ export function mountPublicTabsNow() {
         const nextTrigger = triggers[nextIndex];
         nextTrigger?.focus();
         activateTab(root, nextTrigger?.dataset.publicTabTrigger);
-      });
-    });
-
-    navLinks.forEach((link) => {
-      link.addEventListener("click", () => {
-        activateTab(root, link.dataset.publicTabLink);
       });
     });
 

@@ -22,10 +22,12 @@ test('promo page renders premium Everbranch splash and pricing content', functio
         ->assertSee('data-premium-motion="public"', false)
         ->assertSee('id="intro-logo"', false)
         ->assertSee('id="site-ambient"', false)
-        ->assertSeeText('Your business, Under your control')
+        ->assertSeeText('All of your business, in one place')
         ->assertSeeText('The Future of AI-Powered Small Business')
         ->assertSee('data-public-tabs', false)
         ->assertSee('data-public-tab-trigger="workflows"', false)
+        ->assertDontSee('fb-public-tabs__nav', false)
+        ->assertDontSeeText('Explore Everbranch')
         ->assertSeeText('Shopify is supported. It is not the whole product.')
         ->assertSeeText('From $777/mo')
         ->assertSeeText('Start as a client');

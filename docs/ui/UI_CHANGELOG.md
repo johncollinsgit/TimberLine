@@ -3,9 +3,11 @@
 ## 2026-06-16 — Public Homepage Tabs and Hero Copy
 
 ### What changed
-- Updated the Everbranch public splash headline to “Your business, Under your control.”
+- Updated the Everbranch public splash headline to “All of your business, in one place.”
 - Updated the public summary copy to describe Everbranch as one intelligent app.
 - Converted the long public homepage body into tabs for Product, Workflows, Customers, Integrations, Security, and Plans.
+- Made the splash the full first-page experience, then moved the sticky public nav below it so the nav is the only tab control.
+- Removed the duplicate “Explore Everbranch” intro and lower tab selector from the public homepage.
 
 ### What did not change
 - No billing, checkout, module activation, imports, mobile APIs, or tenant onboarding behavior changed from the public homepage.
