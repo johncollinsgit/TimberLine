@@ -17,6 +17,19 @@
     $selectedTimeline = (string) old('timeline', '');
     $selectedImportPath = (string) old('import_path', 'undecided');
     $selectedMobileInterest = (string) old('mobile_interest', 'undecided');
+    $showAdvancedDetails = (bool) array_filter([
+        old('company'),
+        old('website'),
+        old('business_type'),
+        old('team_size'),
+        old('timeline'),
+        old('import_path'),
+        old('mobile_interest'),
+        old('requested_tenant_slug'),
+        old('message'),
+        old('preferred_plan_key'),
+        old('addons_interest'),
+    ], static fn ($value): bool => ! empty($value));
     $intentHeadline = $intentValue === 'demo'
         ? 'Demo access request'
         : 'Production access request';
@@ -29,244 +42,248 @@
 <body class="fb-public-body" data-premium-motion="public">
     @include('platform.partials.premium-motion')
 
-    <main class="fb-public-shell fb-contact-shell">
+    <main class="fb-public-shell fb-contact-shell fb-start-shell">
         <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary fb-contact-back">Back to homepage</a>
 
-        <section class="fb-card fb-contact-overview" aria-label="Request overview" data-reveal data-premium-surface>
+        <section class="fb-card fb-contact-overview fb-start-hero" aria-label="Request overview" data-reveal data-premium-surface>
             <p class="fb-section-kicker">{{ $content['eyebrow'] ?? 'Access' }}</p>
             <h1 class="fb-contact-title">{{ $content['headline'] ?? 'Request access' }}</h1>
             <p class="fb-contact-summary">{{ $content['summary'] ?? 'Submit your details and we will follow up shortly.' }}</p>
             @if(filled($content['intent_note'] ?? null))
                 <p class="mt-2 text-sm text-[var(--fb-text-secondary)]">{{ $content['intent_note'] }}</p>
             @endif
-            <div class="mt-4 flex flex-wrap gap-2 text-xs">
+            <div class="fb-start-hero__chips">
                 <span class="fb-module-pill {{ $intentValue === 'demo' ? 'fb-module-pill--accent' : '' }}">Demo = evaluate safely</span>
                 <span class="fb-module-pill {{ $intentValue === 'production' ? 'fb-module-pill--accent' : '' }}">Production = apply + activate</span>
+                <span class="fb-module-pill">Only a few questions to start</span>
             </div>
         </section>
 
-        <section class="fb-section" aria-label="Access request form" data-reveal>
-            <div class="grid gap-6 lg:grid-cols-[1.6fr_minmax(0,1fr)]">
-                <div class="fb-card p-6" data-premium-surface>
+        <section class="fb-start-layout" aria-label="Access request form" data-reveal>
+            <div class="fb-card fb-start-form-card" data-premium-surface>
                 @if (session('status'))
                     <div class="fb-state fb-state--success mb-4">{{ session('status') }}</div>
                 @endif
 
-                    <div class="mb-4 flex items-center justify-between gap-3">
+                <div class="fb-start-form-header">
+                    <div>
+                        <h2 class="fb-start-form-title">{{ $intentHeadline }}</h2>
+                        <p class="fb-start-form-summary">Share the basics now. Optional details stay tucked away until you need them.</p>
+                    </div>
+                    <div class="fb-start-form-note">We keep demo and production routing separate.</div>
+                </div>
+
+                <form method="POST" action="{{ route('platform.access-request') }}" class="space-y-4">
+                    @csrf
+                    <input type="hidden" name="intent" value="{{ $intentValue }}" />
+
+                    <div class="fb-start-form-grid fb-start-form-grid--2">
                         <div>
-                            <h2 class="text-lg font-semibold text-[var(--fb-text-primary)]">{{ $intentHeadline }}</h2>
-                            <p class="text-sm text-[var(--fb-text-secondary)]">Complete the essentials once. We keep demo and production routing separate.</p>
+                            <label class="fb-form-label" for="name">Name</label>
+                            <input id="name" name="name" type="text" class="fb-input fb-start-field mt-2" value="{{ old('name') }}" required />
+                            @error('name') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                        </div>
+                        <div>
+                            <label class="fb-form-label" for="email">Email</label>
+                            <input id="email" name="email" type="email" class="fb-input fb-start-field mt-2" value="{{ old('email') }}" required />
+                            @error('email') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                         </div>
                     </div>
 
-                    <form method="POST" action="{{ route('platform.access-request') }}" class="space-y-4">
-                        @csrf
-                        <input type="hidden" name="intent" value="{{ $intentValue }}" />
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="fb-form-label" for="name">Name</label>
-                                <input id="name" name="name" type="text" class="fb-input mt-2" value="{{ old('name') }}" required />
-                                @error('name') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
-                            <div>
-                                <label class="fb-form-label" for="email">Email</label>
-                                <input id="email" name="email" type="email" class="fb-input mt-2" value="{{ old('email') }}" required />
-                                @error('email') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
+                    <div class="fb-start-form-grid fb-start-form-grid--2">
+                        <div>
+                            <label class="fb-form-label" for="company">Company (optional)</label>
+                            <input id="company" name="company" type="text" class="fb-input fb-start-field mt-2" value="{{ old('company') }}" />
+                            @error('company') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                         </div>
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="fb-form-label" for="company">Company (optional)</label>
-                                <input id="company" name="company" type="text" class="fb-input mt-2" value="{{ old('company') }}" />
-                                @error('company') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
-                            <div>
-                                <label class="fb-form-label" for="website">Website (optional)</label>
-                                <input id="website" name="website" type="url" class="fb-input mt-2" value="{{ old('website') }}" placeholder="https://example.com" />
-                                @error('website') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
+                        <div>
+                            <label class="fb-form-label" for="website">Website (optional)</label>
+                            <input id="website" name="website" type="url" class="fb-input fb-start-field mt-2" value="{{ old('website') }}" placeholder="https://example.com" />
+                            @error('website') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                         </div>
+                    </div>
 
-                        <div class="grid gap-4 md:grid-cols-3">
-                            <div>
-                                <label class="fb-form-label" for="business_type">Business type</label>
-                                <select id="business_type" name="business_type" class="fb-input mt-2">
-                                    <option value="">Select one</option>
-                                    @foreach($businessTypes as $key => $label)
-                                        <option value="{{ $key }}" @selected($selectedBusinessType === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                                @error('business_type') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
-                            <div>
-                                <label class="fb-form-label" for="team_size">Team size</label>
-                                <select id="team_size" name="team_size" class="fb-input mt-2">
-                                    <option value="">Select one</option>
-                                    @foreach($teamSizes as $key => $label)
-                                        <option value="{{ $key }}" @selected($selectedTeamSize === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                                @error('team_size') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
-                            <div>
-                                <label class="fb-form-label" for="timeline">Timeline</label>
-                                <select id="timeline" name="timeline" class="fb-input mt-2">
-                                    <option value="">Select one</option>
-                                    @foreach($timelines as $key => $label)
-                                        <option value="{{ $key }}" @selected($selectedTimeline === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                                @error('timeline') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
+                    <div class="fb-start-form-grid fb-start-form-grid--3">
+                        <div>
+                            <label class="fb-form-label" for="business_type">Business type</label>
+                            <select id="business_type" name="business_type" class="fb-input fb-select fb-start-field mt-2">
+                                <option value="">Select one</option>
+                                @foreach($businessTypes as $key => $label)
+                                    <option value="{{ $key }}" @selected($selectedBusinessType === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @error('business_type') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                         </div>
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="fb-form-label" for="import_path">Primary setup/import path</label>
-                                <select id="import_path" name="import_path" class="fb-input mt-2">
-                                    @foreach($importPaths as $key => $label)
-                                        <option value="{{ $key }}" @selected($selectedImportPath === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                                <p class="mt-1 text-xs text-[var(--fb-text-secondary)]">Shopify is the flagship path, but Square, CSV, manual, and other setup paths can be reviewed manually.</p>
-                                @error('import_path') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
-                            <div>
-                                <label class="fb-form-label" for="mobile_interest">Mobile app interest</label>
-                                <select id="mobile_interest" name="mobile_interest" class="fb-input mt-2">
-                                    @foreach($mobileInterests as $key => $label)
-                                        <option value="{{ $key }}" @selected($selectedMobileInterest === $key)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                                <p class="mt-1 text-xs text-[var(--fb-text-secondary)]">This records future Android/iOS interest only; generic Everbranch mobile access is not active yet.</p>
-                                @error('mobile_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
-                            </div>
+                        <div>
+                            <label class="fb-form-label" for="team_size">Team size</label>
+                            <select id="team_size" name="team_size" class="fb-input fb-select fb-start-field mt-2">
+                                <option value="">Select one</option>
+                                @foreach($teamSizes as $key => $label)
+                                    <option value="{{ $key }}" @selected($selectedTeamSize === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @error('team_size') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                         </div>
+                        <div>
+                            <label class="fb-form-label" for="timeline">Timeline</label>
+                            <select id="timeline" name="timeline" class="fb-input fb-select fb-start-field mt-2">
+                                <option value="">Select one</option>
+                                @foreach($timelines as $key => $label)
+                                    <option value="{{ $key }}" @selected($selectedTimeline === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @error('timeline') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                        </div>
+                    </div>
 
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div>
-                                <label class="fb-form-label" for="requested_tenant_slug">Preferred workspace address (optional)</label>
-                                <input
-                                    id="requested_tenant_slug"
-                                    name="requested_tenant_slug"
-                                    type="text"
-                                    class="fb-input mt-2"
-                                    value="{{ old('requested_tenant_slug') }}"
-                                    @if($intentValue === 'demo') disabled @endif
-                                />
-                                @php
-                                    $canonicalTenantDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com')));
-                                @endphp
-                                <div class="fb-help">
-                                    This becomes your team’s workspace URL after approval, like `your-workspace.{{ $canonicalTenantDomain }}`.
+                    <details class="fb-start-details" @if($showAdvancedDetails) open @endif>
+                        <summary>
+                            <span>
+                                <strong>More details</strong>
+                                <em>Optional, but useful for routing and setup</em>
+                            </span>
+                            <span class="fb-start-details__toggle">Optional</span>
+                        </summary>
+                        <div class="fb-start-details__body">
+                            <div class="fb-start-form-grid fb-start-form-grid--2">
+                                <div>
+                                    <label class="fb-form-label" for="requested_tenant_slug">Preferred workspace address (optional)</label>
+                                    <input
+                                        id="requested_tenant_slug"
+                                        name="requested_tenant_slug"
+                                        type="text"
+                                        class="fb-input fb-start-field mt-2"
+                                        value="{{ old('requested_tenant_slug') }}"
+                                        @if($intentValue === 'demo') disabled @endif
+                                    />
+                                    @php
+                                        $canonicalTenantDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com')));
+                                    @endphp
+                                    <div class="fb-help">
+                                        This becomes your team’s workspace URL after approval, like `your-workspace.{{ $canonicalTenantDomain }}`.
+                                    </div>
+                                    @error('requested_tenant_slug') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                                 </div>
-                                @error('requested_tenant_slug') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                                <div>
+                                    <label class="fb-form-label" for="message">Notes (optional)</label>
+                                    <textarea id="message" name="message" rows="4" class="fb-input fb-start-field fb-start-textarea mt-2">{{ old('message') }}</textarea>
+                                    @error('message') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                                </div>
                             </div>
-                            <div>
-                                <label class="fb-form-label" for="message">Notes (optional)</label>
-                                <textarea id="message" name="message" rows="4" class="fb-input mt-2">{{ old('message') }}</textarea>
-                                @error('message') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+
+                            <div class="fb-start-form-grid fb-start-form-grid--2">
+                                <div>
+                                    <label class="fb-form-label" for="import_path">Primary setup/import path</label>
+                                    <select id="import_path" name="import_path" class="fb-input fb-select fb-start-field mt-2">
+                                        @foreach($importPaths as $key => $label)
+                                            <option value="{{ $key }}" @selected($selectedImportPath === $key)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-1 text-xs text-[var(--fb-text-secondary)]">Shopify is the flagship path, but Square, CSV, manual, and other setup paths can be reviewed manually.</p>
+                                    @error('import_path') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                                </div>
+                                <div>
+                                    <label class="fb-form-label" for="mobile_interest">Mobile app interest</label>
+                                    <select id="mobile_interest" name="mobile_interest" class="fb-input fb-select fb-start-field mt-2">
+                                        @foreach($mobileInterests as $key => $label)
+                                            <option value="{{ $key }}" @selected($selectedMobileInterest === $key)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-1 text-xs text-[var(--fb-text-secondary)]">This records future Android/iOS interest only; generic Everbranch mobile access is not active yet.</p>
+                                    @error('mobile_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                                </div>
                             </div>
-                        </div>
 
-                        @if($intentValue === 'production')
-                            <div class="rounded-2xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4">
-                                <div class="text-sm font-semibold text-[var(--fb-text-primary)]">Commercial interest (optional)</div>
-                                <div class="mt-1 text-xs text-[var(--fb-text-secondary)]">This does not trigger billing writes. It helps route the right tier and add-ons after approval.</div>
-
-                                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                                    <div>
-                                        <label class="fb-form-label" for="preferred_plan_key">Preferred tier</label>
-                                        <select id="preferred_plan_key" name="preferred_plan_key" class="fb-input mt-2">
-                                            <option value="">No preference</option>
-                                            @foreach($planCards as $plan)
-                                                @php
-                                                    $key = (string) ($plan['plan_key'] ?? '');
-                                                    $label = (string) ($plan['label'] ?? $key);
-                                                @endphp
-                                                @if($key !== '')
-                                                    <option value="{{ $key }}" @selected($selectedPlanKey === $key)>
-                                                        {{ $label }}{{ $key === $recommendedPlanKey ? ' (recommended)' : '' }}
-                                                    </option>
-                                                @endif
-                                            @endforeach
-                                        </select>
+                            @if($intentValue === 'production')
+                                <div class="fb-start-optional-card">
+                                    <div class="fb-start-optional-card__head">
+                                        <div class="fb-start-optional-card__title">Commercial interest (optional)</div>
+                                        <p>This does not trigger billing writes. It helps route the right tier and add-ons after approval.</p>
                                     </div>
 
-                                    <div>
-                                        <div class="fb-form-label">Add-ons of interest</div>
-                                        <div class="mt-2 flex flex-wrap gap-2">
-                                            @foreach($addonCards as $addon)
-                                                @php
-                                                    $addonKey = (string) ($addon['addon_key'] ?? '');
-                                                    $addonLabel = (string) ($addon['label'] ?? $addonKey);
-                                                @endphp
-                                                @if($addonKey !== '')
-                                                    <label class="fb-module-pill cursor-pointer">
-                                                        <input
-                                                            type="checkbox"
-                                                            class="mr-2"
-                                                            name="addons_interest[]"
-                                                            value="{{ $addonKey }}"
-                                                            @checked(in_array($addonKey, $selectedAddons, true))
-                                                        />
-                                                        {{ $addonLabel }}
-                                                    </label>
-                                                @endif
-                                            @endforeach
+                                    <div class="fb-start-form-grid fb-start-form-grid--2 fb-start-form-grid--compact">
+                                        <div>
+                                            <label class="fb-form-label" for="preferred_plan_key">Preferred tier</label>
+                                            <select id="preferred_plan_key" name="preferred_plan_key" class="fb-input fb-select fb-start-field mt-2">
+                                                <option value="">No preference</option>
+                                                @foreach($planCards as $plan)
+                                                    @php
+                                                        $key = (string) ($plan['plan_key'] ?? '');
+                                                        $label = (string) ($plan['label'] ?? $key);
+                                                    @endphp
+                                                    @if($key !== '')
+                                                        <option value="{{ $key }}" @selected($selectedPlanKey === $key)>
+                                                            {{ $label }}{{ $key === $recommendedPlanKey ? ' (recommended)' : '' }}
+                                                        </option>
+                                                    @endif
+                                                @endforeach
+                                            </select>
                                         </div>
-                                        @error('addons_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+
+                                        <div>
+                                            <div class="fb-form-label">Add-ons of interest</div>
+                                            <div class="mt-2 flex flex-wrap gap-2">
+                                                @foreach($addonCards as $addon)
+                                                    @php
+                                                        $addonKey = (string) ($addon['addon_key'] ?? '');
+                                                        $addonLabel = (string) ($addon['label'] ?? $addonKey);
+                                                    @endphp
+                                                    @if($addonKey !== '')
+                                                        <label class="fb-module-pill cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                class="mr-2"
+                                                                name="addons_interest[]"
+                                                                value="{{ $addonKey }}"
+                                                                @checked(in_array($addonKey, $selectedAddons, true))
+                                                            />
+                                                            {{ $addonLabel }}
+                                                        </label>
+                                                    @endif
+                                                @endforeach
+                                            </div>
+                                            @error('addons_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        @endif
-
-                        <div class="flex flex-wrap items-center gap-3 pt-2">
-                            <button type="submit" class="fb-btn fb-btn-primary">
-                                {{ $content['submit_label'] ?? 'Submit request' }}
-                            </button>
-                            <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Already have access? Sign in</a>
+                            @endif
                         </div>
+                    </details>
 
-                        @if(filled($content['footnote'] ?? null))
-                            <p class="mt-4 text-xs text-[var(--fb-text-secondary)]">{{ $content['footnote'] }}</p>
-                        @endif
-                    </form>
-                </div>
+                    <div class="fb-start-actions">
+                        <button type="submit" class="fb-btn fb-btn-primary fb-start-submit">
+                            {{ $content['submit_label'] ?? 'Submit request' }}
+                        </button>
+                        <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary fb-start-secondary">Already have access? Sign in</a>
+                    </div>
 
-                <aside class="space-y-4">
-                    <article class="fb-card p-5" data-premium-surface>
-                        <h2 class="text-base font-semibold text-[var(--fb-text-primary)]">What happens next</h2>
-                        <ol class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)] list-decimal pl-4">
-                            <li>We review your {{ $intentValue === 'demo' ? 'demo' : 'production' }} request.</li>
-                            <li>If approved, you receive one activation email with a password setup link.</li>
-                            <li>Your first login lands in tenant-aware Start Here with clear next steps.</li>
-                        </ol>
-                    </article>
-
-                    @if($intentValue === 'production')
-                        <article class="fb-card p-5" data-premium-surface>
-                            <h2 class="text-base font-semibold text-[var(--fb-text-primary)]">Production path</h2>
-                            <p class="mt-2 text-sm text-[var(--fb-text-secondary)]">Production onboarding keeps approval, activation, and billing handoff truthful and tenant-safe.</p>
-                            <div class="mt-3 flex flex-wrap gap-2">
-                                <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
-                                <a href="{{ route('platform.contact', ['intent' => 'sales']) }}" class="fb-btn fb-btn-secondary">Talk to sales</a>
-                            </div>
-                        </article>
+                    @if(filled($content['footnote'] ?? null))
+                        <p class="fb-start-footnote">{{ $content['footnote'] }}</p>
                     @else
-                        <article class="fb-card p-5" data-premium-surface>
-                            <h2 class="text-base font-semibold text-[var(--fb-text-primary)]">Demo path</h2>
-                            <p class="mt-2 text-sm text-[var(--fb-text-secondary)]">Demo access uses a safe sample workspace. Production activation is handled separately.</p>
-                            <div class="mt-3 flex flex-wrap gap-2">
-                                <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-secondary">Start as a client</a>
-                                <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
-                            </div>
-                        </article>
+                        <p class="fb-start-footnote">Plan assignment remains landlord-controlled during early rollout. You will land in Start Here after first login.</p>
                     @endif
-                </aside>
+                </form>
             </div>
+
+            <aside class="fb-start-aside">
+                <article class="fb-card fb-start-note-card" data-premium-surface>
+                    <h2 class="text-base font-semibold text-[var(--fb-text-primary)]">What happens next</h2>
+                    <ol class="mt-3 space-y-2 text-sm text-[var(--fb-text-secondary)] list-decimal pl-4">
+                        <li>We review your {{ $intentValue === 'demo' ? 'demo' : 'production' }} request.</li>
+                        <li>If approved, you receive one activation email with a password setup link.</li>
+                        <li>Your first login lands in tenant-aware Start Here with clear next steps.</li>
+                    </ol>
+                </article>
+
+                <article class="fb-card fb-start-note-card fb-start-note-card--compact" data-premium-surface>
+                    <h2 class="text-base font-semibold text-[var(--fb-text-primary)]">Need a different path?</h2>
+                    <p class="mt-2 text-sm text-[var(--fb-text-secondary)]">You can review plans or talk to sales without restarting this form.</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
+                        <a href="{{ route('platform.contact', ['intent' => 'sales']) }}" class="fb-btn fb-btn-secondary">Talk to sales</a>
+                    </div>
+                </article>
+            </aside>
         </section>
     </main>
 </body>

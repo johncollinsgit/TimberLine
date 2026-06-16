@@ -35,9 +35,13 @@ test('public start as a client page renders plan interest inputs', function (): 
         ->assertOk()
         ->assertSee('name="intent" value="production"', false)
         ->assertSeeText('Production access request')
+        ->assertSeeText('Share the basics now. Optional details stay tucked away until you need them.')
+        ->assertSeeText('More details')
         ->assertSeeText('Commercial interest (optional)')
         ->assertSeeText('Preferred tier')
-        ->assertSeeText('Add-ons of interest');
+        ->assertSeeText('Add-ons of interest')
+        ->assertDontSeeText('Production path')
+        ->assertDontSeeText('Demo path');
 });
 
 test('demo access request submission persists a pending request', function (): void {
