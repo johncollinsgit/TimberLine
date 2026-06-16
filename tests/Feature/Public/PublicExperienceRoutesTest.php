@@ -19,8 +19,9 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('data-public-tab-panel="plans"', false)
         ->assertSeeInOrder([
             'class="fb-site-nav-wrap"',
-            'id="splash"',
             'id="everbranch-public"',
+            'id="panel-product"',
+            'id="splash"',
         ], false)
         ->assertDontSee('fb-public-tabs__nav', false)
         ->assertDontSeeText('Explore Everbranch')
@@ -36,6 +37,8 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertDontSeeText('Forestry Backstage')
         ->assertDontSeeText('Backstage')
         ->assertDontSeeText('Welcome back');
+
+    expect(substr_count($response->getContent(), 'id="splash"'))->toBe(1);
 
     $content = strtolower($response->getContent());
 

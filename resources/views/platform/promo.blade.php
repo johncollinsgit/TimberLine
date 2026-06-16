@@ -49,35 +49,35 @@
             </nav>
         </div>
 
-        <header id="splash" class="fb-splash" aria-label="Everbranch entry">
-            <div class="fb-splash__field" aria-hidden="true">
-                <span class="fb-splash__branch fb-splash__branch--one"></span>
-                <span class="fb-splash__branch fb-splash__branch--two"></span>
-                <span class="fb-splash__branch fb-splash__branch--three"></span>
-                <span class="fb-splash__node fb-splash__node--one"></span>
-                <span class="fb-splash__node fb-splash__node--two"></span>
-                <span class="fb-splash__node fb-splash__node--three"></span>
-                <span class="fb-splash__node fb-splash__node--four"></span>
-                <span class="fb-splash__node fb-splash__node--five"></span>
-            </div>
-
-            <div class="fb-splash__content" data-reveal>
-                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" class="fb-splash__mark" />
-                <p class="fb-section-kicker">{{ $content['eyebrow'] ?? 'AI-Powered Small Business Workspace' }}</p>
-                <h1>{{ $headline }}</h1>
-                <p>
-                    {{ $summary }}
-                </p>
-                <a href="#everbranch-public" class="fb-splash__button" data-splash-cta>
-                    The Future of AI-Powered Small Business
-                </a>
-            </div>
-        </header>
-
         <main id="everbranch-public" class="fb-public-main" tabindex="-1">
             <section class="fb-public-tabs" aria-label="Everbranch overview tabs" data-public-tabs data-reveal>
                 <div class="fb-public-tabs__panels">
                     <article id="panel-product" class="fb-public-tab-panel is-active" role="tabpanel" aria-labelledby="tab-product" data-public-tab-panel="product">
+                        <header id="splash" class="fb-splash" aria-label="Everbranch entry">
+                            <div class="fb-splash__field" aria-hidden="true">
+                                <span class="fb-splash__branch fb-splash__branch--one"></span>
+                                <span class="fb-splash__branch fb-splash__branch--two"></span>
+                                <span class="fb-splash__branch fb-splash__branch--three"></span>
+                                <span class="fb-splash__node fb-splash__node--one"></span>
+                                <span class="fb-splash__node fb-splash__node--two"></span>
+                                <span class="fb-splash__node fb-splash__node--three"></span>
+                                <span class="fb-splash__node fb-splash__node--four"></span>
+                                <span class="fb-splash__node fb-splash__node--five"></span>
+                            </div>
+
+                            <div class="fb-splash__content" data-reveal>
+                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" class="fb-splash__mark" />
+                                <p class="fb-section-kicker">{{ $content['eyebrow'] ?? 'AI-Powered Small Business Workspace' }}</p>
+                                <h1>{{ $headline }}</h1>
+                                <p>
+                                    {{ $summary }}
+                                </p>
+                                <a href="#everbranch-public" class="fb-splash__button" data-splash-cta>
+                                    The Future of AI-Powered Small Business
+                                </a>
+                            </div>
+                        </header>
+
                         <div class="fb-public-hero">
                             <div class="fb-public-hero__copy">
                                 <p class="fb-section-kicker">Product</p>
