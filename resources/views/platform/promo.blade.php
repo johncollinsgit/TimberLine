@@ -220,7 +220,7 @@
                                 </article>
                                 <article class="fb-card fb-card--public">
                                     <h3>No surprise charges</h3>
-                                    <p>Looking at plans or asking for help does not start a payment from this page.</p>
+                                    <p>Browsing the site or asking for help does not start a payment from this page.</p>
                                 </article>
                             </div>
                         </div>
@@ -236,7 +236,6 @@
             </div>
             <nav aria-label="Footer navigation">
                 <a href="{{ route('platform.contact') }}">Contact</a>
-                <a href="{{ route('platform.plans') }}">Pricing</a>
                 <a href="{{ route('login') }}">Login</a>
             </nav>
         </footer>

@@ -42,6 +42,8 @@ test('promo page renders premium Everbranch splash and public tabs', function ()
         ->assertDontSee('fb-public-tabs__nav', false)
         ->assertDontSeeText('Explore Everbranch')
         ->assertDontSeeText('Shopify is supported. It is not the whole product.')
+        ->assertDontSeeText('Pricing')
+        ->assertDontSee('href="/platform/plans"', false)
         ->assertDontSeeText('From $777/mo')
         ->assertSeeText('Start as a client');
 });
