@@ -200,25 +200,69 @@
                             <div class="fb-section-header">
                                 <p class="fb-section-kicker">Privacy</p>
                                 <h2>Bring in your information without losing control.</h2>
-                                <p>Start with Shopify, a spreadsheet, manual entry, or a guided setup. The goal is to stop retyping the same details in five different places while keeping important changes reviewed first.</p>
+                                <p>Everbranch should make your business easier to see, not harder to trust. You choose what to bring in, who can see it, and what gets reviewed before anything important changes.</p>
                             </div>
-                            <div class="fb-path-strip" data-premium-surface>
-                                <span>Shopify store</span>
-                                <span>Spreadsheet</span>
-                                <span>Manual entry</span>
-                                <span>Guided setup</span>
-                                <span>More connections later</span>
+
+                            <div class="fb-privacy-panel" data-premium-surface>
+                                <div class="fb-privacy-panel__copy">
+                                    <p class="fb-mini-kicker">Start with what you have</p>
+                                    <h3>Use what you already have.</h3>
+                                    <p>
+                                        Start with Shopify, a spreadsheet, manual entry, or a guided setup. The goal is to stop
+                                        retyping customer details, job notes, materials, and follow-ups in five different places.
+                                    </p>
+                                    <div class="fb-privacy-sources" aria-label="Supported starting points">
+                                        <span>Shopify store</span>
+                                        <span>Spreadsheet</span>
+                                        <span>Manual entry</span>
+                                        <span>Guided setup</span>
+                                        <span>More connections later</span>
+                                    </div>
+                                </div>
+                                <aside class="fb-privacy-control" aria-label="Privacy controls">
+                                    <div class="fb-privacy-control__header">
+                                        <span>Built around control</span>
+                                        <strong>No all-or-nothing setup</strong>
+                                    </div>
+                                    <ol class="fb-privacy-steps">
+                                        <li>
+                                            <span>1</span>
+                                            <div>
+                                                <strong>You decide what comes in</strong>
+                                                <p>Start small, then add more information when it is useful.</p>
+                                            </div>
+                                        </li>
+                                        <li>
+                                            <span>2</span>
+                                            <div>
+                                                <strong>Your team sees what they need</strong>
+                                                <p>Access is based on the work someone actually does.</p>
+                                            </div>
+                                        </li>
+                                        <li>
+                                            <span>3</span>
+                                            <div>
+                                                <strong>Big changes are checked first</strong>
+                                                <p>Important setup choices are reviewed before they affect the business.</p>
+                                            </div>
+                                        </li>
+                                    </ol>
+                                </aside>
                             </div>
-                            <div class="fb-grid fb-grid-3">
-                                <article class="fb-card fb-card--public">
+
+                            <div class="fb-privacy-card-grid">
+                                <article class="fb-privacy-card">
+                                    <span>People</span>
                                     <h3>The right people see the right things</h3>
                                     <p>Your team gets access based on what they need to do, not everything by default.</p>
                                 </article>
-                                <article class="fb-card fb-card--public">
+                                <article class="fb-privacy-card">
+                                    <span>Setup</span>
                                     <h3>Setup is checked first</h3>
                                     <p>Important setup choices are reviewed before they change how your business runs.</p>
                                 </article>
-                                <article class="fb-card fb-card--public">
+                                <article class="fb-privacy-card">
+                                    <span>Payments</span>
                                     <h3>No surprise charges</h3>
                                     <p>Browsing the site or asking for help does not start a payment from this page.</p>
                                 </article>
