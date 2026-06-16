@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Onboarding;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Services\Onboarding\TenantOnboardingCompletionService;
 use App\Services\Onboarding\TenantSetupStatusService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantBlueprintModuleRecommendationService;
@@ -17,7 +18,8 @@ class CustomerStartHereController extends Controller
     public function show(
         TenantCommercialExperienceService $experienceService,
         TenantSetupStatusService $setupStatusService,
-        TenantBlueprintModuleRecommendationService $blueprintModuleRecommendations
+        TenantBlueprintModuleRecommendationService $blueprintModuleRecommendations,
+        TenantOnboardingCompletionService $completionService
     ): Response
     {
         /** @var Tenant|null $tenant */
@@ -25,6 +27,7 @@ class CustomerStartHereController extends Controller
         abort_unless($tenant instanceof Tenant, 403);
 
         $setupStatus = $setupStatusService->forTenant($tenant);
+        $onboardingComplete = $completionService->isComplete($tenant);
 
         return response()->view('onboarding.start-here', [
             'tenant' => $tenant,
@@ -33,6 +36,9 @@ class CustomerStartHereController extends Controller
             'setupOptions' => $setupStatusService->options(),
             'setupStatus' => $setupStatusService->payload($tenant, $setupStatus),
             'blueprintModuleRecommendations' => $blueprintModuleRecommendations->forTenantModel($tenant),
+            'onboardingComplete' => $onboardingComplete,
+            'showOnboardingModal' => ! $onboardingComplete,
+            'completionRedirectUrl' => route('dashboard', absolute: false),
         ]);
     }
 

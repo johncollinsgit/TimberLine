@@ -3,6 +3,7 @@
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
 
 test('onboarding wizard endpoints require authentication', function (): void {
@@ -68,6 +69,141 @@ test('onboarding wizard endpoints are tenant-safe and do not leak across tenants
         ->assertStatus(403);
 });
 
+test('GET contract seeds the electrician defaults for the direct onboarding surface', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'account_mode' => 'production',
+        ],
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $response = $this->actingAs($user)
+        ->getJson(route('onboarding.api.contract', ['tenant' => 'tenant-a']))
+        ->assertOk()
+        ->json();
+
+    expect(data_get($response, 'contract.defaults.template_key'))->toBe('electrician')
+        ->and(data_get($response, 'contract.defaults.data_source'))->toBe('manual')
+        ->and(data_get($response, 'contract.defaults.selected_modules'))->toContain('customers')
+        ->and(data_get($response, 'contract.defaults.setup_preferences.label_overrides.customer_label'))->toBe('Customer')
+        ->and(data_get($response, 'contract.defaults.setup_preferences.client_brand.logo_alt'))->toBe('Company logo')
+        ->and(data_get($response, 'contract.defaults.setup_preferences.client_brand.display_name'))->toBeNull()
+        ->and(data_get($response, 'contract.defaults.setup_preferences.client_brand.logo_url'))->toBeNull()
+        ->and(data_get($response, 'contract.steps'))->toHaveCount(3)
+        ->and(collect(data_get($response, 'contract.steps'))->pluck('step_key')->all())->not->toContain('mobile_intent');
+});
+
+test('GET contract only returns the current users onboarding draft', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $userA = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $userB = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $userA->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+    $userB->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $this->actingAs($userA)
+        ->postJson(route('onboarding.api.draft.autosave', ['tenant' => 'tenant-a']), [
+            'rail' => 'direct',
+            'template_key' => 'electrician',
+            'desired_outcome_first' => 'Get the electrician workspace ready.',
+            'selected_modules' => ['customers'],
+            'data_source' => 'manual',
+            'setup_preferences' => [
+                'client_brand' => [
+                    'display_name' => 'Private Electric',
+                    'logo_url' => 'https://cdn.example.test/private-electric-logo.png',
+                    'logo_alt' => 'Private Electric logo',
+                ],
+            ],
+            'mobile_intent' => [
+                'needs_mobile_access' => false,
+            ],
+        ])
+        ->assertOk();
+
+    $response = $this->actingAs($userB)
+        ->getJson(route('onboarding.api.contract', ['tenant' => 'tenant-a']))
+        ->assertOk()
+        ->json();
+
+    expect(data_get($response, 'draft'))->toBeNull()
+        ->and(data_get($response, 'contract.defaults.setup_preferences.client_brand.display_name'))->toBeNull();
+});
+
+test('onboarding wizard endpoints reject tenant users without onboarding roles', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'pouring',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'staff']]);
+
+    $this->actingAs($user)
+        ->getJson(route('onboarding.api.contract', ['tenant' => 'tenant-a']))
+        ->assertStatus(403);
+});
+
+test('POST autosave rejects modules hidden from the safe onboarding surface', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $this->actingAs($user)
+        ->postJson(route('onboarding.api.draft.autosave', ['tenant' => 'tenant-a']), [
+            'rail' => 'direct',
+            'template_key' => 'electrician',
+            'selected_modules' => ['settings'],
+            'data_source' => 'manual',
+            'mobile_intent' => [
+                'needs_mobile_access' => false,
+            ],
+        ])
+        ->assertStatus(422);
+});
+
 test('GET contract returns contract payload and includes latest draft when present', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Tenant A', 'slug' => 'tenant-a']);
 
@@ -99,7 +235,7 @@ test('GET contract returns contract payload and includes latest draft when prese
         ->postJson(route('onboarding.api.draft.autosave', ['tenant' => 'tenant-a']), [
             'template_key' => 'candle',
             'desired_outcome_first' => 'first_sync',
-            'selected_modules' => ['advanced_reporting'],
+            'selected_modules' => ['customers', 'lead_capture'],
             'data_source' => 'shopify',
             'mobile_intent' => [
                 'needs_mobile_access' => true,
@@ -110,7 +246,7 @@ test('GET contract returns contract payload and includes latest draft when prese
         ->assertOk()
         ->json();
 
-    expect(data_get($autosave, 'draft.payload.selected_modules'))->toContain('diagnostics_advanced')
+    expect(data_get($autosave, 'draft.payload.selected_modules'))->toContain('lead_capture')
         ->and(data_get($autosave, 'draft.payload.tenant_creation_policy'))->toBe('create_fresh_production_tenant');
 
     $response = $this->actingAs($user)
@@ -187,15 +323,75 @@ test('draft autosave overwrites a stable per-user draft record', function (): vo
         ->postJson(route('onboarding.api.draft.autosave', ['tenant' => 'tenant-a']), [
             'rail' => 'direct',
             'template_key' => 'candle',
-            'selected_modules' => ['customers', 'advanced_reporting'],
+            'selected_modules' => ['customers', 'lead_capture'],
             'mobile_intent' => ['needs_mobile_access' => true],
         ])
         ->assertOk()
         ->json();
 
     expect(data_get($first, 'draft.id'))->toBe(data_get($second, 'draft.id'))
-        ->and(data_get($second, 'draft.payload.selected_modules'))->toContain('diagnostics_advanced')
+        ->and(data_get($second, 'draft.payload.selected_modules'))->toContain('lead_capture')
         ->and(data_get($second, 'draft.payload.mobile_intent.needs_mobile_access'))->toBeTrue();
+});
+
+test('draft autosave and finalize persist electrician client branding preferences', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $user = User::factory()->create([
+        'role' => 'marketing_manager',
+        'email_verified_at' => now(),
+    ]);
+    $user->tenants()->syncWithoutDetaching([(int) $tenant->id => ['role' => 'admin']]);
+
+    $autosave = $this->actingAs($user)
+        ->postJson(route('onboarding.api.draft.autosave', ['tenant' => 'collins-electric']), [
+            'rail' => 'direct',
+            'template_key' => 'electrician',
+            'desired_outcome_first' => 'Get the electrician workspace ready.',
+            'selected_modules' => ['customers', 'lead_capture'],
+            'data_source' => 'manual',
+            'setup_preferences' => [
+                'client_brand' => [
+                    'display_name' => 'Collins Electric',
+                    'logo_url' => 'https://cdn.example.test/collins-electric-logo.png',
+                    'logo_alt' => 'Collins Electric logo',
+                ],
+                'label_overrides' => [
+                    'work_label' => 'Service Call',
+                ],
+            ],
+            'mobile_intent' => [
+                'needs_mobile_access' => false,
+            ],
+        ])
+        ->assertOk()
+        ->json();
+
+    expect(data_get($autosave, 'draft.payload.setup_preferences.client_brand.display_name'))->toBe('Collins Electric')
+        ->and(data_get($autosave, 'draft.payload.setup_preferences.client_brand.logo_url'))->toBe('https://cdn.example.test/collins-electric-logo.png')
+        ->and(data_get($autosave, 'draft.payload.setup_preferences.label_overrides.work_label'))->toBe('Service Call');
+
+    $final = $this->actingAs($user)
+        ->postJson(route('onboarding.api.blueprint.finalize', ['tenant' => 'collins-electric']))
+        ->assertOk()
+        ->json();
+
+    expect(data_get($final, 'final.payload.setup_preferences.client_brand.logo_alt'))->toBe('Collins Electric logo')
+        ->and(data_get($final, 'final.payload.setup_preferences.client_brand.logo_url'))->toBe('https://cdn.example.test/collins-electric-logo.png');
+
+    $profile = TenantDiscoveryProfile::query()->where('tenant_id', (int) $tenant->id)->first();
+
+    expect($profile)->not->toBeNull()
+        ->and($profile?->primary_brand_name)->toBe('Collins Electric')
+        ->and($profile?->primary_logo_url)->toBe('https://cdn.example.test/collins-electric-logo.png')
+        ->and($profile?->is_active)->toBeTrue();
 });
 
 test('finalize fails when no draft exists', function (): void {

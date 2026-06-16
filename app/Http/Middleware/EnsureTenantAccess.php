@@ -3,7 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\Tenant;
+use App\Services\Onboarding\TenantOnboardingCompletionService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
+use App\Support\Auth\HomeRedirect;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -13,7 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 class EnsureTenantAccess
 {
     public function __construct(
-        protected AuthenticatedTenantContextResolver $tenantContextResolver
+        protected AuthenticatedTenantContextResolver $tenantContextResolver,
+        protected TenantOnboardingCompletionService $onboardingCompletionService
     ) {
     }
 
@@ -35,6 +38,10 @@ class EnsureTenantAccess
 
         $this->assertRouteModelTenantAccess($request, (int) $tenant->id);
         $this->assertStoreAccess($request, (int) $tenant->id);
+
+        if ($this->shouldRedirectForIncompleteOnboarding($request, $tenant, $user)) {
+            return redirect()->route('app.start', ['tenant' => (string) $tenant->slug]);
+        }
 
         $request->attributes->set('current_tenant', $tenant);
         $request->attributes->set('current_tenant_id', (int) $tenant->id);
@@ -85,5 +92,22 @@ class EnsureTenantAccess
                 abort(404);
             }
         }
+    }
+
+    protected function shouldRedirectForIncompleteOnboarding(Request $request, Tenant $tenant, mixed $user): bool
+    {
+        if ($user instanceof \App\Models\User && HomeRedirect::isPlatformOperator($user)) {
+            return false;
+        }
+
+        if ($this->onboardingCompletionService->isComplete($tenant)) {
+            return false;
+        }
+
+        if ($request->routeIs('app.start', 'app.setup-status.update', 'onboarding.*', 'landlord.*')) {
+            return false;
+        }
+
+        return true;
     }
 }

@@ -16,6 +16,8 @@ Design the simplest safe path for a small business to create an account, identif
 - Existing tenant `/start` now shows a setup guidance section with business profile, setup phase, import path, Shopify connection status, Square/CSV/manual setup intent, module interests, mobile interest, landlord review status, next recommended action, and explicit inactive-capability guardrails.
 - Existing tenant `/start` now captures plan interest, likely billing lane interest, implementation help interest, and commercial notes as planning signals only.
 - Existing landlord onboarding diagnostics now includes a client setup status table with light review controls.
+- Existing tenant `/start` now acts as the first-sign-in onboarding gate for incomplete tenants and opens a branded electrician modal that keeps the wizard short, template-led, and safe-module-only.
+- The electrician onboarding modal captures optional client brand preferences in `setup_preferences.client_brand`: `display_name`, `logo_url`, and `logo_alt`. On final blueprint save, `display_name` and `logo_url` are promoted to `tenant_discovery_profiles.primary_brand_name` and `tenant_discovery_profiles.primary_logo_url`.
 - A landlord intake queue now exists at `/landlord/onboarding/intake` with filters for setup statuses that need operator triage.
 - A landlord commercial intent gate now exists at `/landlord/commercial-intent` with plan/lane grouping, billing readiness blockers, custom request context, and review-only commercial triage.
 - Landlord `/landlord/tenants/create` now captures a tenant blueprint/profile for Shopify and non-Shopify tenants without creating a separate app architecture.
@@ -206,6 +208,7 @@ The gate does not charge tenants, create checkout sessions, create subscriptions
 - Tenant slug/workspace creation needs clear validation and collision handling.
 - Import readiness is now visible, but connector automation is still intentionally absent.
 - Setup progress has a clearer tenant-facing home on `/start`, but it is still guidance/status rather than a full onboarding automation workflow.
+- The modal-first electrician onboarding flow is now the default first-sign-in path for incomplete tenants, but it still depends on the existing blueprint store and safe visible module catalog rather than a new tenant-creation backend.
 - Mobile readiness must not imply the current Modern Forestry catalog API is generic.
 - Landlord setup review is now filterable, but it is still not connector automation or a full custom onboarding workflow.
 - Public access request metadata is promoted on approval/provisioning, but the public request is still not a fully self-service tenant creation workflow.
@@ -225,6 +228,7 @@ The gate does not charge tenants, create checkout sessions, create subscriptions
 - Landlord review status, next action, and internal notes.
 - Plan and billing lane interest as intent only.
 - Landlord commercial summary and billing lane blockers as decision support only.
+- Electrician onboarding client brand preferences as URL-only setup metadata: display name, logo URL, and logo alt text.
 
 ## Must Stay Landlord/Manual
 
@@ -237,6 +241,7 @@ The gate does not charge tenants, create checkout sessions, create subscriptions
 - Billing lane activation, checkout, quotes, invoices, and entitlement changes from the landlord commercial intent gate.
 - Any Android/iOS mobile app rollout.
 - Any real project/task/assignment/comment/messaging/photo/file/mobile-capture implementation.
+- Any self-service logo file upload, storage management, image processing, or public branding automation beyond saving a reviewed logo URL.
 
 ## Pass Criteria
 
@@ -252,6 +257,7 @@ The gate does not charge tenants, create checkout sessions, create subscriptions
 - A user can attach another tenant's Shopify or Square data.
 - Checkout is offered before billing gates pass.
 - Setup implies generic mobile APIs are available today.
+- Logo customization implies file uploads/storage are active, or that public branding has been automatically published without review.
 
 ## Recommended Next PR
 

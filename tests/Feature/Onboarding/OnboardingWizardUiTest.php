@@ -3,7 +3,7 @@
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\User;
-use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Services\Tenancy\TenantModuleCatalogService;
 
 test('onboarding wizard UI requires authentication', function (): void {
     $this->get(route('onboarding.wizard'))
@@ -32,6 +32,11 @@ test('onboarding wizard UI is tenant-aware and renders endpoint wiring', functio
         ->get(route('onboarding.wizard', ['tenant' => 'tenant-a']))
         ->assertOk()
         ->assertSee('Create Tenant Blueprint')
+        ->assertSee('data-onboarding-surface="page"', false)
+        ->assertSee('Client brand')
+        ->assertSee('data-client-brand-preview', false)
+        ->assertSee('setup_preferences.client_brand.logo_url', false)
+        ->assertSee('data-review-client-brand', false)
         ->assertSee('/api/onboarding/wizard-contract', false)
         ->assertSee('/api/onboarding/blueprint-draft', false)
         ->assertSee('/api/onboarding/blueprint-finalize', false)
@@ -97,17 +102,12 @@ test('onboarding wizard UI renders locked modules as visible but grayed out', fu
         'source' => 'test',
     ]);
 
-    $resolver = app(TenantModuleAccessResolver::class);
-    $moduleKeys = array_keys((array) config('module_catalog.modules', []));
-    sort($moduleKeys);
-    $resolution = $resolver->resolveForTenant((int) $tenant->id, $moduleKeys);
-    $modules = is_array($resolution['modules'] ?? null) ? (array) $resolution['modules'] : [];
-    $lockedKey = collect($modules)
-        ->filter(fn (array $module): bool => ! (bool) ($module['has_access'] ?? false))
-        ->keys()
-        ->first();
+    $catalog = app(TenantModuleCatalogService::class)->tenantStorePayload((int) $tenant->id, 'public_site');
+    $lockedKey = collect((array) ($catalog['modules'] ?? []))
+        ->first(fn (array $module): bool => in_array((string) ($module['state_bucket'] ?? ''), ['upgrade', 'request'], true));
+    $lockedKey = is_array($lockedKey) ? (string) ($lockedKey['module_key'] ?? '') : '';
 
-    expect($lockedKey)->not->toBeNull();
+    expect($lockedKey)->not->toBe('');
 
     $user = User::factory()->create([
         'role' => 'marketing_manager',

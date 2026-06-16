@@ -16,6 +16,18 @@ const contextualModules = [
     mountExport: "mountOnboardingWizardNow",
   },
   {
+    key: "onboardingGate",
+    selectors: ["[data-onboarding-gate-root]"],
+    load: () => import("./onboarding/gate"),
+    mountExport: "mountOnboardingGateNow",
+  },
+  {
+    key: "publicTabs",
+    selectors: ["[data-public-tabs]"],
+    load: () => import("./public-tabs"),
+    mountExport: "mountPublicTabsNow",
+  },
+  {
     key: "widgetDnd",
     selectors: ["[data-dashboard-root]", "[data-widget-root]"],
     load: () => import("./widget-dnd"),

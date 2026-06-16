@@ -983,12 +983,101 @@ body[data-premium-motion="public"].has-premium-motion .fb-splash__node--four {
   outline: none;
 }
 
+.fb-public-tabs {
+  padding: clamp(3rem, 6vw, 5rem) 0 1rem;
+}
+
+.fb-public-tabs__header {
+  margin-inline: auto;
+  max-width: 760px;
+  text-align: center;
+}
+
+.fb-public-tabs__nav {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(18, 60, 67, 0.1);
+  border-radius: var(--fb-radius-lg);
+  box-shadow: 0 22px 70px -46px rgba(8, 24, 27, 0.48);
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 1.4rem auto 0;
+  max-width: 980px;
+  padding: 0.38rem;
+  position: sticky;
+  top: 0.75rem;
+  z-index: 10;
+}
+
+.fb-public-tabs__nav button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--fb-radius-md);
+  color: var(--fb-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 750;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.65rem;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.fb-public-tabs__nav button:hover {
+  background: rgba(18, 60, 67, 0.06);
+  color: var(--fb-brand);
+}
+
+.fb-public-tabs__nav button:focus-visible {
+  outline: 3px solid var(--fb-focus-ring);
+  outline-offset: 2px;
+}
+
+.fb-public-tabs__nav button.is-active {
+  background: linear-gradient(180deg, #102f34, #1e5a63);
+  box-shadow: 0 14px 34px -24px rgba(8, 24, 27, 0.58);
+  color: #ffffff;
+}
+
+.fb-public-tabs__panels {
+  margin-top: clamp(1.25rem, 3vw, 2rem);
+}
+
+.fb-public-tab-panel {
+  animation: fbTabPanelIn 240ms var(--eb-motion-ease) both;
+}
+
+.fb-public-tab-panel[hidden] {
+  display: none;
+}
+
+.fb-public-tab-panel > .fb-section:first-child,
+.fb-public-tab-panel .fb-public-hero + .fb-section {
+  border-top: 0;
+}
+
+@keyframes fbTabPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .fb-public-hero {
   align-items: center;
   display: grid;
   gap: clamp(1.6rem, 4vw, 4rem);
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.74fr);
-  padding: clamp(3rem, 7vw, 6rem) 0 1rem;
+  padding: clamp(1.5rem, 3vw, 2.4rem) 0 1rem;
 }
 
 .fb-public-hero__copy h2 {
@@ -4245,6 +4334,11 @@ textarea.assistant-field-input {
 
   .fb-site-links {
     justify-content: center;
+  }
+
+  .fb-public-tabs__nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: static;
   }
 
   .fb-site-brand--lockup img {

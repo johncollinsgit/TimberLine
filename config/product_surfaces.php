@@ -10,8 +10,8 @@ $helloContact = 'hello@'.$contactDomain;
 return [
     'promo' => [
         'eyebrow' => 'AI-Powered Small Business Workspace',
-        'headline' => 'Run the business you actually have.',
-        'summary' => $productName.' brings customers, work, money, materials, communication, and next steps into one intelligent workspace.',
+        'headline' => 'Your business, Under your control',
+        'summary' => $productName.' brings customers, work, money, materials, communication, and next steps into one intelligent app.',
         'how_it_works' => [
             [
                 'title' => 'Bring the important signals together',

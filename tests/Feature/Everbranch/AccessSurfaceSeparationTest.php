@@ -4,6 +4,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
+use App\Services\Onboarding\TenantOnboardingBlueprintStore;
 use App\Support\Tenancy\TenantHostBuilder;
 
 beforeEach(function (): void {
@@ -95,6 +96,47 @@ test('incomplete tenant users are sent to Start Here instead of generic provisio
     ])
         ->assertSessionHasNoErrors()
         ->assertRedirect(route('app.start', absolute: false))
+        ->assertSessionHas('tenant_id', (int) $tenant->id);
+
+    $this->actingAs($user)
+        ->get('http://new-client.theeverbranch.com/dashboard')
+        ->assertRedirect(route('app.start', ['tenant' => 'new-client'], false));
+
+    $this->actingAs($user)
+        ->get('http://new-client.theeverbranch.com/search')
+        ->assertRedirect(route('app.start', ['tenant' => 'new-client'], false));
+});
+
+test('a final onboarding blueprint unlocks the dashboard redirect even before landlord review', function (): void {
+    $tenant = everbranchAccessLaneTenant('finalized-client', 'Finalized Client', 'production', 'pending_review');
+    $user = User::factory()->tenantAdmin()->create();
+    $user->tenants()->attach((int) $tenant->id, ['role' => 'admin']);
+
+    app(TenantOnboardingBlueprintStore::class)->finalize((int) $tenant->id, [
+        'rail' => 'direct',
+        'template_key' => 'electrician',
+        'desired_outcome_first' => 'Get the electrician workspace ready for intake.',
+        'selected_modules' => ['customers', 'lead_capture'],
+        'data_source' => 'manual',
+        'setup_preferences' => [
+            'label_overrides' => [
+                'customer_label' => 'Customer',
+                'work_label' => 'Job',
+            ],
+        ],
+        'mobile_intent' => [
+            'needs_mobile_access' => false,
+        ],
+    ], (int) $user->id);
+
+    $this->get('http://finalized-client.theeverbranch.com/login')->assertOk();
+
+    $this->post('http://finalized-client.theeverbranch.com/login', [
+        'email' => $user->email,
+        'password' => 'password',
+    ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('dashboard', absolute: false))
         ->assertSessionHas('tenant_id', (int) $tenant->id);
 });
 

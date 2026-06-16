@@ -250,6 +250,23 @@ return [
                 'Validate email readiness for reward workflows',
             ],
         ],
+        'electrician' => [
+            'name' => 'Electrician',
+            'position' => 15,
+            'active' => true,
+            'recommended_modules' => [
+                'starter' => ['customers', 'lead_capture', 'reporting', 'reviews', 'campaigns'],
+                'growth' => ['customers', 'lead_capture', 'reporting', 'reviews', 'campaigns', 'sms'],
+                'pro' => ['customers', 'lead_capture', 'reporting', 'reviews', 'campaigns', 'sms', 'ai'],
+            ],
+            'dashboard_layout' => ['customers', 'lead_capture', 'reporting', 'campaigns'],
+            'navigation_emphasis' => ['customers', 'lead_capture', 'reporting'],
+            'onboarding_checklist' => [
+                'Confirm the electrician template and the first outcome',
+                'Choose the safe visible modules that should be available now',
+                'Review the label tweaks before the workspace opens',
+            ],
+        ],
         'law' => [
             'name' => 'Law',
             'position' => 20,

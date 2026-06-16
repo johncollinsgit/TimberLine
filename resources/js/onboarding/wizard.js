@@ -45,6 +45,7 @@ export function mountOnboardingWizardNow() {
   const autosaveUrl = root.dataset.autosaveUrl;
   const finalizeUrl = root.dataset.finalizeUrl;
   const summaryUrl = root.dataset.postProvisioningSummaryUrl;
+  const completionRedirectUrl = root.dataset.completionRedirectUrl || null;
   const provisionUrl = root.dataset.provisionUrl || null;
   const canProvision = root.dataset.canProvision === "1";
 
@@ -80,6 +81,12 @@ export function mountOnboardingWizardNow() {
   const reviewModulesEl = root.querySelector("[data-review-modules]");
   const reviewDataSourceEl = root.querySelector("[data-review-data-source]");
   const reviewMobileEl = root.querySelector("[data-review-mobile]");
+  const reviewLabelsEl = root.querySelector("[data-review-labels]");
+  const reviewClientBrandEl = root.querySelector("[data-review-client-brand]");
+
+  const clientBrandPreviewNameEl = root.querySelector("[data-client-brand-preview-name]");
+  const clientBrandPreviewMarkEl = root.querySelector("[data-client-brand-preview-mark]");
+  const defaultClientBrandName = normalizeString(clientBrandPreviewNameEl?.textContent) || "Client workspace";
 
   const nbaActiveEl = root.querySelector("[data-nba-active]");
   const nbaSetupEl = root.querySelector("[data-nba-setup]");
@@ -399,14 +406,57 @@ export function mountOnboardingWizardNow() {
       const checkbox = card.querySelector("[data-module-checkbox]");
       if (checkbox) {
         checkbox.checked = isSelected;
-        checkbox.disabled = locked && !isSelected;
+        checkbox.disabled = false;
       }
 
       card.classList.toggle("is-selected", isSelected);
     });
   }
 
+  function initialsFor(value) {
+    const words = (normalizeString(value) || "Client workspace")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2);
+    return words.map((word) => word.charAt(0).toUpperCase()).join("") || "CW";
+  }
+
+  function renderClientBrandPreview() {
+    const displayName =
+      normalizeString(getByPath(state.blueprint, "setup_preferences.client_brand.display_name")) ||
+      defaultClientBrandName;
+    const logoUrl = normalizeString(getByPath(state.blueprint, "setup_preferences.client_brand.logo_url"));
+    const logoAlt =
+      normalizeString(getByPath(state.blueprint, "setup_preferences.client_brand.logo_alt")) ||
+      `${displayName} logo`;
+
+    if (clientBrandPreviewNameEl) {
+      clientBrandPreviewNameEl.textContent = displayName;
+    }
+
+    if (!clientBrandPreviewMarkEl) return;
+
+    clientBrandPreviewMarkEl.innerHTML = "";
+    if (logoUrl) {
+      const image = document.createElement("img");
+      image.src = logoUrl;
+      image.alt = logoAlt;
+      image.className = "h-full w-full object-contain";
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        clientBrandPreviewMarkEl.innerHTML = "";
+        clientBrandPreviewMarkEl.textContent = initialsFor(displayName);
+      }, { once: true });
+      clientBrandPreviewMarkEl.appendChild(image);
+      return;
+    }
+
+    clientBrandPreviewMarkEl.textContent = initialsFor(displayName);
+  }
+
   function renderReview() {
+    renderClientBrandPreview();
+
     if (reviewTemplateEl) reviewTemplateEl.textContent = state.blueprint.template_key || "—";
     if (reviewOutcomeEl) reviewOutcomeEl.textContent = state.blueprint.desired_outcome_first || "—";
     if (reviewDataSourceEl) reviewDataSourceEl.textContent = state.blueprint.data_source || "—";
@@ -418,6 +468,35 @@ export function mountOnboardingWizardNow() {
 
     if (reviewMobileEl) {
       reviewMobileEl.textContent = state.blueprint.mobile_intent.needs_mobile_access ? "Yes" : "No";
+    }
+
+    if (reviewLabelsEl) {
+      const labelPairs = [
+        ["Customer", getByPath(state.blueprint, "setup_preferences.label_overrides.customer_label")],
+        ["Work", getByPath(state.blueprint, "setup_preferences.label_overrides.work_label")],
+        ["Money", getByPath(state.blueprint, "setup_preferences.label_overrides.money_label")],
+        ["Materials", getByPath(state.blueprint, "setup_preferences.label_overrides.material_label")],
+        ["Stage", getByPath(state.blueprint, "setup_preferences.label_overrides.stage_label")],
+        ["Assignee", getByPath(state.blueprint, "setup_preferences.label_overrides.assignee_label")],
+      ];
+      const activePairs = labelPairs
+        .map(([label, value]) => [label, normalizeString(value)])
+        .filter(([, value]) => value);
+      reviewLabelsEl.textContent = activePairs.length
+        ? activePairs.map(([label, value]) => `${label}: ${value}`).join(" · ")
+        : "Template defaults";
+    }
+
+    if (reviewClientBrandEl) {
+      const displayName = normalizeString(getByPath(state.blueprint, "setup_preferences.client_brand.display_name"));
+      const logoUrl = normalizeString(getByPath(state.blueprint, "setup_preferences.client_brand.logo_url"));
+      const logoAlt = normalizeString(getByPath(state.blueprint, "setup_preferences.client_brand.logo_alt"));
+      const values = [
+        displayName ? `Name: ${displayName}` : null,
+        logoUrl ? `Logo: ${logoUrl}` : null,
+        logoAlt ? `Alt: ${logoAlt}` : null,
+      ].filter(Boolean);
+      reviewClientBrandEl.textContent = values.length ? values.join(" · ") : "No client logo added yet";
     }
 
     if (nbaActiveEl) nbaActiveEl.textContent = JSON.stringify(state.contract?.next_best_actions?.available_now || [], null, 2);
@@ -527,8 +606,12 @@ export function mountOnboardingWizardNow() {
       if (finalizeStatusEl) {
         finalizeStatusEl.textContent = `Saved setup plan #${state.final.id} (setup-only).`;
       }
-      await loadSummary();
       window.dispatchEvent(new CustomEvent("toast", { detail: { message: "Setup plan saved.", style: "success" } }));
+      if (completionRedirectUrl) {
+        window.location.assign(completionRedirectUrl);
+        return;
+      }
+      await loadSummary();
     } catch (error) {
       const payload = error?.response?.data || null;
       showErrors(payload || "Finalize failed.");
@@ -641,12 +724,6 @@ export function mountOnboardingWizardNow() {
         el.checked = !!value;
         return;
       }
-      if (path === "setup_preferences_json") {
-        el.value = state.blueprint.setup_preferences && Object.keys(state.blueprint.setup_preferences).length
-          ? JSON.stringify(state.blueprint.setup_preferences, null, 2)
-          : "";
-        return;
-      }
       el.value = value ?? "";
     });
 
@@ -677,24 +754,6 @@ export function mountOnboardingWizardNow() {
       if (!path) return;
 
       const handler = () => {
-        if (path === "setup_preferences_json") {
-          const raw = `${el.value || ""}`.trim();
-          if (raw === "") {
-            state.blueprint.setup_preferences = {};
-          } else {
-            const parsed = safeJsonParse(raw, null);
-            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-              state.blueprint.setup_preferences = parsed;
-              clearErrors();
-            } else {
-              showErrors("setup_preferences must be a JSON object.");
-            }
-          }
-          markDirty();
-          scheduleAutosave();
-          return;
-        }
-
         if (el.type === "checkbox") {
           const parts = path.split(".");
           if (parts.length === 1) {
@@ -792,11 +851,7 @@ export function mountOnboardingWizardNow() {
 
         const selected = new Set(state.blueprint.selected_modules || []);
         recommended.forEach((key) => {
-          const card = moduleCards.find((node) => node.dataset.moduleKey === key);
-          const locked = card?.dataset?.moduleLocked === "1";
-          if (!locked) {
-            selected.add(key);
-          }
+          selected.add(key);
         });
 
         state.blueprint.selected_modules = Array.from(selected);

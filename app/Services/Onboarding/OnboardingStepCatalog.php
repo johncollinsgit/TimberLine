@@ -80,8 +80,8 @@ class OnboardingStepCatalog
             ),
             new OnboardingStepDefinition(
                 stepKey: 'review_and_start',
-                title: 'Review and start',
-                description: 'Confirm your blueprint and get next best actions in the merchant journey: Available Now, Setup Next, Unlock Next.',
+                title: 'Review and confirm',
+                description: 'Confirm the electrician template, module choices, and setup preferences before you finish onboarding.',
                 sequence: 50,
                 railVisibility: 'both',
                 requiredInputs: [],
@@ -132,4 +132,3 @@ class OnboardingStepCatalog
         return $negate ? ! $result : $result;
     }
 }
-

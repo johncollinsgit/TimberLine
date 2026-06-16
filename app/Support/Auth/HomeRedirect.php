@@ -4,6 +4,7 @@ namespace App\Support\Auth;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Onboarding\TenantOnboardingCompletionService;
 
 class HomeRedirect
 {
@@ -58,14 +59,7 @@ class HomeRedirect
 
     protected static function tenantSetupIsIncomplete(Tenant $tenant): bool
     {
-        $tenant->loadMissing('setupStatus');
-
-        $setupStatus = $tenant->setupStatus;
-        if (! $setupStatus) {
-            return false;
-        }
-
-        return (string) ($setupStatus->landlord_review_status ?? '') !== 'reviewed';
+        return app(TenantOnboardingCompletionService::class)->isIncomplete($tenant);
     }
 
     protected static function isCustomerPortalUser(User $user): bool

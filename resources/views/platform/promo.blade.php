@@ -10,13 +10,15 @@
     $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
     $productName = (string) config('everbranch.product_name', 'Everbranch');
     $companyName = (string) config('everbranch.company_name', 'Evergrove');
+    $headline = (string) ($content['headline'] ?? 'Your business, Under your control');
+    $summary = (string) ($content['summary'] ?? 'Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent app.');
 @endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
     @include('partials.head', [
         'title' => $productName.' | The Future of AI-Powered Small Business',
-        'description' => $content['summary'] ?? 'Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent workspace.',
+        'description' => $summary,
     ])
 </head>
 <body class="fb-public-body fb-public-body--splash" data-premium-motion="public">
@@ -29,12 +31,12 @@
                     <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
                 </a>
                 <div class="fb-site-links" aria-label="Public sections">
-                    <a href="#product">Product</a>
-                    <a href="#workflows">Workflows</a>
-                    <a href="#customers">Customers</a>
-                    <a href="#integrations">Integrations</a>
-                    <a href="#security">Security</a>
-                    <a href="#plans">Plans</a>
+                    <a href="#tab-product" data-public-tab-link="product">Product</a>
+                    <a href="#tab-workflows" data-public-tab-link="workflows">Workflows</a>
+                    <a href="#tab-customers" data-public-tab-link="customers">Customers</a>
+                    <a href="#tab-integrations" data-public-tab-link="integrations">Integrations</a>
+                    <a href="#tab-security" data-public-tab-link="security">Security</a>
+                    <a href="#tab-plans" data-public-tab-link="plans">Plans</a>
                 </div>
                 <div class="fb-hero-cta fb-hero-cta--nav">
                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
@@ -62,9 +64,9 @@
             <div class="fb-splash__content" data-reveal>
                 <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" class="fb-splash__mark" />
                 <p class="fb-section-kicker">{{ $content['eyebrow'] ?? 'AI-Powered Small Business Workspace' }}</p>
-                <h1>{{ $content['headline'] ?? 'Run the business you actually have.' }}</h1>
+                <h1>{{ $headline }}</h1>
                 <p>
-                    {{ $content['summary'] ?? 'Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent workspace.' }}
+                    {{ $summary }}
                 </p>
                 <a href="#everbranch-public" class="fb-splash__button" data-splash-cta>
                     The Future of AI-Powered Small Business
@@ -73,184 +75,215 @@
         </header>
 
         <main id="everbranch-public" class="fb-public-main" tabindex="-1">
-            <section id="product" class="fb-public-hero" aria-label="Product overview" data-reveal>
-                <div class="fb-public-hero__copy">
-                    <p class="fb-section-kicker">Product</p>
-                    <h2>One intelligent workspace for the messy middle of small business.</h2>
-                    <p>
-                        Know your customers, track the work, understand what made money, and see what needs
-                        attention next. Everbranch gives your team one calm place to make sense of the day.
-                    </p>
-                    <div class="fb-hero-cta">
-                        <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Request access</a>
-                        <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">View a demo</a>
-                        <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-                    </div>
+            <section class="fb-public-tabs" aria-label="Everbranch overview tabs" data-public-tabs data-reveal>
+                <div class="fb-section-header fb-public-tabs__header">
+                    <p class="fb-section-kicker">Explore Everbranch</p>
+                    <h2>Choose the part of the business you want to understand first.</h2>
+                    <p>The same information is grouped into tabs now, so the page feels more like an app and less like a long scroll.</p>
                 </div>
-                <aside class="fb-orbit-panel" data-premium-surface aria-label="Everbranch focus areas">
-                    <div class="fb-orbit-panel__center">
-                        <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                        <span>{{ $productName }}</span>
-                    </div>
-                    <div class="fb-orbit-panel__list">
-                        <span>Customers</span>
-                        <span>Work</span>
-                        <span>Money</span>
-                        <span>Materials</span>
-                        <span>Communication</span>
-                        <span>Next steps</span>
-                    </div>
-                </aside>
-            </section>
 
-            <section class="fb-section fb-section--public" aria-label="What Everbranch does" data-reveal>
-                <div class="fb-section-header">
-                    <p class="fb-section-kicker">What Everbranch Does</p>
-                    <h2>It turns scattered business signals into a clear next action.</h2>
-                    <p>Everbranch is built for founders and teams who need one place to understand what happened, what is happening, and what should happen next.</p>
+                <div class="fb-public-tabs__nav" role="tablist" aria-label="Everbranch sections">
+                    <button id="tab-product" type="button" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">Product</button>
+                    <button id="tab-workflows" type="button" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">Workflows</button>
+                    <button id="tab-customers" type="button" role="tab" aria-selected="false" aria-controls="panel-customers" data-public-tab-trigger="customers">Customers</button>
+                    <button id="tab-integrations" type="button" role="tab" aria-selected="false" aria-controls="panel-integrations" data-public-tab-trigger="integrations">Integrations</button>
+                    <button id="tab-security" type="button" role="tab" aria-selected="false" aria-controls="panel-security" data-public-tab-trigger="security">Security</button>
+                    <button id="tab-plans" type="button" role="tab" aria-selected="false" aria-controls="panel-plans" data-public-tab-trigger="plans">Plans</button>
                 </div>
-                <div class="fb-grid fb-grid-4">
-                    <article class="fb-card fb-card--public">
-                        <h3>Know your customers</h3>
-                        <p>See who bought, asked, returned, requested, or needs follow-up without losing the human story.</p>
+
+                <div class="fb-public-tabs__panels">
+                    <article id="panel-product" class="fb-public-tab-panel is-active" role="tabpanel" aria-labelledby="tab-product" data-public-tab-panel="product">
+                        <div class="fb-public-hero">
+                            <div class="fb-public-hero__copy">
+                                <p class="fb-section-kicker">Product</p>
+                                <h2>One intelligent app for the messy middle of small business.</h2>
+                                <p>
+                                    Know your customers, track the work, understand what made money, and see what needs
+                                    attention next. Everbranch gives your team one calm place to make sense of the day.
+                                </p>
+                                <div class="fb-hero-cta">
+                                    <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Request access</a>
+                                    <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">View a demo</a>
+                                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
+                                </div>
+                            </div>
+                            <aside class="fb-orbit-panel" data-premium-surface aria-label="Everbranch focus areas">
+                                <div class="fb-orbit-panel__center">
+                                    <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
+                                    <span>{{ $productName }}</span>
+                                </div>
+                                <div class="fb-orbit-panel__list">
+                                    <span>Customers</span>
+                                    <span>Work</span>
+                                    <span>Money</span>
+                                    <span>Materials</span>
+                                    <span>Communication</span>
+                                    <span>Next steps</span>
+                                </div>
+                            </aside>
+                        </div>
+
+                        <div class="fb-section fb-section--public" aria-label="What Everbranch does">
+                            <div class="fb-section-header">
+                                <p class="fb-section-kicker">What Everbranch Does</p>
+                                <h2>It turns scattered business signals into a clear next action.</h2>
+                                <p>Everbranch is built for founders and teams who need one place to understand what happened, what is happening, and what should happen next.</p>
+                            </div>
+                            <div class="fb-grid fb-grid-4">
+                                <article class="fb-card fb-card--public">
+                                    <h3>Know your customers</h3>
+                                    <p>See who bought, asked, returned, requested, or needs follow-up without losing the human story.</p>
+                                </article>
+                                <article class="fb-card fb-card--public">
+                                    <h3>Track the work</h3>
+                                    <p>Follow orders, jobs, batches, matters, projects, or service visits with labels that fit your business.</p>
+                                </article>
+                                <article class="fb-card fb-card--public">
+                                    <h3>Understand the money</h3>
+                                    <p>Plan around revenue, cost, margin, materials, and effort before the numbers become a mystery.</p>
+                                </article>
+                                <article class="fb-card fb-card--public">
+                                    <h3>See what needs attention</h3>
+                                    <p>Turn setup status, requested features, and daily signals into the next move your team can trust.</p>
+                                </article>
+                            </div>
+                        </div>
                     </article>
-                    <article class="fb-card fb-card--public">
-                        <h3>Track the work</h3>
-                        <p>Follow orders, jobs, batches, matters, projects, or service visits with labels that fit your business.</p>
+
+                    <article id="panel-workflows" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-workflows" data-public-tab-panel="workflows" hidden>
+                        <div class="fb-section fb-section--public" aria-label="Workflow paths">
+                            <div class="fb-section-header">
+                                <p class="fb-section-kicker">Workflows</p>
+                                <h2>Start with the door that matches your business.</h2>
+                                <p>Every path is reviewed before advanced access or billing is considered. No checkout or payment flow starts from this page.</p>
+                            </div>
+                            <div class="fb-grid fb-grid-3">
+                                @foreach((array) ($content['how_it_works'] ?? []) as $step)
+                                    <article class="fb-card fb-card--public">
+                                        <h3>{{ $step['title'] ?? 'Step' }}</h3>
+                                        <p>{{ $step['description'] ?? '' }}</p>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        @if($previewFlow !== [])
+                            <div class="fb-section fb-section--public" aria-label="What happens next">
+                                <div class="fb-section-header">
+                                    <p class="fb-section-kicker">Next Steps</p>
+                                    <h2>A calm path from curiosity to a working workspace.</h2>
+                                </div>
+                                <div class="fb-grid fb-grid-3">
+                                    @foreach($previewFlow as $step)
+                                        <article class="fb-card fb-card--public" data-premium-surface>
+                                            <h3>{{ $step['title'] ?? 'Step' }}</h3>
+                                            <p>{{ $step['description'] ?? '' }}</p>
+                                        </article>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
                     </article>
-                    <article class="fb-card fb-card--public">
-                        <h3>Understand the money</h3>
-                        <p>Plan around revenue, cost, margin, materials, and effort before the numbers become a mystery.</p>
+
+                    <article id="panel-customers" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-customers" data-public-tab-panel="customers" hidden>
+                        <div class="fb-section fb-section--public" aria-label="Who Everbranch is for">
+                            <div class="fb-section-header">
+                                <p class="fb-section-kicker">Who It Is For</p>
+                                <h2>Built around the business you have, not a generic template.</h2>
+                                <p>Shopify can be the starting point, but Everbranch also supports direct, CSV, manual, and requested setup paths.</p>
+                            </div>
+                            @if($previewProfiles !== [])
+                                <div class="fb-grid fb-grid-3">
+                                    @foreach($previewProfiles as $profile)
+                                        <article class="fb-card fb-card--public" data-premium-surface>
+                                            <h3>{{ $profile['label'] ?? 'Business type' }}</h3>
+                                            <p>{{ $profile['summary'] ?? '' }}</p>
+                                            @if(! empty($profile['signals']))
+                                                <ul>
+                                                    @foreach((array) $profile['signals'] as $signal)
+                                                        <li>{{ $signal }}</li>
+                                                    @endforeach
+                                                </ul>
+                                            @endif
+                                        </article>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
                     </article>
-                    <article class="fb-card fb-card--public">
-                        <h3>See what needs attention</h3>
-                        <p>Turn setup status, requested features, and daily signals into the next move your team can trust.</p>
+
+                    <article id="panel-integrations" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-integrations" data-public-tab-panel="integrations" hidden>
+                        <div class="fb-section fb-section--public" aria-label="Integrations and setup paths">
+                            <div class="fb-section-header">
+                                <p class="fb-section-kicker">Integrations</p>
+                                <h2>Shopify is supported. It is not the whole product.</h2>
+                                <p>Bring a Shopify store, request CSV/manual setup, or ask Everbranch to shape a direct workspace around your business.</p>
+                            </div>
+                            <div class="fb-path-strip" data-premium-surface>
+                                <span>Shopify</span>
+                                <span>CSV / Spreadsheet</span>
+                                <span>Manual setup</span>
+                                <span>Direct workspace</span>
+                                <span>Requested connectors</span>
+                            </div>
+                        </div>
                     </article>
-                </div>
-            </section>
 
-            @if($previewProfiles !== [])
-                <section id="customers" class="fb-section fb-section--public" aria-label="Who Everbranch is for" data-reveal>
-                    <div class="fb-section-header">
-                        <p class="fb-section-kicker">Who It Is For</p>
-                        <h2>Built around the business you have, not a generic template.</h2>
-                        <p>Shopify can be the starting point, but Everbranch also supports direct, CSV, manual, and requested setup paths.</p>
-                    </div>
-                    <div class="fb-grid fb-grid-3">
-                        @foreach($previewProfiles as $profile)
-                            <article class="fb-card fb-card--public" data-premium-surface>
-                                <h3>{{ $profile['label'] ?? 'Business type' }}</h3>
-                                <p>{{ $profile['summary'] ?? '' }}</p>
-                                @if(! empty($profile['signals']))
-                                    <ul>
-                                        @foreach((array) $profile['signals'] as $signal)
-                                            <li>{{ $signal }}</li>
-                                        @endforeach
-                                    </ul>
-                                @endif
-                            </article>
-                        @endforeach
-                    </div>
-                </section>
-            @endif
-
-            <section id="workflows" class="fb-section fb-section--public" aria-label="Workflow paths" data-reveal>
-                <div class="fb-section-header">
-                    <p class="fb-section-kicker">Workflows</p>
-                    <h2>Start with the door that matches your business.</h2>
-                    <p>Every path is reviewed before advanced access or billing is considered. No checkout or payment flow starts from this page.</p>
-                </div>
-                <div class="fb-grid fb-grid-3">
-                    @foreach((array) ($content['how_it_works'] ?? []) as $step)
-                        <article class="fb-card fb-card--public">
-                            <h3>{{ $step['title'] ?? 'Step' }}</h3>
-                            <p>{{ $step['description'] ?? '' }}</p>
-                        </article>
-                    @endforeach
-                </div>
-            </section>
-
-            <section id="integrations" class="fb-section fb-section--public" aria-label="Integrations and setup paths" data-reveal>
-                <div class="fb-section-header">
-                    <p class="fb-section-kicker">Integrations</p>
-                    <h2>Shopify is supported. It is not the whole product.</h2>
-                    <p>Bring a Shopify store, request CSV/manual setup, or ask Everbranch to shape a direct workspace around your business.</p>
-                </div>
-                <div class="fb-path-strip" data-premium-surface>
-                    <span>Shopify</span>
-                    <span>CSV / Spreadsheet</span>
-                    <span>Manual setup</span>
-                    <span>Direct workspace</span>
-                    <span>Requested connectors</span>
-                </div>
-            </section>
-
-            @if($previewFlow !== [])
-                <section class="fb-section fb-section--public" aria-label="What happens next" data-reveal>
-                    <div class="fb-section-header">
-                        <p class="fb-section-kicker">Next Steps</p>
-                        <h2>A calm path from curiosity to a working workspace.</h2>
-                    </div>
-                    <div class="fb-grid fb-grid-3">
-                        @foreach($previewFlow as $step)
-                            <article class="fb-card fb-card--public" data-premium-surface>
-                                <h3>{{ $step['title'] ?? 'Step' }}</h3>
-                                <p>{{ $step['description'] ?? '' }}</p>
-                            </article>
-                        @endforeach
-                    </div>
-                </section>
-            @endif
-
-            <section id="security" class="fb-section fb-section--public" aria-label="Security and trust" data-reveal>
-                <div class="fb-section-header">
-                    <p class="fb-section-kicker">Security</p>
-                    <h2>Quiet safeguards before big moves.</h2>
-                    <p>Everbranch keeps access, setup, plan interest, and requested features review-controlled until the right evidence and approvals are in place.</p>
-                </div>
-                <div class="fb-grid fb-grid-3">
-                    <article class="fb-card fb-card--public">
-                        <h3>Clear access</h3>
-                        <p>People land in the right workspace based on their role and business context.</p>
+                    <article id="panel-security" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-security" data-public-tab-panel="security" hidden>
+                        <div class="fb-section fb-section--public" aria-label="Security and trust">
+                            <div class="fb-section-header">
+                                <p class="fb-section-kicker">Security</p>
+                                <h2>Quiet safeguards before big moves.</h2>
+                                <p>Everbranch keeps access, setup, plan interest, and requested features review-controlled until the right evidence and approvals are in place.</p>
+                            </div>
+                            <div class="fb-grid fb-grid-3">
+                                <article class="fb-card fb-card--public">
+                                    <h3>Clear access</h3>
+                                    <p>People land in the right workspace based on their role and business context.</p>
+                                </article>
+                                <article class="fb-card fb-card--public">
+                                    <h3>Reviewed setup</h3>
+                                    <p>Requested paths are captured safely before features, connectors, or plan changes move forward.</p>
+                                </article>
+                                <article class="fb-card fb-card--public">
+                                    <h3>No surprise checkout</h3>
+                                    <p>Public plan interest is a conversation starter. Billing activation is not part of this public page.</p>
+                                </article>
+                            </div>
+                        </div>
                     </article>
-                    <article class="fb-card fb-card--public">
-                        <h3>Reviewed setup</h3>
-                        <p>Requested paths are captured safely before features, connectors, or plan changes move forward.</p>
-                    </article>
-                    <article class="fb-card fb-card--public">
-                        <h3>No surprise checkout</h3>
-                        <p>Public plan interest is a conversation starter. Billing activation is not part of this public page.</p>
+
+                    <article id="panel-plans" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-plans" data-public-tab-panel="plans" hidden>
+                        <div class="fb-section fb-section--public" aria-label="Plans and access">
+                            <div class="fb-final-cta fb-final-cta--public" data-premium-surface>
+                                <div>
+                                    <p class="fb-section-kicker">Plans</p>
+                                    <h2>Ready to see where Everbranch fits?</h2>
+                                    <p>
+                                        Compare plan direction, request a demo, or start as a client. Everbranch will review the right setup path before anything sensitive changes.
+                                    </p>
+                                </div>
+                                <div class="fb-hero-cta">
+                                    <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">View plans</a>
+                                    <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">View a demo</a>
+                                    <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Start as a client</a>
+                                </div>
+                            </div>
+
+                            @if($planCards !== [])
+                                <div class="fb-plan-teaser" aria-label="Plan preview">
+                                    @foreach(array_slice($planCards, 0, 3) as $card)
+                                        <article class="fb-card fb-card--public">
+                                            <h3>{{ $card['label'] ?? 'Plan' }}</h3>
+                                            <p><strong>{{ $card['price_display'] ?? 'Review with Everbranch' }}</strong></p>
+                                            <p>{{ $card['summary'] ?? 'A reviewed plan direction for your workspace.' }}</p>
+                                        </article>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
                     </article>
                 </div>
-            </section>
-
-            <section id="plans" class="fb-section fb-section--public" aria-label="Plans and access" data-reveal>
-                <div class="fb-final-cta fb-final-cta--public" data-premium-surface>
-                    <div>
-                        <p class="fb-section-kicker">Plans</p>
-                        <h2>Ready to see where Everbranch fits?</h2>
-                        <p>
-                            Compare plan direction, request a demo, or start as a client. Everbranch will review the right setup path before anything sensitive changes.
-                        </p>
-                    </div>
-                    <div class="fb-hero-cta">
-                        <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">View plans</a>
-                        <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">View a demo</a>
-                        <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Start as a client</a>
-                    </div>
-                </div>
-
-                @if($planCards !== [])
-                    <div class="fb-plan-teaser" aria-label="Plan preview">
-                        @foreach(array_slice($planCards, 0, 3) as $card)
-                            <article class="fb-card fb-card--public">
-                                <h3>{{ $card['label'] ?? 'Plan' }}</h3>
-                                <p><strong>{{ $card['price_display'] ?? 'Review with Everbranch' }}</strong></p>
-                                <p>{{ $card['summary'] ?? 'A reviewed plan direction for your workspace.' }}</p>
-                            </article>
-                        @endforeach
-                    </div>
-                @endif
             </section>
         </main>
 

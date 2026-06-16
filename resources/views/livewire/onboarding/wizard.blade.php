@@ -1,11 +1,15 @@
 <div
     data-onboarding-wizard-root
+    data-onboarding-surface="{{ $surface ?? 'page' }}"
     data-tenant-token="{{ $tenantToken }}"
     data-tenant-id="{{ (int) $tenantId }}"
     data-contract-url="{{ $contractUrl }}"
     data-autosave-url="{{ $autosaveUrl }}"
     data-finalize-url="{{ $finalizeUrl }}"
     data-post-provisioning-summary-url="{{ $postProvisioningSummaryUrl }}"
+    @if(! empty($completionRedirectUrl))
+        data-completion-redirect-url="{{ $completionRedirectUrl }}"
+    @endif
     @if($provisionUrl)
         data-provision-url="{{ $provisionUrl }}"
     @endif
@@ -150,6 +154,75 @@
                                 />
                                 <div class="fb-help">Keep it short; this anchors initial checklist and recommendations.</div>
                             </div>
+
+                            <div class="fb-state">
+                                <div class="flex flex-wrap items-start justify-between gap-4">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="fb-form-label">Client brand</div>
+                                        <div class="fb-help">Optional. Add a logo URL and display name so the setup preview feels like their workspace.</div>
+                                    </div>
+                                    <div class="flex min-w-[220px] items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm" data-client-brand-preview>
+                                        <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 text-sm font-semibold text-zinc-500" data-client-brand-preview-mark>
+                                            EB
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="truncate text-sm font-semibold text-zinc-950" data-client-brand-preview-name>{{ $tenantName !== '' ? $tenantName : 'Client workspace' }}</div>
+                                            <div class="text-xs text-zinc-500">Electrician setup</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div>
+                                        <label class="fb-form-label">Display name</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="{{ $tenantName !== '' ? $tenantName : 'Client company' }}" data-input="setup_preferences.client_brand.display_name" />
+                                    </div>
+                                    <div>
+                                        <label class="fb-form-label">Logo URL</label>
+                                        <input type="url" class="fb-input mt-2" placeholder="https://example.com/logo.png" data-input="setup_preferences.client_brand.logo_url" />
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="fb-form-label">Logo alt text</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="Company logo" data-input="setup_preferences.client_brand.logo_alt" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="fb-state">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div class="fb-form-label">Label tweaks</div>
+                                        <div class="fb-help">Small wording changes. These do not change access or billing.</div>
+                                    </div>
+                                    <span class="rounded-full border border-zinc-300 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-600">Optional</span>
+                                </div>
+                                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    <div>
+                                        <label class="fb-form-label">Customer label</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="Customer" data-input="setup_preferences.label_overrides.customer_label" />
+                                    </div>
+                                    <div>
+                                        <label class="fb-form-label">Work label</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="Job" data-input="setup_preferences.label_overrides.work_label" />
+                                    </div>
+                                    <div>
+                                        <label class="fb-form-label">Money label</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="Revenue / Cost" data-input="setup_preferences.label_overrides.money_label" />
+                                    </div>
+                                    <div>
+                                        <label class="fb-form-label">Materials label</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="Parts / Labor" data-input="setup_preferences.label_overrides.material_label" />
+                                    </div>
+                                    <div>
+                                        <label class="fb-form-label">Stage label</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="Job Stage" data-input="setup_preferences.label_overrides.stage_label" />
+                                    </div>
+                                    <div>
+                                        <label class="fb-form-label">Assignee label</label>
+                                        <input type="text" class="fb-input mt-2" placeholder="Technician" data-input="setup_preferences.label_overrides.assignee_label" />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="hidden space-y-6" data-step-panel="modules_and_data">
@@ -157,7 +230,7 @@
                                 <div class="flex flex-wrap items-end justify-between gap-3">
                                     <div>
                                         <div class="fb-form-label">Modules</div>
-                                        <div class="fb-help">Locked modules stay visible but can’t be newly selected.</div>
+                                        <div class="fb-help">Visible modules stay in the wizard even when Everbranch still needs to review access.</div>
                                     </div>
                                     <button type="button" class="fb-btn-soft fb-link-soft" data-action-apply-recommended>
                                         Apply recommended
@@ -214,15 +287,11 @@
                                     </select>
                                     <div class="fb-help">This is the intake path for initial data availability.</div>
                                 </div>
-                                <div>
-                                    <label class="fb-form-label">Setup preferences (optional)</label>
-                                    <textarea
-                                        rows="4"
-                                        class="fb-textarea mt-2"
-                                        placeholder='{"timezone":"America/New_York"}'
-                                        data-input="setup_preferences_json"
-                                    ></textarea>
-                                    <div class="fb-help">JSON object; leave blank if unsure.</div>
+                                <div class="fb-state">
+                                    <div class="fb-form-label">Setup preferences</div>
+                                    <div class="mt-2 text-sm text-[var(--fb-text-secondary)]">
+                                        We keep the stored preferences lightweight: the electrician template, the default intake path, and the label tweaks you set above.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -281,11 +350,19 @@
                                         <div class="fb-form-label">Mobile intent</div>
                                         <div class="mt-1 text-sm font-semibold text-[var(--fb-text-primary)]" data-review-mobile>—</div>
                                     </div>
+                                    <div class="fb-surface-inset p-4 md:col-span-2">
+                                        <div class="fb-form-label">Label tweaks</div>
+                                        <div class="mt-1 text-sm text-[var(--fb-text-secondary)]" data-review-labels>—</div>
+                                    </div>
+                                    <div class="fb-surface-inset p-4 md:col-span-2">
+                                        <div class="fb-form-label">Client brand</div>
+                                        <div class="mt-1 text-sm text-[var(--fb-text-secondary)]" data-review-client-brand>—</div>
+                                    </div>
                                 </div>
 
                                 <div class="mt-5 flex flex-wrap items-center gap-2">
                                     <button type="button" class="fb-btn-soft fb-btn-accent fb-link-soft" data-action-finalize>Finalize blueprint</button>
-                                    <div class="text-xs text-[var(--fb-text-secondary)]" data-finalize-status>Finalization is blueprint-only (no redirects, no session mutation).</div>
+                                    <div class="text-xs text-[var(--fb-text-secondary)]" data-finalize-status>Finalization saves the blueprint and then takes you to the workspace when the modal flow is complete.</div>
                                 </div>
                             </div>
 

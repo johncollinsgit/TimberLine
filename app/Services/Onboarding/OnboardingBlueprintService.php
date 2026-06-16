@@ -38,6 +38,13 @@ class OnboardingBlueprintService
             'selected_modules.*' => ['string', 'max:120'],
             'data_source' => ['nullable', 'string', 'max:80'],
             'setup_preferences' => ['sometimes', 'array'],
+            'setup_preferences.intake_path' => ['nullable', 'string', 'max:80'],
+            'setup_preferences.label_overrides' => ['sometimes', 'array'],
+            'setup_preferences.label_overrides.*' => ['nullable', 'string', 'max:80'],
+            'setup_preferences.client_brand' => ['sometimes', 'array'],
+            'setup_preferences.client_brand.display_name' => ['nullable', 'string', 'max:80'],
+            'setup_preferences.client_brand.logo_url' => ['nullable', 'url', 'max:255'],
+            'setup_preferences.client_brand.logo_alt' => ['nullable', 'string', 'max:120'],
             'demo_origin' => ['sometimes', 'array'],
             'mobile_intent' => ['sometimes', 'array'],
             'mobile_intent.needs_mobile_access' => ['sometimes', 'boolean'],
@@ -76,6 +83,13 @@ class OnboardingBlueprintService
             'selected_modules.*' => ['string', 'max:120'],
             'data_source' => ['required', 'string', 'in:shopify,csv,manual,connector'],
             'setup_preferences' => ['sometimes', 'array'],
+            'setup_preferences.intake_path' => ['nullable', 'string', 'max:80'],
+            'setup_preferences.label_overrides' => ['sometimes', 'array'],
+            'setup_preferences.label_overrides.*' => ['nullable', 'string', 'max:80'],
+            'setup_preferences.client_brand' => ['sometimes', 'array'],
+            'setup_preferences.client_brand.display_name' => ['nullable', 'string', 'max:80'],
+            'setup_preferences.client_brand.logo_url' => ['nullable', 'url', 'max:255'],
+            'setup_preferences.client_brand.logo_alt' => ['nullable', 'string', 'max:120'],
             'demo_origin' => ['sometimes', 'array'],
             'mobile_intent' => ['required', 'array'],
             'mobile_intent.needs_mobile_access' => ['required', 'boolean'],
@@ -180,7 +194,7 @@ class OnboardingBlueprintService
             'desired_outcome_first' => $this->nullableString($input['desired_outcome_first'] ?? null),
             'selected_modules' => $normalizedModules,
             'data_source' => $dataSource,
-            'setup_preferences' => is_array($input['setup_preferences'] ?? null) ? (array) $input['setup_preferences'] : [],
+            'setup_preferences' => $this->normalizeSetupPreferences($input['setup_preferences'] ?? []),
             'mobile_intent' => [
                 'needs_mobile_access' => is_bool($needsMobileAccess) ? $needsMobileAccess : false,
                 'mobile_roles_needed' => $mobileRoles,
@@ -355,5 +369,36 @@ class OnboardingBlueprintService
         $raw = trim((string) $value);
 
         return $raw !== '' ? $raw : null;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function normalizeSetupPreferences(mixed $preferences): array
+    {
+        if (! is_array($preferences)) {
+            return [];
+        }
+
+        $normalized = (array) $preferences;
+        $clientBrand = is_array($normalized['client_brand'] ?? null)
+            ? (array) $normalized['client_brand']
+            : [];
+
+        $logoUrl = $this->nullableString($clientBrand['logo_url'] ?? null);
+        $displayName = $this->nullableString($clientBrand['display_name'] ?? null);
+        $logoAlt = $this->nullableString($clientBrand['logo_alt'] ?? null);
+
+        if ($displayName !== null || $logoUrl !== null || $logoAlt !== null) {
+            $normalized['client_brand'] = array_filter([
+                'display_name' => $displayName,
+                'logo_url' => $logoUrl,
+                'logo_alt' => $logoAlt,
+            ], static fn (?string $value): bool => $value !== null);
+        } else {
+            unset($normalized['client_brand']);
+        }
+
+        return $normalized;
     }
 }

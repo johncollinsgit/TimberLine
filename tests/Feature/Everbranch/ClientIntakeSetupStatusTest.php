@@ -5,6 +5,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
+use App\Services\Onboarding\TenantOnboardingBlueprintStore;
 use App\Services\Onboarding\TenantSetupStatusService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -229,9 +230,45 @@ test('missing setup status is created safely with undecided guidance', function 
         ->assertOk()
         ->assertSeeText('Stage: Choosing setup path')
         ->assertSeeText('No import path has been chosen yet')
-        ->assertSeeText('Mobile companion needs are undecided');
+        ->assertSeeText('Mobile companion needs are undecided')
+        ->assertSee('data-onboarding-gate-root', false)
+        ->assertSee('data-onboarding-modal-open="1"', false)
+        ->assertSee('data-open-onboarding-modal', false)
+        ->assertSee('Electrician onboarding', false)
+        ->assertSee('data-onboarding-surface="modal"', false);
 
     expect(TenantSetupStatus::query()->where('tenant_id', $tenant->id)->count())->toBe(1);
+});
+
+test('completed tenant setup page keeps onboarding modal available without auto open', function (): void {
+    $tenant = setupStatusTenant('acme');
+    $user = setupStatusUserForTenant($tenant);
+
+    app(TenantOnboardingBlueprintStore::class)->finalize((int) $tenant->id, [
+        'rail' => 'direct',
+        'template_key' => 'electrician',
+        'desired_outcome_first' => 'Get the electrician workspace ready.',
+        'selected_modules' => ['customers', 'lead_capture'],
+        'data_source' => 'manual',
+        'setup_preferences' => [
+            'client_brand' => [
+                'display_name' => 'Acme Electric',
+                'logo_url' => 'https://cdn.example.test/acme-electric-logo.png',
+                'logo_alt' => 'Acme Electric logo',
+            ],
+        ],
+        'mobile_intent' => [
+            'needs_mobile_access' => false,
+        ],
+    ], (int) $user->id);
+
+    $this->actingAs($user)
+        ->get('http://acme.theeverbranch.com/start?tenant=acme')
+        ->assertOk()
+        ->assertSee('data-onboarding-gate-root', false)
+        ->assertSee('data-onboarding-modal-open="0"', false)
+        ->assertSee('Review setup')
+        ->assertDontSee('data-onboarding-modal-open="1"', false);
 });
 
 test('tenant setup status captures import module and mobile intent without generic mobile activation', function (): void {

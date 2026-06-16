@@ -42,15 +42,20 @@
         ->all();
 
     $billingReturn = strtolower(trim((string) request()->query('billing', '')));
+    $onboardingComplete = (bool) ($onboardingComplete ?? false);
+    $showOnboardingModal = (bool) ($showOnboardingModal ?? false);
+    $completionRedirectUrl = (string) ($completionRedirectUrl ?? route('dashboard', absolute: false));
 @endphp
 
 <x-layouts::app.sidebar title="Start Here">
     <flux:main>
-        <div class="fb-workflow-shell">
+        <div class="fb-workflow-shell" data-onboarding-gate-root data-onboarding-modal-open="{{ $showOnboardingModal ? '1' : '0' }}">
             <header class="fb-workflow-header">
                 <div class="fb-eyebrow">Start Here</div>
                 <h1 class="fb-title-xl">{{ $tenantName }}</h1>
-                <p class="fb-subtitle">A workspace setup guide for choosing an import path, clarifying feature interests, and showing what Everbranch still needs to review.</p>
+                <p class="fb-subtitle">
+                    {{ $onboardingComplete ? 'Your workspace setup is complete. You can review status here or jump straight into the workspace.' : 'A short, guided setup for the first electrician client. We will pick a template, choose a few safe modules, and confirm the starting point.' }}
+                </p>
 
                 <div class="fb-metric-grid">
                     <div class="fb-metric">
@@ -70,7 +75,46 @@
                         <div class="fb-metric-value">{{ count($purchasable) }}</div>
                     </div>
                 </div>
+
+                <div class="mt-5 flex flex-wrap items-center gap-3">
+                    @if($showOnboardingModal)
+                        <button type="button" class="fb-btn-soft fb-btn-accent fb-link-soft" data-open-onboarding-modal>
+                            Continue setup
+                        </button>
+                        <span class="text-sm text-zinc-600">The modal opens automatically on first sign-in, but you can reopen it here anytime.</span>
+                    @else
+                        <span class="text-sm text-zinc-600">The onboarding blueprint is complete. You can still reopen the setup flow for review.</span>
+                        <button type="button" class="fb-btn-soft fb-link-soft" data-open-onboarding-modal>
+                            Review setup
+                        </button>
+                    @endif
+                </div>
             </header>
+
+            <dialog
+                class="fb-onboarding-dialog w-[min(1200px,calc(100vw-1rem))] max-w-none rounded-[32px] border border-zinc-200 bg-white p-0 shadow-[0_40px_120px_rgba(15,23,42,0.28)] backdrop:bg-[rgba(11,15,20,0.4)] backdrop:backdrop-blur-md"
+                aria-labelledby="onboarding-modal-title"
+                data-onboarding-modal
+            >
+                <div class="max-h-[92vh] overflow-y-auto bg-[radial-gradient(circle_at_top_left,_rgba(237,247,245,0.95),_rgba(255,255,255,1)_48%,_rgba(248,249,250,1))]">
+                    <div class="flex items-start justify-between gap-4 border-b border-zinc-200 px-6 py-5">
+                        <div>
+                            <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Electrician onboarding</div>
+                            <h2 id="onboarding-modal-title" class="mt-1 text-2xl font-semibold text-zinc-950">Finish setup in three calm steps.</h2>
+                            <p class="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+                                Pick the electrician template, choose the safe modules you need now, and confirm the review so the workspace can open.
+                            </p>
+                        </div>
+                        <button type="button" class="rounded-full border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100" data-close-onboarding-modal>
+                            Close
+                        </button>
+                    </div>
+
+                    <div class="px-4 py-4 md:px-6 md:py-6">
+                        @livewire('onboarding.wizard', ['surface' => 'modal', 'completionRedirectUrl' => $completionRedirectUrl], key('onboarding-modal-'.$tenant->id))
+                    </div>
+                </div>
+            </dialog>
 
             <section class="fb-panel mb-6" data-everbranch-setup-status="true">
                 <div class="fb-panel-head">

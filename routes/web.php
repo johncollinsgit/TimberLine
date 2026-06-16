@@ -380,10 +380,11 @@ Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap
 Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
-    Route::middleware(['role:admin,manager,marketing_manager'])->group(function () {
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->group(function () {
         Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });
-    Route::get('/search', [GlobalSearchController::class, 'index'])
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
 
     Route::middleware(['role:admin', 'tenant.access'])
@@ -446,7 +447,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     */
     Route::prefix('api/onboarding')
         ->name('onboarding.api.')
-        ->middleware(['tenant.access'])
+        ->middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->group(function (): void {
             Route::get('/wizard-contract', [OnboardingWizardApiController::class, 'contract'])
                 ->name('contract');

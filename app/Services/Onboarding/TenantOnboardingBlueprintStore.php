@@ -3,9 +3,11 @@
 namespace App\Services\Onboarding;
 
 use App\Models\Tenant;
+use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantOnboardingBlueprint;
 use App\Models\User;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
+use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Support\Onboarding\AccountMode;
 use App\Support\Onboarding\OnboardingBlueprint;
 use App\Support\Onboarding\OnboardingRail;
@@ -23,7 +25,8 @@ class TenantOnboardingBlueprintStore
     public function __construct(
         protected OnboardingBlueprintService $blueprintService,
         protected TenantAccountModeResolver $accountModeResolver,
-        protected AuthenticatedTenantContextResolver $tenantContextResolver
+        protected AuthenticatedTenantContextResolver $tenantContextResolver,
+        protected TenantModuleCatalogService $moduleCatalogService
     ) {
     }
 
@@ -43,6 +46,7 @@ class TenantOnboardingBlueprintStore
             ...$input,
             'account_mode' => (string) ($input['account_mode'] ?? $this->accountModeResolver->resolveForTenant($tenant)->value),
         ]);
+        $this->assertSelectableModulesAreVisible($tenantId, (array) ($validated['selected_modules'] ?? []));
 
         $accountMode = (string) ($validated['account_mode'] ?? AccountMode::Production->value);
         $rail = (string) ($validated['rail'] ?? OnboardingRail::Direct->value);
@@ -108,8 +112,9 @@ class TenantOnboardingBlueprintStore
             ...$input,
             'account_mode' => (string) ($input['account_mode'] ?? $this->accountModeResolver->resolveForTenant($tenant)->value),
         ]);
+        $this->assertSelectableModulesAreVisible($tenantId, (array) ($validated['selected_modules'] ?? []));
 
-        return TenantOnboardingBlueprint::query()->create([
+        $final = TenantOnboardingBlueprint::query()->create([
             'tenant_id' => $tenantId,
             'created_by_user_id' => $actorUserId,
             'status' => 'final',
@@ -119,6 +124,10 @@ class TenantOnboardingBlueprintStore
             'payload' => $validated,
             'origin' => $origin,
         ]);
+
+        $this->syncClientBrandPreference($tenant, $validated);
+
+        return $final;
     }
 
     /**
@@ -191,17 +200,13 @@ class TenantOnboardingBlueprintStore
         }
 
         if ($actorUserId !== null) {
-            $scoped = TenantOnboardingBlueprint::query()
+            return TenantOnboardingBlueprint::query()
                 ->forTenantId($tenantId)
                 ->where('status', 'draft')
                 ->where('created_by_user_id', $actorUserId)
                 ->orderByDesc('updated_at')
                 ->orderByDesc('id')
                 ->first();
-
-            if ($scoped instanceof TenantOnboardingBlueprint) {
-                return $scoped;
-            }
         }
 
         return TenantOnboardingBlueprint::query()
@@ -232,6 +237,86 @@ class TenantOnboardingBlueprintStore
     {
         if (! Schema::hasTable('tenant_onboarding_blueprints')) {
             throw new \RuntimeException('tenant_onboarding_blueprints table is missing; run migrations first.');
+        }
+    }
+
+    /**
+     * Promote the onboarding brand preference into the tenant discovery profile
+     * so the client logo is not stranded inside blueprint history.
+     *
+     * @param  array<string,mixed>  $validated
+     */
+    protected function syncClientBrandPreference(Tenant $tenant, array $validated): void
+    {
+        if (! Schema::hasTable('tenant_discovery_profiles')) {
+            return;
+        }
+
+        $clientBrand = is_array(data_get($validated, 'setup_preferences.client_brand'))
+            ? (array) data_get($validated, 'setup_preferences.client_brand')
+            : [];
+
+        $displayName = trim((string) ($clientBrand['display_name'] ?? ''));
+        $logoUrl = trim((string) ($clientBrand['logo_url'] ?? ''));
+
+        if ($displayName === '' && $logoUrl === '') {
+            return;
+        }
+
+        $profile = TenantDiscoveryProfile::query()->firstOrNew([
+            'tenant_id' => (int) $tenant->id,
+        ]);
+
+        if ($displayName !== '') {
+            $profile->primary_brand_name = $displayName;
+        }
+
+        if ($logoUrl !== '') {
+            $profile->primary_logo_url = $logoUrl;
+        }
+
+        if (! $profile->exists) {
+            $profile->is_active = true;
+        }
+
+        $profile->save();
+    }
+
+    /**
+     * @param  array<int,string>  $selectedModules
+     */
+    protected function assertSelectableModulesAreVisible(int $tenantId, array $selectedModules): void
+    {
+        if ($selectedModules === []) {
+            return;
+        }
+
+        $payload = $this->moduleCatalogService->publicCatalogPayload();
+        $modules = array_values((array) ($payload['modules'] ?? []));
+
+        $allowed = [];
+        foreach ($modules as $module) {
+            if (! is_array($module)) {
+                continue;
+            }
+
+            $moduleKey = strtolower(trim((string) ($module['key'] ?? '')));
+            if ($moduleKey === '') {
+                continue;
+            }
+
+            $allowed[] = $moduleKey;
+        }
+
+        $invalid = array_values(array_diff(
+            array_values(array_unique(array_map(static fn (mixed $moduleKey): string => strtolower(trim((string) $moduleKey)), $selectedModules))),
+            array_values(array_unique($allowed))
+        ));
+
+        if ($invalid !== []) {
+            throw ValidationException::withMessages([
+                'selected_modules' => ['One or more selected modules are not available from the safe onboarding surface: '.implode(', ', $invalid)],
+            ]);
         }
     }
 }

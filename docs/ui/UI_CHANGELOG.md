@@ -1,5 +1,33 @@
 # UI Changelog
 
+## 2026-06-16 — Public Homepage Tabs and Hero Copy
+
+### What changed
+- Updated the Everbranch public splash headline to “Your business, Under your control.”
+- Updated the public summary copy to describe Everbranch as one intelligent app.
+- Converted the long public homepage body into tabs for Product, Workflows, Customers, Integrations, Security, and Plans.
+
+### What did not change
+- No billing, checkout, module activation, imports, mobile APIs, or tenant onboarding behavior changed from the public homepage.
+
+## 2026-06-16 — Electrician Onboarding Modal
+
+### What changed
+- Turned the authenticated onboarding experience into a first-sign-in modal flow for incomplete tenants.
+- Kept `/onboarding` and the existing wizard contract/store as the canonical onboarding backend, while giving `/start` a branded modal shell with automatic open-on-load behavior.
+- Seeded the direct onboarding flow with the electrician template, lightweight label tweaks, and a short three-step progression: template/outcome, modules/data, review/confirm.
+- Added optional client brand preferences to onboarding: display name, logo URL, and logo alt text, with a compact live preview and review-step summary.
+- Finalized client brand preferences now promote the display name and logo URL into the tenant discovery profile so tenant-wide brand metadata has the latest onboarding choice.
+- Switched onboarding module selection to safe visible catalog modules only and preserved the tenant-scoped completion gate so incomplete users cannot reach the normal workspace.
+- Updated the review step and completion handoff so the submitted choices are visible before finalize and the modal redirects to the workspace after completion.
+- Tightened first-client readiness by role-gating onboarding APIs, tenant-gating `/search`, preventing cross-user draft fallback, and adding a native dialog fallback.
+
+### What did not change
+- No new parallel onboarding backend route was added.
+- No billing, checkout, subscription, module entitlement, or import automation was activated.
+- Logo customization is URL-only from onboarding today; no self-service file upload or storage pipeline was activated.
+- Hidden/internal/placeholder/roadmap modules remain fail-closed and unavailable in the onboarding surface.
+
 ## 2026-05-22 — Premium Everbranch Public Splash and Marketing Shell
 
 ### What changed
