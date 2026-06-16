@@ -811,11 +811,11 @@ body[data-premium-motion="public"].has-premium-motion [data-reveal].is-visible {
 
 .fb-splash {
   display: grid;
-  min-height: calc(100svh - 5rem);
+  min-height: calc(100svh - 7rem);
   place-items: center;
   position: relative;
   overflow: hidden;
-  padding: clamp(3rem, 7vw, 6rem) 0 clamp(2.5rem, 5vw, 4rem);
+  padding: clamp(2rem, 5vw, 4rem) 0 clamp(2rem, 5vw, 4rem);
 }
 
 .fb-splash::before,
@@ -998,7 +998,7 @@ body[data-premium-motion="public"].has-premium-motion .fb-splash__node--four {
 }
 
 .fb-public-tabs {
-  padding: clamp(1.25rem, 3vw, 2.5rem) 0 1rem;
+  padding: 0 0 1rem;
 }
 
 .fb-public-tabs__panels {
@@ -4308,7 +4308,7 @@ textarea.assistant-field-input {
   }
 
   .fb-splash {
-    min-height: calc(100svh - 3rem);
+    min-height: calc(100svh - 6rem);
   }
 
   .fb-splash h1,
