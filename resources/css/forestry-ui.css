@@ -811,11 +811,11 @@ body[data-premium-motion="public"].has-premium-motion [data-reveal].is-visible {
 
 .fb-splash {
   display: grid;
-  min-height: 100svh;
+  min-height: calc(100svh - 5rem);
   place-items: center;
   position: relative;
   overflow: hidden;
-  padding: clamp(3rem, 7vw, 6rem) 0;
+  padding: clamp(3rem, 7vw, 6rem) 0 clamp(2.5rem, 5vw, 4rem);
 }
 
 .fb-splash::before,
@@ -4308,7 +4308,7 @@ textarea.assistant-field-input {
   }
 
   .fb-splash {
-    min-height: 100svh;
+    min-height: calc(100svh - 3rem);
   }
 
   .fb-splash h1,

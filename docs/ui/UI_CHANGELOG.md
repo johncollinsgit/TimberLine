@@ -6,7 +6,7 @@
 - Updated the Everbranch public splash headline to “All of your business, in one place.”
 - Updated the public summary copy to describe Everbranch as one intelligent app.
 - Converted the long public homepage body into tabs for Product, Workflows, Customers, Integrations, Security, and Plans.
-- Made the splash the full first-page experience, then moved the sticky public nav below it so the nav is the only tab control.
+- Kept the sticky public nav as the only tab control and positioned it above the splash hero.
 - Removed the duplicate “Explore Everbranch” intro and lower tab selector from the public homepage.
 
 ### What did not change

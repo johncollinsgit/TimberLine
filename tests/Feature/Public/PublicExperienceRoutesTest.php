@@ -18,8 +18,8 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('data-public-tab-trigger="product"', false)
         ->assertSee('data-public-tab-panel="plans"', false)
         ->assertSeeInOrder([
-            'id="splash"',
             'class="fb-site-nav-wrap"',
+            'id="splash"',
             'id="everbranch-public"',
         ], false)
         ->assertDontSee('fb-public-tabs__nav', false)

@@ -25,6 +25,30 @@
     @include('platform.partials.premium-motion')
 
     <div class="fb-public-shell fb-public-shell--wide">
+        <div class="fb-site-nav-wrap">
+            <nav class="fb-site-nav fb-site-nav--premium" aria-label="Primary navigation">
+                <a href="#splash" class="fb-site-brand fb-site-brand--lockup">
+                    <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
+                </a>
+                <div class="fb-site-links" role="tablist" aria-label="Public sections">
+                    <a id="tab-product" href="#everbranch-public" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">Product</a>
+                    <a id="tab-workflows" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">Workflows</a>
+                    <a id="tab-customers" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-customers" data-public-tab-trigger="customers">Customers</a>
+                    <a id="tab-integrations" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-integrations" data-public-tab-trigger="integrations">Integrations</a>
+                    <a id="tab-security" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-security" data-public-tab-trigger="security">Security</a>
+                    <a id="tab-plans" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-plans" data-public-tab-trigger="plans">Plans</a>
+                </div>
+                <div class="fb-hero-cta fb-hero-cta--nav">
+                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
+                    @if(is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null))
+                        <a href="{{ $cta['start_client']['href'] }}" class="fb-btn fb-btn-primary">{{ $cta['start_client']['label'] ?? 'Start as a client' }}</a>
+                    @else
+                        <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Start as a client</a>
+                    @endif
+                </div>
+            </nav>
+        </div>
+
         <header id="splash" class="fb-splash" aria-label="Everbranch entry">
             <div class="fb-splash__field" aria-hidden="true">
                 <span class="fb-splash__branch fb-splash__branch--one"></span>
@@ -49,30 +73,6 @@
                 </a>
             </div>
         </header>
-
-        <div class="fb-site-nav-wrap">
-            <nav class="fb-site-nav fb-site-nav--premium" aria-label="Primary navigation">
-                <a href="#splash" class="fb-site-brand fb-site-brand--lockup">
-                    <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
-                </a>
-                <div class="fb-site-links" role="tablist" aria-label="Public sections">
-                    <a id="tab-product" href="#everbranch-public" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">Product</a>
-                    <a id="tab-workflows" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">Workflows</a>
-                    <a id="tab-customers" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-customers" data-public-tab-trigger="customers">Customers</a>
-                    <a id="tab-integrations" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-integrations" data-public-tab-trigger="integrations">Integrations</a>
-                    <a id="tab-security" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-security" data-public-tab-trigger="security">Security</a>
-                    <a id="tab-plans" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-plans" data-public-tab-trigger="plans">Plans</a>
-                </div>
-                <div class="fb-hero-cta fb-hero-cta--nav">
-                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-                    @if(is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null))
-                        <a href="{{ $cta['start_client']['href'] }}" class="fb-btn fb-btn-primary">{{ $cta['start_client']['label'] ?? 'Start as a client' }}</a>
-                    @else
-                        <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Start as a client</a>
-                    @endif
-                </div>
-            </nav>
-        </div>
 
         <main id="everbranch-public" class="fb-public-main" tabindex="-1">
             <section class="fb-public-tabs" aria-label="Everbranch overview tabs" data-public-tabs data-reveal>
