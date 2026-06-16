@@ -9,6 +9,7 @@
 - Kept the sticky public nav as the only tab control and positioned it above the splash hero.
 - Removed the duplicate “Explore Everbranch” intro and lower tab selector from the public homepage.
 - Rewrote the public tab labels and body copy in plain small-business language, replacing software jargon with customers, jobs, notes, materials, money, and next-step language.
+- Removed the public Pricing tab and combined the Your Info and Trust tabs into one Privacy tab.
 
 ### What did not change
 - No billing, checkout, module activation, imports, mobile APIs, or tenant onboarding behavior changed from the public homepage.

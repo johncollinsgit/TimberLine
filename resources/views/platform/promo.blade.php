@@ -34,9 +34,7 @@
                     <a id="tab-product" href="#everbranch-public" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">What it does</a>
                     <a id="tab-workflows" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">Daily work</a>
                     <a id="tab-customers" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-customers" data-public-tab-trigger="customers">Who it helps</a>
-                    <a id="tab-integrations" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-integrations" data-public-tab-trigger="integrations">Your info</a>
-                    <a id="tab-security" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-security" data-public-tab-trigger="security">Trust</a>
-                    <a id="tab-plans" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-plans" data-public-tab-trigger="plans">Pricing</a>
+                    <a id="tab-privacy" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-privacy" data-public-tab-trigger="privacy">Privacy</a>
                 </div>
                 <div class="fb-hero-cta fb-hero-cta--nav">
                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
@@ -197,12 +195,12 @@
                         </div>
                     </article>
 
-                    <article id="panel-integrations" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-integrations" data-public-tab-panel="integrations" hidden>
-                        <div class="fb-section fb-section--public" aria-label="Business information">
+                    <article id="panel-privacy" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-privacy" data-public-tab-panel="privacy" hidden>
+                        <div class="fb-section fb-section--public" aria-label="Privacy and business information">
                             <div class="fb-section-header">
-                                <p class="fb-section-kicker">Your info</p>
-                                <h2>Bring in the information you already use.</h2>
-                                <p>Start with Shopify, a spreadsheet, manual entry, or a guided setup. The goal is to stop retyping the same details in five different places.</p>
+                                <p class="fb-section-kicker">Privacy</p>
+                                <h2>Bring in your information without losing control.</h2>
+                                <p>Start with Shopify, a spreadsheet, manual entry, or a guided setup. The goal is to stop retyping the same details in five different places while keeping important changes reviewed first.</p>
                             </div>
                             <div class="fb-path-strip" data-premium-surface>
                                 <span>Shopify store</span>
@@ -211,20 +209,10 @@
                                 <span>Guided setup</span>
                                 <span>More connections later</span>
                             </div>
-                        </div>
-                    </article>
-
-                    <article id="panel-security" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-security" data-public-tab-panel="security" hidden>
-                        <div class="fb-section fb-section--public" aria-label="Trust and control">
-                            <div class="fb-section-header">
-                                <p class="fb-section-kicker">Trust</p>
-                                <h2>You stay in control.</h2>
-                                <p>Everbranch should help your business feel clearer, not risky. New setup steps, paid changes, and sensitive access are reviewed before anything important changes.</p>
-                            </div>
                             <div class="fb-grid fb-grid-3">
                                 <article class="fb-card fb-card--public">
                                     <h3>The right people see the right things</h3>
-                                    <p>Your team gets access based on what they need to do.</p>
+                                    <p>Your team gets access based on what they need to do, not everything by default.</p>
                                 </article>
                                 <article class="fb-card fb-card--public">
                                     <h3>Setup is checked first</h3>
@@ -235,37 +223,6 @@
                                     <p>Looking at plans or asking for help does not start a payment from this page.</p>
                                 </article>
                             </div>
-                        </div>
-                    </article>
-
-                    <article id="panel-plans" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-plans" data-public-tab-panel="plans" hidden>
-                        <div class="fb-section fb-section--public" aria-label="Pricing and access">
-                            <div class="fb-final-cta fb-final-cta--public" data-premium-surface>
-                                <div>
-                                    <p class="fb-section-kicker">Pricing</p>
-                                    <h2>Find the right starting point.</h2>
-                                    <p>
-                                        Look at the plan options, request a demo, or start as a client. We will help match Everbranch to how your business actually works before anything sensitive changes.
-                                    </p>
-                                </div>
-                                <div class="fb-hero-cta">
-                                    <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">View pricing</a>
-                                    <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">View a demo</a>
-                                    <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Start as a client</a>
-                                </div>
-                            </div>
-
-                            @if($planCards !== [])
-                                <div class="fb-plan-teaser" aria-label="Plan preview">
-                                    @foreach(array_slice($planCards, 0, 3) as $card)
-                                        <article class="fb-card fb-card--public">
-                                            <h3>{{ $card['label'] ?? 'Plan' }}</h3>
-                                            <p><strong>{{ $card['price_display'] ?? 'Review with Everbranch' }}</strong></p>
-                                            <p>{{ $card['summary'] ?? 'A simple starting point for your business.' }}</p>
-                                        </article>
-                                    @endforeach
-                                </div>
-                            @endif
                         </div>
                     </article>
                 </div>

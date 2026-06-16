@@ -14,7 +14,7 @@ beforeEach(function () {
     $this->withoutVite();
 });
 
-test('promo page renders premium Everbranch splash and pricing content', function () {
+test('promo page renders premium Everbranch splash and public tabs', function () {
     config()->set('product_surfaces.plans.cards.starter.price_display', 'From $777/mo');
 
     $this->get(route('platform.promo'))
@@ -27,17 +27,22 @@ test('promo page renders premium Everbranch splash and pricing content', functio
         ->assertSeeText('What it does')
         ->assertSeeText('Daily work')
         ->assertSeeText('Who it helps')
-        ->assertSeeText('Your info')
-        ->assertSeeText('Trust')
-        ->assertSeeText('Pricing')
+        ->assertSeeText('Privacy')
         ->assertSeeText('One place to see what is happening in your business.')
-        ->assertSeeText('Bring in the information you already use.')
+        ->assertSeeText('Bring in your information without losing control.')
         ->assertSee('data-public-tabs', false)
         ->assertSee('data-public-tab-trigger="workflows"', false)
+        ->assertSee('data-public-tab-trigger="privacy"', false)
+        ->assertDontSee('data-public-tab-trigger="integrations"', false)
+        ->assertDontSee('data-public-tab-trigger="security"', false)
+        ->assertDontSee('data-public-tab-trigger="plans"', false)
+        ->assertDontSee('data-public-tab-panel="integrations"', false)
+        ->assertDontSee('data-public-tab-panel="security"', false)
+        ->assertDontSee('data-public-tab-panel="plans"', false)
         ->assertDontSee('fb-public-tabs__nav', false)
         ->assertDontSeeText('Explore Everbranch')
         ->assertDontSeeText('Shopify is supported. It is not the whole product.')
-        ->assertSeeText('From $777/mo')
+        ->assertDontSeeText('From $777/mo')
         ->assertSeeText('Start as a client');
 });
 
