@@ -9,67 +9,67 @@ $helloContact = 'hello@'.$contactDomain;
 
 return [
     'promo' => [
-        'eyebrow' => 'AI-Powered Small Business Workspace',
+        'eyebrow' => 'Built for busy small businesses',
         'headline' => 'All of your business, in one place',
         'summary' => $productName.' brings customers, work, money, materials, communication, and next steps into one intelligent app.',
         'how_it_works' => [
             [
-                'title' => 'Bring the important signals together',
-                'description' => 'Connect Shopify, request CSV/manual setup, or shape a direct workspace around how your business already runs.',
+                'title' => 'Tell us how your business runs',
+                'description' => 'Bring the basics together: customers, jobs, orders, materials, notes, and the places you already keep information.',
             ],
             [
-                'title' => 'Choose the workflows that matter first',
-                'description' => 'Start with customers, work, orders, materials, reports, or requested setup paths without turning on anything risky automatically.',
+                'title' => 'Pick what matters first',
+                'description' => 'Start with the part that causes the most headaches, like follow-ups, job notes, order tracking, or materials.',
             ],
             [
-                'title' => 'Review the next step with Everbranch',
-                'description' => 'Plan interest, setup needs, and requested features stay clear before billing or advanced access is considered.',
+                'title' => 'Get a clear next step',
+                'description' => 'We help you see what should happen next before anything paid, sensitive, or important changes.',
             ],
         ],
         'preview_profiles' => [
             [
                 'key' => 'landscaper',
                 'label' => 'Landscaper',
-                'summary' => 'See customers, jobs, crew notes, materials, and follow-ups without scattering the day across tools.',
+                'summary' => 'Keep customers, jobs, crew notes, materials, and follow-ups in one place.',
                 'signals' => [
-                    'Scheduled jobs and crew assignments',
-                    'Materials and job cost questions',
-                    'Before-and-after photo needs',
+                    'Jobs and crew notes',
+                    'Materials and job costs',
+                    'Photos and follow-ups',
                 ],
             ],
             [
                 'key' => 'electrician',
                 'label' => 'Electrician',
-                'summary' => 'Track service work, customers, parts, notes, and next actions from one calm workspace.',
+                'summary' => 'Track service calls, customers, parts, notes, estimates, and follow-ups.',
                 'signals' => [
-                    'Service jobs and technician notes',
+                    'Service calls and job notes',
                     'Parts, receipts, and estimates',
-                    'Follow-up reminders after the visit',
+                    'Reminders after the visit',
                 ],
             ],
             [
                 'key' => 'soap_maker',
                 'label' => 'Soap Maker',
-                'summary' => 'Connect orders, batches, raw materials, wholesale needs, and repeat-customer moments.',
+                'summary' => 'Connect orders, batches, materials, inventory, wholesale needs, and repeat customers.',
                 'signals' => [
-                    'Production batches and materials',
+                    'Batches and materials',
                     'Orders, products, and inventory',
-                    'Repeat purchase and campaign ideas',
+                    'Repeat customer ideas',
                 ],
             ],
         ],
         'preview_flow' => [
             [
-                'title' => 'Preview',
-                'description' => 'Explore a guided example with real-looking workflows and no private business data.',
+                'title' => 'See an example',
+                'description' => 'Look at a guided example with real-looking business details and no private data.',
             ],
             [
-                'title' => 'Request',
-                'description' => 'Share what kind of business you run, how your data should arrive, and what you want help with first.',
+                'title' => 'Share what you need',
+                'description' => 'Tell us what kind of business you run, where your information lives, and what you want help with first.',
             ],
             [
-                'title' => 'Start',
-                'description' => 'After review, your team lands in a Start Here guide with clear setup status and next actions.',
+                'title' => 'Start with a guide',
+                'description' => 'Your team gets a simple Start Here page that shows what is ready and what to do next.',
             ],
         ],
         'plan_order' => [

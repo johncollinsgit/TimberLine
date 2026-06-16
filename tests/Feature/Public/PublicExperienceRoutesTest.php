@@ -10,9 +10,21 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('class="fb-public-body fb-public-body--splash"', false)
         ->assertSeeText('All of your business, in one place')
         ->assertSeeText('The Future of AI-Powered Small Business')
+        ->assertSeeText('What it does')
+        ->assertSeeText('Daily work')
+        ->assertSeeText('Who it helps')
+        ->assertSeeText('Your info')
+        ->assertSeeText('Trust')
+        ->assertSeeText('Pricing')
         ->assertSee('href="#everbranch-public"', false)
         ->assertSee('id="everbranch-public"', false)
         ->assertSeeText('Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent app.')
+        ->assertSeeText('One place to see what is happening in your business.')
+        ->assertSeeText('Start with the parts of your business you want help with first.')
+        ->assertSeeText('Built for real small businesses, not software teams.')
+        ->assertSeeText('Bring in the information you already use.')
+        ->assertSeeText('You stay in control.')
+        ->assertSeeText('Find the right starting point.')
         ->assertSee('data-public-tabs', false)
         ->assertSee('role="tablist"', false)
         ->assertSee('data-public-tab-trigger="product"', false)
@@ -26,7 +38,8 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertDontSee('fb-public-tabs__nav', false)
         ->assertDontSeeText('Explore Everbranch')
         ->assertDontSeeText('Choose the part of the business you want to understand first.')
-        ->assertSeeText('Shopify is supported. It is not the whole product.')
+        ->assertDontSeeText('Workflows')
+        ->assertDontSeeText('Shopify is supported. It is not the whole product.')
         ->assertSeeText('Start as a client')
         ->assertSeeText('Login')
         ->assertSeeText('Landscaper')
@@ -41,6 +54,17 @@ test('guest home route renders the marketing landing page by default', function 
     expect(substr_count($response->getContent(), 'id="splash"'))->toBe(1);
 
     $content = strtolower($response->getContent());
+    $visibleContent = strtolower((string) preg_replace('/\s+/', ' ', strip_tags($response->getContent())));
+
+    foreach ([
+        'workflow',
+        'signals',
+        'advanced access',
+        'review-controlled',
+        'workspace',
+    ] as $jargonTerm) {
+        expect($visibleContent)->not->toContain($jargonTerm);
+    }
 
     foreach ([
         'tenant',
