@@ -11,11 +11,13 @@ class ModernForestryMobileProductCatalogService
 {
     public const TENANT_SLUG = 'modern-forestry';
 
-    public const STOREFRONT_BASE_URL = 'https://modernforestry.theforestrystudio.com';
+    public const DEFAULT_LIMIT = 24;
 
-    public const MAX_LIMIT = 50;
+    public const MAX_LIMIT = 250;
 
-    public const DEFAULT_LIMIT = 20;
+    public const PAGE_SIZE = 50;
+
+    public const FEATURED_LIMIT = 6;
 
     /**
      * @return array<int,array<string,mixed>>
@@ -28,28 +30,7 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeProducts($limit);
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
-
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
-
-        $data = $client->query($this->productsQuery(), [
-            'first' => $limit,
-        ]);
-
-        $nodes = $data['products']['nodes'] ?? [];
-        if (! is_array($nodes)) {
-            return [];
-        }
-
-        return array_values(array_map(
-            fn (mixed $node): array => $this->mapProduct(is_array($node) ? $node : []),
-            $nodes
-        ));
+        return $this->fetchAllProducts($limit);
     }
 
     /**
@@ -67,16 +48,7 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeProductDetail($handle);
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
-
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
-
-        $data = $client->query($this->productDetailQuery(), [
+        $data = $this->client()->query($this->productDetailQuery(), [
             'query' => 'handle:'.$handle.' status:active',
         ]);
 
@@ -99,16 +71,7 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeCollections();
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
-
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
-
-        $data = $client->query($this->collectionsQuery());
+        $data = $this->client()->query($this->collectionsQuery());
 
         $nodes = $data['collections']['nodes'] ?? [];
         if (! is_array($nodes)) {
@@ -138,16 +101,7 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeCollectionProducts($handle, $limit);
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
-
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
-
-        $data = $client->query($this->collectionProductsQuery(), [
+        $data = $this->client()->query($this->collectionProductsQuery(), [
             'query' => 'handle:'.$handle,
             'first' => $limit,
         ]);
@@ -181,27 +135,52 @@ class ModernForestryMobileProductCatalogService
      */
     public function home(): array
     {
+        $featuredCollections = array_slice($this->collections(), 0, 4);
+        $featuredProducts = $this->featuredProducts();
+        $featuredCandleClubProduct = $this->featuredCandleClubProduct();
+
         return [
             'hero' => [
                 'eyebrow' => 'Modern Forestry',
-                'title' => 'Hand-poured candles for a slower season.',
-                'subtitle' => 'Small-batch scents, seasonal favorites, and Candle Cash rewards.',
+                'title' => 'Candles, Candle Club, and rewards in one calm native home.',
+                'subtitle' => 'Browse the retail catalog, discover Candle Club rituals, and jump into Candle Cash when you are ready.',
             ],
-            'featuredCollections' => array_slice($this->collections(), 0, 3),
-            'featuredProducts' => $this->products(6),
+            'featuredCollections' => $featuredCollections,
+            'featuredProducts' => $featuredProducts,
             'cards' => $this->homeCards(),
+            'candleClub' => $this->candleClubPayload($featuredCandleClubProduct),
         ];
     }
 
     public function normalizeLimit(int $limit): int
     {
-        return max(1, min(self::MAX_LIMIT, $limit));
+        return max(1, min($this->catalogMaxLimit(), $limit));
     }
 
     public function fakeCatalogEnabled(): bool
     {
         return app()->environment(['local', 'testing'])
             && (bool) config('mobile_catalog.fake_enabled', false);
+    }
+
+    protected function catalogDefaultLimit(): int
+    {
+        return max(1, (int) config('mobile_catalog.catalog.default_limit', self::DEFAULT_LIMIT));
+    }
+
+    protected function catalogMaxLimit(): int
+    {
+        return max($this->catalogDefaultLimit(), (int) config('mobile_catalog.catalog.max_limit', self::MAX_LIMIT));
+    }
+
+    protected function catalogPageSize(): int
+    {
+        return max(1, min(100, (int) config('mobile_catalog.catalog.page_size', self::PAGE_SIZE)));
+    }
+
+    protected function featuredLimit(): int
+    {
+        return max(1, min($this->catalogMaxLimit(), (int) config('mobile_catalog.catalog.featured_limit', self::FEATURED_LIMIT)));
     }
 
     protected function modernForestryTenant(): Tenant
@@ -239,11 +218,112 @@ class ModernForestryMobileProductCatalogService
         return $store;
     }
 
+    protected function client(): ShopifyGraphqlClient
+    {
+        $tenant = $this->modernForestryTenant();
+        $store = $this->modernForestryRetailStore($tenant);
+
+        return new ShopifyGraphqlClient(
+            (string) $store['shop'],
+            (string) $store['token'],
+            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
+        );
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function fetchAllProducts(int $limit): array
+    {
+        $client = $this->client();
+        $products = [];
+        $after = null;
+
+        do {
+            $remaining = $limit - count($products);
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $batchSize = min($this->catalogPageSize(), $remaining);
+            $data = $client->query($this->productsQuery(), [
+                'first' => $batchSize,
+                'after' => $after,
+                'query' => 'status:active',
+            ]);
+
+            $productNodes = $data['products']['nodes'] ?? [];
+            $pageInfo = $data['products']['pageInfo'] ?? [];
+
+            if (! is_array($productNodes) || $productNodes === []) {
+                break;
+            }
+
+            foreach ($productNodes as $node) {
+                if (! is_array($node)) {
+                    continue;
+                }
+
+                $products[] = $this->mapProduct($node);
+            }
+
+            $hasNextPage = (bool) ($pageInfo['hasNextPage'] ?? false);
+            $after = is_scalar($pageInfo['endCursor'] ?? null)
+                ? (string) $pageInfo['endCursor']
+                : null;
+        } while ($hasNextPage && $after !== null && count($products) < $limit);
+
+        return array_slice($products, 0, $limit);
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function featuredProducts(): array
+    {
+        if ($this->fakeCatalogEnabled()) {
+            return array_slice($this->fakeProducts($this->featuredLimit()), 0, $this->featuredLimit());
+        }
+
+        $data = $this->client()->query($this->featuredProductsQuery(), [
+            'first' => $this->featuredLimit(),
+            'query' => 'status:active',
+        ]);
+
+        $nodes = $data['products']['nodes'] ?? [];
+        if (! is_array($nodes)) {
+            return [];
+        }
+
+        return array_values(array_map(
+            fn (mixed $node): array => $this->mapProduct(is_array($node) ? $node : []),
+            $nodes
+        ));
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function featuredCandleClubProduct(): ?array
+    {
+        $handle = $this->candleClubProductHandle();
+
+        if ($handle === '') {
+            return null;
+        }
+
+        if ($this->fakeCatalogEnabled()) {
+            return $this->fakeProductDetail($handle);
+        }
+
+        return $this->productDetail($handle);
+    }
+
     protected function productsQuery(): string
     {
         return <<<'GRAPHQL'
-query MobileCatalogProducts($first: Int!) {
-  products(first: $first, sortKey: UPDATED_AT, reverse: true, query: "status:active") {
+query MobileCatalogProducts($first: Int!, $after: String, $query: String!) {
+  products(first: $first, after: $after, sortKey: TITLE, reverse: false, query: $query) {
     nodes {
       id
       title
@@ -258,6 +338,39 @@ query MobileCatalogProducts($first: Int!) {
         nodes {
           price
           compareAtPrice
+          availableForSale
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+GRAPHQL;
+    }
+
+    protected function featuredProductsQuery(): string
+    {
+        return <<<'GRAPHQL'
+query MobileCatalogFeaturedProducts($first: Int!, $query: String!) {
+  products(first: $first, sortKey: BEST_SELLING, reverse: false, query: $query) {
+    nodes {
+      id
+      title
+      handle
+      productType
+      tags
+      status
+      featuredImage {
+        url
+      }
+      variants(first: 1) {
+        nodes {
+          price
+          compareAtPrice
+          availableForSale
         }
       }
     }
@@ -305,7 +418,7 @@ GRAPHQL;
     {
         return <<<'GRAPHQL'
 query MobileCatalogCollections {
-  collections(first: 20, sortKey: UPDATED_AT, reverse: true) {
+  collections(first: 30, sortKey: TITLE, reverse: false) {
     nodes {
       handle
       title
@@ -340,6 +453,7 @@ query MobileCatalogCollectionProducts($query: String!, $first: Int!) {
             nodes {
               price
               compareAtPrice
+              availableForSale
             }
           }
         }
@@ -380,7 +494,7 @@ GRAPHQL;
 
         foreach ($formats as $formatIndex => $format) {
             foreach ($baseProducts as $product) {
-                if (count($catalog) >= self::MAX_LIMIT) {
+                if (count($catalog) >= $this->catalogMaxLimit()) {
                     break 2;
                 }
 
@@ -433,9 +547,10 @@ GRAPHQL;
                 'price' => $product['price'],
                 'compareAtPrice' => $product['compareAtPrice'],
                 'available' => true,
-                'productType' => 'Candle',
+                'productType' => $product['productType'],
                 'tags' => $product['tags'],
                 'scentNotes' => $product['scentNotes'],
+                'isCandleClub' => (bool) ($product['isCandleClub'] ?? false),
             ];
         }
 
@@ -449,9 +564,14 @@ GRAPHQL;
     {
         return [
             [
-                'handle' => 'winter',
-                'title' => 'Winter Collection',
-                'description' => 'Evergreen, ember, and soft wooded candles for cold nights and slow mornings.',
+                'handle' => 'bright-and-fresh',
+                'title' => 'Bright + Fresh',
+                'description' => 'Clean citrus, herbs, and gentle woods for a fresh lift.',
+            ],
+            [
+                'handle' => 'candle-club',
+                'title' => 'Candle Club',
+                'description' => 'Monthly ritual candles, member perks, and a standing seasonal delivery.',
             ],
             [
                 'handle' => 'cozy-home',
@@ -459,40 +579,62 @@ GRAPHQL;
                 'description' => 'Warm, comforting scents for full tables, quiet corners, and everyday rituals.',
             ],
             [
-                'handle' => 'bright-and-fresh',
-                'title' => 'Bright + Fresh',
-                'description' => 'Clean citrus, herbs, and gentle woods for a fresh lift.',
+                'handle' => 'winter',
+                'title' => 'Winter Collection',
+                'description' => 'Evergreen, ember, and soft wooded candles for cold nights and slow mornings.',
             ],
         ];
     }
 
     /**
-     * @return array<int,array<string,string>>
+     * @return array<int,array<string,mixed>>
      */
     protected function homeCards(): array
     {
         return [
             [
+                'kind' => 'candle_club',
+                'title' => 'Candle Club',
+                'body' => 'Explore the monthly subscription ritual, member-only drops, and extra reward momentum.',
+                'actionTitle' => 'Explore Candle Club',
+                'url' => $this->candleClubJoinUrl(),
+            ],
+            [
                 'kind' => 'candle_cash',
-                'title' => 'Earn Candle Cash',
-                'body' => 'Earn rewards when you shop, review, and celebrate your birthday.',
+                'title' => 'Candle Cash',
+                'body' => 'Earn rewards when you shop, review, refer a friend, and celebrate your birthday month.',
                 'actionTitle' => 'View rewards',
-                'url' => self::STOREFRONT_BASE_URL.'/pages/rewards',
+                'url' => $this->rewardsUrl(),
             ],
             [
-                'kind' => 'wishlist',
-                'title' => 'Save your favorites',
-                'body' => 'Keep track of scents you love and come back when you are ready.',
-                'actionTitle' => 'View wishlist',
-                'url' => self::STOREFRONT_BASE_URL,
+                'kind' => 'account',
+                'title' => 'Account and orders',
+                'body' => 'Jump to your website account for order history, saved perks, and subscription details.',
+                'actionTitle' => 'Open account',
+                'url' => $this->accountUrl(),
             ],
-            [
-                'kind' => 'reviews',
-                'title' => 'Reviews',
-                'body' => 'See what customers love and share your own Modern Forestry favorites.',
-                'actionTitle' => 'Browse products',
-                'url' => self::STOREFRONT_BASE_URL.'/collections/all',
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function candleClubPayload(?array $featuredProduct): array
+    {
+        return [
+            'eyebrow' => 'Candle Club',
+            'title' => 'Bring the monthly ritual home.',
+            'body' => 'Candle Club pairs member-only scents with a steady delivery rhythm and bonus Candle Cash momentum.',
+            'benefits' => [
+                'Member-only scents and seasonal curation',
+                'A standing subscription with simple web account management',
+                'Bonus Candle Cash perks layered onto the rewards program',
             ],
+            'joinTitle' => 'Explore Candle Club',
+            'joinUrl' => $this->candleClubJoinUrl(),
+            'rewardsTitle' => 'Open Candle Cash',
+            'rewardsUrl' => $this->rewardsUrl(),
+            'featuredProduct' => $featuredProduct,
         ];
     }
 
@@ -512,6 +654,7 @@ GRAPHQL;
             'winter' => ['fraser-fir', 'hearthside', 'vanilla-birch'],
             'cozy-home' => ['oakmoss-amber', 'lavender-woods', 'hearthside', 'vanilla-birch'],
             'bright-and-fresh' => ['citrus-grove', 'lavender-woods', 'fraser-fir'],
+            'candle-club' => ['modern-forestry-candle-club-16oz-subscription-with-gifts', 'hearthside', 'vanilla-birch'],
         ];
 
         $wantedHandles = $handlesByCollection[$handle] ?? [];
@@ -546,8 +689,9 @@ GRAPHQL;
             'price' => $product['price'],
             'compareAtPrice' => $product['compareAtPrice'],
             'available' => true,
-            'productType' => 'Candle',
+            'productType' => $product['productType'],
             'tags' => $product['tags'],
+            'isCandleClub' => (bool) ($product['isCandleClub'] ?? false),
         ];
     }
 
@@ -565,6 +709,8 @@ GRAPHQL;
                 'tags' => ['evergreen', 'winter', 'fir'],
                 'scentNotes' => ['Fraser fir', 'cedarwood', 'fresh snow'],
                 'description' => 'A crisp evergreen candle with fresh-cut fir, cool winter air, and a soft wooded finish.',
+                'productType' => 'Candle',
+                'isCandleClub' => false,
             ],
             [
                 'title' => 'Oakmoss + Amber',
@@ -574,6 +720,8 @@ GRAPHQL;
                 'tags' => ['oakmoss', 'amber', 'earthy'],
                 'scentNotes' => ['oakmoss', 'amber', 'tonka'],
                 'description' => 'An earthy, softly polished candle with oakmoss, warm amber, and a grounded studio glow.',
+                'productType' => 'Candle',
+                'isCandleClub' => false,
             ],
             [
                 'title' => 'Lavender Woods',
@@ -583,6 +731,8 @@ GRAPHQL;
                 'tags' => ['lavender', 'woods', 'calm'],
                 'scentNotes' => ['lavender', 'cedar', 'soft herbs'],
                 'description' => 'A calm, woodsy lavender candle made for slow evenings, quiet rooms, and easy unwinding.',
+                'productType' => 'Candle',
+                'isCandleClub' => false,
             ],
             [
                 'title' => 'Hearthside',
@@ -592,6 +742,8 @@ GRAPHQL;
                 'tags' => ['smoke', 'spice', 'cozy'],
                 'scentNotes' => ['smoked wood', 'clove', 'warm embers'],
                 'description' => 'A cozy fireside candle with gentle smoke, baking spice, and the warmth of a full house.',
+                'productType' => 'Candle',
+                'isCandleClub' => false,
             ],
             [
                 'title' => 'Citrus Grove',
@@ -601,6 +753,8 @@ GRAPHQL;
                 'tags' => ['citrus', 'bright', 'grove'],
                 'scentNotes' => ['orange peel', 'green leaves', 'sunlit wood'],
                 'description' => 'A bright citrus candle with fresh peel, leafy green notes, and a clean wooded base.',
+                'productType' => 'Candle',
+                'isCandleClub' => false,
             ],
             [
                 'title' => 'Vanilla Birch',
@@ -610,6 +764,19 @@ GRAPHQL;
                 'tags' => ['vanilla', 'birch', 'soft'],
                 'scentNotes' => ['vanilla bean', 'white birch', 'soft musk'],
                 'description' => 'A soft, creamy candle with vanilla bean, pale birch, and a gentle everyday warmth.',
+                'productType' => 'Candle',
+                'isCandleClub' => false,
+            ],
+            [
+                'title' => 'Modern Forestry Candle Club',
+                'handle' => 'modern-forestry-candle-club-16oz-subscription-with-gifts',
+                'price' => '36.00',
+                'compareAtPrice' => null,
+                'tags' => ['candle club', 'subscription', 'member favorite'],
+                'scentNotes' => ['exclusive scent', 'monthly ritual', 'seasonal curation'],
+                'description' => 'A standing Candle Club subscription with member-only scents, recurring deliveries, and extra perks.',
+                'productType' => 'Subscription',
+                'isCandleClub' => true,
             ],
         ];
     }
@@ -622,6 +789,8 @@ GRAPHQL;
     {
         $handle = trim((string) ($node['handle'] ?? ''));
         $variant = $this->firstVariant($node);
+        $tags = $this->stringList($node['tags'] ?? []);
+        $isCandleClub = $this->isCandleClubProduct($handle, $node['title'] ?? null, $node['productType'] ?? null, $tags);
 
         return [
             'id' => $this->publicId((string) ($node['id'] ?? '')),
@@ -631,9 +800,12 @@ GRAPHQL;
             'imageUrl' => $this->imageUrl($node),
             'price' => $this->moneyString($variant['price'] ?? null),
             'compareAtPrice' => $this->moneyString($variant['compareAtPrice'] ?? null),
-            'available' => strtoupper((string) ($node['status'] ?? 'ACTIVE')) === 'ACTIVE',
+            'available' => array_key_exists('availableForSale', $variant)
+                ? (bool) $variant['availableForSale']
+                : strtoupper((string) ($node['status'] ?? 'ACTIVE')) === 'ACTIVE',
             'productType' => $this->nullableString($node['productType'] ?? null),
-            'tags' => $this->stringList($node['tags'] ?? []),
+            'tags' => $tags,
+            'isCandleClub' => $isCandleClub,
         ];
     }
 
@@ -658,10 +830,11 @@ GRAPHQL;
             'variants' => $variants,
             'price' => $this->moneyString($firstVariant['price'] ?? null) ?? $summary['price'],
             'compareAtPrice' => $this->moneyString($firstVariant['compareAtPrice'] ?? null),
-            'available' => strtoupper((string) ($node['status'] ?? 'ACTIVE')) === 'ACTIVE',
+            'available' => $summary['available'],
             'productType' => $summary['productType'],
             'tags' => $summary['tags'],
             'scentNotes' => $this->scentNotes($summary['tags']),
+            'isCandleClub' => $summary['isCandleClub'],
         ];
     }
 
@@ -689,10 +862,45 @@ GRAPHQL;
     protected function productUrl(string $handle): string
     {
         if ($handle === '') {
-            return self::STOREFRONT_BASE_URL.'/collections/all';
+            return $this->storefrontBaseUrl().'/collections/all';
         }
 
-        return self::STOREFRONT_BASE_URL.'/products/'.rawurlencode($handle);
+        return $this->storefrontBaseUrl().'/products/'.rawurlencode($handle);
+    }
+
+    protected function rewardsUrl(): string
+    {
+        return $this->storefrontBaseUrl().'/pages/rewards';
+    }
+
+    protected function accountUrl(): string
+    {
+        return $this->storefrontBaseUrl().'/account';
+    }
+
+    protected function storefrontBaseUrl(): string
+    {
+        return rtrim((string) config('mobile_catalog.storefront_base_url', 'https://theforestrystudio.com'), '/');
+    }
+
+    protected function candleClubProductHandle(): string
+    {
+        return strtolower(trim((string) config('mobile_catalog.candle_club.product_handle', '')));
+    }
+
+    protected function candleClubJoinUrl(): string
+    {
+        $configured = trim((string) config('mobile_catalog.candle_club.join_path', ''));
+
+        if ($configured === '') {
+            return $this->productUrl($this->candleClubProductHandle());
+        }
+
+        if (preg_match('/\Ahttps?:\/\//i', $configured) === 1) {
+            return $configured;
+        }
+
+        return $this->storefrontBaseUrl().'/'.ltrim($configured, '/');
     }
 
     /**
@@ -836,8 +1044,46 @@ GRAPHQL;
 
             return ! str_contains($normalized, 'sale')
                 && ! str_contains($normalized, 'collection')
-                && ! str_contains($normalized, 'thanksgiving');
+                && ! str_contains($normalized, 'thanksgiving')
+                && ! str_contains($normalized, 'subscription')
+                && ! str_contains($normalized, 'candle club');
         }), 0, 6));
+    }
+
+    /**
+     * @param  array<int,string>  $tags
+     */
+    protected function isCandleClubProduct(string $handle, mixed $title, mixed $productType, array $tags): bool
+    {
+        $normalizedHandle = strtolower(trim($handle));
+        $normalizedTitle = strtolower(trim((string) $title));
+        $normalizedType = strtolower(trim((string) $productType));
+
+        if ($normalizedHandle === $this->candleClubProductHandle()) {
+            return true;
+        }
+
+        if (str_contains($normalizedHandle, 'candle-club')) {
+            return true;
+        }
+
+        if (str_contains($normalizedTitle, 'candle club')) {
+            return true;
+        }
+
+        if (str_contains($normalizedType, 'subscription')) {
+            return true;
+        }
+
+        foreach ($tags as $tag) {
+            $normalizedTag = strtolower($tag);
+
+            if (str_contains($normalizedTag, 'candle club') || str_contains($normalizedTag, 'subscription')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function normalizeHandle(string $handle): ?string
