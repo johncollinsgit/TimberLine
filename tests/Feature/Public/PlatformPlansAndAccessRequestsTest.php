@@ -24,22 +24,36 @@ test('public demo request page renders access request form', function (): void {
         ->assertOk()
         ->assertSee('name="intent" value="demo"', false)
         ->assertSeeText('Request demo access')
-        ->assertSeeText('Demo = evaluate safely')
-        ->assertSeeText('Production = apply + activate')
+        ->assertSeeText('See Everbranch in action.')
+        ->assertSeeText('We only ask for the basics on this screen.')
         ->assertSeeText('Business type')
-        ->assertSeeText('Already have access? Sign in');
+        ->assertSeeText('Team size')
+        ->assertSeeText('Already have access? Sign in')
+        ->assertDontSeeText('What happens next')
+        ->assertDontSeeText('Need a different path?');
 });
 
 test('public start as a client page renders plan interest inputs', function (): void {
     $this->get(route('platform.start'))
         ->assertOk()
         ->assertSee('name="intent" value="production"', false)
+        ->assertSeeText('Simplify your life,')
+        ->assertSeeText('Get more time with your family.')
         ->assertSeeText('Production access request')
-        ->assertSeeText('Share the basics now. Optional details stay tucked away until you need them.')
+        ->assertSeeText('Just the basics to start. Optional details stay hidden until you need them.')
+        ->assertSeeText('Full name')
+        ->assertSeeText('Company name')
+        ->assertSeeText('Email')
+        ->assertSeeText('Business type')
+        ->assertSeeText('Team size')
         ->assertSeeText('More details')
-        ->assertSeeText('Commercial interest (optional)')
+        ->assertSeeText('Commercial interest')
         ->assertSeeText('Preferred tier')
         ->assertSeeText('Add-ons of interest')
+        ->assertSeeText('Already have access? Sign in')
+        ->assertSeeText('We review the request first, then send one setup email if approved.')
+        ->assertDontSeeText('What happens next')
+        ->assertDontSeeText('Need a different path?')
         ->assertDontSeeText('Production path')
         ->assertDontSeeText('Demo path');
 });
