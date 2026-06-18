@@ -30,9 +30,6 @@
         old('preferred_plan_key'),
         old('addons_interest'),
     ], static fn ($value): bool => ! empty($value));
-    $intentHeadline = $intentValue === 'demo'
-        ? 'Demo access request'
-        : 'Production access request';
     $heroHeadline = (string) ($content['headline'] ?? "Simplify your life,\nGet more time with your family.");
     $heroHeadlineLines = array_values(array_filter(
         array_map('trim', preg_split("/\r\n|\r|\n/", $heroHeadline) ?: []),
@@ -55,16 +52,11 @@
         <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary fb-contact-back">Back to homepage</a>
 
         <section class="fb-card fb-contact-overview fb-start-hero" aria-label="Request overview" data-reveal data-premium-surface>
-            <p class="fb-section-kicker">{{ $content['eyebrow'] ?? 'Access' }}</p>
             <h1 class="fb-start-hero__title">
                 @foreach($heroHeadlineLines as $heroLine)
                     <span>{{ $heroLine }}</span>
                 @endforeach
             </h1>
-            <p class="fb-start-hero__summary">{{ $content['summary'] ?? 'Just the basics to start.' }}</p>
-            @if(filled($content['intent_note'] ?? null))
-                <p class="fb-start-hero__note">{{ $content['intent_note'] }}</p>
-            @endif
         </section>
 
         <section class="fb-start-layout" aria-label="Access request form" data-reveal>
@@ -72,13 +64,6 @@
                 @if (session('status'))
                     <div class="fb-state fb-state--success mb-4">{{ session('status') }}</div>
                 @endif
-
-                <div class="fb-start-form-header">
-                    <div>
-                        <h2 class="fb-start-form-title">{{ $intentHeadline }}</h2>
-                        <p class="fb-start-form-summary">We only ask for the basics on this screen.</p>
-                    </div>
-                </div>
 
                 <form method="POST" action="{{ route('platform.access-request') }}" class="space-y-4">
                     @csrf
@@ -132,9 +117,7 @@
                         <summary>
                             <span>
                                 <strong>More details</strong>
-                                <em>Optional fields only</em>
                             </span>
-                            <span class="fb-start-details__toggle">Optional</span>
                         </summary>
                         <div class="fb-start-details__body">
                             <div class="fb-start-form-grid fb-start-form-grid--2">
@@ -205,7 +188,6 @@
                             @if($intentValue === 'production')
                                 <div class="fb-start-details__subsection">
                                     <div class="fb-start-details__subsection-title">Commercial interest</div>
-                                    <p class="fb-start-details__subsection-copy">Optional. Nothing bills from this page.</p>
 
                                     <div class="fb-start-form-grid fb-start-form-grid--2 fb-start-form-grid--compact">
                                         <div>
@@ -262,8 +244,6 @@
                         </button>
                         <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary fb-start-secondary">Already have access? Sign in</a>
                     </div>
-
-                    <p class="fb-start-footnote">{{ $content['footnote'] ?? 'We review the request first, then send one setup email if approved.' }}</p>
                 </form>
             </div>
         </section>

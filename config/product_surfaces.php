@@ -301,12 +301,8 @@ return [
     ],
 
     'start_client' => [
-        'eyebrow' => 'Client Signup',
         'headline' => "Simplify your life,\nGet more time with your family.",
-        'summary' => 'Just the basics to start. Optional details stay hidden until you need them.',
-        'intent_note' => 'We keep the first step short and only ask for what helps us set things up.',
         'submit_label' => 'Request production access',
-        'footnote' => 'We review the request first, then send one setup email if approved.',
     ],
 
     'integrations' => [
