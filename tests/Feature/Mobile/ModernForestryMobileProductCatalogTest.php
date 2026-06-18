@@ -68,6 +68,7 @@ test('fake mobile catalog response has expected data and meta shape', function (
                     'available',
                     'productType',
                     'tags',
+                    'isCandleClub',
                 ],
             ],
             'meta' => [
@@ -76,7 +77,7 @@ test('fake mobile catalog response has expected data and meta shape', function (
                 'source',
             ],
         ])
-        ->assertJsonPath('data.0.url', 'https://modernforestry.theforestrystudio.com/products/fraser-fir')
+        ->assertJsonPath('data.0.url', 'https://theforestrystudio.com/products/fraser-fir')
         ->assertJsonPath('data.0.imageUrl', null)
         ->assertJsonPath('data.0.price', '24.00')
         ->assertJsonPath('data.0.compareAtPrice', null)
@@ -84,7 +85,7 @@ test('fake mobile catalog response has expected data and meta shape', function (
         ->assertJsonPath('data.0.productType', 'Candle');
 });
 
-test('fake mobile catalog respects limit and caps at 50', function (): void {
+test('fake mobile catalog respects limit and caps at launch catalog size', function (): void {
     config()->set('mobile_catalog.fake_enabled', true);
     ShopifyStore::query()->delete();
     Tenant::query()->delete();
@@ -95,7 +96,7 @@ test('fake mobile catalog respects limit and caps at 50', function (): void {
 
     $this->getJson('/api/mobile/v1/modern-forestry/products?limit=500')
         ->assertOk()
-        ->assertJsonPath('meta.count', 50);
+        ->assertJsonPath('meta.count', 63);
 });
 
 test('fake mobile collections list returns testing collections', function (): void {
@@ -114,10 +115,11 @@ test('fake mobile collections list returns testing collections', function (): vo
                 ],
             ],
         ])
-        ->assertJsonPath('collections.0.handle', 'winter')
-        ->assertJsonPath('collections.0.title', 'Winter Collection')
-        ->assertJsonPath('collections.1.handle', 'cozy-home')
-        ->assertJsonPath('collections.2.handle', 'bright-and-fresh');
+        ->assertJsonPath('collections.0.handle', 'bright-and-fresh')
+        ->assertJsonPath('collections.0.title', 'Bright + Fresh')
+        ->assertJsonPath('collections.1.handle', 'candle-club')
+        ->assertJsonPath('collections.2.handle', 'cozy-home')
+        ->assertJsonPath('collections.3.handle', 'winter');
 });
 
 test('fake mobile collection products returns products for known handle', function (): void {
@@ -131,7 +133,7 @@ test('fake mobile collection products returns products for known handle', functi
         ->assertJsonPath('collection.title', 'Winter Collection')
         ->assertJsonPath('products.0.title', 'Fraser Fir')
         ->assertJsonPath('products.0.handle', 'fraser-fir')
-        ->assertJsonPath('products.0.url', 'https://modernforestry.theforestrystudio.com/products/fraser-fir')
+        ->assertJsonPath('products.0.url', 'https://theforestrystudio.com/products/fraser-fir')
         ->assertJsonPath('products.0.imageUrl', null)
         ->assertJsonPath('products.0.price', '24.00')
         ->assertJsonPath('products.0.available', true)
@@ -194,13 +196,25 @@ test('fake mobile home endpoint returns hero featured content and cards', functi
                     'url',
                 ],
             ],
+            'candleClub' => [
+                'eyebrow',
+                'title',
+                'body',
+                'benefits',
+                'joinTitle',
+                'joinUrl',
+                'rewardsTitle',
+                'rewardsUrl',
+                'featuredProduct',
+            ],
         ])
         ->assertJsonPath('hero.eyebrow', 'Modern Forestry')
-        ->assertJsonPath('hero.title', 'Hand-poured candles for a slower season.')
-        ->assertJsonPath('featuredCollections.0.handle', 'winter')
+        ->assertJsonPath('hero.title', 'Candles, Candle Club, and rewards in one calm native home.')
+        ->assertJsonPath('featuredCollections.0.handle', 'bright-and-fresh')
         ->assertJsonPath('featuredProducts.0.handle', 'fraser-fir')
-        ->assertJsonPath('cards.0.kind', 'candle_cash')
-        ->assertJsonPath('cards.0.url', 'https://modernforestry.theforestrystudio.com/pages/rewards');
+        ->assertJsonPath('cards.0.kind', 'candle_club')
+        ->assertJsonPath('cards.0.url', 'https://theforestrystudio.com/products/modern-forestry-candle-club-16oz-subscription-with-gifts?selling_plan=11300438275')
+        ->assertJsonPath('candleClub.featuredProduct.handle', 'modern-forestry-candle-club-16oz-subscription-with-gifts');
 });
 
 test('fake mobile home response references valid known collection and product handles', function (): void {
@@ -212,7 +226,7 @@ test('fake mobile home response references valid known collection and product ha
         ->assertOk()
         ->json();
 
-    $knownCollectionHandles = ['winter', 'cozy-home', 'bright-and-fresh'];
+    $knownCollectionHandles = ['winter', 'cozy-home', 'bright-and-fresh', 'candle-club'];
     $knownProductHandles = ['fraser-fir', 'oakmoss-amber', 'lavender-woods', 'hearthside', 'citrus-grove', 'vanilla-birch'];
 
     foreach ($payload['featuredCollections'] as $collection) {
@@ -235,11 +249,12 @@ test('fake mobile product detail returns 200 for a known handle', function (): v
         ->assertJsonPath('meta.source', 'fake')
         ->assertJsonPath('data.title', 'Fraser Fir')
         ->assertJsonPath('data.handle', 'fraser-fir')
-        ->assertJsonPath('data.url', 'https://modernforestry.theforestrystudio.com/products/fraser-fir')
+        ->assertJsonPath('data.url', 'https://theforestrystudio.com/products/fraser-fir')
         ->assertJsonPath('data.description', 'A crisp evergreen candle with fresh-cut fir, cool winter air, and a soft wooded finish.')
         ->assertJsonPath('data.price', '24.00')
         ->assertJsonPath('data.available', true)
-        ->assertJsonPath('data.scentNotes.0', 'Fraser fir');
+        ->assertJsonPath('data.scentNotes.0', 'Fraser fir')
+        ->assertJsonPath('data.isCandleClub', false);
 });
 
 test('fake mobile product detail response has expected shape', function (): void {
@@ -278,6 +293,7 @@ test('fake mobile product detail response has expected shape', function (): void
                 'productType',
                 'tags',
                 'scentNotes',
+                'isCandleClub',
             ],
             'meta' => [
                 'tenant',
@@ -429,7 +445,7 @@ test('real mobile product detail fails closed safely when tenant or store config
 
 test('mobile catalog endpoint returns 200 with public product data', function (): void {
     Http::fake([
-        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileCatalogPayload(), 200),
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileCatalogPayload(productCount: 3), 200),
     ]);
 
     $response = $this->getJson('/api/mobile/v1/modern-forestry/products');
@@ -437,22 +453,25 @@ test('mobile catalog endpoint returns 200 with public product data', function ()
     $response
         ->assertOk()
         ->assertJsonPath('meta.tenant', 'modern-forestry')
-        ->assertJsonPath('meta.count', 2)
+        ->assertJsonPath('meta.count', 3)
         ->assertJsonPath('data.0.id', '111')
         ->assertJsonPath('data.0.title', 'Forest Ember Candle')
         ->assertJsonPath('data.0.handle', 'forest-ember-candle')
-        ->assertJsonPath('data.0.url', 'https://modernforestry.theforestrystudio.com/products/forest-ember-candle')
+        ->assertJsonPath('data.0.url', 'https://theforestrystudio.com/products/forest-ember-candle')
         ->assertJsonPath('data.0.imageUrl', 'https://cdn.shopify.com/s/files/forest-ember.png')
         ->assertJsonPath('data.0.price', '24.00')
         ->assertJsonPath('data.0.compareAtPrice', null)
         ->assertJsonPath('data.0.available', true)
         ->assertJsonPath('data.0.productType', 'Candle')
-        ->assertJsonPath('data.0.tags.0', 'amber');
+        ->assertJsonPath('data.0.tags.0', 'amber')
+        ->assertJsonPath('data.0.isCandleClub', false)
+        ->assertJsonPath('data.2.handle', 'modern-forestry-candle-club-16oz-subscription-with-gifts')
+        ->assertJsonPath('data.2.isCandleClub', true);
 });
 
 test('mobile catalog response has expected data and meta shape', function (): void {
     Http::fake([
-        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileCatalogPayload(), 200),
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileCatalogPayload(productCount: 3), 200),
     ]);
 
     $this->getJson('/api/mobile/v1/modern-forestry/products')
@@ -470,6 +489,7 @@ test('mobile catalog response has expected data and meta shape', function (): vo
                     'available',
                     'productType',
                     'tags',
+                    'isCandleClub',
                 ],
             ],
             'meta' => [
@@ -479,7 +499,7 @@ test('mobile catalog response has expected data and meta shape', function (): vo
         ]);
 });
 
-test('mobile catalog limit query parameter is capped at 50', function (): void {
+test('mobile catalog limit query parameter is capped at 250 while requests page in 50 item slices', function (): void {
     $requestedFirst = null;
 
     Http::fake(function (Request $request) use (&$requestedFirst) {
@@ -510,7 +530,7 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.id', '111')
         ->assertJsonPath('data.title', 'Forest Ember Candle')
         ->assertJsonPath('data.handle', 'forest-ember-candle')
-        ->assertJsonPath('data.url', 'https://modernforestry.theforestrystudio.com/products/forest-ember-candle')
+        ->assertJsonPath('data.url', 'https://theforestrystudio.com/products/forest-ember-candle')
         ->assertJsonPath('data.description', 'Warm amber, cedar, and a soft smoky finish.')
         ->assertJsonPath('data.descriptionHtml', '<p>Warm amber, cedar, and a soft smoky finish.</p>')
         ->assertJsonPath('data.images.0.url', 'https://cdn.shopify.com/s/files/forest-ember-detail.png')
@@ -525,7 +545,8 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.available', true)
         ->assertJsonPath('data.productType', 'Candle')
         ->assertJsonPath('data.tags.0', 'amber')
-        ->assertJsonPath('data.scentNotes.0', 'amber');
+        ->assertJsonPath('data.scentNotes.0', 'amber')
+        ->assertJsonPath('data.isCandleClub', false);
 });
 
 test('mobile product detail endpoint returns 404 when shopify has no matching product', function (): void {
@@ -627,6 +648,7 @@ function shopifyMobileCatalogPayload(int $productCount = 2): array
                     [
                         'price' => '24.00',
                         'compareAtPrice' => null,
+                        'availableForSale' => true,
                     ],
                 ],
             ],
@@ -647,6 +669,28 @@ function shopifyMobileCatalogPayload(int $productCount = 2): array
                     [
                         'price' => '28.00',
                         'compareAtPrice' => '32.00',
+                        'availableForSale' => true,
+                    ],
+                ],
+            ],
+        ],
+        [
+            'id' => 'gid://shopify/Product/333',
+            'title' => 'Modern Forestry Candle Club',
+            'handle' => 'modern-forestry-candle-club-16oz-subscription-with-gifts',
+            'onlineStoreUrl' => 'https://example.myshopify.com/products/modern-forestry-candle-club-16oz-subscription-with-gifts',
+            'productType' => 'Subscription',
+            'tags' => ['candle club', 'subscription', 'members'],
+            'status' => 'ACTIVE',
+            'featuredImage' => [
+                'url' => 'https://cdn.shopify.com/s/files/candle-club.png',
+            ],
+            'variants' => [
+                'nodes' => [
+                    [
+                        'price' => '36.00',
+                        'compareAtPrice' => null,
+                        'availableForSale' => true,
                     ],
                 ],
             ],
@@ -657,6 +701,10 @@ function shopifyMobileCatalogPayload(int $productCount = 2): array
         'data' => [
             'products' => [
                 'nodes' => array_slice($products, 0, $productCount),
+                'pageInfo' => [
+                    'hasNextPage' => false,
+                    'endCursor' => null,
+                ],
             ],
         ],
     ];
