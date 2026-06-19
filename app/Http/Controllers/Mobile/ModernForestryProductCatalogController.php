@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Services\Mobile\ModernForestryMobileCheckoutException;
+use App\Services\Mobile\ModernForestryMobileCheckoutService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,6 +12,54 @@ use Throwable;
 
 class ModernForestryProductCatalogController extends Controller
 {
+    public function checkout(
+        Request $request,
+        ModernForestryMobileCheckoutService $checkout
+    ): JsonResponse {
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:'.ModernForestryMobileCheckoutService::MAX_LINES],
+            'items.*.productHandle' => ['required', 'string', 'max:255'],
+            'items.*.variantId' => ['required', 'string', 'max:255'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:'.ModernForestryMobileCheckoutService::MAX_QUANTITY],
+            'discountCode' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        try {
+            return response()->json([
+                'data' => $checkout->checkout(
+                    $validated['items'],
+                    $validated['discountCode'] ?? null
+                ),
+                'meta' => [
+                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                    'source' => 'shopify',
+                ],
+            ]);
+        } catch (ModernForestryMobileCheckoutException $exception) {
+            return response()->json([
+                'data' => null,
+                'meta' => [
+                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                ],
+                'error' => [
+                    'code' => $exception->publicCode(),
+                    'message' => $exception->getMessage(),
+                ],
+            ], $exception->status());
+        } catch (Throwable) {
+            return response()->json([
+                'data' => null,
+                'meta' => [
+                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                ],
+                'error' => [
+                    'code' => 'checkout_unavailable',
+                    'message' => 'Checkout is temporarily unavailable.',
+                ],
+            ], 503);
+        }
+    }
+
     public function __invoke(
         Request $request,
         ModernForestryMobileProductCatalogService $catalog

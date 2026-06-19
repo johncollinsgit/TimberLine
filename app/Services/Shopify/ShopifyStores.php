@@ -110,6 +110,8 @@ class ShopifyStores
             ?? config('services.shopify.stores.retail.access_token')
             ?? config('services.shopify.retail.token')
             ?? config('services.shopify.retail.access_token');
+        $retailStorefrontAccessToken = config('services.shopify.stores.retail.storefront_access_token')
+            ?? config('services.shopify.retail.storefront_access_token');
         $retailTimezone = config('services.shopify.stores.retail.timezone')
             ?? config('services.shopify.reporting_timezone')
             ?? 'UTC';
@@ -140,6 +142,7 @@ class ShopifyStores
                 'timezone' => $retailTimezone,
                 'secret' => $retailSecret,
                 'client_id' => $retailClientId,
+                'storefront_access_token' => $retailStorefrontAccessToken,
                 'api_version' => config('services.shopify.api_version', '2026-01'),
             ],
             'wholesale' => [
@@ -258,6 +261,7 @@ class ShopifyStores
                 'installed_at' => $record?->installed_at,
                 'token_source' => $tokenSource,
                 'storefront_widget_settings' => $record?->storefront_widget_settings,
+                'storefront_access_token' => $base['storefront_access_token'] ?? null,
             ];
         }
 

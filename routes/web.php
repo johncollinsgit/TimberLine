@@ -375,6 +375,10 @@ Route::get('/api/mobile/v1/modern-forestry/products/{handle}', [ModernForestryPr
     ->where('handle', '[A-Za-z0-9][A-Za-z0-9-]*')
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.products.show');
+Route::post('/api/mobile/v1/modern-forestry/checkout', [ModernForestryProductCatalogController::class, 'checkout'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.checkout');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {

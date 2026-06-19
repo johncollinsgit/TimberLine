@@ -179,11 +179,12 @@ return [
         'stores' => [
 
             'retail' => [
-                'shop'          => env('SHOPIFY_RETAIL_SHOP'),
-                'access_token'  => env('SHOPIFY_RETAIL_ACCESS_TOKEN'),
-                'client_id'     => env('SHOPIFY_RETAIL_CLIENT_ID'),
-                'client_secret' => env('SHOPIFY_RETAIL_CLIENT_SECRET'),
-                'timezone'      => env('SHOPIFY_RETAIL_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
+                'shop'                   => env('SHOPIFY_RETAIL_SHOP'),
+                'access_token'           => env('SHOPIFY_RETAIL_ACCESS_TOKEN'),
+                'storefront_access_token' => env('SHOPIFY_RETAIL_STOREFRONT_ACCESS_TOKEN'),
+                'client_id'              => env('SHOPIFY_RETAIL_CLIENT_ID'),
+                'client_secret'          => env('SHOPIFY_RETAIL_CLIENT_SECRET'),
+                'timezone'               => env('SHOPIFY_RETAIL_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
             ],
 
             'wholesale' => [
