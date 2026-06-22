@@ -409,7 +409,7 @@ class ModernForestryMobileProductCatalogService
     {
         return <<<'GRAPHQL'
 query MobileCatalogProducts($first: Int!, $after: String) {
-  products(first: $first, after: $after, sortKey: BEST_SELLING, reverse: false, query: "status:active") {
+  products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true, query: "status:active") {
     nodes {
       id
       title
@@ -444,7 +444,7 @@ GRAPHQL;
     {
         return <<<'GRAPHQL'
 query MobileCatalogActiveProductDetails($first: Int!, $after: String) {
-  products(first: $first, after: $after, sortKey: BEST_SELLING, reverse: false, query: "status:active") {
+  products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true, query: "status:active") {
     nodes {
       id
       title

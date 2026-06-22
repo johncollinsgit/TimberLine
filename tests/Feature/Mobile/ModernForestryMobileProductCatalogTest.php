@@ -686,8 +686,8 @@ test('real mobile home featured products use actual purchase history before shop
 
             if (str_contains($query, 'query MobileCatalogProducts')) {
                 expect($variables['first'] ?? null)->toBe(50);
-                expect($query)->toContain('sortKey: BEST_SELLING');
-                expect($query)->toContain('reverse: false');
+                expect($query)->toContain('sortKey: UPDATED_AT');
+                expect($query)->toContain('reverse: true');
 
                 return Http::response(shopifyMobileCatalogPayload(), 200);
             }

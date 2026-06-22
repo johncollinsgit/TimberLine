@@ -22,7 +22,7 @@ Important boundary:
 
 ## Modern Forestry Mobile Catalog Recovery Follow-up (2026-06-22)
 
-- Home featured products now page through Shopify's best-selling catalog, with a wider active window so the six-card shelf still fills after filtering hidden or inactive products.
+- Home featured products now prefer imported order-line purchase history, with a supported Shopify active-catalog fallback so the six-card shelf still fills after filtering hidden or inactive products.
 - Product-detail lookups now fall back to a paginated active-catalog search when the first handle lookup misses, which keeps stale product links from dead-ending the mobile detail screen.
 
 ## Candle Cash Combination Rules Update (2026-04-22)

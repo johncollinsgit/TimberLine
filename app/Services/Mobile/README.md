@@ -71,6 +71,6 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
   - explicit seasonal collections
   - active-only collection products
   - sorting
-  - best-selling featured product ordering
+  - order-history featured product ordering
   - product-detail fallback lookup
   - Candle Club FAQ exposure
