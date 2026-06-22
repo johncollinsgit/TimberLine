@@ -8,6 +8,7 @@ use App\Services\Mobile\ModernForestryMobileCheckoutService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Throwable;
 
 class ModernForestryProductCatalogController extends Controller
@@ -185,9 +186,10 @@ class ModernForestryProductCatalogController extends Controller
         ModernForestryMobileProductCatalogService $catalog
     ): JsonResponse {
         $limit = $catalog->normalizeLimit((int) $request->query('limit', ModernForestryMobileProductCatalogService::DEFAULT_LIMIT));
+        $sort = $catalog->normalizeSort((string) $request->query('sort', ModernForestryMobileProductCatalogService::DEFAULT_SORT));
 
         try {
-            $result = $catalog->collectionProducts($handle, $limit);
+            $result = $catalog->collectionProducts($handle, $limit, $sort);
         } catch (Throwable) {
             return response()->json([
                 'collection' => null,
@@ -211,5 +213,27 @@ class ModernForestryProductCatalogController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    public function sessionStatus(Request $request): JsonResponse
+    {
+        $sessionHint = $request->boolean('session_hint');
+
+        $cookieAuthenticated = collect(array_keys($request->cookies->all()))
+            ->map(fn (string $name): string => Str::lower($name))
+            ->contains(fn (string $name): bool => Str::contains($name, [
+                'secure_customer_sig',
+                'storefront_digest',
+                'customer_session',
+            ]));
+
+        $authenticated = $cookieAuthenticated || $sessionHint;
+
+        return response()->json([
+            'authenticated' => $authenticated,
+            'state' => $authenticated ? 'authenticated' : 'signed_out',
+            'sessionHint' => $sessionHint,
+            'checkedAt' => now()->toIso8601String(),
+        ]);
     }
 }

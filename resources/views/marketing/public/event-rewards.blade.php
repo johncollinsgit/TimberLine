@@ -35,7 +35,7 @@
             @endif
         </p>
         <p class="mt-2 text-sm text-zinc-600">
-            Lightweight public utility for event customers to check {{ $rewardsBalanceLabel }} and the current $10 redemption status.
+            Check {{ $rewardsBalanceLabel }} and the current redemption status.
         </p>
     </section>
 
@@ -45,16 +45,16 @@
             <input type="text" name="phone" value="{{ request('phone') }}" placeholder="Phone" class="rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 sm:col-span-1">
             <button type="submit" class="rounded-xl border border-sky-300/35 bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-900 sm:col-span-1">Lookup</button>
         </form>
-        <p class="mt-2 text-xs text-zinc-500">Use both email and phone for lookup. This page returns only minimal {{ strtolower($rewardsLabel) }} data.</p>
+        <p class="mt-2 text-xs text-zinc-500">Use email and phone to continue.</p>
         @if(($lookupState ?? '') !== '')
             <div class="mt-2 text-xs text-zinc-600">
                 State: <span class="font-semibold">{{ strtoupper((string) $lookupState) }}</span>
                 @if($lookupState === 'verification_required')
-                    · Please provide both email and phone.
+                    · Both fields are required.
                 @elseif($lookupState === 'needs_verification')
-                    · Identity could not be linked automatically; try again or contact support.
+                    · This profile needs verification.
                 @elseif($lookupState === 'unknown_customer')
-                    · No matching profile found yet.
+                    · No matching profile yet.
                 @endif
             </div>
         @endif
@@ -69,7 +69,7 @@
             <article class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                 <h2 class="text-sm font-semibold text-zinc-950">{{ $rewardsBalanceLabel }}</h2>
                 <div class="mt-2 text-3xl font-semibold text-zinc-950">{{ data_get($balance, 'candle_cash_amount_formatted', '$0.00') }}</div>
-                <div class="mt-2 text-xs text-zinc-500">Redeem $10 {{ $rewardsLabel }} at a time. Limit $10 {{ $rewardsLabel }} per order.</div>
+                    <div class="mt-2 text-xs text-zinc-500">Redeem $10 {{ $rewardsLabel }} at a time.</div>
                 <div class="mt-2 text-xs text-zinc-500">Matched identity: {{ $maskedEmail ?: $maskedPhone ?: 'verified' }}</div>
             </article>
             <article class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
@@ -103,7 +103,7 @@
         </section>
     @elseif(request()->query('email') || request()->query('phone'))
         <section class="rounded-3xl border border-amber-300/30 bg-amber-100 p-4 text-sm text-amber-800">
-            No profile was found for that verified email + phone combination yet.
+                        No matching profile found.
         </section>
     @endif
 </main>

@@ -9,8 +9,9 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Services\Discovery\TenantDiscoveryProfileService;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
-use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
+use App\Services\Marketing\TenantRewardsPolicyService;
+use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -52,9 +53,9 @@ class ModernForestryAlphaBootstrapService
     public function __construct(
         protected TenantEmailSettingsService $tenantEmailSettingsService,
         protected TenantDiscoveryProfileService $tenantDiscoveryProfileService,
-        protected CandleCashShopifyDiscountService $candleCashShopifyDiscountService
-    ) {
-    }
+        protected CandleCashShopifyDiscountService $candleCashShopifyDiscountService,
+        protected ShopifyAppContentService $shopifyAppContentService
+    ) {}
 
     public function hasAiAssistantAlphaOverride(?int $tenantId): bool
     {
@@ -115,6 +116,7 @@ class ModernForestryAlphaBootstrapService
             $this->ensureEmailSettings((int) $tenant->id);
             $this->ensureSmsProviderSettings((int) $tenant->id);
             $policyUpdated = $this->ensureRewardsPolicyDefaults((int) $tenant->id);
+            $this->ensureShopifyAppContentDefaults((int) $tenant->id);
             if ($policyUpdated) {
                 try {
                     $this->candleCashShopifyDiscountService->syncIssuedDiscountsForTenant((int) $tenant->id, null, 500);
@@ -438,5 +440,14 @@ class ModernForestryAlphaBootstrapService
         );
 
         return true;
+    }
+
+    protected function ensureShopifyAppContentDefaults(int $tenantId): void
+    {
+        if ($tenantId <= 0) {
+            return;
+        }
+
+        $this->shopifyAppContentService->ensureDefaults($tenantId);
     }
 }

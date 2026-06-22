@@ -485,7 +485,7 @@ test('responses tab renders next to analytics with text and email toggle labels'
 
     $this->get(route('shopify.app.messaging.responses', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Responses')
+        ->assertSeeText('Inbox')
         ->assertSeeText('Text')
         ->assertSeeText('Email')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {

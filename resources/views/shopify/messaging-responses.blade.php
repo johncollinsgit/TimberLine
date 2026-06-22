@@ -71,18 +71,18 @@
             <x-tenancy.module-state-card
                 :module-state="$messagingModuleState"
                 title="Messaging module state"
-                description="Responses follow the same workspace access and embedded access rules as the rest of Messaging."
+                description="Inbox follows the same workspace access and embedded access rules as the rest of Messaging."
             />
         @endif
 
         @if(! $authorized)
             <article class="sf-responses-card">
-                <h2>Responses requires Shopify context</h2>
+                <h2>Inbox requires Shopify context</h2>
                 <p>Open this page from Shopify Admin so Everbranch can verify store access.</p>
             </article>
         @elseif(! $messagingEnabled)
             <article class="sf-responses-card" data-tone="error">
-                <h2>Responses is locked</h2>
+                <h2>Inbox is locked</h2>
                 <p>{{ $messagingMessage !== '' ? $messagingMessage : 'Messaging is not enabled for this tenant.' }}</p>
                 @if($messagingStatus !== '')
                     <p class="sf-responses-muted">Status: {{ $messagingStatus }}</p>
@@ -91,7 +91,7 @@
         @else
             <div id="shopify-responses-root" class="sf-responses-card" aria-live="polite">
                 <div class="sf-responses-loading">
-                    <h2>Responses</h2>
+                    <h2>Inbox</h2>
                     <p class="sf-responses-muted">Loading unified inbox for Text and Email replies.</p>
                     <span class="sf-responses-muted">Text</span>
                     <span class="sf-responses-muted">Email</span>

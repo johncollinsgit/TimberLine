@@ -1,5 +1,30 @@
 # UI Changelog
 
+## 2026-06-20 — Unified Shopify Inbox and Customer Messages
+
+### What changed
+- Promoted the existing Shopify embedded messaging workspace into a company-facing `Inbox` tab so operators keep using the same conversation surface instead of a separate responses app.
+- Added a customer-facing `Messages` area to the Modern Forestry account dashboard so signed customers can text the brand phone number and see the same threaded conversation in the Shopify inbox.
+- Kept opt-out and suppression checks in place so blocked contacts fall back to the support/contact path instead of exposing a broken composer.
+- Kept Candle Club points, rewards, and account state anchored in Laravel while Shopify remains the authenticated surface for the messaging experience.
+
+### What did not change
+- No duplicate inbox model or separate ProductionOS app surface was introduced.
+- No push notification transport was added in this pass; the customer messaging flow remains SMS-first.
+- Shopify checkout, billing, and account verification flows remain unchanged.
+
+## 2026-06-19 — Modern Forestry Customer Dashboard Completion
+
+### What changed
+- Added a Modern Forestry customer dashboard surface for signed Shopify app-proxy traffic with rewards, account status, recent orders, reorder handoff, support, privacy, terms, and data request actions.
+- Added a Shopify embedded App Content editor for Modern Forestry tenant 1 with draft/live previews, published-only customer copy, support links, privacy links, terms links, and data request fields.
+- Shortened public rewards copy and separated full account/order visibility from email-and-phone rewards lookup so customer details require a linked Shopify customer identity.
+
+### What did not change
+- No future Everbranch multi-tenant app behavior was generalized from this Modern Forestry pass.
+- No custom checkout, billing, subscription, Shopify Billing, Stripe checkout, OAuth, scope, deploy/release, module entitlement, or privacy deletion automation was activated.
+- Shopify checkout remains a hosted Shopify cart/reorder handoff.
+
 ## 2026-06-16 — Public Homepage Tabs and Hero Copy
 
 ### What changed

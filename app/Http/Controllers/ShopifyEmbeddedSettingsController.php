@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ShopifyStore;
 use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
+use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
-use App\Models\ShopifyStore;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ class ShopifyEmbeddedSettingsController extends Controller
         TwilioSenderConfigService $senderConfigService,
         TenantResolver $tenantResolver,
         TenantEmailSettingsService $emailSettingsService,
+        ShopifyAppContentService $appContentService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -57,6 +59,9 @@ class ShopifyEmbeddedSettingsController extends Controller
             $authorized ? (string) ($store['key'] ?? '') : null,
             $authorized ? ($store['storefront_widget_settings'] ?? null) : null
         ));
+        $appContent = ($authorized && $tenantId === 1)
+            ? $probe->time('page_payload', fn (): array => $appContentService->forTenant($tenantId))
+            : null;
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.settings', [
@@ -66,7 +71,7 @@ class ShopifyEmbeddedSettingsController extends Controller
                 'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
                 'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
                 'storeLabel' => $authorized
-                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status),
                 'subheadline' => $this->subheadlineForStatus($status),
@@ -91,6 +96,18 @@ class ShopifyEmbeddedSettingsController extends Controller
                     ],
                 ],
                 'widgetSettingsBootstrap' => $widgetSettings,
+                'appContentBootstrap' => [
+                    'authorized' => $authorized && $tenantId === 1,
+                    'tenant_id' => $tenantId,
+                    'store_key' => $authorized ? ($store['key'] ?? null) : null,
+                    'settings' => $appContent,
+                    'defaults' => $appContentService->defaults(),
+                    'endpoints' => [
+                        'load' => route('shopify.app.api.settings.content', [], false),
+                        'save' => route('shopify.app.api.settings.content.save', [], false),
+                        'publish' => route('shopify.app.api.settings.content.publish', [], false),
+                    ],
+                ],
             ]),
             $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
         ));
@@ -168,6 +185,67 @@ class ShopifyEmbeddedSettingsController extends Controller
         ]);
     }
 
+    public function appContent(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ShopifyAppContentService $appContentService
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if ($tenantId === null) {
+            return $this->tenantNotMappedResponse();
+        }
+        if ($tenantId !== 1) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Modern Forestry content editing is available only for tenant 1.',
+            ], 403);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'tenant_id' => $tenantId,
+                'settings' => $appContentService->forTenant($tenantId),
+            ],
+        ]);
+    }
+
+    public function saveAppContent(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ShopifyAppContentService $appContentService
+    ): JsonResponse {
+        return $this->persistAppContent(
+            $request,
+            $contextService,
+            $tenantResolver,
+            $appContentService,
+            false
+        );
+    }
+
+    public function publishAppContent(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ShopifyAppContentService $appContentService
+    ): JsonResponse {
+        return $this->persistAppContent(
+            $request,
+            $contextService,
+            $tenantResolver,
+            $appContentService,
+            true
+        );
+    }
+
     public function emailSettings(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
@@ -189,6 +267,79 @@ class ShopifyEmbeddedSettingsController extends Controller
             'data' => [
                 'tenant_id' => $tenantId,
                 'settings' => $emailSettingsService->forAdmin($tenantId),
+            ],
+        ]);
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     */
+    protected function persistAppContent(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ShopifyAppContentService $appContentService,
+        bool $publish
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if ($tenantId === null) {
+            return $this->tenantNotMappedResponse();
+        }
+        if ($tenantId !== 1) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Modern Forestry content editing is available only for tenant 1.',
+            ], 403);
+        }
+
+        try {
+            $data = $this->validatedAppContentData($request);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => $publish ? 'App content could not be published.' : 'App content could not be saved.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        try {
+            $setting = $publish
+                ? $appContentService->publish($tenantId, $data, [
+                    'updated_by' => (string) ($context['shopify_admin_user_id'] ?? $context['shopify_admin_email'] ?? 'admin'),
+                    'published_by' => (string) ($context['shopify_admin_user_id'] ?? $context['shopify_admin_email'] ?? 'admin'),
+                ])
+                : $appContentService->saveDraft($tenantId, $data, [
+                    'updated_by' => (string) ($context['shopify_admin_user_id'] ?? $context['shopify_admin_email'] ?? 'admin'),
+                ]);
+        } catch (\Throwable $exception) {
+            Log::error('shopify app content save failed', [
+                'tenant_id' => $tenantId,
+                'publish' => $publish,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => $publish ? 'Failed to publish app content.' : 'Failed to save app content.',
+            ], 500);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => $publish ? 'App content published.' : 'App content saved.',
+            'data' => [
+                'tenant_id' => $tenantId,
+                'settings' => $appContentService->forTenant($tenantId),
+                'record' => [
+                    'id' => $setting->id,
+                    'key' => $setting->key,
+                    'updated_at' => optional($setting->updated_at)->toIso8601String(),
+                ],
             ],
         ]);
     }
@@ -430,7 +581,7 @@ class ShopifyEmbeddedSettingsController extends Controller
         $response->setStatusCode($status);
         $response->headers->set(
             'Content-Security-Policy',
-            "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;"
+            'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;'
         );
         $response->headers->remove('X-Frame-Options');
 
@@ -487,7 +638,38 @@ class ShopifyEmbeddedSettingsController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @return array<string,mixed>
+     */
+    protected function validatedAppContentData(Request $request): array
+    {
+        return validator($request->all(), [
+            'brand_name' => ['required', 'string', 'max:120'],
+            'hero_eyebrow' => ['required', 'string', 'max:120'],
+            'hero_title' => ['required', 'string', 'max:160'],
+            'hero_body' => ['required', 'string', 'max:240'],
+            'primary_cta_label' => ['required', 'string', 'max:80'],
+            'secondary_cta_label' => ['required', 'string', 'max:80'],
+            'rewards_title' => ['required', 'string', 'max:120'],
+            'rewards_body' => ['required', 'string', 'max:240'],
+            'orders_title' => ['required', 'string', 'max:120'],
+            'orders_body' => ['required', 'string', 'max:240'],
+            'support_title' => ['required', 'string', 'max:120'],
+            'support_body' => ['required', 'string', 'max:240'],
+            'support_cta_label' => ['required', 'string', 'max:80'],
+            'support_email' => ['nullable', 'email', 'max:255'],
+            'support_url' => ['nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'privacy_url' => ['nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'terms_url' => ['nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'data_deletion_url' => ['nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'data_deletion_email' => ['nullable', 'email', 'max:255'],
+            'empty_rewards' => ['required', 'string', 'max:240'],
+            'empty_orders' => ['required', 'string', 'max:240'],
+            'account_note' => ['required', 'string', 'max:240'],
+        ])->validate();
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
      */
     protected function resolveTenantIdFromContext(array $context, TenantResolver $tenantResolver): ?int
     {
@@ -495,7 +677,7 @@ class ShopifyEmbeddedSettingsController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     protected function resolveStoreFromContext(array $context): ?ShopifyStore
     {
@@ -508,7 +690,7 @@ class ShopifyEmbeddedSettingsController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     protected function invalidApiContextResponse(array $context): JsonResponse
     {
@@ -544,7 +726,7 @@ class ShopifyEmbeddedSettingsController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $validation
+     * @param  array<string,mixed>  $validation
      */
     protected function statusFromValidation(array $validation, string $provider): string
     {
@@ -604,7 +786,7 @@ class ShopifyEmbeddedSettingsController extends Controller
     }
 
     /**
-     * @param array<string,mixed>|null $settings
+     * @param  array<string,mixed>|null  $settings
      * @return array<string,mixed>
      */
     protected function mergeWidgetSettings($settings): array
@@ -623,7 +805,7 @@ class ShopifyEmbeddedSettingsController extends Controller
     }
 
     /**
-     * @param array<string,mixed>|null $settings
+     * @param  array<string,mixed>|null  $settings
      * @return array<string,mixed>
      */
     protected function widgetSettingsBootstrap(?string $storeKey, ?array $settings): array

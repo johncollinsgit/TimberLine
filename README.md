@@ -1,5 +1,25 @@
 # Modern Forestry Backstage
 
+## Modern Forestry Mobile Home + Session Pass (2026-06-21)
+
+This pass touched the Laravel-side mobile contract that feeds the native Modern Forestry iOS app in `modernforestry-build/`.
+
+Implemented:
+- mobile Home payload now carries:
+  - `brand`
+  - hero slideshow data resolved from the live theme snapshot
+  - featured collections
+  - featured products
+- mobile collection detail payload now includes collection image data so iOS can keep collection headers aligned with the browser cards
+- lightweight mobile session-status route added:
+  - `GET /api/mobile/v1/modern-forestry/session-status`
+- focused contract coverage updated:
+  - `tests/Feature/Mobile/ModernForestryMobileProductCatalogTest.php`
+
+Important boundary:
+- This repo provides the mobile catalog and helper session contract, but it still does not own the native app UI itself.
+- The iOS app continues to use Shopify/storefront web session behavior for actual sign-in persistence on device.
+
 ## Candle Cash Combination Rules Update (2026-04-22)
 
 This update enables Shopify discount combinations for Candle Cash using Shopify `combinesWith` on the single Candle Cash discount code.
@@ -1193,6 +1213,16 @@ Mobile catalog local/testing mode:
 - Fake catalog mode is for iOS development only; it does not call Shopify and does not require Shopify tokens.
 - Staging and production must use the real Shopify-backed catalog path with an installed `modern-forestry` tenant/store token.
 - Do not add real Shopify tokens to docs, fixtures, seeders, or commits.
+- Collection hero imagery is resolved server-side from the collection image first, then the best-selling product image when Shopify does not provide collection artwork.
+- Keep the iOS app dumb about art selection so future catalog tweaks stay in the Laravel source of truth.
+- The mobile catalog now exists to support collection-first browsing, gentler shop cards, and safer phone-facing imagery without reintroducing a second catalog source.
+
+Recent mobile catalog pass notes:
+- Collection payloads now request collection media plus best-selling product imagery so the phone app can show stronger shelf art.
+- Collection image URLs now fall back to the best-selling product image when Shopify omits collection artwork, which keeps the Shop screen from showing empty hero cards.
+- The collection service now prefers a collection image first, then a hero product image, so the mobile app can present a full-screen collections experience without inventing its own art rules.
+- The current mobile work is intended to support the iOS Shop tab, not a separate backend catalog UI.
+- Folder-specific notes for the mobile catalog live in `app/Services/Mobile/README.md`.
 
 ### Modern Forestry Native Reviews + Wishlist
 

@@ -29,7 +29,7 @@
         <div class="text-xs uppercase tracking-[0.22em] text-zinc-500">TimberLine {{ $rewardsLabel }} Account</div>
         <h1 class="mt-2 text-2xl font-semibold text-zinc-950">{{ $rewardsLabel }} Account Lookup</h1>
         <p class="mt-2 text-sm text-zinc-600">
-            Check your {{ $rewardsBalanceLabel }}, recent activity, referral details, and your current $10 redemption status.
+            Check your {{ $rewardsBalanceLabel }} and recent activity.
         </p>
     </section>
 
@@ -39,16 +39,16 @@
             <input type="text" name="phone" value="{{ request('phone') }}" placeholder="Phone" class="rounded-xl border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm text-zinc-950 sm:col-span-1">
             <button type="submit" class="rounded-xl border border-sky-300/35 bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-900 sm:col-span-1">Lookup</button>
         </form>
-        <p class="mt-2 text-xs text-zinc-500">Lookup requires both email and phone to reduce accidental exposure.</p>
+        <p class="mt-2 text-xs text-zinc-500">Use email and phone to continue.</p>
         @if(($lookupState ?? '') !== '')
             <div class="mt-2 text-xs text-zinc-600">
                 State: <span class="font-semibold">{{ strtoupper((string) $lookupState) }}</span>
                 @if($lookupState === 'verification_required')
-                    · Provide both fields to continue.
+                    · Both fields are required.
                 @elseif($lookupState === 'needs_verification')
-                    · Identity is ambiguous and needs verification.
+                    · This profile needs verification.
                 @elseif($lookupState === 'unknown_customer')
-                    · No profile match found yet.
+                    · No matching profile yet.
                 @endif
             </div>
         @endif
@@ -103,11 +103,11 @@
                 <div class="mt-2 text-xs text-zinc-500">Matched identity: {{ $maskedEmail ?: $maskedPhone ?: 'verified' }}</div>
             </article>
             <article class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
-                <h2 class="text-sm font-semibold text-zinc-950">Referral (Legacy Snapshot)</h2>
+                <h2 class="text-sm font-semibold text-zinc-950">Referral Snapshot</h2>
                 @if($latestGrowaveExternal && $latestGrowaveExternal->referral_link)
                     <div class="mt-2 break-all text-sm text-sky-200">{{ $latestGrowaveExternal->referral_link }}</div>
                     <div class="mt-2 text-xs text-zinc-500">
-                        Legacy Growave referral snapshot only (read-only). Live referral enrollment and editing are not enabled in this surface.
+                        Read-only legacy snapshot.
                     </div>
                 @else
                     <div class="mt-2 text-sm text-zinc-500">No legacy Growave referral link on file.</div>
@@ -182,7 +182,7 @@
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div>
                                     <div class="text-sm font-semibold text-zinc-950">{{ data_get($reward, 'name', 'Redeem $10 ' . $rewardCreditLabelTitle) }}</div>
-                                    <div class="text-xs text-zinc-500">{{ data_get($reward, 'candle_cash_amount_formatted', '$10.00') }} off this order · Limit $10 per order</div>
+                                    <div class="text-xs text-zinc-500">{{ data_get($reward, 'candle_cash_amount_formatted', '$10.00') }} off this order</div>
                                 </div>
                                 @if($redeemEnabled)
                                     <form method="POST" action="{{ route('marketing.public.account-rewards.redeem') }}" class="shrink-0">
@@ -262,7 +262,7 @@
         </section>
     @elseif(request()->query('email') || request()->query('phone'))
         <section class="rounded-3xl border border-amber-300/30 bg-amber-100 p-4 text-sm text-amber-800">
-            No profile found for that email + phone combination.
+            No matching profile found.
         </section>
     @endif
 </main>

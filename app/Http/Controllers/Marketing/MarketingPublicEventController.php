@@ -3,34 +3,42 @@
 namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
-use App\Models\CandleCashTaskCompletion;
-use App\Models\CandleCashRedemption;
 use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
+use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
+use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
+use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewSummary;
+use App\Models\Order;
+use App\Models\OrderLine;
+use App\Models\MessagingConversation;
+use App\Models\MessagingConversationMessage;
 use App\Services\Marketing\CandleCashAccessGate;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
+use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\GrowaveProjectionService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
-use App\Services\Marketing\CandleCashTaskService;
-use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
-use App\Support\Marketing\MarketingEventContextResolver;
-use App\Support\Marketing\MarketingIdentityNormalizer;
+use App\Services\Marketing\MessagingContactChannelStateService;
+use App\Services\Marketing\MessagingConversationService;
+use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
+use App\Support\Marketing\MarketingEventContextResolver;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class MarketingPublicEventController extends Controller
@@ -43,9 +51,10 @@ class MarketingPublicEventController extends Controller
         protected GrowaveProjectionService $growaveProjectionService,
         protected CandleCashAccessGate $candleCashAccessGate,
         protected TenantResolver $tenantResolver,
-        protected TenantDisplayLabelResolver $displayLabelResolver
-    ) {
-    }
+        protected TenantDisplayLabelResolver $displayLabelResolver,
+        protected MessagingConversationService $conversationService,
+        protected MessagingContactChannelStateService $channelStateService
+    ) {}
 
     public function showOptin(string $eventSlug, Request $request): View|RedirectResponse
     {
@@ -59,7 +68,7 @@ class MarketingPublicEventController extends Controller
         $this->eventLogger->log('public_event_optin_view', [
             'status' => 'ok',
             'source_surface' => 'public_event',
-            'endpoint' => '/events/' . ($eventContext['slug'] ?? Str::slug($eventSlug)) . '/optin',
+            'endpoint' => '/events/'.($eventContext['slug'] ?? Str::slug($eventSlug)).'/optin',
             'event_instance_id' => (int) ($eventContext['id'] ?? 0) ?: null,
             'source_type' => 'event_public_optin',
             'source_id' => (string) ($eventContext['slug'] ?? Str::slug($eventSlug)),
@@ -95,7 +104,7 @@ class MarketingPublicEventController extends Controller
         $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
         $canonicalSlug = (string) ($eventContext['slug'] ?? Str::slug($eventSlug));
         $sourceId = $this->storefrontIdentityService->deterministicSourceId(
-            prefix: 'event_public_optin:' . $canonicalSlug,
+            prefix: 'event_public_optin:'.$canonicalSlug,
             email: (string) ($data['email'] ?? ''),
             phone: (string) ($data['phone'] ?? '')
         );
@@ -140,7 +149,7 @@ class MarketingPublicEventController extends Controller
                 'status' => 'verification_required',
                 'issue_type' => 'identity_review_required',
                 'source_surface' => 'public_event',
-                'endpoint' => '/events/' . $canonicalSlug . '/optin',
+                'endpoint' => '/events/'.$canonicalSlug.'/optin',
                 'event_instance_id' => (int) ($eventContext['id'] ?? 0) ?: null,
                 'source_type' => 'event_public_optin',
                 'source_id' => $sourceId,
@@ -175,7 +184,7 @@ class MarketingPublicEventController extends Controller
 
             $taskService->awardSystemTask($profile, 'email-signup', [
                 'source_type' => 'event_public_optin',
-                'source_id' => $sourceId . ':email',
+                'source_id' => $sourceId.':email',
                 'metadata' => [
                     'event_slug' => $canonicalSlug,
                 ],
@@ -207,7 +216,7 @@ class MarketingPublicEventController extends Controller
         $this->eventLogger->log('public_event_optin_submit', [
             'status' => 'ok',
             'source_surface' => 'public_event',
-            'endpoint' => '/events/' . $canonicalSlug . '/optin',
+            'endpoint' => '/events/'.$canonicalSlug.'/optin',
             'profile' => $profile,
             'event_instance_id' => (int) ($eventContext['id'] ?? 0) ?: null,
             'source_type' => 'event_public_optin',
@@ -252,7 +261,7 @@ class MarketingPublicEventController extends Controller
         if ($rewardCreditLabel === '') {
             $rewardCreditLabel = 'reward credit';
         }
-        $resolution = $this->resolveProfileFromRequest($request, 'event_reward_lookup:' . ($eventContext['slug'] ?? Str::slug($eventSlug)));
+        $resolution = $this->resolveProfileFromRequest($request, 'event_reward_lookup:'.($eventContext['slug'] ?? Str::slug($eventSlug)));
         $profile = $resolution['profile'];
         $lookupState = $resolution['state'];
         $tenantId = $this->resolvedTenantId($profile, $tenantContext);
@@ -261,7 +270,7 @@ class MarketingPublicEventController extends Controller
             'status' => $profile ? 'ok' : ($lookupState === 'verification_required' ? 'verification_required' : 'pending'),
             'issue_type' => $profile ? null : $lookupState,
             'source_surface' => 'public_event',
-            'endpoint' => '/events/' . ($eventContext['slug'] ?? Str::slug($eventSlug)) . '/rewards',
+            'endpoint' => '/events/'.($eventContext['slug'] ?? Str::slug($eventSlug)).'/rewards',
             'profile' => $profile,
             'event_instance_id' => (int) ($eventContext['id'] ?? 0) ?: null,
             'source_type' => 'event_reward_lookup',
@@ -294,7 +303,7 @@ class MarketingPublicEventController extends Controller
                     ->map(fn ($row): array => [
                         'id' => (int) $row->id,
                         'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward, $tenantId)
-                            ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted($tenantId) . ' ' . Str::title($rewardCreditLabel)
+                            ? 'Redeem '.$candleCashService->fixedRedemptionFormatted($tenantId).' '.Str::title($rewardCreditLabel)
                             : (string) ($row->reward?->name ?: $rewardsLabel),
                         'status' => (string) ($row->status ?: 'issued'),
                         'candle_cash_amount' => $candleCashService->amountFromPoints($row->candle_cash_spent),
@@ -380,8 +389,7 @@ class MarketingPublicEventController extends Controller
         Request $request,
         CandleCashService $candleCashService,
         CandleCashShopifyDiscountService $discountSyncService
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'max:40'],
@@ -404,7 +412,7 @@ class MarketingPublicEventController extends Controller
         if (! $profile) {
             $this->eventLogger->log('public_reward_redeem', [
                 'status' => 'error',
-                'issue_type' => 'identity_' . $lookupState,
+                'issue_type' => 'identity_'.$lookupState,
                 'source_surface' => 'public_event',
                 'endpoint' => '/rewards/lookup/redeem',
                 'source_type' => 'reward_lookup_redeem',
@@ -540,7 +548,7 @@ class MarketingPublicEventController extends Controller
                 'state' => $state,
                 'message' => $message,
                 'balance' => $candleCashService->balancePayloadFromPoints($result['balance'] ?? 0),
-                'reward_name' => 'Redeem ' . $candleCashService->fixedRedemptionFormatted($tenantId) . ' ' . Str::title($rewardCreditLabel),
+                'reward_name' => 'Redeem '.$candleCashService->fixedRedemptionFormatted($tenantId).' '.Str::title($rewardCreditLabel),
                 'redemption_code' => $ok ? (string) ($result['code'] ?? '') : null,
                 'redemption_id' => $ok ? (int) ($result['redemption_id'] ?? 0) : null,
                 'discount_sync_status' => $discountSyncStatus,
@@ -583,6 +591,167 @@ class MarketingPublicEventController extends Controller
         ]);
     }
 
+    public function customerDashboard(
+        Request $request,
+        CandleCashService $candleCashService,
+        ShopifyAppContentService $appContentService
+    ): View|RedirectResponse {
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
+        if (! is_numeric($tenantContext['tenant_id'] ?? null) || (int) ($tenantContext['tenant_id'] ?? 0) !== 1) {
+            abort(404);
+        }
+
+        $resolution = $this->resolveCustomerDashboardProfileFromRequest($request);
+        $profile = $resolution['profile'];
+        $lookupState = $resolution['state'];
+        $tenantId = $this->resolvedTenantId($profile, $tenantContext) ?? 1;
+        $displayLabels = $this->displayLabelsForTenantId($tenantId);
+        $content = $appContentService->forTenant(1);
+
+        [
+            $balance,
+            $availableRewards,
+            $redemptions,
+            $transactions,
+            $latestGrowaveExternal,
+            $reviewSummary,
+            $nativeReviewSummary,
+            $legacyReviewSummary,
+            $reviewRewardStatus,
+            $nativeReviewRewardStatus,
+            $legacyReviewRewardStatus,
+            $lastGrowaveSyncAt,
+            $reviewDataSource,
+        ] = $this->rewardsLookupData($profile, $candleCashService, $displayLabels, $tenantId);
+
+        $orders = $profile ? $this->customerDashboardOrders($profile, $tenantId) : collect();
+        $profileStoreContext = $profile
+            ? $this->preferredStoreContextForProfile($profile)
+            : ['store_key' => $tenantContext['store_key'] ?? null, 'tenant_id' => $tenantContext['tenant_id'] ?? null];
+        $messages = $profile
+            ? $this->customerDashboardMessages($profile, $tenantId, $profileStoreContext['store_key'] ?? null)
+            : null;
+
+        $this->eventLogger->log('public_customer_dashboard_view', [
+            'status' => $profile ? 'ok' : $lookupState,
+            'issue_type' => $profile ? null : $lookupState,
+            'source_surface' => 'shopify_app_proxy',
+            'endpoint' => '/shopify/marketing/account',
+            'profile' => $profile,
+            'source_type' => 'shopify_customer_dashboard',
+            'source_id' => $profile ? 'profile:'.$profile->id : null,
+            'meta' => [
+                'lookup_state' => $lookupState,
+                'order_count' => $orders->count(),
+            ],
+            'resolution_status' => $profile ? 'resolved' : 'open',
+        ]);
+
+        return view('marketing/public/customer-dashboard', [
+            'content' => $content,
+            'contentPublished' => is_array($content['published'] ?? null) ? $content['published'] : null,
+            'contentDefaults' => is_array($content['defaults'] ?? null) ? $content['defaults'] : [],
+            'profile' => $profile,
+            'lookupState' => $lookupState,
+            'balance' => $balance,
+            'availableRewards' => $availableRewards,
+            'redemptions' => $redemptions,
+            'transactions' => $transactions,
+            'latestGrowaveExternal' => $latestGrowaveExternal,
+            'reviewSummary' => $reviewSummary,
+            'nativeReviewSummary' => $nativeReviewSummary,
+            'legacyReviewSummary' => $legacyReviewSummary,
+            'reviewRewardStatus' => $reviewRewardStatus,
+            'nativeReviewRewardStatus' => $nativeReviewRewardStatus,
+            'legacyReviewRewardStatus' => $legacyReviewRewardStatus,
+            'lastGrowaveSyncAt' => $lastGrowaveSyncAt,
+            'reviewDataSource' => $reviewDataSource,
+            'orders' => $orders,
+            'messages' => $messages,
+            'displayLabels' => $displayLabels,
+            'redemptionAccess' => $this->candleCashAccessGate->storefrontRedeemAccessPayload($profile),
+            'profileStoreContext' => $profileStoreContext,
+            'supportLink' => $this->supportLinkForDashboard($content),
+            'rewardsLabel' => trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards')) ?: 'Rewards',
+            'messageActionUrl' => $this->customerDashboardMessageActionUrl($request),
+            'messageNotice' => $request->attributes->get('message_notice'),
+        ]);
+    }
+
+    public function sendCustomerMessage(
+        Request $request,
+        CandleCashService $candleCashService,
+        ShopifyAppContentService $appContentService
+    ): View {
+        $resolution = $this->resolveCustomerDashboardProfileFromRequest($request);
+        $profile = $resolution['profile'];
+        $lookupState = (string) ($resolution['state'] ?? 'customer_login_required');
+        if (! $profile instanceof MarketingProfile) {
+            return $this->customerDashboard($request, $candleCashService, $appContentService);
+        }
+
+        $tenantId = $this->resolvedTenantId($profile, $this->resolveTenantContext($request, $this->tenantResolver)) ?? 1;
+        $profileStoreContext = $this->preferredStoreContextForProfile($profile);
+        $messages = $this->customerDashboardMessages($profile, $tenantId, $profileStoreContext['store_key'] ?? null);
+        $smsStatus = strtolower(trim((string) ($messages['sms_status'] ?? 'unknown')));
+        $canCompose = (bool) ($messages['can_compose'] ?? false);
+        $body = trim((string) $request->input('message_body', ''));
+
+        if ($body === '') {
+            $request->attributes->set('message_notice', 'Please write a message before sending.');
+            return $this->customerDashboard($request, $candleCashService, $appContentService);
+        }
+
+        if (! $canCompose || in_array($smsStatus, ['unsubscribed', 'suppressed'], true)) {
+            $request->attributes->set(
+                'message_notice',
+                (string) ($messages['support_prompt'] ?? 'Messages are not available for this account right now. Use support instead.')
+            );
+            return $this->customerDashboard($request, $candleCashService, $appContentService);
+        }
+
+        $conversation = $this->conversationService->findOrCreateSmsConversation(
+            tenantId: $tenantId,
+            storeKey: $profileStoreContext['store_key'] ?? null,
+            profile: $profile,
+            phone: (string) ($profile->phone ?? $profile->normalized_phone ?? ''),
+            context: [
+                'source_type' => 'shopify_account_message',
+                'source_context' => [
+                    'surface' => 'shopify_account',
+                    'source' => 'customer_dashboard',
+                ],
+            ]
+        );
+
+        $conversation->forceFill([
+            'status' => 'open',
+        ])->save();
+
+        $this->conversationService->appendMessage($conversation, [
+            'marketing_profile_id' => $profile->id,
+            'channel' => 'sms',
+            'direction' => 'inbound',
+            'provider' => 'shopify',
+            'body' => $body,
+            'normalized_body' => $body,
+            'from_identity' => $profile->normalized_phone ?: $profile->phone,
+            'received_at' => now(),
+            'message_type' => 'normal',
+            'raw_payload' => [
+                'source' => 'customer_dashboard',
+                'surface' => 'shopify_account',
+            ],
+            'metadata' => [
+                'source_label' => 'customer_dashboard_message',
+            ],
+        ]);
+
+        $request->attributes->set('message_notice', 'Message sent. We will continue the conversation here and in the Shopify inbox.');
+
+        return $this->customerDashboard($request, $candleCashService, $appContentService);
+    }
+
     /**
      * @return array<string,string>
      */
@@ -623,6 +792,325 @@ class MarketingPublicEventController extends Controller
             'rewards_redemption_label' => 'Candle Cash redemption',
             'reward_credit_label' => 'Candle Cash credit',
         ]);
+    }
+
+    /**
+     * @return array{profile:?MarketingProfile,state:string}
+     */
+    protected function resolveCustomerDashboardProfileFromRequest(Request $request): array
+    {
+        $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
+        if (! is_numeric($tenantContext['tenant_id'] ?? null) || (int) ($tenantContext['tenant_id'] ?? 0) <= 0) {
+            return ['profile' => null, 'state' => 'missing_tenant_context'];
+        }
+
+        $shopifyCustomerId = trim((string) ($request->query('logged_in_customer_id', '')));
+        if ($shopifyCustomerId === '') {
+            $shopifyCustomerId = trim((string) ($request->query('shopify_customer_id', '')));
+        }
+        if ($shopifyCustomerId === '') {
+            $shopifyCustomerId = trim((string) ($request->query('customer_id', '')));
+        }
+
+        if ($shopifyCustomerId !== '') {
+            $profile = $this->profileForShopifyCustomerId(
+                (int) $tenantContext['tenant_id'],
+                $shopifyCustomerId,
+                is_string($tenantContext['store_key'] ?? null) ? (string) $tenantContext['store_key'] : null
+            );
+            if ($profile) {
+                return ['profile' => $profile, 'state' => 'linked_customer'];
+            }
+        }
+
+        return [
+            'profile' => null,
+            'state' => $shopifyCustomerId !== '' ? 'unknown_customer' : 'customer_login_required',
+        ];
+    }
+
+    protected function profileForShopifyCustomerId(int $tenantId, string $shopifyCustomerId, ?string $storeKey = null): ?MarketingProfile
+    {
+        $normalized = trim($shopifyCustomerId);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $digits = preg_match('/(\d+)(?!.*\d)/', $normalized, $matches) === 1
+            ? (string) $matches[1]
+            : null;
+
+        $possibleSourceIds = array_values(array_unique(array_filter([
+            $normalized,
+            $digits,
+            $storeKey !== null && $digits !== null ? $storeKey.':'.$digits : null,
+            $storeKey !== null ? $storeKey.':'.$normalized : null,
+        ])));
+
+        $profileId = MarketingProfileLink::query()
+            ->where('tenant_id', $tenantId)
+            ->where('source_type', 'shopify_customer')
+            ->where(function ($query) use ($possibleSourceIds): void {
+                foreach ($possibleSourceIds as $value) {
+                    $query->orWhere('source_id', $value)
+                        ->orWhere('source_id', 'retail:'.$value)
+                        ->orWhere('source_id', 'shopify:'.$value);
+                }
+            })
+            ->orderByDesc('id')
+            ->value('marketing_profile_id');
+
+        if (is_numeric($profileId) && (int) $profileId > 0) {
+            return MarketingProfile::query()
+                ->where('tenant_id', $tenantId)
+                ->find((int) $profileId);
+        }
+
+        $externalProfile = CustomerExternalProfile::query()
+            ->where('tenant_id', $tenantId)
+            ->where(function ($query) use ($possibleSourceIds): void {
+                foreach ($possibleSourceIds as $value) {
+                    $query->orWhere('external_customer_id', $value)
+                        ->orWhere('external_customer_gid', $value);
+                }
+            })
+            ->latest('id')
+            ->first();
+
+        if ($externalProfile instanceof CustomerExternalProfile) {
+            return $externalProfile->marketingProfile()
+                ->where('tenant_id', $tenantId)
+                ->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * @return Collection<int,array<string,mixed>>
+     */
+    protected function customerDashboardOrders(MarketingProfile $profile, ?int $tenantId = null): Collection
+    {
+        $resolvedTenantId = is_numeric($profile->tenant_id) && (int) $profile->tenant_id > 0
+            ? (int) $profile->tenant_id
+            : $tenantId;
+        if ($resolvedTenantId === null) {
+            return collect();
+        }
+
+        $orders = collect();
+        $linkedOrderIds = $profile->links()
+            ->where('source_type', 'order')
+            ->pluck('source_id')
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values();
+
+        if ($linkedOrderIds->isNotEmpty()) {
+            $orders = $orders->concat(
+                Order::query()
+                    ->where('tenant_id', $resolvedTenantId)
+                    ->whereIn('id', $linkedOrderIds->all())
+                    ->with(['lines'])
+                    ->orderByDesc('ordered_at')
+                    ->orderByDesc('id')
+                    ->get()
+            );
+        }
+
+        $shopifyCustomerIds = $profile->links()
+            ->where('source_type', 'shopify_customer')
+            ->pluck('source_id')
+            ->map(function ($value): ?string {
+                $normalized = trim((string) $value);
+                if ($normalized === '') {
+                    return null;
+                }
+                if (preg_match('/:(\d+)(?:$|[^0-9])/', $normalized, $matches) === 1) {
+                    return (string) $matches[1];
+                }
+                if (preg_match('/(\d+)(?!.*\d)/', $normalized, $matches) === 1) {
+                    return (string) $matches[1];
+                }
+
+                return null;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($shopifyCustomerIds->isNotEmpty()) {
+            $orders = $orders->concat(
+                Order::query()
+                    ->where('tenant_id', $resolvedTenantId)
+                    ->whereIn('shopify_customer_id', $shopifyCustomerIds->all())
+                    ->with(['lines'])
+                    ->orderByDesc('ordered_at')
+                    ->orderByDesc('id')
+                    ->get()
+            );
+        }
+
+        return $orders
+            ->unique('id')
+            ->sortByDesc(fn (Order $order): int => optional($order->ordered_at)->timestamp ?? ((int) $order->id))
+            ->map(function (Order $order): array {
+                $lines = $order->lines->map(function (OrderLine $line): array {
+                    return [
+                        'id' => (int) $line->id,
+                        'title' => trim((string) ($line->raw_title ?? '')) ?: trim((string) ($line->raw_variant ?? '')) ?: 'Item',
+                        'quantity' => max(1, (int) ($line->quantity ?: $line->ordered_qty ?: 1)),
+                        'shopify_variant_id' => $line->shopify_variant_id ? (string) $line->shopify_variant_id : null,
+                    ];
+                })->values();
+
+                $storeKey = trim((string) ($order->shopify_store_key ?: $order->shopify_store ?: ''));
+                $shopDomain = $this->shopDomainForStoreKey($storeKey);
+
+                return [
+                    'id' => (int) $order->id,
+                    'order_number' => (string) ($order->order_number ?: $order->order_label ?: ('#'.$order->id)),
+                    'title' => (string) ($order->display_name ?: $order->order_number ?: $order->order_label ?: ('Order #'.$order->id)),
+                    'ordered_at' => optional($order->ordered_at)->toIso8601String(),
+                    'status' => (string) ($order->status ?: 'open'),
+                    'currency_code' => (string) ($order->currency_code ?: 'USD'),
+                    'total_price_formatted' => '$'.number_format((float) ($order->total_price ?? 0), 2),
+                    'line_count' => $lines->count(),
+                    'line_preview' => $lines->take(3)->pluck('title')->implode(' · '),
+                    'reorder_url' => $this->reorderUrlForOrder($shopDomain, $lines),
+                    'lines' => $lines->all(),
+                ];
+            })
+            ->values();
+    }
+
+    /**
+     * @return array{
+     *   conversation_id:?int,
+     *   sms_status:string,
+     *   can_compose:bool,
+     *   phone_display:string,
+     *   support_prompt:string,
+     *   messages:array<int,array<string,mixed>>
+     * }
+     */
+    protected function customerDashboardMessages(MarketingProfile $profile, int $tenantId, ?string $storeKey = null): array
+    {
+        $phone = trim((string) ($profile->normalized_phone ?: $profile->phone));
+        $smsStatus = $this->channelStateService->resolveSmsStatus($tenantId, $profile, $phone !== '' ? $phone : null);
+        $hasPhone = $phone !== '';
+        $canCompose = $hasPhone
+            && (bool) $profile->accepts_sms_marketing
+            && ! in_array($smsStatus, ['unsubscribed', 'suppressed'], true);
+        $supportPrompt = $canCompose
+            ? 'Send a message here and it will stay threaded with the Shopify inbox.'
+            : 'Messages are not available for this account right now. Use support instead.';
+
+        $conversation = null;
+        if ($hasPhone) {
+            $conversation = MessagingConversation::query()
+                ->forTenantId($tenantId)
+                ->where('channel', 'sms')
+                ->where('marketing_profile_id', (int) $profile->id)
+                ->when(
+                    $storeKey !== null,
+                    fn ($query) => $query->where('store_key', $storeKey),
+                    fn ($query) => $query->whereNull('store_key')
+                )
+                ->with(['messages.creator'])
+                ->orderByDesc('last_message_at')
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        $messages = [];
+        if ($conversation instanceof MessagingConversation) {
+            $messages = $conversation->messages()
+                ->orderByRaw('COALESCE(received_at, sent_at, created_at) asc')
+                ->get()
+                ->map(fn (MessagingConversationMessage $message): array => [
+                    'id' => (int) $message->id,
+                    'direction' => (string) $message->direction,
+                    'body' => (string) $message->body,
+                    'message_type' => (string) $message->message_type,
+                    'from_identity' => $message->from_identity ? (string) $message->from_identity : null,
+                    'to_identity' => $message->to_identity ? (string) $message->to_identity : null,
+                    'created_at' => optional($message->received_at ?? $message->sent_at ?? $message->created_at)->toIso8601String(),
+                ])
+                ->values()
+                ->all();
+        }
+
+        return [
+            'conversation_id' => $conversation ? (int) $conversation->id : null,
+            'sms_status' => $smsStatus,
+            'can_compose' => $canCompose,
+            'phone_display' => $hasPhone ? $phone : 'No phone on file',
+            'support_prompt' => $supportPrompt,
+            'messages' => $messages,
+        ];
+    }
+
+    protected function customerDashboardMessageActionUrl(Request $request): string
+    {
+        $routeName = $request->is('shopify/marketing/v1/*')
+            ? 'marketing.shopify.v1.message'
+            : 'marketing.shopify.message';
+
+        return route($routeName, $request->query(), false);
+    }
+
+    /**
+     * @param  Collection<int,array<string,mixed>>  $lines
+     */
+    protected function reorderUrlForOrder(?string $shopDomain, Collection $lines): ?string
+    {
+        $lineItems = $lines
+            ->filter(fn (array $line): bool => ! empty($line['shopify_variant_id']))
+            ->map(fn (array $line): string => rawurlencode((string) $line['shopify_variant_id']).':'.max(1, (int) ($line['quantity'] ?? 1)))
+            ->values();
+
+        if ($shopDomain === null || $shopDomain === '' || $lineItems->isEmpty()) {
+            return null;
+        }
+
+        return 'https://'.$shopDomain.'/cart/'.$lineItems->implode(',');
+    }
+
+    protected function shopDomainForStoreKey(?string $storeKey): ?string
+    {
+        $normalizedStoreKey = strtolower(trim((string) $storeKey));
+        if ($normalizedStoreKey === '') {
+            return null;
+        }
+
+        $store = ShopifyStores::find($normalizedStoreKey);
+        $shopDomain = trim((string) ($store['shop'] ?? ''));
+
+        return $shopDomain !== '' ? $shopDomain : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $content
+     */
+    protected function supportLinkForDashboard(array $content): ?string
+    {
+        $published = is_array($content['published'] ?? null)
+            ? (array) $content['published']
+            : (is_array($content['effective'] ?? null) ? (array) $content['effective'] : []);
+
+        $supportUrl = trim((string) ($published['support_url'] ?? ''));
+        if ($supportUrl !== '' && filter_var($supportUrl, FILTER_VALIDATE_URL)) {
+            return $supportUrl;
+        }
+
+        $supportEmail = trim((string) ($published['support_email'] ?? ''));
+        if ($supportEmail !== '' && filter_var($supportEmail, FILTER_VALIDATE_EMAIL)) {
+            return 'mailto:'.$supportEmail;
+        }
+
+        return null;
     }
 
     /**
@@ -679,7 +1167,7 @@ class MarketingPublicEventController extends Controller
     }
 
     /**
-     * @param array{store_key:?string,tenant_id:?int} $tenantContext
+     * @param  array{store_key:?string,tenant_id:?int}  $tenantContext
      */
     protected function resolvedTenantId(?MarketingProfile $profile, array $tenantContext): ?int
     {
@@ -770,7 +1258,7 @@ class MarketingPublicEventController extends Controller
     }
 
     /**
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      */
     protected function syncRedemptionStoreContext(CandleCashRedemption $redemption, array $storeContext): CandleCashRedemption
     {
@@ -819,9 +1307,9 @@ class MarketingPublicEventController extends Controller
             return null;
         }
 
-        $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=candle_cash';
+        $redirect = '/cart?forestry_reward_code='.rawurlencode($rewardCode).'&forestry_reward_kind=candle_cash';
 
-        return 'https://' . $shopDomain . '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
+        return 'https://'.$shopDomain.'/discount/'.rawurlencode($rewardCode).'?redirect='.rawurlencode($redirect);
     }
 
     protected function queueShopifyCustomerProvisioning(
@@ -938,7 +1426,7 @@ class MarketingPublicEventController extends Controller
             ->map(fn ($row): array => [
                 'id' => (int) $row->id,
                 'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward, $resolvedTenantId)
-                    ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted($resolvedTenantId) . ' ' . Str::title($rewardCreditLabel)
+                    ? 'Redeem '.$candleCashService->fixedRedemptionFormatted($resolvedTenantId).' '.Str::title($rewardCreditLabel)
                     : (string) ($row->reward?->name ?: $rewardsLabel),
                 'status' => (string) ($row->status ?: 'issued'),
                 'redemption_code' => $revealRedemptionCodes && $row->redemption_code ? (string) $row->redemption_code : null,

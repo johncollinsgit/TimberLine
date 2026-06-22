@@ -339,7 +339,7 @@ class ShopifyEmbeddedPageRegistry
             [
                 'key' => 'messaging.responses',
                 'route_name' => 'shopify.app.messaging.responses',
-                'label' => 'Responses',
+                'label' => 'Inbox',
                 'section' => 'messaging',
                 'group' => 'messaging_subnav',
                 'icon_key' => 'inbox-stack',
@@ -350,6 +350,7 @@ class ShopifyEmbeddedPageRegistry
                 'search_subtitle' => 'Review inbound SMS and email replies in a unified operator inbox.',
                 'search_keywords' => [
                     'responses',
+                    'inbox',
                     'reply inbox',
                     'message replies',
                     'support inbox',

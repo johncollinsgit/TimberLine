@@ -10,6 +10,7 @@
   - Email via existing tenant email/send pipeline
   - preview/confirmation before group send dispatch
   - channel-aware audience diagnostics (displayed vs query candidates vs resolved sendable)
+- Reuses the same tenant-scoped conversation model for the embedded Shopify inbox and the customer account-page Messages section so SMS replies stay on one thread.
 
 ## Commercial Modeling
 - Canonical module/add-on configuration:
@@ -58,6 +59,21 @@
   - history
 - All API routes use strict Shopify bearer-token verification via `ShopifyEmbeddedAppContext::resolveAuthenticatedApiContext`.
 
+## Customer Messages Thread
+- Controller: `app/Http/Controllers/Marketing/MarketingPublicEventController.php`
+- View: `resources/views/marketing/public/customer-dashboard.blade.php`
+- Routes:
+  - account page: `GET /shopify/marketing/account`
+  - account page proxy: `GET /shopify/marketing/v1/account`
+  - send message: `POST /shopify/marketing/message`
+  - send message proxy: `POST /shopify/marketing/v1/message`
+- Behavior:
+  - resolves the signed Shopify storefront session and reuses the existing SMS conversation service
+  - appends customer replies into the same tenant-scoped conversation used by the Shopify inbox
+  - suppresses SMS composition when the contact is unsubscribed or otherwise suppressed
+  - falls back to the support/contact path when a profile cannot be matched or SMS is not available
+  - preserves Candle Club points and account state in Laravel as the source of truth
+
 ## UX Structure
 - Default workflow is group messaging with a compact, left-side audience selector ordered high-to-low by audience size.
 - `All Subscribed` is selectable/deselectable and never applied automatically.
@@ -70,6 +86,7 @@
   - conditional email template editor
   - live preview pane
   - hidden entirely for SMS.
+- Embedded company-facing messaging uses the same workspace but is surfaced as an `Inbox` tab in the Shopify shell.
 
 ## Customer Search Reuse
 - Messaging search reuses embedded Customers query behavior instead of introducing a separate picker implementation.

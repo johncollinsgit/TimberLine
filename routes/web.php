@@ -379,6 +379,9 @@ Route::post('/api/mobile/v1/modern-forestry/checkout', [ModernForestryProductCat
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.checkout');
+Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProductCatalogController::class, 'sessionStatus'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.session-status');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -1025,10 +1028,14 @@ Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class,
     ->middleware('throttle:30,1')
     ->name('marketing.public.consent-confirm');
 
-Route::prefix('shopify/marketing')
+    Route::prefix('shopify/marketing')
     ->name('marketing.shopify.')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
+        Route::get('/account', [MarketingPublicEventController::class, 'customerDashboard'])->name('account');
+        Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('message');
         Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
         Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
@@ -1091,6 +1098,10 @@ Route::prefix('shopify/marketing/v1')
     ->name('marketing.shopify.v1.')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
+        Route::get('/account', [MarketingPublicEventController::class, 'customerDashboard'])->name('account');
+        Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('message');
         Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
         Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
@@ -1339,6 +1350,14 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/settings/email/health', [ShopifyEmbeddedSettingsController::class, 'emailProviderHealth'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('settings.email.health');
+        Route::get('/settings/content', [ShopifyEmbeddedSettingsController::class, 'appContent'])
+            ->name('settings.content');
+        Route::post('/settings/content', [ShopifyEmbeddedSettingsController::class, 'saveAppContent'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.content.save');
+        Route::post('/settings/content/publish', [ShopifyEmbeddedSettingsController::class, 'publishAppContent'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.content.publish');
     });
     Route::get('/auth/{store}', [ShopifyAuthController::class, 'auth'])->name('shopify.auth');
     Route::get('/reinstall/{store}', [ShopifyAuthController::class, 'reinstall'])->name('shopify.reinstall');

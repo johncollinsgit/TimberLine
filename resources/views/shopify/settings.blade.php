@@ -310,6 +310,126 @@
             padding: 12px 14px;
         }
 
+        .content-editor {
+            display: grid;
+            gap: 16px;
+        }
+
+        .content-preview-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .content-preview-card {
+            border-radius: 16px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
+            padding: 14px;
+        }
+
+        .content-preview-card h3 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .content-preview-card p {
+            margin-top: 8px;
+            color: rgba(15, 23, 42, 0.68);
+            line-height: 1.55;
+            font-size: 13px;
+        }
+
+        .content-preview-hero {
+            margin-top: 12px;
+            border-radius: 14px;
+            padding: 14px;
+            background: radial-gradient(circle at top right, rgba(15, 143, 97, 0.12), transparent 45%), rgba(15, 23, 42, 0.03);
+            border: 1px solid rgba(15, 23, 42, 0.06);
+        }
+
+        .content-preview-eyebrow {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(15, 23, 42, 0.5);
+        }
+
+        .content-preview-title {
+            margin-top: 6px;
+            font-size: 1.25rem;
+            font-weight: 750;
+            line-height: 1.2;
+            color: #0f172a;
+        }
+
+        .content-preview-body {
+            margin-top: 8px;
+            font-size: 13px;
+            line-height: 1.55;
+            color: rgba(15, 23, 42, 0.74);
+        }
+
+        .content-preview-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .content-preview-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 34px;
+            border-radius: 999px;
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 700;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            background: #ffffff;
+            color: #0f172a;
+        }
+
+        .content-preview-section {
+            margin-top: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .content-preview-section strong {
+            font-size: 13px;
+            color: #0f172a;
+        }
+
+        .content-preview-empty {
+            font-size: 13px;
+            color: rgba(15, 23, 42, 0.58);
+        }
+
+        .content-preview-order {
+            border-radius: 12px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255, 255, 255, 0.88);
+            padding: 10px 12px;
+        }
+
+        .content-preview-order-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .content-preview-order-meta {
+            margin-top: 4px;
+            font-size: 12px;
+            color: rgba(15, 23, 42, 0.62);
+            line-height: 1.5;
+        }
+
         .settings-sender-meta {
             display: flex;
             flex-wrap: wrap;
@@ -394,6 +514,168 @@
                 <button class="settings-button settings-button--primary" type="button" id="widget-settings-save">Save Widget Settings</button>
             </div>
         </article>
+
+        @if(is_array($appContentBootstrap ?? null) && (bool) ($appContentBootstrap['authorized'] ?? false))
+            <article class="settings-card" id="app-content-card">
+                @php
+                    $publishedContent = is_array(data_get($appContentBootstrap, 'settings.published'))
+                        ? data_get($appContentBootstrap, 'settings.published')
+                        : data_get($appContentBootstrap, 'defaults', []);
+                    $draftContent = is_array(data_get($appContentBootstrap, 'settings.draft'))
+                        ? data_get($appContentBootstrap, 'settings.draft')
+                        : data_get($appContentBootstrap, 'defaults', []);
+                @endphp
+                <div class="settings-head">
+                    <div>
+                        <h2>App Content</h2>
+                        <p>
+                            Update the customer dashboard copy for Modern Forestry. Draft changes stay private until you publish them.
+                        </p>
+                    </div>
+                    <div class="settings-badges" id="app-content-status">
+                        <span class="settings-badge">Draft ready</span>
+                        <span class="settings-badge settings-badge--configured">Published live</span>
+                    </div>
+                </div>
+
+                <div class="settings-inline-status" id="app-content-alert" hidden></div>
+
+                <div class="content-editor">
+                    <form id="app-content-form">
+                        <div class="settings-grid">
+                            <div class="settings-field">
+                                <label for="content-brand-name">Brand Name</label>
+                                <input id="content-brand-name" name="brand_name" type="text" maxlength="120" value="{{ data_get($draftContent, 'brand_name', 'Modern Forestry') }}">
+                                <div class="settings-field-error" data-error-for="brand_name"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-hero-eyebrow">Hero Eyebrow</label>
+                                <input id="content-hero-eyebrow" name="hero_eyebrow" type="text" maxlength="120" value="{{ data_get($draftContent, 'hero_eyebrow', 'Customer account') }}">
+                                <div class="settings-field-error" data-error-for="hero_eyebrow"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-hero-title">Hero Title</label>
+                                <input id="content-hero-title" name="hero_title" type="text" maxlength="160" value="{{ data_get($draftContent, 'hero_title', 'Your Modern Forestry account') }}">
+                                <div class="settings-field-error" data-error-for="hero_title"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-hero-body">Hero Body</label>
+                                <textarea id="content-hero-body" name="hero_body" maxlength="240">{{ data_get($draftContent, 'hero_body', 'Check rewards, recent orders, and quick actions in one place.') }}</textarea>
+                                <div class="settings-field-error" data-error-for="hero_body"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-primary-cta">Primary CTA</label>
+                                <input id="content-primary-cta" name="primary_cta_label" type="text" maxlength="80" value="{{ data_get($draftContent, 'primary_cta_label', 'View rewards') }}">
+                                <div class="settings-field-error" data-error-for="primary_cta_label"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-secondary-cta">Secondary CTA</label>
+                                <input id="content-secondary-cta" name="secondary_cta_label" type="text" maxlength="80" value="{{ data_get($draftContent, 'secondary_cta_label', 'Review orders') }}">
+                                <div class="settings-field-error" data-error-for="secondary_cta_label"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-rewards-title">Rewards Title</label>
+                                <input id="content-rewards-title" name="rewards_title" type="text" maxlength="120" value="{{ data_get($draftContent, 'rewards_title', 'Rewards') }}">
+                                <div class="settings-field-error" data-error-for="rewards_title"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-rewards-body">Rewards Body</label>
+                                <textarea id="content-rewards-body" name="rewards_body" maxlength="240">{{ data_get($draftContent, 'rewards_body', 'Redeem on Shopify checkout when you are ready.') }}</textarea>
+                                <div class="settings-field-error" data-error-for="rewards_body"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-orders-title">Orders Title</label>
+                                <input id="content-orders-title" name="orders_title" type="text" maxlength="120" value="{{ data_get($draftContent, 'orders_title', 'Recent orders') }}">
+                                <div class="settings-field-error" data-error-for="orders_title"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-orders-body">Orders Body</label>
+                                <textarea id="content-orders-body" name="orders_body" maxlength="240">{{ data_get($draftContent, 'orders_body', 'Reorder the items you want again with a Shopify cart handoff.') }}</textarea>
+                                <div class="settings-field-error" data-error-for="orders_body"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-support-title">Support Title</label>
+                                <input id="content-support-title" name="support_title" type="text" maxlength="120" value="{{ data_get($draftContent, 'support_title', 'Support') }}">
+                                <div class="settings-field-error" data-error-for="support_title"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-support-body">Support Body</label>
+                                <textarea id="content-support-body" name="support_body" maxlength="240">{{ data_get($draftContent, 'support_body', 'Need help? Reach out and we will follow up.') }}</textarea>
+                                <div class="settings-field-error" data-error-for="support_body"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-support-cta">Support CTA</label>
+                                <input id="content-support-cta" name="support_cta_label" type="text" maxlength="80" value="{{ data_get($draftContent, 'support_cta_label', 'Contact support') }}">
+                                <div class="settings-field-error" data-error-for="support_cta_label"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-support-email">Support Email</label>
+                                <input id="content-support-email" name="support_email" type="email" maxlength="255" value="{{ data_get($draftContent, 'support_email', 'support@modernforestry.com') }}">
+                                <div class="settings-field-error" data-error-for="support_email"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-support-url">Support URL</label>
+                                <input id="content-support-url" name="support_url" type="url" maxlength="500" value="{{ data_get($draftContent, 'support_url', '') }}">
+                                <div class="settings-field-error" data-error-for="support_url"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-privacy-url">Privacy URL</label>
+                                <input id="content-privacy-url" name="privacy_url" type="url" maxlength="500" value="{{ data_get($draftContent, 'privacy_url', 'https://modernforestry.com/policies/privacy-policy') }}">
+                                <div class="settings-field-error" data-error-for="privacy_url"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-terms-url">Terms URL</label>
+                                <input id="content-terms-url" name="terms_url" type="url" maxlength="500" value="{{ data_get($draftContent, 'terms_url', 'https://modernforestry.com/policies/terms-of-service') }}">
+                                <div class="settings-field-error" data-error-for="terms_url"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-data-deletion-url">Data Request URL</label>
+                                <input id="content-data-deletion-url" name="data_deletion_url" type="url" maxlength="500" value="{{ data_get($draftContent, 'data_deletion_url', '') }}">
+                                <div class="settings-field-error" data-error-for="data_deletion_url"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-data-deletion-email">Data Request Email</label>
+                                <input id="content-data-deletion-email" name="data_deletion_email" type="email" maxlength="255" value="{{ data_get($draftContent, 'data_deletion_email', 'support@modernforestry.com') }}">
+                                <div class="settings-field-error" data-error-for="data_deletion_email"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-empty-rewards">Empty Rewards Copy</label>
+                                <input id="content-empty-rewards" name="empty_rewards" type="text" maxlength="240" value="{{ data_get($draftContent, 'empty_rewards', 'No active rewards right now.') }}">
+                                <div class="settings-field-error" data-error-for="empty_rewards"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-empty-orders">Empty Orders Copy</label>
+                                <input id="content-empty-orders" name="empty_orders" type="text" maxlength="240" value="{{ data_get($draftContent, 'empty_orders', 'No recent orders yet.') }}">
+                                <div class="settings-field-error" data-error-for="empty_orders"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-account-note">Account Note</label>
+                                <textarea id="content-account-note" name="account_note" maxlength="240">{{ data_get($draftContent, 'account_note', 'For privacy or account data requests, contact Modern Forestry support.') }}</textarea>
+                                <div class="settings-field-error" data-error-for="account_note"></div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="content-preview-grid">
+                        <article class="content-preview-card">
+                            <h3>Draft Preview</h3>
+                            <p>What merchants are editing right now.</p>
+                            <div class="content-preview-slot" id="content-preview-draft"></div>
+                        </article>
+                        <article class="content-preview-card">
+                            <h3>Live Preview</h3>
+                            <p>What customers see after publish.</p>
+                            <div class="content-preview-slot" id="content-preview-live"></div>
+                        </article>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="settings-button settings-button--primary" type="button" id="app-content-save">Save Draft</button>
+                        <button class="settings-button" type="button" id="app-content-publish">Publish Live</button>
+                    </div>
+                </div>
+            </article>
+        @endif
 
         <article class="settings-card" id="development-notes-nav-card" hidden>
             <h2>Development Notes</h2>
@@ -548,6 +830,7 @@
         (() => {
             const bootstrap = @json($emailSettingsBootstrap ?? []);
             const widgetBootstrap = @json($widgetSettingsBootstrap ?? []);
+            const appContentBootstrap = @json($appContentBootstrap ?? []);
             const root = document.getElementById("email-settings-root");
             if (!root) {
                 return;
@@ -562,6 +845,14 @@
             const wishlistDrawerInput = document.getElementById("widget-wishlist-drawer-id");
             const reviewsPositionSelect = document.getElementById("widget-reviews-position");
             const imageRadiusInput = document.getElementById("widget-image-radius");
+            const appContentCard = document.getElementById("app-content-card");
+            const appContentForm = document.getElementById("app-content-form");
+            const appContentAlert = document.getElementById("app-content-alert");
+            const appContentStatus = document.getElementById("app-content-status");
+            const appContentSaveButton = document.getElementById("app-content-save");
+            const appContentPublishButton = document.getElementById("app-content-publish");
+            const contentPreviewDraft = document.getElementById("content-preview-draft");
+            const contentPreviewLive = document.getElementById("content-preview-live");
             const providerSelect = document.getElementById("email-provider");
             const providerStatusInput = document.getElementById("provider-status-readonly");
             const providerSettingsContent = document.getElementById("provider-settings-content");
@@ -599,6 +890,16 @@
                 loading: false,
                 saving: false,
                 settings: normalizeWidgetSettings(widgetBootstrap?.settings || widgetBootstrap?.defaults || null),
+            };
+
+            const contentState = {
+                loading: false,
+                saving: false,
+                publishing: false,
+                defaults: normalizeContent(appContentBootstrap?.defaults || null),
+                draft: normalizeContent(appContentBootstrap?.settings?.draft || appContentBootstrap?.settings?.effective || appContentBootstrap?.defaults || null),
+                published: appContentBootstrap?.settings?.published ? normalizeContent(appContentBootstrap?.settings?.published) : null,
+                effective: normalizeContent(appContentBootstrap?.settings?.effective || appContentBootstrap?.defaults || null),
             };
 
             if (!bootstrap?.authorized || !bootstrap?.tenant_id) {
@@ -779,7 +1080,7 @@
 
             function setBusy(isBusy) {
                 state.busy = Boolean(isBusy);
-                [saveButton, validateButton, healthButton, testButton, clearKeyButton].forEach((button) => {
+                [saveButton, validateButton, healthButton, testButton, clearKeyButton, appContentSaveButton, appContentPublishButton].forEach((button) => {
                     if (button) {
                         button.disabled = state.busy || state.loading;
                     }
@@ -796,6 +1097,14 @@
 
                     element.toggleAttribute("disabled", state.busy || state.loading);
                 });
+
+                if (appContentForm) {
+                    Array.from(appContentForm.elements || []).forEach((element) => {
+                        if (element instanceof HTMLElement) {
+                            element.toggleAttribute("disabled", state.busy || state.loading);
+                        }
+                    });
+                }
             }
 
             function lockUi(message) {
@@ -805,11 +1114,18 @@
                         element.setAttribute("disabled", "disabled");
                     }
                 });
-                [saveButton, validateButton, healthButton, testButton, clearKeyButton].forEach((button) => {
+                [saveButton, validateButton, healthButton, testButton, clearKeyButton, appContentSaveButton, appContentPublishButton].forEach((button) => {
                     if (button) {
                         button.setAttribute("disabled", "disabled");
                     }
                 });
+                if (appContentForm) {
+                    Array.from(appContentForm.elements || []).forEach((element) => {
+                        if (element instanceof HTMLElement) {
+                            element.setAttribute("disabled", "disabled");
+                        }
+                    });
+                }
             }
 
             function statusLabel(status, settings) {
@@ -1120,6 +1436,60 @@
                 return normalized === "" ? null : normalized;
             }
 
+            function normalizeContent(input) {
+                const defaults = appContentBootstrap?.defaults || {
+                    brand_name: "Modern Forestry",
+                    hero_eyebrow: "Customer account",
+                    hero_title: "Your Modern Forestry account",
+                    hero_body: "Check rewards, recent orders, and quick actions in one place.",
+                    primary_cta_label: "View rewards",
+                    secondary_cta_label: "Review orders",
+                    rewards_title: "Rewards",
+                    rewards_body: "Redeem on Shopify checkout when you are ready.",
+                    orders_title: "Recent orders",
+                    orders_body: "Reorder the items you want again with a Shopify cart handoff.",
+                    support_title: "Support",
+                    support_body: "Need help? Reach out and we will follow up.",
+                    support_cta_label: "Contact support",
+                    support_email: "support@modernforestry.com",
+                    support_url: null,
+                    privacy_url: "https://modernforestry.com/policies/privacy-policy",
+                    terms_url: "https://modernforestry.com/policies/terms-of-service",
+                    data_deletion_url: null,
+                    data_deletion_email: "support@modernforestry.com",
+                    empty_rewards: "No active rewards right now.",
+                    empty_orders: "No recent orders yet.",
+                    account_note: "For privacy or account data requests, contact Modern Forestry support.",
+                };
+
+                const source = input && typeof input === "object" ? input : {};
+
+                return {
+                    brand_name: normalizeString(source.brand_name) || defaults.brand_name,
+                    hero_eyebrow: normalizeString(source.hero_eyebrow) || defaults.hero_eyebrow,
+                    hero_title: normalizeString(source.hero_title) || defaults.hero_title,
+                    hero_body: normalizeString(source.hero_body) || defaults.hero_body,
+                    primary_cta_label: normalizeString(source.primary_cta_label) || defaults.primary_cta_label,
+                    secondary_cta_label: normalizeString(source.secondary_cta_label) || defaults.secondary_cta_label,
+                    rewards_title: normalizeString(source.rewards_title) || defaults.rewards_title,
+                    rewards_body: normalizeString(source.rewards_body) || defaults.rewards_body,
+                    orders_title: normalizeString(source.orders_title) || defaults.orders_title,
+                    orders_body: normalizeString(source.orders_body) || defaults.orders_body,
+                    support_title: normalizeString(source.support_title) || defaults.support_title,
+                    support_body: normalizeString(source.support_body) || defaults.support_body,
+                    support_cta_label: normalizeString(source.support_cta_label) || defaults.support_cta_label,
+                    support_email: normalizeString(source.support_email) || defaults.support_email,
+                    support_url: normalizeString(source.support_url) || defaults.support_url,
+                    privacy_url: normalizeString(source.privacy_url) || defaults.privacy_url,
+                    terms_url: normalizeString(source.terms_url) || defaults.terms_url,
+                    data_deletion_url: normalizeString(source.data_deletion_url) || defaults.data_deletion_url,
+                    data_deletion_email: normalizeString(source.data_deletion_email) || defaults.data_deletion_email,
+                    empty_rewards: normalizeString(source.empty_rewards) || defaults.empty_rewards,
+                    empty_orders: normalizeString(source.empty_orders) || defaults.empty_orders,
+                    account_note: normalizeString(source.account_note) || defaults.account_note,
+                };
+            }
+
             function escapeHtml(value) {
                 return String(value ?? "")
                     .replaceAll("&", "&amp;")
@@ -1167,6 +1537,161 @@
                         <span class="settings-badge">Radius ${widgetState.settings.image_radius_px}px</span>
                     `;
                 }
+            }
+
+            function contentStatusLabel() {
+                if (!appContentBootstrap?.authorized) {
+                    return "Unavailable";
+                }
+
+                return contentState.published ? "Live published" : "Draft only";
+            }
+
+            function contentStatusTone() {
+                if (!appContentBootstrap?.authorized) {
+                    return "warn";
+                }
+
+                return contentState.published ? "configured" : "warn";
+            }
+
+            function contentSnapshotCard(snapshot, badgeLabel) {
+                const heroTitle = escapeHtml(snapshot.hero_title || "");
+                const heroBody = escapeHtml(snapshot.hero_body || "");
+                const eyebrow = escapeHtml(snapshot.hero_eyebrow || "");
+                const rewardsTitle = escapeHtml(snapshot.rewards_title || "");
+                const rewardsBody = escapeHtml(snapshot.rewards_body || "");
+                const ordersTitle = escapeHtml(snapshot.orders_title || "");
+                const ordersBody = escapeHtml(snapshot.orders_body || "");
+                const supportTitle = escapeHtml(snapshot.support_title || "");
+                const supportBody = escapeHtml(snapshot.support_body || "");
+                const supportCta = escapeHtml(snapshot.support_cta_label || "");
+                const supportHref = snapshot.support_url || snapshot.support_email
+                    ? escapeHtml(snapshot.support_url || `mailto:${snapshot.support_email}`)
+                    : "";
+                const privacyHref = escapeHtml(snapshot.privacy_url || "");
+                const termsHref = escapeHtml(snapshot.terms_url || "");
+                const dataRequestHref = snapshot.data_deletion_url || snapshot.data_deletion_email
+                    ? escapeHtml(snapshot.data_deletion_url || `mailto:${snapshot.data_deletion_email}`)
+                    : "";
+                const brandName = escapeHtml(snapshot.brand_name || "Modern Forestry");
+                const note = escapeHtml(snapshot.account_note || "");
+
+                return `
+                    <div class="content-preview-hero">
+                        <div class="content-preview-eyebrow">${eyebrow}</div>
+                        <div class="content-preview-title">${heroTitle}</div>
+                        <div class="content-preview-body">${heroBody}</div>
+                        <div class="content-preview-actions">
+                            <span class="content-preview-action">${escapeHtml(snapshot.primary_cta_label || "View rewards")}</span>
+                            <span class="content-preview-action">${escapeHtml(snapshot.secondary_cta_label || "Review orders")}</span>
+                        </div>
+                    </div>
+                    <div class="content-preview-section">
+                        <strong>${rewardsTitle}</strong>
+                        <div class="content-preview-empty">${rewardsBody}</div>
+                    </div>
+                    <div class="content-preview-section">
+                        <strong>${ordersTitle}</strong>
+                        <div class="content-preview-empty">${ordersBody}</div>
+                    </div>
+                    <div class="content-preview-section">
+                        <strong>${supportTitle}</strong>
+                        <div class="content-preview-empty">${supportBody}</div>
+                        <div class="content-preview-actions">
+                            <a class="content-preview-action" href="${supportHref || '#'}">${supportCta}</a>
+                            ${privacyHref ? `<a class="content-preview-action" href="${privacyHref}">Privacy</a>` : ""}
+                            ${termsHref ? `<a class="content-preview-action" href="${termsHref}">Terms</a>` : ""}
+                            ${dataRequestHref ? `<a class="content-preview-action" href="${dataRequestHref}">Data requests</a>` : ""}
+                        </div>
+                    </div>
+                    <div class="content-preview-empty" style="margin-top: 12px;">${brandName} · ${note} · ${badgeLabel}</div>
+                `;
+            }
+
+            function renderContentPreview() {
+                if (!contentPreviewDraft || !contentPreviewLive) {
+                    return;
+                }
+
+                const draftSnapshot = normalizeContent(collectContentPayload());
+                const liveSnapshot = contentState.published || contentState.defaults;
+                contentPreviewDraft.innerHTML = contentSnapshotCard(draftSnapshot, "Draft");
+                contentPreviewLive.innerHTML = contentSnapshotCard(liveSnapshot, contentState.published ? "Published" : "Defaults");
+
+                if (appContentStatus) {
+                    appContentStatus.innerHTML = `
+                        <span class="settings-badge">${escapeHtml(contentStatusLabel())}</span>
+                        <span class="settings-badge ${contentState.published ? "settings-badge--configured" : "settings-badge--warn"}">${contentState.published ? "Published" : "No live publish yet"}</span>
+                    `;
+                }
+            }
+
+            function populateContentForm() {
+                if (!appContentForm) {
+                    return;
+                }
+
+                const snapshot = contentState.draft || contentState.defaults;
+                setContentField("content-brand-name", snapshot.brand_name);
+                setContentField("content-hero-eyebrow", snapshot.hero_eyebrow);
+                setContentField("content-hero-title", snapshot.hero_title);
+                setContentField("content-hero-body", snapshot.hero_body);
+                setContentField("content-primary-cta", snapshot.primary_cta_label);
+                setContentField("content-secondary-cta", snapshot.secondary_cta_label);
+                setContentField("content-rewards-title", snapshot.rewards_title);
+                setContentField("content-rewards-body", snapshot.rewards_body);
+                setContentField("content-orders-title", snapshot.orders_title);
+                setContentField("content-orders-body", snapshot.orders_body);
+                setContentField("content-support-title", snapshot.support_title);
+                setContentField("content-support-body", snapshot.support_body);
+                setContentField("content-support-cta", snapshot.support_cta_label);
+                setContentField("content-support-email", snapshot.support_email);
+                setContentField("content-support-url", snapshot.support_url);
+                setContentField("content-privacy-url", snapshot.privacy_url);
+                setContentField("content-terms-url", snapshot.terms_url);
+                setContentField("content-data-deletion-url", snapshot.data_deletion_url);
+                setContentField("content-data-deletion-email", snapshot.data_deletion_email);
+                setContentField("content-empty-rewards", snapshot.empty_rewards);
+                setContentField("content-empty-orders", snapshot.empty_orders);
+                setContentField("content-account-note", snapshot.account_note);
+                renderContentPreview();
+            }
+
+            function setContentField(id, value) {
+                const element = document.getElementById(id);
+                if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) {
+                    return;
+                }
+
+                element.value = value || "";
+            }
+
+            function collectContentPayload() {
+                return {
+                    brand_name: normalizeString(document.getElementById("content-brand-name")?.value) || contentState.defaults.brand_name,
+                    hero_eyebrow: normalizeString(document.getElementById("content-hero-eyebrow")?.value) || contentState.defaults.hero_eyebrow,
+                    hero_title: normalizeString(document.getElementById("content-hero-title")?.value) || contentState.defaults.hero_title,
+                    hero_body: normalizeString(document.getElementById("content-hero-body")?.value) || contentState.defaults.hero_body,
+                    primary_cta_label: normalizeString(document.getElementById("content-primary-cta")?.value) || contentState.defaults.primary_cta_label,
+                    secondary_cta_label: normalizeString(document.getElementById("content-secondary-cta")?.value) || contentState.defaults.secondary_cta_label,
+                    rewards_title: normalizeString(document.getElementById("content-rewards-title")?.value) || contentState.defaults.rewards_title,
+                    rewards_body: normalizeString(document.getElementById("content-rewards-body")?.value) || contentState.defaults.rewards_body,
+                    orders_title: normalizeString(document.getElementById("content-orders-title")?.value) || contentState.defaults.orders_title,
+                    orders_body: normalizeString(document.getElementById("content-orders-body")?.value) || contentState.defaults.orders_body,
+                    support_title: normalizeString(document.getElementById("content-support-title")?.value) || contentState.defaults.support_title,
+                    support_body: normalizeString(document.getElementById("content-support-body")?.value) || contentState.defaults.support_body,
+                    support_cta_label: normalizeString(document.getElementById("content-support-cta")?.value) || contentState.defaults.support_cta_label,
+                    support_email: normalizeString(document.getElementById("content-support-email")?.value) || contentState.defaults.support_email,
+                    support_url: normalizeString(document.getElementById("content-support-url")?.value) || contentState.defaults.support_url,
+                    privacy_url: normalizeString(document.getElementById("content-privacy-url")?.value) || contentState.defaults.privacy_url,
+                    terms_url: normalizeString(document.getElementById("content-terms-url")?.value) || contentState.defaults.terms_url,
+                    data_deletion_url: normalizeString(document.getElementById("content-data-deletion-url")?.value) || contentState.defaults.data_deletion_url,
+                    data_deletion_email: normalizeString(document.getElementById("content-data-deletion-email")?.value) || contentState.defaults.data_deletion_email,
+                    empty_rewards: normalizeString(document.getElementById("content-empty-rewards")?.value) || contentState.defaults.empty_rewards,
+                    empty_orders: normalizeString(document.getElementById("content-empty-orders")?.value) || contentState.defaults.empty_orders,
+                    account_note: normalizeString(document.getElementById("content-account-note")?.value) || contentState.defaults.account_note,
+                };
             }
 
             function authFailureMessage(status, fallbackMessage) {
@@ -1470,6 +1995,48 @@
                 }
             }
 
+            async function saveAppContent(publish = false) {
+                if (!appContentBootstrap?.authorized || !appContentBootstrap?.tenant_id) {
+                    return;
+                }
+
+                if (!appContentForm) {
+                    return;
+                }
+
+                clearErrors();
+                const endpoint = publish ? appContentBootstrap?.endpoints?.publish : appContentBootstrap?.endpoints?.save;
+                if (!endpoint) {
+                    return;
+                }
+
+                const payload = collectContentPayload();
+                contentState.saving = !publish;
+                contentState.publishing = Boolean(publish);
+                setAlert(appContentAlert, publish ? "Publishing app content..." : "Saving draft...", "neutral");
+
+                try {
+                    const response = await fetchJson(endpoint, {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    });
+
+                    const nextContent = response?.data?.settings || {};
+                    contentState.draft = normalizeContent(nextContent.draft || payload);
+                    contentState.published = nextContent.published ? normalizeContent(nextContent.published) : null;
+                    contentState.effective = normalizeContent(nextContent.effective || nextContent.published || contentState.defaults);
+                    populateContentForm();
+                    setAlert(appContentAlert, response?.message || (publish ? "App content published." : "Draft saved."), "success");
+                } catch (error) {
+                    const payloadError = extractError(error);
+                    setErrors(payloadError?.errors || {});
+                    setAlert(appContentAlert, payloadError?.message || error?.message || "Failed to save app content.", "error");
+                } finally {
+                    contentState.saving = false;
+                    contentState.publishing = false;
+                }
+            }
+
             providerSelect.addEventListener("change", () => {
                 const previousProvider = String(state.settings.email_provider || "sendgrid");
                 state.providerDrafts[previousProvider] = providerDraftFromDom(previousProvider);
@@ -1532,11 +2099,23 @@
                 widgetSaveButton.addEventListener("click", () => saveWidgetSettings());
             }
 
+            if (appContentForm) {
+                appContentForm.addEventListener("input", () => {
+                    renderContentPreview();
+                });
+                appContentSaveButton?.addEventListener("click", () => saveAppContent(false));
+                appContentPublishButton?.addEventListener("click", () => saveAppContent(true));
+            }
+
             populateWidgetSettings();
             if (!widgetBootstrap?.settings) {
                 scheduleIdleTask(loadWidgetSettings);
             }
             scheduleIdleTask(loadDevelopmentNotesAccess);
+
+            if (appContentCard) {
+                populateContentForm();
+            }
 
             syncProviderDraftFromSettings();
             populateFormFromState();

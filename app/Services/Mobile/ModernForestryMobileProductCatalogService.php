@@ -5,17 +5,89 @@ namespace App\Services\Mobile;
 use App\Models\Tenant;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class ModernForestryMobileProductCatalogService
 {
     public const TENANT_SLUG = 'modern-forestry';
 
-    public const STOREFRONT_BASE_URL = 'https://modernforestry.theforestrystudio.com';
+    public const STOREFRONT_BASE_URL = 'https://theforestrystudio.com';
 
     public const MAX_LIMIT = 50;
 
     public const DEFAULT_LIMIT = 20;
+
+    public const THEME_INDEX_PATH = '/Users/johncollins/projects/modernforestry-live-theme/templates/index.json';
+
+    public const DEFAULT_SORT = 'best_selling';
+
+    protected const PRODUCT_IMAGE_WIDTH = 640;
+
+    protected const COLLECTION_IMAGE_WIDTH = 900;
+
+    protected const DETAIL_IMAGE_WIDTH = 1200;
+
+    protected const HERO_IMAGE_WIDTH = 1200;
+
+    /**
+     * @var array<int,string>
+     */
+    public const SUPPORTED_SORTS = [
+        'best_selling',
+        'newest',
+        'price_low_to_high',
+        'price_high_to_low',
+    ];
+
+    /**
+     * @var array<int,array<string,mixed>>
+     */
+    protected const SEASONAL_COLLECTIONS = [
+        [
+            'handle' => 'spring',
+            'title' => 'Spring',
+            'description' => 'Fresh florals, bright greens, and softer daylight scents.',
+            'aliases' => ['spring', 'spring-collection', 'wholesale-spring-collection'],
+            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457',
+        ],
+        [
+            'handle' => 'classic',
+            'title' => 'Classic',
+            'description' => 'The everyday candles people keep coming back for.',
+            'aliases' => ['classic', 'classic-collection-1', 'candle-collection', 'wholesale-year-round-collection'],
+            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113',
+        ],
+        [
+            'handle' => 'summer',
+            'title' => 'Summer',
+            'description' => 'Sunlit, airy, and easygoing favorites for warm days.',
+            'aliases' => ['summer', 'summer-collection', 'wholesale-summer-collection', 'summer-one-day-sale'],
+            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038',
+        ],
+        [
+            'handle' => 'holiday',
+            'title' => 'Holiday',
+            'description' => 'Seasonal candles for gatherings, gifts, and winter moods.',
+            'aliases' => ['holiday', 'holiday-collection', 'thanksgiving-day-sale', 'wholesale-holiday-collection'],
+            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457',
+        ],
+        [
+            'handle' => 'fall',
+            'title' => 'Fall',
+            'description' => 'Warm spices, woods, and deeper comfort notes.',
+            'aliases' => ['fall', 'fall-collection', 'autumn-collection', 'wholesale-fall-candle-collection'],
+            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113',
+        ],
+        [
+            'handle' => 'bundles',
+            'title' => 'Bundles',
+            'description' => 'Curated sets and giftable groupings with a little extra value.',
+            'aliases' => ['bundles', 'candle-bundles', 'bundle-collection', 'sale-items'],
+            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038',
+        ],
+    ];
 
     /**
      * @return array<int,array<string,mixed>>
@@ -28,14 +100,7 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeProducts($limit);
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
-
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
+        $client = $this->client();
 
         $data = $client->query($this->productsQuery(), [
             'first' => $limit,
@@ -46,10 +111,15 @@ class ModernForestryMobileProductCatalogService
             return [];
         }
 
-        return array_values(array_map(
-            fn (mixed $node): array => $this->mapProduct(is_array($node) ? $node : []),
-            $nodes
-        ));
+        $products = array_values(array_filter(array_map(function (mixed $node): ?array {
+            if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
+                return null;
+            }
+
+            return $this->mapProduct($node);
+        }, $nodes)));
+
+        return array_slice($products, 0, $limit);
     }
 
     /**
@@ -67,14 +137,7 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeProductDetail($handle);
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
-
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
+        $client = $this->client();
 
         $data = $client->query($this->productDetailQuery(), [
             'query' => 'handle:'.$handle.' status:active',
@@ -87,7 +150,11 @@ class ModernForestryMobileProductCatalogService
 
         $node = $nodes[0] ?? [];
 
-        return is_array($node) ? $this->mapProductDetail($node) : null;
+        if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
+            return null;
+        }
+
+        return $this->mapProductDetail($node);
     }
 
     /**
@@ -99,32 +166,15 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeCollections();
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
+        $client = $this->client();
 
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
-
-        $data = $client->query($this->collectionsQuery());
-
-        $nodes = $data['collections']['nodes'] ?? [];
-        if (! is_array($nodes)) {
-            return [];
-        }
-
-        return array_values(array_map(
-            fn (mixed $node): array => $this->mapCollection(is_array($node) ? $node : []),
-            $nodes
-        ));
+        return $this->seasonalCollectionsFromNodes($this->collectionNodes($client));
     }
 
     /**
      * @return array{collection:array<string,mixed>,products:array<int,array<string,mixed>>}|null
      */
-    public function collectionProducts(string $handle, int $limit = self::DEFAULT_LIMIT): ?array
+    public function collectionProducts(string $handle, int $limit = self::DEFAULT_LIMIT, string $sort = self::DEFAULT_SORT): ?array
     {
         $handle = $this->normalizeHandle($handle);
 
@@ -133,23 +183,24 @@ class ModernForestryMobileProductCatalogService
         }
 
         $limit = $this->normalizeLimit($limit);
+        $sort = $this->normalizeSort($sort);
 
         if ($this->fakeCatalogEnabled()) {
-            return $this->fakeCollectionProducts($handle, $limit);
+            return $this->fakeCollectionProducts($handle, $limit, $sort);
         }
 
-        $tenant = $this->modernForestryTenant();
-        $store = $this->modernForestryRetailStore($tenant);
+        $client = $this->client();
+        $collectionNodes = $this->collectionNodes($client);
+        $resolvedCollection = $this->resolveSeasonalCollectionNode($handle, $collectionNodes);
+        $targetHandle = trim((string) ($resolvedCollection['handle'] ?? $handle));
 
-        $client = new ShopifyGraphqlClient(
-            (string) $store['shop'],
-            (string) $store['token'],
-            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
-        );
+        $sortArguments = $this->collectionSortArguments($sort);
 
         $data = $client->query($this->collectionProductsQuery(), [
-            'query' => 'handle:'.$handle,
-            'first' => $limit,
+            'query' => 'handle:'.$targetHandle,
+            'first' => min(max($limit * 4, 24), 100),
+            'sortKey' => $sortArguments['sortKey'],
+            'reverse' => $sortArguments['reverse'],
         ]);
 
         $nodes = $data['collections']['nodes'] ?? [];
@@ -164,14 +215,27 @@ class ModernForestryMobileProductCatalogService
 
         $productNodes = $collection['products']['nodes'] ?? [];
         $products = is_array($productNodes)
-            ? array_values(array_map(
-                fn (mixed $node): array => $this->mapProduct(is_array($node) ? $node : []),
-                $productNodes
-            ))
+            ? array_values(array_filter(array_map(function (mixed $node): ?array {
+                if (! is_array($node)) {
+                    return null;
+                }
+
+                if (! $this->productNodeIsCustomerVisible($node)) {
+                    return null;
+                }
+
+                return $this->mapProduct($node);
+            }, $productNodes)))
             : [];
 
+        $products = $this->sortProducts($products, $sort);
+        $products = array_slice($products, 0, $limit);
+
         return [
-            'collection' => $this->mapCollection($collection),
+            'collection' => $this->mapCollection(
+                $collection,
+                $this->seasonalDefinitionForHandle($handle)
+            ),
             'products' => $products,
         ];
     }
@@ -181,13 +245,24 @@ class ModernForestryMobileProductCatalogService
      */
     public function home(): array
     {
+        $collections = $this->collections();
+
         return [
+            'brand' => [
+                'wordmark' => 'Modern Forestry',
+                'tagline' => 'Soy candles',
+                'logoUrl' => null,
+            ],
             'hero' => [
                 'eyebrow' => 'Modern Forestry',
                 'title' => 'Hand-poured candles for a slower season.',
                 'subtitle' => 'Small-batch scents, seasonal favorites, and Candle Cash rewards.',
+                'logoUrl' => null,
+                'wordmark' => 'Modern Forestry',
+                'tagline' => 'Soy candles',
+                'slides' => $this->homeHeroSlides(),
             ],
-            'featuredCollections' => array_slice($this->collections(), 0, 3),
+            'featuredCollections' => $collections,
             'featuredProducts' => $this->products(6),
             'cards' => $this->homeCards(),
         ];
@@ -196,6 +271,15 @@ class ModernForestryMobileProductCatalogService
     public function normalizeLimit(int $limit): int
     {
         return max(1, min(self::MAX_LIMIT, $limit));
+    }
+
+    public function normalizeSort(string $sort): string
+    {
+        $normalized = Str::of($sort)->trim()->lower()->replace(' ', '_')->toString();
+
+        return in_array($normalized, self::SUPPORTED_SORTS, true)
+            ? $normalized
+            : self::DEFAULT_SORT;
     }
 
     public function fakeCatalogEnabled(): bool
@@ -239,6 +323,18 @@ class ModernForestryMobileProductCatalogService
         return $store;
     }
 
+    protected function client(): ShopifyGraphqlClient
+    {
+        $tenant = $this->modernForestryTenant();
+        $store = $this->modernForestryRetailStore($tenant);
+
+        return new ShopifyGraphqlClient(
+            (string) $store['shop'],
+            (string) $store['token'],
+            (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
+        );
+    }
+
     protected function productsQuery(): string
     {
         return <<<'GRAPHQL'
@@ -248,6 +344,8 @@ query MobileCatalogProducts($first: Int!) {
       id
       title
       handle
+      publishedAt
+      onlineStoreUrl
       productType
       tags
       status
@@ -258,6 +356,7 @@ query MobileCatalogProducts($first: Int!) {
         nodes {
           price
           compareAtPrice
+          availableForSale
         }
       }
     }
@@ -277,6 +376,8 @@ query MobileCatalogProductDetail($query: String!) {
       handle
       description
       descriptionHtml
+      publishedAt
+      onlineStoreUrl
       productType
       tags
       status
@@ -305,11 +406,30 @@ GRAPHQL;
     {
         return <<<'GRAPHQL'
 query MobileCatalogCollections {
-  collections(first: 20, sortKey: UPDATED_AT, reverse: true) {
+  collections(first: 40, sortKey: UPDATED_AT, reverse: true) {
     nodes {
       handle
       title
       description
+      image {
+        url
+        altText
+      }
+      products(first: 8, sortKey: BEST_SELLING) {
+        nodes {
+          status
+          publishedAt
+          onlineStoreUrl
+          featuredImage {
+            url
+          }
+          variants(first: 1) {
+            nodes {
+              availableForSale
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -319,17 +439,24 @@ GRAPHQL;
     protected function collectionProductsQuery(): string
     {
         return <<<'GRAPHQL'
-query MobileCatalogCollectionProducts($query: String!, $first: Int!) {
+query MobileCatalogCollectionProducts($query: String!, $first: Int!, $sortKey: ProductCollectionSortKeys!, $reverse: Boolean!) {
   collections(first: 1, query: $query) {
     nodes {
       handle
       title
       description
-      products(first: $first, sortKey: BEST_SELLING) {
+      image {
+        url
+        altText
+      }
+      products(first: $first, sortKey: $sortKey, reverse: $reverse) {
         nodes {
           id
           title
           handle
+          createdAt
+          publishedAt
+          onlineStoreUrl
           productType
           tags
           status
@@ -340,6 +467,7 @@ query MobileCatalogCollectionProducts($query: String!, $first: Int!) {
             nodes {
               price
               compareAtPrice
+              availableForSale
             }
           }
         }
@@ -420,6 +548,7 @@ GRAPHQL;
                 'url' => $this->productUrl($product['handle']),
                 'description' => $product['description'],
                 'descriptionHtml' => null,
+                'mobileSummary' => $this->buildMobileSummary($product['description']),
                 'images' => [],
                 'variants' => [
                     [
@@ -436,6 +565,7 @@ GRAPHQL;
                 'productType' => 'Candle',
                 'tags' => $product['tags'],
                 'scentNotes' => $product['scentNotes'],
+                'faq' => [],
             ];
         }
 
@@ -447,23 +577,15 @@ GRAPHQL;
      */
     protected function fakeCollections(): array
     {
-        return [
-            [
-                'handle' => 'winter',
-                'title' => 'Winter Collection',
-                'description' => 'Evergreen, ember, and soft wooded candles for cold nights and slow mornings.',
+        return array_values(array_map(
+            fn (array $definition): array => [
+                'handle' => $definition['handle'],
+                'title' => $definition['title'],
+                'description' => $definition['description'],
+            'imageUrl' => $this->mobileImageUrl($definition['fallback_image'], self::COLLECTION_IMAGE_WIDTH),
             ],
-            [
-                'handle' => 'cozy-home',
-                'title' => 'Cozy Home',
-                'description' => 'Warm, comforting scents for full tables, quiet corners, and everyday rituals.',
-            ],
-            [
-                'handle' => 'bright-and-fresh',
-                'title' => 'Bright + Fresh',
-                'description' => 'Clean citrus, herbs, and gentle woods for a fresh lift.',
-            ],
-        ];
+            self::SEASONAL_COLLECTIONS
+        ));
     }
 
     /**
@@ -499,7 +621,7 @@ GRAPHQL;
     /**
      * @return array{collection:array<string,mixed>,products:array<int,array<string,mixed>>}|null
      */
-    protected function fakeCollectionProducts(string $handle, int $limit): ?array
+    protected function fakeCollectionProducts(string $handle, int $limit, string $sort): ?array
     {
         $collection = collect($this->fakeCollections())
             ->first(fn (array $collection): bool => $collection['handle'] === $handle);
@@ -509,21 +631,29 @@ GRAPHQL;
         }
 
         $handlesByCollection = [
-            'winter' => ['fraser-fir', 'hearthside', 'vanilla-birch'],
-            'cozy-home' => ['oakmoss-amber', 'lavender-woods', 'hearthside', 'vanilla-birch'],
-            'bright-and-fresh' => ['citrus-grove', 'lavender-woods', 'fraser-fir'],
+            'spring' => ['citrus-grove', 'lavender-woods'],
+            'classic' => ['oakmoss-amber', 'vanilla-birch'],
+            'summer' => ['citrus-grove', 'vanilla-birch', 'lavender-woods'],
+            'holiday' => ['fraser-fir', 'hearthside'],
+            'fall' => ['oakmoss-amber', 'hearthside', 'vanilla-birch'],
+            'bundles' => ['fraser-fir', 'oakmoss-amber', 'hearthside', 'citrus-grove', 'vanilla-birch', 'lavender-woods'],
         ];
 
         $wantedHandles = $handlesByCollection[$handle] ?? [];
         $products = [];
+        $catalogByHandle = [];
 
         foreach ($this->fakeBaseProducts() as $index => $product) {
-            if (! in_array($product['handle'], $wantedHandles, true)) {
-                continue;
-            }
-
-            $products[] = $this->fakeProductSummary($product, $index + 1);
+            $catalogByHandle[$product['handle']] = $this->fakeProductSummary($product, $index + 1);
         }
+
+        foreach ($wantedHandles as $wantedHandle) {
+            if (isset($catalogByHandle[$wantedHandle])) {
+                $products[] = $catalogByHandle[$wantedHandle];
+            }
+        }
+
+        $products = $this->sortProducts($products, $sort);
 
         return [
             'collection' => $collection,
@@ -543,6 +673,7 @@ GRAPHQL;
             'handle' => $product['handle'],
             'url' => $this->productUrl($product['handle']),
             'imageUrl' => null,
+            'createdAt' => now()->subDays(max($idNumber - 1, 0))->toIso8601String(),
             'price' => $product['price'],
             'compareAtPrice' => $product['compareAtPrice'],
             'available' => true,
@@ -628,10 +759,11 @@ GRAPHQL;
             'title' => (string) ($node['title'] ?? ''),
             'handle' => $handle,
             'url' => $this->productUrl($handle),
-            'imageUrl' => $this->imageUrl($node),
+            'imageUrl' => $this->imageUrl($node, self::PRODUCT_IMAGE_WIDTH),
+            'createdAt' => $this->nullableString($node['createdAt'] ?? null),
             'price' => $this->moneyString($variant['price'] ?? null),
             'compareAtPrice' => $this->moneyString($variant['compareAtPrice'] ?? null),
-            'available' => strtoupper((string) ($node['status'] ?? 'ACTIVE')) === 'ACTIVE',
+            'available' => $this->productNodeIsCustomerVisible($node),
             'productType' => $this->nullableString($node['productType'] ?? null),
             'tags' => $this->stringList($node['tags'] ?? []),
         ];
@@ -646,22 +778,25 @@ GRAPHQL;
         $summary = $this->mapProduct($node);
         $variants = $this->variantList($node);
         $firstVariant = $variants[0] ?? [];
+        $description = (string) ($node['description'] ?? '');
 
         return [
             'id' => $summary['id'],
             'title' => $summary['title'],
             'handle' => $summary['handle'],
             'url' => $summary['url'],
-            'description' => (string) ($node['description'] ?? ''),
+            'description' => $description,
             'descriptionHtml' => $this->nullableString($node['descriptionHtml'] ?? null),
+            'mobileSummary' => $this->buildMobileSummary($description),
             'images' => $this->imageList($node),
             'variants' => $variants,
             'price' => $this->moneyString($firstVariant['price'] ?? null) ?? $summary['price'],
             'compareAtPrice' => $this->moneyString($firstVariant['compareAtPrice'] ?? null),
-            'available' => strtoupper((string) ($node['status'] ?? 'ACTIVE')) === 'ACTIVE',
+            'available' => $this->productNodeIsCustomerVisible($node),
             'productType' => $summary['productType'],
             'tags' => $summary['tags'],
             'scentNotes' => $this->scentNotes($summary['tags']),
+            'faq' => $this->productFaq($node),
         ];
     }
 
@@ -669,13 +804,201 @@ GRAPHQL;
      * @param  array<string,mixed>  $node
      * @return array<string,mixed>
      */
-    protected function mapCollection(array $node): array
+    protected function mapCollection(array $node, ?array $definition = null): array
+    {
+        $handle = trim((string) ($node['handle'] ?? ''));
+
+        return [
+            'handle' => (string) ($definition['handle'] ?? $handle),
+            'title' => (string) ($definition['title'] ?? ($node['title'] ?? '')),
+            'description' => (string) ($definition['description'] ?? ($node['description'] ?? '')),
+            'imageUrl' => $this->collectionImageUrl($node)
+                ?? $this->mobileImageUrl($definition['fallback_image'] ?? null, self::COLLECTION_IMAGE_WIDTH),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $node
+     */
+    protected function collectionImageUrl(array $node): ?string
+    {
+        $image = $node['image'] ?? null;
+        if (is_array($image)) {
+            $imageUrl = $this->nullableString($image['url'] ?? null);
+            if ($imageUrl !== null) {
+                return $this->mobileImageUrl($imageUrl, self::COLLECTION_IMAGE_WIDTH);
+            }
+        }
+
+        $products = $node['products'] ?? null;
+        $productNodes = is_array($products) ? ($products['nodes'] ?? []) : [];
+        if (! is_array($productNodes) || $productNodes === []) {
+            return null;
+        }
+
+        foreach ($productNodes as $productNode) {
+            if (! is_array($productNode) || ! $this->productNodeIsCustomerVisible($productNode)) {
+                continue;
+            }
+
+            $featuredImage = $productNode['featuredImage'] ?? null;
+            if (! is_array($featuredImage)) {
+                continue;
+            }
+
+            $url = $this->nullableString($featuredImage['url'] ?? null);
+            if ($url !== null) {
+                return $this->mobileImageUrl($url, self::COLLECTION_IMAGE_WIDTH);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function homeHeroSlides(): array
+    {
+        if (! File::exists(self::THEME_INDEX_PATH)) {
+            return $this->fallbackHeroSlides();
+        }
+
+        $payload = json_decode((string) File::get(self::THEME_INDEX_PATH), true);
+        if (! is_array($payload)) {
+            return $this->fallbackHeroSlides();
+        }
+
+        $slideshow = $payload['sections']['slideshow'] ?? null;
+        if (! is_array($slideshow)) {
+            return $this->fallbackHeroSlides();
+        }
+
+        $blocks = is_array($slideshow['blocks'] ?? null) ? $slideshow['blocks'] : [];
+        $order = is_array($slideshow['block_order'] ?? null) ? $slideshow['block_order'] : array_keys($blocks);
+
+        $slides = [];
+
+        foreach ($order as $blockId) {
+            $block = $blocks[$blockId] ?? null;
+            if (! is_array($block)) {
+                continue;
+            }
+
+            $settings = is_array($block['settings'] ?? null) ? $block['settings'] : [];
+            $title = trim((string) ($settings['title'] ?? ''));
+            $imageUrl = $this->themeImageUrl($settings['image'] ?? null);
+
+            if ($title === '' || $imageUrl === null) {
+                continue;
+            }
+
+            $slides[] = [
+                'id' => (string) $blockId,
+                'title' => $title,
+                'subtitle' => $this->nullableString($settings['subheading'] ?? null),
+                'imageUrl' => $this->mobileImageUrl($imageUrl, self::HERO_IMAGE_WIDTH),
+                'mobileImageUrl' => $this->mobileImageUrl($this->themeImageUrl($settings['mobile_image'] ?? null) ?? $imageUrl, self::HERO_IMAGE_WIDTH),
+                'ctaTitle' => $this->nullableString($settings['button_1_text'] ?? null),
+                'ctaUrl' => $this->storefrontUrl($settings['button_1_link'] ?? null),
+                'secondaryCtaTitle' => $this->nullableString($settings['button_2_text'] ?? null),
+                'secondaryCtaUrl' => $this->storefrontUrl($settings['button_2_link'] ?? null),
+            ];
+        }
+
+        return $slides !== [] ? $slides : $this->fallbackHeroSlides();
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function fallbackHeroSlides(): array
     {
         return [
-            'handle' => trim((string) ($node['handle'] ?? '')),
-            'title' => (string) ($node['title'] ?? ''),
-            'description' => (string) ($node['description'] ?? ''),
+            [
+                'id' => 'spring-collection',
+                'title' => 'Shop our Spring Collection',
+                'subtitle' => null,
+                'imageUrl' => $this->mobileImageUrl(self::STOREFRONT_BASE_URL.'/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457', self::HERO_IMAGE_WIDTH),
+                'mobileImageUrl' => $this->mobileImageUrl(self::STOREFRONT_BASE_URL.'/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457', self::HERO_IMAGE_WIDTH),
+                'ctaTitle' => 'Click to Shop',
+                'ctaUrl' => self::STOREFRONT_BASE_URL.'/collections/spring-collection',
+                'secondaryCtaTitle' => null,
+                'secondaryCtaUrl' => null,
+            ],
+            [
+                'id' => 'candle-cash',
+                'title' => 'Earn $5 in Candle Cash',
+                'subtitle' => null,
+                'imageUrl' => $this->mobileImageUrl(self::STOREFRONT_BASE_URL.'/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038', self::HERO_IMAGE_WIDTH),
+                'mobileImageUrl' => $this->mobileImageUrl(self::STOREFRONT_BASE_URL.'/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038', self::HERO_IMAGE_WIDTH),
+                'ctaTitle' => 'Join for $5',
+                'ctaUrl' => self::STOREFRONT_BASE_URL.'/pages/rewards?task=email-signup',
+                'secondaryCtaTitle' => null,
+                'secondaryCtaUrl' => null,
+            ],
+            [
+                'id' => 'candle-club',
+                'title' => 'Candle Club',
+                'subtitle' => null,
+                'imageUrl' => $this->mobileImageUrl(self::STOREFRONT_BASE_URL.'/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113', self::HERO_IMAGE_WIDTH),
+                'mobileImageUrl' => $this->mobileImageUrl(self::STOREFRONT_BASE_URL.'/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113', self::HERO_IMAGE_WIDTH),
+                'ctaTitle' => 'Join to get exclusive scents!',
+                'ctaUrl' => self::STOREFRONT_BASE_URL.'/products/modern-forestry-candle-club-16oz-subscription-with-gifts?selling_plan=11300438275',
+                'secondaryCtaTitle' => null,
+                'secondaryCtaUrl' => null,
+            ],
         ];
+    }
+
+    protected function themeImageUrl(mixed $reference): ?string
+    {
+        $reference = trim((string) $reference);
+        if ($reference === '') {
+            return null;
+        }
+
+        if (Str::startsWith($reference, ['http://', 'https://'])) {
+            return $reference;
+        }
+
+        if (Str::startsWith($reference, 'shopify://shop_images/')) {
+            $filename = rawurlencode(Str::after($reference, 'shopify://shop_images/'));
+
+            return self::STOREFRONT_BASE_URL.'/cdn/shop/files/'.$filename;
+        }
+
+        if (Str::startsWith($reference, '/')) {
+            return self::STOREFRONT_BASE_URL.$reference;
+        }
+
+        return self::STOREFRONT_BASE_URL.'/'.ltrim($reference, '/');
+    }
+
+    protected function storefrontUrl(mixed $reference): ?string
+    {
+        $reference = trim((string) $reference);
+        if ($reference === '') {
+            return null;
+        }
+
+        if (Str::startsWith($reference, ['http://', 'https://'])) {
+            return $reference;
+        }
+
+        if (Str::startsWith($reference, 'shopify://collections/')) {
+            return self::STOREFRONT_BASE_URL.'/collections/'.rawurlencode(Str::after($reference, 'shopify://collections/'));
+        }
+
+        if (Str::startsWith($reference, 'shopify://products/')) {
+            return self::STOREFRONT_BASE_URL.'/products/'.rawurlencode(Str::after($reference, 'shopify://products/'));
+        }
+
+        if (Str::startsWith($reference, '/')) {
+            return self::STOREFRONT_BASE_URL.$reference;
+        }
+
+        return self::STOREFRONT_BASE_URL.'/'.ltrim($reference, '/');
     }
 
     protected function publicId(string $gid): string
@@ -696,16 +1019,120 @@ GRAPHQL;
     }
 
     /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function collectionNodes(ShopifyGraphqlClient $client): array
+    {
+        $data = $client->query($this->collectionsQuery());
+        $nodes = $data['collections']['nodes'] ?? [];
+
+        return is_array($nodes) ? $nodes : [];
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $nodes
+     * @return array<int,array<string,mixed>>
+     */
+    protected function seasonalCollectionsFromNodes(array $nodes): array
+    {
+        $collections = [];
+
+        foreach (self::SEASONAL_COLLECTIONS as $definition) {
+            $match = $this->resolveSeasonalCollectionNode((string) $definition['handle'], $nodes);
+
+            if (is_array($match)) {
+                $collections[] = $this->mapCollection($match, $definition);
+                continue;
+            }
+
+            $collections[] = [
+                'handle' => $definition['handle'],
+                'title' => $definition['title'],
+                'description' => $definition['description'],
+                'imageUrl' => $this->mobileImageUrl($definition['fallback_image'], self::COLLECTION_IMAGE_WIDTH),
+            ];
+        }
+
+        return $collections;
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $nodes
+     * @return array<string,mixed>|null
+     */
+    protected function resolveSeasonalCollectionNode(string $handle, array $nodes): ?array
+    {
+        $definition = $this->seasonalDefinitionForHandle($handle);
+
+        if ($definition === null) {
+            foreach ($nodes as $node) {
+                if (! is_array($node)) {
+                    continue;
+                }
+
+                if (Str::lower(trim((string) ($node['handle'] ?? ''))) === Str::lower($handle)) {
+                    return $node;
+                }
+            }
+
+            return null;
+        }
+
+        $aliases = array_map(
+            static fn (mixed $alias): string => Str::lower(trim((string) $alias)),
+            $definition['aliases'] ?? []
+        );
+
+        foreach ($nodes as $node) {
+            if (! is_array($node)) {
+                continue;
+            }
+
+            $nodeHandle = Str::lower(trim((string) ($node['handle'] ?? '')));
+            $nodeTitle = Str::lower(trim((string) ($node['title'] ?? '')));
+
+            if (in_array($nodeHandle, $aliases, true)
+                || Str::contains($nodeHandle, $aliases)
+                || Str::contains($nodeTitle, Str::lower((string) $definition['title']))) {
+                return $node;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function seasonalDefinitionForHandle(string $handle): ?array
+    {
+        $normalized = Str::lower(trim($handle));
+
+        foreach (self::SEASONAL_COLLECTIONS as $definition) {
+            $aliases = array_map(
+                static fn (mixed $alias): string => Str::lower(trim((string) $alias)),
+                $definition['aliases'] ?? []
+            );
+
+            if ($normalized === Str::lower((string) $definition['handle']) || in_array($normalized, $aliases, true)) {
+                return $definition;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param  array<string,mixed>  $node
      */
-    protected function imageUrl(array $node): ?string
+    protected function imageUrl(array $node, int $width = self::PRODUCT_IMAGE_WIDTH): ?string
     {
         $featuredImage = $node['featuredImage'] ?? null;
         if (! is_array($featuredImage)) {
             return null;
         }
 
-        return $this->nullableString($featuredImage['url'] ?? null);
+        return $this->mobileImageUrl($featuredImage['url'] ?? null, $width);
     }
 
     /**
@@ -724,6 +1151,87 @@ GRAPHQL;
         $variant = $nodes[0] ?? [];
 
         return is_array($variant) ? $variant : [];
+    }
+
+    protected function productNodeIsActive(array $node): bool
+    {
+        return Str::upper((string) ($node['status'] ?? 'ACTIVE')) === 'ACTIVE';
+    }
+
+    /**
+     * Shopify's admin API may expose draft/archived status, publication fields,
+     * and variant sellability depending on the query. Treat present visibility
+     * signals as authoritative while preserving older test payloads that omit them.
+     *
+     * @param  array<string,mixed>  $node
+     */
+    protected function productNodeIsCustomerVisible(array $node): bool
+    {
+        if (! $this->productNodeIsActive($node)) {
+            return false;
+        }
+
+        $hasPublicationSignal = array_key_exists('publishedAt', $node)
+            || array_key_exists('onlineStoreUrl', $node);
+
+        if ($hasPublicationSignal
+            && $this->nullableString($node['publishedAt'] ?? null) === null
+            && $this->nullableString($node['onlineStoreUrl'] ?? null) === null) {
+            return false;
+        }
+
+        $variants = $node['variants'] ?? null;
+        if (! is_array($variants) || ! array_key_exists('nodes', $variants)) {
+            return true;
+        }
+
+        $variantNodes = $variants['nodes'];
+        if (! is_array($variantNodes) || $variantNodes === []) {
+            return false;
+        }
+
+        foreach ($variantNodes as $variantNode) {
+            if (! is_array($variantNode)) {
+                continue;
+            }
+
+            if (! array_key_exists('availableForSale', $variantNode) || (bool) $variantNode['availableForSale']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{sortKey:string,reverse:bool}
+     */
+    protected function collectionSortArguments(string $sort): array
+    {
+        return match ($this->normalizeSort($sort)) {
+            'newest' => ['sortKey' => 'CREATED', 'reverse' => true],
+            'price_low_to_high' => ['sortKey' => 'PRICE', 'reverse' => false],
+            'price_high_to_low' => ['sortKey' => 'PRICE', 'reverse' => true],
+            default => ['sortKey' => 'BEST_SELLING', 'reverse' => false],
+        };
+    }
+
+    protected function mobileImageUrl(mixed $value, int $width): ?string
+    {
+        $url = $this->nullableString($value);
+        if ($url === null) {
+            return null;
+        }
+
+        if (! Str::startsWith($url, ['http://', 'https://'])) {
+            return $url;
+        }
+
+        if (preg_match('/([?&])width=\d+/i', $url) === 1) {
+            return preg_replace('/([?&])width=\d+/i', '$1width='.$width, $url) ?: $url;
+        }
+
+        return $url.(str_contains($url, '?') ? '&' : '?').'width='.$width;
     }
 
     /**
@@ -750,7 +1258,7 @@ GRAPHQL;
             }
 
             return [
-                'url' => $url,
+                'url' => $this->mobileImageUrl($url, self::DETAIL_IMAGE_WIDTH),
                 'altText' => $this->nullableString($image['altText'] ?? null),
             ];
         }, $nodes)));
@@ -782,6 +1290,107 @@ GRAPHQL;
                 'available' => (bool) ($variant['availableForSale'] ?? true),
             ];
         }, $nodes)));
+    }
+
+    protected function buildMobileSummary(string $description): ?string
+    {
+        $text = trim(preg_replace('/\s+/', ' ', strip_tags($description)) ?? '');
+        if ($text === '') {
+            return null;
+        }
+
+        if (mb_strlen($text) <= 160) {
+            return $text;
+        }
+
+        $sentences = preg_split('/(?<=[.!?])\s+/', $text) ?: [];
+        $summary = '';
+
+        foreach ($sentences as $sentence) {
+            $candidate = trim($summary === '' ? $sentence : $summary.' '.$sentence);
+            if ($candidate === '') {
+                continue;
+            }
+
+            if (mb_strlen($candidate) > 170) {
+                break;
+            }
+
+            $summary = $candidate;
+
+            if (mb_strlen($summary) >= 120) {
+                break;
+            }
+        }
+
+        if ($summary !== '') {
+            return $summary;
+        }
+
+        return Str::limit($text, 157, '...');
+    }
+
+    /**
+     * @param  array<string,mixed>  $node
+     * @return array<int,array{question:string,answer:string}>
+     */
+    protected function productFaq(array $node): array
+    {
+        if (! $this->isCandleClubProduct($node)) {
+            return [];
+        }
+
+        return [
+            [
+                'question' => 'What is Candle Club?',
+                'answer' => 'Candle Club is the recurring Modern Forestry subscription with member-only candle access and storefront-linked perks.',
+            ],
+            [
+                'question' => 'How do rewards work with Candle Club?',
+                'answer' => 'Candle Cash and member benefits stay connected to the same live storefront account you use for checkout, rewards, and account access.',
+            ],
+            [
+                'question' => 'Where do I manage my subscription?',
+                'answer' => 'After checkout, use your account experience to review future orders, saved addresses, and subscription changes.',
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $node
+     */
+    protected function isCandleClubProduct(array $node): bool
+    {
+        $title = Str::lower(trim((string) ($node['title'] ?? '')));
+        $handle = Str::lower(trim((string) ($node['handle'] ?? '')));
+        $productType = Str::lower(trim((string) ($node['productType'] ?? '')));
+        $tags = Str::lower(implode(' ', $this->stringList($node['tags'] ?? [])));
+        $haystack = trim($title.' '.$handle.' '.$productType.' '.$tags);
+
+        return Str::contains($haystack, ['candle club', 'subscription']);
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $products
+     * @return array<int,array<string,mixed>>
+     */
+    protected function sortProducts(array $products, string $sort): array
+    {
+        return match ($sort) {
+            'newest' => collect($products)
+                ->sortByDesc(fn (array $product): string => (string) ($product['createdAt'] ?? ''))
+                ->values()
+                ->all(),
+            'price_low_to_high' => collect($products)
+                ->sortBy(fn (array $product): float => (float) ($product['price'] ?? 0))
+                ->values()
+                ->all(),
+            'price_high_to_low' => collect($products)
+                ->sortByDesc(fn (array $product): float => (float) ($product['price'] ?? 0))
+                ->values()
+                ->all(),
+            default => array_values($products),
+        };
     }
 
     protected function moneyString(mixed $value): ?string

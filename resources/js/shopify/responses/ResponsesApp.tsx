@@ -248,7 +248,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
         setMessages([]);
       }
     } catch (error) {
-      const message = error instanceof MessagingApiError ? error.message : "Could not load responses.";
+      const message = error instanceof MessagingApiError ? error.message : "Could not load inbox.";
       setBanner({ tone: "critical", message });
     } finally {
       setLoadingList(false);
@@ -329,7 +329,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
             <InlineStack align="space-between" blockAlign="center">
               <BlockStack gap="100">
                 <Text as="h2" variant="headingLg">
-                  Responses
+                  Inbox
                 </Text>
                 <Text as="p" variant="bodySm" tone="subdued">
                   Lightweight support inbox for Text and Email replies, with opt-out safety built in.

@@ -112,7 +112,7 @@ test('messaging routes expose messaging subnav with expected active tab', functi
 })->with([
     'messaging workspace tab' => ['shopify.app.messaging', 'workspace', 'Messages Workspace'],
     'messaging analytics tab' => ['shopify.app.messaging.analytics', 'analytics', 'Message Analytics'],
-    'messaging responses tab' => ['shopify.app.messaging.responses', 'responses', 'Responses'],
+    'messaging inbox tab' => ['shopify.app.messaging.responses', 'responses', 'Inbox'],
 ]);
 
 test('legacy customers route redirects to all customers', function () {

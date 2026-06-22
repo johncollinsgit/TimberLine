@@ -76,7 +76,7 @@ test('fake mobile catalog response has expected data and meta shape', function (
                 'source',
             ],
         ])
-        ->assertJsonPath('data.0.url', 'https://modernforestry.theforestrystudio.com/products/fraser-fir')
+        ->assertJsonPath('data.0.url', 'https://theforestrystudio.com/products/fraser-fir')
         ->assertJsonPath('data.0.imageUrl', null)
         ->assertJsonPath('data.0.price', '24.00')
         ->assertJsonPath('data.0.compareAtPrice', null)
@@ -111,13 +111,17 @@ test('fake mobile collections list returns testing collections', function (): vo
                     'handle',
                     'title',
                     'description',
+                    'imageUrl',
                 ],
             ],
         ])
-        ->assertJsonPath('collections.0.handle', 'winter')
-        ->assertJsonPath('collections.0.title', 'Winter Collection')
-        ->assertJsonPath('collections.1.handle', 'cozy-home')
-        ->assertJsonPath('collections.2.handle', 'bright-and-fresh');
+        ->assertJsonPath('collections.0.handle', 'spring')
+        ->assertJsonPath('collections.0.title', 'Spring')
+        ->assertJsonPath('collections.1.handle', 'classic')
+        ->assertJsonPath('collections.2.handle', 'summer')
+        ->assertJsonPath('collections.3.handle', 'holiday')
+        ->assertJsonPath('collections.4.handle', 'fall')
+        ->assertJsonPath('collections.5.handle', 'bundles');
 });
 
 test('fake mobile collection products returns products for known handle', function (): void {
@@ -125,17 +129,17 @@ test('fake mobile collection products returns products for known handle', functi
     ShopifyStore::query()->delete();
     Tenant::query()->delete();
 
-    $this->getJson('/api/mobile/v1/modern-forestry/collections/winter/products?limit=2')
+    $this->getJson('/api/mobile/v1/modern-forestry/collections/spring/products?limit=2')
         ->assertOk()
-        ->assertJsonPath('collection.handle', 'winter')
-        ->assertJsonPath('collection.title', 'Winter Collection')
-        ->assertJsonPath('products.0.title', 'Fraser Fir')
-        ->assertJsonPath('products.0.handle', 'fraser-fir')
-        ->assertJsonPath('products.0.url', 'https://modernforestry.theforestrystudio.com/products/fraser-fir')
+        ->assertJsonPath('collection.handle', 'spring')
+        ->assertJsonPath('collection.title', 'Spring')
+        ->assertJsonPath('products.0.title', 'Citrus Grove')
+        ->assertJsonPath('products.0.handle', 'citrus-grove')
+        ->assertJsonPath('products.0.url', 'https://theforestrystudio.com/products/citrus-grove')
         ->assertJsonPath('products.0.imageUrl', null)
         ->assertJsonPath('products.0.price', '24.00')
         ->assertJsonPath('products.0.available', true)
-        ->assertJsonPath('products.1.title', 'Hearthside')
+        ->assertJsonPath('products.1.title', 'Lavender Woods')
         ->assertJsonCount(2, 'products');
 });
 
@@ -159,10 +163,31 @@ test('fake mobile home endpoint returns hero featured content and cards', functi
     $this->getJson('/api/mobile/v1/modern-forestry/home')
         ->assertOk()
         ->assertJsonStructure([
+            'brand' => [
+                'wordmark',
+                'tagline',
+                'logoUrl',
+            ],
             'hero' => [
                 'eyebrow',
                 'title',
                 'subtitle',
+                'logoUrl',
+                'wordmark',
+                'tagline',
+                'slides' => [
+                    '*' => [
+                        'id',
+                        'title',
+                        'subtitle',
+                        'imageUrl',
+                        'mobileImageUrl',
+                        'ctaTitle',
+                        'ctaUrl',
+                        'secondaryCtaTitle',
+                        'secondaryCtaUrl',
+                    ],
+                ],
             ],
             'featuredCollections' => [
                 '*' => [
@@ -195,12 +220,14 @@ test('fake mobile home endpoint returns hero featured content and cards', functi
                 ],
             ],
         ])
+        ->assertJsonPath('brand.wordmark', 'Modern Forestry')
         ->assertJsonPath('hero.eyebrow', 'Modern Forestry')
         ->assertJsonPath('hero.title', 'Hand-poured candles for a slower season.')
-        ->assertJsonPath('featuredCollections.0.handle', 'winter')
+        ->assertJsonPath('hero.slides.0.title', 'Shop our Spring Collection')
+        ->assertJsonPath('featuredCollections.0.handle', 'spring')
         ->assertJsonPath('featuredProducts.0.handle', 'fraser-fir')
         ->assertJsonPath('cards.0.kind', 'candle_cash')
-        ->assertJsonPath('cards.0.url', 'https://modernforestry.theforestrystudio.com/pages/rewards');
+        ->assertJsonPath('cards.0.url', 'https://theforestrystudio.com/pages/rewards');
 });
 
 test('fake mobile home response references valid known collection and product handles', function (): void {
@@ -212,7 +239,7 @@ test('fake mobile home response references valid known collection and product ha
         ->assertOk()
         ->json();
 
-    $knownCollectionHandles = ['winter', 'cozy-home', 'bright-and-fresh'];
+    $knownCollectionHandles = ['spring', 'classic', 'summer', 'holiday', 'fall', 'bundles'];
     $knownProductHandles = ['fraser-fir', 'oakmoss-amber', 'lavender-woods', 'hearthside', 'citrus-grove', 'vanilla-birch'];
 
     foreach ($payload['featuredCollections'] as $collection) {
@@ -222,6 +249,20 @@ test('fake mobile home response references valid known collection and product ha
     foreach ($payload['featuredProducts'] as $product) {
         expect($product['handle'])->toBeIn($knownProductHandles);
     }
+});
+
+test('mobile session status reports signed out by default and can honor a session hint', function (): void {
+    $this->getJson('/api/mobile/v1/modern-forestry/session-status')
+        ->assertOk()
+        ->assertJsonPath('authenticated', false)
+        ->assertJsonPath('state', 'signed_out')
+        ->assertJsonPath('sessionHint', false);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/session-status?session_hint=1')
+        ->assertOk()
+        ->assertJsonPath('authenticated', true)
+        ->assertJsonPath('state', 'authenticated')
+        ->assertJsonPath('sessionHint', true);
 });
 
 test('fake mobile product detail returns 200 for a known handle', function (): void {
@@ -235,8 +276,9 @@ test('fake mobile product detail returns 200 for a known handle', function (): v
         ->assertJsonPath('meta.source', 'fake')
         ->assertJsonPath('data.title', 'Fraser Fir')
         ->assertJsonPath('data.handle', 'fraser-fir')
-        ->assertJsonPath('data.url', 'https://modernforestry.theforestrystudio.com/products/fraser-fir')
+        ->assertJsonPath('data.url', 'https://theforestrystudio.com/products/fraser-fir')
         ->assertJsonPath('data.description', 'A crisp evergreen candle with fresh-cut fir, cool winter air, and a soft wooded finish.')
+        ->assertJsonPath('data.mobileSummary', 'A crisp evergreen candle with fresh-cut fir, cool winter air, and a soft wooded finish.')
         ->assertJsonPath('data.price', '24.00')
         ->assertJsonPath('data.available', true)
         ->assertJsonPath('data.scentNotes.0', 'Fraser fir');
@@ -257,6 +299,7 @@ test('fake mobile product detail response has expected shape', function (): void
                 'url',
                 'description',
                 'descriptionHtml',
+                'mobileSummary',
                 'images' => [
                     '*' => [
                         'url',
@@ -278,6 +321,7 @@ test('fake mobile product detail response has expected shape', function (): void
                 'productType',
                 'tags',
                 'scentNotes',
+                'faq',
             ],
             'meta' => [
                 'tenant',
@@ -387,6 +431,139 @@ test('real mobile collections fail closed safely when tenant or store config is 
         ->assertJsonPath('error.message', 'Modern Forestry collections are temporarily unavailable.');
 });
 
+test('real mobile collections use a collection or hero product image when available', function (): void {
+    config()->set('mobile_catalog.fake_enabled', false);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileCollectionsPayload(), 200),
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/collections')
+        ->assertOk()
+        ->assertJsonCount(6, 'collections')
+        ->assertJsonPath('collections.0.handle', 'spring')
+        ->assertJsonPath('collections.0.title', 'Spring')
+        ->assertJsonPath('collections.0.imageUrl', 'https://cdn.shopify.com/s/files/spring-hero.png?width=900')
+        ->assertJsonPath('collections.1.handle', 'classic')
+        ->assertJsonPath('collections.1.imageUrl', 'https://cdn.shopify.com/s/files/classic-collection.png?width=900');
+});
+
+test('real mobile home always returns canonical seasonal collections with image urls', function (): void {
+    config()->set('mobile_catalog.fake_enabled', false);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => function (Request $request) {
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
+
+            if (str_contains($query, 'query MobileCatalogCollections')) {
+                return Http::response([
+                    'data' => [
+                        'collections' => [
+                            'nodes' => [
+                                [
+                                    'handle' => 'holiday-collection',
+                                    'title' => 'Holiday Collection',
+                                    'description' => 'Winter gifts.',
+                                    'image' => null,
+                                    'products' => ['nodes' => []],
+                                ],
+                            ],
+                        ],
+                    ],
+                ], 200);
+            }
+
+            if (str_contains($query, 'query MobileCatalogProducts')) {
+                return Http::response(shopifyMobileCatalogPayload(), 200);
+            }
+
+            return Http::response([], 404);
+        },
+    ]);
+
+    $payload = $this->getJson('/api/mobile/v1/modern-forestry/home')
+        ->assertOk()
+        ->assertJsonCount(6, 'featuredCollections')
+        ->json();
+
+    expect(collect($payload['featuredCollections'])->pluck('handle')->all())
+        ->toBe(['spring', 'classic', 'summer', 'holiday', 'fall', 'bundles']);
+
+    foreach ($payload['featuredCollections'] as $collection) {
+        expect($collection['imageUrl'] ?? null)->toBeString()->not->toBe('');
+    }
+});
+
+test('real mobile collection products return only active products and support sorting', function (): void {
+    config()->set('mobile_catalog.fake_enabled', false);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => function (Request $request) {
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
+            $variables = $body['variables'] ?? [];
+
+            if (str_contains($query, 'query MobileCatalogCollections')) {
+                return Http::response(shopifyMobileCollectionsPayload(), 200);
+            }
+
+            if (str_contains($query, 'query MobileCatalogCollectionProducts')) {
+                expect($variables['query'] ?? null)->toBe('handle:fall-collection');
+                expect($variables['sortKey'] ?? null)->toBe('PRICE');
+                expect($variables['reverse'] ?? null)->toBeFalse();
+
+                return Http::response(shopifyMobileCollectionProductsPayload(), 200);
+            }
+
+            return Http::response([], 404);
+        },
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/collections/fall/products?sort=price_low_to_high')
+        ->assertOk()
+        ->assertJsonPath('collection.handle', 'fall')
+        ->assertJsonPath('products.0.handle', 'apple-harvest')
+        ->assertJsonPath('products.0.price', '18.00')
+        ->assertJsonPath('products.1.handle', 'forest-ember-candle')
+        ->assertJsonPath('products.2.handle', 'spiced-cider')
+        ->assertJsonCount(3, 'products');
+});
+
+test('real mobile collection product sorting maps to shopify sort variables', function (string $sort, string $sortKey, bool $reverse): void {
+    config()->set('mobile_catalog.fake_enabled', false);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => function (Request $request) use ($sortKey, $reverse) {
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
+            $variables = $body['variables'] ?? [];
+
+            if (str_contains($query, 'query MobileCatalogCollections')) {
+                return Http::response(shopifyMobileCollectionsPayload(), 200);
+            }
+
+            if (str_contains($query, 'query MobileCatalogCollectionProducts')) {
+                expect($variables['sortKey'] ?? null)->toBe($sortKey);
+                expect($variables['reverse'] ?? null)->toBe($reverse);
+
+                return Http::response(shopifyMobileCollectionProductsPayload(), 200);
+            }
+
+            return Http::response([], 404);
+        },
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/collections/fall/products?sort='.$sort)
+        ->assertOk()
+        ->assertJsonPath('collection.handle', 'fall');
+})->with([
+    'best selling' => ['best_selling', 'BEST_SELLING', false],
+    'newest' => ['newest', 'CREATED', true],
+    'price low to high' => ['price_low_to_high', 'PRICE', false],
+    'price high to low' => ['price_high_to_low', 'PRICE', true],
+]);
+
 test('real mobile collection products fail closed safely when tenant or store config is invalid', function (): void {
     config()->set('mobile_catalog.fake_enabled', false);
     ShopifyStore::query()->delete();
@@ -441,8 +618,8 @@ test('mobile catalog endpoint returns 200 with public product data', function ()
         ->assertJsonPath('data.0.id', '111')
         ->assertJsonPath('data.0.title', 'Forest Ember Candle')
         ->assertJsonPath('data.0.handle', 'forest-ember-candle')
-        ->assertJsonPath('data.0.url', 'https://modernforestry.theforestrystudio.com/products/forest-ember-candle')
-        ->assertJsonPath('data.0.imageUrl', 'https://cdn.shopify.com/s/files/forest-ember.png')
+        ->assertJsonPath('data.0.url', 'https://theforestrystudio.com/products/forest-ember-candle')
+        ->assertJsonPath('data.0.imageUrl', 'https://cdn.shopify.com/s/files/forest-ember.png?width=640')
         ->assertJsonPath('data.0.price', '24.00')
         ->assertJsonPath('data.0.compareAtPrice', null)
         ->assertJsonPath('data.0.available', true)
@@ -510,10 +687,11 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.id', '111')
         ->assertJsonPath('data.title', 'Forest Ember Candle')
         ->assertJsonPath('data.handle', 'forest-ember-candle')
-        ->assertJsonPath('data.url', 'https://modernforestry.theforestrystudio.com/products/forest-ember-candle')
+        ->assertJsonPath('data.url', 'https://theforestrystudio.com/products/forest-ember-candle')
         ->assertJsonPath('data.description', 'Warm amber, cedar, and a soft smoky finish.')
         ->assertJsonPath('data.descriptionHtml', '<p>Warm amber, cedar, and a soft smoky finish.</p>')
-        ->assertJsonPath('data.images.0.url', 'https://cdn.shopify.com/s/files/forest-ember-detail.png')
+        ->assertJsonPath('data.mobileSummary', 'Warm amber, cedar, and a soft smoky finish.')
+        ->assertJsonPath('data.images.0.url', 'https://cdn.shopify.com/s/files/forest-ember-detail.png?width=1200')
         ->assertJsonPath('data.images.0.altText', 'Forest Ember candle jar')
         ->assertJsonPath('data.variants.0.id', '9001')
         ->assertJsonPath('data.variants.0.title', '8 oz candle')
@@ -525,7 +703,20 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.available', true)
         ->assertJsonPath('data.productType', 'Candle')
         ->assertJsonPath('data.tags.0', 'amber')
-        ->assertJsonPath('data.scentNotes.0', 'amber');
+        ->assertJsonPath('data.scentNotes.0', 'amber')
+        ->assertJsonPath('data.faq', []);
+});
+
+test('mobile product detail includes candle club faq for subscription products', function (): void {
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileCandleClubProductDetailPayload(), 200),
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/products/modern-forestry-candle-club-16oz-subscription-with-gifts')
+        ->assertOk()
+        ->assertJsonPath('data.handle', 'modern-forestry-candle-club-16oz-subscription-with-gifts')
+        ->assertJsonPath('data.faq.0.question', 'What is Candle Club?')
+        ->assertJsonPath('data.faq.1.question', 'How do rewards work with Candle Club?');
 });
 
 test('mobile product detail endpoint returns 404 when shopify has no matching product', function (): void {
@@ -862,6 +1053,253 @@ function shopifyMobileCatalogPayload(int $productCount = 2): array
 /**
  * @return array<string,mixed>
  */
+function shopifyMobileCollectionsPayload(): array
+{
+    return [
+        'data' => [
+            'collections' => [
+                'nodes' => [
+                    [
+                        'handle' => 'spring-collection',
+                        'title' => 'Spring Collection',
+                        'description' => 'Fresh florals and brighter daylight scents.',
+                        'image' => null,
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/spring-hero.png',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'handle' => 'classic-collection-1',
+                        'title' => 'Classic Collection',
+                        'description' => 'The year-round scents people keep coming back for.',
+                        'image' => [
+                            'url' => 'https://cdn.shopify.com/s/files/classic-collection.png',
+                        ],
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/classic-hero.png',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'handle' => 'summer-collection',
+                        'title' => 'Summer Collection',
+                        'description' => 'Sunlit favorites.',
+                        'image' => [
+                            'url' => 'https://cdn.shopify.com/s/files/summer-collection.png',
+                        ],
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/summer-hero.png',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'handle' => 'holiday-collection',
+                        'title' => 'Holiday Collection',
+                        'description' => 'Winter gifts and gatherings.',
+                        'image' => null,
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/holiday-hero.png',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'handle' => 'fall-collection',
+                        'title' => 'Fall Collection',
+                        'description' => 'Warm spice and woods.',
+                        'image' => null,
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/fall-hero.png',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'handle' => 'bundle-collection',
+                        'title' => 'Bundle Collection',
+                        'description' => 'Giftable sets.',
+                        'image' => null,
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/bundles-hero.png',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ];
+}
+
+/**
+ * @return array<string,mixed>
+ */
+function shopifyMobileCollectionProductsPayload(): array
+{
+    return [
+        'data' => [
+            'collections' => [
+                'nodes' => [
+                    [
+                        'handle' => 'fall-collection',
+                        'title' => 'Fall Collection',
+                        'description' => 'Warm spice and woods.',
+                        'image' => null,
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'id' => 'gid://shopify/Product/111',
+                                    'title' => 'Forest Ember Candle',
+                                    'handle' => 'forest-ember-candle',
+                                    'createdAt' => '2026-06-15T12:00:00Z',
+                                    'productType' => 'Candle',
+                                    'tags' => ['amber', 'cedar'],
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/forest-ember.png',
+                                    ],
+                                    'variants' => [
+                                        'nodes' => [
+                                            [
+                                                'price' => '24.00',
+                                                'compareAtPrice' => null,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'id' => 'gid://shopify/Product/222',
+                                    'title' => 'Draft Candle',
+                                    'handle' => 'draft-candle',
+                                    'createdAt' => '2026-06-18T12:00:00Z',
+                                    'productType' => 'Candle',
+                                    'tags' => ['draft'],
+                                    'status' => 'DRAFT',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/draft-candle.png',
+                                    ],
+                                    'variants' => [
+                                        'nodes' => [
+                                            [
+                                                'price' => '12.00',
+                                                'compareAtPrice' => null,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'id' => 'gid://shopify/Product/333',
+                                    'title' => 'Apple Harvest',
+                                    'handle' => 'apple-harvest',
+                                    'createdAt' => '2026-06-20T12:00:00Z',
+                                    'publishedAt' => '2026-06-20T12:00:00Z',
+                                    'onlineStoreUrl' => 'https://example.myshopify.com/products/apple-harvest',
+                                    'productType' => 'Candle',
+                                    'tags' => ['apple'],
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/apple-harvest.png',
+                                    ],
+                                    'variants' => [
+                                        'nodes' => [
+                                            [
+                                                'price' => '18.00',
+                                                'compareAtPrice' => null,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'id' => 'gid://shopify/Product/555',
+                                    'title' => 'Hidden Active Candle',
+                                    'handle' => 'hidden-active-candle',
+                                    'createdAt' => '2026-06-22T12:00:00Z',
+                                    'publishedAt' => null,
+                                    'onlineStoreUrl' => null,
+                                    'productType' => 'Candle',
+                                    'tags' => ['hidden'],
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/hidden-active-candle.png',
+                                    ],
+                                    'variants' => [
+                                        'nodes' => [
+                                            [
+                                                'price' => '10.00',
+                                                'compareAtPrice' => null,
+                                                'availableForSale' => true,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                                [
+                                    'id' => 'gid://shopify/Product/444',
+                                    'title' => 'Spiced Cider',
+                                    'handle' => 'spiced-cider',
+                                    'createdAt' => '2026-06-10T12:00:00Z',
+                                    'publishedAt' => '2026-06-10T12:00:00Z',
+                                    'onlineStoreUrl' => 'https://example.myshopify.com/products/spiced-cider',
+                                    'productType' => 'Candle',
+                                    'tags' => ['cider'],
+                                    'status' => 'ACTIVE',
+                                    'featuredImage' => [
+                                        'url' => 'https://cdn.shopify.com/s/files/spiced-cider.png',
+                                    ],
+                                    'variants' => [
+                                        'nodes' => [
+                                            [
+                                                'price' => '29.00',
+                                                'compareAtPrice' => '34.00',
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ];
+}
+
+/**
+ * @return array<string,mixed>
+ */
 function shopifyMobileProductDetailPayload(): array
 {
     return [
@@ -902,6 +1340,50 @@ function shopifyMobileProductDetailPayload(): array
                                     'price' => '32.00',
                                     'compareAtPrice' => '36.00',
                                     'availableForSale' => false,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ];
+}
+
+/**
+ * @return array<string,mixed>
+ */
+function shopifyMobileCandleClubProductDetailPayload(): array
+{
+    return [
+        'data' => [
+            'products' => [
+                'nodes' => [
+                    [
+                        'id' => 'gid://shopify/Product/999',
+                        'title' => 'Modern Forestry Candle Club 16oz Subscription with Gifts',
+                        'handle' => 'modern-forestry-candle-club-16oz-subscription-with-gifts',
+                        'description' => 'A recurring Candle Club subscription with member-only access and seasonal extras.',
+                        'descriptionHtml' => '<p>A recurring Candle Club subscription with member-only access and seasonal extras.</p>',
+                        'productType' => 'Subscription',
+                        'tags' => ['candle club', 'subscription'],
+                        'status' => 'ACTIVE',
+                        'images' => [
+                            'nodes' => [
+                                [
+                                    'url' => 'https://cdn.shopify.com/s/files/candle-club.png',
+                                    'altText' => 'Candle Club product',
+                                ],
+                            ],
+                        ],
+                        'variants' => [
+                            'nodes' => [
+                                [
+                                    'id' => 'gid://shopify/ProductVariant/9901',
+                                    'title' => 'Default Title',
+                                    'price' => '30.00',
+                                    'compareAtPrice' => null,
+                                    'availableForSale' => true,
                                 ],
                             ],
                         ],

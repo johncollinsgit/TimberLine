@@ -182,7 +182,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'storeLabel' => $authorized
                     ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
                     : 'Shopify Admin',
-                'headline' => $this->headlineForStatus($status, 'Responses'),
+                'headline' => $this->headlineForStatus($status, 'Inbox'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Review inbound SMS and email replies in one Everbranch inbox.'),
                 'appNavigation' => $appNavigation,
                 'pageSubnav' => $pageSubnav,
@@ -197,7 +197,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                         ? 'This Shopify store is not mapped to a tenant yet.'
                         : ($hasMessagingAccess
                             ? null
-                            : 'Messaging is not enabled for this tenant. Enable the Messaging module to use Responses.'),
+                            : 'Messaging is not enabled for this tenant. Enable the Messaging module to use the inbox.'),
                 ],
                 'messagingResponsesBootstrap' => [
                     'authorized' => $authorized,
@@ -1526,7 +1526,7 @@ class ShopifyEmbeddedMessagingController extends Controller
     {
         $surfaceLabel = match ($surface) {
             'workspace' => 'this workspace',
-            'responses' => 'Responses',
+            'responses' => 'Inbox',
             'setup' => 'Setup',
             default => 'message analytics',
         };
