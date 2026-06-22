@@ -20,6 +20,11 @@ Important boundary:
 - This repo provides the mobile catalog and helper session contract, but it still does not own the native app UI itself.
 - The iOS app continues to use Shopify/storefront web session behavior for actual sign-in persistence on device.
 
+## Modern Forestry Mobile Catalog Recovery Follow-up (2026-06-22)
+
+- Home featured products now page through Shopify's best-selling catalog, with a wider active window so the six-card shelf still fills after filtering hidden or inactive products.
+- Product-detail lookups now fall back to a paginated active-catalog search when the first handle lookup misses, which keeps stale product links from dead-ending the mobile detail screen.
+
 ## Candle Cash Combination Rules Update (2026-04-22)
 
 This update enables Shopify discount combinations for Candle Cash using Shopify `combinesWith` on the single Candle Cash discount code.
@@ -1216,6 +1221,10 @@ Mobile catalog local/testing mode:
 - Collection hero imagery is resolved server-side from the collection image first, then the best-selling product image when Shopify does not provide collection artwork.
 - Keep the iOS app dumb about art selection so future catalog tweaks stay in the Laravel source of truth.
 - The mobile catalog now exists to support collection-first browsing, gentler shop cards, and safer phone-facing imagery without reintroducing a second catalog source.
+- Home featured products now use actual Modern Forestry order-line purchase history first, not a stale updated-at slice or Shopify-only sort; Shopify best-selling only fills gaps after inactive/unavailable products are filtered.
+- Mobile product summary payloads include `variantId` when an available Shopify variant exists, so native cards can become purchaseable without a second product lookup.
+- Mobile checkout supports guest checkout and attaches `customerAccessToken` only when the native app has a validated Customer Account session.
+- Customer Account OAuth code exchange is handled by Laravel at `/api/mobile/v1/modern-forestry/auth/token`; production must configure `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`, optional `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`, `SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT`, and `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT`.
 
 Recent mobile catalog pass notes:
 - Collection payloads now request collection media plus best-selling product imagery so the phone app can show stronger shelf art.

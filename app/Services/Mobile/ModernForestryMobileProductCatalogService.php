@@ -2,10 +2,13 @@
 
 namespace App\Services\Mobile;
 
+use App\Models\OrderLine;
 use App\Models\Tenant;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -102,22 +105,78 @@ class ModernForestryMobileProductCatalogService
 
         $client = $this->client();
 
-        $data = $client->query($this->productsQuery(), [
-            'first' => $limit,
-        ]);
+        $products = [];
+        $after = null;
 
-        $nodes = $data['products']['nodes'] ?? [];
-        if (! is_array($nodes)) {
-            return [];
-        }
+        do {
+            $variables = [
+                'first' => self::MAX_LIMIT,
+            ];
 
-        $products = array_values(array_filter(array_map(function (mixed $node): ?array {
-            if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
-                return null;
+            if ($after !== null) {
+                $variables['after'] = $after;
             }
 
-            return $this->mapProduct($node);
-        }, $nodes)));
+            $data = $client->query($this->productsQuery(), $variables);
+
+            $connection = $data['products'] ?? [];
+            $nodes = is_array($connection) ? ($connection['nodes'] ?? []) : [];
+            if (is_array($nodes)) {
+                foreach ($nodes as $node) {
+                    if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
+                        continue;
+                    }
+
+                    $products[] = $this->mapProduct($node);
+
+                    if (count($products) >= $limit) {
+                        break 2;
+                    }
+                }
+            }
+
+            $pageInfo = is_array($connection) ? ($connection['pageInfo'] ?? []) : [];
+            $after = $this->nullableString($pageInfo['endCursor'] ?? null);
+            $hasNextPage = (bool) ($pageInfo['hasNextPage'] ?? false);
+        } while ($hasNextPage && count($products) < $limit && $after !== null);
+
+        return array_slice($products, 0, $limit);
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    public function featuredProducts(int $limit = 6): array
+    {
+        $limit = $this->normalizeLimit($limit);
+
+        if ($this->fakeCatalogEnabled()) {
+            return $this->fakeProducts($limit);
+        }
+
+        $products = $this->topPurchasedProducts($limit);
+        $seen = array_fill_keys(array_map(
+            static fn (array $product): string => (string) ($product['id'] ?? ''),
+            $products
+        ), true);
+
+        if (count($products) < $limit) {
+            foreach ($this->products($limit) as $fallback) {
+                $id = (string) ($fallback['id'] ?? '');
+                if ($id !== '' && isset($seen[$id])) {
+                    continue;
+                }
+
+                $products[] = $fallback;
+                if ($id !== '') {
+                    $seen[$id] = true;
+                }
+
+                if (count($products) >= $limit) {
+                    break;
+                }
+            }
+        }
 
         return array_slice($products, 0, $limit);
     }
@@ -145,13 +204,13 @@ class ModernForestryMobileProductCatalogService
 
         $nodes = $data['products']['nodes'] ?? [];
         if (! is_array($nodes) || $nodes === []) {
-            return null;
+            return $this->fallbackProductDetail($client, $handle);
         }
 
         $node = $nodes[0] ?? [];
 
         if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
-            return null;
+            return $this->fallbackProductDetail($client, $handle);
         }
 
         return $this->mapProductDetail($node);
@@ -196,14 +255,25 @@ class ModernForestryMobileProductCatalogService
 
         $sortArguments = $this->collectionSortArguments($sort);
 
-        $data = $client->query($this->collectionProductsQuery(), [
-            'query' => 'handle:'.$targetHandle,
-            'first' => min(max($limit * 4, 24), 100),
-            'sortKey' => $sortArguments['sortKey'],
-            'reverse' => $sortArguments['reverse'],
-        ]);
+        $data = null;
+        $queriedHandle = $targetHandle;
 
-        $nodes = $data['collections']['nodes'] ?? [];
+        foreach ($this->collectionHandleCandidates($handle, $targetHandle) as $candidateHandle) {
+            $data = $client->query($this->collectionProductsQuery(), [
+                'query' => 'handle:'.$candidateHandle,
+                'first' => min(max($limit * 4, 24), 100),
+                'sortKey' => $sortArguments['sortKey'],
+                'reverse' => $sortArguments['reverse'],
+            ]);
+
+            $nodes = $data['collections']['nodes'] ?? [];
+            if (is_array($nodes) && $nodes !== []) {
+                $queriedHandle = $candidateHandle;
+                break;
+            }
+        }
+
+        $nodes = is_array($data) ? ($data['collections']['nodes'] ?? []) : [];
         if (! is_array($nodes) || $nodes === []) {
             return null;
         }
@@ -234,7 +304,7 @@ class ModernForestryMobileProductCatalogService
         return [
             'collection' => $this->mapCollection(
                 $collection,
-                $this->seasonalDefinitionForHandle($handle)
+                $this->seasonalDefinitionForHandle($handle) ?? $this->seasonalDefinitionForHandle($queriedHandle)
             ),
             'products' => $products,
         ];
@@ -263,7 +333,7 @@ class ModernForestryMobileProductCatalogService
                 'slides' => $this->homeHeroSlides(),
             ],
             'featuredCollections' => $collections,
-            'featuredProducts' => $this->products(6),
+            'featuredProducts' => $this->featuredProducts(6),
             'cards' => $this->homeCards(),
         ];
     }
@@ -338,8 +408,8 @@ class ModernForestryMobileProductCatalogService
     protected function productsQuery(): string
     {
         return <<<'GRAPHQL'
-query MobileCatalogProducts($first: Int!) {
-  products(first: $first, sortKey: UPDATED_AT, reverse: true, query: "status:active") {
+query MobileCatalogProducts($first: Int!, $after: String) {
+  products(first: $first, after: $after, sortKey: BEST_SELLING, reverse: false, query: "status:active") {
     nodes {
       id
       title
@@ -352,13 +422,59 @@ query MobileCatalogProducts($first: Int!) {
       featuredImage {
         url
       }
-      variants(first: 1) {
+      variants(first: 10) {
         nodes {
+          id
           price
           compareAtPrice
           availableForSale
         }
       }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+GRAPHQL;
+    }
+
+    protected function productDetailFallbackQuery(): string
+    {
+        return <<<'GRAPHQL'
+query MobileCatalogActiveProductDetails($first: Int!, $after: String) {
+  products(first: $first, after: $after, sortKey: BEST_SELLING, reverse: false, query: "status:active") {
+    nodes {
+      id
+      title
+      handle
+      description
+      descriptionHtml
+      publishedAt
+      onlineStoreUrl
+      productType
+      tags
+      status
+      images(first: 8) {
+        nodes {
+          url
+          altText
+        }
+      }
+      variants(first: 20) {
+        nodes {
+          id
+          title
+          price
+          compareAtPrice
+          availableForSale
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
     }
   }
 }
@@ -423,8 +539,9 @@ query MobileCatalogCollections {
           featuredImage {
             url
           }
-          variants(first: 1) {
+          variants(first: 10) {
             nodes {
+              id
               availableForSale
             }
           }
@@ -463,8 +580,9 @@ query MobileCatalogCollectionProducts($query: String!, $first: Int!, $sortKey: P
           featuredImage {
             url
           }
-          variants(first: 1) {
+          variants(first: 10) {
             nodes {
+              id
               price
               compareAtPrice
               availableForSale
@@ -677,6 +795,7 @@ GRAPHQL;
             'price' => $product['price'],
             'compareAtPrice' => $product['compareAtPrice'],
             'available' => true,
+            'variantId' => 'fake-modern-forestry-variant-'.str_pad((string) $idNumber, 3, '0', STR_PAD_LEFT),
             'productType' => 'Candle',
             'tags' => $product['tags'],
         ];
@@ -753,6 +872,7 @@ GRAPHQL;
     {
         $handle = trim((string) ($node['handle'] ?? ''));
         $variant = $this->firstVariant($node);
+        $variantId = $this->publicId((string) ($variant['id'] ?? ''));
 
         return [
             'id' => $this->publicId((string) ($node['id'] ?? '')),
@@ -764,6 +884,7 @@ GRAPHQL;
             'price' => $this->moneyString($variant['price'] ?? null),
             'compareAtPrice' => $this->moneyString($variant['compareAtPrice'] ?? null),
             'available' => $this->productNodeIsCustomerVisible($node),
+            'variantId' => $variantId !== '' ? $variantId : null,
             'productType' => $this->nullableString($node['productType'] ?? null),
             'tags' => $this->stringList($node['tags'] ?? []),
         ];
@@ -798,6 +919,53 @@ GRAPHQL;
             'scentNotes' => $this->scentNotes($summary['tags']),
             'faq' => $this->productFaq($node),
         ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function fallbackProductDetail(ShopifyGraphqlClient $client, string $handle): ?array
+    {
+        $after = null;
+
+        do {
+            $variables = [
+                'first' => self::MAX_LIMIT,
+            ];
+
+            if ($after !== null) {
+                $variables['after'] = $after;
+            }
+
+            $data = $client->query($this->productDetailFallbackQuery(), $variables);
+
+            $connection = $data['products'] ?? [];
+            $nodes = is_array($connection) ? ($connection['nodes'] ?? []) : [];
+
+            if (is_array($nodes)) {
+                foreach ($nodes as $node) {
+                    if (! is_array($node)) {
+                        continue;
+                    }
+
+                    if (Str::lower(trim((string) ($node['handle'] ?? ''))) !== $handle) {
+                        continue;
+                    }
+
+                    if (! $this->productNodeIsCustomerVisible($node)) {
+                        continue;
+                    }
+
+                    return $this->mapProductDetail($node);
+                }
+            }
+
+            $pageInfo = is_array($connection) ? ($connection['pageInfo'] ?? []) : [];
+            $after = $this->nullableString($pageInfo['endCursor'] ?? null);
+            $hasNextPage = (bool) ($pageInfo['hasNextPage'] ?? false);
+        } while ($hasNextPage && $after !== null);
+
+        return null;
     }
 
     /**
@@ -1021,6 +1189,176 @@ GRAPHQL;
     /**
      * @return array<int,array<string,mixed>>
      */
+    protected function topPurchasedProducts(int $limit): array
+    {
+        $tenant = $this->modernForestryTenant();
+        $ids = $this->topPurchasedProductIds($tenant, min(max($limit * 4, 24), 50));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $nodes = $this->productNodesByIds($this->client(), $ids);
+        $products = [];
+
+        foreach ($ids as $id) {
+            $node = $nodes[$id] ?? null;
+            if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
+                continue;
+            }
+
+            $products[] = $this->mapProduct($node);
+
+            if (count($products) >= $limit) {
+                break;
+            }
+        }
+
+        return $products;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function topPurchasedProductIds(Tenant $tenant, int $limit): array
+    {
+        if (! Schema::hasTable('order_lines') || ! Schema::hasTable('orders')) {
+            return [];
+        }
+
+        $quantitySql = Schema::hasColumn('order_lines', 'quantity')
+            ? 'coalesce(order_lines.quantity, order_lines.ordered_qty, 0)'
+            : 'coalesce(order_lines.ordered_qty, 0)';
+
+        $query = OrderLine::query()
+            ->select('order_lines.shopify_product_id')
+            ->selectRaw('sum('.$quantitySql.') as purchased_quantity')
+            ->whereNotNull('order_lines.shopify_product_id')
+            ->whereHas('order', function ($orderQuery) use ($tenant): void {
+                if (Schema::hasColumn('orders', 'tenant_id')) {
+                    $orderQuery->where('tenant_id', $tenant->id);
+                }
+
+                if (Schema::hasColumn('orders', 'shopify_store_key')) {
+                    $orderQuery->where(function ($storeQuery): void {
+                        $storeQuery->whereNull('shopify_store_key')
+                            ->orWhere('shopify_store_key', 'retail');
+                    });
+                } elseif (Schema::hasColumn('orders', 'shopify_store')) {
+                    $orderQuery->where(function ($storeQuery): void {
+                        $storeQuery->whereNull('shopify_store')
+                            ->orWhere('shopify_store', 'retail');
+                    });
+                }
+
+                if (Schema::hasColumn('orders', 'cancelled_at')) {
+                    $orderQuery->whereNull('cancelled_at');
+                }
+            })
+            ->groupBy('order_lines.shopify_product_id')
+            ->orderByDesc(DB::raw('purchased_quantity'))
+            ->limit($limit);
+
+        return $query
+            ->pluck('order_lines.shopify_product_id')
+            ->map(static fn (mixed $id): string => (string) $id)
+            ->filter(static fn (string $id): bool => $id !== '' && ctype_digit($id))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int,string>  $ids
+     * @return array<string,array<string,mixed>>
+     */
+    protected function productNodesByIds(ShopifyGraphqlClient $client, array $ids): array
+    {
+        $gids = array_values(array_unique(array_map(
+            static fn (string $id): string => 'gid://shopify/Product/'.$id,
+            $ids
+        )));
+
+        if ($gids === []) {
+            return [];
+        }
+
+        $data = $client->query($this->productsByIdsQuery(), [
+            'ids' => $gids,
+        ]);
+
+        $nodes = $data['nodes'] ?? [];
+        if (! is_array($nodes)) {
+            return [];
+        }
+
+        $products = [];
+        foreach ($nodes as $node) {
+            if (! is_array($node)) {
+                continue;
+            }
+
+            $id = $this->publicId((string) ($node['id'] ?? ''));
+            if ($id !== '') {
+                $products[$id] = $node;
+            }
+        }
+
+        return $products;
+    }
+
+    protected function productsByIdsQuery(): string
+    {
+        return <<<'GRAPHQL'
+query MobileCatalogProductsByIds($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Product {
+      id
+      title
+      handle
+      createdAt
+      publishedAt
+      onlineStoreUrl
+      productType
+      tags
+      status
+      featuredImage {
+        url
+      }
+      variants(first: 10) {
+        nodes {
+          id
+          price
+          compareAtPrice
+          availableForSale
+        }
+      }
+    }
+  }
+}
+GRAPHQL;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function collectionHandleCandidates(string $requestedHandle, string $resolvedHandle): array
+    {
+        $definition = $this->seasonalDefinitionForHandle($requestedHandle) ?? $this->seasonalDefinitionForHandle($resolvedHandle);
+        $handles = [$resolvedHandle, $requestedHandle];
+
+        if (is_array($definition)) {
+            $handles = array_merge($handles, [$definition['handle']], (array) ($definition['aliases'] ?? []));
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn (mixed $handle): string => trim((string) $handle),
+            $handles
+        ), static fn (string $handle): bool => $handle !== '')));
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
     protected function collectionNodes(ShopifyGraphqlClient $client): array
     {
         $data = $client->query($this->collectionsQuery());
@@ -1146,6 +1484,16 @@ GRAPHQL;
 
         if (! is_array($nodes)) {
             return [];
+        }
+
+        foreach ($nodes as $variant) {
+            if (! is_array($variant)) {
+                continue;
+            }
+
+            if (! array_key_exists('availableForSale', $variant) || (bool) $variant['availableForSale']) {
+                return $variant;
+            }
         }
 
         $variant = $nodes[0] ?? [];

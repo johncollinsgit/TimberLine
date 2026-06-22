@@ -1,5 +1,12 @@
 <?php
 
+use App\Models\CandleCashBalance;
+use App\Models\CandleCashReward;
+use App\Models\CandleCashTransaction;
+use App\Models\MarketingProfile;
+use App\Models\MarketingProfileLink;
+use App\Models\Order;
+use App\Models\OrderLine;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use Illuminate\Http\Client\Request;
@@ -255,14 +262,151 @@ test('mobile session status reports signed out by default and can honor a sessio
     $this->getJson('/api/mobile/v1/modern-forestry/session-status')
         ->assertOk()
         ->assertJsonPath('authenticated', false)
-        ->assertJsonPath('state', 'signed_out')
-        ->assertJsonPath('sessionHint', false);
+        ->assertJsonPath('state', 'signed_out');
 
-    $this->getJson('/api/mobile/v1/modern-forestry/session-status?session_hint=1')
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'customer@example.com',
+        'normalized_email' => 'customer@example.com',
+    ]);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/session-status')
         ->assertOk()
         ->assertJsonPath('authenticated', true)
         ->assertJsonPath('state', 'authenticated')
-        ->assertJsonPath('sessionHint', true);
+        ->assertJsonPath('customer.email', 'customer@example.com');
+});
+
+test('mobile account and rewards endpoints require a signed in customer token', function (): void {
+    $this->getJson('/api/mobile/v1/modern-forestry/account')
+        ->assertUnauthorized()
+        ->assertJsonPath('error.code', 'unauthenticated');
+
+    $this->getJson('/api/mobile/v1/modern-forestry/rewards')
+        ->assertUnauthorized()
+        ->assertJsonPath('error.code', 'unauthenticated');
+});
+
+test('mobile auth session can create and validate a customer account token identity', function (): void {
+    $response = $this->withToken('mf-test-email:native@example.com')
+        ->postJson('/api/mobile/v1/modern-forestry/auth/session');
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('authenticated', true)
+        ->assertJsonPath('state', 'authenticated')
+        ->assertJsonPath('customer.email', 'native@example.com');
+
+    $this->assertDatabaseHas('marketing_profiles', [
+        'tenant_id' => 1,
+        'normalized_email' => 'native@example.com',
+    ]);
+});
+
+test('mobile account endpoint returns native safe account data only for signed in customer', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+        'accepts_email_marketing' => true,
+    ]);
+    MarketingProfileLink::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:12345',
+        'match_method' => 'test',
+        'confidence' => 1,
+    ]);
+    $order = Order::factory()->create([
+        'tenant_id' => 1,
+        'shopify_customer_id' => '12345',
+        'order_number' => 'MF-1001',
+        'total_price' => 36.50,
+        'ordered_at' => now(),
+    ]);
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Forest Ember Candle',
+        'quantity' => 1,
+    ]);
+
+    $payload = $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/account')
+        ->assertOk()
+        ->assertJsonPath('data.customer.displayName', 'Ada Woods')
+        ->assertJsonPath('data.orders.0.orderNumber', 'MF-1001')
+        ->assertJsonPath('data.orders.0.linePreview', 'Forest Ember Candle')
+        ->json();
+
+    $encoded = json_encode($payload);
+    expect($encoded)->not->toContain('shpat_mobile_test_token')
+        ->and($encoded)->not->toContain('mobile-test-secret')
+        ->and($encoded)->not->toContain('access_token');
+});
+
+test('mobile rewards endpoint returns balance rewards history and can redeem natively', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'rewards@example.com',
+        'normalized_email' => 'rewards@example.com',
+    ]);
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 25,
+    ]);
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'type' => 'earn',
+        'candle_cash_delta' => 25,
+        'source' => 'order',
+        'source_id' => 'MF-1',
+        'description' => 'Earned from order MF-1.',
+    ]);
+    CandleCashReward::query()->delete();
+    $reward = CandleCashReward::query()->create([
+        'name' => '$10 coupon',
+        'description' => 'Redeem for a $10 discount.',
+        'candle_cash_cost' => 10,
+        'reward_type' => 'coupon',
+        'reward_value' => '10USD',
+        'is_active' => true,
+    ]);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/rewards')
+        ->assertOk()
+        ->assertJsonPath('data.customer.email', 'rewards@example.com')
+        ->assertJsonPath('data.history.0.description', 'Earned from order MF-1.')
+        ->assertJsonPath('data.rewards.0.id', $reward->id);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/rewards/redeem', [
+            'rewardId' => $reward->id,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.ok', true)
+        ->assertJsonPath('data.redemption.status', 'issued')
+        ->assertJsonPath('data.redemption.amountFormatted', '$10.00');
+});
+
+test('mobile account message endpoint accepts signed in native support messages', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'support@example.com',
+        'normalized_email' => 'support@example.com',
+    ]);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/account/message', [
+            'message' => 'Can you help with my order?',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.ok', true)
+        ->assertJsonPath('data.state', 'received');
 });
 
 test('fake mobile product detail returns 200 for a known handle', function (): void {
@@ -495,6 +639,73 @@ test('real mobile home always returns canonical seasonal collections with image 
     }
 });
 
+test('real mobile home featured products use actual purchase history before shopify fallback', function (): void {
+    config()->set('mobile_catalog.fake_enabled', false);
+
+    $order = Order::factory()->create([
+        'tenant_id' => 1,
+        'shopify_store_key' => 'retail',
+    ]);
+
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'shopify_product_id' => 222,
+        'shopify_variant_id' => 9003,
+        'quantity' => 8,
+        'ordered_qty' => 8,
+        'raw_title' => 'Pine Ridge Candle',
+    ]);
+
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'shopify_product_id' => 111,
+        'shopify_variant_id' => 9001,
+        'quantity' => 1,
+        'ordered_qty' => 1,
+        'raw_title' => 'Forest Ember Candle',
+    ]);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => function (Request $request) {
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
+            $variables = $body['variables'] ?? [];
+
+            if (str_contains($query, 'query MobileCatalogCollections')) {
+                return Http::response(shopifyMobileCollectionsPayload(), 200);
+            }
+
+            if (str_contains($query, 'query MobileCatalogProductsByIds')) {
+                expect($variables['ids'] ?? [])->toBe([
+                    'gid://shopify/Product/222',
+                    'gid://shopify/Product/111',
+                ]);
+
+                return Http::response(shopifyMobileProductsByIdsPayload(), 200);
+            }
+
+            if (str_contains($query, 'query MobileCatalogProducts')) {
+                expect($variables['first'] ?? null)->toBe(50);
+                expect($query)->toContain('sortKey: BEST_SELLING');
+                expect($query)->toContain('reverse: false');
+
+                return Http::response(shopifyMobileCatalogPayload(), 200);
+            }
+
+            return Http::response([], 404);
+        },
+    ]);
+
+    $payload = $this->getJson('/api/mobile/v1/modern-forestry/home')
+        ->assertOk()
+        ->json();
+
+    expect($payload['featuredProducts'][0]['handle'] ?? null)->toBe('pine-ridge-candle');
+    expect($payload['featuredProducts'][0]['variantId'] ?? null)->toBe('9003');
+    expect($payload['featuredProducts'][1]['handle'] ?? null)->toBe('forest-ember-candle');
+    expect($payload['featuredProducts'][1]['variantId'] ?? null)->toBe('9001');
+});
+
 test('real mobile collection products return only active products and support sorting', function (): void {
     config()->set('mobile_catalog.fake_enabled', false);
 
@@ -705,6 +916,86 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.tags.0', 'amber')
         ->assertJsonPath('data.scentNotes.0', 'amber')
         ->assertJsonPath('data.faq', []);
+});
+
+test('mobile product detail endpoint falls back to a broader active catalog lookup when the exact handle search misses', function (): void {
+    $requests = [];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => function (Request $request) use (&$requests) {
+            $body = json_decode($request->body(), true);
+            $requests[] = $body;
+
+            if (count($requests) === 1) {
+                return Http::response([
+                    'data' => [
+                        'products' => [
+                            'nodes' => [],
+                        ],
+                    ],
+                ], 200);
+            }
+
+            if (count($requests) === 2) {
+                return Http::response([
+                    'data' => [
+                        'products' => [
+                            'nodes' => [
+                                [
+                                    'id' => 'gid://shopify/Product/222',
+                                    'title' => 'Summer Linen',
+                                    'handle' => 'summer-linen',
+                                    'description' => 'A different visible product.',
+                                    'descriptionHtml' => '<p>A different visible product.</p>',
+                                    'onlineStoreUrl' => 'https://modernforestry-test.myshopify.com/products/summer-linen',
+                                    'productType' => 'Candle',
+                                    'tags' => ['linen'],
+                                    'status' => 'ACTIVE',
+                                    'images' => [
+                                        'nodes' => [
+                                            [
+                                                'url' => 'https://cdn.shopify.com/s/files/summer-linen.png',
+                                                'altText' => 'Summer Linen candle jar',
+                                            ],
+                                        ],
+                                    ],
+                                    'variants' => [
+                                        'nodes' => [
+                                            [
+                                                'id' => 'gid://shopify/ProductVariant/9003',
+                                                'title' => '8 oz candle',
+                                                'price' => '30.00',
+                                                'compareAtPrice' => null,
+                                                'availableForSale' => true,
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            'pageInfo' => [
+                                'hasNextPage' => true,
+                                'endCursor' => 'cursor-1',
+                            ],
+                        ],
+                    ],
+                ], 200);
+            }
+
+            return Http::response(shopifyMobileProductDetailPayload(), 200);
+        },
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/products/forest-ember-candle')
+        ->assertOk()
+        ->assertJsonPath('meta.source', 'shopify')
+        ->assertJsonPath('data.handle', 'forest-ember-candle')
+        ->assertJsonPath('data.title', 'Forest Ember Candle');
+
+    expect($requests)->toHaveCount(3);
+    expect((string) ($requests[0]['query'] ?? ''))->toContain('query MobileCatalogProductDetail');
+    expect((string) ($requests[1]['query'] ?? ''))->toContain('query MobileCatalogActiveProductDetails');
+    expect($requests[1]['variables']['first'] ?? null)->toBe(50);
+    expect($requests[2]['variables']['after'] ?? null)->toBe('cursor-1');
 });
 
 test('mobile product detail includes candle club faq for subscription products', function (): void {
@@ -941,6 +1232,7 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
             ],
         ],
         'discountCode' => ' candlecash10 ',
+        'customerAccessToken' => 'customer-account-test-token',
     ]);
 
     $response
@@ -964,6 +1256,7 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
     expect($body['variables']['input']['lines'][0]['merchandiseId'])->toBe('gid://shopify/ProductVariant/9001');
     expect($body['variables']['input']['lines'][0]['quantity'])->toBe(2);
     expect($body['variables']['input']['discountCodes'])->toBe(['CANDLECASH10']);
+    expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('customer-account-test-token');
 });
 
 test('mobile checkout response does not expose storefront token or shopify gids', function (): void {
@@ -1013,8 +1306,10 @@ function shopifyMobileCatalogPayload(int $productCount = 2): array
             'variants' => [
                 'nodes' => [
                     [
+                        'id' => 'gid://shopify/ProductVariant/9001',
                         'price' => '24.00',
                         'compareAtPrice' => null,
+                        'availableForSale' => true,
                     ],
                 ],
             ],
@@ -1033,8 +1328,10 @@ function shopifyMobileCatalogPayload(int $productCount = 2): array
             'variants' => [
                 'nodes' => [
                     [
+                        'id' => 'gid://shopify/ProductVariant/9003',
                         'price' => '28.00',
                         'compareAtPrice' => '32.00',
+                        'availableForSale' => true,
                     ],
                 ],
             ],
@@ -1046,6 +1343,18 @@ function shopifyMobileCatalogPayload(int $productCount = 2): array
             'products' => [
                 'nodes' => array_slice($products, 0, $productCount),
             ],
+        ],
+    ];
+}
+
+/**
+ * @return array<string,mixed>
+ */
+function shopifyMobileProductsByIdsPayload(): array
+{
+    return [
+        'data' => [
+            'nodes' => shopifyMobileCatalogPayload()['data']['products']['nodes'],
         ],
     ];
 }
@@ -1194,10 +1503,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                                            [
-                                                'price' => '24.00',
-                                                'compareAtPrice' => null,
-                                            ],
+                            [
+                                'id' => 'gid://shopify/ProductVariant/9001',
+                                'price' => '24.00',
+                                'compareAtPrice' => null,
+                                'availableForSale' => true,
+                            ],
                                         ],
                                     ],
                                 ],
@@ -1214,10 +1525,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                                            [
-                                                'price' => '12.00',
-                                                'compareAtPrice' => null,
-                                            ],
+                            [
+                                'id' => 'gid://shopify/ProductVariant/9002',
+                                'price' => '12.00',
+                                'compareAtPrice' => null,
+                                'availableForSale' => true,
+                            ],
                                         ],
                                     ],
                                 ],
@@ -1236,10 +1549,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                                            [
-                                                'price' => '18.00',
-                                                'compareAtPrice' => null,
-                                            ],
+                            [
+                                'id' => 'gid://shopify/ProductVariant/9004',
+                                'price' => '18.00',
+                                'compareAtPrice' => null,
+                                'availableForSale' => true,
+                            ],
                                         ],
                                     ],
                                 ],
@@ -1258,10 +1573,11 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                                            [
-                                                'price' => '10.00',
-                                                'compareAtPrice' => null,
-                                                'availableForSale' => true,
+                            [
+                                'id' => 'gid://shopify/ProductVariant/9005',
+                                'price' => '10.00',
+                                'compareAtPrice' => null,
+                                'availableForSale' => true,
                                             ],
                                         ],
                                     ],
@@ -1281,10 +1597,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                                            [
-                                                'price' => '29.00',
-                                                'compareAtPrice' => '34.00',
-                                            ],
+                            [
+                                'id' => 'gid://shopify/ProductVariant/9006',
+                                'price' => '29.00',
+                                'compareAtPrice' => '34.00',
+                                'availableForSale' => true,
+                            ],
                                         ],
                                     ],
                                 ],

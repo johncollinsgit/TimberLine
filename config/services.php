@@ -197,6 +197,13 @@ return [
 
         ],
 
+        'customer_account' => [
+            'client_id' => env('SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID'),
+            'client_secret' => env('SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET'),
+            'token_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT'),
+            'graphql_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT'),
+        ],
+
     ],
 
 ];

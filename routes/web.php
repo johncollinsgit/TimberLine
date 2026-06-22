@@ -379,6 +379,28 @@ Route::post('/api/mobile/v1/modern-forestry/checkout', [ModernForestryProductCat
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.checkout');
+Route::post('/api/mobile/v1/modern-forestry/auth/session', [ModernForestryProductCatalogController::class, 'authSession'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.auth.session');
+Route::post('/api/mobile/v1/modern-forestry/auth/token', [ModernForestryProductCatalogController::class, 'authToken'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.auth.token');
+Route::get('/api/mobile/v1/modern-forestry/account', [ModernForestryProductCatalogController::class, 'account'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.account');
+Route::post('/api/mobile/v1/modern-forestry/account/message', [ModernForestryProductCatalogController::class, 'accountMessage'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.account.message');
+Route::get('/api/mobile/v1/modern-forestry/rewards', [ModernForestryProductCatalogController::class, 'rewards'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.rewards');
+Route::post('/api/mobile/v1/modern-forestry/rewards/redeem', [ModernForestryProductCatalogController::class, 'redeemReward'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.rewards.redeem');
 Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProductCatalogController::class, 'sessionStatus'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.session-status');

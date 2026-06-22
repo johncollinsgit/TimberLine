@@ -23,13 +23,14 @@ class ModernForestryMobileCheckoutService
      * @param  array<int,array<string,mixed>>  $items
      * @return array<string,mixed>
      */
-    public function checkout(array $items, ?string $discountCode = null): array
+    public function checkout(array $items, ?string $discountCode = null, ?string $customerAccessToken = null): array
     {
         $this->assertModernForestryTenant();
 
         $store = $this->modernForestryRetailStore();
         $lines = $this->normalizeLines($items);
         $discountCodes = $this->normalizeDiscountCodes($discountCode);
+        $customerAccessToken = $this->normalizeCustomerAccessToken($customerAccessToken);
         $storefrontToken = $this->storefrontAccessToken($store);
 
         if ($storefrontToken === null) {
@@ -54,6 +55,9 @@ class ModernForestryMobileCheckoutService
                             $lines
                         ),
                         'discountCodes' => $discountCodes,
+                        'buyerIdentity' => $customerAccessToken !== null
+                            ? ['customerAccessToken' => $customerAccessToken]
+                            : null,
                         'attributes' => [
                             [
                                 'key' => 'source',
@@ -136,6 +140,7 @@ class ModernForestryMobileCheckoutService
             'lines' => $this->lineSummaries($lines),
             'subtotal' => $this->moneyAmount($cart['cost']['subtotalAmount'] ?? null),
             'total' => $this->moneyAmount($cart['cost']['totalAmount'] ?? null),
+            'authenticated' => $customerAccessToken !== null,
             'errors' => [],
         ];
     }
@@ -322,6 +327,13 @@ class ModernForestryMobileCheckoutService
         return $code !== '' && strlen($code) <= 80 ? [$code] : [];
     }
 
+    protected function normalizeCustomerAccessToken(?string $token): ?string
+    {
+        $token = trim((string) $token);
+
+        return $token !== '' && strlen($token) <= 4096 ? $token : null;
+    }
+
     /**
      * @param  array<string,mixed>  $store
      */
@@ -362,6 +374,7 @@ class ModernForestryMobileCheckoutService
             'lines' => $this->lineSummaries($lines),
             'subtotal' => $this->estimatedSubtotal($lines),
             'total' => null,
+            'authenticated' => false,
             'errors' => [],
         ];
     }

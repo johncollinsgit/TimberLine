@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Services\Mobile\ModernForestryMobileAccountService;
 use App\Services\Mobile\ModernForestryMobileCheckoutException;
 use App\Services\Mobile\ModernForestryMobileCheckoutService;
+use App\Services\Mobile\ModernForestryMobileCustomerSessionService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Throwable;
 
 class ModernForestryProductCatalogController extends Controller
@@ -23,13 +24,15 @@ class ModernForestryProductCatalogController extends Controller
             'items.*.variantId' => ['required', 'string', 'max:255'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:'.ModernForestryMobileCheckoutService::MAX_QUANTITY],
             'discountCode' => ['nullable', 'string', 'max:80'],
+            'customerAccessToken' => ['nullable', 'string', 'max:4096'],
         ]);
 
         try {
             return response()->json([
                 'data' => $checkout->checkout(
                     $validated['items'],
-                    $validated['discountCode'] ?? null
+                    $validated['discountCode'] ?? null,
+                    $validated['customerAccessToken'] ?? $request->bearerToken()
                 ),
                 'meta' => [
                     'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
@@ -215,25 +218,158 @@ class ModernForestryProductCatalogController extends Controller
         return response()->json($result);
     }
 
-    public function sessionStatus(Request $request): JsonResponse
-    {
-        $sessionHint = $request->boolean('session_hint');
+    public function authSession(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request, allowCreate: true);
 
-        $cookieAuthenticated = collect(array_keys($request->cookies->all()))
-            ->map(fn (string $name): string => Str::lower($name))
-            ->contains(fn (string $name): bool => Str::contains($name, [
-                'secure_customer_sig',
-                'storefront_digest',
-                'customer_session',
-            ]));
+        return response()->json($sessions->sessionPayload($session), $session ? 200 : 401);
+    }
 
-        $authenticated = $cookieAuthenticated || $sessionHint;
+    public function authToken(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions
+    ): JsonResponse {
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:4096'],
+            'codeVerifier' => ['required', 'string', 'max:512'],
+            'redirectUri' => ['required', 'string', 'max:512'],
+        ]);
+
+        $token = $sessions->exchangeAuthorizationCode(
+            (string) $validated['code'],
+            (string) $validated['codeVerifier'],
+            (string) $validated['redirectUri']
+        );
+
+        if (! is_array($token)) {
+            return response()->json([
+                'data' => null,
+                'meta' => [
+                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                ],
+                'error' => [
+                    'code' => 'customer_auth_not_configured',
+                    'message' => 'Modern Forestry customer login is not configured.',
+                ],
+            ], 503);
+        }
 
         return response()->json([
-            'authenticated' => $authenticated,
-            'state' => $authenticated ? 'authenticated' : 'signed_out',
-            'sessionHint' => $sessionHint,
-            'checkedAt' => now()->toIso8601String(),
+            'data' => $token,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'shopify_customer_account',
+            ],
         ]);
+    }
+
+    public function account(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        return response()->json([
+            'data' => $account->account($session),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function rewards(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        return response()->json([
+            'data' => $account->rewards($session),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function redeemReward(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'rewardId' => ['nullable', 'integer'],
+        ]);
+
+        $payload = $account->redeem($session, isset($validated['rewardId']) ? (int) $validated['rewardId'] : null);
+
+        return response()->json([
+            'data' => $payload,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ], (bool) ($payload['ok'] ?? false) ? 200 : 422);
+    }
+
+    public function accountMessage(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+        ]);
+
+        return response()->json([
+            'data' => $account->message($session, (string) $validated['message']),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function sessionStatus(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions
+    ): JsonResponse
+    {
+        return response()->json($sessions->sessionPayload($sessions->resolveFromRequest($request)));
+    }
+
+    protected function mobileUnauthorizedResponse(): JsonResponse
+    {
+        return response()->json([
+            'data' => null,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+            ],
+            'error' => [
+                'code' => 'unauthenticated',
+                'message' => 'Sign in to continue.',
+            ],
+        ], 401);
     }
 }
