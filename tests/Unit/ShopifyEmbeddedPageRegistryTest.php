@@ -68,7 +68,7 @@ test('shopify embedded page registry groups pages by expected navigation groups'
         ->pluck('key')
         ->all();
 
-    expect($primaryKeys)->toBe(['home', 'assistant', 'customers', 'messaging', 'rewards', 'settings'])
+    expect($primaryKeys)->toBe(['home', 'assistant', 'customers', 'messaging', 'rewards', 'edit_app', 'settings'])
         ->and($customersSubnavKeys)->toBe(['customers.all', 'customers.segments', 'customers.activity', 'customers.imports'])
         ->and($dashboardSubnavKeys)->toBe(['home.start', 'home.plans', 'home.store', 'home.integrations'])
         ->and($assistantSubnavKeys)->toBe(['assistant.start', 'assistant.opportunities', 'assistant.drafts', 'assistant.setup', 'assistant.activity'])

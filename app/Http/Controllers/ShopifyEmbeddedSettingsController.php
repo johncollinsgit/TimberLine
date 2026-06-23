@@ -118,6 +118,77 @@ class ShopifyEmbeddedSettingsController extends Controller
         ])->finish($response);
     }
 
+    public function editApp(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ShopifyAppContentService $appContentService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
+    ): Response {
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
+
+        $status = (string) ($context['status'] ?? 'invalid_request');
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized
+            ? $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store))
+            : null;
+
+        if ($authorized && $tenantId !== null) {
+            app()->terminating(function () use ($alphaBootstrapService, $tenantId, $store): void {
+                try {
+                    $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? ''));
+                } catch (\Throwable) {
+                    // Defaults are best-effort and should never fail the app editor.
+                }
+            });
+        }
+
+        $probe->forTenant($tenantId);
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('edit_app', null, $tenantId));
+        $appContent = ($authorized && $tenantId === 1)
+            ? $probe->time('page_payload', fn (): array => $appContentService->forTenant($tenantId))
+            : null;
+
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+            response()->view('shopify.edit-app', [
+                'authorized' => $authorized,
+                'status' => $status,
+                'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+                'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
+                'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
+                'storeLabel' => $authorized
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
+                    : 'Shopify Admin',
+                'headline' => $authorized ? 'Edit App' : $this->headlineForStatus($status),
+                'subheadline' => $authorized
+                    ? 'Edit the customer dashboard and native mobile app content.'
+                    : $this->subheadlineForStatus($status),
+                'appNavigation' => $appNavigation,
+                'pageActions' => [],
+                'appContentBootstrap' => [
+                    'authorized' => $authorized && $tenantId === 1,
+                    'tenant_id' => $tenantId,
+                    'store_key' => $authorized ? ($store['key'] ?? null) : null,
+                    'settings' => $appContent,
+                    'defaults' => $appContentService->defaults(),
+                    'endpoints' => [
+                        'load' => route('shopify.app.api.settings.content', [], false),
+                        'save' => route('shopify.app.api.settings.content.save', [], false),
+                        'publish' => route('shopify.app.api.settings.content.publish', [], false),
+                    ],
+                ],
+            ]),
+            $authorized ? 200 : ($status === 'open_from_shopify' ? 200 : 401)
+        ));
+
+        return $probe->addContext([
+            'authorized' => $authorized,
+            'status' => $status,
+        ])->finish($response);
+    }
+
     public function widgetSettings(
         Request $request,
         ShopifyEmbeddedAppContext $contextService
@@ -665,6 +736,27 @@ class ShopifyEmbeddedSettingsController extends Controller
             'empty_rewards' => ['required', 'string', 'max:240'],
             'empty_orders' => ['required', 'string', 'max:240'],
             'account_note' => ['required', 'string', 'max:240'],
+            'mobile_home_eyebrow' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'mobile_home_title' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'mobile_home_subtitle' => ['sometimes', 'nullable', 'string', 'max:240'],
+            'mobile_slide_1_title' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'mobile_slide_1_subtitle' => ['sometimes', 'nullable', 'string', 'max:240'],
+            'mobile_slide_1_image_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_1_mobile_image_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_1_cta_label' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'mobile_slide_1_cta_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_2_title' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'mobile_slide_2_subtitle' => ['sometimes', 'nullable', 'string', 'max:240'],
+            'mobile_slide_2_image_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_2_mobile_image_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_2_cta_label' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'mobile_slide_2_cta_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_3_title' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'mobile_slide_3_subtitle' => ['sometimes', 'nullable', 'string', 'max:240'],
+            'mobile_slide_3_image_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_3_mobile_image_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_slide_3_cta_label' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'mobile_slide_3_cta_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
         ])->validate();
     }
 

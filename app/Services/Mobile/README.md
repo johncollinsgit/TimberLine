@@ -74,3 +74,13 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
   - order-history featured product ordering
   - product-detail fallback lookup
   - Candle Club FAQ exposure
+
+## Shopify Embedded App Content Bridge (2026-06-23)
+
+- The native Home payload now reads published App Content from the Shopify embedded `Edit App` page before falling back to defaults.
+- Editable mobile fields currently include:
+  - Home hero eyebrow, title, and subtitle
+  - three hero slide titles, subtitles, image URLs, phone-crop URLs, button labels, and button URLs
+- Draft content stays private until published; the native app only reads the published/effective snapshot.
+- Product images, collection images, product availability, variants, sorting, and checkout purchaseability still come from Shopify-backed catalog/checkout services.
+- Headless is not just an order route: Customer Account OAuth and Storefront checkout use Shopify customer-facing APIs, while catalog/media curation remains Laravel-owned via Shopify Admin GraphQL.

@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-06-23 — Modern Forestry Edit App Page
+
+### What changed
+- Added a top-level Shopify embedded `Edit App` navigation item between Rewards and Settings.
+- Moved the Modern Forestry App Content editor out of Settings and into its own page.
+- Split app editing into Customer Dashboard and Mobile Home tabs while keeping the existing draft/publish workflow.
+
+### What did not change
+- The existing App Content API endpoints and published mobile Home payload contract remain stable.
+- Settings still owns email, widget, and operational configuration.
+
 ## 2026-06-20 — Unified Shopify Inbox and Customer Messages
 
 ### What changed

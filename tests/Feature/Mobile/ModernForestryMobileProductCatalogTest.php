@@ -9,6 +9,8 @@ use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
+use App\Models\TenantMarketingSetting;
+use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -235,6 +237,49 @@ test('fake mobile home endpoint returns hero featured content and cards', functi
         ->assertJsonPath('featuredProducts.0.handle', 'fraser-fir')
         ->assertJsonPath('cards.0.kind', 'candle_cash')
         ->assertJsonPath('cards.0.url', 'https://theforestrystudio.com/pages/rewards');
+});
+
+test('mobile home uses published Shopify app content for native hero and slides', function (): void {
+    config()->set('mobile_catalog.fake_enabled', true);
+    ShopifyStore::query()->delete();
+
+    $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
+    $content = app(ShopifyAppContentService::class)->defaults();
+    $content['brand_name'] = 'Modern Forestry Test';
+    $content['mobile_home_eyebrow'] = 'Fresh from Shopify Admin';
+    $content['mobile_home_title'] = 'A native home anyone can update';
+    $content['mobile_home_subtitle'] = 'Published content flows into the app.';
+    $content['mobile_slide_1_title'] = 'Updated hero slide';
+    $content['mobile_slide_1_subtitle'] = 'No rebuild needed.';
+    $content['mobile_slide_1_image_url'] = 'https://theforestrystudio.com/cdn/shop/files/mobile-admin-slide.jpg?v=1';
+    $content['mobile_slide_1_mobile_image_url'] = 'https://theforestrystudio.com/cdn/shop/files/mobile-admin-slide-phone.jpg?v=1';
+    $content['mobile_slide_1_cta_label'] = 'Shop the edit';
+    $content['mobile_slide_1_cta_url'] = 'https://theforestrystudio.com/collections/summer';
+
+    TenantMarketingSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'key' => ShopifyAppContentService::SETTING_KEY,
+        'value' => [
+            'draft' => app(ShopifyAppContentService::class)->defaults(),
+            'published' => $content,
+            'published_at' => now()->toIso8601String(),
+            'published_by' => 'shopify-admin',
+        ],
+        'description' => 'Modern Forestry customer dashboard copy.',
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/home')
+        ->assertOk()
+        ->assertJsonPath('brand.wordmark', 'Modern Forestry Test')
+        ->assertJsonPath('hero.eyebrow', 'Fresh from Shopify Admin')
+        ->assertJsonPath('hero.title', 'A native home anyone can update')
+        ->assertJsonPath('hero.subtitle', 'Published content flows into the app.')
+        ->assertJsonPath('hero.slides.0.title', 'Updated hero slide')
+        ->assertJsonPath('hero.slides.0.subtitle', 'No rebuild needed.')
+        ->assertJsonPath('hero.slides.0.ctaTitle', 'Shop the edit')
+        ->assertJsonPath('hero.slides.0.ctaUrl', 'https://theforestrystudio.com/collections/summer')
+        ->assertJsonPath('hero.slides.0.imageUrl', 'https://theforestrystudio.com/cdn/shop/files/mobile-admin-slide.jpg?v=1&width=1200')
+        ->assertJsonPath('hero.slides.0.mobileImageUrl', 'https://theforestrystudio.com/cdn/shop/files/mobile-admin-slide-phone.jpg?v=1&width=1200');
 });
 
 test('fake mobile home response references valid known collection and product handles', function (): void {

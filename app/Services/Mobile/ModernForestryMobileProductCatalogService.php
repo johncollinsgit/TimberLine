@@ -5,6 +5,7 @@ namespace App\Services\Mobile;
 use App\Models\OrderLine;
 use App\Models\Tenant;
 use App\Services\Shopify\ShopifyGraphqlClient;
+use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyStores;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -316,21 +317,24 @@ class ModernForestryMobileProductCatalogService
     public function home(): array
     {
         $collections = $this->collections();
+        $content = $this->mobileAppContent();
 
         return [
             'brand' => [
-                'wordmark' => 'Modern Forestry',
+                'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
                 'tagline' => 'Soy candles',
                 'logoUrl' => null,
             ],
             'hero' => [
-                'eyebrow' => 'Modern Forestry',
-                'title' => 'Hand-poured candles for a slower season.',
-                'subtitle' => 'Small-batch scents, seasonal favorites, and Candle Cash rewards.',
+                'eyebrow' => $this->mobileContentValue($content, 'mobile_home_eyebrow', 'Modern Forestry'),
+                'title' => $this->mobileContentValue($content, 'mobile_home_title', 'Hand-poured candles for a slower season.'),
+                'subtitle' => $this->mobileContentValue($content, 'mobile_home_subtitle', 'Small-batch scents, seasonal favorites, and Candle Cash rewards.'),
                 'logoUrl' => null,
-                'wordmark' => 'Modern Forestry',
+                'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
                 'tagline' => 'Soy candles',
-                'slides' => $this->homeHeroSlides(),
+                'slides' => ($content['__has_published_app_content'] ?? false)
+                    ? ($this->mobileContentHeroSlides($content) ?: $this->homeHeroSlides())
+                    : $this->homeHeroSlides(),
             ],
             'featuredCollections' => $collections,
             'featuredProducts' => $this->featuredProducts(6),
@@ -403,6 +407,75 @@ class ModernForestryMobileProductCatalogService
             (string) $store['token'],
             (string) ($store['api_version'] ?? config('services.shopify.api_version', '2026-01'))
         );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function mobileAppContent(): array
+    {
+        $appContentService = app(ShopifyAppContentService::class);
+        $defaults = $appContentService->defaults();
+
+        try {
+            $tenant = $this->modernForestryTenant();
+            $content = $appContentService->forTenant((int) $tenant->id);
+            $effective = $content['effective'] ?? null;
+            $published = $content['published'] ?? null;
+
+            if (! is_array($effective)) {
+                return $defaults;
+            }
+
+            return array_merge($defaults, $effective, [
+                '__has_published_app_content' => is_array($published)
+                    && trim((string) ($content['published_by'] ?? '')) !== 'bootstrap',
+            ]);
+        } catch (\Throwable) {
+            return $defaults;
+        }
+    }
+
+    protected function mobileContentValue(array $content, string $key, string $fallback): string
+    {
+        $value = trim((string) ($content[$key] ?? ''));
+
+        return $value !== '' ? $value : $fallback;
+    }
+
+    /**
+     * @param  array<string,mixed>  $content
+     * @return array<int,array<string,mixed>>
+     */
+    protected function mobileContentHeroSlides(array $content): array
+    {
+        $slides = [];
+
+        for ($index = 1; $index <= 3; $index++) {
+            $title = trim((string) ($content["mobile_slide_{$index}_title"] ?? ''));
+            $imageUrl = $this->nullableString($content["mobile_slide_{$index}_image_url"] ?? null);
+
+            if ($title === '' || $imageUrl === null) {
+                continue;
+            }
+
+            $mobileImageUrl = $this->nullableString($content["mobile_slide_{$index}_mobile_image_url"] ?? null) ?? $imageUrl;
+            $ctaUrl = $this->storefrontUrl($content["mobile_slide_{$index}_cta_url"] ?? null);
+
+            $slides[] = [
+                'id' => 'app-content-'.$index,
+                'title' => $title,
+                'subtitle' => $this->nullableString($content["mobile_slide_{$index}_subtitle"] ?? null),
+                'imageUrl' => $this->mobileImageUrl($imageUrl, self::HERO_IMAGE_WIDTH),
+                'mobileImageUrl' => $this->mobileImageUrl($mobileImageUrl, self::HERO_IMAGE_WIDTH),
+                'ctaTitle' => $this->nullableString($content["mobile_slide_{$index}_cta_label"] ?? null),
+                'ctaUrl' => $ctaUrl,
+                'secondaryCtaTitle' => null,
+                'secondaryCtaUrl' => null,
+            ];
+        }
+
+        return $slides;
     }
 
     protected function productsQuery(): string

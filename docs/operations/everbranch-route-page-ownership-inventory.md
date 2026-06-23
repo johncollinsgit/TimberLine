@@ -40,6 +40,7 @@ This inventory documents who each major route/page belongs to so future work can
 | `/shopify/app/start` | Shopify embedded | Start Here/setup checklist | Shopify tenant setup | Keep; later add imports/mobile setup clarity | Later |
 | `/shopify/app/store` | Shopify embedded | App Store safe module catalog | Tenant module discovery | Keep safe-module language | No |
 | `/shopify/app/integrations` | Shopify embedded | Placeholder-first integrations | Tenant integrations setup | Keep Shopify, Square, CSV, manual, mobile readiness | No |
+| `/shopify/app/edit` | Shopify embedded | Modern Forestry app content editor | Native app/customer dashboard content editing | Top-level Edit App page with Customer Dashboard and Mobile Home tabs; tenant 1 only | Yes |
 | `/shopify/auth/{store}` | Shopify auth | OAuth redirect | Shopify install/auth | Canonical Everbranch callback host | No |
 | `/shopify/callback/{store}` | Shopify auth | OAuth callback | Shopify install/auth | Canonical Everbranch callback host | No |
 | `/shopify/reinstall/{store}` | Shopify auth | Reinstall path | Shopify install/auth | Keep route/copy until Partner Dashboard decision | No |

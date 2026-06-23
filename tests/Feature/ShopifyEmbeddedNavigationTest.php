@@ -57,6 +57,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'messaging workspace' => ['shopify.app.messaging', 'messaging', 'workspace'],
     'messaging analytics' => ['shopify.app.messaging.analytics', 'messaging', 'analytics'],
     'messaging responses' => ['shopify.app.messaging.responses', 'messaging', 'responses'],
+    'edit app' => ['shopify.app.edit', 'edit_app', null],
     'settings' => ['shopify.app.settings', 'settings', null],
 ]);
 
@@ -224,7 +225,7 @@ test('embedded navigation order includes messaging when module access is enabled
             $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $items);
             $labels = array_map(static fn (array $item): string => (string) ($item['label'] ?? ''), $items);
 
-            return $keys === ['home', 'assistant', 'customers', 'messaging', 'rewards', 'settings']
+            return $keys === ['home', 'assistant', 'customers', 'messaging', 'rewards', 'edit_app', 'settings']
                 && $labels[1] === 'AI Assistant'
                 && $labels[3] === 'Messages';
         });

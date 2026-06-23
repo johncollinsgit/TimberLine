@@ -90,7 +90,25 @@ beforeEach(function (): void {
     $this->withoutVite();
 });
 
-test('modern forestry settings page exposes the app content editor', function (): void {
+test('modern forestry edit app page exposes the app content editor', function (): void {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $response = $this->get(route('shopify.app.edit', retailEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertSeeText('App Content')
+        ->assertSeeText('Customer Dashboard')
+        ->assertSeeText('Mobile Home')
+        ->assertSeeText('Draft Preview')
+        ->assertSeeText('Publish Live')
+        ->assertSeeText('Update customer dashboard and mobile app copy.');
+});
+
+test('modern forestry settings page links to edit app instead of rendering the full editor', function (): void {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -100,10 +118,9 @@ test('modern forestry settings page exposes the app content editor', function ()
     $response = $this->get(route('shopify.app.settings', retailEmbeddedSignedQuery()));
 
     $response->assertOk()
-        ->assertSeeText('App Content')
-        ->assertSeeText('Draft Preview')
-        ->assertSeeText('Publish Live')
-        ->assertSeeText('Update the customer dashboard copy for Modern Forestry.');
+        ->assertSeeText('Edit App')
+        ->assertSeeText('Open Edit App')
+        ->assertDontSee('id="app-content-form"', false);
 });
 
 test('modern forestry app content draft and publish snapshots persist separately', function (): void {

@@ -25,6 +25,15 @@ Important boundary:
 - Home featured products now prefer imported order-line purchase history, with a supported Shopify active-catalog fallback so the six-card shelf still fills after filtering hidden or inactive products.
 - Product-detail lookups now fall back to a paginated active-catalog search when the first handle lookup misses, which keeps stale product links from dead-ending the mobile detail screen.
 
+## Modern Forestry Mobile App Content Editor (2026-06-23)
+
+- Shopify embedded navigation now exposes a top-level `Edit App` page between Rewards and Settings.
+- The dedicated editor separates Customer Dashboard and Mobile Home fields with tabs, while Settings only links to the editor.
+- Operators can update the native Home hero copy and three hero slides using draft/publish controls without rebuilding iOS.
+- Published App Content feeds `/api/mobile/v1/modern-forestry/home`; draft content stays private in Shopify Admin.
+- Product and collection photos still come from Shopify product/collection media through the Laravel mobile catalog service.
+- Shopify Headless is used for Customer Account OAuth and Storefront checkout/cart creation. The mobile catalog still uses Laravel + Shopify Admin GraphQL so the app receives a curated, filtered, purchaseable payload.
+
 ## Candle Cash Combination Rules Update (2026-04-22)
 
 This update enables Shopify discount combinations for Candle Cash using Shopify `combinesWith` on the single Candle Cash discount code.

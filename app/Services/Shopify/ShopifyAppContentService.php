@@ -37,6 +37,27 @@ class ShopifyAppContentService
             'empty_rewards' => 'No active rewards right now.',
             'empty_orders' => 'No recent orders yet.',
             'account_note' => 'For privacy or account data requests, contact Modern Forestry support.',
+            'mobile_home_eyebrow' => 'Modern Forestry',
+            'mobile_home_title' => 'Hand-poured candles for a slower season.',
+            'mobile_home_subtitle' => 'Small-batch scents, seasonal favorites, and Candle Cash rewards.',
+            'mobile_slide_1_title' => 'Shop our Spring Collection',
+            'mobile_slide_1_subtitle' => null,
+            'mobile_slide_1_image_url' => 'https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457',
+            'mobile_slide_1_mobile_image_url' => null,
+            'mobile_slide_1_cta_label' => 'Click to Shop',
+            'mobile_slide_1_cta_url' => 'https://theforestrystudio.com/collections/spring-collection',
+            'mobile_slide_2_title' => 'Classic scents, always ready',
+            'mobile_slide_2_subtitle' => 'Keep your favorites close.',
+            'mobile_slide_2_image_url' => 'https://theforestrystudio.com/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113',
+            'mobile_slide_2_mobile_image_url' => null,
+            'mobile_slide_2_cta_label' => 'Shop Classic',
+            'mobile_slide_2_cta_url' => 'https://theforestrystudio.com/collections/classic-collection-1',
+            'mobile_slide_3_title' => 'Earn Candle Cash',
+            'mobile_slide_3_subtitle' => 'Shop, review, and redeem rewards.',
+            'mobile_slide_3_image_url' => 'https://theforestrystudio.com/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038',
+            'mobile_slide_3_mobile_image_url' => null,
+            'mobile_slide_3_cta_label' => 'View Rewards',
+            'mobile_slide_3_cta_url' => 'https://theforestrystudio.com/pages/rewards',
         ];
     }
 
@@ -216,6 +237,27 @@ class ShopifyAppContentService
             'empty_rewards' => $this->normalizedText($source['empty_rewards'] ?? null, $defaults['empty_rewards']),
             'empty_orders' => $this->normalizedText($source['empty_orders'] ?? null, $defaults['empty_orders']),
             'account_note' => $this->normalizedText($source['account_note'] ?? null, $defaults['account_note']),
+            'mobile_home_eyebrow' => $this->normalizedText($source['mobile_home_eyebrow'] ?? null, $defaults['mobile_home_eyebrow']),
+            'mobile_home_title' => $this->normalizedText($source['mobile_home_title'] ?? null, $defaults['mobile_home_title']),
+            'mobile_home_subtitle' => $this->normalizedText($source['mobile_home_subtitle'] ?? null, $defaults['mobile_home_subtitle']),
+            'mobile_slide_1_title' => $this->normalizedText($source['mobile_slide_1_title'] ?? null, $defaults['mobile_slide_1_title']),
+            'mobile_slide_1_subtitle' => $this->normalizedOptionalText($source['mobile_slide_1_subtitle'] ?? null, $defaults['mobile_slide_1_subtitle']),
+            'mobile_slide_1_image_url' => $this->normalizedUrl($source['mobile_slide_1_image_url'] ?? null, $defaults['mobile_slide_1_image_url']),
+            'mobile_slide_1_mobile_image_url' => $this->normalizedUrl($source['mobile_slide_1_mobile_image_url'] ?? null, $defaults['mobile_slide_1_mobile_image_url']),
+            'mobile_slide_1_cta_label' => $this->normalizedText($source['mobile_slide_1_cta_label'] ?? null, $defaults['mobile_slide_1_cta_label']),
+            'mobile_slide_1_cta_url' => $this->normalizedUrl($source['mobile_slide_1_cta_url'] ?? null, $defaults['mobile_slide_1_cta_url']),
+            'mobile_slide_2_title' => $this->normalizedText($source['mobile_slide_2_title'] ?? null, $defaults['mobile_slide_2_title']),
+            'mobile_slide_2_subtitle' => $this->normalizedOptionalText($source['mobile_slide_2_subtitle'] ?? null, $defaults['mobile_slide_2_subtitle']),
+            'mobile_slide_2_image_url' => $this->normalizedUrl($source['mobile_slide_2_image_url'] ?? null, $defaults['mobile_slide_2_image_url']),
+            'mobile_slide_2_mobile_image_url' => $this->normalizedUrl($source['mobile_slide_2_mobile_image_url'] ?? null, $defaults['mobile_slide_2_mobile_image_url']),
+            'mobile_slide_2_cta_label' => $this->normalizedText($source['mobile_slide_2_cta_label'] ?? null, $defaults['mobile_slide_2_cta_label']),
+            'mobile_slide_2_cta_url' => $this->normalizedUrl($source['mobile_slide_2_cta_url'] ?? null, $defaults['mobile_slide_2_cta_url']),
+            'mobile_slide_3_title' => $this->normalizedText($source['mobile_slide_3_title'] ?? null, $defaults['mobile_slide_3_title']),
+            'mobile_slide_3_subtitle' => $this->normalizedOptionalText($source['mobile_slide_3_subtitle'] ?? null, $defaults['mobile_slide_3_subtitle']),
+            'mobile_slide_3_image_url' => $this->normalizedUrl($source['mobile_slide_3_image_url'] ?? null, $defaults['mobile_slide_3_image_url']),
+            'mobile_slide_3_mobile_image_url' => $this->normalizedUrl($source['mobile_slide_3_mobile_image_url'] ?? null, $defaults['mobile_slide_3_mobile_image_url']),
+            'mobile_slide_3_cta_label' => $this->normalizedText($source['mobile_slide_3_cta_label'] ?? null, $defaults['mobile_slide_3_cta_label']),
+            'mobile_slide_3_cta_url' => $this->normalizedUrl($source['mobile_slide_3_cta_url'] ?? null, $defaults['mobile_slide_3_cta_url']),
         ];
     }
 
@@ -227,6 +269,13 @@ class ShopifyAppContentService
         }
 
         return $normalized;
+    }
+
+    protected function normalizedOptionalText(mixed $value, ?string $fallback = null): ?string
+    {
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : $fallback;
     }
 
     protected function normalizedEmail(mixed $value, ?string $fallback = null): ?string

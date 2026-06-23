@@ -17,6 +17,10 @@
             route('shopify.app.development-notes', [], false),
             $embeddedUrlGenerator->contextQuery(request(), filled($host) ? (string) $host : null)
         );
+        $editAppHref = $embeddedUrlGenerator->append(
+            route('shopify.app.edit', [], false),
+            $embeddedUrlGenerator->contextQuery(request(), filled($host) ? (string) $host : null)
+        );
     @endphp
 
     <style>
@@ -516,6 +520,25 @@
         </article>
 
         @if(is_array($appContentBootstrap ?? null) && (bool) ($appContentBootstrap['authorized'] ?? false))
+            <article class="settings-card" id="app-content-settings-link-card">
+                <div class="settings-head">
+                    <div>
+                        <h2>Edit App</h2>
+                        <p>
+                            App homepage, customer dashboard, and mobile hero copy now live on a dedicated editor page.
+                        </p>
+                    </div>
+                    <div class="settings-badges">
+                        <span class="settings-badge settings-badge--configured">App content</span>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <a class="settings-button settings-button--primary" href="{{ $editAppHref }}">Open Edit App</a>
+                </div>
+            </article>
+        @endif
+
+        @if(false && is_array($appContentBootstrap ?? null) && (bool) ($appContentBootstrap['authorized'] ?? false))
             <article class="settings-card" id="app-content-card">
                 @php
                     $publishedContent = is_array(data_get($appContentBootstrap, 'settings.published'))
@@ -653,6 +676,61 @@
                                 <textarea id="content-account-note" name="account_note" maxlength="240">{{ data_get($draftContent, 'account_note', 'For privacy or account data requests, contact Modern Forestry support.') }}</textarea>
                                 <div class="settings-field-error" data-error-for="account_note"></div>
                             </div>
+                            <div class="settings-field" style="grid-column: 1 / -1;">
+                                <h3 style="margin: 0 0 6px;">Mobile Home</h3>
+                                <small>These published fields feed the native iPhone Home screen without an app rebuild. Paste Shopify CDN image URLs or storefront URLs.</small>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-mobile-home-eyebrow">Mobile Hero Eyebrow</label>
+                                <input id="content-mobile-home-eyebrow" name="mobile_home_eyebrow" type="text" maxlength="120" value="{{ data_get($draftContent, 'mobile_home_eyebrow', data_get($appContentBootstrap, 'defaults.mobile_home_eyebrow', 'Modern Forestry')) }}">
+                                <div class="settings-field-error" data-error-for="mobile_home_eyebrow"></div>
+                            </div>
+                            <div class="settings-field">
+                                <label for="content-mobile-home-title">Mobile Hero Title</label>
+                                <input id="content-mobile-home-title" name="mobile_home_title" type="text" maxlength="160" value="{{ data_get($draftContent, 'mobile_home_title', data_get($appContentBootstrap, 'defaults.mobile_home_title', 'Hand-poured candles for a slower season.')) }}">
+                                <div class="settings-field-error" data-error-for="mobile_home_title"></div>
+                            </div>
+                            <div class="settings-field" style="grid-column: 1 / -1;">
+                                <label for="content-mobile-home-subtitle">Mobile Hero Subtitle</label>
+                                <textarea id="content-mobile-home-subtitle" name="mobile_home_subtitle" maxlength="240">{{ data_get($draftContent, 'mobile_home_subtitle', data_get($appContentBootstrap, 'defaults.mobile_home_subtitle', 'Small-batch scents, seasonal favorites, and Candle Cash rewards.')) }}</textarea>
+                                <div class="settings-field-error" data-error-for="mobile_home_subtitle"></div>
+                            </div>
+                            @for($slideIndex = 1; $slideIndex <= 3; $slideIndex++)
+                                <div class="settings-field" style="grid-column: 1 / -1;">
+                                    <h3 style="margin: 0 0 6px;">Mobile Slide {{ $slideIndex }}</h3>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="content-mobile-slide-{{ $slideIndex }}-title">Slide {{ $slideIndex }} Title</label>
+                                    <input id="content-mobile-slide-{{ $slideIndex }}-title" name="mobile_slide_{{ $slideIndex }}_title" type="text" maxlength="160" value="{{ data_get($draftContent, 'mobile_slide_'.$slideIndex.'_title', data_get($appContentBootstrap, 'defaults.mobile_slide_'.$slideIndex.'_title')) }}">
+                                    <div class="settings-field-error" data-error-for="mobile_slide_{{ $slideIndex }}_title"></div>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="content-mobile-slide-{{ $slideIndex }}-subtitle">Slide {{ $slideIndex }} Subtitle</label>
+                                    <input id="content-mobile-slide-{{ $slideIndex }}-subtitle" name="mobile_slide_{{ $slideIndex }}_subtitle" type="text" maxlength="240" value="{{ data_get($draftContent, 'mobile_slide_'.$slideIndex.'_subtitle', data_get($appContentBootstrap, 'defaults.mobile_slide_'.$slideIndex.'_subtitle')) }}">
+                                    <div class="settings-field-error" data-error-for="mobile_slide_{{ $slideIndex }}_subtitle"></div>
+                                </div>
+                                <div class="settings-field" style="grid-column: 1 / -1;">
+                                    <label for="content-mobile-slide-{{ $slideIndex }}-image-url">Slide {{ $slideIndex }} Image URL</label>
+                                    <input id="content-mobile-slide-{{ $slideIndex }}-image-url" name="mobile_slide_{{ $slideIndex }}_image_url" type="url" maxlength="500" value="{{ data_get($draftContent, 'mobile_slide_'.$slideIndex.'_image_url', data_get($appContentBootstrap, 'defaults.mobile_slide_'.$slideIndex.'_image_url')) }}">
+                                    <div class="settings-field-error" data-error-for="mobile_slide_{{ $slideIndex }}_image_url"></div>
+                                </div>
+                                <div class="settings-field" style="grid-column: 1 / -1;">
+                                    <label for="content-mobile-slide-{{ $slideIndex }}-mobile-image-url">Slide {{ $slideIndex }} Phone Crop URL</label>
+                                    <input id="content-mobile-slide-{{ $slideIndex }}-mobile-image-url" name="mobile_slide_{{ $slideIndex }}_mobile_image_url" type="url" maxlength="500" value="{{ data_get($draftContent, 'mobile_slide_'.$slideIndex.'_mobile_image_url', data_get($appContentBootstrap, 'defaults.mobile_slide_'.$slideIndex.'_mobile_image_url')) }}">
+                                    <small>Optional. Leave blank to reuse the image URL.</small>
+                                    <div class="settings-field-error" data-error-for="mobile_slide_{{ $slideIndex }}_mobile_image_url"></div>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="content-mobile-slide-{{ $slideIndex }}-cta-label">Slide {{ $slideIndex }} Button Label</label>
+                                    <input id="content-mobile-slide-{{ $slideIndex }}-cta-label" name="mobile_slide_{{ $slideIndex }}_cta_label" type="text" maxlength="80" value="{{ data_get($draftContent, 'mobile_slide_'.$slideIndex.'_cta_label', data_get($appContentBootstrap, 'defaults.mobile_slide_'.$slideIndex.'_cta_label')) }}">
+                                    <div class="settings-field-error" data-error-for="mobile_slide_{{ $slideIndex }}_cta_label"></div>
+                                </div>
+                                <div class="settings-field">
+                                    <label for="content-mobile-slide-{{ $slideIndex }}-cta-url">Slide {{ $slideIndex }} Button URL</label>
+                                    <input id="content-mobile-slide-{{ $slideIndex }}-cta-url" name="mobile_slide_{{ $slideIndex }}_cta_url" type="url" maxlength="500" value="{{ data_get($draftContent, 'mobile_slide_'.$slideIndex.'_cta_url', data_get($appContentBootstrap, 'defaults.mobile_slide_'.$slideIndex.'_cta_url')) }}">
+                                    <div class="settings-field-error" data-error-for="mobile_slide_{{ $slideIndex }}_cta_url"></div>
+                                </div>
+                            @endfor
                         </div>
                     </form>
 
@@ -1460,6 +1538,27 @@
                     empty_rewards: "No active rewards right now.",
                     empty_orders: "No recent orders yet.",
                     account_note: "For privacy or account data requests, contact Modern Forestry support.",
+                    mobile_home_eyebrow: "Modern Forestry",
+                    mobile_home_title: "Hand-poured candles for a slower season.",
+                    mobile_home_subtitle: "Small-batch scents, seasonal favorites, and Candle Cash rewards.",
+                    mobile_slide_1_title: "Shop our Spring Collection",
+                    mobile_slide_1_subtitle: null,
+                    mobile_slide_1_image_url: "https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457",
+                    mobile_slide_1_mobile_image_url: null,
+                    mobile_slide_1_cta_label: "Click to Shop",
+                    mobile_slide_1_cta_url: "https://theforestrystudio.com/collections/spring-collection",
+                    mobile_slide_2_title: "Classic scents, always ready",
+                    mobile_slide_2_subtitle: "Keep your favorites close.",
+                    mobile_slide_2_image_url: "https://theforestrystudio.com/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113",
+                    mobile_slide_2_mobile_image_url: null,
+                    mobile_slide_2_cta_label: "Shop Classic",
+                    mobile_slide_2_cta_url: "https://theforestrystudio.com/collections/classic-collection-1",
+                    mobile_slide_3_title: "Earn Candle Cash",
+                    mobile_slide_3_subtitle: "Shop, review, and redeem rewards.",
+                    mobile_slide_3_image_url: "https://theforestrystudio.com/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038",
+                    mobile_slide_3_mobile_image_url: null,
+                    mobile_slide_3_cta_label: "View Rewards",
+                    mobile_slide_3_cta_url: "https://theforestrystudio.com/pages/rewards",
                 };
 
                 const source = input && typeof input === "object" ? input : {};
@@ -1487,6 +1586,27 @@
                     empty_rewards: normalizeString(source.empty_rewards) || defaults.empty_rewards,
                     empty_orders: normalizeString(source.empty_orders) || defaults.empty_orders,
                     account_note: normalizeString(source.account_note) || defaults.account_note,
+                    mobile_home_eyebrow: normalizeString(source.mobile_home_eyebrow) || defaults.mobile_home_eyebrow,
+                    mobile_home_title: normalizeString(source.mobile_home_title) || defaults.mobile_home_title,
+                    mobile_home_subtitle: normalizeString(source.mobile_home_subtitle) || defaults.mobile_home_subtitle,
+                    mobile_slide_1_title: normalizeString(source.mobile_slide_1_title) || defaults.mobile_slide_1_title,
+                    mobile_slide_1_subtitle: normalizeString(source.mobile_slide_1_subtitle) || defaults.mobile_slide_1_subtitle,
+                    mobile_slide_1_image_url: normalizeString(source.mobile_slide_1_image_url) || defaults.mobile_slide_1_image_url,
+                    mobile_slide_1_mobile_image_url: normalizeString(source.mobile_slide_1_mobile_image_url) || defaults.mobile_slide_1_mobile_image_url,
+                    mobile_slide_1_cta_label: normalizeString(source.mobile_slide_1_cta_label) || defaults.mobile_slide_1_cta_label,
+                    mobile_slide_1_cta_url: normalizeString(source.mobile_slide_1_cta_url) || defaults.mobile_slide_1_cta_url,
+                    mobile_slide_2_title: normalizeString(source.mobile_slide_2_title) || defaults.mobile_slide_2_title,
+                    mobile_slide_2_subtitle: normalizeString(source.mobile_slide_2_subtitle) || defaults.mobile_slide_2_subtitle,
+                    mobile_slide_2_image_url: normalizeString(source.mobile_slide_2_image_url) || defaults.mobile_slide_2_image_url,
+                    mobile_slide_2_mobile_image_url: normalizeString(source.mobile_slide_2_mobile_image_url) || defaults.mobile_slide_2_mobile_image_url,
+                    mobile_slide_2_cta_label: normalizeString(source.mobile_slide_2_cta_label) || defaults.mobile_slide_2_cta_label,
+                    mobile_slide_2_cta_url: normalizeString(source.mobile_slide_2_cta_url) || defaults.mobile_slide_2_cta_url,
+                    mobile_slide_3_title: normalizeString(source.mobile_slide_3_title) || defaults.mobile_slide_3_title,
+                    mobile_slide_3_subtitle: normalizeString(source.mobile_slide_3_subtitle) || defaults.mobile_slide_3_subtitle,
+                    mobile_slide_3_image_url: normalizeString(source.mobile_slide_3_image_url) || defaults.mobile_slide_3_image_url,
+                    mobile_slide_3_mobile_image_url: normalizeString(source.mobile_slide_3_mobile_image_url) || defaults.mobile_slide_3_mobile_image_url,
+                    mobile_slide_3_cta_label: normalizeString(source.mobile_slide_3_cta_label) || defaults.mobile_slide_3_cta_label,
+                    mobile_slide_3_cta_url: normalizeString(source.mobile_slide_3_cta_url) || defaults.mobile_slide_3_cta_url,
                 };
             }
 
@@ -1576,6 +1696,10 @@
                     : "";
                 const brandName = escapeHtml(snapshot.brand_name || "Modern Forestry");
                 const note = escapeHtml(snapshot.account_note || "");
+                const mobileTitle = escapeHtml(snapshot.mobile_home_title || "");
+                const mobileSubtitle = escapeHtml(snapshot.mobile_home_subtitle || "");
+                const mobileSlideTitle = escapeHtml(snapshot.mobile_slide_1_title || "");
+                const mobileSlideCta = escapeHtml(snapshot.mobile_slide_1_cta_label || "");
 
                 return `
                     <div class="content-preview-hero">
@@ -1603,6 +1727,15 @@
                             ${privacyHref ? `<a class="content-preview-action" href="${privacyHref}">Privacy</a>` : ""}
                             ${termsHref ? `<a class="content-preview-action" href="${termsHref}">Terms</a>` : ""}
                             ${dataRequestHref ? `<a class="content-preview-action" href="${dataRequestHref}">Data requests</a>` : ""}
+                        </div>
+                    </div>
+                    <div class="content-preview-section">
+                        <strong>Native mobile Home</strong>
+                        <div class="content-preview-empty">${mobileTitle}</div>
+                        <div class="content-preview-empty">${mobileSubtitle}</div>
+                        <div class="content-preview-actions">
+                            <span class="content-preview-action">${mobileSlideTitle}</span>
+                            <span class="content-preview-action">${mobileSlideCta}</span>
                         </div>
                     </div>
                     <div class="content-preview-empty" style="margin-top: 12px;">${brandName} · ${note} · ${badgeLabel}</div>
@@ -1655,6 +1788,17 @@
                 setContentField("content-empty-rewards", snapshot.empty_rewards);
                 setContentField("content-empty-orders", snapshot.empty_orders);
                 setContentField("content-account-note", snapshot.account_note);
+                setContentField("content-mobile-home-eyebrow", snapshot.mobile_home_eyebrow);
+                setContentField("content-mobile-home-title", snapshot.mobile_home_title);
+                setContentField("content-mobile-home-subtitle", snapshot.mobile_home_subtitle);
+                for (let index = 1; index <= 3; index += 1) {
+                    setContentField(`content-mobile-slide-${index}-title`, snapshot[`mobile_slide_${index}_title`]);
+                    setContentField(`content-mobile-slide-${index}-subtitle`, snapshot[`mobile_slide_${index}_subtitle`]);
+                    setContentField(`content-mobile-slide-${index}-image-url`, snapshot[`mobile_slide_${index}_image_url`]);
+                    setContentField(`content-mobile-slide-${index}-mobile-image-url`, snapshot[`mobile_slide_${index}_mobile_image_url`]);
+                    setContentField(`content-mobile-slide-${index}-cta-label`, snapshot[`mobile_slide_${index}_cta_label`]);
+                    setContentField(`content-mobile-slide-${index}-cta-url`, snapshot[`mobile_slide_${index}_cta_url`]);
+                }
                 renderContentPreview();
             }
 
@@ -1691,6 +1835,27 @@
                     empty_rewards: normalizeString(document.getElementById("content-empty-rewards")?.value) || contentState.defaults.empty_rewards,
                     empty_orders: normalizeString(document.getElementById("content-empty-orders")?.value) || contentState.defaults.empty_orders,
                     account_note: normalizeString(document.getElementById("content-account-note")?.value) || contentState.defaults.account_note,
+                    mobile_home_eyebrow: normalizeString(document.getElementById("content-mobile-home-eyebrow")?.value) || contentState.defaults.mobile_home_eyebrow,
+                    mobile_home_title: normalizeString(document.getElementById("content-mobile-home-title")?.value) || contentState.defaults.mobile_home_title,
+                    mobile_home_subtitle: normalizeString(document.getElementById("content-mobile-home-subtitle")?.value) || contentState.defaults.mobile_home_subtitle,
+                    mobile_slide_1_title: normalizeString(document.getElementById("content-mobile-slide-1-title")?.value) || contentState.defaults.mobile_slide_1_title,
+                    mobile_slide_1_subtitle: normalizeString(document.getElementById("content-mobile-slide-1-subtitle")?.value) || contentState.defaults.mobile_slide_1_subtitle,
+                    mobile_slide_1_image_url: normalizeString(document.getElementById("content-mobile-slide-1-image-url")?.value) || contentState.defaults.mobile_slide_1_image_url,
+                    mobile_slide_1_mobile_image_url: normalizeString(document.getElementById("content-mobile-slide-1-mobile-image-url")?.value) || contentState.defaults.mobile_slide_1_mobile_image_url,
+                    mobile_slide_1_cta_label: normalizeString(document.getElementById("content-mobile-slide-1-cta-label")?.value) || contentState.defaults.mobile_slide_1_cta_label,
+                    mobile_slide_1_cta_url: normalizeString(document.getElementById("content-mobile-slide-1-cta-url")?.value) || contentState.defaults.mobile_slide_1_cta_url,
+                    mobile_slide_2_title: normalizeString(document.getElementById("content-mobile-slide-2-title")?.value) || contentState.defaults.mobile_slide_2_title,
+                    mobile_slide_2_subtitle: normalizeString(document.getElementById("content-mobile-slide-2-subtitle")?.value) || contentState.defaults.mobile_slide_2_subtitle,
+                    mobile_slide_2_image_url: normalizeString(document.getElementById("content-mobile-slide-2-image-url")?.value) || contentState.defaults.mobile_slide_2_image_url,
+                    mobile_slide_2_mobile_image_url: normalizeString(document.getElementById("content-mobile-slide-2-mobile-image-url")?.value) || contentState.defaults.mobile_slide_2_mobile_image_url,
+                    mobile_slide_2_cta_label: normalizeString(document.getElementById("content-mobile-slide-2-cta-label")?.value) || contentState.defaults.mobile_slide_2_cta_label,
+                    mobile_slide_2_cta_url: normalizeString(document.getElementById("content-mobile-slide-2-cta-url")?.value) || contentState.defaults.mobile_slide_2_cta_url,
+                    mobile_slide_3_title: normalizeString(document.getElementById("content-mobile-slide-3-title")?.value) || contentState.defaults.mobile_slide_3_title,
+                    mobile_slide_3_subtitle: normalizeString(document.getElementById("content-mobile-slide-3-subtitle")?.value) || contentState.defaults.mobile_slide_3_subtitle,
+                    mobile_slide_3_image_url: normalizeString(document.getElementById("content-mobile-slide-3-image-url")?.value) || contentState.defaults.mobile_slide_3_image_url,
+                    mobile_slide_3_mobile_image_url: normalizeString(document.getElementById("content-mobile-slide-3-mobile-image-url")?.value) || contentState.defaults.mobile_slide_3_mobile_image_url,
+                    mobile_slide_3_cta_label: normalizeString(document.getElementById("content-mobile-slide-3-cta-label")?.value) || contentState.defaults.mobile_slide_3_cta_label,
+                    mobile_slide_3_cta_url: normalizeString(document.getElementById("content-mobile-slide-3-cta-url")?.value) || contentState.defaults.mobile_slide_3_cta_url,
                 };
             }
 
