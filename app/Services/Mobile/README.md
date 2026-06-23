@@ -78,6 +78,7 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 ## Shopify Embedded App Content Bridge (2026-06-23)
 
 - The native Home payload now reads published App Content from the Shopify embedded `Edit App` page before falling back to defaults.
+- The `Edit App` page includes a Shopify-admin-side phone preview that uses draft Mobile Home fields plus live mobile Home API shelves for visual editing.
 - Editable mobile fields currently include:
   - Home hero eyebrow, title, and subtitle
   - three hero slide titles, subtitles, image URLs, phone-crop URLs, button labels, and button URLs

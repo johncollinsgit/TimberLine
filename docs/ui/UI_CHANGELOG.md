@@ -6,6 +6,7 @@
 - Added a top-level Shopify embedded `Edit App` navigation item between Rewards and Settings.
 - Moved the Modern Forestry App Content editor out of Settings and into its own page.
 - Split app editing into Customer Dashboard and Mobile Home tabs while keeping the existing draft/publish workflow.
+- Added a phone-shaped live Mobile Home preview that updates as operators type and uses live product/collection shelf data when available.
 
 ### What did not change
 - The existing App Content API endpoints and published mobile Home payload contract remain stable.

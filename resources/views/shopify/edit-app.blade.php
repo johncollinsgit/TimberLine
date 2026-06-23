@@ -69,9 +69,21 @@
         .app-editor-root {
             display: grid;
             gap: 16px;
-            max-width: 1200px;
+            max-width: 1440px;
             width: 100%;
             margin: 0 auto;
+        }
+
+        .app-editor-workspace {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+            align-items: start;
+            gap: 18px;
+        }
+
+        .app-editor-preview-card {
+            position: sticky;
+            top: 18px;
         }
 
         .app-editor-card {
@@ -277,109 +289,385 @@
             opacity: 0.6;
         }
 
-        .app-editor-preview-grid {
+        .app-preview-frame {
+            display: flex;
+            justify-content: center;
+            padding: 10px 0 2px;
+        }
+
+        .app-phone {
+            width: min(100%, 360px);
+            aspect-ratio: 390 / 844;
+            border-radius: 38px;
+            border: 10px solid #101828;
+            background: #f8f4ec;
+            box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .app-phone::before {
+            content: "";
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 84px;
+            height: 22px;
+            border-radius: 999px;
+            background: #101828;
+            z-index: 4;
+        }
+
+        .app-phone-screen {
+            height: 100%;
+            overflow: auto;
+            background: #f7f1e7;
+            color: #1f2937;
+            scrollbar-width: thin;
+        }
+
+        .app-phone-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 22px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            color: #1f2937;
+        }
+
+        .app-phone-status-icons {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .app-phone-status-icons span {
+            display: block;
+            width: 14px;
+            height: 7px;
+            border-radius: 999px;
+            background: rgba(31, 41, 55, 0.72);
+        }
+
+        .app-phone-body {
             display: grid;
-            gap: 12px;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            margin-top: 14px;
+            gap: 18px;
+            padding: 12px 14px 24px;
         }
 
-        .app-editor-preview {
-            border-radius: 14px;
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            background: rgba(248, 250, 252, 0.86);
-            padding: 14px;
+        .app-phone-brand {
+            text-align: center;
+            display: grid;
+            gap: 2px;
         }
 
-        .app-editor-preview ul {
-            margin: 12px 0 0;
-            padding-left: 18px;
-            color: rgba(15, 23, 42, 0.72);
+        .app-phone-brand strong {
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 19px;
+            letter-spacing: 0.02em;
+            color: #1f2a21;
+        }
+
+        .app-phone-brand span {
+            font-size: 10px;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+            color: #6f7f68;
+        }
+
+        .app-phone-hero {
+            min-height: 382px;
+            border-radius: 32px;
+            background: linear-gradient(180deg, #f8fafc, #efe7d7);
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+        }
+
+        .app-phone-hero img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .app-phone-hero::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.76));
+        }
+
+        .app-phone-hero-copy {
+            position: absolute;
+            left: 22px;
+            right: 22px;
+            bottom: 46px;
+            z-index: 2;
+            display: grid;
+            gap: 9px;
+            color: #ffffff;
+        }
+
+        .app-phone-hero-copy strong {
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 27px;
+            line-height: 1.04;
+            font-weight: 600;
+        }
+
+        .app-phone-hero-copy p {
+            margin: 0;
             font-size: 13px;
-            line-height: 1.55;
+            line-height: 1.36;
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .app-phone-hero-cta {
+            width: fit-content;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.16);
+            padding: 9px 13px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #fffaf0;
+        }
+
+        .app-phone-dots {
+            position: absolute;
+            left: 22px;
+            bottom: 18px;
+            z-index: 2;
+            display: flex;
+            gap: 7px;
+        }
+
+        .app-phone-dots span {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.46);
+        }
+
+        .app-phone-dots span:first-child {
+            width: 24px;
+            background: #ffffff;
+        }
+
+        .app-phone-section {
+            display: grid;
+            gap: 11px;
+        }
+
+        .app-phone-section h3 {
+            margin: 0;
+            color: #6d856b;
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .app-phone-rail {
+            display: flex;
+            gap: 12px;
+            overflow: hidden;
+        }
+
+        .app-phone-collection-card,
+        .app-phone-product-card {
+            flex: 0 0 auto;
+            border-radius: 22px;
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            background: #fffdf9;
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
+            overflow: hidden;
+        }
+
+        .app-phone-collection-card {
+            width: 144px;
+            padding: 11px;
+        }
+
+        .app-phone-collection-card img,
+        .app-phone-product-card img,
+        .app-phone-image-placeholder {
+            display: block;
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: 18px;
+            background: #f1eadf;
+        }
+
+        .app-phone-image-placeholder {
+            border: 1px dashed rgba(15, 23, 42, 0.14);
+        }
+
+        .app-phone-card-title {
+            margin: 10px 0 0;
+            font-size: 14px;
+            line-height: 1.16;
+            font-weight: 800;
+            color: #1f2937;
+        }
+
+        .app-phone-card-subtitle {
+            margin: 6px 0 0;
+            min-height: 30px;
+            color: #6f6a60;
+            font-size: 11px;
+            line-height: 1.28;
+        }
+
+        .app-phone-products-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .app-phone-product-card {
+            padding: 11px;
+            min-height: 228px;
+        }
+
+        .app-phone-price {
+            margin-top: 14px;
+            color: #6f6a60;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .app-preview-note {
+            margin: 12px 0 0;
+            color: rgba(15, 23, 42, 0.58);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .app-preview-warning {
+            margin-top: 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(180, 35, 24, 0.2);
+            background: rgba(180, 35, 24, 0.08);
+            color: #b42318;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .app-preview-warning[hidden] {
+            display: none;
         }
 
         @media (max-width: 760px) {
-            .app-editor-grid,
-            .app-editor-preview-grid {
+            .app-editor-grid {
                 grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .app-editor-workspace {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .app-editor-preview-card {
+                position: static;
             }
         }
     </style>
 
     <section class="app-editor-root" id="app-content-editor-root">
         @if(is_array($appContentBootstrap ?? null) && (bool) ($appContentBootstrap['authorized'] ?? false))
-            <article class="app-editor-card" id="app-content-card">
-                <div class="app-editor-head">
-                    <div>
-                        <h2>App Content</h2>
-                        <p>Update customer dashboard and mobile app copy. Draft changes stay private until you publish them.</p>
-                    </div>
-                    <div class="app-editor-badges" id="app-content-status">
-                        <span class="app-editor-badge">Draft ready</span>
-                        <span class="app-editor-badge app-editor-badge--configured">Published live</span>
-                    </div>
-                </div>
-
-                <div class="app-editor-alert" id="app-content-alert" hidden></div>
-
-                <form id="app-content-form">
-                    <div class="app-editor-tabs" role="tablist" aria-label="Edit App sections">
-                        <button class="app-editor-tab is-active" id="app-content-tab-dashboard" type="button" role="tab" aria-selected="true" aria-controls="app-content-panel-dashboard" data-app-content-tab="dashboard">Customer Dashboard</button>
-                        <button class="app-editor-tab" id="app-content-tab-mobile" type="button" role="tab" aria-selected="false" aria-controls="app-content-panel-mobile" data-app-content-tab="mobile">Mobile Home</button>
-                    </div>
-
-                    <div class="app-editor-panel" id="app-content-panel-dashboard" role="tabpanel" aria-labelledby="app-content-tab-dashboard">
-                        <div class="app-editor-grid">
-                            @foreach($dashboardFields as [$name, $label, $type, $max])
-                                <div class="app-editor-field {{ $type === 'textarea' ? 'app-editor-field--wide' : '' }}">
-                                    <label for="{{ $fieldId($name) }}">{{ $label }}</label>
-                                    @if($type === 'textarea')
-                                        <textarea id="{{ $fieldId($name) }}" name="{{ $name }}" maxlength="{{ $max }}">{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}</textarea>
-                                    @else
-                                        <input id="{{ $fieldId($name) }}" name="{{ $name }}" type="{{ $type }}" maxlength="{{ $max }}" value="{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}">
-                                    @endif
-                                    <div class="app-editor-field-error" data-error-for="{{ $name }}"></div>
-                                </div>
-                            @endforeach
+            <div class="app-editor-workspace">
+                <article class="app-editor-card" id="app-content-card">
+                    <div class="app-editor-head">
+                        <div>
+                            <h2>App Content</h2>
+                            <p>Update customer dashboard and mobile app copy. Draft changes stay private until you publish them.</p>
+                        </div>
+                        <div class="app-editor-badges" id="app-content-status">
+                            <span class="app-editor-badge">Draft ready</span>
+                            <span class="app-editor-badge app-editor-badge--configured">Published live</span>
                         </div>
                     </div>
 
-                    <div class="app-editor-panel" id="app-content-panel-mobile" role="tabpanel" aria-labelledby="app-content-tab-mobile" hidden>
-                        <div class="app-editor-grid">
-                            @foreach($mobileFields as [$name, $label, $type, $max])
-                                <div class="app-editor-field {{ $type === 'textarea' ? 'app-editor-field--wide' : '' }}">
-                                    <label for="{{ $fieldId($name) }}">{{ $label }}</label>
-                                    @if($type === 'textarea')
-                                        <textarea id="{{ $fieldId($name) }}" name="{{ $name }}" maxlength="{{ $max }}">{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}</textarea>
-                                    @else
-                                        <input id="{{ $fieldId($name) }}" name="{{ $name }}" type="{{ $type }}" maxlength="{{ $max }}" value="{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}">
-                                    @endif
-                                    <div class="app-editor-field-error" data-error-for="{{ $name }}"></div>
-                                </div>
-                            @endforeach
+                    <div class="app-editor-alert" id="app-content-alert" hidden></div>
+
+                    <form id="app-content-form">
+                        <div class="app-editor-tabs" role="tablist" aria-label="Edit App sections">
+                            <button class="app-editor-tab is-active" id="app-content-tab-dashboard" type="button" role="tab" aria-selected="true" aria-controls="app-content-panel-dashboard" data-app-content-tab="dashboard">Customer Dashboard</button>
+                            <button class="app-editor-tab" id="app-content-tab-mobile" type="button" role="tab" aria-selected="false" aria-controls="app-content-panel-mobile" data-app-content-tab="mobile">Mobile Home</button>
+                        </div>
+
+                        <div class="app-editor-panel" id="app-content-panel-dashboard" role="tabpanel" aria-labelledby="app-content-tab-dashboard">
+                            <div class="app-editor-grid">
+                                @foreach($dashboardFields as [$name, $label, $type, $max])
+                                    <div class="app-editor-field {{ $type === 'textarea' ? 'app-editor-field--wide' : '' }}">
+                                        <label for="{{ $fieldId($name) }}">{{ $label }}</label>
+                                        @if($type === 'textarea')
+                                            <textarea id="{{ $fieldId($name) }}" name="{{ $name }}" maxlength="{{ $max }}">{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}</textarea>
+                                        @else
+                                            <input id="{{ $fieldId($name) }}" name="{{ $name }}" type="{{ $type }}" maxlength="{{ $max }}" value="{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}">
+                                        @endif
+                                        <div class="app-editor-field-error" data-error-for="{{ $name }}"></div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="app-editor-panel" id="app-content-panel-mobile" role="tabpanel" aria-labelledby="app-content-tab-mobile" hidden>
+                            <div class="app-editor-grid">
+                                @foreach($mobileFields as [$name, $label, $type, $max])
+                                    <div class="app-editor-field {{ $type === 'textarea' ? 'app-editor-field--wide' : '' }}">
+                                        <label for="{{ $fieldId($name) }}">{{ $label }}</label>
+                                        @if($type === 'textarea')
+                                            <textarea id="{{ $fieldId($name) }}" name="{{ $name }}" maxlength="{{ $max }}">{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}</textarea>
+                                        @else
+                                            <input id="{{ $fieldId($name) }}" name="{{ $name }}" type="{{ $type }}" maxlength="{{ $max }}" value="{{ data_get($draftContent, $name, data_get($appContentBootstrap, 'defaults.'.$name, '')) }}">
+                                        @endif
+                                        <div class="app-editor-field-error" data-error-for="{{ $name }}"></div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="app-editor-actions">
+                        <button class="app-editor-button" type="button" id="app-content-save">Save Draft</button>
+                        <button class="app-editor-button app-editor-button--primary" type="button" id="app-content-publish">Publish Live</button>
+                    </div>
+                </article>
+
+                <article class="app-editor-card app-editor-preview-card">
+                    <div class="app-editor-head">
+                        <div>
+                            <h2>Live Mobile Preview</h2>
+                            <p>Draft Mobile Home fields render here as you type. Publish still controls what the iPhone app receives.</p>
                         </div>
                     </div>
-                </form>
-
-                <div class="app-editor-actions">
-                    <button class="app-editor-button" type="button" id="app-content-save">Save Draft</button>
-                    <button class="app-editor-button app-editor-button--primary" type="button" id="app-content-publish">Publish Live</button>
-                </div>
-            </article>
-
-            <article class="app-editor-card">
-                <div class="app-editor-head">
-                    <div>
-                        <h2>Preview</h2>
-                        <p>Draft updates below refresh as you type. Live content reflects the latest published snapshot.</p>
+                    <div class="app-preview-frame">
+                        <div class="app-phone" aria-label="Mobile app home preview">
+                            <div class="app-phone-screen">
+                                <div class="app-phone-status">
+                                    <span>9:41</span>
+                                    <span class="app-phone-status-icons" aria-hidden="true"><span></span><span></span></span>
+                                </div>
+                                <div class="app-phone-body" id="app-phone-preview"></div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="app-editor-preview-grid">
-                    <div class="app-editor-preview" id="content-preview-draft"></div>
-                    <div class="app-editor-preview" id="content-preview-live"></div>
-                </div>
-            </article>
+                    <p class="app-preview-note">
+                        Product and collection shelves use live mobile API data when available. Hero copy and image URLs use the current draft.
+                    </p>
+                    <div class="app-preview-warning" id="app-preview-warning" hidden></div>
+                </article>
+            </div>
         @else
             <article class="app-editor-card">
                 <div class="app-editor-head">
@@ -400,9 +688,10 @@
             const alertNode = document.getElementById("app-content-alert");
             const saveButton = document.getElementById("app-content-save");
             const publishButton = document.getElementById("app-content-publish");
-            const draftPreview = document.getElementById("content-preview-draft");
-            const livePreview = document.getElementById("content-preview-live");
+            const phonePreview = document.getElementById("app-phone-preview");
+            const previewWarning = document.getElementById("app-preview-warning");
             const tabs = Array.from(root?.querySelectorAll("[data-app-content-tab]") || []);
+            const mobileHomeEndpoint = @json(route('mobile.modern-forestry.home', [], false));
             const panels = {
                 dashboard: document.getElementById("app-content-panel-dashboard"),
                 mobile: document.getElementById("app-content-panel-mobile"),
@@ -416,6 +705,7 @@
                 defaults: normalizeContent(bootstrap?.defaults || {}),
                 draft: normalizeContent(bootstrap?.settings?.draft || bootstrap?.settings?.effective || bootstrap?.defaults || {}),
                 published: bootstrap?.settings?.published ? normalizeContent(bootstrap.settings.published) : null,
+                liveHome: null,
                 saving: false,
             };
 
@@ -583,26 +873,6 @@
                 return payload;
             }
 
-            function renderPreviewCard(node, title, content) {
-                if (!node) {
-                    return;
-                }
-                const slides = [1, 2, 3].map((index) => ({
-                    title: content[`mobile_slide_${index}_title`] || `Slide ${index}`,
-                    cta: content[`mobile_slide_${index}_cta_label`] || "Open",
-                }));
-                node.innerHTML = `
-                    <h3>${escapeHtml(title)}</h3>
-                    <p><strong>${escapeHtml(content.hero_title || content.mobile_home_title || "Untitled")}</strong></p>
-                    <p>${escapeHtml(content.hero_body || content.mobile_home_subtitle || "")}</p>
-                    <ul>
-                        <li>Dashboard: ${escapeHtml(content.rewards_title || "Rewards")} / ${escapeHtml(content.orders_title || "Orders")}</li>
-                        <li>Mobile Home: ${escapeHtml(content.mobile_home_title || "Home")}</li>
-                        <li>Slides: ${slides.map((slide) => `${slide.title} (${slide.cta})`).map(escapeHtml).join(", ")}</li>
-                    </ul>
-                `;
-            }
-
             function escapeHtml(value) {
                 return String(value || "")
                     .replace(/&/g, "&amp;")
@@ -612,10 +882,199 @@
                     .replace(/'/g, "&#039;");
             }
 
+            function safeImageUrl(value) {
+                const normalized = normalizeString(value);
+                if (normalized === "") {
+                    return "";
+                }
+
+                try {
+                    const url = new URL(normalized, window.location.origin);
+                    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+                } catch (_error) {
+                    return "";
+                }
+            }
+
+            function formatPrice(value) {
+                if (typeof value === "number" && Number.isFinite(value)) {
+                    return `$${value.toFixed(2)}`;
+                }
+
+                const normalized = normalizeString(value);
+                if (normalized === "") {
+                    return "$30.00";
+                }
+
+                return normalized.startsWith("$") ? normalized : `$${normalized}`;
+            }
+
+            function fallbackCollections() {
+                return [
+                    {
+                        title: "Spring",
+                        description: "Fresh florals and brighter seasonal favorites.",
+                        imageUrl: state.defaults.mobile_slide_1_image_url,
+                    },
+                    {
+                        title: "Classic",
+                        description: "Core scents ready all year.",
+                        imageUrl: state.defaults.mobile_slide_2_image_url,
+                    },
+                    {
+                        title: "Holiday",
+                        description: "Seasonal candles for gifts and gatherings.",
+                        imageUrl: state.defaults.mobile_slide_3_image_url,
+                    },
+                ];
+            }
+
+            function fallbackProducts() {
+                return [
+                    {
+                        title: "Sale Candles",
+                        price: "$14.00",
+                        imageUrl: state.defaults.mobile_slide_1_image_url,
+                    },
+                    {
+                        title: "Holiday Tree Candle",
+                        price: "$35.00",
+                        imageUrl: state.defaults.mobile_slide_2_image_url,
+                    },
+                    {
+                        title: "Thru Hike",
+                        price: "$30.00",
+                        imageUrl: state.defaults.mobile_slide_3_image_url,
+                    },
+                    {
+                        title: "Summer Linen",
+                        price: "$30.00",
+                        imageUrl: state.defaults.mobile_slide_1_image_url,
+                    },
+                ];
+            }
+
+            function currentSlides(content) {
+                return [1, 2, 3].map((index) => ({
+                    title: normalizeString(content[`mobile_slide_${index}_title`]) || `Slide ${index}`,
+                    subtitle: normalizeString(content[`mobile_slide_${index}_subtitle`]),
+                    imageUrl: safeImageUrl(content[`mobile_slide_${index}_mobile_image_url`])
+                        || safeImageUrl(content[`mobile_slide_${index}_image_url`]),
+                    cta: normalizeString(content[`mobile_slide_${index}_cta_label`]) || "Open",
+                })).filter((slide) => slide.title !== "" || slide.imageUrl !== "");
+            }
+
+            function shelfImage(item) {
+                return safeImageUrl(item?.imageUrl || item?.image_url || item?.image || "");
+            }
+
+            function renderImage(url, alt) {
+                const safeUrl = safeImageUrl(url);
+                if (safeUrl === "") {
+                    return `<div class="app-phone-image-placeholder" role="img" aria-label="${escapeHtml(alt)}"></div>`;
+                }
+
+                return `<img src="${escapeHtml(safeUrl)}" alt="${escapeHtml(alt)}" loading="lazy" onerror="this.style.visibility='hidden'">`;
+            }
+
+            function renderCollectionCard(collection) {
+                const title = normalizeString(collection?.title) || "Collection";
+                const description = normalizeString(collection?.description) || "Browse collection";
+                return `
+                    <div class="app-phone-collection-card">
+                        ${renderImage(shelfImage(collection), title)}
+                        <div class="app-phone-card-title">${escapeHtml(title)}</div>
+                        <div class="app-phone-card-subtitle">${escapeHtml(description)}</div>
+                    </div>
+                `;
+            }
+
+            function renderProductCard(product) {
+                const title = normalizeString(product?.title) || "Product";
+                const imageUrl = shelfImage(product);
+                const price = formatPrice(product?.price || product?.priceText || product?.displayPrice);
+                return `
+                    <div class="app-phone-product-card">
+                        ${renderImage(imageUrl, title)}
+                        <div class="app-phone-card-title">${escapeHtml(title)}</div>
+                        <div class="app-phone-price">${escapeHtml(price)}</div>
+                    </div>
+                `;
+            }
+
             function renderPreviews() {
                 const draft = normalizeContent({ ...state.draft, ...collectPayload() });
-                renderPreviewCard(draftPreview, "Draft Preview", draft);
-                renderPreviewCard(livePreview, "Live Preview", state.published || state.defaults);
+                if (!phonePreview) {
+                    return;
+                }
+
+                const slides = currentSlides(draft);
+                const heroSlide = slides[0] || {
+                    title: draft.mobile_home_title,
+                    subtitle: draft.mobile_home_subtitle,
+                    imageUrl: state.defaults.mobile_slide_1_image_url,
+                    cta: draft.mobile_slide_1_cta_label || "Open",
+                };
+                const collections = Array.isArray(state.liveHome?.featuredCollections) && state.liveHome.featuredCollections.length > 0
+                    ? state.liveHome.featuredCollections.slice(0, 4)
+                    : fallbackCollections();
+                const products = Array.isArray(state.liveHome?.featuredProducts) && state.liveHome.featuredProducts.length > 0
+                    ? state.liveHome.featuredProducts.slice(0, 4)
+                    : fallbackProducts();
+
+                phonePreview.innerHTML = `
+                    <div class="app-phone-brand">
+                        <strong>${escapeHtml(draft.brand_name || "Modern Forestry")}</strong>
+                        <span>Soy candles</span>
+                    </div>
+                    <div class="app-phone-hero">
+                        ${renderImage(heroSlide.imageUrl, heroSlide.title)}
+                        <div class="app-phone-hero-copy">
+                            <strong>${escapeHtml(heroSlide.title || draft.mobile_home_title || "Mobile Home")}</strong>
+                            ${heroSlide.subtitle ? `<p>${escapeHtml(heroSlide.subtitle)}</p>` : ""}
+                            ${heroSlide.cta ? `<div class="app-phone-hero-cta">${escapeHtml(heroSlide.cta)} &rarr;</div>` : ""}
+                        </div>
+                        <div class="app-phone-dots">
+                            ${slides.slice(0, 3).map(() => "<span></span>").join("") || "<span></span>"}
+                        </div>
+                    </div>
+                    <div class="app-phone-section">
+                        <h3>Browse Collections</h3>
+                        <div class="app-phone-rail">
+                            ${collections.map(renderCollectionCard).join("")}
+                        </div>
+                    </div>
+                    <div class="app-phone-section">
+                        <h3>Featured Products</h3>
+                        <div class="app-phone-products-grid">
+                            ${products.map(renderProductCard).join("")}
+                        </div>
+                    </div>
+                `;
+            }
+
+            async function loadPreviewHomeData() {
+                try {
+                    const response = await fetch(mobileHomeEndpoint, {
+                        headers: { "Accept": "application/json" },
+                        credentials: "same-origin",
+                    });
+                    const payload = await response.json();
+                    if (!response.ok || !payload || typeof payload !== "object") {
+                        throw new Error(payload?.message || "Mobile preview data is unavailable.");
+                    }
+                    state.liveHome = payload;
+                    if (previewWarning) {
+                        previewWarning.hidden = true;
+                        previewWarning.textContent = "";
+                    }
+                    renderPreviews();
+                } catch (error) {
+                    if (previewWarning) {
+                        previewWarning.hidden = false;
+                        previewWarning.textContent = error?.message || "Live product and collection data could not be loaded. Showing preview placeholders.";
+                    }
+                }
             }
 
             async function saveContent(publish = false) {
@@ -669,6 +1128,7 @@
             saveButton?.addEventListener("click", () => saveContent(false));
             publishButton?.addEventListener("click", () => saveContent(true));
             renderPreviews();
+            loadPreviewHomeData();
         })();
     </script>
 </x-shopify-embedded-shell>

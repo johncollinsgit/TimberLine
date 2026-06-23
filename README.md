@@ -29,6 +29,7 @@ Important boundary:
 
 - Shopify embedded navigation now exposes a top-level `Edit App` page between Rewards and Settings.
 - The dedicated editor separates Customer Dashboard and Mobile Home fields with tabs, while Settings only links to the editor.
+- The editor includes a phone-shaped live Mobile Home preview that updates from draft hero fields and hydrates product/collection shelves from the mobile Home API.
 - Operators can update the native Home hero copy and three hero slides using draft/publish controls without rebuilding iOS.
 - Published App Content feeds `/api/mobile/v1/modern-forestry/home`; draft content stays private in Shopify Admin.
 - Product and collection photos still come from Shopify product/collection media through the Laravel mobile catalog service.
