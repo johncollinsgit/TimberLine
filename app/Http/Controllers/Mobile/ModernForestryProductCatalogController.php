@@ -11,6 +11,7 @@ use App\Services\Mobile\ModernForestryMobileCustomerSessionService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Throwable;
 
 class ModernForestryProductCatalogController extends Controller
@@ -238,6 +239,13 @@ class ModernForestryProductCatalogController extends Controller
                 'source' => 'shopify_customer_account',
             ],
         ]);
+    }
+
+    public function authCallback(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions
+    ): RedirectResponse {
+        return redirect()->away($sessions->nativeCallbackRedirect($request->query()));
     }
 
     public function authToken(

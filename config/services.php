@@ -204,6 +204,7 @@ return [
             'token_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT'),
             'graphql_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT'),
             'redirect_uri' => env('SHOPIFY_CUSTOMER_ACCOUNT_REDIRECT_URI', 'shop.20812479.modernforestry://shopify-customer-auth'),
+            'callback_scheme' => env('SHOPIFY_CUSTOMER_ACCOUNT_CALLBACK_SCHEME', 'shop.20812479.modernforestry'),
             'scopes' => env('SHOPIFY_CUSTOMER_ACCOUNT_SCOPES', 'openid email customer-account-api:full'),
         ],
 

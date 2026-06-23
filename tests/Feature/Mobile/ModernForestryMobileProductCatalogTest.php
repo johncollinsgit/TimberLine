@@ -310,7 +310,8 @@ test('mobile customer auth config exposes only public oauth fields', function ()
     config()->set('services.shopify.customer_account.authorization_endpoint', 'https://shopify.com/authentication/20812479/oauth/authorize');
     config()->set('services.shopify.customer_account.token_endpoint', 'https://shopify.com/authentication/20812479/oauth/token');
     config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
-    config()->set('services.shopify.customer_account.redirect_uri', 'shop.20812479.modernforestry://shopify-customer-auth');
+    config()->set('services.shopify.customer_account.redirect_uri', 'https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback');
+    config()->set('services.shopify.customer_account.callback_scheme', 'shop.20812479.modernforestry');
     config()->set('services.shopify.customer_account.scopes', 'openid email customer-account-api:full');
 
     $payload = $this->getJson('/api/mobile/v1/modern-forestry/auth/config')
@@ -318,13 +319,20 @@ test('mobile customer auth config exposes only public oauth fields', function ()
         ->assertJsonPath('data.configured', true)
         ->assertJsonPath('data.clientId', 'customer-account-client')
         ->assertJsonPath('data.authorizationEndpoint', 'https://shopify.com/authentication/20812479/oauth/authorize')
-        ->assertJsonPath('data.redirectUri', 'shop.20812479.modernforestry://shopify-customer-auth')
+        ->assertJsonPath('data.redirectUri', 'https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback')
         ->assertJsonPath('data.callbackScheme', 'shop.20812479.modernforestry')
         ->assertJsonPath('data.scopes', 'openid email customer-account-api:full')
         ->json();
 
     expect(json_encode($payload))->not->toContain('customer-account-secret')
         ->and(json_encode($payload))->not->toContain('graphql');
+});
+
+test('mobile customer auth callback bridges shopify https redirects back to the native app scheme', function (): void {
+    config()->set('services.shopify.customer_account.callback_scheme', 'shop.20812479.modernforestry');
+
+    $this->get('/api/mobile/v1/modern-forestry/auth/callback?code=code-123&state=state-456')
+        ->assertRedirect('shop.20812479.modernforestry://shopify-customer-auth?code=code-123&state=state-456');
 });
 
 test('mobile customer auth config reports incomplete production oauth setup', function (): void {

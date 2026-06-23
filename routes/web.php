@@ -386,6 +386,9 @@ Route::post('/api/mobile/v1/modern-forestry/auth/session', [ModernForestryProduc
 Route::get('/api/mobile/v1/modern-forestry/auth/config', [ModernForestryProductCatalogController::class, 'authConfig'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.auth.config');
+Route::get('/api/mobile/v1/modern-forestry/auth/callback', [ModernForestryProductCatalogController::class, 'authCallback'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.auth.callback');
 Route::post('/api/mobile/v1/modern-forestry/auth/token', [ModernForestryProductCatalogController::class, 'authToken'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')

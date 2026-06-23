@@ -85,14 +85,13 @@ class ModernForestryMobileCustomerSessionService
             ?: 'shop.20812479.modernforestry://shopify-customer-auth';
         $scopes = $this->customerAccountString('scopes')
             ?: 'openid email customer-account-api:full';
-        $callbackScheme = parse_url($redirectUri, PHP_URL_SCHEME);
+        $callbackScheme = $this->nativeCallbackScheme($redirectUri);
 
         $configured = $clientId !== ''
             && $authorizationEndpoint !== ''
             && $tokenEndpoint !== ''
             && $graphqlEndpoint !== ''
             && $redirectUri !== ''
-            && is_string($callbackScheme)
             && $callbackScheme !== '';
 
         return [
@@ -103,6 +102,27 @@ class ModernForestryMobileCustomerSessionService
             'callbackScheme' => is_string($callbackScheme) && $callbackScheme !== '' ? $callbackScheme : null,
             'scopes' => $scopes,
         ];
+    }
+
+    public function nativeCallbackScheme(?string $redirectUri = null): string
+    {
+        $configured = $this->customerAccountString('callback_scheme');
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        $scheme = parse_url($redirectUri ?? $this->customerAccountString('redirect_uri'), PHP_URL_SCHEME);
+
+        return is_string($scheme) && $scheme !== '' ? $scheme : '';
+    }
+
+    public function nativeCallbackRedirect(array $query): string
+    {
+        $scheme = $this->nativeCallbackScheme();
+        $target = $scheme.'://shopify-customer-auth';
+        $query = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+
+        return $query !== '' ? $target.'?'.$query : $target;
     }
 
     /**
