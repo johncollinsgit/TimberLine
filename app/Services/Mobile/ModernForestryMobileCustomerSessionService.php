@@ -8,6 +8,7 @@ use App\Models\MarketingProfileLink;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class ModernForestryMobileCustomerSessionService
@@ -72,19 +73,57 @@ class ModernForestryMobileCustomerSessionService
     }
 
     /**
-     * @return array<string,mixed>|null
+     * @return array<string,mixed>
      */
-    public function exchangeAuthorizationCode(string $code, string $codeVerifier, string $redirectUri): ?array
+    public function authConfig(): array
+    {
+        $clientId = $this->customerAccountString('client_id');
+        $authorizationEndpoint = $this->authorizationEndpoint();
+        $tokenEndpoint = $this->customerAccountString('token_endpoint');
+        $graphqlEndpoint = $this->customerAccountString('graphql_endpoint');
+        $redirectUri = $this->customerAccountString('redirect_uri')
+            ?: 'shop.20812479.modernforestry://shopify-customer-auth';
+        $scopes = $this->customerAccountString('scopes')
+            ?: 'openid email customer-account-api:full';
+        $callbackScheme = parse_url($redirectUri, PHP_URL_SCHEME);
+
+        $configured = $clientId !== ''
+            && $authorizationEndpoint !== ''
+            && $tokenEndpoint !== ''
+            && $graphqlEndpoint !== ''
+            && $redirectUri !== ''
+            && is_string($callbackScheme)
+            && $callbackScheme !== '';
+
+        return [
+            'configured' => $configured,
+            'clientId' => $clientId !== '' ? $clientId : null,
+            'authorizationEndpoint' => $authorizationEndpoint !== '' ? $authorizationEndpoint : null,
+            'redirectUri' => $redirectUri,
+            'callbackScheme' => is_string($callbackScheme) && $callbackScheme !== '' ? $callbackScheme : null,
+            'scopes' => $scopes,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function exchangeAuthorizationCode(string $code, string $codeVerifier, string $redirectUri): array
     {
         $code = trim($code);
         $codeVerifier = trim($codeVerifier);
         $redirectUri = trim($redirectUri);
-        $clientId = trim((string) config('services.shopify.customer_account.client_id', ''));
-        $clientSecret = trim((string) config('services.shopify.customer_account.client_secret', ''));
-        $tokenEndpoint = trim((string) config('services.shopify.customer_account.token_endpoint', ''));
+        $clientId = $this->customerAccountString('client_id');
+        $clientSecret = $this->customerAccountString('client_secret');
+        $tokenEndpoint = $this->customerAccountString('token_endpoint');
+        $graphqlEndpoint = $this->customerAccountString('graphql_endpoint');
 
-        if ($code === '' || $codeVerifier === '' || $redirectUri === '' || $clientId === '' || $tokenEndpoint === '') {
-            return null;
+        if ($code === '' || $codeVerifier === '' || $redirectUri === '') {
+            throw ModernForestryMobileCustomerAuthException::invalidCallback();
+        }
+
+        if ($clientId === '' || $tokenEndpoint === '' || $graphqlEndpoint === '') {
+            throw ModernForestryMobileCustomerAuthException::notConfigured();
         }
 
         $request = Http::asForm()
@@ -107,12 +146,26 @@ class ModernForestryMobileCustomerSessionService
         $response = $request->post($tokenEndpoint, $payload);
 
         if ($response->failed()) {
-            return null;
+            Log::warning('Modern Forestry mobile customer auth token exchange failed.', [
+                'status' => $response->status(),
+                'shopify_error' => $this->nullableString($response->json('error')),
+                'shopify_error_description' => $this->nullableString($response->json('error_description')),
+            ]);
+
+            throw ModernForestryMobileCustomerAuthException::exchangeFailed(
+                $response->status() >= 500 ? 502 : 422,
+                ['shopify_status' => $response->status()]
+            );
         }
 
         $token = $response->json();
         if (! is_array($token) || $this->nullableString($token['access_token'] ?? null) === null) {
-            return null;
+            Log::warning('Modern Forestry mobile customer auth token exchange returned no access token.', [
+                'status' => $response->status(),
+                'keys' => is_array($token) ? array_values(array_filter(array_keys($token), 'is_string')) : [],
+            ]);
+
+            throw ModernForestryMobileCustomerAuthException::exchangeFailed();
         }
 
         return [
@@ -122,6 +175,26 @@ class ModernForestryMobileCustomerSessionService
             'id_token' => $this->nullableString($token['id_token'] ?? null),
             'token_type' => $this->nullableString($token['token_type'] ?? null),
         ];
+    }
+
+    protected function customerAccountString(string $key): string
+    {
+        return trim((string) config('services.shopify.customer_account.'.$key, ''));
+    }
+
+    protected function authorizationEndpoint(): string
+    {
+        $configured = $this->customerAccountString('authorization_endpoint');
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        $tokenEndpoint = $this->customerAccountString('token_endpoint');
+        if ($tokenEndpoint !== '' && str_ends_with($tokenEndpoint, '/oauth/token')) {
+            return Str::beforeLast($tokenEndpoint, '/oauth/token').'/oauth/authorize';
+        }
+
+        return '';
     }
 
     protected function bearerToken(Request $request): ?string

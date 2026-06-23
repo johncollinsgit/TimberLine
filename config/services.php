@@ -200,8 +200,11 @@ return [
         'customer_account' => [
             'client_id' => env('SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID'),
             'client_secret' => env('SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET'),
+            'authorization_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT'),
             'token_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT'),
             'graphql_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT'),
+            'redirect_uri' => env('SHOPIFY_CUSTOMER_ACCOUNT_REDIRECT_URI', 'shop.20812479.modernforestry://shopify-customer-auth'),
+            'scopes' => env('SHOPIFY_CUSTOMER_ACCOUNT_SCOPES', 'openid email customer-account-api:full'),
         ],
 
     ],

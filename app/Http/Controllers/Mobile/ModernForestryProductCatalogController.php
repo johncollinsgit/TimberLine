@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Mobile\ModernForestryMobileAccountService;
 use App\Services\Mobile\ModernForestryMobileCheckoutException;
 use App\Services\Mobile\ModernForestryMobileCheckoutService;
+use App\Services\Mobile\ModernForestryMobileCustomerAuthException;
 use App\Services\Mobile\ModernForestryMobileCustomerSessionService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use Illuminate\Http\JsonResponse;
@@ -227,6 +228,18 @@ class ModernForestryProductCatalogController extends Controller
         return response()->json($sessions->sessionPayload($session), $session ? 200 : 401);
     }
 
+    public function authConfig(
+        ModernForestryMobileCustomerSessionService $sessions
+    ): JsonResponse {
+        return response()->json([
+            'data' => $sessions->authConfig(),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'shopify_customer_account',
+            ],
+        ]);
+    }
+
     public function authToken(
         Request $request,
         ModernForestryMobileCustomerSessionService $sessions
@@ -237,23 +250,18 @@ class ModernForestryProductCatalogController extends Controller
             'redirectUri' => ['required', 'string', 'max:512'],
         ]);
 
-        $token = $sessions->exchangeAuthorizationCode(
-            (string) $validated['code'],
-            (string) $validated['codeVerifier'],
-            (string) $validated['redirectUri']
-        );
+        try {
+            $token = $sessions->exchangeAuthorizationCode(
+                (string) $validated['code'],
+                (string) $validated['codeVerifier'],
+                (string) $validated['redirectUri']
+            );
 
-        if (! is_array($token)) {
-            return response()->json([
-                'data' => null,
-                'meta' => [
-                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
-                ],
-                'error' => [
-                    'code' => 'customer_auth_not_configured',
-                    'message' => 'Modern Forestry customer login is not configured.',
-                ],
-            ], 503);
+            if (! $sessions->resolveToken((string) $token['access_token'], allowCreate: true)) {
+                throw ModernForestryMobileCustomerAuthException::validationFailed();
+            }
+        } catch (ModernForestryMobileCustomerAuthException $exception) {
+            return $this->mobileAuthErrorResponse($exception);
         }
 
         return response()->json([
@@ -263,6 +271,20 @@ class ModernForestryProductCatalogController extends Controller
                 'source' => 'shopify_customer_account',
             ],
         ]);
+    }
+
+    protected function mobileAuthErrorResponse(ModernForestryMobileCustomerAuthException $exception): JsonResponse
+    {
+        return response()->json([
+            'data' => null,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+            ],
+            'error' => [
+                'code' => $exception->authCode,
+                'message' => $exception->getMessage(),
+            ],
+        ], $exception->status);
     }
 
     public function account(

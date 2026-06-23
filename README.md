@@ -1224,7 +1224,8 @@ Mobile catalog local/testing mode:
 - Home featured products now use actual Modern Forestry order-line purchase history first, not a stale updated-at slice or Shopify-only sort; Shopify best-selling only fills gaps after inactive/unavailable products are filtered.
 - Mobile product summary payloads include `variantId` when an available Shopify variant exists, so native cards can become purchaseable without a second product lookup.
 - Mobile checkout supports guest checkout and attaches `customerAccessToken` only when the native app has a validated Customer Account session.
-- Customer Account OAuth code exchange is handled by Laravel at `/api/mobile/v1/modern-forestry/auth/token`; production must configure `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`, optional `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`, `SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT`, and `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT`.
+- Customer Account OAuth code exchange is handled by Laravel at `/api/mobile/v1/modern-forestry/auth/token`; iOS first reads non-secret public OAuth settings from `/api/mobile/v1/modern-forestry/auth/config` so the app does not ship stale Shopify client IDs.
+- Production customer login must configure `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`, optional `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`, `SHOPIFY_CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT` or a token endpoint Laravel can derive from, `SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT`, `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT`, `SHOPIFY_CUSTOMER_ACCOUNT_REDIRECT_URI`, and `SHOPIFY_CUSTOMER_ACCOUNT_SCOPES`.
 
 Recent mobile catalog pass notes:
 - Collection payloads now request collection media plus best-selling product imagery so the phone app can show stronger shelf art.

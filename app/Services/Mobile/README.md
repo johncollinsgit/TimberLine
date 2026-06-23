@@ -60,7 +60,7 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 - Home featured products now rank by imported Modern Forestry order-line purchase quantity first, then use Shopify best-selling only as a fallback if fewer than six active, published, available products survive.
 - Product summary payloads now expose `variantId` for the first available Shopify variant so Home, Shop, and collection cards can feed native bag/checkout flows safely.
 - Mobile checkout is guest-capable; signed-in customer identity is optional and is attached only when the app has a valid Customer Account token.
-- Customer Account OAuth token exchange lives behind Laravel at `/auth/token` so stores that require a confidential Customer Account client secret do not expose that secret in iOS.
+- Customer Account OAuth public config lives at `/auth/config`, and token exchange lives behind Laravel at `/auth/token` so stores that require a confidential Customer Account client secret do not expose that secret in iOS. `/auth/token` validates the exchanged token against Customer Account GraphQL before the app treats the customer as signed in.
 - Product-detail lookups now fall back to a paginated active-catalog search when the exact handle misses or resolves to a non-customer-visible node.
 - Product-detail payloads now include:
   - `mobileSummary`

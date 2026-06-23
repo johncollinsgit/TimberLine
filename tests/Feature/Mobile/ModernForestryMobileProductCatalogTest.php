@@ -304,6 +304,169 @@ test('mobile auth session can create and validate a customer account token ident
     ]);
 });
 
+test('mobile customer auth config exposes only public oauth fields', function (): void {
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
+    config()->set('services.shopify.customer_account.client_secret', 'customer-account-secret');
+    config()->set('services.shopify.customer_account.authorization_endpoint', 'https://shopify.com/authentication/20812479/oauth/authorize');
+    config()->set('services.shopify.customer_account.token_endpoint', 'https://shopify.com/authentication/20812479/oauth/token');
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
+    config()->set('services.shopify.customer_account.redirect_uri', 'shop.20812479.modernforestry://shopify-customer-auth');
+    config()->set('services.shopify.customer_account.scopes', 'openid email customer-account-api:full');
+
+    $payload = $this->getJson('/api/mobile/v1/modern-forestry/auth/config')
+        ->assertOk()
+        ->assertJsonPath('data.configured', true)
+        ->assertJsonPath('data.clientId', 'customer-account-client')
+        ->assertJsonPath('data.authorizationEndpoint', 'https://shopify.com/authentication/20812479/oauth/authorize')
+        ->assertJsonPath('data.redirectUri', 'shop.20812479.modernforestry://shopify-customer-auth')
+        ->assertJsonPath('data.callbackScheme', 'shop.20812479.modernforestry')
+        ->assertJsonPath('data.scopes', 'openid email customer-account-api:full')
+        ->json();
+
+    expect(json_encode($payload))->not->toContain('customer-account-secret')
+        ->and(json_encode($payload))->not->toContain('graphql');
+});
+
+test('mobile customer auth config reports incomplete production oauth setup', function (): void {
+    config()->set('services.shopify.customer_account.client_id', null);
+    config()->set('services.shopify.customer_account.token_endpoint', null);
+    config()->set('services.shopify.customer_account.graphql_endpoint', null);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/auth/config')
+        ->assertOk()
+        ->assertJsonPath('data.configured', false)
+        ->assertJsonPath('data.clientId', null)
+        ->assertJsonPath('data.authorizationEndpoint', null)
+        ->assertJsonPath('data.callbackScheme', 'shop.20812479.modernforestry');
+});
+
+test('mobile oauth token endpoint returns not configured when customer account env is missing', function (): void {
+    config()->set('services.shopify.customer_account.client_id', null);
+    config()->set('services.shopify.customer_account.token_endpoint', null);
+    config()->set('services.shopify.customer_account.graphql_endpoint', null);
+
+    $this->postJson('/api/mobile/v1/modern-forestry/auth/token', [
+        'code' => 'code',
+        'codeVerifier' => 'verifier',
+        'redirectUri' => 'shop.20812479.modernforestry://shopify-customer-auth',
+    ])
+        ->assertStatus(503)
+        ->assertJsonPath('error.code', 'customer_auth_not_configured');
+});
+
+test('mobile oauth token exchange uses basic auth and validates the customer account token', function (): void {
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
+    config()->set('services.shopify.customer_account.client_secret', 'customer-account-secret');
+    config()->set('services.shopify.customer_account.token_endpoint', 'https://shopify.com/authentication/20812479/oauth/token');
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
+
+    Http::fake(function (Request $request) {
+        if ($request->url() === 'https://shopify.com/authentication/20812479/oauth/token') {
+            expect($request->hasHeader('Authorization', 'Basic '.base64_encode('customer-account-client:customer-account-secret')))->toBeTrue();
+            expect($request['grant_type'])->toBe('authorization_code')
+                ->and($request['code'])->toBe('valid-code')
+                ->and($request['code_verifier'])->toBe('valid-verifier')
+                ->and($request['redirect_uri'])->toBe('shop.20812479.modernforestry://shopify-customer-auth');
+
+            return Http::response([
+                'access_token' => 'shopify-customer-access-token',
+                'refresh_token' => 'shopify-refresh-token',
+                'expires_in' => 3600,
+                'token_type' => 'Bearer',
+            ], 200);
+        }
+
+        if ($request->url() === 'https://shopify.com/20812479/account/customer/api/2026-01/graphql') {
+            expect($request->hasHeader('Authorization', 'Bearer shopify-customer-access-token'))->toBeTrue();
+
+            return Http::response([
+                'data' => [
+                    'customer' => [
+                        'id' => 'gid://shopify/Customer/12345',
+                        'firstName' => 'Maple',
+                        'lastName' => 'Woods',
+                        'emailAddress' => [
+                            'emailAddress' => 'maple@example.com',
+                        ],
+                        'phoneNumber' => null,
+                    ],
+                ],
+            ], 200);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $payload = $this->postJson('/api/mobile/v1/modern-forestry/auth/token', [
+        'code' => 'valid-code',
+        'codeVerifier' => 'valid-verifier',
+        'redirectUri' => 'shop.20812479.modernforestry://shopify-customer-auth',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.access_token', 'shopify-customer-access-token')
+        ->assertJsonPath('meta.source', 'shopify_customer_account')
+        ->json();
+
+    expect(json_encode($payload))->not->toContain('customer-account-secret');
+    $this->assertDatabaseHas('marketing_profiles', [
+        'tenant_id' => 1,
+        'normalized_email' => 'maple@example.com',
+    ]);
+});
+
+test('mobile oauth token exchange maps shopify failures to safe typed errors', function (): void {
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
+    config()->set('services.shopify.customer_account.client_secret', 'customer-account-secret');
+    config()->set('services.shopify.customer_account.token_endpoint', 'https://shopify.com/authentication/20812479/oauth/token');
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
+
+    Http::fake([
+        'https://shopify.com/authentication/20812479/oauth/token' => Http::response([
+            'error' => 'invalid_grant',
+            'error_description' => 'Code was already used.',
+        ], 400),
+    ]);
+
+    $payload = $this->postJson('/api/mobile/v1/modern-forestry/auth/token', [
+        'code' => 'stale-code',
+        'codeVerifier' => 'valid-verifier',
+        'redirectUri' => 'shop.20812479.modernforestry://shopify-customer-auth',
+    ])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'customer_auth_exchange_failed')
+        ->json();
+
+    expect(json_encode($payload))->not->toContain('customer-account-secret')
+        ->and(json_encode($payload))->not->toContain('Code was already used');
+});
+
+test('mobile oauth token exchange validates returned customer token before trusting it', function (): void {
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
+    config()->set('services.shopify.customer_account.client_secret', 'customer-account-secret');
+    config()->set('services.shopify.customer_account.token_endpoint', 'https://shopify.com/authentication/20812479/oauth/token');
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
+
+    Http::fake([
+        'https://shopify.com/authentication/20812479/oauth/token' => Http::response([
+            'access_token' => 'unusable-customer-token',
+            'token_type' => 'Bearer',
+        ], 200),
+        'https://shopify.com/20812479/account/customer/api/2026-01/graphql' => Http::response([
+            'data' => [
+                'customer' => null,
+            ],
+        ], 200),
+    ]);
+
+    $this->postJson('/api/mobile/v1/modern-forestry/auth/token', [
+        'code' => 'valid-code',
+        'codeVerifier' => 'valid-verifier',
+        'redirectUri' => 'shop.20812479.modernforestry://shopify-customer-auth',
+    ])
+        ->assertStatus(401)
+        ->assertJsonPath('error.code', 'customer_auth_validation_failed');
+});
+
 test('mobile account endpoint returns native safe account data only for signed in customer', function (): void {
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => 1,
