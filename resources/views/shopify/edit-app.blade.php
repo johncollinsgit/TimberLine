@@ -619,6 +619,7 @@
             }
 
             async function saveContent(publish = false) {
+                const contentPayload = collectPayload();
                 setBusy(true);
                 setAlert(publish ? "Publishing app content..." : "Saving app content...");
                 clearErrors();
@@ -629,9 +630,9 @@
                             "Content-Type": "application/json",
                             "Accept": "application/json",
                         },
-                        body: JSON.stringify(collectPayload()),
+                        body: JSON.stringify(contentPayload),
                     });
-                    state.draft = normalizeContent(payload?.data?.settings?.draft || collectPayload());
+                    state.draft = normalizeContent(payload?.data?.settings?.draft || contentPayload);
                     state.published = payload?.data?.settings?.published
                         ? normalizeContent(payload.data.settings.published)
                         : state.published;

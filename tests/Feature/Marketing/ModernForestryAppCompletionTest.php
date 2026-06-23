@@ -105,7 +105,9 @@ test('modern forestry edit app page exposes the app content editor', function ()
         ->assertSeeText('Mobile Home')
         ->assertSeeText('Draft Preview')
         ->assertSeeText('Publish Live')
-        ->assertSeeText('Update customer dashboard and mobile app copy.');
+        ->assertSeeText('Update customer dashboard and mobile app copy.')
+        ->assertSee('const contentPayload = collectPayload();', false)
+        ->assertSee('body: JSON.stringify(contentPayload)', false);
 });
 
 test('modern forestry settings page links to edit app instead of rendering the full editor', function (): void {
