@@ -1364,7 +1364,7 @@ Server deploy command sequence:
 Notes:
 - `route:cache` is intentionally not used because the app currently has closure routes.
 - Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
-- Forge currently reruns deploys against the active release directory, so moving `node_modules` and `public/build` out of the way before the asset install is intentional. On this server `npm install --no-audit --no-fund` has been reliable, while `npm ci` still trips npm cleanup `ENOTEMPTY` errors after interrupted runs.
+- Forge currently reruns deploys against the active release directory, so moving `node_modules` and `public/build` out of the way before the asset install is intentional. On this server `npm install --no-audit --no-fund` is the safer path, and the old directories should be left parked during deploy rather than deleted in the background because concurrent cleanup still triggers npm `ENOTEMPTY` errors on this filesystem.
 
 Known push/deploy pitfalls (2026-03-26):
 - GitHub Action fails before deploy steps with missing-input errors:

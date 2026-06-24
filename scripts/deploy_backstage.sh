@@ -30,13 +30,13 @@ echo "== build assets =="
 if [ -d node_modules ]; then
   OLD_NODE_MODULES="node_modules.__old__.$(date +%Y%m%d%H%M%S)"
   mv node_modules "$OLD_NODE_MODULES"
-  rm -rf "$OLD_NODE_MODULES" >/dev/null 2>&1 &
+  echo "Moved previous node_modules to $OLD_NODE_MODULES"
 fi
 
 if [ -d public/build ]; then
   OLD_PUBLIC_BUILD="public/build.__old__.$(date +%Y%m%d%H%M%S)"
   mv public/build "$OLD_PUBLIC_BUILD"
-  rm -rf "$OLD_PUBLIC_BUILD" >/dev/null 2>&1 &
+  echo "Moved previous public/build to $OLD_PUBLIC_BUILD"
 fi
 
 npm install --no-audit --no-fund
