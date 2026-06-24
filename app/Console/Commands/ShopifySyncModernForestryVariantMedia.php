@@ -19,6 +19,7 @@ class ShopifySyncModernForestryVariantMedia extends Command
         {--store=retail : Shopify store key or myshopify domain}
         {--transport=admin-token : Shopify GraphQL transport: admin-token or cli}
         {--apply : Apply live Shopify media changes}
+        {--handle=* : Optional Shopify product handles to target}
         {--image-dir=/Users/johncollins/Downloads : Directory containing 4oz.png, 8oz.png, 16oz.png, Wood Wick.png, and Wax Melt.png}
         {--page-size=50 : Products fetched per Admin API request}
         {--limit= : Optional product limit for partial audits}';
@@ -38,12 +39,13 @@ class ShopifySyncModernForestryVariantMedia extends Command
         $limit = $this->positiveInt($this->option('limit'));
         $imageDir = (string) $this->option('image-dir');
         $transport = $this->transport();
+        $handleFilter = $this->handleFilter();
 
         try {
             $store = $this->resolveStore((string) $this->option('store'), requiresToken: $transport === 'admin-token');
             $images = $this->imageFiles($imageDir, requirePresent: $apply);
             $client = $this->client($store, $transport);
-            $products = $this->fetchProducts($client, $pageSize, $limit);
+            $products = $this->fetchProducts($client, $pageSize, $limit, $handleFilter);
             $plan = $this->buildPlan($products);
         } catch (Throwable $exception) {
             $this->error($exception->getMessage());
@@ -170,13 +172,17 @@ class ShopifySyncModernForestryVariantMedia extends Command
     /**
      * @return array<int,array<string,mixed>>
      */
-    protected function fetchProducts(ShopifyGraphqlClient|ShopifyCliAdminClient $client, int $pageSize, ?int $limit): array
+    protected function fetchProducts(ShopifyGraphqlClient|ShopifyCliAdminClient $client, int $pageSize, ?int $limit, array $handleFilter = []): array
     {
         $products = [];
         $after = null;
+        $queryFilter = $this->productQueryFilter($handleFilter);
 
         do {
-            $variables = ['first' => $pageSize];
+            $variables = [
+                'first' => $pageSize,
+                'query' => $queryFilter,
+            ];
             if ($after !== null) {
                 $variables['after'] = $after;
             }
@@ -630,11 +636,41 @@ class ShopifySyncModernForestryVariantMedia extends Command
         return $int > 0 ? $int : null;
     }
 
+    /**
+     * @return array<int,string>
+     */
+    protected function handleFilter(): array
+    {
+        $handles = $this->option('handle');
+
+        if (! is_array($handles)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_unique(array_map(static function (mixed $handle): string {
+            return trim((string) $handle);
+        }, $handles))));
+    }
+
+    /**
+     * @param  array<int,string>  $handles
+     */
+    protected function productQueryFilter(array $handles): string
+    {
+        $filters = ['status:active'];
+
+        if ($handles !== []) {
+            $filters[] = '('.implode(' OR ', array_map(static fn (string $handle): string => 'handle:'.$handle, $handles)).')';
+        }
+
+        return implode(' ', $filters);
+    }
+
     protected function productsQuery(): string
     {
         return <<<'GRAPHQL'
-query ModernForestryVariantMediaProducts($first: Int!, $after: String) {
-  products(first: $first, after: $after, query: "status:active", sortKey: UPDATED_AT, reverse: true) {
+query ModernForestryVariantMediaProducts($first: Int!, $after: String, $query: String!) {
+  products(first: $first, after: $after, query: $query, sortKey: UPDATED_AT, reverse: true) {
     nodes {
       id
       title

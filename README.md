@@ -5,6 +5,7 @@
 - Shopify install/reinstall scopes for the retail store now include `write_products`, and the canonical reinstall route is `https://app.theeverbranch.com/shopify/reinstall/retail`.
 - The repeatable media sync entrypoint is `php artisan shopify:sync-modern-forestry-variant-media`.
 - Default mode is a dry-run; add `--apply` to stage Shopify media uploads and attach canonical variant images.
+- Use `--handle=<shopify-handle>` one or more times when you need to repair a specific stubborn product without sweeping the whole catalog again.
 - Canonical media files live in `/Users/johncollins/Downloads`:
   - `4oz.png`
   - `8oz.png`
@@ -1349,6 +1350,7 @@ Server deploy command sequence:
 - `git checkout main`
 - `git pull --ff-only origin main`
 - `composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev`
+- `rm -rf node_modules public/build`
 - `npm ci`
 - `npm run build`
 - `rm -f public/hot`
@@ -1361,6 +1363,7 @@ Server deploy command sequence:
 Notes:
 - `route:cache` is intentionally not used because the app currently has closure routes.
 - Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
+- Forge currently reruns deploys against the active release directory, so clearing `node_modules` before `npm ci` is intentional. It prevents `ENOTEMPTY` failures after a previously interrupted asset install.
 
 Known push/deploy pitfalls (2026-03-26):
 - GitHub Action fails before deploy steps with missing-input errors:

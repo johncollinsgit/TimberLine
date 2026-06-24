@@ -55,6 +55,27 @@ test('modern forestry variant media sync dry run audits without uploading media'
     });
 });
 
+test('modern forestry variant media sync can target specific handles', function (): void {
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyVariantMediaProductsPayload(), 200),
+    ]);
+
+    $exitCode = Artisan::call('shopify:sync-modern-forestry-variant-media', [
+        '--store' => 'retail',
+        '--image-dir' => '/tmp/missing-modern-forestry-media-test',
+        '--handle' => ['thru-hike', 'coffeehouse'],
+    ]);
+
+    expect($exitCode)->toBe(0);
+
+    Http::assertSent(function (Request $request): bool {
+        $payload = $request->data();
+        $variables = $payload['variables'] ?? [];
+
+        return ($variables['query'] ?? null) === 'status:active (handle:thru-hike OR handle:coffeehouse)';
+    });
+});
+
 /**
  * @return array<string,mixed>
  */
