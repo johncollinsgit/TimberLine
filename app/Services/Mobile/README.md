@@ -2,6 +2,16 @@
 
 This folder owns the Laravel-side mobile catalog source of truth for the Modern Forestry iOS app.
 
+## Variant Media Sync Notes (2026-06-23)
+
+- The canonical Shopify media sync is `php artisan shopify:sync-modern-forestry-variant-media`.
+- Use `--transport=cli` when you want the Shopify CLI-backed admin session, or keep the default `--transport=admin-token` for the installed-store Admin token path.
+- The command now knows about `wood_wick_8oz` and `wood_wick_16oz`, and it maps those to `/Users/johncollins/Downloads/Wood Wick.png`.
+- `wax melt`, `wax melts`, `melt`, `melts`, `wax tart`, `wax tarts`, `soy tart`, and `soy tarts` all normalize to `wax_melt`.
+- If Shopify says media are not ready yet, the command polls for readiness before attaching them to variants and skips variants that are already linked.
+- The live catalog response for Coffeehouse now proves the canonical image attachments exist on Shopify, including the wood-wick assets and wax-melt assets.
+- Future edits should keep the variant payload fields stable because the iOS product page now depends on `imageUrl`, `compareAtPrice`, `available`, and `selectedOptions` to feel like a real shopping app.
+
 ## Home Payload + Session Contract (2026-06-21)
 
 - `ModernForestryMobileProductCatalogService.php` now extends the mobile home payload with:
@@ -85,3 +95,23 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 - Draft content stays private until published; the native app only reads the published/effective snapshot.
 - Product images, collection images, product availability, variants, sorting, and checkout purchaseability still come from Shopify-backed catalog/checkout services.
 - Headless is not just an order route: Customer Account OAuth and Storefront checkout use Shopify customer-facing APIs, while catalog/media curation remains Laravel-owned via Shopify Admin GraphQL.
+
+## Product Detail Variant Media + Pricing (2026-06-23)
+
+- Product-detail variant payloads now include:
+  - `imageUrl`
+  - `compareAtPrice`
+  - `available`
+  - `selectedOptions`
+- The mobile catalog queries Shopify Admin variant `media`, `selectedOptions`, `price`, `compareAtPrice`, and `availableForSale` so the iOS product page can update image, price, and purchaseability when a customer changes variants.
+- `php artisan shopify:sync-modern-forestry-variant-media` audits and optionally attaches canonical size/form imagery to matching variants:
+  - default mode is dry-run
+  - `--apply` performs live Shopify media uploads and variant-media appends
+  - `--image-dir` defaults to `/Users/johncollins/Downloads`
+  - canonical files are `4oz.png`, `8oz.png`, `16oz.png`, and `Wax Melt.png`
+- Variant title normalization treats `4oz`/`4 oz`, `8oz`/`8 oz`, `16oz`/`16 oz`, and `wax melt`/`wax melts`/`melts`/`wax tarts`/`soy tarts` as canonical matches.
+- The command only adds missing canonical media. It does not delete or replace existing Shopify product or variant media.
+- Local Shopify CLI was repaired by reinstalling Homebrew Node; `shopify app info` now works for `info@theforestrystudio.com`. The local Laravel retail Admin token currently returns Shopify `401 Invalid API key or access token`, so live command dry-runs require a refreshed `SHOPIFY_RETAIL_ACCESS_TOKEN`/installed-store token before using the Laravel command against Shopify.
+- `shopify app execute --store modernforestry.myshopify.com --version 2026-01` was verified with a read-only query against live products. It confirmed live variants such as `16oz Cotton Wick`, `8oz Cotton Wick`, and `4oz Cotton Wick` currently have empty `variant.media.nodes`, so the media attachment problem is real on Shopify data, not an iOS rendering issue.
+- Future agents should not spend time re-proving the GraphQL shape: Admin variant media reads work with `variants { nodes { selectedOptions { name value } media(first: 1) { nodes { ... on MediaImage { image { url altText } } } } } }`.
+- The Laravel sync command is the repeatable production path once the app's stored Admin token is refreshed. Shopify CLI can prove/store access, but CLI mutations are dev-store only in this version, so do not depend on `shopify app execute` for production media writes.

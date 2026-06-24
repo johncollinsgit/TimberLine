@@ -1,5 +1,21 @@
 # Modern Forestry Backstage
 
+## Modern Forestry Variant Media + Mobile Detail Notes (2026-06-23)
+
+- Shopify install/reinstall scopes for the retail store now include `write_products`, and the canonical reinstall route is `https://app.theeverbranch.com/shopify/reinstall/retail`.
+- The repeatable media sync entrypoint is `php artisan shopify:sync-modern-forestry-variant-media`.
+- Default mode is a dry-run; add `--apply` to stage Shopify media uploads and attach canonical variant images.
+- Canonical media files live in `/Users/johncollins/Downloads`:
+  - `4oz.png`
+  - `8oz.png`
+  - `16oz.png`
+  - `Wax Melt.png`
+  - `Wood Wick.png`
+- Wood-wick variants normalize to `wood_wick_8oz` and `wood_wick_16oz` so 8 oz / 16 oz cedar, wood, or wooden wick labels pick up the wood-wick asset instead of the cotton-wick asset.
+- The production mobile product-detail payload now needs to surface variant `imageUrl`, `compareAtPrice`, `available`, and `selectedOptions` so the iOS app can switch image and price when the customer changes variants.
+- The live sync run proved the attach path on Shopify was real and not just an iOS rendering issue; future agents should start by checking the live mobile JSON and the sync command output before assuming a UI bug.
+- If Shopify returns `Non-ready media cannot be attached to variants`, rerun the command after the upload settles; the command now polls media readiness and skips variants that are already linked.
+
 ## Modern Forestry Mobile Home + Session Pass (2026-06-21)
 
 This pass touched the Laravel-side mobile contract that feeds the native Modern Forestry iOS app in `modernforestry-build/`.

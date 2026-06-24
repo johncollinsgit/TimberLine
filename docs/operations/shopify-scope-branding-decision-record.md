@@ -77,6 +77,7 @@ write_order_edits
 write_orders
 write_pixels
 write_price_rules
+write_products
 write_themes
 write_third_party_fulfillment_orders
 ```
@@ -93,7 +94,7 @@ Known runtime usage from code search:
 
 | Scope family | Known code path | Current recommendation |
 | --- | --- | --- |
-| `read_products` | Product lookups, Modern Forestry mobile catalog, embedded messaging product lookup | Keep if product/catalog surfaces remain in app. |
+| `read_products`, `write_products` | Product lookups, Modern Forestry mobile catalog, embedded messaging product lookup, and alpha/internal mobile variant-media sync for Shopify variant images | Keep for Modern Forestry alpha while the app owns product/variant media repair; review before public App Store submission. |
 | `read_orders`, `read_all_orders` | Order import, audit, backfill, marketing/customer analytics | Keep or justify with clear retention/privacy language. |
 | `read_customers`, `write_customers` | Customer sync and customer metafield/provisioning services | Keep only if customer sync/metafield write path is part of App Store scope; otherwise separate internal app may be safer. |
 | `read_pixels`, `write_pixels`, `read_customer_events` | Web pixel connection/bootstrap/setup services | Keep if storefront tracking/pixel is part of the submitted app. |
@@ -148,7 +149,7 @@ Read-only PR 18 evidence:
 
 ## Scope Decision Status
 
-Decision: pending.
+Decision: pending for public App Store submission. Approved alpha/internal exception on 2026-06-23: add `write_products` so the Modern Forestry app can attach canonical 4oz, 8oz, 16oz, wood-wick, and wax-melt images to Shopify product variants used by the native mobile product detail page.
 
 Recommendation:
 1. Do not change scopes in PR 18.
@@ -162,6 +163,11 @@ Risk of changing scopes:
 - Pixel/customer/order import paths may break if required scopes are removed.
 - Partner Dashboard and CLI app version state may drift from Laravel runtime config.
 - Broad scopes can trigger App Store review rejection or privacy policy gaps if not justified.
+
+2026-06-23 implementation note:
+- `write_products` is required by Shopify Admin GraphQL for `stagedUploadsCreate`, product media creation, and product variant media attachment.
+- The existing installed Modern Forestry token only had `read_orders,read_all_orders,read_customers`, so product media writes failed with `Access denied for stagedUploadsCreate field`.
+- After changing TOML/runtime scopes, deploy the Shopify app config and reauthorize `/shopify/reinstall/retail` so Laravel stores a token with `write_products` before running `php artisan shopify:sync-modern-forestry-variant-media --store=modernforestry.myshopify.com --transport=admin-token --apply`.
 
 ## App Name And Handle Options
 

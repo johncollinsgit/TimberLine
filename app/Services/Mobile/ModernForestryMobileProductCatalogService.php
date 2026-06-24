@@ -542,6 +542,21 @@ query MobileCatalogActiveProductDetails($first: Int!, $after: String) {
           price
           compareAtPrice
           availableForSale
+          selectedOptions {
+            name
+            value
+          }
+          media(first: 1) {
+            nodes {
+              ... on MediaImage {
+                id
+                image {
+                  url
+                  altText
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -583,6 +598,21 @@ query MobileCatalogProductDetail($query: String!) {
           price
           compareAtPrice
           availableForSale
+          selectedOptions {
+            name
+            value
+          }
+          media(first: 1) {
+            nodes {
+              ... on MediaImage {
+                id
+                image {
+                  url
+                  altText
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -748,6 +778,8 @@ GRAPHQL;
                         'price' => $product['price'],
                         'compareAtPrice' => $product['compareAtPrice'],
                         'available' => true,
+                        'imageUrl' => null,
+                        'selectedOptions' => [],
                     ],
                 ],
                 'price' => $product['price'],
@@ -1709,8 +1741,69 @@ GRAPHQL;
                 'price' => $this->moneyString($variant['price'] ?? null),
                 'compareAtPrice' => $this->moneyString($variant['compareAtPrice'] ?? null),
                 'available' => (bool) ($variant['availableForSale'] ?? true),
+                'imageUrl' => $this->variantMediaImageUrl($variant),
+                'selectedOptions' => $this->selectedOptionList($variant['selectedOptions'] ?? []),
             ];
         }, $nodes)));
+    }
+
+    /**
+     * @param  array<string,mixed>  $variant
+     */
+    protected function variantMediaImageUrl(array $variant): ?string
+    {
+        $media = $variant['media'] ?? null;
+        $nodes = is_array($media) ? ($media['nodes'] ?? []) : [];
+
+        if (! is_array($nodes)) {
+            return null;
+        }
+
+        foreach ($nodes as $node) {
+            if (! is_array($node)) {
+                continue;
+            }
+
+            $image = $node['image'] ?? null;
+            if (! is_array($image)) {
+                continue;
+            }
+
+            $url = $this->nullableString($image['url'] ?? null);
+            if ($url !== null) {
+                return $this->mobileImageUrl($url, self::DETAIL_IMAGE_WIDTH);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int,array{name:string,value:string}>
+     */
+    protected function selectedOptionList(mixed $options): array
+    {
+        if (! is_array($options)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(function (mixed $option): ?array {
+            if (! is_array($option)) {
+                return null;
+            }
+
+            $name = $this->nullableString($option['name'] ?? null);
+            $value = $this->nullableString($option['value'] ?? null);
+
+            if ($name === null || $value === null) {
+                return null;
+            }
+
+            return [
+                'name' => $name,
+                'value' => $value,
+            ];
+        }, $options)));
     }
 
     protected function buildMobileSummary(string $description): ?string

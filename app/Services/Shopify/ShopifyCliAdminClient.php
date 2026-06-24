@@ -276,7 +276,8 @@ class ShopifyCliAdminClient
 
     protected function shouldFallbackToAppCredentials(RuntimeException $exception): bool
     {
-        return str_contains($exception->getMessage(), 'IN operator is not supported for store_type filter');
+        return str_contains($exception->getMessage(), 'IN operator is not supported for store_type filter')
+            || str_contains($exception->getMessage(), 'Mutations can only be executed on dev stores');
     }
 
     protected function normalizeDomain(string $storeDomain): string

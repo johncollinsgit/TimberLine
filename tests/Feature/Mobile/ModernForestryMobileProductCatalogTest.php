@@ -673,6 +673,8 @@ test('fake mobile product detail response has expected shape', function (): void
                         'price',
                         'compareAtPrice',
                         'available',
+                        'imageUrl',
+                        'selectedOptions',
                     ],
                 ],
                 'price',
@@ -1125,6 +1127,11 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.variants.0.price', '24.00')
         ->assertJsonPath('data.variants.0.compareAtPrice', null)
         ->assertJsonPath('data.variants.0.available', true)
+        ->assertJsonPath('data.variants.0.imageUrl', 'https://cdn.shopify.com/s/files/8oz-reference.png?width=1200')
+        ->assertJsonPath('data.variants.0.selectedOptions.0.name', 'Size')
+        ->assertJsonPath('data.variants.0.selectedOptions.0.value', '8 oz candle')
+        ->assertJsonPath('data.variants.1.imageUrl', 'https://cdn.shopify.com/s/files/16oz-reference.png?width=1200')
+        ->assertJsonPath('data.variants.1.selectedOptions.0.value', '16 oz candle')
         ->assertJsonPath('data.price', '24.00')
         ->assertJsonPath('data.compareAtPrice', null)
         ->assertJsonPath('data.available', true)
@@ -1867,13 +1874,47 @@ function shopifyMobileProductDetailPayload(): array
                                     'price' => '24.00',
                                     'compareAtPrice' => null,
                                     'availableForSale' => true,
+                                    'selectedOptions' => [
+                                        [
+                                            'name' => 'Size',
+                                            'value' => '8 oz candle',
+                                        ],
+                                    ],
+                                    'media' => [
+                                        'nodes' => [
+                                            [
+                                                'id' => 'gid://shopify/MediaImage/8001',
+                                                'image' => [
+                                                    'url' => 'https://cdn.shopify.com/s/files/8oz-reference.png',
+                                                    'altText' => 'Modern Forestry 8 oz size reference',
+                                                ],
+                                            ],
+                                        ],
+                                    ],
                                 ],
                                 [
                                     'id' => 'gid://shopify/ProductVariant/9002',
-                                    'title' => '12 oz candle',
+                                    'title' => '16 oz candle',
                                     'price' => '32.00',
                                     'compareAtPrice' => '36.00',
                                     'availableForSale' => false,
+                                    'selectedOptions' => [
+                                        [
+                                            'name' => 'Size',
+                                            'value' => '16 oz candle',
+                                        ],
+                                    ],
+                                    'media' => [
+                                        'nodes' => [
+                                            [
+                                                'id' => 'gid://shopify/MediaImage/16001',
+                                                'image' => [
+                                                    'url' => 'https://cdn.shopify.com/s/files/16oz-reference.png',
+                                                    'altText' => 'Modern Forestry 16 oz size reference',
+                                                ],
+                                            ],
+                                        ],
+                                    ],
                                 ],
                             ],
                         ],
