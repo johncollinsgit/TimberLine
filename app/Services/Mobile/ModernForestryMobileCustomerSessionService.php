@@ -7,6 +7,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -78,21 +79,25 @@ class ModernForestryMobileCustomerSessionService
     public function authConfig(): array
     {
         $clientId = $this->customerAccountString('client_id');
-        $authorizationEndpoint = $this->authorizationEndpoint();
-        $tokenEndpoint = $this->customerAccountString('token_endpoint');
-        $graphqlEndpoint = $this->customerAccountString('graphql_endpoint');
+        $discovery = $this->customerAccountDiscovery();
+        $authorizationEndpoint = $this->resolveAuthorizationEndpoint($discovery);
+        $tokenEndpoint = $this->tokenEndpoint($discovery);
+        $graphqlEndpoint = $this->graphqlEndpoint($discovery);
         $redirectUri = $this->customerAccountString('redirect_uri')
             ?: 'shop.20812479.modernforestry://shopify-customer-auth';
         $scopes = $this->customerAccountString('scopes')
             ?: 'openid email customer-account-api:full';
         $callbackScheme = $this->nativeCallbackScheme($redirectUri);
+        $requiresClientSecret = $this->requiresClientSecret($discovery);
+        $clientSecret = $this->customerAccountString('client_secret');
 
         $configured = $clientId !== ''
             && $authorizationEndpoint !== ''
             && $tokenEndpoint !== ''
             && $graphqlEndpoint !== ''
             && $redirectUri !== ''
-            && $callbackScheme !== '';
+            && $callbackScheme !== ''
+            && (! $requiresClientSecret || $clientSecret !== '');
 
         return [
             'configured' => $configured,
@@ -135,14 +140,19 @@ class ModernForestryMobileCustomerSessionService
         $redirectUri = trim($redirectUri);
         $clientId = $this->customerAccountString('client_id');
         $clientSecret = $this->customerAccountString('client_secret');
-        $tokenEndpoint = $this->customerAccountString('token_endpoint');
-        $graphqlEndpoint = $this->customerAccountString('graphql_endpoint');
+        $discovery = $this->customerAccountDiscovery();
+        $tokenEndpoint = $this->tokenEndpoint($discovery);
+        $graphqlEndpoint = $this->graphqlEndpoint($discovery);
 
         if ($code === '' || $codeVerifier === '' || $redirectUri === '') {
             throw ModernForestryMobileCustomerAuthException::invalidCallback();
         }
 
         if ($clientId === '' || $tokenEndpoint === '' || $graphqlEndpoint === '') {
+            throw ModernForestryMobileCustomerAuthException::notConfigured();
+        }
+
+        if ($this->requiresClientSecret($discovery) && $clientSecret === '') {
             throw ModernForestryMobileCustomerAuthException::notConfigured();
         }
 
@@ -204,17 +214,69 @@ class ModernForestryMobileCustomerSessionService
 
     protected function authorizationEndpoint(): string
     {
+        return $this->resolveAuthorizationEndpoint($this->customerAccountDiscovery());
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $discovery
+     */
+    protected function resolveAuthorizationEndpoint(?array $discovery): string
+    {
+        $discovered = $this->nullableString(data_get($discovery, 'openid.authorization_endpoint'));
+        if ($discovered !== null) {
+            return $discovered;
+        }
+
         $configured = $this->customerAccountString('authorization_endpoint');
         if ($configured !== '') {
             return $configured;
         }
 
-        $tokenEndpoint = $this->customerAccountString('token_endpoint');
+        $tokenEndpoint = $this->tokenEndpoint($discovery);
         if ($tokenEndpoint !== '' && str_ends_with($tokenEndpoint, '/oauth/token')) {
             return Str::beforeLast($tokenEndpoint, '/oauth/token').'/oauth/authorize';
         }
 
         return '';
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $discovery
+     */
+    protected function tokenEndpoint(?array $discovery = null): string
+    {
+        $discovered = $this->nullableString(data_get($discovery ?? $this->customerAccountDiscovery(), 'openid.token_endpoint'));
+        if ($discovered !== null) {
+            return $discovered;
+        }
+
+        return $this->customerAccountString('token_endpoint');
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $discovery
+     */
+    protected function graphqlEndpoint(?array $discovery = null): string
+    {
+        $discovered = $this->nullableString(data_get($discovery ?? $this->customerAccountDiscovery(), 'customer.graphql_api'));
+        if ($discovered !== null) {
+            return $discovered;
+        }
+
+        return $this->customerAccountString('graphql_endpoint');
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $discovery
+     */
+    protected function requiresClientSecret(?array $discovery = null): bool
+    {
+        $supported = data_get($discovery ?? $this->customerAccountDiscovery(), 'openid.token_endpoint_auth_methods_supported');
+        if (! is_array($supported) || $supported === []) {
+            return false;
+        }
+
+        return in_array('client_secret_basic', $supported, true);
     }
 
     protected function bearerToken(Request $request): ?string
@@ -267,7 +329,7 @@ class ModernForestryMobileCustomerSessionService
      */
     protected function remoteCustomerIdentity(string $token): ?array
     {
-        $endpoint = trim((string) config('services.shopify.customer_account.graphql_endpoint', ''));
+        $endpoint = $this->graphqlEndpoint();
         if ($endpoint === '') {
             return null;
         }
@@ -295,11 +357,39 @@ GRAPHQL,
             ]);
 
         if ($response->failed()) {
+            Log::warning('Modern Forestry mobile customer auth session validation failed.', [
+                'status' => $response->status(),
+                'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
+                'graphql_errors' => collect((array) $response->json('errors'))
+                    ->pluck('message')
+                    ->filter(fn (mixed $value): bool => is_string($value) && trim($value) !== '')
+                    ->values()
+                    ->all(),
+            ]);
             return null;
+        }
+
+        $graphqlErrors = collect((array) $response->json('errors'))
+            ->pluck('message')
+            ->filter(fn (mixed $value): bool => is_string($value) && trim($value) !== '')
+            ->values()
+            ->all();
+
+        if ($graphqlErrors !== []) {
+            Log::warning('Modern Forestry mobile customer auth validation returned GraphQL errors.', [
+                'status' => $response->status(),
+                'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
+                'graphql_errors' => $graphqlErrors,
+            ]);
         }
 
         $customer = $response->json('data.customer');
         if (! is_array($customer)) {
+            Log::warning('Modern Forestry mobile customer auth validation returned no customer record.', [
+                'status' => $response->status(),
+                'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
+                'has_graphql_errors' => $graphqlErrors !== [],
+            ]);
             return null;
         }
 
@@ -319,6 +409,71 @@ GRAPHQL,
             'source_type' => 'shopify_customer',
             'source_id' => $shopifyCustomerId,
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function customerAccountDiscovery(): array
+    {
+        if (app()->environment('testing')) {
+            return [];
+        }
+
+        $storefrontBaseUrl = $this->customerAccountDiscoveryBaseUrl();
+        if ($storefrontBaseUrl === null) {
+            return [];
+        }
+
+        $cacheKey = 'modern_forestry_mobile_customer_account_discovery:'.sha1($storefrontBaseUrl);
+
+        return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($storefrontBaseUrl): array {
+            return [
+                'openid' => $this->fetchDiscoveryDocument($storefrontBaseUrl.'/.well-known/openid-configuration'),
+                'customer' => $this->fetchDiscoveryDocument($storefrontBaseUrl.'/.well-known/customer-account-api'),
+            ];
+        });
+    }
+
+    protected function customerAccountDiscoveryBaseUrl(): ?string
+    {
+        $baseUrl = trim((string) config(
+            'marketing.candle_cash.storefront_base_url',
+            ModernForestryMobileProductCatalogService::STOREFRONT_BASE_URL
+        ));
+
+        if ($baseUrl === '') {
+            return null;
+        }
+
+        if (! str_starts_with($baseUrl, 'http://') && ! str_starts_with($baseUrl, 'https://')) {
+            $baseUrl = 'https://'.$baseUrl;
+        }
+
+        return rtrim($baseUrl, '/');
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function fetchDiscoveryDocument(string $url): ?array
+    {
+        $response = Http::acceptJson()
+            ->timeout(5)
+            ->get($url);
+
+        if ($response->failed()) {
+            Log::warning('Modern Forestry mobile customer auth discovery failed.', [
+                'url' => $url,
+                'status' => $response->status(),
+            ]);
+
+            return null;
+        }
+
+        $payload = $response->json();
+
+        return is_array($payload) ? $payload : null;
     }
 
     /**

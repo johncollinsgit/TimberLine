@@ -1253,6 +1253,9 @@ Mobile catalog local/testing mode:
 - Mobile checkout supports guest checkout and attaches `customerAccessToken` only when the native app has a validated Customer Account session.
 - Customer Account OAuth code exchange is handled by Laravel at `/api/mobile/v1/modern-forestry/auth/token`; iOS first reads non-secret public OAuth settings from `/api/mobile/v1/modern-forestry/auth/config` so the app does not ship stale Shopify client IDs.
 - Production customer login must configure `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`, optional `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`, `SHOPIFY_CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT` or a token endpoint Laravel can derive from, `SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT`, `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT`, `SHOPIFY_CUSTOMER_ACCOUNT_REDIRECT_URI`, and `SHOPIFY_CUSTOMER_ACCOUNT_SCOPES`.
+- Shopify Customer Account auth is now discovery-first in production: Laravel prefers `https://theforestrystudio.com/.well-known/openid-configuration` and `/.well-known/customer-account-api` for the live authorization, token, and Customer Account GraphQL endpoints, then falls back to the configured env values only when discovery is unavailable.
+- This matters because Shopify’s live Customer Account endpoints can drift by API version or customer-account domain; a stale hardcoded `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT` is a direct cause of “Shopify sign-in finished, but the customer session could not be verified.”
+- The live Modern Forestry storefront currently advertises `token_endpoint_auth_methods_supported=["client_secret_basic"]`, so production should include `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` unless Shopify changes that discovery document.
 
 Recent mobile catalog pass notes:
 - Collection payloads now request collection media plus best-selling product imagery so the phone app can show stronger shelf art.
