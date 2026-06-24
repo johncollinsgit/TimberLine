@@ -1352,7 +1352,7 @@ Server deploy command sequence:
 - `composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev`
 - `mv node_modules node_modules.__old__.$(date +%s) 2>/dev/null || true`
 - `mv public/build public/build.__old__.$(date +%s) 2>/dev/null || true`
-- `npm ci`
+- `npm install --no-audit --no-fund`
 - `npm run build`
 - `rm -f public/hot`
 - `php artisan migrate --force`
@@ -1364,7 +1364,7 @@ Server deploy command sequence:
 Notes:
 - `route:cache` is intentionally not used because the app currently has closure routes.
 - Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
-- Forge currently reruns deploys against the active release directory, so moving `node_modules` and `public/build` out of the way before `npm ci` is intentional. It prevents `ENOTEMPTY` failures after a previously interrupted asset install without recursively deleting a broken tree in place.
+- Forge currently reruns deploys against the active release directory, so moving `node_modules` and `public/build` out of the way before the asset install is intentional. On this server `npm install --no-audit --no-fund` has been reliable, while `npm ci` still trips npm cleanup `ENOTEMPTY` errors after interrupted runs.
 
 Known push/deploy pitfalls (2026-03-26):
 - GitHub Action fails before deploy steps with missing-input errors:

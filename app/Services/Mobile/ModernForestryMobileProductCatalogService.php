@@ -4,6 +4,7 @@ namespace App\Services\Mobile;
 
 use App\Models\OrderLine;
 use App\Models\Tenant;
+use App\Services\Shopify\ModernForestryVariantMediaClassifier;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyStores;
@@ -533,6 +534,18 @@ query MobileCatalogActiveProductDetails($first: Int!, $after: String) {
         nodes {
           url
           altText
+        }
+      }
+      media(first: 50) {
+        nodes {
+          id
+          alt
+          ... on MediaImage {
+            image {
+              url
+              altText
+            }
+          }
         }
       }
       variants(first: 20) {
@@ -1725,12 +1738,13 @@ GRAPHQL;
     {
         $variants = $node['variants'] ?? null;
         $nodes = is_array($variants) ? ($variants['nodes'] ?? []) : [];
+        $productMedia = $this->productMediaNodes($node);
 
         if (! is_array($nodes)) {
             return [];
         }
 
-        return array_values(array_filter(array_map(function (mixed $variant): ?array {
+        return array_values(array_filter(array_map(function (mixed $variant) use ($productMedia): ?array {
             if (! is_array($variant)) {
                 return null;
             }
@@ -1741,7 +1755,7 @@ GRAPHQL;
                 'price' => $this->moneyString($variant['price'] ?? null),
                 'compareAtPrice' => $this->moneyString($variant['compareAtPrice'] ?? null),
                 'available' => (bool) ($variant['availableForSale'] ?? true),
-                'imageUrl' => $this->variantMediaImageUrl($variant),
+                'imageUrl' => $this->variantMediaImageUrl($variant, $productMedia),
                 'selectedOptions' => $this->selectedOptionList($variant['selectedOptions'] ?? []),
             ];
         }, $nodes)));
@@ -1749,10 +1763,66 @@ GRAPHQL;
 
     /**
      * @param  array<string,mixed>  $variant
+     * @param  array<int,mixed>  $productMedia
      */
-    protected function variantMediaImageUrl(array $variant): ?string
+    protected function variantMediaImageUrl(array $variant, array $productMedia = []): ?string
     {
-        $media = $variant['media'] ?? null;
+        $canonical = app(ModernForestryVariantMediaClassifier::class)->classify($this->variantTitle($variant));
+        if ($canonical !== null) {
+            $canonicalImageUrl = $this->canonicalProductMediaImageUrl($productMedia, $canonical);
+            if ($canonicalImageUrl !== null) {
+                return $canonicalImageUrl;
+            }
+        }
+
+        return $this->firstMediaImageUrl($variant['media'] ?? null);
+    }
+
+    /**
+     * @param  array<string,mixed>  $node
+     * @return array<int,mixed>
+     */
+    protected function productMediaNodes(array $node): array
+    {
+        $media = $node['media'] ?? null;
+        $nodes = is_array($media) ? ($media['nodes'] ?? []) : [];
+
+        return is_array($nodes) ? $nodes : [];
+    }
+
+    /**
+     * @param  array<int,mixed>  $mediaNodes
+     */
+    protected function canonicalProductMediaImageUrl(array $mediaNodes, string $canonical): ?string
+    {
+        $marker = app(ModernForestryVariantMediaClassifier::class)->altMarker($canonical);
+
+        foreach ($mediaNodes as $node) {
+            if (! is_array($node)) {
+                continue;
+            }
+
+            $haystack = implode(' ', array_filter([
+                (string) ($node['alt'] ?? ''),
+                (string) data_get($node, 'image.altText', ''),
+                (string) data_get($node, 'image.url', ''),
+            ]));
+
+            if (! str_contains($haystack, $marker)) {
+                continue;
+            }
+
+            $url = $this->nullableString(data_get($node, 'image.url'));
+            if ($url !== null) {
+                return $this->mobileImageUrl($url, self::DETAIL_IMAGE_WIDTH);
+            }
+        }
+
+        return null;
+    }
+
+    protected function firstMediaImageUrl(mixed $media): ?string
+    {
         $nodes = is_array($media) ? ($media['nodes'] ?? []) : [];
 
         if (! is_array($nodes)) {
@@ -1764,18 +1834,32 @@ GRAPHQL;
                 continue;
             }
 
-            $image = $node['image'] ?? null;
-            if (! is_array($image)) {
-                continue;
-            }
-
-            $url = $this->nullableString($image['url'] ?? null);
+            $url = $this->nullableString(data_get($node, 'image.url'));
             if ($url !== null) {
                 return $this->mobileImageUrl($url, self::DETAIL_IMAGE_WIDTH);
             }
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $variant
+     */
+    protected function variantTitle(array $variant): string
+    {
+        $parts = [(string) ($variant['title'] ?? '')];
+
+        foreach ((array) ($variant['selectedOptions'] ?? []) as $option) {
+            if (! is_array($option)) {
+                continue;
+            }
+
+            $parts[] = (string) ($option['name'] ?? '');
+            $parts[] = (string) ($option['value'] ?? '');
+        }
+
+        return trim(implode(' ', array_filter($parts)));
     }
 
     /**

@@ -1141,6 +1141,59 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.faq', []);
 });
 
+test('mobile product detail prefers canonical product media for variant images when Shopify keeps an older variant image first', function (): void {
+    $payload = shopifyMobileProductDetailPayload();
+    $payload['data']['products']['nodes'][0]['media'] = [
+        'nodes' => [
+            [
+                'id' => 'gid://shopify/MediaImage/4001',
+                'alt' => 'mf-app-variant-size:4oz Modern Forestry 4 oz size reference',
+                'image' => [
+                    'url' => 'https://cdn.shopify.com/s/files/4oz-reference.png',
+                    'altText' => 'mf-app-variant-size:4oz Modern Forestry 4 oz size reference',
+                ],
+            ],
+            [
+                'id' => 'gid://shopify/MediaImage/8001',
+                'alt' => 'mf-app-variant-size:8oz Modern Forestry 8 oz size reference',
+                'image' => [
+                    'url' => 'https://cdn.shopify.com/s/files/8oz-reference.png',
+                    'altText' => 'mf-app-variant-size:8oz Modern Forestry 8 oz size reference',
+                ],
+            ],
+            [
+                'id' => 'gid://shopify/MediaImage/16001',
+                'alt' => 'mf-app-variant-size:16oz Modern Forestry 16 oz size reference',
+                'image' => [
+                    'url' => 'https://cdn.shopify.com/s/files/16oz-reference.png',
+                    'altText' => 'mf-app-variant-size:16oz Modern Forestry 16 oz size reference',
+                ],
+            ],
+        ],
+    ];
+    $payload['data']['products']['nodes'][0]['variants']['nodes'][0]['title'] = '4 oz candle';
+    $payload['data']['products']['nodes'][0]['variants']['nodes'][0]['selectedOptions'][0]['value'] = '4 oz candle';
+    $payload['data']['products']['nodes'][0]['variants']['nodes'][0]['media'] = [
+        'nodes' => [
+            [
+                'id' => 'gid://shopify/MediaImage/legacy-4001',
+                'image' => [
+                    'url' => 'https://cdn.shopify.com/s/files/legacy-product-image.png',
+                    'altText' => '',
+                ],
+            ],
+        ],
+    ];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response($payload, 200),
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/products/forest-ember-candle')
+        ->assertOk()
+        ->assertJsonPath('data.variants.0.imageUrl', 'https://cdn.shopify.com/s/files/4oz-reference.png?width=1200');
+});
+
 test('mobile product detail endpoint falls back to a broader active catalog lookup when the exact handle search misses', function (): void {
     $requests = [];
 
@@ -1865,6 +1918,9 @@ function shopifyMobileProductDetailPayload(): array
                                     'altText' => 'Forest Ember candle jar',
                                 ],
                             ],
+                        ],
+                        'media' => [
+                            'nodes' => [],
                         ],
                         'variants' => [
                             'nodes' => [

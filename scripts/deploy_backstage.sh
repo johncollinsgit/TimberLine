@@ -39,7 +39,7 @@ if [ -d public/build ]; then
   rm -rf "$OLD_PUBLIC_BUILD" >/dev/null 2>&1 &
 fi
 
-npm ci --no-audit --no-fund
+npm install --no-audit --no-fund
 npm run build
 
 echo "== restart queues =="
