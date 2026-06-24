@@ -1356,6 +1356,7 @@ Server deploy command sequence:
 - `mv node_modules node_modules.__old__.$(date +%s) 2>/dev/null || true`
 - `mv public/build public/build.__old__.$(date +%s) 2>/dev/null || true`
 - `npm install --no-audit --no-fund`
+- if npm still hits an `ENOTEMPTY` cleanup race, clear the fresh partial `node_modules`/`public/build` tree, run `npm cache verify`, and retry the install once
 - `npm run build`
 - `rm -f public/hot`
 - `php artisan migrate --force`
@@ -1368,6 +1369,7 @@ Notes:
 - `route:cache` is intentionally not used because the app currently has closure routes.
 - Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
 - Forge currently reruns deploys against the active release directory, so moving `node_modules` and `public/build` out of the way before the asset install is intentional. On this server `npm install --no-audit --no-fund` is the safer path, and the old directories should be left parked during deploy rather than deleted in the background because concurrent cleanup still triggers npm `ENOTEMPTY` errors on this filesystem.
+- `scripts/deploy_backstage.sh` now retries one failed npm install after deleting the new partial asset tree and verifying the npm cache, which is the convergent path when Forge leaves a half-built `node_modules` tree behind.
 
 Known push/deploy pitfalls (2026-03-26):
 - GitHub Action fails before deploy steps with missing-input errors:

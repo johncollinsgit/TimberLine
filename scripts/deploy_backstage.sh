@@ -39,7 +39,17 @@ if [ -d public/build ]; then
   echo "Moved previous public/build to $OLD_PUBLIC_BUILD"
 fi
 
-npm install --no-audit --no-fund
+run_npm_install() {
+  npm install --no-audit --no-fund
+}
+
+if ! run_npm_install; then
+  echo "WARN: npm install failed; clearing the fresh partial asset tree and retrying once"
+  rm -rf node_modules public/build
+  npm cache verify || true
+  run_npm_install
+fi
+
 npm run build
 
 echo "== restart queues =="
