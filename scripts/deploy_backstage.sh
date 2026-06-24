@@ -24,9 +24,21 @@ php artisan view:cache
 
 echo "== build assets =="
 # Forge reruns this script in-place on the active release, so a failed `npm ci`
-# can leave a partially removed node_modules tree behind. Clear the asset dirs
-# first so reruns converge instead of dying on ENOTEMPTY during npm cleanup.
-rm -rf node_modules public/build
+# can leave a partially removed node_modules tree behind. Move the asset dirs
+# out of the way first so reruns converge instead of dying on ENOTEMPTY while
+# trying to clean a broken tree in place.
+if [ -d node_modules ]; then
+  OLD_NODE_MODULES="node_modules.__old__.$(date +%Y%m%d%H%M%S)"
+  mv node_modules "$OLD_NODE_MODULES"
+  rm -rf "$OLD_NODE_MODULES" >/dev/null 2>&1 &
+fi
+
+if [ -d public/build ]; then
+  OLD_PUBLIC_BUILD="public/build.__old__.$(date +%Y%m%d%H%M%S)"
+  mv public/build "$OLD_PUBLIC_BUILD"
+  rm -rf "$OLD_PUBLIC_BUILD" >/dev/null 2>&1 &
+fi
+
 npm ci --no-audit --no-fund
 npm run build
 

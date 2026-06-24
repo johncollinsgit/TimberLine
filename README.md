@@ -1350,7 +1350,8 @@ Server deploy command sequence:
 - `git checkout main`
 - `git pull --ff-only origin main`
 - `composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev`
-- `rm -rf node_modules public/build`
+- `mv node_modules node_modules.__old__.$(date +%s) 2>/dev/null || true`
+- `mv public/build public/build.__old__.$(date +%s) 2>/dev/null || true`
 - `npm ci`
 - `npm run build`
 - `rm -f public/hot`
@@ -1363,7 +1364,7 @@ Server deploy command sequence:
 Notes:
 - `route:cache` is intentionally not used because the app currently has closure routes.
 - Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
-- Forge currently reruns deploys against the active release directory, so clearing `node_modules` before `npm ci` is intentional. It prevents `ENOTEMPTY` failures after a previously interrupted asset install.
+- Forge currently reruns deploys against the active release directory, so moving `node_modules` and `public/build` out of the way before `npm ci` is intentional. It prevents `ENOTEMPTY` failures after a previously interrupted asset install without recursively deleting a broken tree in place.
 
 Known push/deploy pitfalls (2026-03-26):
 - GitHub Action fails before deploy steps with missing-input errors:
