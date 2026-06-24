@@ -72,9 +72,12 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 - Mobile checkout is guest-capable; signed-in customer identity is optional and is attached only when the app has a valid Customer Account token.
 - Customer Account OAuth public config lives at `/auth/config`, and token exchange lives behind Laravel at `/auth/token` so stores that require a confidential Customer Account client secret do not expose that secret in iOS. `/auth/token` validates the exchanged token against Customer Account GraphQL before the app treats the customer as signed in.
 - The Customer Account flow now prefers Shopify discovery documents from `https://theforestrystudio.com/.well-known/openid-configuration` and `/.well-known/customer-account-api` when resolving auth/token/graphql endpoints in live environments.
+- Shopify Customer Account OAuth is tied to the Shopify app config, not just the store's customer-account settings. Keep the mobile callback in `shopify.app.toml` under `[customer_authentication]`, release it with `shopify app deploy`, and make sure `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID` and `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` are from the same released app. A mismatched pair returns Shopify `invalid_client` from `/oauth/token`.
 - Keep the env values in place as fallbacks, but treat discovery drift first when login says Shopify sign-in completed and session verification failed.
 - If this error shows up again, inspect:
   - the live `.well-known` token + graph endpoints
+  - whether `shopify.app.toml` includes the mobile `[customer_authentication]` callback and the app version has been released
+  - whether the Customer Account client ID and secret are a matching Shopify app pair
   - whether Laravel has `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`
   - whether the returned Shopify customer identity can resolve to a tenant-1 `MarketingProfile`
 - Product-detail lookups now fall back to a paginated active-catalog search when the exact handle misses or resolves to a non-customer-visible node.

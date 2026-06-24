@@ -37,6 +37,11 @@ redirect_urls = [
   "https://app.theeverbranch.com/shopify/callback/wholesale"
 ]
 
+[customer_authentication]
+redirect_uris = [
+  "https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback"
+]
+
 [app_proxy]
 url = "https://app.theeverbranch.com/shopify/marketing/v1"
 subpath = "forestry"
