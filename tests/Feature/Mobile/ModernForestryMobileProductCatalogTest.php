@@ -417,6 +417,7 @@ test('mobile oauth token exchange uses basic auth and validates the customer acc
         if ($request->url() === 'https://shopify.com/authentication/20812479/oauth/token') {
             expect($request->hasHeader('Authorization', 'Basic '.base64_encode('customer-account-client:customer-account-secret')))->toBeTrue();
             expect($request['grant_type'])->toBe('authorization_code')
+                ->and($request['client_id'])->toBe('customer-account-client')
                 ->and($request['code'])->toBe('valid-code')
                 ->and($request['code_verifier'])->toBe('valid-verifier')
                 ->and($request['redirect_uri'])->toBe('shop.20812479.modernforestry://shopify-customer-auth');

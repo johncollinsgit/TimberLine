@@ -162,6 +162,7 @@ class ModernForestryMobileCustomerSessionService
 
         $payload = [
             'grant_type' => 'authorization_code',
+            'client_id' => $clientId,
             'redirect_uri' => $redirectUri,
             'code' => $code,
             'code_verifier' => $codeVerifier,
@@ -169,8 +170,6 @@ class ModernForestryMobileCustomerSessionService
 
         if ($clientSecret !== '') {
             $request = $request->withBasicAuth($clientId, $clientSecret);
-        } else {
-            $payload['client_id'] = $clientId;
         }
 
         $response = $request->post($tokenEndpoint, $payload);
