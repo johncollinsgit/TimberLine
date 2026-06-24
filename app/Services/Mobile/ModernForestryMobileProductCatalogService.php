@@ -604,6 +604,18 @@ query MobileCatalogProductDetail($query: String!) {
           altText
         }
       }
+      media(first: 50) {
+        nodes {
+          id
+          alt
+          ... on MediaImage {
+            image {
+              url
+              altText
+            }
+          }
+        }
+      }
       variants(first: 20) {
         nodes {
           id
