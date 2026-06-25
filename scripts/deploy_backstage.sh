@@ -27,25 +27,28 @@ echo "== build assets =="
 # can leave a partially removed node_modules tree behind. Move the asset dirs
 # out of the way first so reruns converge instead of dying on ENOTEMPTY while
 # trying to clean a broken tree in place.
-if [ -d node_modules ]; then
-  OLD_NODE_MODULES="node_modules.__old__.$(date +%Y%m%d%H%M%S)"
-  mv node_modules "$OLD_NODE_MODULES"
-  echo "Moved previous node_modules to $OLD_NODE_MODULES"
-fi
+move_dir_if_exists() {
+  local dir="$1"
+  local prefix="$2"
 
-if [ -d public/build ]; then
-  OLD_PUBLIC_BUILD="public/build.__old__.$(date +%Y%m%d%H%M%S)"
-  mv public/build "$OLD_PUBLIC_BUILD"
-  echo "Moved previous public/build to $OLD_PUBLIC_BUILD"
-fi
+  if [ -d "$dir" ]; then
+    local target="${prefix}.$(date +%Y%m%d%H%M%S).$$"
+    mv "$dir" "$target"
+    echo "Moved $dir to $target"
+  fi
+}
+
+move_dir_if_exists node_modules node_modules.__old__
+move_dir_if_exists public/build public/build.__old__
 
 run_npm_install() {
   npm install --no-audit --no-fund
 }
 
 if ! run_npm_install; then
-  echo "WARN: npm install failed; clearing the fresh partial asset tree and retrying once"
-  rm -rf node_modules public/build
+  echo "WARN: npm install failed; moving the fresh partial asset tree aside and retrying once"
+  move_dir_if_exists node_modules node_modules.__failed__
+  move_dir_if_exists public/build public/build.__failed__
   npm cache verify || true
   run_npm_install
 fi
