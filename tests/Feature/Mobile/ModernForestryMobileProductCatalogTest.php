@@ -431,7 +431,7 @@ test('mobile oauth token exchange uses basic auth and validates the customer acc
         }
 
         if ($request->url() === 'https://shopify.com/20812479/account/customer/api/2026-01/graphql') {
-            expect($request->hasHeader('Authorization', 'Bearer shopify-customer-access-token'))->toBeTrue();
+            expect($request->hasHeader('Authorization', 'shopify-customer-access-token'))->toBeTrue();
 
             return Http::response([
                 'data' => [

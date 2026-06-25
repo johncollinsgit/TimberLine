@@ -333,7 +333,11 @@ class ModernForestryMobileCustomerSessionService
             return null;
         }
 
-        $response = Http::withToken($token)
+        $response = Http::withHeaders([
+                'Authorization' => $token,
+                'Origin' => $this->customerAccountDiscoveryBaseUrl() ?? 'https://theforestrystudio.com',
+                'User-Agent' => 'Modern Forestry iOS / Everbranch Mobile Customer Account',
+            ])
             ->acceptJson()
             ->asJson()
             ->timeout(8)
