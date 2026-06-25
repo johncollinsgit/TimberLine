@@ -45,9 +45,10 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 ## What this folder does not do
 
 - It does not own the iOS UI.
-- It does not store customer records or Candle Club points.
 - It does not replace Shopify as the commerce platform.
-- It does not implement messaging, checkout, or account login persistence.
+- It does not implement checkout or storefront web-session persistence.
+- It does not own the native app shell, but it now serves native account, rewards, and support payloads for the phone app.
+- It does not implement the Shopify storefront theme or Infinite Options settings that actually render bundle selectors on the website.
 
 ## Current mobile-pass notes
 
@@ -55,6 +56,18 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 - The mobile catalog remains collection-first so the app can open into the seasonal shop experience instead of a raw product feed.
 - Home is now the first mobile surface that should be extended when brand, slideshow, or featured shelf content changes.
 - Future catalog changes should start here before duplicating logic in the app.
+- Bundle products are exact-count flows. `config/shopify_bundles.php` defines how many scent selections each bundle must carry, and the order ingestor rejects bundle lines that have too few or too many scent choices.
+- The mobile account payload now includes:
+  - native wishlist data from the Laravel wishlist system
+  - lightweight notification preferences
+  - per-customer insights used by the app's account and home personalization screens
+- The mobile controller now exposes native wishlist and scent endpoints for the app:
+  - `/api/mobile/v1/modern-forestry/wishlist/status`
+  - `/api/mobile/v1/modern-forestry/wishlist/add`
+  - `/api/mobile/v1/modern-forestry/wishlist/remove`
+  - `/api/mobile/v1/modern-forestry/scents`
+- Product-detail bundle payloads now include the required scent count plus the active scent list, so the SwiftUI bundle builder can enforce exact selections before add-to-bag or checkout.
+- Checkout now preserves bundle scent choices as Shopify line attributes so the importer and Shopify order notes can retain the customer's selections.
 
 ## Catalog + Rewards Cleanup (2026-06-22)
 

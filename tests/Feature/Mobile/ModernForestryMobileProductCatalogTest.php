@@ -7,9 +7,11 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Models\Scent;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
+use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -538,6 +540,15 @@ test('mobile account endpoint returns native safe account data only for signed i
         'match_method' => 'test',
         'confidence' => 1,
     ]);
+    app(MarketingWishlistService::class)->addItem($profile, [
+        'store_key' => 'retail',
+        'tenant_id' => 1,
+        'product_id' => 'gid://shopify/Product/111',
+        'product_variant_id' => 'gid://shopify/ProductVariant/9001',
+        'product_handle' => 'forest-ember-candle',
+        'product_title' => 'Forest Ember Candle',
+        'product_url' => 'https://theforestrystudio.com/products/forest-ember-candle',
+    ]);
     $order = Order::factory()->create([
         'tenant_id' => 1,
         'shopify_customer_id' => '12345',
@@ -547,8 +558,22 @@ test('mobile account endpoint returns native safe account data only for signed i
     ]);
     OrderLine::query()->create([
         'order_id' => $order->id,
-        'raw_title' => 'Forest Ember Candle',
+        'raw_title' => 'Customer Gift Candle',
         'quantity' => 1,
+    ]);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response([
+            'data' => [
+                'products' => [
+                    'nodes' => [],
+                    'pageInfo' => [
+                        'hasNextPage' => false,
+                        'endCursor' => null,
+                    ],
+                ],
+            ],
+        ], 200),
     ]);
 
     $payload = $this->withToken('mf-test-profile:'.$profile->id)
@@ -556,13 +581,66 @@ test('mobile account endpoint returns native safe account data only for signed i
         ->assertOk()
         ->assertJsonPath('data.customer.displayName', 'Ada Woods')
         ->assertJsonPath('data.orders.0.orderNumber', 'MF-1001')
-        ->assertJsonPath('data.orders.0.linePreview', 'Forest Ember Candle')
+        ->assertJsonPath('data.orders.0.linePreview', 'Customer Gift Candle')
+        ->assertJsonPath('data.wishlist.summary.active_count', 1)
+        ->assertJsonPath('data.wishlist.items.0.product_title', 'Forest Ember Candle')
+        ->assertJsonPath('data.notifications.channels.0.id', 'email')
+        ->assertJsonPath('data.notifications.channels.2.state', 'coming_soon')
+        ->assertJsonPath('data.insights.wishlistCount', 1)
+        ->assertJsonPath('data.insights.topWishlistProducts.0', 'Forest Ember Candle')
         ->json();
 
     $encoded = json_encode($payload);
     expect($encoded)->not->toContain('shpat_mobile_test_token')
         ->and($encoded)->not->toContain('mobile-test-secret')
         ->and($encoded)->not->toContain('access_token');
+});
+
+test('mobile account endpoint still loads when shopify reorder enrichment is unavailable', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+    MarketingProfileLink::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:12345',
+        'match_method' => 'test',
+        'confidence' => 1,
+    ]);
+
+    $order = Order::factory()->create([
+        'tenant_id' => 1,
+        'shopify_customer_id' => '12345',
+        'order_number' => 'MF-1002',
+        'total_price' => 28.00,
+        'ordered_at' => now(),
+    ]);
+
+    OrderLine::query()->create([
+        'order_id' => $order->id,
+        'raw_title' => 'Forest Ember Candle',
+        'raw_variant' => '8 oz candle',
+        'quantity' => 1,
+    ]);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response([
+            'errors' => 'Not Found',
+        ], 404),
+    ]);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/account')
+        ->assertOk()
+        ->assertJsonPath('data.customer.displayName', 'Ada Woods')
+        ->assertJsonPath('data.orders.0.orderNumber', 'MF-1002')
+        ->assertJsonPath('data.orders.0.lines.0.title', 'Forest Ember Candle')
+        ->assertJsonPath('data.orders.0.lines.0.canReorder', false);
 });
 
 test('mobile rewards endpoint returns balance rewards history and can redeem natively', function (): void {
@@ -624,6 +702,76 @@ test('mobile account message endpoint accepts signed in native support messages'
         ->assertOk()
         ->assertJsonPath('data.ok', true)
         ->assertJsonPath('data.state', 'received');
+});
+
+test('mobile wishlist endpoints reuse the native laravel wishlist state', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'wishlist@example.com',
+        'normalized_email' => 'wishlist@example.com',
+    ]);
+
+    $product = [
+        'product_id' => 'gid://shopify/Product/111',
+        'product_variant_id' => 'gid://shopify/ProductVariant/9001',
+        'product_handle' => 'forest-ember-candle',
+        'product_title' => 'Forest Ember Candle',
+        'product_url' => 'https://theforestrystudio.com/products/forest-ember-candle',
+    ];
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/wishlist/add', [
+            ...$product,
+            'list_name' => 'Favorites',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.state', 'wishlist_added')
+        ->assertJsonPath('data.payload.summary.active_count', 1)
+        ->assertJsonPath('data.item.product_title', 'Forest Ember Candle')
+        ->assertJsonPath('data.item.status', 'active');
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/wishlist/status?'.http_build_query($product + ['limit' => 1]))
+        ->assertOk()
+        ->assertJsonPath('data.summary.active_count', 1)
+        ->assertJsonPath('data.product.in_wishlist', true);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/wishlist/remove', $product)
+        ->assertOk()
+        ->assertJsonPath('data.state', 'wishlist_removed')
+        ->assertJsonPath('data.payload.summary.active_count', 0)
+        ->assertJsonPath('data.payload.product.in_wishlist', false);
+});
+
+test('mobile scents endpoint returns active scents for bundle builders', function (): void {
+    Scent::query()->create([
+        'name' => 'Forest Ember',
+        'display_name' => 'Forest Ember',
+        'abbreviation' => 'F',
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+    Scent::query()->create([
+        'name' => 'Oakmoss Amber',
+        'display_name' => 'Oakmoss Amber',
+        'abbreviation' => 'O',
+        'is_active' => true,
+        'sort_order' => 1,
+    ]);
+    Scent::query()->create([
+        'name' => 'Hidden Scent',
+        'display_name' => 'Hidden Scent',
+        'abbreviation' => 'H',
+        'is_active' => false,
+        'sort_order' => 3,
+    ]);
+
+    $payload = $this->getJson('/api/mobile/v1/modern-forestry/scents')
+        ->assertOk()
+        ->json();
+    expect(collect($payload['data'])->pluck('name')->all())->toContain('Forest Ember', 'Oakmoss Amber')
+        ->and(collect($payload['data'])->pluck('name')->all())->not->toContain('Hidden Scent');
 });
 
 test('fake mobile product detail returns 200 for a known handle', function (): void {
@@ -695,6 +843,43 @@ test('fake mobile product detail response has expected shape', function (): void
         ->assertJsonPath('data.images', [])
         ->assertJsonPath('data.variants.0.title', 'Default Title')
         ->assertJsonPath('data.productType', 'Candle');
+});
+
+test('mobile product detail exposes bundle scent requirements and active scent options', function (): void {
+    Scent::query()->create([
+        'name' => 'Forest Ember',
+        'display_name' => 'Forest Ember',
+        'abbreviation' => 'F',
+        'is_active' => true,
+        'sort_order' => 1,
+    ]);
+    Scent::query()->create([
+        'name' => 'Oakmoss Amber',
+        'display_name' => 'Oakmoss Amber',
+        'abbreviation' => 'O',
+        'is_active' => true,
+        'sort_order' => 2,
+    ]);
+
+    $payload = shopifyMobileProductDetailPayload();
+    $payload['data']['products']['nodes'][0]['title'] = '3 16oz Soy Candle Bundle';
+    $payload['data']['products']['nodes'][0]['handle'] = '3-16oz-soy-candle-bundle';
+    $payload['data']['products']['nodes'][0]['productType'] = 'Bundle';
+    $payload['data']['products']['nodes'][0]['tags'] = ['bundle', 'gift set'];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response($payload, 200),
+    ]);
+
+    $payload = $this->getJson('/api/mobile/v1/modern-forestry/products/3-16oz-soy-candle-bundle')
+        ->assertOk()
+        ->json();
+
+    expect(data_get($payload, 'data.bundle.requiredScentCount'))->toBe(3)
+        ->and(data_get($payload, 'data.bundle.qtyPerScent'))->toBe(1)
+        ->and(data_get($payload, 'data.bundle.selectionLabels'))->toBe(['Scent 1', 'Scent 2', 'Scent 3'])
+        ->and(collect(data_get($payload, 'data.bundle.availableScents', []))->pluck('displayName')->all())
+            ->toContain('Forest Ember', 'Oakmoss Amber');
 });
 
 test('fake mobile product detail returns 404 for unknown handle', function (): void {
@@ -1506,6 +1691,12 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
                 'productHandle' => 'forest-ember-candle',
                 'variantId' => '9001',
                 'quantity' => 2,
+                'attributes' => [
+                    [
+                        'key' => 'Scent 1',
+                        'value' => 'Forest Ember',
+                    ],
+                ],
             ],
         ],
         'discountCode' => ' candlecash10 ',
@@ -1532,6 +1723,12 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
 
     expect($body['variables']['input']['lines'][0]['merchandiseId'])->toBe('gid://shopify/ProductVariant/9001');
     expect($body['variables']['input']['lines'][0]['quantity'])->toBe(2);
+    expect($body['variables']['input']['lines'][0]['attributes'])->toBe([
+        [
+            'key' => 'Scent 1',
+            'value' => 'Forest Ember',
+        ],
+    ]);
     expect($body['variables']['input']['discountCodes'])->toBe(['CANDLECASH10']);
     expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('customer-account-test-token');
 });

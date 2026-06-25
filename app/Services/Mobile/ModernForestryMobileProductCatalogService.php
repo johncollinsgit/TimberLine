@@ -3,6 +3,7 @@
 namespace App\Services\Mobile;
 
 use App\Models\OrderLine;
+use App\Models\Scent;
 use App\Models\Tenant;
 use App\Services\Shopify\ModernForestryVariantMediaClassifier;
 use App\Services\Shopify\ShopifyGraphqlClient;
@@ -341,6 +342,56 @@ class ModernForestryMobileProductCatalogService
             'featuredProducts' => $this->featuredProducts(6),
             'cards' => $this->homeCards(),
         ];
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    public function availableScents(): array
+    {
+        if ($this->fakeCatalogEnabled()) {
+            return array_values(array_map(
+                fn (array $product, int $index): array => [
+                    'id' => $index + 1,
+                    'name' => $product['handle'],
+                    'displayName' => $product['title'],
+                    'abbreviation' => strtoupper(substr((string) $product['title'], 0, 1)),
+                    'isBlend' => false,
+                    'isCandleClub' => false,
+                    'isActive' => true,
+                    'sortOrder' => $index + 1,
+                ],
+                $this->fakeBaseProducts(),
+                array_keys($this->fakeBaseProducts())
+            ));
+        }
+
+        return Scent::query()
+            ->where('is_active', true)
+            ->orderByRaw('coalesce(sort_order, 999999) asc')
+            ->orderByRaw('coalesce(display_name, name) asc')
+            ->get([
+                'id',
+                'name',
+                'display_name',
+                'abbreviation',
+                'is_blend',
+                'is_candle_club',
+                'is_active',
+                'sort_order',
+            ])
+            ->map(fn (Scent $scent): array => [
+                'id' => (int) $scent->id,
+                'name' => (string) $scent->name,
+                'displayName' => $this->nullableString($scent->display_name) ?? (string) $scent->name,
+                'abbreviation' => $this->nullableString($scent->abbreviation),
+                'isBlend' => (bool) $scent->is_blend,
+                'isCandleClub' => (bool) $scent->is_candle_club,
+                'isActive' => (bool) $scent->is_active,
+                'sortOrder' => $scent->sort_order,
+            ])
+            ->values()
+            ->all();
     }
 
     public function normalizeLimit(int $limit): int
@@ -814,6 +865,7 @@ GRAPHQL;
                 'tags' => $product['tags'],
                 'scentNotes' => $product['scentNotes'],
                 'faq' => [],
+                'bundle' => $this->bundleConfigurationForProduct($product['title'], $product['handle'], $product['tags']),
             ];
         }
 
@@ -1048,7 +1100,59 @@ GRAPHQL;
             'tags' => $summary['tags'],
             'scentNotes' => $this->scentNotes($summary['tags']),
             'faq' => $this->productFaq($node),
+            'bundle' => $this->bundleConfigurationForProduct($summary['title'] ?? $summary['handle'] ?? '', $summary['handle'] ?? '', $summary['tags'] ?? []),
         ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function bundleConfigurationForProduct(string $title, string $handle, array $tags = []): ?array
+    {
+        $normalized = strtolower(trim($title));
+        $normalizedHandle = strtolower(trim($handle));
+        $bundleConfig = config('shopify_bundles', []);
+        $bundleDefinition = null;
+
+        foreach ($bundleConfig as $key => $definition) {
+            $keyNormalized = strtolower(trim((string) $key));
+            if ($normalized === $keyNormalized || $normalizedHandle === $keyNormalized) {
+                $bundleDefinition = $definition;
+                break;
+            }
+        }
+
+        if ($bundleDefinition === null) {
+            $isBundle = str_contains($normalized, 'bundle')
+                || str_contains($normalizedHandle, 'bundle')
+                || collect($tags)->contains(fn ($tag): bool => str_contains(strtolower((string) $tag), 'bundle'));
+
+            if (! $isBundle) {
+                return null;
+            }
+        }
+
+        $requiredCount = (int) ($bundleDefinition['required_scent_count'] ?? max(1, $this->bundleCountFromTitle($normalized)));
+
+        return [
+            'requiredScentCount' => $requiredCount,
+            'qtyPerScent' => (int) ($bundleDefinition['qty_per_scent'] ?? 1),
+            'sizeKey' => $bundleDefinition['size_key'] ?? null,
+            'availableScents' => $this->availableScents(),
+            'selectionLabels' => array_map(
+                static fn (int $index): string => 'Scent ' . $index,
+                range(1, max(1, $requiredCount))
+            ),
+        ];
+    }
+
+    protected function bundleCountFromTitle(string $title): int
+    {
+        if (preg_match('/\b(\d+)\b/u', $title, $matches) === 1) {
+            return max(1, (int) $matches[1]);
+        }
+
+        return 1;
     }
 
     /**

@@ -530,6 +530,16 @@ class ShopifyOrderIngestor
             return [];
         }
 
+        $requiredSelectionCount = max(0, (int) ($config['required_scent_count'] ?? 0));
+        if ($requiredSelectionCount > 0 && count($selections) !== $requiredSelectionCount) {
+            $this->recordImportException($storeKey, $orderData, $line, 'bundle_scent_count_mismatch', [
+                'expected_scent_count' => $requiredSelectionCount,
+                'actual_scent_count' => count($selections),
+            ]);
+
+            return [];
+        }
+
         $qtyPer = (int) ($config['qty_per_scent'] ?? 1);
         $bundleQty = (int) ($line['quantity'] ?? 1);
         $lineItemId = isset($line['id']) ? (int) $line['id'] : null;

@@ -48,10 +48,17 @@ class ModernForestryMobileCheckoutService
                 'variables' => [
                     'input' => array_filter([
                         'lines' => array_map(
-                            static fn (array $line): array => [
+                            static fn (array $line): array => array_filter([
                                 'merchandiseId' => $line['merchandiseId'],
                                 'quantity' => $line['quantity'],
-                            ],
+                                'attributes' => ! empty($line['attributes']) ? array_map(
+                                    static fn (array $attribute): array => [
+                                        'key' => (string) ($attribute['key'] ?? ''),
+                                        'value' => (string) ($attribute['value'] ?? ''),
+                                    ],
+                                    $line['attributes']
+                                ) : null,
+                            ], static fn (mixed $value): bool => $value !== null && $value !== []),
                             $lines
                         ),
                         'discountCodes' => $discountCodes,
@@ -236,6 +243,9 @@ class ModernForestryMobileCheckoutService
             $key = $handle.':'.$variantId;
             if (isset($lines[$key])) {
                 $lines[$key]['quantity'] = min(self::MAX_QUANTITY, $lines[$key]['quantity'] + $quantity);
+                if (! empty($item['attributes']) && $lines[$key]['attributes'] === []) {
+                    $lines[$key]['attributes'] = $this->normalizeAttributes($item['attributes']);
+                }
                 continue;
             }
 
@@ -247,10 +257,43 @@ class ModernForestryMobileCheckoutService
                 'quantity' => $quantity,
                 'price' => $variant['price'] ?? null,
                 'merchandiseId' => $this->variantGid($variantId),
+                'attributes' => $this->normalizeAttributes($item['attributes'] ?? []),
             ];
         }
 
         return array_values($lines);
+    }
+
+    /**
+     * @param mixed $attributes
+     * @return array<int,array{key:string,value:string}>
+     */
+    protected function normalizeAttributes(mixed $attributes): array
+    {
+        if (! is_array($attributes)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($attributes as $attribute) {
+            if (! is_array($attribute)) {
+                continue;
+            }
+
+            $key = trim((string) ($attribute['key'] ?? ''));
+            $value = trim((string) ($attribute['value'] ?? ''));
+            if ($key === '' || $value === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'key' => $key,
+                'value' => $value,
+            ];
+        }
+
+        return $normalized;
     }
 
     protected function normalizeHandle(mixed $value): ?string

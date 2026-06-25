@@ -400,6 +400,20 @@ Route::post('/api/mobile/v1/modern-forestry/account/message', [ModernForestryPro
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.account.message');
+Route::get('/api/mobile/v1/modern-forestry/wishlist/status', [ModernForestryProductCatalogController::class, 'wishlistStatus'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.wishlist.status');
+Route::post('/api/mobile/v1/modern-forestry/wishlist/add', [ModernForestryProductCatalogController::class, 'wishlistAdd'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.wishlist.add');
+Route::post('/api/mobile/v1/modern-forestry/wishlist/remove', [ModernForestryProductCatalogController::class, 'wishlistRemove'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.wishlist.remove');
+Route::get('/api/mobile/v1/modern-forestry/scents', [ModernForestryProductCatalogController::class, 'scents'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.scents');
 Route::get('/api/mobile/v1/modern-forestry/rewards', [ModernForestryProductCatalogController::class, 'rewards'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.rewards');

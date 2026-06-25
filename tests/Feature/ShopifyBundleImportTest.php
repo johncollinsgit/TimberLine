@@ -34,6 +34,10 @@ class ShopifyBundleImportTest extends TestCase
             ['name' => 'Pumpkin Chai'],
             ['display_name' => 'Pumpkin Chai', 'is_active' => true]
         );
+        $oakmoss = Scent::query()->firstOrCreate(
+            ['name' => 'Oakmoss Amber'],
+            ['display_name' => 'Oakmoss Amber', 'is_active' => true]
+        );
 
         $orderData = [
             'id' => 123,
@@ -48,6 +52,7 @@ class ShopifyBundleImportTest extends TestCase
                     'properties' => [
                         ['name' => 'Scent 1', 'value' => 'River Birch'],
                         ['name' => 'Scent 2', 'value' => 'Pumpkin Chai'],
+                        ['name' => 'Scent 3', 'value' => 'Oakmoss Amber'],
                     ],
                 ],
             ],
@@ -58,9 +63,10 @@ class ShopifyBundleImportTest extends TestCase
         $ingestor->ingest($store, $orderData);
 
         $lines = OrderLine::query()->get();
-        $this->assertCount(2, $lines);
+        $this->assertCount(3, $lines);
         $this->assertSame($river->id, $lines[0]->scent_id);
         $this->assertSame($pumpkin->id, $lines[1]->scent_id);
+        $this->assertSame($oakmoss->id, $lines[2]->scent_id);
         $this->assertNotNull($lines[0]->size_id);
         $this->assertNotNull($lines[1]->size_id);
         $this->assertNotNull($lines[0]->external_key);
@@ -96,6 +102,7 @@ class ShopifyBundleImportTest extends TestCase
 
         $this->assertSame(0, OrderLine::query()->count());
         $this->assertSame(1, ShopifyImportException::query()->count());
+        $this->assertSame('bundle_scent_count_mismatch', ShopifyImportException::query()->first()->reason);
     }
 
     public function testReimportDoesNotDuplicateBundleLines(): void
@@ -112,6 +119,10 @@ class ShopifyBundleImportTest extends TestCase
             ['name' => 'Pumpkin Chai'],
             ['display_name' => 'Pumpkin Chai', 'is_active' => true]
         );
+        Scent::query()->firstOrCreate(
+            ['name' => 'Oakmoss Amber'],
+            ['display_name' => 'Oakmoss Amber', 'is_active' => true]
+        );
 
         $orderData = [
             'id' => 789,
@@ -126,6 +137,7 @@ class ShopifyBundleImportTest extends TestCase
                     'properties' => [
                         ['name' => 'Scent 1', 'value' => 'River Birch'],
                         ['name' => 'Scent 2', 'value' => 'Pumpkin Chai'],
+                        ['name' => 'Scent 3', 'value' => 'Oakmoss Amber'],
                     ],
                 ],
             ],
@@ -136,7 +148,7 @@ class ShopifyBundleImportTest extends TestCase
         $ingestor->ingest($store, $orderData);
         $ingestor->ingest($store, $orderData);
 
-        $this->assertSame(2, OrderLine::query()->count());
+        $this->assertSame(3, OrderLine::query()->count());
     }
 
     public function testSaleCandlesUsesVariantAsScentSourceForWholesaleImport(): void

@@ -8,13 +8,24 @@ use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\MarketingWishlistService;
+use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class ModernForestryMobileAccountService
 {
+    /**
+     * @var array<int,array<string,mixed>>|null
+     */
+    protected ?array $catalogProducts = null;
+
     public function __construct(
-        protected CandleCashService $candleCashService
+        protected CandleCashService $candleCashService,
+        protected MarketingWishlistService $wishlistService,
+        protected ModernForestryMobileProductCatalogService $catalog
     ) {
     }
 
@@ -31,6 +42,63 @@ class ModernForestryMobileAccountService
             'orders' => $this->orders($profile, $tenantId)->take(10)->values()->all(),
             'support' => $this->supportPayload($profile),
             'rewards' => $this->rewardsSummary($profile, $tenantId),
+            'wishlist' => $this->wishlistPayload($profile, $tenantId),
+            'notifications' => $this->notificationsPayload($profile),
+            'insights' => $this->insightsPayload($profile, $tenantId),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function wishlistPayload(MarketingProfile $profile, int $tenantId): array
+    {
+        return $this->wishlistService->storefrontPayload($profile, [
+            'store_key' => 'retail',
+            'tenant_id' => $tenantId,
+            'limit' => 12,
+            'identity_status' => 'authenticated',
+        ]);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function wishlistStatus(MarketingProfile $profile, array $context = []): array
+    {
+        return $this->wishlistService->storefrontPayload($profile, [
+            'store_key' => 'retail',
+            ...$context,
+        ]);
+    }
+
+    /**
+     * @param array<string,mixed> $product
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function addWishlistItem(MarketingProfile $profile, array $product, array $options = []): array
+    {
+        $result = $this->wishlistService->addItem($profile, $product, $options);
+
+        return [
+            ...$result,
+            'payload' => $this->wishlistPayload($profile, $this->tenantId($profile)),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $product
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function removeWishlistItem(MarketingProfile $profile, array $product, array $options = []): array
+    {
+        $result = $this->wishlistService->removeItem($profile, $product, $options);
+
+        return [
+            ...$result,
+            'payload' => $this->wishlistPayload($profile, $this->tenantId($profile)),
         ];
     }
 
@@ -225,20 +293,16 @@ class ModernForestryMobileAccountService
             ->orderByDesc('id')
             ->limit(20)
             ->get()
-            ->map(fn (Order $order): array => $this->orderPayload($order))
+            ->map(fn (Order $order): array => $this->orderPayload($order, $tenantId))
             ->values();
     }
 
     /**
      * @return array<string,mixed>
      */
-    protected function orderPayload(Order $order): array
+    protected function orderPayload(Order $order, int $tenantId): array
     {
-        $lines = $order->lines->map(fn (OrderLine $line): array => [
-            'id' => (int) $line->id,
-            'title' => trim((string) ($line->raw_title ?? '')) ?: trim((string) ($line->raw_variant ?? '')) ?: 'Item',
-            'quantity' => max(1, (int) ($line->quantity ?: $line->ordered_qty ?: 1)),
-        ])->values();
+        $lines = $order->lines->map(fn (OrderLine $line): array => $this->orderLinePayload($line, $tenantId))->values();
 
         return [
             'id' => (int) $order->id,
@@ -252,6 +316,44 @@ class ModernForestryMobileAccountService
             'linePreview' => $lines->take(3)->pluck('title')->implode(' · '),
             'lineCount' => $lines->count(),
             'lines' => $lines->all(),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function orderLinePayload(OrderLine $line, int $tenantId): array
+    {
+        $rawTitle = trim((string) ($line->raw_title ?? ''));
+        $rawVariant = trim((string) ($line->raw_variant ?? ''));
+        $matchedProduct = $this->matchProductForLine($rawTitle);
+        $matchedVariant = null;
+
+        if ($matchedProduct !== null) {
+            try {
+                $detail = $this->catalog->productDetail((string) ($matchedProduct['handle'] ?? ''));
+                if (is_array($detail)) {
+                    $matchedVariant = $this->matchVariantForLine((array) ($detail['variants'] ?? []), $rawVariant);
+                }
+            } catch (Throwable $exception) {
+                Log::warning('Modern Forestry mobile account variant enrichment failed.', [
+                    'order_line_id' => (int) $line->id,
+                    'product_handle' => $matchedProduct['handle'] ?? null,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'id' => (int) $line->id,
+            'title' => $rawTitle !== '' ? $rawTitle : ($rawVariant !== '' ? $rawVariant : 'Item'),
+            'quantity' => max(1, (int) ($line->quantity ?: $line->ordered_qty ?: 1)),
+            'productHandle' => $matchedProduct['handle'] ?? null,
+            'productTitle' => $matchedProduct['title'] ?? ($rawTitle !== '' ? $rawTitle : null),
+            'variantId' => $matchedVariant['id'] ?? ($line->shopify_variant_id ? (string) $line->shopify_variant_id : null),
+            'variantTitle' => $matchedVariant['title'] ?? ($rawVariant !== '' ? $rawVariant : null),
+            'imageUrl' => $this->nullableString($line->image_url),
+            'canReorder' => $matchedProduct !== null,
         ];
     }
 
@@ -287,6 +389,62 @@ class ModernForestryMobileAccountService
             ->get()
             ->map(fn (CandleCashRedemption $redemption): array => $this->redemptionPayload($redemption, $tenantId, true))
             ->values();
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function notificationsPayload(MarketingProfile $profile): array
+    {
+        return [
+            'channels' => [
+                [
+                    'id' => 'email',
+                    'title' => 'Email updates',
+                    'enabled' => (bool) $profile->accepts_email_marketing,
+                ],
+                [
+                    'id' => 'sms',
+                    'title' => 'Text alerts',
+                    'enabled' => (bool) $profile->accepts_sms_marketing,
+                ],
+                [
+                    'id' => 'push',
+                    'title' => 'Push notifications',
+                    'enabled' => false,
+                    'state' => 'coming_soon',
+                ],
+            ],
+            'summary' => [
+                'email' => (bool) $profile->accepts_email_marketing,
+                'sms' => (bool) $profile->accepts_sms_marketing,
+                'push' => false,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function insightsPayload(MarketingProfile $profile, int $tenantId): array
+    {
+        $orders = $this->orders($profile, $tenantId);
+        $wishlist = $this->wishlistPayload($profile, $tenantId);
+
+        return [
+            'orderCount' => $orders->count(),
+            'wishlistCount' => (int) data_get($wishlist, 'summary.active_count', 0),
+            'wishlistListCount' => count((array) data_get($wishlist, 'lists', [])),
+            'rewardBalance' => data_get($this->rewardsSummary($profile, $tenantId), 'balance'),
+            'topOrderTitles' => $orders->pluck('linePreview')->filter()->take(3)->values()->all(),
+            'topWishlistProducts' => collect(data_get($wishlist, 'items', []))
+                ->pluck('product_title')
+                ->filter()
+                ->unique()
+                ->take(3)
+                ->values()
+                ->all(),
+        ];
     }
 
     /**
@@ -347,6 +505,73 @@ class ModernForestryMobileAccountService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function matchProductForLine(string $rawTitle): ?array
+    {
+        $candidate = Str::of($rawTitle)->trim()->lower()->toString();
+        if ($candidate === '') {
+            return null;
+        }
+
+        foreach ($this->catalogProducts() as $product) {
+            $title = Str::of((string) ($product['title'] ?? ''))->trim()->lower()->toString();
+            $handle = Str::of((string) ($product['handle'] ?? ''))->trim()->lower()->toString();
+
+            if ($title === $candidate || $handle === $candidate || str_contains($title, $candidate) || str_contains($candidate, $title)) {
+                return $product;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function catalogProducts(): array
+    {
+        if (is_array($this->catalogProducts)) {
+            return $this->catalogProducts;
+        }
+
+        try {
+            $this->catalogProducts = $this->catalog->products(40);
+        } catch (Throwable $exception) {
+            Log::warning('Modern Forestry mobile account catalog enrichment failed.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            $this->catalogProducts = [];
+        }
+
+        return $this->catalogProducts;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $variants
+     * @return array<string,mixed>|null
+     */
+    protected function matchVariantForLine(array $variants, string $rawVariant): ?array
+    {
+        $candidate = Str::of($rawVariant)->trim()->lower()->toString();
+        if ($candidate === '') {
+            return null;
+        }
+
+        foreach ($variants as $variant) {
+            $title = Str::of((string) ($variant['title'] ?? ''))->trim()->lower()->toString();
+            $displayTitle = Str::of((string) ($variant['displayTitle'] ?? ''))->trim()->lower()->toString();
+
+            if ($title === $candidate || $displayTitle === $candidate || str_contains($title, $candidate) || str_contains($candidate, $title)) {
+                return $variant;
+            }
+        }
+
+        return null;
     }
 
     protected function redemptionMessage(string $state): string

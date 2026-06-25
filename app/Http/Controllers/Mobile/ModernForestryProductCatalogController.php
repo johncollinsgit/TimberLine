@@ -25,6 +25,9 @@ class ModernForestryProductCatalogController extends Controller
             'items.*.productHandle' => ['required', 'string', 'max:255'],
             'items.*.variantId' => ['required', 'string', 'max:255'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:'.ModernForestryMobileCheckoutService::MAX_QUANTITY],
+            'items.*.attributes' => ['nullable', 'array'],
+            'items.*.attributes.*.key' => ['required_with:items.*.attributes', 'string', 'max:120'],
+            'items.*.attributes.*.value' => ['required_with:items.*.attributes', 'string', 'max:255'],
             'discountCode' => ['nullable', 'string', 'max:80'],
             'customerAccessToken' => ['nullable', 'string', 'max:4096'],
         ]);
@@ -374,6 +377,133 @@ class ModernForestryProductCatalogController extends Controller
 
         return response()->json([
             'data' => $account->message($session, (string) $validated['message']),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function wishlistStatus(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'product_id' => ['nullable', 'string', 'max:120'],
+            'product_variant_id' => ['nullable', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+            'wishlist_list_id' => ['nullable', 'integer'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        return response()->json([
+            'data' => $account->wishlistStatus($session->profile, $validated),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function wishlistAdd(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'product_id' => ['required', 'string', 'max:120'],
+            'product_variant_id' => ['nullable', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+            'wishlist_list_id' => ['nullable', 'integer'],
+            'list_name' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $payload = $account->addWishlistItem($session->profile, [
+            'store_key' => 'retail',
+            'tenant_id' => $session->profile->tenant_id,
+            'product_id' => $validated['product_id'],
+            'product_variant_id' => $validated['product_variant_id'] ?? null,
+            'product_handle' => $validated['product_handle'] ?? null,
+            'product_title' => $validated['product_title'] ?? null,
+            'product_url' => $validated['product_url'] ?? null,
+        ], [
+            'wishlist_list_id' => $validated['wishlist_list_id'] ?? null,
+            'list_name' => $validated['list_name'] ?? null,
+            'source' => 'modern_forestry_ios',
+            'source_surface' => 'modern_forestry_ios',
+        ]);
+
+        return response()->json([
+            'data' => $payload,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function wishlistRemove(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'product_id' => ['required', 'string', 'max:120'],
+            'product_variant_id' => ['nullable', 'string', 'max:120'],
+            'product_handle' => ['nullable', 'string', 'max:160'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'product_url' => ['nullable', 'string', 'max:500'],
+            'wishlist_list_id' => ['nullable', 'integer'],
+        ]);
+
+        $payload = $account->removeWishlistItem($session->profile, [
+            'store_key' => 'retail',
+            'tenant_id' => $session->profile->tenant_id,
+            'product_id' => $validated['product_id'],
+            'product_variant_id' => $validated['product_variant_id'] ?? null,
+            'product_handle' => $validated['product_handle'] ?? null,
+            'product_title' => $validated['product_title'] ?? null,
+            'product_url' => $validated['product_url'] ?? null,
+        ], [
+            'wishlist_list_id' => $validated['wishlist_list_id'] ?? null,
+            'source' => 'modern_forestry_ios',
+            'source_surface' => 'modern_forestry_ios',
+        ]);
+
+        return response()->json([
+            'data' => $payload,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function scents(
+        ModernForestryMobileProductCatalogService $catalog
+    ): JsonResponse {
+        return response()->json([
+            'data' => $catalog->availableScents(),
             'meta' => [
                 'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
                 'source' => 'mobile',
