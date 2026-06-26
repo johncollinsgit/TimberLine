@@ -139,7 +139,7 @@ class ShopifyEmbeddedShellPayloadBuilder
         $moduleStates = $this->moduleStates($tenantId, $request);
         $displayLabels = $this->displayLabels($tenantId, $request);
 
-        return array_map(function (array $page) use ($activeKey, $moduleStates, $displayLabels): array {
+        return array_map(function (array $page) use ($activeKey, $moduleStates, $displayLabels, $tenantId): array {
             $shortKey = $this->childKeyFromPage((string) ($page['key'] ?? ''));
             $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
             $badge = $shortKey === 'app_messages'

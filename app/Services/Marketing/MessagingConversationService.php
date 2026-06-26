@@ -193,6 +193,7 @@ class MessagingConversationService
                     'delivery_status' => $this->nullableString($attributes['delivery_status'] ?? null),
                     'message_type' => $attributes['message_type'] ?? 'normal',
                     'operator_read_at' => $attributes['operator_read_at'] ?? null,
+                    'customer_read_at' => $attributes['customer_read_at'] ?? null,
                     'created_by' => $attributes['created_by'] ?? null,
                     'raw_payload' => is_array($attributes['raw_payload'] ?? null) ? $attributes['raw_payload'] : [],
                     'metadata' => is_array($attributes['metadata'] ?? null) ? $attributes['metadata'] : [],

@@ -131,6 +131,18 @@ return [
         'api_key' => env('SENDGRID_API_KEY'),
     ],
 
+    'modern_forestry_apns' => [
+        'enabled' => env('MODERN_FORESTRY_APNS_ENABLED', false),
+        'team_id' => env('MODERN_FORESTRY_APNS_TEAM_ID'),
+        'key_id' => env('MODERN_FORESTRY_APNS_KEY_ID'),
+        'bundle_id' => env('MODERN_FORESTRY_IOS_BUNDLE_ID', 'com.theforestrystudio.modernforestry'),
+        'environment' => env('MODERN_FORESTRY_APNS_ENVIRONMENT', 'production'),
+        'auth_key' => env('MODERN_FORESTRY_APNS_AUTH_KEY'),
+        'auth_key_base64' => env('MODERN_FORESTRY_APNS_AUTH_KEY_BASE64'),
+        'auth_key_path' => env('MODERN_FORESTRY_APNS_AUTH_KEY_PATH'),
+        'timeout' => (int) env('MODERN_FORESTRY_APNS_TIMEOUT', 10),
+    ],
+
     'stripe' => [
         'secret' => env('STRIPE_SECRET'),
         'publishable_key' => env('STRIPE_KEY'),

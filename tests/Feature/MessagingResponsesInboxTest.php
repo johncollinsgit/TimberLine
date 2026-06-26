@@ -8,11 +8,13 @@ use App\Models\MarketingProfile;
 use App\Models\MessagingContactChannelState;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
+use App\Models\MobilePushDevice;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Services\Marketing\MessagingConversationService;
 use App\Services\Marketing\MessagingEmailReplyAddressService;
 use App\Services\Marketing\SendGridEmailService;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 beforeEach(function (): void {
@@ -45,6 +47,29 @@ function grantResponsesMessagingEntitlement(Tenant $tenant): void
             'price_source' => 'test',
         ]
     );
+}
+
+function responsesApnsPrivateKey(): string
+{
+    static $pem = null;
+
+    if (is_string($pem) && $pem !== '') {
+        return $pem;
+    }
+
+    $resource = openssl_pkey_new([
+        'private_key_type' => OPENSSL_KEYTYPE_EC,
+        'curve_name' => 'prime256v1',
+    ]);
+
+    expect($resource)->not->toBeFalse();
+
+    $exported = openssl_pkey_export($resource, $pem);
+
+    expect($exported)->toBeTrue()
+        ->and($pem)->toBeString();
+
+    return $pem;
 }
 
 /**
@@ -237,6 +262,91 @@ test('help reply is stored correctly and visible in conversation detail', functi
         ->assertOk()
         ->assertJsonPath('data.conversation.id', (int) $conversation->id)
         ->assertJsonPath('data.messages.1.message_type', 'help');
+});
+
+test('mobile app inbox replies trigger APNs delivery for registered iphone devices', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Responses Mobile App Push Tenant',
+        'slug' => 'responses-mobile-app-push-tenant',
+    ]);
+    grantResponsesMessagingEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    config()->set('services.modern_forestry_apns.enabled', true);
+    config()->set('services.modern_forestry_apns.team_id', 'TEAM123ABC');
+    config()->set('services.modern_forestry_apns.key_id', 'KEY123ABC');
+    config()->set('services.modern_forestry_apns.bundle_id', 'com.theforestrystudio.modernforestry');
+    config()->set('services.modern_forestry_apns.environment', 'development');
+    config()->set('services.modern_forestry_apns.auth_key', responsesApnsPrivateKey());
+
+    $profile = responsesProfile($tenant->id, [
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada-push@example.com',
+        'normalized_email' => 'ada-push@example.com',
+    ]);
+
+    $conversation = MessagingConversation::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'channel' => 'email',
+        'marketing_profile_id' => $profile->id,
+        'email' => 'ada-push@example.com',
+        'subject' => 'Modern Forestry app support',
+        'status' => 'open',
+        'source_type' => 'modern_forestry_app',
+        'source_context' => [
+            'thread_kind' => 'support',
+            'reply_via' => 'app',
+        ],
+    ]);
+
+    MobilePushDevice::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'platform' => 'ios',
+        'device_token' => str_repeat('ab12', 16),
+        'authorization_status' => 'authorized',
+        'push_enabled' => true,
+        'last_registered_at' => now(),
+        'last_seen_at' => now(),
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.push.apple.com/3/device/*' => Http::response('', 200),
+    ]);
+
+    $this->withHeaders(responsesApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.responses.reply', ['conversation' => $conversation->id]), [
+            'body' => 'Exclusive app-only offer: your saved candle is back in stock.',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.conversation.source_type', 'modern_forestry_app');
+
+    Http::assertSent(function (\Illuminate\Http\Client\Request $request) use ($conversation): bool {
+        $payload = json_decode($request->body(), true);
+
+        return $request->url() === 'https://api.sandbox.push.apple.com/3/device/'.str_repeat('ab12', 16)
+            && $request->hasHeader('apns-topic', 'com.theforestrystudio.modernforestry')
+            && $request->hasHeader('apns-push-type', 'alert')
+            && $request->hasHeader('authorization')
+            && ($payload['aps']['alert']['title'] ?? null) === 'Modern Forestry'
+            && ($payload['aps']['alert']['subtitle'] ?? null) === 'App-only message'
+            && ($payload['aps']['badge'] ?? null) === 1
+            && ($payload['mf_type'] ?? null) === 'account_message'
+            && ($payload['mf_route'] ?? null) === 'account'
+            && ($payload['mf_conversation_id'] ?? null) === $conversation->id;
+    });
+
+    $message = MessagingConversationMessage::query()
+        ->where('conversation_id', $conversation->id)
+        ->latest('id')
+        ->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message?->direction)->toBe('outbound')
+        ->and($message?->message_type)->toBe('app_message')
+        ->and($message?->customer_read_at)->toBeNull();
 });
 
 test('duplicate sms webhook payload does not create duplicate messages', function () {
@@ -486,11 +596,12 @@ test('responses tab renders next to analytics with text and email toggle labels'
     $this->get(route('shopify.app.messaging.responses', retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSeeText('Inbox')
+        ->assertSeeText('App Messages')
         ->assertSeeText('Text')
         ->assertSeeText('Email')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $subnav);
 
-            return $keys === ['setup', 'workspace', 'analytics', 'responses'];
+            return $keys === ['setup', 'workspace', 'analytics', 'responses', 'app_messages'];
         });
 });

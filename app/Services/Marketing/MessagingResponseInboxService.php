@@ -7,6 +7,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
 use App\Models\User;
+use App\Services\Mobile\ModernForestryApnsService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -25,6 +26,7 @@ class MessagingResponseInboxService
         protected MessagingEmailReplyAddressService $replyAddressService,
         protected TwilioSmsService $twilioSmsService,
         protected SendGridEmailService $sendGridEmailService,
+        protected ModernForestryApnsService $apnsService,
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected TenantHostBuilder $hostBuilder,
     ) {
@@ -573,7 +575,7 @@ class MessagingResponseInboxService
             ? $this->nullableString($conversation->phone)
             : $this->nullableString($conversation->email);
 
-        $this->conversationService->appendMessage($conversation, [
+        $message = $this->conversationService->appendMessage($conversation, [
             'marketing_profile_id' => $conversation->marketing_profile_id,
             'channel' => (string) $conversation->channel,
             'direction' => 'outbound',
@@ -597,6 +599,8 @@ class MessagingResponseInboxService
             ],
             'customer_read_at' => null,
         ]);
+
+        $this->apnsService->sendAccountMessageNotification($conversation->fresh() ?? $conversation, $message);
     }
 
     protected function nullableString(mixed $value): ?string
