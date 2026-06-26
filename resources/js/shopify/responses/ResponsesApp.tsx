@@ -21,6 +21,14 @@ export interface ResponsesBootstrap {
   tenant_id: number | null;
   status: string;
   module_access: boolean;
+  headline?: string;
+  description?: string;
+  default_filters?: {
+    channel?: Channel;
+    filter?: Filter;
+    source?: SourceFilter;
+  };
+  channel_options?: Channel[];
   endpoints: {
     index?: string;
     detail_base?: string;
@@ -29,8 +37,9 @@ export interface ResponsesBootstrap {
   };
 }
 
-type Channel = "sms" | "email";
+type Channel = "sms" | "email" | "all";
 type Filter = "open" | "unread" | "opted_out" | "assigned_to_me" | "all";
+type SourceFilter = "all" | "mobile_app" | "standard";
 
 interface SummaryPayload {
   sms_unread: number;
@@ -63,6 +72,7 @@ interface ConversationRow {
     phone?: string | null;
   } | null;
   source_context?: Record<string, unknown>;
+  source_type?: string | null;
 }
 
 interface MessageRow {
@@ -159,8 +169,9 @@ function subscriptionTone(state?: string | null):
 }
 
 export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
-  const [channel, setChannel] = useState<Channel>("sms");
-  const [filter, setFilter] = useState<Filter>("open");
+  const [channel, setChannel] = useState<Channel>(bootstrap.default_filters?.channel ?? "sms");
+  const [filter, setFilter] = useState<Filter>(bootstrap.default_filters?.filter ?? "open");
+  const [sourceFilter] = useState<SourceFilter>(bootstrap.default_filters?.source ?? "all");
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<SummaryPayload>({
     sms_unread: 0,
@@ -183,6 +194,10 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
   const canReply = useMemo(() => {
     if (!selectedConversation) {
       return false;
+    }
+
+    if (selectedConversation.source_type === "modern_forestry_app") {
+      return true;
     }
 
     const state = (selectedConversation.subscription_state ?? "").toLowerCase();
@@ -226,6 +241,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
       const url = new URL(bootstrap.endpoints.index, window.location.origin);
       url.searchParams.set("channel", channel);
       url.searchParams.set("filter", filter);
+      url.searchParams.set("source", sourceFilter);
       if (search.trim()) {
         url.searchParams.set("search", search.trim());
       }
@@ -257,7 +273,17 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
 
   useEffect(() => {
     void loadList(false);
-  }, [channel, filter, search]);
+  }, [channel, filter, search, sourceFilter]);
+
+  useEffect(() => {
+    if (bootstrap.default_filters?.channel) {
+      setChannel(bootstrap.default_filters.channel);
+    }
+  }, [bootstrap.default_filters?.channel]);
+
+  const availableChannels = bootstrap.channel_options?.length
+    ? bootstrap.channel_options
+    : (["sms", "email"] as Channel[]);
 
   async function runAction(action: string) {
     if (!selectedId) {
@@ -329,19 +355,18 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
             <InlineStack align="space-between" blockAlign="center">
               <BlockStack gap="100">
                 <Text as="h2" variant="headingLg">
-                  Inbox
+                  {bootstrap.headline ?? "Inbox"}
                 </Text>
                 <Text as="p" variant="bodySm" tone="subdued">
-                  Lightweight support inbox for Text and Email replies, with opt-out safety built in.
+                  {bootstrap.description ?? "Lightweight support inbox for Text and Email replies, with opt-out safety built in."}
                 </Text>
               </BlockStack>
               <InlineStack gap="200">
-                <Button pressed={channel === "sms"} onClick={() => setChannel("sms")}>
-                  Text
-                </Button>
-                <Button pressed={channel === "email"} onClick={() => setChannel("email")}>
-                  Email
-                </Button>
+                {availableChannels.map((option) => (
+                  <Button key={option} pressed={channel === option} onClick={() => setChannel(option)}>
+                    {option === "all" ? "All" : option === "sms" ? "Text" : "Email"}
+                  </Button>
+                ))}
               </InlineStack>
             </InlineStack>
 
@@ -419,6 +444,9 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                       </Text>
                     </InlineStack>
                     <InlineStack gap="200" wrap>
+                      {conversation.source_type === "modern_forestry_app" ? (
+                        <Badge tone="success">App thread</Badge>
+                      ) : null}
                       <Badge tone={statusTone(conversation.status)}>{conversation.status}</Badge>
                       {conversation.subscription_state ? (
                         <Badge tone={subscriptionTone(conversation.subscription_state)}>
@@ -456,6 +484,9 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                       </Text>
                       <InlineStack gap="200" wrap>
                         <Badge tone="info">{selectedConversation.channel === "sms" ? "Text" : "Email"}</Badge>
+                        {selectedConversation.source_type === "modern_forestry_app" ? (
+                          <Badge tone="success">Modern Forestry app</Badge>
+                        ) : null}
                         <Badge tone={statusTone(selectedConversation.status)}>{selectedConversation.status}</Badge>
                         {selectedConversation.subscription_state ? (
                           <Badge tone={subscriptionTone(selectedConversation.subscription_state)}>
@@ -541,7 +572,9 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                       disabled={!canReply}
                       helpText={
                         canReply
-                          ? "Replies are sent from Everbranch and appended to this thread."
+                          ? selectedConversation.source_type === "modern_forestry_app"
+                            ? "Replies stay inside the Modern Forestry app thread and can light up the account badge for the customer."
+                            : "Replies are sent from Everbranch and appended to this thread."
                           : selectedConversation.channel === "sms"
                             ? "SMS replies are blocked because this contact is opted out or suppressed."
                             : "Email replies are blocked because this contact is unsubscribed, bounced, or suppressed."

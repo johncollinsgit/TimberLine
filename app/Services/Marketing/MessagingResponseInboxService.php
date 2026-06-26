@@ -17,6 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 class MessagingResponseInboxService
 {
+    protected const MOBILE_APP_SOURCE_TYPE = 'modern_forestry_app';
+
     public function __construct(
         protected MessagingConversationService $conversationService,
         protected MessagingContactChannelStateService $channelStateService,
@@ -34,24 +36,31 @@ class MessagingResponseInboxService
      */
     public function index(int $tenantId, ?string $storeKey, array $filters = []): array
     {
-        $channel = in_array(($filters['channel'] ?? null), ['sms', 'email'], true)
+        $channel = in_array(($filters['channel'] ?? null), ['sms', 'email', 'all'], true)
             ? (string) $filters['channel']
             : 'sms';
         $search = trim((string) ($filters['search'] ?? ''));
         $filter = strtolower(trim((string) ($filters['filter'] ?? 'open')));
+        $source = in_array(($filters['source'] ?? null), ['all', 'mobile_app', 'standard'], true)
+            ? (string) $filters['source']
+            : 'all';
         $perPage = max(10, min(50, (int) ($filters['per_page'] ?? 25)));
 
         $query = MessagingConversation::query()
             ->forTenantId($tenantId)
             ->with(['profile', 'assignee'])
-            ->where('channel', $channel)
             ->when(
                 $storeKey !== null,
                 fn (Builder $builder) => $builder->where('store_key', $storeKey),
                 fn (Builder $builder) => $builder->whereNull('store_key')
             );
 
+        if ($channel !== 'all') {
+            $query->where('channel', $channel);
+        }
+
         $query = $this->applyConversationFilter($query, $filter, auth()->user());
+        $query = $this->applyConversationSourceFilter($query, $source);
 
         if ($search !== '') {
             $query->where(function (Builder $builder) use ($search): void {
@@ -163,8 +172,20 @@ class MessagingResponseInboxService
         $subject = $this->nullableString($validated['subject'] ?? null);
 
         if ($conversation->channel === 'sms') {
+            if ($this->isMobileAppConversation($conversation)) {
+                $this->appendMobileAppReply($conversation, $body, $actor);
+
+                return $this->show($tenantId, $storeKey, $conversationId);
+            }
+
             $this->sendSmsReply($conversation, $body, $actor);
         } else {
+            if ($this->isMobileAppConversation($conversation)) {
+                $this->appendMobileAppReply($conversation, $body, $actor, $subject);
+
+                return $this->show($tenantId, $storeKey, $conversationId);
+            }
+
             $this->sendEmailReply($conversation, $body, $subject, $actor);
         }
 
@@ -420,6 +441,18 @@ class MessagingResponseInboxService
         };
     }
 
+    protected function applyConversationSourceFilter(Builder $query, string $source): Builder
+    {
+        return match ($source) {
+            'mobile_app' => $query->where('source_type', self::MOBILE_APP_SOURCE_TYPE),
+            'standard' => $query->where(function (Builder $builder): void {
+                $builder->whereNull('source_type')
+                    ->orWhere('source_type', '!=', self::MOBILE_APP_SOURCE_TYPE);
+            }),
+            default => $query,
+        };
+    }
+
     /**
      * @return array<string,mixed>
      */
@@ -462,6 +495,7 @@ class MessagingResponseInboxService
             'opted_out' => $conversation->status === 'opted_out'
                 || in_array((string) ($smsStatus ?? $emailStatus), ['unsubscribed', 'suppressed', 'bounced'], true),
             'source_context' => is_array($conversation->source_context) ? $conversation->source_context : [],
+            'source_type' => $this->nullableString($conversation->source_type),
             'profile' => $includeProfile && $profile
                 ? [
                     'id' => (int) $profile->id,
@@ -494,6 +528,7 @@ class MessagingResponseInboxService
             'sent_at' => optional($message->sent_at)->toIso8601String(),
             'created_at' => optional($message->created_at)->toIso8601String(),
             'operator_read_at' => optional($message->operator_read_at)->toIso8601String(),
+            'customer_read_at' => optional($message->customer_read_at)->toIso8601String(),
             'metadata' => is_array($message->metadata) ? $message->metadata : [],
             'creator' => $message->creator
                 ? [
@@ -516,6 +551,52 @@ class MessagingResponseInboxService
         }
 
         return 'Re: ' . $subject;
+    }
+
+    protected function isMobileAppConversation(MessagingConversation $conversation): bool
+    {
+        return trim((string) $conversation->source_type) === self::MOBILE_APP_SOURCE_TYPE;
+    }
+
+    protected function appendMobileAppReply(
+        MessagingConversation $conversation,
+        string $body,
+        ?User $actor = null,
+        ?string $subject = null
+    ): void {
+        $conversation->forceFill([
+            'status' => 'open',
+            'subject' => $conversation->subject ?: $this->replySubject($subject ?? 'Modern Forestry app support'),
+        ])->save();
+
+        $recipient = $conversation->channel === 'sms'
+            ? $this->nullableString($conversation->phone)
+            : $this->nullableString($conversation->email);
+
+        $this->conversationService->appendMessage($conversation, [
+            'marketing_profile_id' => $conversation->marketing_profile_id,
+            'channel' => (string) $conversation->channel,
+            'direction' => 'outbound',
+            'provider' => self::MOBILE_APP_SOURCE_TYPE,
+            'body' => $body,
+            'normalized_body' => $body,
+            'subject' => $conversation->channel === 'email' ? $this->replySubject($subject ?? ($conversation->subject ?? 'Modern Forestry app support')) : null,
+            'from_identity' => 'Modern Forestry support',
+            'to_identity' => $recipient,
+            'sent_at' => now(),
+            'delivery_status' => 'queued_for_app',
+            'message_type' => 'app_message',
+            'created_by' => $actor?->id,
+            'raw_payload' => [
+                'surface' => 'shopify_embedded_inbox',
+                'delivery_target' => 'modern_forestry_app',
+            ],
+            'metadata' => [
+                'source_label' => 'modern_forestry_mobile_app_reply',
+                'delivery_target' => 'modern_forestry_app',
+            ],
+            'customer_read_at' => null,
+        ]);
     }
 
     protected function nullableString(mixed $value): ?string

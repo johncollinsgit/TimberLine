@@ -5,6 +5,9 @@ use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MessagingConversation;
+use App\Models\MessagingConversationMessage;
+use App\Models\MobilePushDevice;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Scent;
@@ -585,7 +588,8 @@ test('mobile account endpoint returns native safe account data only for signed i
         ->assertJsonPath('data.wishlist.summary.active_count', 1)
         ->assertJsonPath('data.wishlist.items.0.product_title', 'Forest Ember Candle')
         ->assertJsonPath('data.notifications.channels.0.id', 'email')
-        ->assertJsonPath('data.notifications.channels.2.state', 'coming_soon')
+        ->assertJsonPath('data.notifications.channels.2.state', 'available_in_app')
+        ->assertJsonPath('data.support.unreadCount', 0)
         ->assertJsonPath('data.insights.wishlistCount', 1)
         ->assertJsonPath('data.insights.topWishlistProducts.0', 'Forest Ember Candle')
         ->json();
@@ -594,6 +598,46 @@ test('mobile account endpoint returns native safe account data only for signed i
     expect($encoded)->not->toContain('shpat_mobile_test_token')
         ->and($encoded)->not->toContain('mobile-test-secret')
         ->and($encoded)->not->toContain('access_token');
+});
+
+test('mobile push device registration stores the ios device token for the signed in profile', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/notifications/push/register', [
+            'deviceToken' => str_repeat('ab12', 16),
+            'authorizationStatus' => 'authorized',
+            'pushEnabled' => true,
+            'appVersion' => '1.0',
+            'appBuild' => '42',
+            'deviceName' => 'Johns iPhone',
+            'deviceModel' => 'iPhone 15 Pro Max',
+            'locale' => 'en_US',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.ok', true)
+        ->assertJsonPath('data.pushEnabled', true)
+        ->assertJsonPath('data.deviceCount', 1);
+
+    $device = MobilePushDevice::query()->where('marketing_profile_id', $profile->id)->first();
+
+    expect($device)->not->toBeNull()
+        ->and($device?->platform)->toBe('ios')
+        ->and($device?->authorization_status)->toBe('authorized')
+        ->and((bool) $device?->push_enabled)->toBeTrue();
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/account')
+        ->assertOk()
+        ->assertJsonPath('data.notifications.summary.push', true)
+        ->assertJsonPath('data.notifications.channels.2.enabled', true)
+        ->assertJsonPath('data.notifications.channels.2.state', 'enabled');
 });
 
 test('mobile account endpoint still loads when shopify reorder enrichment is unavailable', function (): void {
@@ -701,7 +745,77 @@ test('mobile account message endpoint accepts signed in native support messages'
         ])
         ->assertOk()
         ->assertJsonPath('data.ok', true)
-        ->assertJsonPath('data.state', 'received');
+        ->assertJsonPath('data.state', 'received')
+        ->assertJsonPath('data.support.messages.0.body', 'Can you help with my order?');
+
+    $conversation = MessagingConversation::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->where('source_type', 'modern_forestry_app')
+        ->first();
+
+    expect($conversation)->not->toBeNull()
+        ->and($conversation?->channel)->toBe('email')
+        ->and((int) ($conversation?->unread_count ?? 0))->toBe(1);
+
+    $message = MessagingConversationMessage::query()
+        ->where('conversation_id', $conversation?->id)
+        ->latest('id')
+        ->first();
+
+    expect($message)->not->toBeNull()
+        ->and($message?->direction)->toBe('inbound')
+        ->and($message?->message_type)->toBe('app_message');
+});
+
+test('mobile support payload exposes unread app replies and can mark them read', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'phone' => '+15555550123',
+        'normalized_phone' => '+15555550123',
+        'accepts_sms_marketing' => true,
+    ]);
+
+    $conversation = MessagingConversation::query()->create([
+        'tenant_id' => 1,
+        'store_key' => 'retail',
+        'channel' => 'sms',
+        'marketing_profile_id' => $profile->id,
+        'phone' => '+15555550123',
+        'status' => 'open',
+        'source_type' => 'modern_forestry_app',
+        'source_context' => [
+            'thread_kind' => 'support',
+            'reply_via' => 'app',
+        ],
+    ]);
+
+    MessagingConversationMessage::query()->create([
+        'conversation_id' => $conversation->id,
+        'tenant_id' => 1,
+        'store_key' => 'retail',
+        'marketing_profile_id' => $profile->id,
+        'channel' => 'sms',
+        'direction' => 'outbound',
+        'provider' => 'modern_forestry_app',
+        'body' => 'We can help with that order.',
+        'sent_at' => now(),
+        'delivery_status' => 'queued_for_app',
+        'message_type' => 'app_message',
+    ]);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/account')
+        ->assertOk()
+        ->assertJsonPath('data.support.unreadCount', 1)
+        ->assertJsonPath('data.support.messages.0.isUnread', true)
+        ->assertJsonPath('data.support.messages.0.direction', 'outbound');
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/account/messages/read')
+        ->assertOk()
+        ->assertJsonPath('data.unreadCount', 0);
+
+    expect(MessagingConversationMessage::query()->first()?->customer_read_at)->not->toBeNull();
 });
 
 test('mobile wishlist endpoints reuse the native laravel wishlist state', function (): void {

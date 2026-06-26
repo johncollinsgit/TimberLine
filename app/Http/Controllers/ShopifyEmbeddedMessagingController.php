@@ -146,6 +146,59 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantModuleAccessResolver $moduleAccessResolver,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
+        return $this->renderResponsesPage(
+            request: $request,
+            contextService: $contextService,
+            tenantResolver: $tenantResolver,
+            moduleAccessResolver: $moduleAccessResolver,
+            alphaBootstrapService: $alphaBootstrapService,
+            activeKey: 'responses',
+            headline: 'Inbox',
+            subheadline: 'Review inbound SMS and email replies in one Everbranch inbox.',
+            bootstrapOverrides: []
+        );
+    }
+
+    public function appMessages(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
+    ): Response {
+        return $this->renderResponsesPage(
+            request: $request,
+            contextService: $contextService,
+            tenantResolver: $tenantResolver,
+            moduleAccessResolver: $moduleAccessResolver,
+            alphaBootstrapService: $alphaBootstrapService,
+            activeKey: 'app_messages',
+            headline: 'App Messages',
+            subheadline: 'Reply to Modern Forestry app conversations and keep support inside the mobile thread.',
+            bootstrapOverrides: [
+                'default_filters' => [
+                    'channel' => 'all',
+                    'filter' => 'all',
+                    'source' => 'mobile_app',
+                ],
+                'headline' => 'App Messages',
+                'description' => 'Two-way support threads sourced from the Modern Forestry iPhone app.',
+                'channel_options' => ['all', 'sms', 'email'],
+            ]
+        );
+    }
+
+    protected function renderResponsesPage(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService,
+        string $activeKey,
+        string $headline,
+        string $subheadline,
+        array $bootstrapOverrides = []
+    ): Response {
         $probe = $this->embeddedProbe($request);
         $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
         $status = (string) ($context['status'] ?? 'invalid_request');
@@ -169,8 +222,8 @@ class ShopifyEmbeddedMessagingController extends Controller
             ];
         $hasMessagingAccess = (bool) ($messagingModule['has_access'] ?? false);
 
-        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'responses', $tenantId));
-        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('responses', $tenantId));
+        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', $activeKey, $tenantId));
+        $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav($activeKey, $tenantId));
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.messaging-responses', [
@@ -182,8 +235,8 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'storeLabel' => $authorized
                     ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
                     : 'Shopify Admin',
-                'headline' => $this->headlineForStatus($status, 'Inbox'),
-                'subheadline' => $this->subheadlineForStatus($status, 'Review inbound SMS and email replies in one Everbranch inbox.'),
+                'headline' => $this->headlineForStatus($status, $headline),
+                'subheadline' => $this->subheadlineForStatus($status, $subheadline),
                 'appNavigation' => $appNavigation,
                 'pageSubnav' => $pageSubnav,
                 'pageActions' => [],
@@ -210,6 +263,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                         'update_base' => route('shopify.app.api.messaging.responses.update', ['conversation' => '__CONVERSATION__'], false),
                         'reply_base' => route('shopify.app.api.messaging.responses.reply', ['conversation' => '__CONVERSATION__'], false),
                     ],
+                    ...$bootstrapOverrides,
                 ],
             ]),
             $this->pageStatusCode($authorized, $status, $tenantId, $hasMessagingAccess)
@@ -1359,8 +1413,9 @@ class ShopifyEmbeddedMessagingController extends Controller
 
         try {
             $filters = validator($request->query(), [
-                'channel' => ['nullable', 'in:sms,email'],
+                'channel' => ['nullable', 'in:sms,email,all'],
                 'filter' => ['nullable', 'in:open,unread,opted_out,assigned_to_me,all'],
+                'source' => ['nullable', 'in:all,mobile_app,standard'],
                 'search' => ['nullable', 'string', 'max:120'],
                 'per_page' => ['nullable', 'integer', 'min:10', 'max:50'],
             ])->validate();

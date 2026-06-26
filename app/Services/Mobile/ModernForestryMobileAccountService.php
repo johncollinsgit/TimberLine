@@ -5,8 +5,12 @@ namespace App\Services\Mobile;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
+use App\Models\MessagingConversation;
+use App\Models\MessagingConversationMessage;
+use App\Models\MobilePushDevice;
 use App\Models\Order;
 use App\Models\OrderLine;
+use App\Services\Marketing\MessagingConversationService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
@@ -17,6 +21,10 @@ use Throwable;
 
 class ModernForestryMobileAccountService
 {
+    protected const MOBILE_SUPPORT_SOURCE_TYPE = 'modern_forestry_app';
+    protected const MOBILE_SUPPORT_STORE_KEY = 'retail';
+    protected const MOBILE_SUPPORT_SUBJECT = 'Modern Forestry app support';
+
     /**
      * @var array<int,array<string,mixed>>|null
      */
@@ -25,7 +33,8 @@ class ModernForestryMobileAccountService
     public function __construct(
         protected CandleCashService $candleCashService,
         protected MarketingWishlistService $wishlistService,
-        protected ModernForestryMobileProductCatalogService $catalog
+        protected ModernForestryMobileProductCatalogService $catalog,
+        protected MessagingConversationService $conversationService
     ) {
     }
 
@@ -202,14 +211,77 @@ class ModernForestryMobileAccountService
     {
         $body = trim($body);
 
+        if ($body === '') {
+            return [
+                'ok' => false,
+                'state' => 'empty_message',
+                'support' => $this->supportPayload($session->profile),
+                'message' => 'Add a short message before sending.',
+            ];
+        }
+
+        $conversation = $this->ensureMobileSupportConversation($session->profile);
+        if (! $conversation instanceof MessagingConversation) {
+            return [
+                'ok' => false,
+                'state' => 'support_unavailable',
+                'support' => $this->supportPayload($session->profile),
+                'message' => 'Support messaging is not available for this account right now.',
+            ];
+        }
+
+        $identity = $conversation->channel === 'sms'
+            ? $this->nullableString($session->profile->normalized_phone ?: $session->profile->phone)
+            : $this->nullableString($session->profile->normalized_email ?: $session->profile->email);
+
+        $this->conversationService->appendMessage($conversation, [
+            'marketing_profile_id' => $session->profile->id,
+            'channel' => (string) $conversation->channel,
+            'direction' => 'inbound',
+            'provider' => self::MOBILE_SUPPORT_SOURCE_TYPE,
+            'body' => $body,
+            'normalized_body' => $body,
+            'subject' => $conversation->channel === 'email' ? ($conversation->subject ?: self::MOBILE_SUPPORT_SUBJECT) : null,
+            'from_identity' => $identity,
+            'to_identity' => 'Modern Forestry support',
+            'received_at' => now(),
+            'delivery_status' => 'received',
+            'message_type' => 'app_message',
+            'customer_read_at' => now(),
+            'raw_payload' => [
+                'surface' => 'ios_account',
+                'thread_kind' => 'support',
+            ],
+            'metadata' => [
+                'source_label' => 'modern_forestry_mobile_app',
+                'thread_kind' => 'support',
+            ],
+        ]);
+
         return [
-            'ok' => $body !== '',
-            'state' => $body !== '' ? 'received' : 'empty_message',
+            'ok' => true,
+            'state' => 'received',
             'support' => $this->supportPayload($session->profile),
-            'message' => $body !== ''
-                ? 'Your message is ready for the Modern Forestry support queue.'
-                : 'Add a short message before sending.',
+            'message' => 'Your message is in the Modern Forestry support thread.',
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function markSupportMessagesRead(ModernForestryMobileCustomerSession $session): array
+    {
+        $conversation = $this->mobileSupportConversation($session->profile);
+        if (! $conversation instanceof MessagingConversation) {
+            return $this->supportPayload($session->profile);
+        }
+
+        $conversation->messages()
+            ->where('direction', 'outbound')
+            ->whereNull('customer_read_at')
+            ->update(['customer_read_at' => now()]);
+
+        return $this->supportPayload($session->profile);
     }
 
     /**
@@ -396,6 +468,12 @@ class ModernForestryMobileAccountService
      */
     protected function notificationsPayload(MarketingProfile $profile): array
     {
+        $pushEnabled = MobilePushDevice::query()
+            ->where('tenant_id', $this->tenantId($profile))
+            ->where('marketing_profile_id', $profile->id)
+            ->where('push_enabled', true)
+            ->exists();
+
         return [
             'channels' => [
                 [
@@ -410,15 +488,15 @@ class ModernForestryMobileAccountService
                 ],
                 [
                     'id' => 'push',
-                    'title' => 'Push notifications',
-                    'enabled' => false,
-                    'state' => 'coming_soon',
+                    'title' => 'App-only alerts',
+                    'enabled' => $pushEnabled,
+                    'state' => $pushEnabled ? 'enabled' : 'available_in_app',
                 ],
             ],
             'summary' => [
                 'email' => (bool) $profile->accepts_email_marketing,
                 'sms' => (bool) $profile->accepts_sms_marketing,
-                'push' => false,
+                'push' => $pushEnabled,
             ],
         ];
     }
@@ -474,11 +552,94 @@ class ModernForestryMobileAccountService
      */
     protected function supportPayload(MarketingProfile $profile): array
     {
+        $conversation = $this->mobileSupportConversation($profile);
+        $messages = [];
+        $unreadCount = 0;
+
+        if ($conversation instanceof MessagingConversation) {
+            $messages = $conversation->messages()
+                ->orderByRaw('COALESCE(received_at, sent_at, created_at) asc')
+                ->get()
+                ->map(fn (MessagingConversationMessage $message): array => [
+                    'id' => (int) $message->id,
+                    'direction' => (string) $message->direction,
+                    'body' => (string) $message->body,
+                    'subject' => $this->nullableString($message->subject),
+                    'messageType' => (string) ($message->message_type ?: 'normal'),
+                    'fromIdentity' => $this->nullableString($message->from_identity),
+                    'toIdentity' => $this->nullableString($message->to_identity),
+                    'createdAt' => optional($message->received_at ?? $message->sent_at ?? $message->created_at)->toIso8601String(),
+                    'isUnread' => $message->direction === 'outbound' && $message->customer_read_at === null,
+                ])
+                ->values()
+                ->all();
+
+            $unreadCount = $conversation->messages()
+                ->where('direction', 'outbound')
+                ->whereNull('customer_read_at')
+                ->count();
+        }
+
         return [
             'canMessage' => $this->nullableString($profile->email) !== null || $this->nullableString($profile->phone) !== null,
             'preferredChannel' => $this->nullableString($profile->phone) !== null ? 'sms' : 'email',
-            'prompt' => 'Send a note and Modern Forestry support can follow up from your account details.',
+            'prompt' => 'Send a note here and Modern Forestry can reply inside the app.',
+            'conversationId' => $conversation?->id,
+            'unreadCount' => $unreadCount,
+            'messages' => $messages,
         ];
+    }
+
+    protected function mobileSupportConversation(MarketingProfile $profile): ?MessagingConversation
+    {
+        return MessagingConversation::query()
+            ->where('tenant_id', $this->tenantId($profile))
+            ->where('marketing_profile_id', $profile->id)
+            ->where('source_type', self::MOBILE_SUPPORT_SOURCE_TYPE)
+            ->where('store_key', self::MOBILE_SUPPORT_STORE_KEY)
+            ->with('messages')
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    protected function ensureMobileSupportConversation(MarketingProfile $profile): ?MessagingConversation
+    {
+        $tenantId = $this->tenantId($profile);
+        $context = [
+            'source_type' => self::MOBILE_SUPPORT_SOURCE_TYPE,
+            'source_context' => [
+                'thread_kind' => 'support',
+                'reply_via' => 'app',
+                'surface' => 'ios_account',
+                'app' => 'modern_forestry',
+            ],
+        ];
+
+        $phone = $this->nullableString($profile->normalized_phone ?: $profile->phone);
+        if ($phone !== null) {
+            return $this->conversationService->findOrCreateSmsConversation(
+                tenantId: $tenantId,
+                storeKey: self::MOBILE_SUPPORT_STORE_KEY,
+                profile: $profile,
+                phone: $phone,
+                context: $context
+            );
+        }
+
+        $email = $this->nullableString($profile->normalized_email ?: $profile->email);
+        if ($email !== null) {
+            return $this->conversationService->findOrCreateEmailConversation(
+                tenantId: $tenantId,
+                storeKey: self::MOBILE_SUPPORT_STORE_KEY,
+                profile: $profile,
+                email: $email,
+                subject: self::MOBILE_SUPPORT_SUBJECT,
+                context: $context
+            );
+        }
+
+        return null;
     }
 
     protected function tenantId(MarketingProfile $profile): int

@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Models\MessagingConversation;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -141,12 +142,16 @@ class ShopifyEmbeddedShellPayloadBuilder
         return array_map(function (array $page) use ($activeKey, $moduleStates, $displayLabels): array {
             $shortKey = $this->childKeyFromPage((string) ($page['key'] ?? ''));
             $moduleKey = strtolower(trim((string) ($page['module_key'] ?? '')));
+            $badge = $shortKey === 'app_messages'
+                ? $this->mobileAppMessagesBadge($tenantId)
+                : null;
 
             return [
                 'key' => $shortKey,
                 'label' => $this->resolvedLabel($page, $displayLabels),
                 'href' => $this->urlGenerator->route((string) ($page['route_name'] ?? ''), [], false),
                 'active' => $shortKey === $activeKey,
+                'badge' => $badge,
                 'module_state' => $moduleKey !== '' && is_array($moduleStates[$moduleKey] ?? null)
                     ? $moduleStates[$moduleKey]
                     : null,
@@ -486,6 +491,20 @@ class ShopifyEmbeddedShellPayloadBuilder
         $parts = explode('.', $normalized);
 
         return (string) end($parts);
+    }
+
+    protected function mobileAppMessagesBadge(?int $tenantId): ?string
+    {
+        if ($tenantId === null || $tenantId <= 0) {
+            return null;
+        }
+
+        $count = MessagingConversation::query()
+            ->where('tenant_id', $tenantId)
+            ->where('source_type', 'modern_forestry_app')
+            ->sum('unread_count');
+
+        return $count > 0 ? (string) $count : null;
     }
 
     /**

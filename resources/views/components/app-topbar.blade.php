@@ -93,6 +93,9 @@
                         data-prefetch-priority="{{ $item['prefetch_priority'] ?? 'normal' }}"
                     >
                         <span>{{ $item['label'] }}</span>
+                        @if(filled($item['badge'] ?? null))
+                            <span class="app-topbar-count-badge">{{ $item['badge'] }}</span>
+                        @endif
                         @if(is_array($item['module_state'] ?? null))
                             <x-tenancy.module-state-badge
                                 :module-state="$item['module_state']"
@@ -216,6 +219,9 @@
                             data-search-intent="open,go to,view"
                         >
                             <span>{{ $item['label'] }}</span>
+                            @if(filled($item['badge'] ?? null))
+                                <span class="app-topbar-count-badge">{{ $item['badge'] }}</span>
+                            @endif
                             @if(is_array($item['module_state'] ?? null))
                                 <x-tenancy.module-state-badge
                                     :module-state="$item['module_state']"

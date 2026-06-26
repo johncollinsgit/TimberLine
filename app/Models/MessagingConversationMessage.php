@@ -32,6 +32,7 @@ class MessagingConversationMessage extends Model
         'delivery_status',
         'message_type',
         'operator_read_at',
+        'customer_read_at',
         'created_by',
         'raw_payload',
         'metadata',
@@ -46,6 +47,7 @@ class MessagingConversationMessage extends Model
         'received_at' => 'datetime',
         'sent_at' => 'datetime',
         'operator_read_at' => 'datetime',
+        'customer_read_at' => 'datetime',
         'raw_payload' => 'array',
         'metadata' => 'array',
     ];

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\MobilePushDevice;
 use App\Services\Mobile\ModernForestryMobileAccountService;
 use App\Services\Mobile\ModernForestryMobileCheckoutException;
 use App\Services\Mobile\ModernForestryMobileCheckoutService;
@@ -377,6 +378,86 @@ class ModernForestryProductCatalogController extends Controller
 
         return response()->json([
             'data' => $account->message($session, (string) $validated['message']),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function accountMessagesRead(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        return response()->json([
+            'data' => $account->markSupportMessagesRead($session),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function registerPushDevice(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'deviceToken' => ['required', 'string', 'min:16', 'max:255'],
+            'authorizationStatus' => ['nullable', 'string', 'max:40'],
+            'pushEnabled' => ['nullable', 'boolean'],
+            'appVersion' => ['nullable', 'string', 'max:40'],
+            'appBuild' => ['nullable', 'string', 'max:40'],
+            'deviceName' => ['nullable', 'string', 'max:120'],
+            'deviceModel' => ['nullable', 'string', 'max:120'],
+            'locale' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $profile = $session->profile;
+        $now = now();
+
+        $device = MobilePushDevice::query()->updateOrCreate(
+            [
+                'tenant_id' => $profile->tenant_id,
+                'device_token' => (string) $validated['deviceToken'],
+            ],
+            [
+                'marketing_profile_id' => $profile->id,
+                'platform' => 'ios',
+                'authorization_status' => $validated['authorizationStatus'] ?? null,
+                'push_enabled' => (bool) ($validated['pushEnabled'] ?? true),
+                'app_version' => $validated['appVersion'] ?? null,
+                'app_build' => $validated['appBuild'] ?? null,
+                'device_name' => $validated['deviceName'] ?? null,
+                'device_model' => $validated['deviceModel'] ?? null,
+                'locale' => $validated['locale'] ?? null,
+                'last_seen_at' => $now,
+                'last_registered_at' => $now,
+            ]
+        );
+
+        return response()->json([
+            'data' => [
+                'ok' => true,
+                'pushEnabled' => (bool) $device->push_enabled,
+                'registeredAt' => optional($device->last_registered_at)?->toIso8601String(),
+                'deviceCount' => MobilePushDevice::query()
+                    ->where('tenant_id', $profile->tenant_id)
+                    ->where('marketing_profile_id', $profile->id)
+                    ->where('push_enabled', true)
+                    ->count(),
+            ],
             'meta' => [
                 'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
                 'source' => 'mobile',

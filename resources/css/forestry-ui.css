@@ -3528,6 +3528,20 @@ select:not([multiple]):not([size])::-ms-expand {
   color: var(--fb-brand);
 }
 
+.app-topbar-count-badge {
+  align-items: center;
+  background: var(--fb-brand);
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.64rem;
+  font-weight: 800;
+  justify-content: center;
+  line-height: 1;
+  min-width: 1.4rem;
+  padding: 0.18rem 0.42rem;
+}
+
 .app-topbar-right {
   align-items: center;
   display: flex;

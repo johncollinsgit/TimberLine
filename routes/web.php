@@ -400,6 +400,14 @@ Route::post('/api/mobile/v1/modern-forestry/account/message', [ModernForestryPro
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.account.message');
+Route::post('/api/mobile/v1/modern-forestry/account/messages/read', [ModernForestryProductCatalogController::class, 'accountMessagesRead'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.account.messages.read');
+Route::post('/api/mobile/v1/modern-forestry/notifications/push/register', [ModernForestryProductCatalogController::class, 'registerPushDevice'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.notifications.push.register');
 Route::get('/api/mobile/v1/modern-forestry/wishlist/status', [ModernForestryProductCatalogController::class, 'wishlistStatus'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.wishlist.status');
@@ -1235,6 +1243,7 @@ Route::prefix('shopify/marketing/v1')
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
+    Route::get('/app/messaging/app-messages', [ShopifyEmbeddedMessagingController::class, 'appMessages'])->name('shopify.app.messaging.app-messages');
         Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
         Route::get('/app/edit', [ShopifyEmbeddedSettingsController::class, 'editApp'])->name('shopify.app.edit');
         Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');

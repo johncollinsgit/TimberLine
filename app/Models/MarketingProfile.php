@@ -201,4 +201,9 @@ class MarketingProfile extends Model
     {
         return $this->hasMany(MarketingAutomationEvent::class, 'marketing_profile_id');
     }
+
+    public function mobilePushDevices(): HasMany
+    {
+        return $this->hasMany(MobilePushDevice::class, 'marketing_profile_id');
+    }
 }
