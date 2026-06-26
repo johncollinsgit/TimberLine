@@ -16,6 +16,7 @@ use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -304,9 +305,58 @@ class ModernForestryMobileAccountService
             ]))) ?: ($this->nullableString($profile->email) ?? 'Modern Forestry customer'),
             'email' => $this->nullableString($profile->email),
             'phone' => $this->nullableString($profile->phone),
+            'avatarUrl' => $this->profileAvatarUrl($profile),
             'acceptsEmailMarketing' => (bool) $profile->accepts_email_marketing,
             'acceptsSmsMarketing' => (bool) $profile->accepts_sms_marketing,
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function updateProfilePhoto(
+        ModernForestryMobileCustomerSession $session,
+        ?string $photoData,
+        bool $clear = false
+    ): array {
+        $profile = $session->profile;
+
+        if ($clear) {
+            $this->deleteProfileAvatar($profile);
+            $profile->forceFill([
+                'mobile_avatar_path' => null,
+                'mobile_avatar_uploaded_at' => null,
+            ])->save();
+
+            return $this->customerPayload($profile->fresh() ?? $profile);
+        }
+
+        $decoded = $this->decodeProfilePhoto($photoData);
+        if ($decoded === null) {
+            return $this->customerPayload($profile);
+        }
+
+        $this->deleteProfileAvatar($profile);
+
+        $path = sprintf(
+            'modern-forestry/customers/%d/profile-%d-%s.jpg',
+            $this->tenantId($profile),
+            (int) $profile->id,
+            Str::lower(Str::random(20))
+        );
+
+        Storage::disk('public')->put($path, $decoded, [
+            'visibility' => 'public',
+            'ContentType' => 'image/jpeg',
+            'CacheControl' => 'public, max-age=31536000',
+        ]);
+
+        $profile->forceFill([
+            'mobile_avatar_path' => $path,
+            'mobile_avatar_uploaded_at' => now(),
+        ])->save();
+
+        return $this->customerPayload($profile->fresh() ?? $profile);
     }
 
     /**
@@ -671,6 +721,57 @@ class ModernForestryMobileAccountService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function profileAvatarUrl(MarketingProfile $profile): ?string
+    {
+        $path = $this->nullableString($profile->mobile_avatar_path);
+        if ($path === null) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
+    protected function deleteProfileAvatar(MarketingProfile $profile): void
+    {
+        $existingPath = $this->nullableString($profile->mobile_avatar_path);
+        if ($existingPath === null) {
+            return;
+        }
+
+        try {
+            Storage::disk('public')->delete($existingPath);
+        } catch (Throwable $exception) {
+            Log::warning('Modern Forestry mobile avatar delete failed.', [
+                'marketing_profile_id' => (int) $profile->id,
+                'path' => $existingPath,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    protected function decodeProfilePhoto(?string $photoData): ?string
+    {
+        $photoData = trim((string) $photoData);
+        if ($photoData === '') {
+            return null;
+        }
+
+        if (preg_match('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', $photoData) === 1) {
+            $photoData = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', $photoData) ?? '';
+        }
+
+        $decoded = base64_decode($photoData, true);
+        if ($decoded === false || $decoded === '') {
+            return null;
+        }
+
+        if (strlen($decoded) > 512000) {
+            return null;
+        }
+
+        return $decoded;
     }
 
     /**

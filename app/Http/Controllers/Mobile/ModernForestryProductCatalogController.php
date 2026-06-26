@@ -404,6 +404,34 @@ class ModernForestryProductCatalogController extends Controller
         ]);
     }
 
+    public function accountProfilePhoto(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'photoData' => ['nullable', 'string', 'max:300000'],
+            'clear' => ['nullable', 'boolean'],
+        ]);
+
+        return response()->json([
+            'data' => $account->updateProfilePhoto(
+                $session,
+                isset($validated['photoData']) ? (string) $validated['photoData'] : null,
+                (bool) ($validated['clear'] ?? false)
+            ),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
     public function registerPushDevice(
         Request $request,
         ModernForestryMobileCustomerSessionService $sessions

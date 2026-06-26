@@ -37,6 +37,8 @@ class MarketingProfile extends Model
         'marketing_score',
         'last_marketing_score_at',
         'notes',
+        'mobile_avatar_path',
+        'mobile_avatar_uploaded_at',
     ];
 
     protected $casts = [
@@ -48,6 +50,7 @@ class MarketingProfile extends Model
         'source_channels' => 'array',
         'marketing_score' => 'decimal:2',
         'last_marketing_score_at' => 'datetime',
+        'mobile_avatar_uploaded_at' => 'datetime',
     ];
 
     public function tenant(): BelongsTo

@@ -19,6 +19,7 @@ use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function (): void {
     config()->set('mobile_catalog.fake_enabled', false);
@@ -591,6 +592,7 @@ test('mobile account endpoint returns native safe account data only for signed i
         ->assertJsonPath('data.notifications.channels.0.id', 'email')
         ->assertJsonPath('data.notifications.channels.2.state', 'available_in_app')
         ->assertJsonPath('data.support.unreadCount', 0)
+        ->assertJsonPath('data.customer.avatarUrl', null)
         ->assertJsonPath('data.insights.wishlistCount', 1)
         ->assertJsonPath('data.insights.topWishlistProducts.0', 'Forest Ember Candle')
         ->json();
@@ -686,6 +688,50 @@ test('mobile account endpoint still loads when shopify reorder enrichment is una
         ->assertJsonPath('data.orders.0.orderNumber', 'MF-1002')
         ->assertJsonPath('data.orders.0.lines.0.title', 'Forest Ember Candle')
         ->assertJsonPath('data.orders.0.lines.0.canReorder', false);
+});
+
+test('mobile account profile photo endpoint stores clears and exposes the avatar url', function (): void {
+    Storage::fake('public');
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+
+    $photoData = base64_encode('fake-jpeg-binary');
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/account/profile-photo', [
+            'photoData' => $photoData,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.displayName', 'Ada Woods');
+
+    $profile->refresh();
+
+    expect($profile->mobile_avatar_path)->not->toBeNull()
+        ->and($profile->mobile_avatar_uploaded_at)->not->toBeNull();
+
+    Storage::disk('public')->assertExists((string) $profile->mobile_avatar_path);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/account')
+        ->assertOk()
+        ->assertJsonPath('data.customer.avatarUrl', Storage::disk('public')->url((string) $profile->mobile_avatar_path));
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/account/profile-photo', [
+            'clear' => true,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.avatarUrl', null);
+
+    Storage::disk('public')->assertMissing((string) $profile->mobile_avatar_path);
+
+    expect($profile->fresh()?->mobile_avatar_path)->toBeNull();
 });
 
 test('mobile rewards endpoint returns balance rewards history and can redeem natively', function (): void {

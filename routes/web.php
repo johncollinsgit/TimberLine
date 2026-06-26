@@ -404,6 +404,10 @@ Route::post('/api/mobile/v1/modern-forestry/account/messages/read', [ModernFores
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.account.messages.read');
+Route::post('/api/mobile/v1/modern-forestry/account/profile-photo', [ModernForestryProductCatalogController::class, 'accountProfilePhoto'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:20,1')
+    ->name('mobile.modern-forestry.account.profile-photo');
 Route::post('/api/mobile/v1/modern-forestry/notifications/push/register', [ModernForestryProductCatalogController::class, 'registerPushDevice'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
