@@ -6,6 +6,7 @@ use App\Models\CustomModuleRequest;
 use App\Models\StripeWebhookEvent;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantSetupStatus;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
@@ -42,6 +43,15 @@ function billingSafetyTenant(string $slug = 'billing-safety-tenant'): Tenant
         'plan_key' => 'starter',
         'operating_mode' => 'shopify',
         'source' => 'test',
+    ]);
+
+    TenantSetupStatus::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'business_profile_status' => 'ready',
+        'import_path' => 'shopify',
+        'shopify_connection_status' => 'connected',
+        'mobile_interest' => 'undecided',
+        'landlord_review_status' => 'reviewed',
     ]);
 
     return $tenant;

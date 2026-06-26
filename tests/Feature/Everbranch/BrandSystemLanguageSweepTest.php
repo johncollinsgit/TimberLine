@@ -55,7 +55,7 @@ test('Everbranch brand configuration includes product ecosystem assets tokens an
 test('public access request uses human workspace language instead of tenant slug copy', function (): void {
     $this->get(route('platform.start'))
         ->assertOk()
-        ->assertSeeText('Preferred workspace address')
+        ->assertSeeText('Workspace address')
         ->assertSeeText('This becomes your team’s workspace URL after approval')
         ->assertDontSeeText('Tenant slug')
         ->assertDontSeeText('canonical');
@@ -94,4 +94,3 @@ test('Shopify embedded module store uses Everbranch copy without changing TOML i
         ->and($toml)->toContain('handle = "modernforestrybackstage"')
         ->and($toml)->not->toContain('name = "Everbranch"');
 });
-

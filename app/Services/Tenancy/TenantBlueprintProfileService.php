@@ -289,7 +289,9 @@ class TenantBlueprintProfileService
             'csv_manual_status' => $existingCsvManualStatus !== 'not_started'
                 ? $existingCsvManualStatus
                 : (in_array($dataSourcePreference, ['csv', 'manual'], true) ? 'requested' : 'not_started'),
-            'landlord_review_status' => 'waiting_on_everbranch',
+            'landlord_review_status' => (string) ($blueprint['blueprint_review_status'] ?? '') === 'reviewed'
+                ? 'reviewed'
+                : 'waiting_on_everbranch',
             'next_recommended_action' => (! $refreshSetupProjection && $this->shouldPreserveNextAction($existingNextAction))
                 ? (string) $status->next_recommended_action
                 : (string) ($blueprint['onboarding_next_action'] ?? $this->defaultNextAction(

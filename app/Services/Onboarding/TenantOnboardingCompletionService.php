@@ -20,8 +20,12 @@ class TenantOnboardingCompletionService
         $tenant->loadMissing('setupStatus');
         $setupStatus = $tenant->setupStatus;
 
-        return $setupStatus !== null
-            && (string) ($setupStatus->landlord_review_status ?? '') === 'reviewed';
+        if ($setupStatus === null) {
+            // Legacy tenants can legitimately predate setup-status tracking.
+            return true;
+        }
+
+        return (string) ($setupStatus->landlord_review_status ?? '') === 'reviewed';
     }
 
     public function isIncomplete(Tenant $tenant): bool

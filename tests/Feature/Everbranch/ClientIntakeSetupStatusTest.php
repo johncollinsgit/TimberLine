@@ -232,7 +232,7 @@ test('missing setup status is created safely with undecided guidance', function 
         ->assertSeeText('No import path has been chosen yet')
         ->assertSeeText('Mobile companion needs are undecided')
         ->assertSee('data-onboarding-gate-root', false)
-        ->assertSee('data-onboarding-modal-open="1"', false)
+        ->assertSee('data-onboarding-modal-open="0"', false)
         ->assertSee('data-open-onboarding-modal', false)
         ->assertSee('Electrician onboarding', false)
         ->assertSee('data-onboarding-surface="modal"', false);

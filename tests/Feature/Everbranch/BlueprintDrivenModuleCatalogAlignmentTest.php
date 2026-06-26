@@ -5,6 +5,7 @@ use App\Models\TenantAccessProfile;
 use App\Models\TenantBillingFulfillment;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
+use App\Models\TenantSetupStatus;
 use App\Models\User;
 use App\Services\Tenancy\TenantBlueprintModuleRecommendationService;
 
@@ -60,7 +61,20 @@ function pr25CreateTenant($testCase, array $overrides = []): Tenant
         ->assertSessionHasNoErrors()
         ->assertRedirect();
 
-    return Tenant::query()->where('slug', (string) $payload['slug'])->firstOrFail();
+    $tenant = Tenant::query()->where('slug', (string) $payload['slug'])->firstOrFail();
+
+    TenantSetupStatus::query()->updateOrCreate(
+        ['tenant_id' => (int) $tenant->id],
+        [
+            'business_profile_status' => 'ready',
+            'import_path' => 'manual',
+            'shopify_connection_status' => 'not_applicable',
+            'mobile_interest' => 'undecided',
+            'landlord_review_status' => 'reviewed',
+        ]
+    );
+
+    return $tenant->refresh();
 }
 
 function pr25TenantUser(Tenant $tenant): User

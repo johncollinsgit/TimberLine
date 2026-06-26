@@ -10,6 +10,7 @@ use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 class ShopifyEmbeddedShellPayloadBuilder
 {
@@ -496,6 +497,10 @@ class ShopifyEmbeddedShellPayloadBuilder
     protected function mobileAppMessagesBadge(?int $tenantId): ?string
     {
         if ($tenantId === null || $tenantId <= 0) {
+            return null;
+        }
+
+        if (! Schema::hasTable('messaging_conversations')) {
             return null;
         }
 

@@ -228,7 +228,7 @@ test('shopify embedded shell payload builder returns messaging subnav entries fr
 
     $subnav = $builder->messagingSubnav('analytics', 77, $request);
 
-    expect(collect($subnav)->pluck('key')->all())->toBe(['setup', 'workspace', 'analytics', 'responses'])
+    expect(collect($subnav)->pluck('key')->all())->toBe(['setup', 'workspace', 'analytics', 'responses', 'app_messages'])
         ->and(collect($subnav)->firstWhere('key', 'analytics')['active'] ?? false)->toBeTrue();
 });
 

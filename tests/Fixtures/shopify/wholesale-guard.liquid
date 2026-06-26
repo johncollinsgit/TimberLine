@@ -1,0 +1,5 @@
+{% if customer and customer.tags contains 'wholesale' %}
+  {% assign wholesale_access = true %}
+{% else %}
+  {% assign wholesale_access = false %}
+{% endif %}

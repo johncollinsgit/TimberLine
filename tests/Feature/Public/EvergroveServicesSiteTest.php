@@ -25,8 +25,8 @@ test('evergrove public host renders the services site', function (): void {
 test('everbranch public host keeps the everbranch product surface', function (): void {
     $this->get('http://theeverbranch.com/')
         ->assertOk()
-        ->assertSeeText('Run the business you actually have.')
-        ->assertSeeText('Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent workspace.')
+        ->assertSeeText('All of your business, in one place')
+        ->assertSeeText('Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent app.')
         ->assertDontSeeText('Turn scattered operations into useful software.');
 });
 
