@@ -143,6 +143,10 @@ return [
         'timeout' => (int) env('MODERN_FORESTRY_APNS_TIMEOUT', 10),
     ],
 
+    'modern_forestry' => [
+        'support_alert_phone' => env('MODERN_FORESTRY_SUPPORT_ALERT_PHONE', '+18646165468'),
+    ],
+
     'stripe' => [
         'secret' => env('STRIPE_SECRET'),
         'publishable_key' => env('STRIPE_KEY'),

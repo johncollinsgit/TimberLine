@@ -1360,6 +1360,9 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/messaging/setup/complete', [ShopifyEmbeddedMessagingController::class, 'completeSetup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.setup.complete');
+        Route::post('/messaging/setup/support-alert', [ShopifyEmbeddedMessagingController::class, 'updateSupportAlertPhone'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.setup.support-alert.update');
         Route::get('/messaging/storefront-tracking/status', [ShopifyEmbeddedMessagingController::class, 'storefrontTrackingStatus'])
             ->name('messaging.storefront-tracking.status');
         Route::post('/messaging/storefront-tracking/connect-pixel', [ShopifyEmbeddedMessagingController::class, 'connectStorefrontPixel'])

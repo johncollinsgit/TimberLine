@@ -14,6 +14,7 @@ use App\Models\Scent;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
+use App\Services\Marketing\TwilioSmsService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Http\Client\Request;
@@ -738,6 +739,46 @@ test('mobile account message endpoint accepts signed in native support messages'
         'email' => 'support@example.com',
         'normalized_email' => 'support@example.com',
     ]);
+    TenantMarketingSetting::query()->updateOrCreate(
+        [
+            'tenant_id' => 1,
+            'key' => 'modern_forestry_mobile_support_alerts',
+        ],
+        [
+            'value' => [
+                'support_alert_phone' => '+18645550123',
+            ],
+            'description' => 'Test mobile support alert routing.',
+        ]
+    );
+
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')
+        ->once()
+        ->withArgs(function (string $toPhone, string $message, array $options): bool {
+            return $toPhone === '+18645550123'
+                && str_contains($message, 'Modern Forestry app support message')
+                && str_contains($message, 'support@example.com')
+                && str_contains($message, 'Can you help with my order?')
+                && array_key_exists('status_callback_url', $options)
+                && $options['status_callback_url'] === null;
+        })
+        ->andReturn([
+            'success' => true,
+            'provider' => 'twilio',
+            'provider_message_id' => 'sms-support-alert-1',
+            'status' => 'sent',
+            'error_code' => null,
+            'error_message' => null,
+            'sender_key' => 'primary',
+            'sender_label' => 'Primary Sender',
+            'from_identifier' => '+15553330000',
+            'delivery_mode' => 'sms',
+            'requested_delivery_mode' => 'sms',
+            'payload' => [],
+            'dry_run' => false,
+        ]);
+    app()->instance(TwilioSmsService::class, $twilio);
 
     $this->withToken('mf-test-profile:'.$profile->id)
         ->postJson('/api/mobile/v1/modern-forestry/account/message', [

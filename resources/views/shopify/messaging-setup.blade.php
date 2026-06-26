@@ -35,6 +35,9 @@
         $trackingInventory = collect((array) ($trackingSetup['tracking_inventory'] ?? []))
             ->filter(fn ($row) => is_array($row))
             ->values();
+        $supportAlerts = is_array($messagingSupportAlerts ?? null) ? $messagingSupportAlerts : [];
+        $supportAlertPhone = trim((string) ($supportAlerts['support_alert_phone'] ?? ''));
+        $supportAlertSaveEndpoint = trim((string) ($supportAlerts['save_endpoint'] ?? ''));
         $trackingMissingRequestedScopes = array_values((array) ($trackingScopeState['missing_requested'] ?? []));
         $trackingEndpoints = is_array($messageAnalyticsTrackingEndpoints ?? null) ? $messageAnalyticsTrackingEndpoints : [];
 
@@ -357,6 +360,30 @@
                             </div>
                         @endif
 
+                        <div class="message-setup-empty" aria-label="Mobile support alert routing">
+                            <h4>Modern Forestry app support alerts</h4>
+                            <p class="message-setup-muted">When a customer sends a support message from the app, Everbranch will text this number with the message body so your team sees it right away.</p>
+                            <label class="message-setup-muted" for="support-alert-phone-input">Support alert phone number</label>
+                            <div class="message-setup-actions">
+                                <input
+                                    id="support-alert-phone-input"
+                                    type="tel"
+                                    value="{{ $supportAlertPhone }}"
+                                    placeholder="+18646165468"
+                                    data-support-alert-phone-input
+                                    style="min-width: 220px; min-height: 36px; border-radius: 999px; border: 1px solid rgba(15, 23, 42, 0.14); padding: 0 12px; font-size: 13px;"
+                                >
+                                <button
+                                    type="button"
+                                    class="message-setup-button message-setup-button--primary"
+                                    data-save-support-alert-phone
+                                    data-endpoint="{{ $supportAlertSaveEndpoint }}"
+                                >
+                                    Save support number
+                                </button>
+                            </div>
+                        </div>
+
                         <p class="message-setup-inline-status" id="message-setup-inline-status" hidden></p>
                     </div>
                 </x-tenancy.module-state-card>
@@ -369,6 +396,8 @@
             (function () {
                 const setupCompleteButton = document.querySelector('[data-mark-setup-complete]');
                 const connectPixelButton = document.querySelector('[data-connect-storefront-pixel]');
+                const saveSupportAlertButton = document.querySelector('[data-save-support-alert-phone]');
+                const supportAlertPhoneInput = document.querySelector('[data-support-alert-phone-input]');
                 const setupStatusNode = document.getElementById('message-setup-inline-status');
 
                 function setSetupStatus(message, tone = 'neutral') {
@@ -433,12 +462,14 @@
                     };
                 }
 
-                async function postJson(url) {
+                async function postJson(url, body = null) {
                     const headers = await resolveEmbeddedAuthHeaders();
+                    const hasBody = body !== null;
                     const response = await fetch(url, {
                         method: 'POST',
                         headers,
                         credentials: 'same-origin',
+                        body: hasBody ? JSON.stringify(body) : null,
                     });
 
                     const payload = await response.json().catch(() => ({
@@ -498,6 +529,33 @@
                             const message = error instanceof Error ? error.message : 'Could not connect the Shopify pixel.';
                             setSetupStatus(message, 'error');
                             connectPixelButton.disabled = false;
+                        }
+                    });
+                }
+
+                if (saveSupportAlertButton && supportAlertPhoneInput) {
+                    saveSupportAlertButton.addEventListener('click', async () => {
+                        const endpoint = String(saveSupportAlertButton.getAttribute('data-endpoint') || '').trim();
+                        if (endpoint === '') {
+                            return;
+                        }
+
+                        saveSupportAlertButton.disabled = true;
+                        supportAlertPhoneInput.disabled = true;
+                        setSetupStatus('Saving support alert number…');
+
+                        try {
+                            const payload = await postJson(endpoint, {
+                                support_alert_phone: String(supportAlertPhoneInput.value || '').trim(),
+                            });
+                            supportAlertPhoneInput.value = String(payload?.data?.support_alert_phone || '').trim();
+                            setSetupStatus(payload?.message || 'Support alert number saved.', 'success');
+                        } catch (error) {
+                            const message = error instanceof Error ? error.message : 'Could not save the support alert number.';
+                            setSetupStatus(message, 'error');
+                        } finally {
+                            saveSupportAlertButton.disabled = false;
+                            supportAlertPhoneInput.disabled = false;
                         }
                     });
                 }

@@ -11,6 +11,7 @@ use App\Models\MobilePushDevice;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Services\Marketing\MessagingConversationService;
+use App\Services\Marketing\TwilioSmsService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
@@ -34,7 +35,9 @@ class ModernForestryMobileAccountService
         protected CandleCashService $candleCashService,
         protected MarketingWishlistService $wishlistService,
         protected ModernForestryMobileProductCatalogService $catalog,
-        protected MessagingConversationService $conversationService
+        protected MessagingConversationService $conversationService,
+        protected TwilioSmsService $twilioSmsService,
+        protected ModernForestryMobileSupportSettingsService $supportSettings
     ) {
     }
 
@@ -257,6 +260,8 @@ class ModernForestryMobileAccountService
                 'thread_kind' => 'support',
             ],
         ]);
+
+        $this->notifySupportSms($session->profile, $body);
 
         return [
             'ok' => true,
@@ -733,6 +738,42 @@ class ModernForestryMobileAccountService
         }
 
         return null;
+    }
+
+    protected function notifySupportSms(MarketingProfile $profile, string $body): void
+    {
+        $destination = $this->supportSettings->supportAlertPhone($this->tenantId($profile));
+        if ($destination === null) {
+            return;
+        }
+
+        $name = trim(implode(' ', array_filter([
+            $this->nullableString($profile->first_name),
+            $this->nullableString($profile->last_name),
+        ])));
+
+        $identity = $this->nullableString($profile->normalized_phone ?: $profile->phone)
+            ?? $this->nullableString($profile->normalized_email ?: $profile->email)
+            ?? 'unknown customer';
+
+        $message = implode("\n", [
+            'Modern Forestry app support message',
+            'From: '.($name !== '' ? $name : 'Unknown customer'),
+            'Reply contact: '.$identity,
+            'Message: '.Str::limit($body, 1200, '...'),
+        ]);
+
+        try {
+            $this->twilioSmsService->sendSms($destination, $message, [
+                'status_callback_url' => null,
+            ]);
+        } catch (Throwable $exception) {
+            Log::warning('Modern Forestry support SMS alert failed.', [
+                'marketing_profile_id' => (int) $profile->id,
+                'destination' => $destination,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     protected function redemptionMessage(string $state): string

@@ -9,6 +9,7 @@ use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\MessagingResponseInboxService;
 use App\Services\Marketing\MessageAnalyticsService;
+use App\Services\Mobile\ModernForestryMobileSupportSettingsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
@@ -420,6 +421,7 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantModuleAccessResolver $moduleAccessResolver,
         TenantEmailSettingsService $tenantEmailSettingsService,
         ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService,
+        ModernForestryMobileSupportSettingsService $supportSettingsService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -454,6 +456,9 @@ class ShopifyEmbeddedMessagingController extends Controller
         $storefrontTracking = $authorized
             ? $probe->time('page_payload', fn (): array => $storefrontTrackingSetupService->build($store, $context['host'] ?? null))
             : [];
+        $supportAlerts = ($authorized && $tenantId !== null && $hasMessagingAccess)
+            ? $probe->time('page_payload', fn (): array => $supportSettingsService->forTenant($tenantId))
+            : ['support_alert_phone' => null];
         $setupGuide = $this->buildMessagingSetupGuide(
             module: $messagingModule,
             hasMessagingAccess: $hasMessagingAccess,
@@ -483,6 +488,10 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'messagingModuleState' => $messagingModule,
                 'messagingAccess' => $this->messagingAccessPayload($tenantId, $hasMessagingAccess, 'setup'),
                 'messagingSetupGuide' => $setupGuide,
+                'messagingSupportAlerts' => [
+                    'support_alert_phone' => $supportAlerts['support_alert_phone'] ?? null,
+                    'save_endpoint' => route('shopify.app.api.messaging.setup.support-alert.update', [], false),
+                ],
                 'messageAnalyticsTrackingEndpoints' => [
                     'status' => route('shopify.app.api.messaging.storefront-tracking.status', [], false),
                     'connect_pixel' => route('shopify.app.api.messaging.storefront-tracking.connect-pixel', [], false),
@@ -540,6 +549,40 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'module_key' => 'messaging',
                 'setup_status' => (string) $state->setup_status,
                 'setup_completed_at' => optional($state->setup_completed_at)->toIso8601String(),
+            ],
+        ]);
+    }
+
+    public function updateSupportAlertPhone(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ModernForestryMobileSupportSettingsService $supportSettingsService
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        try {
+            $data = validator($request->all(), [
+                'support_alert_phone' => ['nullable', 'string', 'max:32'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Support alert number could not be saved.', $exception);
+        }
+
+        $setting = $supportSettingsService->saveForTenant((int) $access['tenant_id'], [
+            'support_alert_phone' => $this->nullableString($data['support_alert_phone'] ?? null),
+        ]);
+        $resolved = is_array($setting->value) ? $setting->value : [];
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Support alert number saved.',
+            'data' => [
+                'support_alert_phone' => $resolved['support_alert_phone'] ?? null,
             ],
         ]);
     }

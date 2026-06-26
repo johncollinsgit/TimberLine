@@ -15,6 +15,7 @@ use App\Models\MarketingMessageOrderAttribution;
 use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\User;
@@ -334,6 +335,31 @@ test('messaging setup can be marked complete from embedded api', function () {
     expect($state)->not->toBeNull()
         ->and((string) ($state?->setup_status ?? ''))->toBe('configured')
         ->and($state?->setup_completed_at)->not->toBeNull();
+});
+
+test('messaging setup can save tenant-scoped modern forestry support alert phone', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Messaging Support Alert Tenant',
+        'slug' => 'messaging-support-alert-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.setup.support-alert.update'), [
+            'support_alert_phone' => '8646165468',
+        ])
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.support_alert_phone', '+18646165468');
+
+    $setting = TenantMarketingSetting::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('key', 'modern_forestry_mobile_support_alerts')
+        ->first();
+
+    expect($setting)->not->toBeNull()
+        ->and(data_get($setting?->value, 'support_alert_phone'))->toBe('+18646165468');
 });
 
 test('messaging analytics stays tenant and store scoped with attributed outcomes', function () {
