@@ -38,7 +38,8 @@ class ModernForestryMobileAccountService
         protected ModernForestryMobileProductCatalogService $catalog,
         protected MessagingConversationService $conversationService,
         protected TwilioSmsService $twilioSmsService,
-        protected ModernForestryMobileSupportSettingsService $supportSettings
+        protected ModernForestryMobileSupportSettingsService $supportSettings,
+        protected ModernForestryMobileScentQuizService $scentQuizService
     ) {
     }
 
@@ -58,6 +59,7 @@ class ModernForestryMobileAccountService
             'wishlist' => $this->wishlistPayload($profile, $tenantId),
             'notifications' => $this->notificationsPayload($profile),
             'insights' => $this->insightsPayload($profile, $tenantId),
+            'scentQuiz' => $this->scentQuizService->latestResultPayload($profile),
         ];
     }
 

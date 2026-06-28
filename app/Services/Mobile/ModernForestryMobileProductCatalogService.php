@@ -9,6 +9,7 @@ use App\Services\Shopify\ModernForestryVariantMediaClassifier;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyStores;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
@@ -36,6 +37,14 @@ class ModernForestryMobileProductCatalogService
     protected const DETAIL_IMAGE_WIDTH = 1200;
 
     protected const HERO_IMAGE_WIDTH = 1200;
+
+    protected const COLLECTIONS_CACHE_SECONDS = 180;
+
+    protected const HOME_CACHE_SECONDS = 120;
+
+    protected const COLLECTION_PRODUCTS_CACHE_SECONDS = 180;
+
+    protected const COLLECTION_NODES_CACHE_SECONDS = 180;
 
     /**
      * @var array<int,string>
@@ -69,7 +78,8 @@ class ModernForestryMobileProductCatalogService
             'handle' => 'summer',
             'title' => 'Summer',
             'description' => 'Sunlit, airy, and easygoing favorites for warm days.',
-            'aliases' => ['summer', 'summer-collection', 'wholesale-summer-collection', 'summer-one-day-sale'],
+            'aliases' => ['summer', 'summer-collection', 'wholesale-summer-collection'],
+            'preferred_titles' => ['Summer Collection'],
             'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038',
         ],
         [
@@ -80,10 +90,11 @@ class ModernForestryMobileProductCatalogService
             'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457',
         ],
         [
-            'handle' => 'fall',
-            'title' => 'Fall',
+            'handle' => 'autumn',
+            'title' => 'Autumn',
             'description' => 'Warm spices, woods, and deeper comfort notes.',
-            'aliases' => ['fall', 'fall-collection', 'autumn-collection', 'wholesale-fall-candle-collection'],
+            'aliases' => ['autumn', 'autumn-collection', 'fall', 'fall-collection', 'wholesale-fall-candle-collection'],
+            'preferred_titles' => ['Autumn Collection'],
             'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113',
         ],
         [
@@ -228,9 +239,11 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeCollections();
         }
 
-        $client = $this->client();
+        return $this->rememberCatalogPayload('collections:v1', self::COLLECTIONS_CACHE_SECONDS, function (): array {
+            $client = $this->client();
 
-        return $this->seasonalCollectionsFromNodes($this->collectionNodes($client));
+            return $this->seasonalCollectionsFromNodes($this->collectionNodes($client));
+        });
     }
 
     /**
@@ -251,66 +264,72 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeCollectionProducts($handle, $limit, $sort);
         }
 
-        $client = $this->client();
-        $collectionNodes = $this->collectionNodes($client);
-        $resolvedCollection = $this->resolveSeasonalCollectionNode($handle, $collectionNodes);
-        $targetHandle = trim((string) ($resolvedCollection['handle'] ?? $handle));
+        return $this->rememberCatalogPayload(
+            sprintf('collection-products:v2:%s:%s:%d', $handle, $sort, $limit),
+            self::COLLECTION_PRODUCTS_CACHE_SECONDS,
+            function () use ($handle, $limit, $sort): ?array {
+                $client = $this->client();
+                $collectionNodes = $this->collectionNodes($client);
+                $resolvedCollection = $this->resolveSeasonalCollectionNode($handle, $collectionNodes);
+                $targetHandle = trim((string) ($resolvedCollection['handle'] ?? $handle));
 
-        $sortArguments = $this->collectionSortArguments($sort);
+                $sortArguments = $this->collectionSortArguments($sort);
 
-        $data = null;
-        $queriedHandle = $targetHandle;
+                $data = null;
+                $queriedHandle = $targetHandle;
 
-        foreach ($this->collectionHandleCandidates($handle, $targetHandle) as $candidateHandle) {
-            $data = $client->query($this->collectionProductsQuery(), [
-                'query' => 'handle:'.$candidateHandle,
-                'first' => min(max($limit * 4, 24), 100),
-                'sortKey' => $sortArguments['sortKey'],
-                'reverse' => $sortArguments['reverse'],
-            ]);
+                foreach ($this->collectionHandleCandidates($handle, $targetHandle) as $candidateHandle) {
+                    $data = $client->query($this->collectionProductsQuery(), [
+                        'query' => 'handle:'.$candidateHandle,
+                        'first' => min(max($limit * 4, 24), 100),
+                        'sortKey' => $sortArguments['sortKey'],
+                        'reverse' => $sortArguments['reverse'],
+                    ]);
 
-            $nodes = $data['collections']['nodes'] ?? [];
-            if (is_array($nodes) && $nodes !== []) {
-                $queriedHandle = $candidateHandle;
-                break;
+                    $nodes = $data['collections']['nodes'] ?? [];
+                    if (is_array($nodes) && $nodes !== []) {
+                        $queriedHandle = $candidateHandle;
+                        break;
+                    }
+                }
+
+                $nodes = is_array($data) ? ($data['collections']['nodes'] ?? []) : [];
+                if (! is_array($nodes) || $nodes === []) {
+                    return null;
+                }
+
+                $collection = $nodes[0] ?? [];
+                if (! is_array($collection)) {
+                    return null;
+                }
+
+                $productNodes = $collection['products']['nodes'] ?? [];
+                $products = is_array($productNodes)
+                    ? array_values(array_filter(array_map(function (mixed $node): ?array {
+                        if (! is_array($node)) {
+                            return null;
+                        }
+
+                        if (! $this->productNodeIsCustomerVisible($node)) {
+                            return null;
+                        }
+
+                        return $this->mapProduct($node);
+                    }, $productNodes)))
+                    : [];
+
+                $products = $this->sortProducts($products, $sort);
+                $products = array_slice($products, 0, $limit);
+
+                return [
+                    'collection' => $this->mapCollection(
+                        $collection,
+                        $this->seasonalDefinitionForHandle($handle) ?? $this->seasonalDefinitionForHandle($queriedHandle)
+                    ),
+                    'products' => $products,
+                ];
             }
-        }
-
-        $nodes = is_array($data) ? ($data['collections']['nodes'] ?? []) : [];
-        if (! is_array($nodes) || $nodes === []) {
-            return null;
-        }
-
-        $collection = $nodes[0] ?? [];
-        if (! is_array($collection)) {
-            return null;
-        }
-
-        $productNodes = $collection['products']['nodes'] ?? [];
-        $products = is_array($productNodes)
-            ? array_values(array_filter(array_map(function (mixed $node): ?array {
-                if (! is_array($node)) {
-                    return null;
-                }
-
-                if (! $this->productNodeIsCustomerVisible($node)) {
-                    return null;
-                }
-
-                return $this->mapProduct($node);
-            }, $productNodes)))
-            : [];
-
-        $products = $this->sortProducts($products, $sort);
-        $products = array_slice($products, 0, $limit);
-
-        return [
-            'collection' => $this->mapCollection(
-                $collection,
-                $this->seasonalDefinitionForHandle($handle) ?? $this->seasonalDefinitionForHandle($queriedHandle)
-            ),
-            'products' => $products,
-        ];
+        );
     }
 
     /**
@@ -318,30 +337,32 @@ class ModernForestryMobileProductCatalogService
      */
     public function home(): array
     {
-        $collections = $this->collections();
-        $content = $this->mobileAppContent();
+        return $this->rememberCatalogPayload('home:v2', self::HOME_CACHE_SECONDS, function (): array {
+            $collections = $this->collections();
+            $content = $this->mobileAppContent();
 
-        return [
-            'brand' => [
-                'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
-                'tagline' => 'Soy candles',
-                'logoUrl' => null,
-            ],
-            'hero' => [
-                'eyebrow' => $this->mobileContentValue($content, 'mobile_home_eyebrow', 'Modern Forestry'),
-                'title' => $this->mobileContentValue($content, 'mobile_home_title', 'Hand-poured candles for a slower season.'),
-                'subtitle' => $this->mobileContentValue($content, 'mobile_home_subtitle', 'Small-batch scents, seasonal favorites, and Candle Cash rewards.'),
-                'logoUrl' => null,
-                'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
-                'tagline' => 'Soy candles',
-                'slides' => ($content['__has_published_app_content'] ?? false)
-                    ? ($this->mobileContentHeroSlides($content) ?: $this->homeHeroSlides())
-                    : $this->homeHeroSlides(),
-            ],
-            'featuredCollections' => $collections,
-            'featuredProducts' => $this->featuredProducts(6),
-            'cards' => $this->homeCards(),
-        ];
+            return [
+                'brand' => [
+                    'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
+                    'tagline' => 'Soy candles',
+                    'logoUrl' => null,
+                ],
+                'hero' => [
+                    'eyebrow' => $this->mobileContentValue($content, 'mobile_home_eyebrow', 'Modern Forestry'),
+                    'title' => $this->mobileContentValue($content, 'mobile_home_title', 'Hand-poured candles for a slower season.'),
+                    'subtitle' => $this->mobileContentValue($content, 'mobile_home_subtitle', 'Small-batch scents, seasonal favorites, and Candle Cash rewards.'),
+                    'logoUrl' => null,
+                    'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
+                    'tagline' => 'Soy candles',
+                    'slides' => ($content['__has_published_app_content'] ?? false)
+                        ? ($this->mobileContentHeroSlides($content) ?: $this->homeHeroSlides())
+                        : $this->homeHeroSlides(),
+                ],
+                'featuredCollections' => $collections,
+                'featuredProducts' => $this->featuredProducts(6),
+                'cards' => $this->homeCards(),
+            ];
+        });
     }
 
     /**
@@ -935,7 +956,7 @@ GRAPHQL;
             'classic' => ['oakmoss-amber', 'vanilla-birch'],
             'summer' => ['citrus-grove', 'vanilla-birch', 'lavender-woods'],
             'holiday' => ['fraser-fir', 'hearthside'],
-            'fall' => ['oakmoss-amber', 'hearthside', 'vanilla-birch'],
+            'autumn' => ['oakmoss-amber', 'hearthside', 'vanilla-birch'],
             'bundles' => ['fraser-fir', 'oakmoss-amber', 'hearthside', 'citrus-grove', 'vanilla-birch', 'lavender-woods'],
         ];
 
@@ -1595,10 +1616,21 @@ GRAPHQL;
      */
     protected function collectionNodes(ShopifyGraphqlClient $client): array
     {
-        $data = $client->query($this->collectionsQuery());
-        $nodes = $data['collections']['nodes'] ?? [];
+        return $this->rememberCatalogPayload('collection-nodes:v1', self::COLLECTION_NODES_CACHE_SECONDS, function () use ($client): array {
+            $data = $client->query($this->collectionsQuery());
+            $nodes = $data['collections']['nodes'] ?? [];
 
-        return is_array($nodes) ? $nodes : [];
+            return is_array($nodes) ? $nodes : [];
+        });
+    }
+
+    protected function rememberCatalogPayload(string $suffix, int $seconds, callable $resolver): mixed
+    {
+        return Cache::remember(
+            'modern_forestry_mobile_catalog:'.$suffix,
+            now()->addSeconds($seconds),
+            $resolver
+        );
     }
 
     /**
@@ -1650,10 +1682,18 @@ GRAPHQL;
             return null;
         }
 
-        $aliases = array_map(
+        $aliases = array_values(array_filter(array_map(
             static fn (mixed $alias): string => Str::lower(trim((string) $alias)),
             $definition['aliases'] ?? []
-        );
+        )));
+
+        $preferredTitles = array_values(array_filter(array_map(
+            static fn (mixed $title): string => Str::lower(trim((string) $title)),
+            $definition['preferred_titles'] ?? []
+        )));
+
+        $bestMatch = null;
+        $bestScore = null;
 
         foreach ($nodes as $node) {
             if (! is_array($node)) {
@@ -1663,14 +1703,33 @@ GRAPHQL;
             $nodeHandle = Str::lower(trim((string) ($node['handle'] ?? '')));
             $nodeTitle = Str::lower(trim((string) ($node['title'] ?? '')));
 
-            if (in_array($nodeHandle, $aliases, true)
-                || Str::contains($nodeHandle, $aliases)
-                || Str::contains($nodeTitle, Str::lower((string) $definition['title']))) {
-                return $node;
+            $score = null;
+
+            if (in_array($nodeTitle, $preferredTitles, true)) {
+                $score = 500;
+            } elseif ($nodeHandle === Str::lower((string) $definition['handle'])) {
+                $score = 450;
+            } elseif (in_array($nodeHandle, $aliases, true)) {
+                $score = 400;
+            } elseif (Str::contains($nodeTitle, $preferredTitles)) {
+                $score = 300;
+            } elseif (Str::contains($nodeTitle, Str::lower((string) $definition['title']))) {
+                $score = 250;
+            } elseif (Str::contains($nodeHandle, $aliases)) {
+                $score = 200;
+            }
+
+            if ($score === null) {
+                continue;
+            }
+
+            if ($bestMatch === null || $bestScore === null || $score > $bestScore) {
+                $bestMatch = $node;
+                $bestScore = $score;
             }
         }
 
-        return null;
+        return $bestMatch;
     }
 
     /**

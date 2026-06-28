@@ -5,6 +5,8 @@ use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingProfileScentQuizResult;
+use App\Models\MarketingReviewHistory;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
 use App\Models\MobilePushDevice;
@@ -14,14 +16,17 @@ use App\Models\Scent;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
+use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Marketing\TwilioSmsService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function (): void {
+    Cache::flush();
     config()->set('mobile_catalog.fake_enabled', false);
     config()->set('services.shopify.api_version', '2026-01');
     config()->set('services.shopify.stores.retail.shop', 'modernforestry-test.myshopify.com');
@@ -136,7 +141,7 @@ test('fake mobile collections list returns testing collections', function (): vo
         ->assertJsonPath('collections.1.handle', 'classic')
         ->assertJsonPath('collections.2.handle', 'summer')
         ->assertJsonPath('collections.3.handle', 'holiday')
-        ->assertJsonPath('collections.4.handle', 'fall')
+        ->assertJsonPath('collections.4.handle', 'autumn')
         ->assertJsonPath('collections.5.handle', 'bundles');
 });
 
@@ -298,7 +303,7 @@ test('fake mobile home response references valid known collection and product ha
         ->assertOk()
         ->json();
 
-    $knownCollectionHandles = ['spring', 'classic', 'summer', 'holiday', 'fall', 'bundles'];
+    $knownCollectionHandles = ['spring', 'classic', 'summer', 'holiday', 'autumn', 'bundles'];
     $knownProductHandles = ['fraser-fir', 'oakmoss-amber', 'lavender-woods', 'hearthside', 'citrus-grove', 'vanilla-birch'];
 
     foreach ($payload['featuredCollections'] as $collection) {
@@ -528,6 +533,55 @@ test('mobile oauth token exchange validates returned customer token before trust
         ->assertJsonPath('error.code', 'customer_auth_validation_failed');
 });
 
+test('mobile oauth refresh exchanges a stored refresh token and validates the refreshed customer token', function (): void {
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
+    config()->set('services.shopify.customer_account.client_secret', 'customer-account-secret');
+    config()->set('services.shopify.customer_account.token_endpoint', 'https://shopify.com/authentication/20812479/oauth/token');
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
+
+    Http::fake(function (Request $request) {
+        if ($request->url() === 'https://shopify.com/authentication/20812479/oauth/token') {
+            expect($request['grant_type'])->toBe('refresh_token')
+                ->and($request['refresh_token'])->toBe('saved-refresh-token');
+
+            return Http::response([
+                'access_token' => 'refreshed-customer-access-token',
+                'refresh_token' => 'rotated-refresh-token',
+                'expires_in' => 3600,
+                'token_type' => 'Bearer',
+            ], 200);
+        }
+
+        if ($request->url() === 'https://shopify.com/20812479/account/customer/api/2026-01/graphql') {
+            expect($request->hasHeader('Authorization', 'refreshed-customer-access-token'))->toBeTrue();
+
+            return Http::response([
+                'data' => [
+                    'customer' => [
+                        'id' => 'gid://shopify/Customer/98765',
+                        'firstName' => 'Evergreen',
+                        'lastName' => 'Lane',
+                        'emailAddress' => [
+                            'emailAddress' => 'evergreen@example.com',
+                        ],
+                        'phoneNumber' => null,
+                    ],
+                ],
+            ], 200);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->postJson('/api/mobile/v1/modern-forestry/auth/refresh', [
+        'refreshToken' => 'saved-refresh-token',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.access_token', 'refreshed-customer-access-token')
+        ->assertJsonPath('data.refresh_token', 'rotated-refresh-token')
+        ->assertJsonPath('meta.source', 'shopify_customer_account');
+});
+
 test('mobile account endpoint returns native safe account data only for signed in customer', function (): void {
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => 1,
@@ -601,6 +655,47 @@ test('mobile account endpoint returns native safe account data only for signed i
     expect($encoded)->not->toContain('shpat_mobile_test_token')
         ->and($encoded)->not->toContain('mobile-test-secret')
         ->and($encoded)->not->toContain('access_token');
+});
+
+test('mobile account payload includes the latest saved scent quiz result', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+
+    MarketingProfileScentQuizResult::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => 1,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => [
+            'floral' => 34,
+            'woodsy' => 88,
+            'smoky' => 62,
+            'sweet' => 24,
+            'masculine' => 58,
+            'earthy' => 71,
+            'clean' => 29,
+            'citrus' => 18,
+        ],
+        'dominant_traits' => ['woodsy', 'earthy', 'smoky'],
+        'headline' => 'Woodsy + Earthy',
+        'personality_title' => 'The Grounded Explorer',
+        'personality_body' => 'A calm, textured profile with a steady outdoorsy backbone.',
+        'answers' => [
+            ['question_id' => 'q01', 'option_id' => 'cabin'],
+        ],
+        'completed_at' => now(),
+    ]);
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/account')
+        ->assertOk()
+        ->assertJsonPath('data.scentQuiz.headline', 'Woodsy + Earthy')
+        ->assertJsonPath('data.scentQuiz.personalityTitle', 'The Grounded Explorer')
+        ->assertJsonPath('data.scentQuiz.axes.1.label', 'Woodsy');
 });
 
 test('mobile push device registration stores the ios device token for the signed in profile', function (): void {
@@ -1083,6 +1178,93 @@ test('mobile product detail exposes bundle scent requirements and active scent o
             ->toContain('Forest Ember', 'Oakmoss Amber');
 });
 
+test('mobile product detail includes laravel-backed review summary and approved reviews', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+
+    MarketingReviewHistory::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => 1,
+        'provider' => 'native_storefront',
+        'integration' => 'shopify_product_reviews',
+        'store_key' => 'retail',
+        'external_customer_id' => 'reviewer-1',
+        'external_review_id' => 'review-forest-ember-1',
+        'rating' => 5,
+        'title' => 'Coffeehouse level cozy',
+        'body' => 'Strong throw, warm woods, and a little smoke in the best way.',
+        'reviewer_name' => 'Ada Woods',
+        'status' => 'approved',
+        'is_published' => true,
+        'is_verified_buyer' => true,
+        'product_id' => 'gid://shopify/Product/111',
+        'product_handle' => 'forest-ember-candle',
+        'product_title' => 'Forest Ember Candle',
+        'product_url' => 'https://theforestrystudio.com/products/forest-ember-candle',
+        'submitted_at' => now()->subDay(),
+        'approved_at' => now(),
+        'reviewed_at' => now(),
+    ]);
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileProductDetailPayload(), 200),
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/products/forest-ember-candle')
+        ->assertOk()
+        ->assertJsonPath('data.reviews.summary.review_count', 1)
+        ->assertJsonPath('data.reviews.summary.rating_label', '5.0 out of 5')
+        ->assertJsonPath('data.reviews.reviews.0.title', 'Coffeehouse level cozy')
+        ->assertJsonPath('data.reviews.reviews.0.reviewer_name', 'Ada Woods');
+});
+
+test('mobile scent quiz endpoints return the authored quiz and persist results to the profile', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+
+    $definition = $this->withToken('mf-test-profile:'.$profile->id)
+        ->getJson('/api/mobile/v1/modern-forestry/scent-quiz')
+        ->assertOk()
+        ->assertJsonPath('data.version', 'scent-v1')
+        ->assertJsonCount(25, 'data.questions')
+        ->json('data');
+
+    $answers = collect($definition['questions'])
+        ->map(fn (array $question): array => [
+            'question_id' => $question['id'],
+            'option_id' => $question['options'][0]['id'],
+        ])
+        ->values()
+        ->all();
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/scent-quiz/results', [
+            'answers' => $answers,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.version', 'scent-v1')
+        ->assertJsonPath('data.axes.0.label', 'Floral')
+        ->assertJsonCount(8, 'data.axes');
+
+    $saved = MarketingProfileScentQuizResult::query()
+        ->where('marketing_profile_id', $profile->id)
+        ->first();
+
+    expect($saved)->not->toBeNull()
+        ->and($saved?->quiz_version)->toBe('scent-v1')
+        ->and($saved?->headline)->not->toBeNull();
+});
+
 test('fake mobile product detail returns 404 for unknown handle', function (): void {
     config()->set('mobile_catalog.fake_enabled', true);
     ShopifyStore::query()->delete();
@@ -1237,7 +1419,7 @@ test('real mobile home always returns canonical seasonal collections with image 
         ->json();
 
     expect(collect($payload['featuredCollections'])->pluck('handle')->all())
-        ->toBe(['spring', 'classic', 'summer', 'holiday', 'fall', 'bundles']);
+        ->toBe(['spring', 'classic', 'summer', 'holiday', 'autumn', 'bundles']);
 
     foreach ($payload['featuredCollections'] as $collection) {
         expect($collection['imageUrl'] ?? null)->toBeString()->not->toBe('');
@@ -1338,7 +1520,7 @@ test('real mobile collection products return only active products and support so
 
     $this->getJson('/api/mobile/v1/modern-forestry/collections/fall/products?sort=price_low_to_high')
         ->assertOk()
-        ->assertJsonPath('collection.handle', 'fall')
+        ->assertJsonPath('collection.handle', 'autumn')
         ->assertJsonPath('products.0.handle', 'apple-harvest')
         ->assertJsonPath('products.0.price', '18.00')
         ->assertJsonPath('products.1.handle', 'forest-ember-candle')
@@ -1372,13 +1554,79 @@ test('real mobile collection product sorting maps to shopify sort variables', fu
 
     $this->getJson('/api/mobile/v1/modern-forestry/collections/fall/products?sort='.$sort)
         ->assertOk()
-        ->assertJsonPath('collection.handle', 'fall');
+        ->assertJsonPath('collection.handle', 'autumn');
 })->with([
     'best selling' => ['best_selling', 'BEST_SELLING', false],
     'newest' => ['newest', 'CREATED', true],
     'price low to high' => ['price_low_to_high', 'PRICE', false],
     'price high to low' => ['price_high_to_low', 'PRICE', true],
 ]);
+
+test('real mobile collection products reuse cached seasonal payloads for repeat requests', function (): void {
+    config()->set('mobile_catalog.fake_enabled', false);
+
+    $requests = 0;
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => function (Request $request) use (&$requests) {
+            $requests++;
+
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
+
+            if (str_contains($query, 'query MobileCatalogCollections')) {
+                return Http::response(shopifyMobileCollectionsPayload(), 200);
+            }
+
+            if (str_contains($query, 'query MobileCatalogCollectionProducts')) {
+                return Http::response(shopifyMobileCollectionProductsPayload(), 200);
+            }
+
+            return Http::response([], 404);
+        },
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/collections/fall/products?sort=best_selling')
+        ->assertOk()
+        ->assertJsonPath('collection.handle', 'autumn');
+
+    $this->getJson('/api/mobile/v1/modern-forestry/collections/fall/products?sort=best_selling')
+        ->assertOk()
+        ->assertJsonPath('collection.handle', 'autumn');
+
+    expect($requests)->toBe(2);
+});
+
+test('seasonal collection resolver prefers canonical summer and autumn collections over sale collections', function (): void {
+    $service = app(ModernForestryMobileProductCatalogService::class);
+    $reflection = new \ReflectionClass($service);
+    $resolveMethod = $reflection->getMethod('resolveSeasonalCollectionNode');
+
+    $nodes = [
+        [
+            'handle' => 'summer-one-day-sale',
+            'title' => 'Summer One Day Sale',
+        ],
+        [
+            'handle' => 'summer-collection',
+            'title' => 'Summer Collection',
+        ],
+        [
+            'handle' => 'fall-collection',
+            'title' => 'Fall Collection',
+        ],
+        [
+            'handle' => 'autumn-collection',
+            'title' => 'Autumn Collection',
+        ],
+    ];
+
+    $summerMatch = $resolveMethod->invoke($service, 'summer', $nodes);
+    $fallMatch = $resolveMethod->invoke($service, 'fall', $nodes);
+
+    expect($summerMatch['handle'] ?? null)->toBe('summer-collection')
+        ->and($fallMatch['handle'] ?? null)->toBe('autumn-collection');
+});
 
 test('real mobile collection products fail closed safely when tenant or store config is invalid', function (): void {
     config()->set('mobile_catalog.fake_enabled', false);

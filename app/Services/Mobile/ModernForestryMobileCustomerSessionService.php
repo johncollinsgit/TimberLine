@@ -206,6 +206,76 @@ class ModernForestryMobileCustomerSessionService
         ];
     }
 
+    /**
+     * @return array<string,mixed>
+     */
+    public function refreshAccessToken(string $refreshToken): array
+    {
+        $refreshToken = trim($refreshToken);
+        $clientId = $this->customerAccountString('client_id');
+        $clientSecret = $this->customerAccountString('client_secret');
+        $discovery = $this->customerAccountDiscovery();
+        $tokenEndpoint = $this->tokenEndpoint($discovery);
+        $graphqlEndpoint = $this->graphqlEndpoint($discovery);
+
+        if ($refreshToken === '') {
+            throw ModernForestryMobileCustomerAuthException::invalidCallback();
+        }
+
+        if ($clientId === '' || $tokenEndpoint === '' || $graphqlEndpoint === '') {
+            throw ModernForestryMobileCustomerAuthException::notConfigured();
+        }
+
+        if ($this->requiresClientSecret($discovery) && $clientSecret === '') {
+            throw ModernForestryMobileCustomerAuthException::notConfigured();
+        }
+
+        $request = Http::asForm()
+            ->acceptJson()
+            ->timeout(10);
+
+        if ($clientSecret !== '') {
+            $request = $request->withBasicAuth($clientId, $clientSecret);
+        }
+
+        $response = $request->post($tokenEndpoint, [
+            'grant_type' => 'refresh_token',
+            'client_id' => $clientId,
+            'refresh_token' => $refreshToken,
+        ]);
+
+        if ($response->failed()) {
+            Log::warning('Modern Forestry mobile customer auth refresh exchange failed.', [
+                'status' => $response->status(),
+                'shopify_error' => $this->nullableString($response->json('error')),
+                'shopify_error_description' => $this->nullableString($response->json('error_description')),
+            ]);
+
+            throw ModernForestryMobileCustomerAuthException::exchangeFailed(
+                $response->status() >= 500 ? 502 : 422,
+                ['shopify_status' => $response->status()]
+            );
+        }
+
+        $token = $response->json();
+        if (! is_array($token) || $this->nullableString($token['access_token'] ?? null) === null) {
+            Log::warning('Modern Forestry mobile customer auth refresh returned no access token.', [
+                'status' => $response->status(),
+                'keys' => is_array($token) ? array_values(array_filter(array_keys($token), 'is_string')) : [],
+            ]);
+
+            throw ModernForestryMobileCustomerAuthException::exchangeFailed();
+        }
+
+        return [
+            'access_token' => (string) $token['access_token'],
+            'refresh_token' => $this->nullableString($token['refresh_token'] ?? null) ?? $refreshToken,
+            'expires_in' => isset($token['expires_in']) ? (int) $token['expires_in'] : null,
+            'id_token' => $this->nullableString($token['id_token'] ?? null),
+            'token_type' => $this->nullableString($token['token_type'] ?? null),
+        ];
+    }
+
     protected function customerAccountString(string $key): string
     {
         return trim((string) config('services.shopify.customer_account.'.$key, ''));

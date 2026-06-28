@@ -209,4 +209,9 @@ class MarketingProfile extends Model
     {
         return $this->hasMany(MobilePushDevice::class, 'marketing_profile_id');
     }
+
+    public function scentQuizResult(): HasOne
+    {
+        return $this->hasOne(MarketingProfileScentQuizResult::class, 'marketing_profile_id');
+    }
 }

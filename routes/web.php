@@ -393,6 +393,10 @@ Route::post('/api/mobile/v1/modern-forestry/auth/token', [ModernForestryProductC
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.auth.token');
+Route::post('/api/mobile/v1/modern-forestry/auth/refresh', [ModernForestryProductCatalogController::class, 'authRefresh'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.auth.refresh');
 Route::get('/api/mobile/v1/modern-forestry/account', [ModernForestryProductCatalogController::class, 'account'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.account');
@@ -426,6 +430,13 @@ Route::post('/api/mobile/v1/modern-forestry/wishlist/remove', [ModernForestryPro
 Route::get('/api/mobile/v1/modern-forestry/scents', [ModernForestryProductCatalogController::class, 'scents'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.scents');
+Route::get('/api/mobile/v1/modern-forestry/scent-quiz', [ModernForestryProductCatalogController::class, 'scentQuiz'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.scent-quiz');
+Route::post('/api/mobile/v1/modern-forestry/scent-quiz/results', [ModernForestryProductCatalogController::class, 'saveScentQuizResult'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.scent-quiz.results');
 Route::get('/api/mobile/v1/modern-forestry/rewards', [ModernForestryProductCatalogController::class, 'rewards'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.rewards');
@@ -433,6 +444,13 @@ Route::post('/api/mobile/v1/modern-forestry/rewards/redeem', [ModernForestryProd
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.rewards.redeem');
+Route::get('/api/mobile/v1/modern-forestry/product-reviews/status', [ModernForestryProductCatalogController::class, 'productReviewStatus'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.product-reviews.status');
+Route::post('/api/mobile/v1/modern-forestry/product-reviews/submit', [ModernForestryProductCatalogController::class, 'submitProductReview'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.product-reviews.submit');
 Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProductCatalogController::class, 'sessionStatus'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.session-status');

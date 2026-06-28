@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
 use App\Models\MobilePushDevice;
+use App\Services\Marketing\ProductReviewService;
 use App\Services\Mobile\ModernForestryMobileAccountService;
 use App\Services\Mobile\ModernForestryMobileCheckoutException;
 use App\Services\Mobile\ModernForestryMobileCheckoutService;
 use App\Services\Mobile\ModernForestryMobileCustomerAuthException;
 use App\Services\Mobile\ModernForestryMobileCustomerSessionService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
+use App\Services\Mobile\ModernForestryMobileScentQuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -108,8 +110,11 @@ class ModernForestryProductCatalogController extends Controller
     }
 
     public function show(
+        Request $request,
         string $handle,
-        ModernForestryMobileProductCatalogService $catalog
+        ModernForestryMobileProductCatalogService $catalog,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ProductReviewService $productReviewService
     ): JsonResponse {
         try {
             $product = $catalog->productDetail($handle);
@@ -138,6 +143,12 @@ class ModernForestryProductCatalogController extends Controller
                 ],
             ], 404);
         }
+
+        $session = $sessions->resolveFromRequest($request);
+        $product['reviews'] = $productReviewService->storefrontPayload(
+            $this->productReviewContext($product),
+            $session?->profile
+        );
 
         $meta = [
             'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
@@ -268,6 +279,33 @@ class ModernForestryProductCatalogController extends Controller
                 (string) $validated['codeVerifier'],
                 (string) $validated['redirectUri']
             );
+
+            if (! $sessions->resolveToken((string) $token['access_token'], allowCreate: true)) {
+                throw ModernForestryMobileCustomerAuthException::validationFailed();
+            }
+        } catch (ModernForestryMobileCustomerAuthException $exception) {
+            return $this->mobileAuthErrorResponse($exception);
+        }
+
+        return response()->json([
+            'data' => $token,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'shopify_customer_account',
+            ],
+        ]);
+    }
+
+    public function authRefresh(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions
+    ): JsonResponse {
+        $validated = $request->validate([
+            'refreshToken' => ['required', 'string', 'max:4096'],
+        ]);
+
+        try {
+            $token = $sessions->refreshAccessToken((string) $validated['refreshToken']);
 
             if (! $sessions->resolveToken((string) $token['access_token'], allowCreate: true)) {
                 throw ModernForestryMobileCustomerAuthException::validationFailed();
@@ -620,6 +658,168 @@ class ModernForestryProductCatalogController extends Controller
         ]);
     }
 
+    public function productReviewStatus(
+        Request $request,
+        ModernForestryMobileProductCatalogService $catalog,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ProductReviewService $productReviewService
+    ): JsonResponse {
+        $validated = $request->validate([
+            'handle' => ['required', 'string', 'max:160'],
+        ]);
+
+        $product = $catalog->productDetail((string) $validated['handle']);
+        if (! is_array($product)) {
+            return response()->json([
+                'data' => null,
+                'meta' => [
+                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                ],
+                'error' => [
+                    'code' => 'product_not_found',
+                    'message' => 'Modern Forestry product was not found.',
+                ],
+            ], 404);
+        }
+
+        $session = $sessions->resolveFromRequest($request);
+
+        return response()->json([
+            'data' => $productReviewService->storefrontPayload(
+                $this->productReviewContext($product),
+                $session?->profile
+            ),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function submitProductReview(
+        Request $request,
+        ModernForestryMobileProductCatalogService $catalog,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ProductReviewService $productReviewService
+    ): JsonResponse {
+        $validated = $request->validate([
+            'handle' => ['required', 'string', 'max:160'],
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'title' => ['nullable', 'string', 'max:190'],
+            'body' => ['required', 'string', 'max:4000'],
+            'name' => ['nullable', 'string', 'max:160'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'orderId' => ['nullable', 'integer'],
+            'orderLineId' => ['nullable', 'integer'],
+            'variantId' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $product = $catalog->productDetail((string) $validated['handle']);
+        if (! is_array($product)) {
+            return response()->json([
+                'data' => null,
+                'meta' => [
+                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                ],
+                'error' => [
+                    'code' => 'product_not_found',
+                    'message' => 'Modern Forestry product was not found.',
+                ],
+            ], 404);
+        }
+
+        $session = $sessions->resolveFromRequest($request);
+        $result = $productReviewService->submitReview(
+            $session?->profile,
+            $this->productReviewContext($product),
+            [
+                'rating' => (int) $validated['rating'],
+                'title' => $validated['title'] ?? null,
+                'body' => (string) $validated['body'],
+                'name' => $validated['name'] ?? null,
+                'email' => $validated['email'] ?? null,
+                'order_id' => $validated['orderId'] ?? null,
+                'order_line_id' => $validated['orderLineId'] ?? null,
+                'variant_id' => $validated['variantId'] ?? null,
+                'request_key' => 'modern_forestry_ios_'.md5((string) $product['id'].':'.(string) ($session?->profile->id ?? 'guest').':'.(string) ($validated['title'] ?? '').':'.(string) $validated['body']),
+                'source_surface' => 'modern_forestry_ios_product_page',
+            ]
+        );
+
+        return response()->json([
+            'data' => [
+                ...$result,
+                'status' => $productReviewService->storefrontPayload(
+                    $this->productReviewContext($product),
+                    $session?->profile
+                ),
+            ],
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ], (bool) ($result['ok'] ?? false) ? 200 : 422);
+    }
+
+    public function scentQuiz(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileScentQuizService $scentQuizService
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        return response()->json([
+            'data' => $scentQuizService->definition($session->profile),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function saveScentQuizResult(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileScentQuizService $scentQuizService
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'answers' => ['required', 'array', 'size:25'],
+            'answers.*.question_id' => ['required', 'string', 'max:32'],
+            'answers.*.option_id' => ['required', 'string', 'max:64'],
+        ]);
+
+        try {
+            $result = $scentQuizService->saveResult($session->profile, (array) $validated['answers']);
+        } catch (\InvalidArgumentException $exception) {
+            return response()->json([
+                'data' => null,
+                'meta' => [
+                    'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                ],
+                'error' => [
+                    'code' => 'invalid_quiz_answers',
+                    'message' => $exception->getMessage(),
+                ],
+            ], 422);
+        }
+
+        return response()->json([
+            'data' => $result,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
     public function sessionStatus(
         Request $request,
         ModernForestryMobileCustomerSessionService $sessions
@@ -640,5 +840,22 @@ class ModernForestryProductCatalogController extends Controller
                 'message' => 'Sign in to continue.',
             ],
         ], 401);
+    }
+
+    /**
+     * @param  array<string,mixed>  $product
+     * @return array<string,mixed>
+     */
+    protected function productReviewContext(array $product): array
+    {
+        return [
+            'product_id' => (string) ($product['id'] ?? ''),
+            'product_handle' => $product['handle'] ?? null,
+            'product_title' => $product['title'] ?? null,
+            'product_url' => $product['url'] ?? null,
+            'variant_id' => data_get($product, 'variants.0.id'),
+            'store_key' => 'retail',
+            'tenant_id' => ModernForestryMobileCheckoutService::TENANT_ID,
+        ];
     }
 }
