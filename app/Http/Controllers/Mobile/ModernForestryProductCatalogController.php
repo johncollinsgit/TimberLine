@@ -412,11 +412,16 @@ class ModernForestryProductCatalogController extends Controller
         }
 
         $validated = $request->validate([
+            'subject' => ['nullable', 'string', 'max:200'],
             'message' => ['required', 'string', 'max:2000'],
         ]);
 
         return response()->json([
-            'data' => $account->message($session, (string) $validated['message']),
+            'data' => $account->message(
+                $session,
+                (string) $validated['message'],
+                isset($validated['subject']) ? (string) $validated['subject'] : null
+            ),
             'meta' => [
                 'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
                 'source' => 'mobile',

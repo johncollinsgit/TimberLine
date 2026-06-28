@@ -213,9 +213,10 @@ class ModernForestryMobileAccountService
     /**
      * @return array<string,mixed>
      */
-    public function message(ModernForestryMobileCustomerSession $session, string $body): array
+    public function message(ModernForestryMobileCustomerSession $session, string $body, ?string $subject = null): array
     {
         $body = trim($body);
+        $subject = $this->nullableString($subject);
 
         if ($body === '') {
             return [
@@ -239,6 +240,8 @@ class ModernForestryMobileAccountService
         $identity = $conversation->channel === 'sms'
             ? $this->nullableString($session->profile->normalized_phone ?: $session->profile->phone)
             : $this->nullableString($session->profile->normalized_email ?: $session->profile->email);
+        $resolvedSubject = $subject
+            ?? ($conversation->channel === 'email' ? ($conversation->subject ?: self::MOBILE_SUPPORT_SUBJECT) : null);
 
         $this->conversationService->appendMessage($conversation, [
             'marketing_profile_id' => $session->profile->id,
@@ -247,7 +250,7 @@ class ModernForestryMobileAccountService
             'provider' => self::MOBILE_SUPPORT_SOURCE_TYPE,
             'body' => $body,
             'normalized_body' => $body,
-            'subject' => $conversation->channel === 'email' ? ($conversation->subject ?: self::MOBILE_SUPPORT_SUBJECT) : null,
+            'subject' => $resolvedSubject,
             'from_identity' => $identity,
             'to_identity' => 'Modern Forestry support',
             'received_at' => now(),
@@ -264,13 +267,19 @@ class ModernForestryMobileAccountService
             ],
         ]);
 
-        $this->notifySupportSms($session->profile, $body);
+        if ($subject !== null && $this->nullableString($conversation->subject) === null) {
+            $conversation->forceFill([
+                'subject' => $subject,
+            ])->save();
+        }
+
+        $this->notifySupportSms($session->profile, $body, $subject);
 
         return [
             'ok' => true,
             'state' => 'received',
             'support' => $this->supportPayload($session->profile),
-            'message' => 'Your message is in the Modern Forestry support thread.',
+            'message' => 'We will get back to you as soon as we can.',
         ];
     }
 
@@ -640,7 +649,7 @@ class ModernForestryMobileAccountService
         return [
             'canMessage' => $this->nullableString($profile->email) !== null || $this->nullableString($profile->phone) !== null,
             'preferredChannel' => $this->nullableString($profile->phone) !== null ? 'sms' : 'email',
-            'prompt' => 'Send a note here and Modern Forestry can reply inside the app.',
+            'prompt' => 'We will get back to you as soon as we can.',
             'conversationId' => $conversation?->id,
             'unreadCount' => $unreadCount,
             'messages' => $messages,
@@ -843,7 +852,7 @@ class ModernForestryMobileAccountService
         return null;
     }
 
-    protected function notifySupportSms(MarketingProfile $profile, string $body): void
+    protected function notifySupportSms(MarketingProfile $profile, string $body, ?string $subject = null): void
     {
         $destination = $this->supportSettings->supportAlertPhone($this->tenantId($profile));
         if ($destination === null) {
@@ -863,6 +872,7 @@ class ModernForestryMobileAccountService
             'Modern Forestry app support message',
             'From: '.($name !== '' ? $name : 'Unknown customer'),
             'Reply contact: '.$identity,
+            ...($subject !== null ? ['Subject: '.$subject] : []),
             'Message: '.Str::limit($body, 1200, '...'),
         ]);
 

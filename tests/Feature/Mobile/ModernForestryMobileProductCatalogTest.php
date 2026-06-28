@@ -900,6 +900,7 @@ test('mobile account message endpoint accepts signed in native support messages'
             return $toPhone === '+18645550123'
                 && str_contains($message, 'Modern Forestry app support message')
                 && str_contains($message, 'support@example.com')
+                && str_contains($message, 'Subject: Order question')
                 && str_contains($message, 'Can you help with my order?')
                 && array_key_exists('status_callback_url', $options)
                 && $options['status_callback_url'] === null;
@@ -923,11 +924,15 @@ test('mobile account message endpoint accepts signed in native support messages'
 
     $this->withToken('mf-test-profile:'.$profile->id)
         ->postJson('/api/mobile/v1/modern-forestry/account/message', [
+            'subject' => 'Order question',
             'message' => 'Can you help with my order?',
         ])
         ->assertOk()
         ->assertJsonPath('data.ok', true)
         ->assertJsonPath('data.state', 'received')
+        ->assertJsonPath('data.message', 'We will get back to you as soon as we can.')
+        ->assertJsonPath('data.support.prompt', 'We will get back to you as soon as we can.')
+        ->assertJsonPath('data.support.messages.0.subject', 'Order question')
         ->assertJsonPath('data.support.messages.0.body', 'Can you help with my order?');
 
     $conversation = MessagingConversation::query()
@@ -946,6 +951,7 @@ test('mobile account message endpoint accepts signed in native support messages'
 
     expect($message)->not->toBeNull()
         ->and($message?->direction)->toBe('inbound')
+        ->and($message?->subject)->toBe('Order question')
         ->and($message?->message_type)->toBe('app_message');
 });
 
