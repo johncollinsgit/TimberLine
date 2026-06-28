@@ -10,12 +10,8 @@ return new class extends Migration
     {
         Schema::create('marketing_profile_scent_quiz_results', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('marketing_profile_id')
-                ->constrained('marketing_profiles')
-                ->cascadeOnDelete();
-            $table->foreignId('tenant_id')
-                ->constrained('tenants')
-                ->cascadeOnDelete();
+            $table->unsignedBigInteger('marketing_profile_id');
+            $table->unsignedBigInteger('tenant_id');
             $table->string('quiz_version', 32)->default('scent-v1');
             $table->json('axis_scores');
             $table->json('dominant_traits')->nullable();
@@ -28,6 +24,14 @@ return new class extends Migration
 
             $table->unique('marketing_profile_id', 'mpsqr_profile_unique');
             $table->index(['tenant_id', 'completed_at'], 'mpsqr_tenant_completed_idx');
+            $table->foreign('marketing_profile_id', 'mpsqr_profile_fk')
+                ->references('id')
+                ->on('marketing_profiles')
+                ->cascadeOnDelete();
+            $table->foreign('tenant_id', 'mpsqr_tenant_fk')
+                ->references('id')
+                ->on('tenants')
+                ->cascadeOnDelete();
         });
     }
 
