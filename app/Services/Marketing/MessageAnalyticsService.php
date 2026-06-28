@@ -24,7 +24,8 @@ class MessageAnalyticsService
         protected MessageLinkAggregationService $messageLinkAggregationService,
         protected MessageAnalyticsShopifyOrderSignalService $messageAnalyticsShopifyOrderSignalService,
         protected AiBudgetReadinessService $aiBudgetReadinessService,
-        protected ModernForestryScentQuizAnalyticsService $modernForestryScentQuizAnalyticsService
+        protected ModernForestryScentQuizAnalyticsService $modernForestryScentQuizAnalyticsService,
+        protected ModernForestrySocialShareRewardService $modernForestrySocialShareRewardService
     ) {}
 
     /**
@@ -2100,6 +2101,7 @@ class MessageAnalyticsService
             'attribution_quality' => $attributionQuality,
             'acquisition_funnel' => $acquisitionFunnel,
             'modern_forestry_scent_quiz' => $this->modernForestryScentQuizPanel($tenantId, $from, $to),
+            'modern_forestry_social_share' => $this->modernForestrySocialSharePanel($tenantId),
             'retention' => $retention,
             'action_queue' => $this->actionQueuePanel($attributionQuality, $acquisitionFunnel, $retention),
             'ai_budget_readiness' => $this->aiBudgetReadinessService->evaluate(
@@ -2191,6 +2193,17 @@ class MessageAnalyticsService
                     'wishlist_to_purchase_rate' => 0.0,
                     'cart_to_purchase_rate' => 0.0,
                 ],
+                'empty' => true,
+            ],
+            'modern_forestry_social_share' => [
+                'starts' => 0,
+                'claims' => 0,
+                'awards' => 0,
+                'duplicates' => 0,
+                'platforms' => [],
+                'targets' => [],
+                'top_shared_products' => [],
+                'top_shared_scent_personalities' => [],
                 'empty' => true,
             ],
             'retention' => [
@@ -2308,6 +2321,19 @@ class MessageAnalyticsService
             || (int) data_get($panel, 'orders.total_purchases', 0) > 0;
 
         $panel['empty'] = ! $hasActivity;
+
+        return $panel;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function modernForestrySocialSharePanel(int $tenantId): array
+    {
+        $panel = $this->modernForestrySocialShareRewardService->analytics($tenantId);
+        $panel['empty'] = (int) ($panel['starts'] ?? 0) === 0
+            && (int) ($panel['claims'] ?? 0) === 0
+            && (int) ($panel['awards'] ?? 0) === 0;
 
         return $panel;
     }

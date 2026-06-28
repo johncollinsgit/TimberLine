@@ -34,7 +34,7 @@ class ModernForestryMobileScentQuizService
             'version' => self::QUIZ_VERSION,
             'intro' => [
                 'title' => 'Find your scent personality',
-                'body' => 'A 25-question profile that turns candle taste into a scent map, dominant traits, and personality-style copy.',
+                'body' => 'A 15-question profile that turns candle taste into a scent map, dominant traits, and personality-style copy.',
             ],
             'axes' => array_map(
                 static fn (array $axis): array => [
@@ -347,23 +347,11 @@ class ModernForestryMobileScentQuizService
                 $this->option('autumn', 'Autumn, for warmth and depth.', ['woodsy' => 2, 'smoky' => 1, 'earthy' => 1]),
                 $this->option('winter', 'Winter, for coziness and mood.', ['sweet' => 2, 'smoky' => 2]),
             ]),
-            $this->question('q07', 'What kind of gift do you usually give?', [
-                $this->option('thoughtful', 'Something sentimental and personal.', ['floral' => 2, 'sweet' => 1]),
-                $this->option('useful', 'Something beautiful but practical.', ['clean' => 2, 'earthy' => 1]),
-                $this->option('luxury', 'Something rich, polished, or impressive.', ['masculine' => 2, 'woodsy' => 1]),
-                $this->option('cozy', 'Something comforting everyone wants to keep.', ['sweet' => 2, 'woodsy' => 1]),
-            ]),
             $this->question('q08', 'Pick a color palette.', [
                 $this->option('petals', 'Blush, ivory, and muted green.', ['floral' => 3]),
                 $this->option('forest', 'Olive, bark, and deep brown.', ['woodsy' => 2, 'earthy' => 1]),
                 $this->option('charcoal', 'Black, tobacco, and bronze.', ['smoky' => 2, 'masculine' => 2]),
                 $this->option('sunlit', 'Cream, gold, and pale citrus.', ['citrus' => 2, 'clean' => 1, 'sweet' => 1]),
-            ]),
-            $this->question('q09', 'How do you want guests to describe your home?', [
-                $this->option('beautiful', 'Beautiful and thoughtfully styled.', ['floral' => 2, 'clean' => 1]),
-                $this->option('cozy', 'Warm and comfortable.', ['sweet' => 2, 'woodsy' => 1]),
-                $this->option('cool', 'Distinctive, moody, and cool.', ['smoky' => 2, 'masculine' => 1]),
-                $this->option('fresh', 'Fresh, bright, and put together.', ['clean' => 2, 'citrus' => 1]),
             ]),
             $this->question('q10', 'Which natural note appeals most?', [
                 $this->option('petals', 'Fresh petals.', ['floral' => 3]),
@@ -383,35 +371,11 @@ class ModernForestryMobileScentQuizService
                 $this->option('coffee', 'Strong coffee and a playlist.', ['masculine' => 1, 'smoky' => 2, 'sweet' => 1]),
                 $this->option('juice', 'Cold citrus and fresh air.', ['citrus' => 3]),
             ]),
-            $this->question('q13', 'Which word sounds most like your style?', [
-                $this->option('romantic', 'Romantic', ['floral' => 3]),
-                $this->option('tailored', 'Tailored', ['masculine' => 3]),
-                $this->option('natural', 'Natural', ['earthy' => 2, 'woodsy' => 1]),
-                $this->option('fresh', 'Fresh', ['clean' => 2, 'citrus' => 1]),
-            ]),
             $this->question('q14', 'Choose a favorite evening setting.', [
                 $this->option('porch', 'A breezy porch at golden hour.', ['citrus' => 2, 'clean' => 1]),
                 $this->option('fireside', 'Fireside with blankets and low light.', ['smoky' => 2, 'sweet' => 1, 'woodsy' => 1]),
                 $this->option('bath', 'A quiet bath with softer details.', ['floral' => 2, 'clean' => 1]),
                 $this->option('reading', 'A book, lamplight, and total calm.', ['earthy' => 2, 'woodsy' => 1]),
-            ]),
-            $this->question('q15', 'What kind of packaging catches your eye?', [
-                $this->option('elegant', 'Elegant and delicate.', ['floral' => 2, 'clean' => 1]),
-                $this->option('minimal', 'Minimal and crisp.', ['clean' => 3]),
-                $this->option('heritage', 'Heritage-inspired and substantial.', ['masculine' => 2, 'woodsy' => 1]),
-                $this->option('handmade', 'Organic and artisanal.', ['earthy' => 2, 'sweet' => 1]),
-            ]),
-            $this->question('q16', 'Which dessert sounds best?', [
-                $this->option('shortcake', 'Berry shortcake.', ['sweet' => 2, 'floral' => 1]),
-                $this->option('citrus', 'Lemon tart.', ['citrus' => 3]),
-                $this->option('smores', 'Something toasted by a fire.', ['smoky' => 2, 'sweet' => 1]),
-                $this->option('none', 'Not dessert, give me something earthy or dry.', ['woodsy' => 1, 'earthy' => 2]),
-            ]),
-            $this->question('q17', 'Which store section do you wander into first?', [
-                $this->option('home', 'Fresh home goods and textiles.', ['clean' => 2, 'floral' => 1]),
-                $this->option('outdoors', 'Outdoor gear or natural materials.', ['woodsy' => 2, 'earthy' => 1]),
-                $this->option('apothecary', 'Apothecary, grooming, or rich fragrances.', ['masculine' => 2, 'smoky' => 1]),
-                $this->option('food', 'Bakery or specialty treats.', ['sweet' => 3]),
             ]),
             $this->question('q18', 'What do you want a signature scent to say?', [
                 $this->option('soft', 'I am thoughtful and warm.', ['floral' => 2, 'sweet' => 1]),
@@ -419,41 +383,17 @@ class ModernForestryMobileScentQuizService
                 $this->option('sharp', 'I am polished and intentional.', ['clean' => 2, 'masculine' => 1]),
                 $this->option('alive', 'I am energetic and impossible to ignore.', ['citrus' => 2, 'smoky' => 1]),
             ]),
-            $this->question('q19', 'Pick a travel mood.', [
-                $this->option('garden-city', 'A beautiful city in bloom.', ['floral' => 2, 'citrus' => 1]),
-                $this->option('mountains', 'A mountain cabin.', ['woodsy' => 2, 'smoky' => 1]),
-                $this->option('spa', 'A coastal spa with white linen.', ['clean' => 2, 'earthy' => 1]),
-                $this->option('nightlife', 'A late-night hotel bar.', ['masculine' => 2, 'smoky' => 2]),
-            ]),
             $this->question('q20', 'How strong should a candle personality be?', [
                 $this->option('subtle', 'Subtle and soft.', ['clean' => 2, 'floral' => 1]),
                 $this->option('comforting', 'Comforting and present.', ['sweet' => 2, 'earthy' => 1]),
                 $this->option('grounded', 'Grounded and layered.', ['woodsy' => 2, 'earthy' => 1]),
                 $this->option('statement', 'A statement piece.', ['smoky' => 2, 'masculine' => 2]),
             ]),
-            $this->question('q21', 'Choose a favorite weather day.', [
-                $this->option('sunny-bloom', 'Sunny with flowers opening.', ['floral' => 2, 'citrus' => 1]),
-                $this->option('cool-forest', 'Cool and shaded under trees.', ['woodsy' => 2, 'earthy' => 1]),
-                $this->option('clean-air', 'Crisp air after a deep clean kind of morning.', ['clean' => 3]),
-                $this->option('storm', 'Stormy skies and candlelight.', ['smoky' => 2, 'sweet' => 1]),
-            ]),
-            $this->question('q22', 'What kind of compliment lands best?', [
-                $this->option('beautiful', 'Beautiful taste.', ['floral' => 2]),
-                $this->option('cozy', 'Your place feels so cozy.', ['sweet' => 2, 'woodsy' => 1]),
-                $this->option('cool', 'Your style is cool.', ['smoky' => 2, 'masculine' => 1]),
-                $this->option('fresh', 'Everything feels fresh and elevated.', ['clean' => 2, 'citrus' => 1]),
-            ]),
             $this->question('q23', 'Pick a candle companion.', [
                 $this->option('flowers', 'Fresh stems on the table.', ['floral' => 3]),
                 $this->option('books', 'A stack of books and a throw blanket.', ['woodsy' => 1, 'earthy' => 2]),
                 $this->option('playlist', 'A sharp playlist and clean counters.', ['clean' => 2, 'citrus' => 1]),
                 $this->option('cocktail', 'A cocktail and low music.', ['masculine' => 2, 'smoky' => 1]),
-            ]),
-            $this->question('q24', 'How do you reset after a long week?', [
-                $this->option('treat', 'Bake something or order dessert.', ['sweet' => 3]),
-                $this->option('tidy', 'Tidy the house and open windows.', ['clean' => 2, 'citrus' => 1]),
-                $this->option('nature', 'Go outside and get quiet.', ['earthy' => 2, 'woodsy' => 1]),
-                $this->option('mood', 'Dim the lights and set a mood.', ['smoky' => 2, 'masculine' => 1]),
             ]),
             $this->question('q25', 'Which final phrase feels most like home?', [
                 $this->option('soft-light', 'Soft light and bloom.', ['floral' => 2, 'sweet' => 1]),

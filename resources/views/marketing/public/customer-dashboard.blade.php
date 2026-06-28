@@ -42,6 +42,12 @@
         $scentQuizNotice = trim((string) ($scentQuizNotice ?? ''));
         $scentQuizOpen = request()->boolean('scent_quiz') || $scentQuizNotice !== '' || $latestScentQuiz === null;
         $scentQuizShopUrl = '/collections/all?mf_source_label=scent_quiz&mf_template_key=modern_forestry_scent_quiz&mf_module_type=scent_quiz&mf_link_label=Shop%20my%20profile';
+        $socialShareConfig = is_array($socialShareConfig ?? null) ? $socialShareConfig : null;
+        $socialShareRewardLabel = (string) data_get($socialShareConfig, 'reward.label', '$1 Candle Cash');
+        $socialShareScentTarget = is_array(data_get($socialShareConfig, 'scentPersonality')) ? data_get($socialShareConfig, 'scentPersonality') : null;
+        $socialShareStartedUrl = trim((string) ($socialShareStartedUrl ?? ''));
+        $socialShareClaimUrl = trim((string) ($socialShareClaimUrl ?? ''));
+        $socialShareNotice = trim((string) ($socialShareNotice ?? ''));
     @endphp
     <title>{{ $brandName }} Account</title>
     @vite(['resources/css/app.css'])
@@ -239,6 +245,24 @@
                 linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 253, 250, 0.92));
             padding: 1.25rem;
         }
+        .forest-social-share {
+            border-radius: 22px;
+            border: 1px solid rgba(5, 150, 105, 0.18);
+            background:
+                radial-gradient(circle at top right, rgba(16, 185, 129, 0.18), transparent 36%),
+                linear-gradient(135deg, rgba(240, 253, 244, 0.95), rgba(255, 255, 255, 0.92));
+            padding: 1rem;
+        }
+        .forest-social-share button {
+            border: 0;
+            cursor: pointer;
+        }
+        .forest-social-state {
+            min-height: 1.25rem;
+            font-size: 12px;
+            font-weight: 700;
+            color: #047857;
+        }
     </style>
 </head>
 <body class="min-h-screen text-slate-900">
@@ -296,6 +320,11 @@
     </section>
 
     @if($profile)
+        @if($socialShareNotice !== '')
+            <section class="forest-card p-4 text-sm font-semibold text-emerald-950">
+                {{ $socialShareNotice }}
+            </section>
+        @endif
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <article class="forest-card p-5">
                 <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ data_get($copy, 'rewards_title', 'Rewards') }}</div>
@@ -355,6 +384,31 @@
                                             <span class="forest-chip border-emerald-200 bg-emerald-50 text-emerald-900">{{ \Illuminate\Support\Str::headline((string) $trait) }}</span>
                                         @endforeach
                                     </div>
+                                    @if($socialShareScentTarget)
+                                        <div class="forest-social-share mt-4" data-social-share-box>
+                                            <div class="text-sm font-semibold text-slate-950">Share your candle personality</div>
+                                            <p class="mt-1 text-xs leading-5 text-slate-600">Share this result and claim {{ $socialShareRewardLabel }} once per platform.</p>
+                                            <div class="mt-3 flex flex-wrap gap-2">
+                                                @foreach(['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $platform => $label)
+                                                    <button
+                                                        type="button"
+                                                        class="forest-action bg-emerald-200 text-emerald-950"
+                                                        data-social-share
+                                                        data-platform="{{ $platform }}"
+                                                        data-target='@json($socialShareScentTarget)'
+                                                    >Share on {{ $label }}</button>
+                                                    <button
+                                                        type="button"
+                                                        class="forest-action border border-slate-200 bg-white text-slate-700"
+                                                        data-social-claim
+                                                        data-platform="{{ $platform }}"
+                                                        data-target='@json($socialShareScentTarget)'
+                                                    >I shared on {{ $label }}</button>
+                                                @endforeach
+                                            </div>
+                                            <div class="forest-social-state mt-2" data-social-state></div>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
                             <div class="grid gap-3 sm:grid-cols-2">
@@ -503,6 +557,51 @@
                             <div class="mt-3 text-sm text-slate-600">
                                 {{ data_get($order, 'line_preview') ?: data_get($copy, 'empty_orders', 'No recent orders yet.') }}
                             </div>
+                            @if(is_array(data_get($order, 'lines')) && count((array) data_get($order, 'lines')) > 0)
+                                <div class="mt-3 grid gap-2">
+                                    @foreach((array) data_get($order, 'lines') as $line)
+                                        @php
+                                            $lineHandle = trim((string) data_get($line, 'handle', ''));
+                                            $lineTarget = [
+                                                'type' => data_get($line, 'share_target_type', 'purchased_product'),
+                                                'id' => data_get($line, 'share_target_id'),
+                                                'handle' => $lineHandle,
+                                                'title' => data_get($line, 'title'),
+                                                'imageUrl' => data_get($line, 'image_url'),
+                                            ];
+                                        @endphp
+                                        @if($lineHandle !== '')
+                                            <div class="rounded-2xl border border-white bg-white/80 p-3" data-social-share-box>
+                                                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                                    <div>
+                                                        <div class="text-sm font-semibold text-slate-950">{{ data_get($line, 'title', 'Purchased item') }}</div>
+                                                        <div class="mt-1 text-xs text-slate-500">Qty {{ data_get($line, 'quantity', 1) }} · Share for {{ $socialShareRewardLabel }}</div>
+                                                    </div>
+                                                    <div class="flex flex-wrap gap-2">
+                                                        @foreach(['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $platform => $label)
+                                                            <button
+                                                                type="button"
+                                                                class="forest-action {{ $platform === 'facebook' ? 'bg-emerald-200 text-emerald-950' : 'border border-slate-200 bg-white text-slate-700' }}"
+                                                                data-social-share
+                                                                data-platform="{{ $platform }}"
+                                                                data-target='@json($lineTarget)'
+                                                            >{{ $label }}</button>
+                                                            <button
+                                                                type="button"
+                                                                class="forest-action border border-slate-200 bg-white text-slate-700"
+                                                                data-social-claim
+                                                                data-platform="{{ $platform }}"
+                                                                data-target='@json($lineTarget)'
+                                                            >I shared</button>
+                                                        @endforeach
+                                                    </div>
+                                                </div>
+                                                <div class="forest-social-state mt-2" data-social-state></div>
+                                            </div>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @endif
                             <div class="mt-2 text-xs text-slate-500">
                                 {{ data_get($order, 'total_price_formatted') }} · {{ strtoupper((string) data_get($order, 'status', 'open')) }}
                             </div>
@@ -651,6 +750,118 @@
         </section>
     @endif
 </main>
+@if($profile && $socialShareStartedUrl !== '' && $socialShareClaimUrl !== '')
+    <script>
+        (function () {
+            const startedUrl = @json($socialShareStartedUrl);
+            const claimUrl = @json($socialShareClaimUrl);
+            const csrfToken = @json(csrf_token());
+
+            function targetFrom(button) {
+                try {
+                    return JSON.parse(button.getAttribute('data-target') || '{}');
+                } catch (error) {
+                    return {};
+                }
+            }
+
+            function statusFor(button, message, isError) {
+                const box = button.closest('[data-social-share-box]');
+                const state = box ? box.querySelector('[data-social-state]') : null;
+                if (!state) {
+                    return;
+                }
+
+                state.textContent = message;
+                state.style.color = isError ? '#b91c1c' : '#047857';
+            }
+
+            async function postJson(url, payload) {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const json = await response.json().catch(function () {
+                    return {};
+                });
+
+                if (!response.ok) {
+                    throw new Error((json && json.message) || 'Share reward is unavailable right now.');
+                }
+
+                return json.data || json;
+            }
+
+            function shareUrlFor(platform, shareUrl) {
+                if (platform === 'facebook') {
+                    return 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl);
+                }
+
+                return 'https://www.instagram.com/';
+            }
+
+            async function openShare(platform, payload, target) {
+                const claim = payload.claim || {};
+                const shareUrl = claim.shareUrl || target.share_url || target.shareUrl || window.location.href;
+                const title = target.title || 'Modern Forestry';
+                const text = target.body || 'I found something from Modern Forestry worth sharing.';
+
+                if (platform === 'instagram' && navigator.share) {
+                    await navigator.share({ title: title, text: text, url: shareUrl });
+                    return;
+                }
+
+                window.open(shareUrlFor(platform, shareUrl), '_blank', 'noopener,noreferrer,width=720,height=680');
+            }
+
+            document.querySelectorAll('[data-social-share]').forEach(function (button) {
+                button.addEventListener('click', async function () {
+                    const platform = button.getAttribute('data-platform') || '';
+                    const target = targetFrom(button);
+                    button.disabled = true;
+                    statusFor(button, 'Opening share window...', false);
+
+                    try {
+                        const payload = await postJson(startedUrl, { platform: platform, target: target });
+                        await openShare(platform, payload, target);
+                        statusFor(button, 'After posting, tap “I shared” to claim your reward.', false);
+                    } catch (error) {
+                        statusFor(button, error.message || 'Unable to start this share.', true);
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
+            });
+
+            document.querySelectorAll('[data-social-claim]').forEach(function (button) {
+                button.addEventListener('click', async function () {
+                    const platform = button.getAttribute('data-platform') || '';
+                    const target = targetFrom(button);
+                    button.disabled = true;
+                    statusFor(button, 'Checking your reward...', false);
+
+                    try {
+                        const payload = await postJson(claimUrl, { platform: platform, target: target });
+                        const already = Boolean(payload.alreadyAwarded);
+                        const reward = (payload.reward && payload.reward.label) || @json($socialShareRewardLabel);
+                        statusFor(button, already ? 'Already rewarded for this share.' : reward + ' added to your account.', false);
+                    } catch (error) {
+                        statusFor(button, error.message || 'Unable to claim this reward.', true);
+                    } finally {
+                        button.disabled = false;
+                    }
+                });
+            });
+        }());
+    </script>
+@endif
 @if($scentQuizAttributionPayload ?? null)
     <script>
         (function () {

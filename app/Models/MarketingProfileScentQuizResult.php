@@ -16,6 +16,7 @@ class MarketingProfileScentQuizResult extends Model
         'headline',
         'personality_title',
         'personality_body',
+        'public_share_token',
         'answers',
         'completed_at',
     ];

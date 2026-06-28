@@ -437,6 +437,17 @@ Route::post('/api/mobile/v1/modern-forestry/scent-quiz/results', [ModernForestry
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.scent-quiz.results');
+Route::get('/api/mobile/v1/modern-forestry/social-share/config', [ModernForestryProductCatalogController::class, 'socialShareConfig'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.social-share.config');
+Route::post('/api/mobile/v1/modern-forestry/social-share/started', [ModernForestryProductCatalogController::class, 'socialShareStarted'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.social-share.started');
+Route::post('/api/mobile/v1/modern-forestry/social-share/claim', [ModernForestryProductCatalogController::class, 'socialShareClaim'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.social-share.claim');
 Route::get('/api/mobile/v1/modern-forestry/rewards', [ModernForestryProductCatalogController::class, 'rewards'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.rewards');
@@ -1099,6 +1110,10 @@ Route::post('/account/rewards/redeem', [MarketingPublicEventController::class, '
 Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class, 'showConsentConfirm'])
     ->middleware('throttle:30,1')
     ->name('marketing.public.consent-confirm');
+Route::get('/share/scent-personality/{token}', [MarketingPublicEventController::class, 'showScentPersonalityShare'])
+    ->where('token', '[A-Za-z0-9]{20,80}')
+    ->middleware('throttle:60,1')
+    ->name('marketing.public.scent-personality-share');
 
 Route::prefix('shopify/marketing')
     ->name('marketing.shopify.')
@@ -1111,6 +1126,12 @@ Route::prefix('shopify/marketing')
         Route::post('/scent-quiz/results', [MarketingPublicEventController::class, 'saveCustomerScentQuizResult'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('scent-quiz.submit');
+        Route::post('/social-share/started', [MarketingPublicEventController::class, 'socialShareStarted'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('social-share.started');
+        Route::post('/social-share/claim', [MarketingPublicEventController::class, 'socialShareClaim'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('social-share.claim');
         Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
         Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
@@ -1180,6 +1201,12 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/scent-quiz/results', [MarketingPublicEventController::class, 'saveCustomerScentQuizResult'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('scent-quiz.submit');
+        Route::post('/social-share/started', [MarketingPublicEventController::class, 'socialShareStarted'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('social-share.started');
+        Route::post('/social-share/claim', [MarketingPublicEventController::class, 'socialShareClaim'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('social-share.claim');
         Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
         Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');

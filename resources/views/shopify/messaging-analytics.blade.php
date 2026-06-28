@@ -52,6 +52,7 @@
         $attributionQualityPanel = is_array($decisionPanels['attribution_quality'] ?? null) ? $decisionPanels['attribution_quality'] : [];
         $acquisitionFunnelPanel = is_array($decisionPanels['acquisition_funnel'] ?? null) ? $decisionPanels['acquisition_funnel'] : [];
         $scentQuizPanel = is_array($decisionPanels['modern_forestry_scent_quiz'] ?? null) ? $decisionPanels['modern_forestry_scent_quiz'] : [];
+        $socialSharePanel = is_array($decisionPanels['modern_forestry_social_share'] ?? null) ? $decisionPanels['modern_forestry_social_share'] : [];
         $retentionPanel = is_array($decisionPanels['retention'] ?? null) ? $decisionPanels['retention'] : [];
         $actionQueuePanel = is_array($decisionPanels['action_queue'] ?? null) ? $decisionPanels['action_queue'] : [];
         $aiBudgetReadinessPanel = is_array($decisionPanels['ai_budget_readiness'] ?? null) ? $decisionPanels['ai_budget_readiness'] : [];
@@ -1148,6 +1149,80 @@
                 @elseif((bool) data_get($scentQuizPanel, 'empty', false))
                     <div class="message-analytics-empty">
                         <p class="message-analytics-muted">No scent quiz activity has been recorded in this reporting window yet.</p>
+                    </div>
+                @endif
+            </article>
+
+            <article class="message-analytics-card">
+                <h3>Modern Forestry Social Share Rewards</h3>
+                <p class="message-analytics-muted">
+                    Decision question: are Facebook and Instagram share prompts creating rewardable advocacy without repeat-credit leakage?
+                </p>
+                <div class="message-analytics-kpi-grid" aria-label="Modern Forestry social share reward summary">
+                    <article class="message-analytics-kpi">
+                        <span>Share starts</span>
+                        <strong>{{ number_format((int) data_get($socialSharePanel, 'starts', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Claims</span>
+                        <strong>{{ number_format((int) data_get($socialSharePanel, 'claims', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Rewards awarded</span>
+                        <strong>{{ number_format((int) data_get($socialSharePanel, 'awards', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Duplicate attempts</span>
+                        <strong>{{ number_format((int) data_get($socialSharePanel, 'duplicates', 0)) }}</strong>
+                    </article>
+                </div>
+
+                <div class="message-analytics-meta-grid" aria-label="Modern Forestry social share platform split">
+                    @foreach(collect((array) data_get($socialSharePanel, 'platforms', []))->take(4) as $row)
+                        <article class="message-analytics-meta-card">
+                            <span>{{ \Illuminate\Support\Str::headline((string) ($row['label'] ?? 'Platform')) }}</span>
+                            <strong>{{ number_format((int) ($row['count'] ?? 0)) }}</strong>
+                        </article>
+                    @endforeach
+                    @foreach(collect((array) data_get($socialSharePanel, 'targets', []))->take(4) as $row)
+                        <article class="message-analytics-meta-card">
+                            <span>{{ \Illuminate\Support\Str::headline((string) ($row['label'] ?? 'Target')) }}</span>
+                            <strong>{{ number_format((int) ($row['count'] ?? 0)) }}</strong>
+                        </article>
+                    @endforeach
+                </div>
+
+                @php
+                    $topSharedProducts = collect((array) data_get($socialSharePanel, 'top_shared_products', []));
+                    $topSharedScentPersonalities = collect((array) data_get($socialSharePanel, 'top_shared_scent_personalities', []));
+                @endphp
+                @if($topSharedProducts->isNotEmpty() || $topSharedScentPersonalities->isNotEmpty())
+                    <h4>Top shared targets</h4>
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:640px;" aria-label="Top Modern Forestry social share targets">
+                            <thead>
+                                <tr>
+                                    <th>Target</th>
+                                    <th>Type</th>
+                                    <th>Shares</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($topSharedProducts->merge($topSharedScentPersonalities)->take(10) as $row)
+                                    <tr>
+                                        <td>{{ (string) ($row['title'] ?? $row['target_id'] ?? 'Shared item') }}</td>
+                                        <td>{{ \Illuminate\Support\Str::headline((string) ($row['target_type'] ?? 'target')) }}</td>
+                                        <td>{{ number_format((int) ($row['count'] ?? 0)) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                @if((bool) data_get($socialSharePanel, 'empty', false))
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No social share reward activity has been recorded in the last 30 days.</p>
                     </div>
                 @endif
             </article>

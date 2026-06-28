@@ -1236,7 +1236,7 @@ test('mobile scent quiz endpoints return the authored quiz and persist results t
         ->getJson('/api/mobile/v1/modern-forestry/scent-quiz')
         ->assertOk()
         ->assertJsonPath('data.version', 'scent-v1')
-        ->assertJsonCount(25, 'data.questions')
+        ->assertJsonCount(15, 'data.questions')
         ->json('data');
 
     $answers = collect($definition['questions'])

@@ -11,6 +11,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingProfileScentQuizResult;
 use App\Models\MarketingReviewSummary;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
@@ -29,6 +30,7 @@ use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MessagingContactChannelStateService;
 use App\Services\Marketing\MessagingConversationService;
 use App\Services\Marketing\ModernForestryScentQuizAnalyticsService;
+use App\Services\Marketing\ModernForestrySocialShareRewardService;
 use App\Services\Mobile\ModernForestryMobileScentQuizService;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyStores;
@@ -37,6 +39,7 @@ use App\Services\Tenancy\TenantResolver;
 use App\Support\Marketing\MarketingEventContextResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -699,6 +702,10 @@ class MarketingPublicEventController extends Controller
             'scentQuiz' => $scentQuiz,
             'scentQuizActionUrl' => $this->customerDashboardScentQuizActionUrl($request),
             'scentQuizNotice' => $request->attributes->get('scent_quiz_notice'),
+            'socialShareConfig' => $profile ? app(ModernForestrySocialShareRewardService::class)->config($profile) : null,
+            'socialShareStartedUrl' => $this->customerDashboardSocialShareStartedUrl($request),
+            'socialShareClaimUrl' => $this->customerDashboardSocialShareClaimUrl($request),
+            'socialShareNotice' => $request->attributes->get('social_share_notice'),
             'scentQuizAttributionPayload' => $request->attributes->get('scent_quiz_attribution_payload')
                 ?? ($request->attributes->get('scent_quiz_completed') && $profile
                     ? $scentQuizAnalytics->attributionPayload($profile, 'Scent quiz complete')
@@ -839,6 +846,101 @@ class MarketingPublicEventController extends Controller
         );
 
         return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
+    }
+
+    public function socialShareStarted(
+        Request $request,
+        ModernForestrySocialShareRewardService $socialShare
+    ): JsonResponse {
+        $profile = $this->resolveCustomerDashboardProfileFromRequest($request)['profile'];
+        if (! $profile instanceof MarketingProfile) {
+            return $this->socialShareJsonError('Sign in before sharing for Candle Cash.', 401);
+        }
+
+        $validated = $request->validate([
+            'platform' => ['required', 'string', 'max:32'],
+            'target' => ['required', 'array'],
+            'target.type' => ['required', 'string', 'max:64'],
+            'target.id' => ['nullable', 'string', 'max:160'],
+            'target.handle' => ['nullable', 'string', 'max:160'],
+            'target.title' => ['nullable', 'string', 'max:190'],
+            'target.body' => ['nullable', 'string', 'max:500'],
+            'target.imageUrl' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $payload = $socialShare->started(
+                $profile,
+                (string) $validated['platform'],
+                (array) $validated['target'],
+                [
+                    'surface' => 'shopify_account',
+                    'endpoint' => '/shopify/marketing/social-share/started',
+                ]
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->socialShareJsonError($exception->getMessage(), 422);
+        }
+
+        return response()->json(['data' => $payload]);
+    }
+
+    public function socialShareClaim(
+        Request $request,
+        ModernForestrySocialShareRewardService $socialShare
+    ): JsonResponse {
+        $profile = $this->resolveCustomerDashboardProfileFromRequest($request)['profile'];
+        if (! $profile instanceof MarketingProfile) {
+            return $this->socialShareJsonError('Sign in before claiming this reward.', 401);
+        }
+
+        $validated = $request->validate([
+            'platform' => ['required', 'string', 'max:32'],
+            'target' => ['required', 'array'],
+            'target.type' => ['required', 'string', 'max:64'],
+            'target.id' => ['nullable', 'string', 'max:160'],
+            'target.handle' => ['nullable', 'string', 'max:160'],
+            'target.title' => ['nullable', 'string', 'max:190'],
+            'target.body' => ['nullable', 'string', 'max:500'],
+            'target.imageUrl' => ['nullable', 'string', 'max:1000'],
+            'proofUrl' => ['nullable', 'string', 'max:1000'],
+            'proofText' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $payload = $socialShare->claim(
+                $profile,
+                (string) $validated['platform'],
+                (array) $validated['target'],
+                [
+                    'proof_url' => $validated['proofUrl'] ?? null,
+                    'proof_text' => $validated['proofText'] ?? null,
+                ],
+                [
+                    'surface' => 'shopify_account',
+                    'endpoint' => '/shopify/marketing/social-share/claim',
+                ]
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->socialShareJsonError($exception->getMessage(), 422);
+        }
+
+        return response()->json(['data' => $payload]);
+    }
+
+    public function showScentPersonalityShare(string $token): View
+    {
+        $result = MarketingProfileScentQuizResult::query()
+            ->where('public_share_token', $token)
+            ->firstOrFail();
+
+        return view('marketing/public/scent-personality-share', [
+            'result' => $result,
+            'axes' => is_array($result->axis_scores) ? $result->axis_scores : [],
+            'dominantTraits' => is_array($result->dominant_traits) ? $result->dominant_traits : [],
+            'quizUrl' => rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
+                .'/apps/forestry/account?scent_quiz=1',
+        ]);
     }
 
     /**
@@ -1046,10 +1148,18 @@ class MarketingPublicEventController extends Controller
             ->sortByDesc(fn (Order $order): int => optional($order->ordered_at)->timestamp ?? ((int) $order->id))
             ->map(function (Order $order): array {
                 $lines = $order->lines->map(function (OrderLine $line): array {
+                    $title = trim((string) ($line->raw_title ?? '')) ?: trim((string) ($line->raw_variant ?? '')) ?: 'Item';
+                    $handle = Str::slug($title);
+
                     return [
                         'id' => (int) $line->id,
-                        'title' => trim((string) ($line->raw_title ?? '')) ?: trim((string) ($line->raw_variant ?? '')) ?: 'Item',
+                        'title' => $title,
                         'quantity' => max(1, (int) ($line->quantity ?: $line->ordered_qty ?: 1)),
+                        'handle' => $handle !== '' ? $handle : null,
+                        'image_url' => $line->image_url ? (string) $line->image_url : null,
+                        'share_target_id' => 'order-line:'.$line->id,
+                        'share_target_type' => 'purchased_product',
+                        'shopify_product_id' => $line->shopify_product_id ? (string) $line->shopify_product_id : null,
                         'shopify_variant_id' => $line->shopify_variant_id ? (string) $line->shopify_variant_id : null,
                     ];
                 })->values();
@@ -1157,6 +1267,35 @@ class MarketingPublicEventController extends Controller
             : 'marketing.shopify.scent-quiz.submit';
 
         return route($routeName, $request->query(), false);
+    }
+
+    protected function customerDashboardSocialShareStartedUrl(Request $request): string
+    {
+        $routeName = $request->is('shopify/marketing/v1/*')
+            ? 'marketing.shopify.v1.social-share.started'
+            : 'marketing.shopify.social-share.started';
+
+        return route($routeName, $request->query(), false);
+    }
+
+    protected function customerDashboardSocialShareClaimUrl(Request $request): string
+    {
+        $routeName = $request->is('shopify/marketing/v1/*')
+            ? 'marketing.shopify.v1.social-share.claim'
+            : 'marketing.shopify.social-share.claim';
+
+        return route($routeName, $request->query(), false);
+    }
+
+    protected function socialShareJsonError(string $message, int $status): JsonResponse
+    {
+        return response()->json([
+            'data' => null,
+            'error' => [
+                'code' => 'social_share_unavailable',
+                'message' => $message,
+            ],
+        ], $status);
     }
 
     /**

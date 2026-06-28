@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Mobile;
 use App\Http\Controllers\Controller;
 use App\Models\MobilePushDevice;
 use App\Services\Marketing\ProductReviewService;
+use App\Services\Marketing\ModernForestrySocialShareRewardService;
 use App\Services\Mobile\ModernForestryMobileAccountService;
 use App\Services\Mobile\ModernForestryMobileCheckoutException;
 use App\Services\Mobile\ModernForestryMobileCheckoutService;
@@ -780,6 +781,119 @@ class ModernForestryProductCatalogController extends Controller
         ]);
     }
 
+    public function socialShareConfig(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestrySocialShareRewardService $socialShare
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        return response()->json([
+            'data' => $socialShare->config($session->profile),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function socialShareStarted(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestrySocialShareRewardService $socialShare
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'platform' => ['required', 'string', 'max:32'],
+            'target' => ['required', 'array'],
+            'target.type' => ['required', 'string', 'max:64'],
+            'target.id' => ['nullable', 'string', 'max:160'],
+            'target.handle' => ['nullable', 'string', 'max:160'],
+            'target.title' => ['nullable', 'string', 'max:190'],
+            'target.body' => ['nullable', 'string', 'max:500'],
+            'target.imageUrl' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $payload = $socialShare->started(
+                $session->profile,
+                (string) $validated['platform'],
+                (array) $validated['target'],
+                [
+                    'surface' => 'modern_forestry_ios',
+                    'endpoint' => '/api/mobile/v1/modern-forestry/social-share/started',
+                ]
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->socialShareError($exception->getMessage());
+        }
+
+        return response()->json([
+            'data' => $payload,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function socialShareClaim(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestrySocialShareRewardService $socialShare
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'platform' => ['required', 'string', 'max:32'],
+            'target' => ['required', 'array'],
+            'target.type' => ['required', 'string', 'max:64'],
+            'target.id' => ['nullable', 'string', 'max:160'],
+            'target.handle' => ['nullable', 'string', 'max:160'],
+            'target.title' => ['nullable', 'string', 'max:190'],
+            'target.body' => ['nullable', 'string', 'max:500'],
+            'target.imageUrl' => ['nullable', 'string', 'max:1000'],
+            'proofUrl' => ['nullable', 'string', 'max:1000'],
+            'proofText' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $payload = $socialShare->claim(
+                $session->profile,
+                (string) $validated['platform'],
+                (array) $validated['target'],
+                [
+                    'proof_url' => $validated['proofUrl'] ?? null,
+                    'proof_text' => $validated['proofText'] ?? null,
+                ],
+                [
+                    'surface' => 'modern_forestry_ios',
+                    'endpoint' => '/api/mobile/v1/modern-forestry/social-share/claim',
+                ]
+            );
+        } catch (\InvalidArgumentException $exception) {
+            return $this->socialShareError($exception->getMessage());
+        }
+
+        return response()->json([
+            'data' => $payload,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
     public function saveScentQuizResult(
         Request $request,
         ModernForestryMobileCustomerSessionService $sessions,
@@ -791,7 +905,7 @@ class ModernForestryProductCatalogController extends Controller
         }
 
         $validated = $request->validate([
-            'answers' => ['required', 'array', 'size:25'],
+            'answers' => ['required', 'array', 'size:15'],
             'answers.*.question_id' => ['required', 'string', 'max:32'],
             'answers.*.option_id' => ['required', 'string', 'max:64'],
         ]);
@@ -840,6 +954,20 @@ class ModernForestryProductCatalogController extends Controller
                 'message' => 'Sign in to continue.',
             ],
         ], 401);
+    }
+
+    protected function socialShareError(string $message): JsonResponse
+    {
+        return response()->json([
+            'data' => null,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+            ],
+            'error' => [
+                'code' => 'invalid_social_share',
+                'message' => $message,
+            ],
+        ], 422);
     }
 
     /**
