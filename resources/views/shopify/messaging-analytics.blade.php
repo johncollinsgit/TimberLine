@@ -51,6 +51,7 @@
         $decisionPanels = is_array($analytics['decision_panels'] ?? null) ? $analytics['decision_panels'] : [];
         $attributionQualityPanel = is_array($decisionPanels['attribution_quality'] ?? null) ? $decisionPanels['attribution_quality'] : [];
         $acquisitionFunnelPanel = is_array($decisionPanels['acquisition_funnel'] ?? null) ? $decisionPanels['acquisition_funnel'] : [];
+        $scentQuizPanel = is_array($decisionPanels['modern_forestry_scent_quiz'] ?? null) ? $decisionPanels['modern_forestry_scent_quiz'] : [];
         $retentionPanel = is_array($decisionPanels['retention'] ?? null) ? $decisionPanels['retention'] : [];
         $actionQueuePanel = is_array($decisionPanels['action_queue'] ?? null) ? $decisionPanels['action_queue'] : [];
         $aiBudgetReadinessPanel = is_array($decisionPanels['ai_budget_readiness'] ?? null) ? $decisionPanels['ai_budget_readiness'] : [];
@@ -62,6 +63,9 @@
             ->filter(fn ($row) => is_array($row))
             ->values();
         $funnelSourceRows = collect((array) ($acquisitionFunnelPanel['source_breakdown'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $scentQuizTopPersonalities = collect((array) ($scentQuizPanel['quiz']['top_personalities'] ?? []))
             ->filter(fn ($row) => is_array($row))
             ->values();
         $retentionTotals = is_array($retentionPanel['totals'] ?? null) ? $retentionPanel['totals'] : [];
@@ -1053,6 +1057,97 @@
                                 @endforeach
                             </tbody>
                         </table>
+                    </div>
+                @endif
+            </article>
+
+            <article class="message-analytics-card">
+                <h3>Modern Forestry Scent Quiz Funnel</h3>
+                <p class="message-analytics-muted">
+                    Decision question: is the scent quiz turning account-level personality results into wishlist intent, cart movement, and real purchases?
+                </p>
+                <div class="message-analytics-kpi-grid" aria-label="Modern Forestry scent quiz funnel summary">
+                    <article class="message-analytics-kpi">
+                        <span>Quiz takers</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'quiz.recent_takers', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Wishlist adds</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'wishlist.recent_additions', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Add to cart</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'cart.recent_additions', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Purchases</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'orders.recent_purchases', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Quiz to wishlist</span>
+                        <strong>{{ $formatPercent((float) data_get($scentQuizPanel, 'conversion.quiz_to_wishlist_rate', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Quiz to cart</span>
+                        <strong>{{ $formatPercent((float) data_get($scentQuizPanel, 'conversion.quiz_to_cart_rate', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Quiz to purchase</span>
+                        <strong>{{ $formatPercent((float) data_get($scentQuizPanel, 'conversion.quiz_to_purchase_rate', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-kpi">
+                        <span>Recent revenue</span>
+                        <strong>{{ $formatMoney((int) round(((float) data_get($scentQuizPanel, 'orders.recent_revenue', 0)) * 100)) }}</strong>
+                    </article>
+                </div>
+
+                <div class="message-analytics-meta-grid" aria-label="Modern Forestry scent quiz totals">
+                    <article class="message-analytics-meta-card">
+                        <span>Total takers</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'quiz.total_takers', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-meta-card">
+                        <span>Total wishlist adds</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'wishlist.total_additions', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-meta-card">
+                        <span>Total add to cart</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'cart.total_additions', 0)) }}</strong>
+                    </article>
+                    <article class="message-analytics-meta-card">
+                        <span>Total purchases</span>
+                        <strong>{{ number_format((int) data_get($scentQuizPanel, 'orders.total_purchases', 0)) }}</strong>
+                    </article>
+                </div>
+
+                <p class="message-analytics-muted">
+                    Window: {{ $formatDateTime(data_get($scentQuizPanel, 'recent_window_started_at')) }} to {{ $formatDateTime(data_get($scentQuizPanel, 'as_of')) }}.
+                    This panel only counts storefront events and orders tagged with the scent quiz attribution payload.
+                </p>
+
+                @if($scentQuizTopPersonalities->isNotEmpty())
+                    <h4>Top scent personalities in this tenant</h4>
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:640px;" aria-label="Top scent quiz personalities">
+                            <thead>
+                                <tr>
+                                    <th>Personality</th>
+                                    <th>Profiles</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($scentQuizTopPersonalities as $row)
+                                    <tr>
+                                        <td>{{ (string) ($row['title'] ?? 'Unlabeled profile') }}</td>
+                                        <td>{{ number_format((int) ($row['count'] ?? 0)) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @elseif((bool) data_get($scentQuizPanel, 'empty', false))
+                    <div class="message-analytics-empty">
+                        <p class="message-analytics-muted">No scent quiz activity has been recorded in this reporting window yet.</p>
                     </div>
                 @endif
             </article>

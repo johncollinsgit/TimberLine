@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\MarketingProfileScentQuizResult;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingStorefrontEvent;
@@ -160,6 +161,36 @@ test('message analytics decision panels expose attribution, funnel, retention, a
     $recordEvent('session_started', $now->subDays(6), 'shopify_storefront_funnel');
     $recordEvent('landing_page_viewed', $now->subDays(6), 'shopify_storefront_funnel');
 
+    MarketingProfileScentQuizResult::query()->create([
+        'marketing_profile_id' => $profileA->id,
+        'tenant_id' => $tenant->id,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => ['woodsy' => 82, 'earthy' => 77],
+        'dominant_traits' => ['woodsy', 'earthy'],
+        'headline' => 'Woodsy + Earthy',
+        'personality_title' => 'The Grounded Explorer',
+        'personality_body' => 'Rooted and calm.',
+        'answers' => [],
+        'completed_at' => $now->subDays(4),
+    ]);
+
+    $recordEvent('wishlist_added', $now->subDays(4), 'shopify_storefront_funnel', [
+        'mf_source_label' => 'scent_quiz',
+        'mf_template_key' => 'modern_forestry_scent_quiz',
+        'mf_profile_id' => (string) $profileA->id,
+    ]);
+    $recordEvent('add_to_cart', $now->subDays(4), 'shopify_storefront_funnel', [
+        'mf_source_label' => 'scent_quiz',
+        'mf_template_key' => 'modern_forestry_scent_quiz',
+        'mf_profile_id' => (string) $profileA->id,
+    ]);
+
+    $orderA->forceFill([
+        'attribution_meta' => array_merge((array) $orderA->attribution_meta, [
+            'email_source_label' => 'scent_quiz',
+        ]),
+    ])->save();
+
     $service = app(MessageAnalyticsService::class);
     $filters = $service->normalizeFilters([
         'date_from' => $now->subDays(30)->toDateString(),
@@ -183,6 +214,11 @@ test('message analytics decision panels expose attribution, funnel, retention, a
         ->and(data_get($panels, 'attribution_quality.totals.meta_relevant_purchases'))->toBe(1)
         ->and(data_get($panels, 'acquisition_funnel.totals.sessions'))->toBe(2)
         ->and(data_get($panels, 'acquisition_funnel.totals.purchases'))->toBe(1)
+        ->and(data_get($panels, 'modern_forestry_scent_quiz.quiz.recent_takers'))->toBe(1)
+        ->and(data_get($panels, 'modern_forestry_scent_quiz.wishlist.recent_additions'))->toBe(1)
+        ->and(data_get($panels, 'modern_forestry_scent_quiz.cart.recent_additions'))->toBe(1)
+        ->and(data_get($panels, 'modern_forestry_scent_quiz.orders.recent_purchases'))->toBe(1)
+        ->and(data_get($panels, 'modern_forestry_scent_quiz.conversion.quiz_to_cart_rate'))->toBe(100.0)
         ->and(data_get($panels, 'retention.totals.first_time_orders'))->toBe(2)
         ->and(data_get($panels, 'retention.totals.returning_orders'))->toBe(1)
         ->and((string) data_get($panels, 'ai_budget_readiness.tier'))->not->toBe('')

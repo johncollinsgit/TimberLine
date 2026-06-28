@@ -23,7 +23,8 @@ class MessageAnalyticsService
     public function __construct(
         protected MessageLinkAggregationService $messageLinkAggregationService,
         protected MessageAnalyticsShopifyOrderSignalService $messageAnalyticsShopifyOrderSignalService,
-        protected AiBudgetReadinessService $aiBudgetReadinessService
+        protected AiBudgetReadinessService $aiBudgetReadinessService,
+        protected ModernForestryScentQuizAnalyticsService $modernForestryScentQuizAnalyticsService
     ) {}
 
     /**
@@ -2098,6 +2099,7 @@ class MessageAnalyticsService
         return [
             'attribution_quality' => $attributionQuality,
             'acquisition_funnel' => $acquisitionFunnel,
+            'modern_forestry_scent_quiz' => $this->modernForestryScentQuizPanel($tenantId, $from, $to),
             'retention' => $retention,
             'action_queue' => $this->actionQueuePanel($attributionQuality, $acquisitionFunnel, $retention),
             'ai_budget_readiness' => $this->aiBudgetReadinessService->evaluate(
@@ -2154,6 +2156,41 @@ class MessageAnalyticsService
                     'checkout_to_purchase_rate' => 0.0,
                 ],
                 'source_breakdown' => [],
+                'empty' => true,
+            ],
+            'modern_forestry_scent_quiz' => [
+                'tenant_id' => null,
+                'recent_window_days' => 0,
+                'recent_window_started_at' => null,
+                'as_of' => null,
+                'quiz' => [
+                    'recent_takers' => 0,
+                    'total_takers' => 0,
+                    'recent_completions' => 0,
+                    'total_completions' => 0,
+                    'top_personalities' => [],
+                ],
+                'wishlist' => [
+                    'recent_additions' => 0,
+                    'total_additions' => 0,
+                ],
+                'cart' => [
+                    'recent_additions' => 0,
+                    'total_additions' => 0,
+                ],
+                'orders' => [
+                    'recent_purchases' => 0,
+                    'total_purchases' => 0,
+                    'recent_revenue' => 0.0,
+                    'total_revenue' => 0.0,
+                ],
+                'conversion' => [
+                    'quiz_to_wishlist_rate' => 0.0,
+                    'quiz_to_cart_rate' => 0.0,
+                    'quiz_to_purchase_rate' => 0.0,
+                    'wishlist_to_purchase_rate' => 0.0,
+                    'cart_to_purchase_rate' => 0.0,
+                ],
                 'empty' => true,
             ],
             'retention' => [
@@ -2252,6 +2289,27 @@ class MessageAnalyticsService
                 'empty' => true,
             ],
         ];
+    }
+
+    protected function modernForestryScentQuizPanel(
+        int $tenantId,
+        CarbonImmutable $from,
+        CarbonImmutable $to
+    ): array {
+        $panel = $this->modernForestryScentQuizAnalyticsService->reportWindow(
+            tenantId: $tenantId,
+            from: $from,
+            to: $to
+        );
+
+        $hasActivity = (int) data_get($panel, 'quiz.total_takers', 0) > 0
+            || (int) data_get($panel, 'wishlist.total_additions', 0) > 0
+            || (int) data_get($panel, 'cart.total_additions', 0) > 0
+            || (int) data_get($panel, 'orders.total_purchases', 0) > 0;
+
+        $panel['empty'] = ! $hasActivity;
+
+        return $panel;
     }
 
     /**

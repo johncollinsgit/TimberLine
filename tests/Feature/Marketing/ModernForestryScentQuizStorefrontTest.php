@@ -68,7 +68,7 @@ test('customer dashboard renders the scent quiz for a linked Shopify customer an
         ->and((string) $saved?->quiz_version)->toBe('scent-v1');
 });
 
-test('modern forestry scent quiz analytics report counts quiz takers, wishlist adds, and attributed purchases', function (): void {
+test('modern forestry scent quiz analytics report counts quiz takers, wishlist adds, cart adds, and attributed purchases', function (): void {
     $tenant = modernForestryScentQuizTenant('modern-forestry-scent-analytics');
 
     $recentProfile = MarketingProfile::query()->create([
@@ -135,6 +135,19 @@ test('modern forestry scent quiz analytics report counts quiz takers, wishlist a
         'resolution_status' => 'resolved',
     ]);
 
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $tenant->id,
+        'event_type' => 'add_to_cart',
+        'status' => 'ok',
+        'source_type' => 'shopify_storefront_funnel',
+        'source_id' => 'cart:1',
+        'meta' => [
+            'mf_source_label' => 'scent_quiz',
+        ],
+        'occurred_at' => now()->subDays(1),
+        'resolution_status' => 'resolved',
+    ]);
+
     Order::query()->create([
         'tenant_id' => $tenant->id,
         'source' => 'shopify',
@@ -167,7 +180,11 @@ test('modern forestry scent quiz analytics report counts quiz takers, wishlist a
     expect(data_get($report, 'quiz.recent_takers'))->toBe(1)
         ->and(data_get($report, 'quiz.total_takers'))->toBe(2)
         ->and(data_get($report, 'wishlist.recent_additions'))->toBe(1)
+        ->and(data_get($report, 'cart.recent_additions'))->toBe(1)
         ->and(data_get($report, 'orders.recent_purchases'))->toBe(1)
+        ->and((float) data_get($report, 'conversion.quiz_to_wishlist_rate'))->toBe(100.0)
+        ->and((float) data_get($report, 'conversion.quiz_to_cart_rate'))->toBe(100.0)
+        ->and((float) data_get($report, 'conversion.quiz_to_purchase_rate'))->toBe(100.0)
         ->and((float) data_get($report, 'orders.recent_revenue'))->toBe(64.0);
 });
 
