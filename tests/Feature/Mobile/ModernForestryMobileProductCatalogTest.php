@@ -16,9 +16,9 @@ use App\Models\Scent;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
-use App\Services\Mobile\ModernForestryMobileProductCatalogService;
-use App\Services\Marketing\TwilioSmsService;
 use App\Services\Marketing\MarketingWishlistService;
+use App\Services\Marketing\TwilioSmsService;
+use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
@@ -1175,7 +1175,7 @@ test('mobile product detail exposes bundle scent requirements and active scent o
         ->and(data_get($payload, 'data.bundle.qtyPerScent'))->toBe(1)
         ->and(data_get($payload, 'data.bundle.selectionLabels'))->toBe(['Scent 1', 'Scent 2', 'Scent 3'])
         ->and(collect(data_get($payload, 'data.bundle.availableScents', []))->pluck('displayName')->all())
-            ->toContain('Forest Ember', 'Oakmoss Amber');
+        ->toContain('Forest Ember', 'Oakmoss Amber');
 });
 
 test('mobile product detail includes laravel-backed review summary and approved reviews', function (): void {
@@ -1597,7 +1597,7 @@ test('real mobile collection products reuse cached seasonal payloads for repeat 
     expect($requests)->toBe(2);
 });
 
-test('seasonal collection resolver prefers canonical summer and autumn collections over sale collections', function (): void {
+test('seasonal collection resolver prefers canonical summer holiday and autumn collections over sale collections', function (): void {
     $service = app(ModernForestryMobileProductCatalogService::class);
     $reflection = new \ReflectionClass($service);
     $resolveMethod = $reflection->getMethod('resolveSeasonalCollectionNode');
@@ -1612,6 +1612,14 @@ test('seasonal collection resolver prefers canonical summer and autumn collectio
             'title' => 'Summer Collection',
         ],
         [
+            'handle' => 'thanksgiving-day-sale',
+            'title' => 'Thanksgiving Day Sale',
+        ],
+        [
+            'handle' => 'holiday-collection',
+            'title' => 'Holiday Collection',
+        ],
+        [
             'handle' => 'fall-collection',
             'title' => 'Fall Collection',
         ],
@@ -1622,9 +1630,11 @@ test('seasonal collection resolver prefers canonical summer and autumn collectio
     ];
 
     $summerMatch = $resolveMethod->invoke($service, 'summer', $nodes);
+    $holidayMatch = $resolveMethod->invoke($service, 'holiday', $nodes);
     $fallMatch = $resolveMethod->invoke($service, 'fall', $nodes);
 
     expect($summerMatch['handle'] ?? null)->toBe('summer-collection')
+        ->and($holidayMatch['handle'] ?? null)->toBe('holiday-collection')
         ->and($fallMatch['handle'] ?? null)->toBe('autumn-collection');
 });
 
@@ -2426,12 +2436,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                            [
-                                'id' => 'gid://shopify/ProductVariant/9001',
-                                'price' => '24.00',
-                                'compareAtPrice' => null,
-                                'availableForSale' => true,
-                            ],
+                                            [
+                                                'id' => 'gid://shopify/ProductVariant/9001',
+                                                'price' => '24.00',
+                                                'compareAtPrice' => null,
+                                                'availableForSale' => true,
+                                            ],
                                         ],
                                     ],
                                 ],
@@ -2448,12 +2458,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                            [
-                                'id' => 'gid://shopify/ProductVariant/9002',
-                                'price' => '12.00',
-                                'compareAtPrice' => null,
-                                'availableForSale' => true,
-                            ],
+                                            [
+                                                'id' => 'gid://shopify/ProductVariant/9002',
+                                                'price' => '12.00',
+                                                'compareAtPrice' => null,
+                                                'availableForSale' => true,
+                                            ],
                                         ],
                                     ],
                                 ],
@@ -2472,12 +2482,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                            [
-                                'id' => 'gid://shopify/ProductVariant/9004',
-                                'price' => '18.00',
-                                'compareAtPrice' => null,
-                                'availableForSale' => true,
-                            ],
+                                            [
+                                                'id' => 'gid://shopify/ProductVariant/9004',
+                                                'price' => '18.00',
+                                                'compareAtPrice' => null,
+                                                'availableForSale' => true,
+                                            ],
                                         ],
                                     ],
                                 ],
@@ -2496,11 +2506,11 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                            [
-                                'id' => 'gid://shopify/ProductVariant/9005',
-                                'price' => '10.00',
-                                'compareAtPrice' => null,
-                                'availableForSale' => true,
+                                            [
+                                                'id' => 'gid://shopify/ProductVariant/9005',
+                                                'price' => '10.00',
+                                                'compareAtPrice' => null,
+                                                'availableForSale' => true,
                                             ],
                                         ],
                                     ],
@@ -2520,12 +2530,12 @@ function shopifyMobileCollectionProductsPayload(): array
                                     ],
                                     'variants' => [
                                         'nodes' => [
-                            [
-                                'id' => 'gid://shopify/ProductVariant/9006',
-                                'price' => '29.00',
-                                'compareAtPrice' => '34.00',
-                                'availableForSale' => true,
-                            ],
+                                            [
+                                                'id' => 'gid://shopify/ProductVariant/9006',
+                                                'price' => '29.00',
+                                                'compareAtPrice' => '34.00',
+                                                'availableForSale' => true,
+                                            ],
                                         ],
                                     ],
                                 ],

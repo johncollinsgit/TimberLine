@@ -6,8 +6,8 @@ use App\Models\OrderLine;
 use App\Models\Scent;
 use App\Models\Tenant;
 use App\Services\Shopify\ModernForestryVariantMediaClassifier;
-use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyAppContentService;
+use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +86,8 @@ class ModernForestryMobileProductCatalogService
             'handle' => 'holiday',
             'title' => 'Holiday',
             'description' => 'Seasonal candles for gatherings, gifts, and winter moods.',
-            'aliases' => ['holiday', 'holiday-collection', 'thanksgiving-day-sale', 'wholesale-holiday-collection'],
+            'aliases' => ['holiday', 'holiday-collection', 'wholesale-holiday-collection'],
+            'preferred_titles' => ['Holiday Collection'],
             'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457',
         ],
         [
@@ -903,7 +904,7 @@ GRAPHQL;
                 'handle' => $definition['handle'],
                 'title' => $definition['title'],
                 'description' => $definition['description'],
-            'imageUrl' => $this->mobileImageUrl($definition['fallback_image'], self::COLLECTION_IMAGE_WIDTH),
+                'imageUrl' => $this->mobileImageUrl($definition['fallback_image'], self::COLLECTION_IMAGE_WIDTH),
             ],
             self::SEASONAL_COLLECTIONS
         ));
@@ -1161,7 +1162,7 @@ GRAPHQL;
             'sizeKey' => $bundleDefinition['size_key'] ?? null,
             'availableScents' => $this->availableScents(),
             'selectionLabels' => array_map(
-                static fn (int $index): string => 'Scent ' . $index,
+                static fn (int $index): string => 'Scent '.$index,
                 range(1, max(1, $requiredCount))
             ),
         ];
@@ -1646,6 +1647,7 @@ GRAPHQL;
 
             if (is_array($match)) {
                 $collections[] = $this->mapCollection($match, $definition);
+
                 continue;
             }
 

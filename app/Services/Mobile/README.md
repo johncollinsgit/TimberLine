@@ -1,5 +1,16 @@
 # Mobile Catalog Services
 
+## Seasonal Cache + Mobile Shop Responsiveness (2026-06-26)
+
+- `ModernForestryMobileProductCatalogService.php` now short-caches the most expensive seasonal catalog payloads:
+  - canonical collections
+  - seasonal collection nodes
+  - collection product payloads
+  - home payload assembly
+- Goal: keep the iPhone app from re-paying the full Shopify GraphQL cost every time a customer reopens Bundles, Fall, Spring, or Home in a short window.
+- The cache window is intentionally short so Shopify image/product changes still flow through without a long stale period.
+- The iOS client also added in-session collection reuse and collection prewarming, but the source-of-truth performance win starts here on the Laravel side.
+
 This folder owns the Laravel-side mobile catalog source of truth for the Modern Forestry iOS app.
 
 ## Variant Media Sync Notes (2026-06-23)
