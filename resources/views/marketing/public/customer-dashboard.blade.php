@@ -799,9 +799,9 @@
                 return json.data || json;
             }
 
-            function shareUrlFor(platform, shareUrl) {
+            function shareUrlFor(platform, shareUrl, text) {
                 if (platform === 'facebook') {
-                    return 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl);
+                    return 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(text || 'Take a look at this from Modern Forestry.');
                 }
 
                 return 'https://www.instagram.com/';
@@ -818,7 +818,11 @@
                     return;
                 }
 
-                window.open(shareUrlFor(platform, shareUrl), '_blank', 'noopener,noreferrer,width=720,height=680');
+                if (platform === 'instagram' && navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text + '\n\n' + shareUrl);
+                }
+
+                window.open(shareUrlFor(platform, shareUrl, text), '_blank', 'noopener,noreferrer,width=720,height=680');
             }
 
             document.querySelectorAll('[data-social-share]').forEach(function (button) {

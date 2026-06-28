@@ -8,6 +8,8 @@ use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class ModernForestryScentQuizAnalyticsService
 {
@@ -16,6 +18,66 @@ class ModernForestryScentQuizAnalyticsService
     public const ATTRIBUTION_TEMPLATE_KEY = 'modern_forestry_scent_quiz';
 
     public const ATTRIBUTION_MODULE_TYPE = 'scent_quiz';
+
+    /**
+     * @var array<string,string>
+     */
+    protected const AXIS_LABELS = [
+        'floral' => 'Floral',
+        'woodsy' => 'Woodsy',
+        'smoky' => 'Smoky',
+        'sweet' => 'Sweet',
+        'masculine' => 'Masculine',
+        'earthy' => 'Earthy',
+        'clean' => 'Clean',
+        'citrus' => 'Citrus',
+    ];
+
+    /**
+     * @var array<string,array{campaign_title:string,campaign_body:string,discount_hint:string}>
+     */
+    protected const DISCOUNT_PLAYBOOK = [
+        'floral' => [
+            'campaign_title' => 'Floral profile feature',
+            'campaign_body' => 'Lead with bright bouquet notes, romantic copy, and fresh seasonal drops.',
+            'discount_hint' => 'Bundle floral-forward candles with spring or garden-story creative.',
+        ],
+        'woodsy' => [
+            'campaign_title' => 'Cabin woods offer',
+            'campaign_body' => 'Highlight forest, cedar, pine, and grounded outdoorsy scent stories.',
+            'discount_hint' => 'Promote woodsy bundles and campfire-style best sellers.',
+        ],
+        'smoky' => [
+            'campaign_title' => 'Campfire depth campaign',
+            'campaign_body' => 'Use moody, fireside, evening, and low-light scent language.',
+            'discount_hint' => 'Aim discounts at richer smoky candles and seasonal evening sets.',
+        ],
+        'sweet' => [
+            'campaign_title' => 'Comfort gourmand push',
+            'campaign_body' => 'Frame the offer around cozy treats, bakery warmth, and comfort gifting.',
+            'discount_hint' => 'Use bakery, vanilla, dessert, and kitchen-story scents in the discount set.',
+        ],
+        'masculine' => [
+            'campaign_title' => 'Bold signature scent push',
+            'campaign_body' => 'Position the offer as confident, tailored, dark, and giftable.',
+            'discount_hint' => 'Pair cologne-inspired candles with gift-ready messaging.',
+        ],
+        'earthy' => [
+            'campaign_title' => 'Grounded natural ritual',
+            'campaign_body' => 'Speak to calm rituals, nature textures, and slow-living scents.',
+            'discount_hint' => 'Build offers around earthy, resin, moss, and herbal scent families.',
+        ],
+        'clean' => [
+            'campaign_title' => 'Fresh home reset',
+            'campaign_body' => 'Sell the feeling of an airy, polished, easy-to-love everyday candle.',
+            'discount_hint' => 'Offer fresh-linen, spa, and clean-finish fragrances as a reset set.',
+        ],
+        'citrus' => [
+            'campaign_title' => 'Bright energy drop',
+            'campaign_body' => 'Lean into morning energy, sunlight, sparkle, and crisp optimism.',
+            'discount_hint' => 'Feature citrus-led candles in launch banners and starter bundles.',
+        ],
+    ];
 
     /**
      * @return array<string,mixed>
@@ -96,6 +158,34 @@ class ModernForestryScentQuizAnalyticsService
             ])
             ->all();
 
+        /** @var Collection<int,MarketingProfileScentQuizResult> $profiledResults */
+        $profiledResults = MarketingProfileScentQuizResult::query()
+            ->where('tenant_id', $tenantId)
+            ->with(['profile:id,tenant_id,first_name,last_name,email,phone'])
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->get([
+                'id',
+                'marketing_profile_id',
+                'tenant_id',
+                'axis_scores',
+                'dominant_traits',
+                'headline',
+                'personality_title',
+                'completed_at',
+            ]);
+
+        $dominantTraitCounts = $profiledResults
+            ->flatMap(function (MarketingProfileScentQuizResult $result): array {
+                return collect((array) ($result->dominant_traits ?? []))
+                    ->map(fn (mixed $trait): string => Str::lower(trim((string) $trait)))
+                    ->filter()
+                    ->values()
+                    ->all();
+            })
+            ->countBy()
+            ->sortDesc();
+
         $recentTakers = (int) $recentResults->distinct()->count('marketing_profile_id');
         $totalTakers = (int) $quizResults->distinct()->count('marketing_profile_id');
         $recentWishlistAdds = (int) $recentWishlistEvents->count();
@@ -104,6 +194,85 @@ class ModernForestryScentQuizAnalyticsService
         $totalCartAdds = (int) $cartEvents->count();
         $recentPurchases = (int) $recentOrders->count();
         $totalPurchases = (int) $orders->count();
+
+        $topTraitAudienceRows = $dominantTraitCounts
+            ->map(function (int $count, string $trait) use ($totalTakers): array {
+                $playbook = self::DISCOUNT_PLAYBOOK[$trait] ?? [
+                    'campaign_title' => Str::headline($trait).' scent campaign',
+                    'campaign_body' => 'Target customers who consistently score into this scent family.',
+                    'discount_hint' => 'Build a scent-specific offer around this audience.',
+                ];
+
+                return [
+                    'trait' => $trait,
+                    'label' => $this->axisLabel($trait),
+                    'count' => $count,
+                    'share_of_profiles' => $this->ratio($count, max(1, $totalTakers)),
+                    'campaign_title' => $playbook['campaign_title'],
+                    'campaign_body' => $playbook['campaign_body'],
+                    'discount_hint' => $playbook['discount_hint'],
+                ];
+            })
+            ->values()
+            ->take(6)
+            ->all();
+
+        $axisAverages = collect(self::AXIS_LABELS)
+            ->map(function (string $label, string $axisId) use ($profiledResults): array {
+                $scores = $profiledResults
+                    ->map(function (MarketingProfileScentQuizResult $result) use ($axisId): ?float {
+                        $score = data_get($result->axis_scores, $axisId);
+
+                        return is_numeric($score) ? (float) $score : null;
+                    })
+                    ->filter(fn (?float $score): bool => $score !== null)
+                    ->values();
+
+                $average = $scores->isNotEmpty()
+                    ? round(((float) $scores->sum()) / $scores->count(), 1)
+                    : 0.0;
+
+                return [
+                    'axis' => $axisId,
+                    'label' => $label,
+                    'average_score' => $average,
+                ];
+            })
+            ->values()
+            ->all();
+
+        $recentProfiles = $profiledResults
+            ->take(8)
+            ->map(function (MarketingProfileScentQuizResult $result): array {
+                $profile = $result->profile;
+                $displayName = $profile instanceof MarketingProfile
+                    ? trim((string) $profile->first_name.' '.(string) $profile->last_name)
+                    : '';
+
+                return [
+                    'marketing_profile_id' => (int) ($result->marketing_profile_id ?? 0),
+                    'display_name' => $displayName !== ''
+                        ? $displayName
+                        : (trim((string) ($profile?->email ?? '')) !== ''
+                            ? (string) $profile->email
+                            : 'Customer #'.(int) ($result->marketing_profile_id ?? 0)),
+                    'email' => $profile instanceof MarketingProfile ? trim((string) $profile->email) : null,
+                    'phone' => $profile instanceof MarketingProfile ? trim((string) $profile->phone) : null,
+                    'headline' => trim((string) ($result->headline ?? '')) !== ''
+                        ? (string) $result->headline
+                        : 'Scent profile saved',
+                    'personality_title' => trim((string) ($result->personality_title ?? '')) !== ''
+                        ? (string) $result->personality_title
+                        : 'Scent personality',
+                    'dominant_traits' => collect((array) ($result->dominant_traits ?? []))
+                        ->map(fn (mixed $trait): string => $this->axisLabel((string) $trait))
+                        ->values()
+                        ->all(),
+                    'completed_at' => optional($result->completed_at)->toIso8601String(),
+                ];
+            })
+            ->values()
+            ->all();
 
         return [
             'tenant_id' => $tenantId,
@@ -137,6 +306,11 @@ class ModernForestryScentQuizAnalyticsService
                 'quiz_to_purchase_rate' => $this->ratio($recentPurchases, $recentTakers),
                 'wishlist_to_purchase_rate' => $this->ratio($recentPurchases, $recentWishlistAdds),
                 'cart_to_purchase_rate' => $this->ratio($recentPurchases, $recentCartAdds),
+            ],
+            'audiences' => [
+                'top_traits' => $topTraitAudienceRows,
+                'axis_averages' => $axisAverages,
+                'recent_profiles' => $recentProfiles,
             ],
         ];
     }
@@ -173,5 +347,12 @@ class ModernForestryScentQuizAnalyticsService
         }
 
         return round(($numerator / $denominator) * 100, 1);
+    }
+
+    protected function axisLabel(string $axisId): string
+    {
+        $key = Str::lower(trim($axisId));
+
+        return self::AXIS_LABELS[$key] ?? Str::headline($axisId);
     }
 }

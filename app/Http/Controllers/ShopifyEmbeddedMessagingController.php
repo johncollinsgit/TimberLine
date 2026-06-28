@@ -174,16 +174,16 @@ class ShopifyEmbeddedMessagingController extends Controller
             moduleAccessResolver: $moduleAccessResolver,
             alphaBootstrapService: $alphaBootstrapService,
             activeKey: 'app_messages',
-            headline: 'App Messages',
-            subheadline: 'Reply to Modern Forestry app conversations and keep support inside the mobile thread.',
+            headline: 'Messages',
+            subheadline: '',
             bootstrapOverrides: [
                 'default_filters' => [
                     'channel' => 'all',
                     'filter' => 'all',
                     'source' => 'mobile_app',
                 ],
-                'headline' => 'App Messages',
-                'description' => 'Two-way support threads sourced from the Modern Forestry iPhone app.',
+                'headline' => 'Messages',
+                'description' => '',
                 'channel_options' => ['all', 'sms', 'email'],
             ]
         );

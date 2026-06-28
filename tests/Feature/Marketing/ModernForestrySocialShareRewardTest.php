@@ -118,6 +118,7 @@ test('public scent personality share page hides private customer data', function
         ->assertOk()
         ->assertSee('Woodsy + Smoky')
         ->assertSee('The Campfire Archivist')
+        ->assertSee('forestry-backstage-intro-tree.png', false)
         ->assertDontSee('Ada')
         ->assertDontSee('ada@example.com');
 });

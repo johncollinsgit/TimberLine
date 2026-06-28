@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\ModernForestryScentAudienceActivationService;
 use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
@@ -128,8 +129,18 @@ class ShopifyEmbeddedCustomersController extends Controller
 
     public function segments(
         Request $request,
-        ShopifyEmbeddedAppContext $contextService
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryScentAudienceActivationService $scentAudienceActivationService
     ): Response {
+        $probe = $this->embeddedProbe($request);
+        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
+        $authorized = (bool) ($context['ok'] ?? false);
+        $tenantId = $authorized
+            ? $probe->time('tenant_resolve', fn (): ?int => $this->resolveEmbeddedTenantId($context, $tenantResolver))
+            : null;
+        $probe->forTenant($tenantId);
+
         return $this->renderPage(
             request: $request,
             contextService: $contextService,
@@ -137,8 +148,79 @@ class ShopifyEmbeddedCustomersController extends Controller
             subnavKey: 'segments',
             defaultHeadline: 'Customers',
             defaultSubheadline: 'Build and review saved customer segments.',
-            extraViewData: []
+            extraViewData: [
+                'scentAudienceDefinitions' => $scentAudienceActivationService->audienceDefinitions(),
+                'savedScentSegments' => $tenantId !== null
+                    ? $scentAudienceActivationService->scentSegmentsForTenant($tenantId)
+                    : collect(),
+            ],
+            resolvedContext: $context,
+            resolvedTenantId: $tenantId,
+            probe: $probe,
         );
+    }
+
+    public function createScentAudienceSegment(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryScentAudienceActivationService $scentAudienceActivationService,
+        ShopifyEmbeddedUrlGenerator $embeddedUrlGenerator
+    ): RedirectResponse {
+        $context = $contextService->resolvePageContext($request);
+        abort_unless((bool) ($context['ok'] ?? false), 403);
+
+        $tenantId = $this->resolveEmbeddedTenantId($context, $tenantResolver);
+        abort_unless($tenantId !== null, 404);
+
+        $validated = $request->validate([
+            'trait' => ['required', 'string', 'max:50'],
+        ]);
+
+        $segment = $scentAudienceActivationService->createSegment(
+            tenantId: $tenantId,
+            trait: (string) $validated['trait'],
+            userId: auth()->id()
+        );
+
+        return redirect()->to($embeddedUrlGenerator->append(
+            route('shopify.app.customers.segments', [], false),
+            $embeddedUrlGenerator->contextQuery($request, (string) data_get($context, 'host'))
+        ))->with('toast', [
+            'style' => 'success',
+            'message' => 'Saved segment ready: '.$segment->name.'.',
+        ]);
+    }
+
+    public function createScentAudienceCampaign(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryScentAudienceActivationService $scentAudienceActivationService
+    ): RedirectResponse {
+        $context = $contextService->resolvePageContext($request);
+        abort_unless((bool) ($context['ok'] ?? false), 403);
+
+        $tenantId = $this->resolveEmbeddedTenantId($context, $tenantResolver);
+        abort_unless($tenantId !== null, 404);
+
+        $validated = $request->validate([
+            'trait' => ['required', 'string', 'max:50'],
+        ]);
+
+        $campaign = $scentAudienceActivationService->createCampaignDraft(
+            tenantId: $tenantId,
+            storeKey: (string) data_get($context, 'store.key', ''),
+            trait: (string) $validated['trait'],
+            userId: auth()->id()
+        );
+
+        return redirect()
+            ->route('marketing.campaigns.edit', $campaign)
+            ->with('toast', [
+                'style' => 'success',
+                'message' => 'Discount campaign draft ready for '.$campaign->name.'.',
+            ]);
     }
 
     public function activity(

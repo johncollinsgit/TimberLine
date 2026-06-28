@@ -2193,6 +2193,11 @@ class MessageAnalyticsService
                     'wishlist_to_purchase_rate' => 0.0,
                     'cart_to_purchase_rate' => 0.0,
                 ],
+                'audiences' => [
+                    'top_traits' => [],
+                    'axis_averages' => [],
+                    'recent_profiles' => [],
+                ],
                 'empty' => true,
             ],
             'modern_forestry_social_share' => [

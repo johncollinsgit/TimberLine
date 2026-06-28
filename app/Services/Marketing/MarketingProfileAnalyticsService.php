@@ -4,6 +4,7 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingOrderEventAttribution;
 use App\Models\MarketingProfile;
+use App\Models\MarketingProfileScentQuizResult;
 use App\Models\MarketingProfileWishlistItem;
 use App\Models\Order;
 use App\Models\SquareOrder;
@@ -143,6 +144,20 @@ class MarketingProfileAnalyticsService
             ->filter()
             ->sortByDesc(fn ($value) => $value?->timestamp ?? 0)
             ->first();
+        $scentQuizResult = $profile->relationLoaded('scentQuizResult')
+            ? $profile->scentQuizResult
+            : $profile->scentQuizResult()->first();
+        $scentTraits = $scentQuizResult instanceof MarketingProfileScentQuizResult
+            ? collect((array) ($scentQuizResult->dominant_traits ?? []))
+                ->map(fn (mixed $trait): string => strtolower(trim((string) $trait)))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all()
+            : [];
+        $scentAxisScores = $scentQuizResult instanceof MarketingProfileScentQuizResult
+            ? (is_array($scentQuizResult->axis_scores) ? $scentQuizResult->axis_scores : [])
+            : [];
 
         $metrics = [
             'profile_id' => $profileId,
@@ -182,6 +197,25 @@ class MarketingProfileAnalyticsService
                     return $addedAt !== null && $addedAt->greaterThanOrEqualTo(now()->subDays(30));
                 })
                 ->count(),
+            'scent_quiz_taken' => $scentQuizResult instanceof MarketingProfileScentQuizResult,
+            'scent_quiz_version' => $scentQuizResult instanceof MarketingProfileScentQuizResult
+                ? (string) ($scentQuizResult->quiz_version ?? '')
+                : '',
+            'scent_profile_headline' => $scentQuizResult instanceof MarketingProfileScentQuizResult
+                ? (string) ($scentQuizResult->headline ?? '')
+                : '',
+            'scent_personality_title' => $scentQuizResult instanceof MarketingProfileScentQuizResult
+                ? (string) ($scentQuizResult->personality_title ?? '')
+                : '',
+            'scent_dominant_traits' => $scentTraits,
+            'scent_axis_floral' => (int) ($scentAxisScores['floral'] ?? 0),
+            'scent_axis_woodsy' => (int) ($scentAxisScores['woodsy'] ?? 0),
+            'scent_axis_smoky' => (int) ($scentAxisScores['smoky'] ?? 0),
+            'scent_axis_sweet' => (int) ($scentAxisScores['sweet'] ?? 0),
+            'scent_axis_masculine' => (int) ($scentAxisScores['masculine'] ?? 0),
+            'scent_axis_earthy' => (int) ($scentAxisScores['earthy'] ?? 0),
+            'scent_axis_clean' => (int) ($scentAxisScores['clean'] ?? 0),
+            'scent_axis_citrus' => (int) ($scentAxisScores['citrus'] ?? 0),
         ];
 
         $this->cache[$profileId] = $metrics;

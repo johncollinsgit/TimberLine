@@ -10,6 +10,13 @@
     :page-actions="$pageActions"
 >
     @php
+        /** @var \App\Services\Shopify\ShopifyEmbeddedUrlGenerator $embeddedUrls */
+        $embeddedUrls = app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class);
+        $embeddedContext = $embeddedUrls->contextQuery(
+            request(),
+            filled($host ?? null) ? (string) $host : null
+        );
+        $embeddedUrl = static fn (string $url): string => $embeddedUrls->append($url, $embeddedContext);
         $messagingModuleState = is_array($messagingModuleState ?? null) ? $messagingModuleState : null;
         $messagingAccess = is_array($messagingAccess ?? null) ? $messagingAccess : [];
         $messagingEnabled = (bool) ($messagingAccess['enabled'] ?? false);
@@ -67,6 +74,15 @@
             ->filter(fn ($row) => is_array($row))
             ->values();
         $scentQuizTopPersonalities = collect((array) ($scentQuizPanel['quiz']['top_personalities'] ?? []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $scentQuizAudienceTraits = collect((array) data_get($scentQuizPanel, 'audiences.top_traits', []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $scentQuizAxisAverages = collect((array) data_get($scentQuizPanel, 'audiences.axis_averages', []))
+            ->filter(fn ($row) => is_array($row))
+            ->values();
+        $scentQuizRecentProfiles = collect((array) data_get($scentQuizPanel, 'audiences.recent_profiles', []))
             ->filter(fn ($row) => is_array($row))
             ->values();
         $retentionTotals = is_array($retentionPanel['totals'] ?? null) ? $retentionPanel['totals'] : [];
@@ -469,6 +485,42 @@
             display: inline-flex;
             gap: 6px;
             align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .message-analytics-link {
+            color: #0f6f4c;
+            font-size: 13px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .message-analytics-link:hover {
+            text-decoration: underline;
+        }
+
+        .message-analytics-inline-form {
+            margin: 0;
+        }
+
+        .message-analytics-inline-button {
+            appearance: none;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.96);
+            color: #0f172a;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            min-height: 30px;
+            padding: 0 10px;
+            cursor: pointer;
+        }
+
+        .message-analytics-inline-button[data-tone="primary"] {
+            background: rgba(209, 250, 229, 0.96);
+            border-color: rgba(16, 185, 129, 0.24);
+            color: #065f46;
         }
 
         .message-analytics-chart {
@@ -1146,7 +1198,115 @@
                             </tbody>
                         </table>
                     </div>
-                @elseif((bool) data_get($scentQuizPanel, 'empty', false))
+                @endif
+
+                @if($scentQuizAudienceTraits->isNotEmpty())
+                    <h4>Scent audiences ready for offers</h4>
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:780px;" aria-label="Scent quiz audience segments">
+                            <thead>
+                                <tr>
+                                    <th>Audience</th>
+                                    <th>Profiles</th>
+                                    <th>Share of takers</th>
+                                    <th>Campaign angle</th>
+                                    <th>Discount hook</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($scentQuizAudienceTraits as $row)
+                                    <tr>
+                                        <td>
+                                            <strong>{{ (string) ($row['label'] ?? 'Audience') }}</strong>
+                                            <div class="message-analytics-muted">{{ (string) ($row['campaign_body'] ?? '') }}</div>
+                                        </td>
+                                        <td>{{ number_format((int) ($row['count'] ?? 0)) }}</td>
+                                        <td>{{ $formatPercent((float) ($row['share_of_profiles'] ?? 0)) }}</td>
+                                        <td>{{ (string) ($row['campaign_title'] ?? 'Campaign angle') }}</td>
+                                        <td>
+                                            <div>{{ (string) ($row['discount_hint'] ?? 'Build a targeted scent offer for this audience.') }}</div>
+                                            @if(filled($row['trait'] ?? null))
+                                                <div class="message-analytics-links" style="margin-top:8px;">
+                                                    <form method="POST" action="{{ $embeddedUrl(route('shopify.app.customers.segments.scent-audiences.segment', [], false)) }}" class="message-analytics-inline-form">
+                                                        @csrf
+                                                        <input type="hidden" name="trait" value="{{ (string) $row['trait'] }}">
+                                                        <button type="submit" class="message-analytics-inline-button" data-tone="primary">Save Segment</button>
+                                                    </form>
+                                                    <form method="POST" action="{{ $embeddedUrl(route('shopify.app.customers.segments.scent-audiences.campaign', [], false)) }}" class="message-analytics-inline-form">
+                                                        @csrf
+                                                        <input type="hidden" name="trait" value="{{ (string) $row['trait'] }}">
+                                                        <button type="submit" class="message-analytics-inline-button">Create Discount Draft</button>
+                                                    </form>
+                                                </div>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                @if($scentQuizAxisAverages->isNotEmpty())
+                    <h4>Average scent lean across saved quiz profiles</h4>
+                    <div class="message-analytics-meta-grid" aria-label="Average scent axis scores">
+                        @foreach($scentQuizAxisAverages as $row)
+                            <article class="message-analytics-meta-card">
+                                <span>{{ (string) ($row['label'] ?? 'Axis') }}</span>
+                                <strong>{{ number_format((float) ($row['average_score'] ?? 0), 1) }}%</strong>
+                            </article>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if($scentQuizRecentProfiles->isNotEmpty())
+                    <h4>Recent quiz profiles</h4>
+                    <div class="message-analytics-table-wrap">
+                        <table class="message-analytics-table" style="min-width:760px;" aria-label="Recent scent quiz profiles">
+                            <thead>
+                                <tr>
+                                    <th>Customer</th>
+                                    <th>Profile</th>
+                                    <th>Traits</th>
+                                    <th>Completed</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($scentQuizRecentProfiles as $row)
+                                    <tr>
+                                        <td>
+                                            <strong>{{ (string) ($row['display_name'] ?? 'Customer') }}</strong>
+                                            @if(filled($row['email'] ?? null))
+                                                <div class="message-analytics-muted">{{ (string) $row['email'] }}</div>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <strong>{{ (string) ($row['personality_title'] ?? 'Scent personality') }}</strong>
+                                            <div class="message-analytics-muted">{{ (string) ($row['headline'] ?? '') }}</div>
+                                        </td>
+                                        <td>{{ collect((array) ($row['dominant_traits'] ?? []))->implode(', ') ?: '—' }}</td>
+                                        <td>{{ $formatDateTime((string) ($row['completed_at'] ?? null)) }}</td>
+                                        <td>
+                                            @if((int) ($row['marketing_profile_id'] ?? 0) > 0)
+                                                <a href="{{ route('shopify.app.customers.detail', ['marketingProfile' => (int) $row['marketing_profile_id']], false) }}" class="message-analytics-link">Open customer</a>
+                                            @else
+                                                —
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+
+                @if(
+                    $scentQuizTopPersonalities->isEmpty()
+                    && $scentQuizAudienceTraits->isEmpty()
+                    && $scentQuizRecentProfiles->isEmpty()
+                    && (bool) data_get($scentQuizPanel, 'empty', false)
+                )
                     <div class="message-analytics-empty">
                         <p class="message-analytics-muted">No scent quiz activity has been recorded in this reporting window yet.</p>
                     </div>

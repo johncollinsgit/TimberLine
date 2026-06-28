@@ -219,6 +219,8 @@ test('message analytics decision panels expose attribution, funnel, retention, a
         ->and(data_get($panels, 'modern_forestry_scent_quiz.cart.recent_additions'))->toBe(1)
         ->and(data_get($panels, 'modern_forestry_scent_quiz.orders.recent_purchases'))->toBe(1)
         ->and(data_get($panels, 'modern_forestry_scent_quiz.conversion.quiz_to_cart_rate'))->toBe(100.0)
+        ->and(data_get($panels, 'modern_forestry_scent_quiz.audiences.top_traits.0.label'))->toBe('Woodsy')
+        ->and(data_get($panels, 'modern_forestry_scent_quiz.audiences.recent_profiles.0.personality_title'))->toBe('The Grounded Explorer')
         ->and(data_get($panels, 'retention.totals.first_time_orders'))->toBe(2)
         ->and(data_get($panels, 'retention.totals.returning_orders'))->toBe(1)
         ->and((string) data_get($panels, 'ai_budget_readiness.tier'))->not->toBe('')

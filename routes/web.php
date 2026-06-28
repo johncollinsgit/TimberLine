@@ -1283,6 +1283,10 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
     Route::get('/app/customers/manage', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers.manage');
     Route::get('/app/customers/segments', [ShopifyEmbeddedCustomersController::class, 'segments'])->name('shopify.app.customers.segments');
+    Route::post('/app/customers/segments/scent-audiences/segment', [ShopifyEmbeddedCustomersController::class, 'createScentAudienceSegment'])
+        ->name('shopify.app.customers.segments.scent-audiences.segment');
+    Route::post('/app/customers/segments/scent-audiences/campaign', [ShopifyEmbeddedCustomersController::class, 'createScentAudienceCampaign'])
+        ->name('shopify.app.customers.segments.scent-audiences.campaign');
     Route::get('/app/customers/activity', [ShopifyEmbeddedCustomersController::class, 'activity'])->name('shopify.app.customers.activity');
     Route::get('/app/customers/imports', [ShopifyEmbeddedCustomersController::class, 'imports'])->name('shopify.app.customers.imports');
     Route::get('/app/customers/questions', [ShopifyEmbeddedCustomersController::class, 'redirectLegacyToImports'])->name('shopify.app.customers.questions');

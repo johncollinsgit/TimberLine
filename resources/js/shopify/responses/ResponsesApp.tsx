@@ -3,7 +3,6 @@ import {
   Badge,
   Banner,
   BlockStack,
-  Box,
   Button,
   Card,
   InlineStack,
@@ -150,25 +149,8 @@ function statusTone(status: string):
   return "warning";
 }
 
-function subscriptionTone(state?: string | null):
-  | "critical"
-  | "warning"
-  | "success"
-  | "info"
-  | "attention"
-  | undefined {
-  const normalized = (state ?? "").trim().toLowerCase();
-  if (["unsubscribed", "suppressed", "bounced"].includes(normalized)) {
-    return "critical";
-  }
-  if (normalized === "subscribed") {
-    return "success";
-  }
-
-  return "info";
-}
-
 export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
+  const isAppInbox = bootstrap.default_filters?.source === "mobile_app";
   const [channel, setChannel] = useState<Channel>(bootstrap.default_filters?.channel ?? "sms");
   const [filter, setFilter] = useState<Filter>(bootstrap.default_filters?.filter ?? "open");
   const [sourceFilter] = useState<SourceFilter>(bootstrap.default_filters?.source ?? "all");
@@ -357,9 +339,11 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                 <Text as="h2" variant="headingLg">
                   {bootstrap.headline ?? "Inbox"}
                 </Text>
-                <Text as="p" variant="bodySm" tone="subdued">
-                  {bootstrap.description ?? "Lightweight support inbox for Text and Email replies, with opt-out safety built in."}
-                </Text>
+                {bootstrap.description ? (
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {bootstrap.description}
+                  </Text>
+                ) : null}
               </BlockStack>
               <InlineStack gap="200">
                 {availableChannels.map((option) => (
@@ -370,24 +354,41 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
               </InlineStack>
             </InlineStack>
 
-            <div className="responses-summary-grid">
-              <div className="responses-summary-card">
-                <span>Unread Text</span>
-                <strong>{summary.sms_unread}</strong>
+            {!isAppInbox ? (
+              <div className="responses-summary-grid">
+                <div className="responses-summary-card">
+                  <span>Unread Text</span>
+                  <strong>{summary.sms_unread}</strong>
+                </div>
+                <div className="responses-summary-card">
+                  <span>Unread Email</span>
+                  <strong>{summary.email_unread}</strong>
+                </div>
+                <div className="responses-summary-card">
+                  <span>Open</span>
+                  <strong>{summary.open}</strong>
+                </div>
+                <div className="responses-summary-card">
+                  <span>Opted Out Today</span>
+                  <strong>{summary.opted_out_today}</strong>
+                </div>
               </div>
-              <div className="responses-summary-card">
-                <span>Unread Email</span>
-                <strong>{summary.email_unread}</strong>
+            ) : (
+              <div className="responses-summary-strip">
+                <div className="responses-summary-pill">
+                  <span>Unread</span>
+                  <strong>{summary.sms_unread + summary.email_unread}</strong>
+                </div>
+                <div className="responses-summary-pill">
+                  <span>Open</span>
+                  <strong>{summary.open}</strong>
+                </div>
+                <div className="responses-summary-pill">
+                  <span>Follow up</span>
+                  <strong>{summary.needs_follow_up}</strong>
+                </div>
               </div>
-              <div className="responses-summary-card">
-                <span>Open</span>
-                <strong>{summary.open}</strong>
-              </div>
-              <div className="responses-summary-card">
-                <span>Opted Out Today</span>
-                <strong>{summary.opted_out_today}</strong>
-              </div>
-            </div>
+            )}
 
             <div className="responses-toolbar">
               <TextField label="Search" labelHidden value={search} onChange={setSearch} placeholder="Search name, phone, email, or preview" autoComplete="off" />
@@ -431,31 +432,34 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                     onClick={() => void loadConversation(conversation.id)}
                   >
                     <InlineStack align="space-between" blockAlign="start">
-                      <BlockStack gap="050">
-                        <Text as="span" variant="bodyMd" fontWeight="semibold">
-                          {conversation.display_name ?? conversation.identity}
-                        </Text>
+                      <InlineStack gap="300" blockAlign="start">
+                        <div className="responses-thread-avatar">
+                          {(conversation.display_name ?? conversation.identity).trim().charAt(0).toUpperCase()}
+                        </div>
+                        <BlockStack gap="050">
+                          <Text as="span" variant="bodyMd" fontWeight="semibold">
+                            {conversation.display_name ?? conversation.identity}
+                          </Text>
+                          <Text as="span" variant="bodySm" tone="subdued">
+                            {conversation.preview ?? conversation.subject ?? conversation.identity}
+                          </Text>
+                        </BlockStack>
+                      </InlineStack>
+                      <BlockStack gap="100" inlineAlign="end">
                         <Text as="span" variant="bodySm" tone="subdued">
-                          {conversation.subject ?? conversation.preview ?? conversation.identity}
+                          {formatDateTime(conversation.last_message_at)}
                         </Text>
+                        {conversation.unread_count > 0 ? (
+                          <div className="responses-unread-badge">{conversation.unread_count}</div>
+                        ) : null}
                       </BlockStack>
-                      <Text as="span" variant="bodySm" tone="subdued">
-                        {formatDateTime(conversation.last_message_at)}
-                      </Text>
                     </InlineStack>
                     <InlineStack gap="200" wrap>
+                      <Badge tone="info">{conversation.channel === "sms" ? "Text" : conversation.channel === "email" ? "Email" : "All"}</Badge>
                       {conversation.source_type === "modern_forestry_app" ? (
-                        <Badge tone="success">App thread</Badge>
+                        <Badge tone="success">App</Badge>
                       ) : null}
                       <Badge tone={statusTone(conversation.status)}>{conversation.status}</Badge>
-                      {conversation.subscription_state ? (
-                        <Badge tone={subscriptionTone(conversation.subscription_state)}>
-                          {conversation.subscription_state}
-                        </Badge>
-                      ) : null}
-                      {conversation.unread_count > 0 ? (
-                        <Badge tone="attention">{conversation.unread_count} unread</Badge>
-                      ) : null}
                     </InlineStack>
                   </button>
                 ))
@@ -485,24 +489,16 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                       <InlineStack gap="200" wrap>
                         <Badge tone="info">{selectedConversation.channel === "sms" ? "Text" : "Email"}</Badge>
                         {selectedConversation.source_type === "modern_forestry_app" ? (
-                          <Badge tone="success">Modern Forestry app</Badge>
+                          <Badge tone="success">App</Badge>
                         ) : null}
                         <Badge tone={statusTone(selectedConversation.status)}>{selectedConversation.status}</Badge>
-                        {selectedConversation.subscription_state ? (
-                          <Badge tone={subscriptionTone(selectedConversation.subscription_state)}>
-                            {selectedConversation.subscription_state}
-                          </Badge>
-                        ) : null}
-                        {selectedConversation.profile?.id ? (
-                          <Badge tone="info">Customer #{selectedConversation.profile.id}</Badge>
-                        ) : null}
-                        {selectedConversation.source_context?.campaign_id ? (
-                          <Badge tone="info">Campaign linked</Badge>
-                        ) : null}
+                        {selectedConversation.unread_count > 0 ? <Badge tone="attention">{selectedConversation.unread_count} unread</Badge> : null}
                       </InlineStack>
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        {selectedConversation.identity}
-                      </Text>
+                      {selectedConversation.profile?.name || selectedConversation.profile?.email || selectedConversation.profile?.phone ? (
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          {selectedConversation.profile?.name ?? selectedConversation.profile?.email ?? selectedConversation.profile?.phone ?? selectedConversation.identity}
+                        </Text>
+                      ) : null}
                     </BlockStack>
                     <InlineStack gap="200" wrap>
                       <Button size="slim" onClick={() => void runAction("mark_read")} disabled={mutating}>
@@ -525,31 +521,29 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
 
                   <div className="responses-messages">
                     {messages.map((message) => (
-                      <div key={message.id} className={`responses-message-card responses-message-card--${message.direction}`}>
-                        <InlineStack align="space-between" blockAlign="start">
-                          <Text as="span" variant="bodySm" fontWeight="semibold">
-                            {message.direction === "inbound"
-                              ? "Customer"
-                              : message.direction === "outbound"
-                                ? message.creator?.name ?? "Everbranch"
-                                : "System"}
+                      <div key={message.id} className={`responses-message-shell responses-message-shell--${message.direction}`}>
+                        <div className={`responses-message-card responses-message-card--${message.direction}`}>
+                          <InlineStack align="space-between" blockAlign="start">
+                            <Text as="span" variant="bodySm" fontWeight="semibold">
+                              {message.direction === "inbound"
+                                ? "Customer"
+                                : message.direction === "outbound"
+                                  ? message.creator?.name ?? "Everbranch"
+                                  : "System"}
+                            </Text>
+                            <Text as="span" variant="bodySm" tone="subdued">
+                              {formatDateTime(message.received_at ?? message.sent_at ?? message.created_at)}
+                            </Text>
+                          </InlineStack>
+                          {message.subject ? (
+                            <Text as="p" variant="bodySm" fontWeight="medium">
+                              {message.subject}
+                            </Text>
+                          ) : null}
+                          <Text as="p" variant="bodyMd">
+                            {message.body || "(No body)"}
                           </Text>
-                          <Text as="span" variant="bodySm" tone="subdued">
-                            {formatDateTime(message.received_at ?? message.sent_at ?? message.created_at)}
-                          </Text>
-                        </InlineStack>
-                        {message.subject ? (
-                          <Text as="p" variant="bodySm" fontWeight="medium">
-                            {message.subject}
-                          </Text>
-                        ) : null}
-                        <Text as="p" variant="bodyMd">
-                          {message.body || "(No body)"}
-                        </Text>
-                        <InlineStack gap="200" wrap>
-                          <Badge tone="info">{message.message_type}</Badge>
-                          {message.delivery_status ? <Badge tone="info">{message.delivery_status}</Badge> : null}
-                        </InlineStack>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -570,15 +564,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                       multiline={5}
                       autoComplete="off"
                       disabled={!canReply}
-                      helpText={
-                        canReply
-                          ? selectedConversation.source_type === "modern_forestry_app"
-                            ? "Replies stay inside the Modern Forestry app thread and can light up the account badge for the customer."
-                            : "Replies are sent from Everbranch and appended to this thread."
-                          : selectedConversation.channel === "sms"
-                            ? "SMS replies are blocked because this contact is opted out or suppressed."
-                            : "Email replies are blocked because this contact is unsubscribed, bounced, or suppressed."
-                      }
+                      helpText={canReply ? "Reply in the conversation." : "Replies are unavailable for this conversation."}
                     />
                     <InlineStack align="space-between" blockAlign="center">
                       <Text as="span" variant="bodySm" tone="subdued">

@@ -61,6 +61,10 @@
             justify-items: start;
         }
 
+        .sf-responses-loading h2 {
+            font-size: 1.25rem;
+        }
+
         [hidden] {
             display: none !important;
         }
@@ -91,10 +95,8 @@
         @else
             <div id="shopify-responses-root" class="sf-responses-card" aria-live="polite">
                 <div class="sf-responses-loading">
-                    <h2>Inbox</h2>
-                    <p class="sf-responses-muted">Loading unified inbox for Text and Email replies.</p>
-                    <span class="sf-responses-muted">Text</span>
-                    <span class="sf-responses-muted">Email</span>
+                    <h2>Loading messages</h2>
+                    <p class="sf-responses-muted">Opening the latest support conversations.</p>
                 </div>
             </div>
             <script id="shopify-responses-bootstrap" type="application/json">

@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\MarketingProfile;
+use App\Models\MarketingProfileScentQuizResult;
 use App\Models\MarketingProfileScore;
 use App\Models\MarketingSegment;
 use App\Models\MarketingProfileWishlistItem;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Marketing\MarketingProfileScoreService;
 use App\Services\Marketing\MarketingSegmentEvaluator;
@@ -100,6 +102,57 @@ test('segment evaluator can target wishlist signals', function () {
     expect($result['matched'])->toBeTrue()
         ->and($result['metrics']['wishlist_active_count'] ?? 0)->toBe(1)
         ->and($result['metrics']['wishlist_product_handles'] ?? [])->toContain('cedar-glow');
+});
+
+test('segment evaluator can target scent quiz dominant traits', function () {
+    Tenant::query()->firstOrCreate([
+        'id' => 1,
+    ], [
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Woodsy',
+        'email' => 'woodsy@example.com',
+        'normalized_email' => 'woodsy@example.com',
+    ]);
+
+    MarketingProfileScentQuizResult::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'tenant_id' => 1,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => [
+            'woodsy' => 88,
+            'earthy' => 71,
+        ],
+        'dominant_traits' => ['woodsy', 'earthy'],
+        'headline' => 'Woodsy + Earthy',
+        'personality_title' => 'The Grounded Explorer',
+        'personality_body' => 'Rooted and calm.',
+        'answers' => [],
+        'completed_at' => now(),
+    ]);
+
+    $segment = MarketingSegment::query()->create([
+        'name' => 'Woodsy scent audience',
+        'status' => 'active',
+        'rules_json' => [
+            'logic' => 'and',
+            'conditions' => [
+                ['field' => 'scent_dominant_traits', 'operator' => 'contains', 'value' => 'woodsy'],
+                ['field' => 'scent_axis_woodsy', 'operator' => 'gte', 'value' => 80],
+            ],
+            'groups' => [],
+        ],
+    ]);
+
+    $result = app(MarketingSegmentEvaluator::class)->evaluateProfile($segment, $profile->fresh());
+
+    expect($result['matched'])->toBeTrue()
+        ->and($result['metrics']['scent_dominant_traits'] ?? [])->toContain('woodsy')
+        ->and($result['metrics']['scent_axis_woodsy'] ?? 0)->toBe(88);
 });
 
 test('system segments are seeded and segment preview returns matches', function () {

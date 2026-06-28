@@ -201,7 +201,7 @@ class ModernForestrySocialShareRewardService
             'id' => 'scent-result:'.$result->id,
             'share_url' => $url,
             'title' => (string) ($result->personality_title ?: $result->headline ?: 'My Modern Forestry scent personality'),
-            'body' => (string) ($result->personality_body ?: 'I found my Modern Forestry candle personality.'),
+            'body' => (string) ($result->personality_body ?: 'I took the Modern Forestry candle personality quiz and found the scent profile that fits me best.'),
         ];
     }
 
@@ -282,8 +282,8 @@ class ModernForestrySocialShareRewardService
             'type' => $type,
             'id' => $targetId,
             'share_url' => $shareUrl,
-            'title' => $this->nullableString($target['title'] ?? null),
-            'body' => $this->nullableString($target['body'] ?? null),
+            'title' => $this->nullableString($target['title'] ?? null) ?? $this->productShareTitle($handle),
+            'body' => $this->nullableString($target['body'] ?? null) ?? $this->productShareBody($target['title'] ?? $handle),
             'image_url' => $this->nullableString($target['image_url'] ?? $target['imageUrl'] ?? null),
         ];
     }
@@ -368,6 +368,22 @@ class ModernForestrySocialShareRewardService
         $value = trim((string) $value);
 
         return $value !== '' ? $value : null;
+    }
+
+    protected function productShareTitle(string $handle): string
+    {
+        return Str::headline(str_replace(['-', '_'], ' ', $handle)).' from Modern Forestry';
+    }
+
+    protected function productShareBody(mixed $title): string
+    {
+        $name = trim((string) $title);
+
+        if ($name === '') {
+            $name = 'this candle';
+        }
+
+        return 'I found '.$name.' from Modern Forestry and thought it belonged on your candle radar.';
     }
 
     /**

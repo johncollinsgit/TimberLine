@@ -10,12 +10,20 @@
         $dominantTraits = array_values(array_filter((array) ($dominantTraits ?? [])));
         $axes = array_values((array) ($axes ?? []));
         $quizUrl = trim((string) ($quizUrl ?? 'https://theforestrystudio.com/apps/forestry/account?scent_quiz=1'));
+        $shareUrl = url()->current();
+        $shareImageUrl = asset('brand/forestry-backstage-intro-tree.png');
     @endphp
     <title>{{ $headline }} | Modern Forestry</title>
     <meta name="description" content="{{ $body }}">
     <meta property="og:title" content="{{ $headline }}">
     <meta property="og:description" content="{{ $body }}">
     <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ $shareUrl }}">
+    <meta property="og:image" content="{{ $shareImageUrl }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $headline }}">
+    <meta name="twitter:description" content="{{ $body }}">
+    <meta name="twitter:image" content="{{ $shareImageUrl }}">
     @vite(['resources/css/app.css'])
     <style>
         body {
