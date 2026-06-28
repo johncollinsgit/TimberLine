@@ -91,6 +91,11 @@ Schedule::command('marketing:send-tenant-rewards-finance-reports')
     ->withoutOverlapping(120)
     ->runInBackground();
 
+Schedule::command('marketing:send-modern-forestry-scent-quiz-report')
+    ->weeklyOn(1, '08:15')
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
 // Zap-style internal workflow automations (Asana -> Google Calendar, etc).
 Schedule::command('automation:run')
     ->everyTenMinutes()

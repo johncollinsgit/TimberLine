@@ -19,6 +19,7 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
     $embedConfig = file_get_contents($embedManifest);
     $embedLiquid = file_get_contents($embedBlock);
     $embedCode = file_get_contents($embedAsset);
+    $embedCss = file_get_contents(base_path('extensions/forestry-marketing-embed/assets/marketing-storefront-tracker.css'));
     $pixelConfig = file_get_contents($pixelManifest);
     $pixelCode = file_get_contents($pixelSource);
 
@@ -39,9 +40,13 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
         ->and($embedCode)->toContain('/cart/update.js')
         ->and($embedCode)->toContain('session_key: sessionKey')
         ->and($embedCode)->toContain('client_id: clientId')
+        ->and($embedCode)->toContain('injectScentQuizBanner();')
+        ->and($embedCode)->toContain('mf_source_label: stringOrNull(currentAttribution.mf_source_label)')
         ->and($embedCode)->toContain('appendLinkagePropertiesToForm(form);')
         ->and($embedCode)->toContain('_mf_session_key')
+        ->and($embedCode)->toContain('_mf_source_label')
         ->and($embedCode)->toContain("properties[' + key + ']")
+        ->and($embedCss)->toContain('.forestry-scent-quiz-banner')
         ->and($pixelConfig)->toContain('type = "web_pixel_extension"')
         ->and($pixelConfig)->toContain('[settings.fields.app_proxy_base]')
         ->and($pixelCode)->toContain("analytics.subscribe('product_viewed'")

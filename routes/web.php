@@ -2,20 +2,20 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
-use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\ClientProjectController;
 use App\Http\Controllers\ClientProjectTicketController;
+use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
-use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
-use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
+use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
@@ -42,12 +42,12 @@ use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
+use App\Http\Controllers\Onboarding\CustomerStartHereController;
+use App\Http\Controllers\Onboarding\OnboardingHarnessController;
 use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
-use App\Http\Controllers\Onboarding\OnboardingHarnessController;
-use App\Http\Controllers\Onboarding\CustomerStartHereController;
-use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\PlatformAccessRequestController;
+use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
@@ -104,9 +104,9 @@ use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
-use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
 use App\Support\Wiki\WikiRepository;
@@ -1100,7 +1100,7 @@ Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class,
     ->middleware('throttle:30,1')
     ->name('marketing.public.consent-confirm');
 
-    Route::prefix('shopify/marketing')
+Route::prefix('shopify/marketing')
     ->name('marketing.shopify.')
     ->middleware(['marketing.storefront.verify', 'throttle:120,1'])
     ->group(function () {
@@ -1108,6 +1108,9 @@ Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class,
         Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('message');
+        Route::post('/scent-quiz/results', [MarketingPublicEventController::class, 'saveCustomerScentQuizResult'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('scent-quiz.submit');
         Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
         Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
@@ -1174,6 +1177,9 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/message', [MarketingPublicEventController::class, 'sendCustomerMessage'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('message');
+        Route::post('/scent-quiz/results', [MarketingPublicEventController::class, 'saveCustomerScentQuizResult'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('scent-quiz.submit');
         Route::get('/rewards/balance', [MarketingShopifyIntegrationController::class, 'rewardBalance'])->name('rewards.balance');
         Route::get('/rewards/available', [MarketingShopifyIntegrationController::class, 'availableRewards'])->name('rewards.available');
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
@@ -1232,8 +1238,8 @@ Route::prefix('shopify/marketing/v1')
             ->name('google-business.review.start');
     });
 
-    Route::prefix('shopify')->middleware('web')->group(function () {
-        Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
+Route::prefix('shopify')->middleware('web')->group(function () {
+    Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
     Route::get('/app/plans', [ShopifyEmbeddedAppController::class, 'plansAndAddons'])->name('shopify.app.plans');
     Route::get('/app/store', [ShopifyEmbeddedAppController::class, 'moduleStore'])->name('shopify.app.store');
@@ -1266,16 +1272,16 @@ Route::prefix('shopify/marketing/v1')
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
     Route::get('/app/messaging/app-messages', [ShopifyEmbeddedMessagingController::class, 'appMessages'])->name('shopify.app.messaging.app-messages');
-        Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
-        Route::get('/app/edit', [ShopifyEmbeddedSettingsController::class, 'editApp'])->name('shopify.app.edit');
-        Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
-        Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
-            Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
-            Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
-            Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
-            Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
-                ->withoutMiddleware([VerifyCsrfToken::class])
-                ->name('dashboard.candle-cash-reminders');
+    Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
+    Route::get('/app/edit', [ShopifyEmbeddedSettingsController::class, 'editApp'])->name('shopify.app.edit');
+    Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
+    Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
+        Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
+        Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
+        Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
+        Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('dashboard.candle-cash-reminders');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
         Route::get('/rewards/policy', [ShopifyEmbeddedRewardsController::class, 'policy'])
             ->name('rewards.policy');

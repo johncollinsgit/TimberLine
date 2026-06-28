@@ -35,6 +35,13 @@
         $messagesSupportPrompt = trim((string) ($messagesThread['support_prompt'] ?? ''));
         $messagesComposerEnabled = (bool) ($messagesThread['can_compose'] ?? false);
         $messagesNotice = trim((string) ($messageNotice ?? ''));
+        $scentQuizDefinition = is_array($scentQuiz ?? null) ? $scentQuiz : null;
+        $latestScentQuiz = is_array($scentQuizDefinition['latestResult'] ?? null) ? $scentQuizDefinition['latestResult'] : null;
+        $scentQuizQuestions = is_array($scentQuizDefinition['questions'] ?? null) ? array_values($scentQuizDefinition['questions']) : [];
+        $scentQuizAxes = is_array($latestScentQuiz['axes'] ?? null) ? array_values($latestScentQuiz['axes']) : [];
+        $scentQuizNotice = trim((string) ($scentQuizNotice ?? ''));
+        $scentQuizOpen = request()->boolean('scent_quiz') || $scentQuizNotice !== '' || $latestScentQuiz === null;
+        $scentQuizShopUrl = '/collections/all?mf_source_label=scent_quiz&mf_template_key=modern_forestry_scent_quiz&mf_module_type=scent_quiz&mf_link_label=Shop%20my%20profile';
     @endphp
     <title>{{ $brandName }} Account</title>
     @vite(['resources/css/app.css'])
@@ -162,6 +169,76 @@
             border: 0;
             cursor: pointer;
         }
+        .forest-quiz-shell {
+            display: grid;
+            gap: 1rem;
+        }
+        .forest-quiz-axis-row {
+            display: grid;
+            gap: 0.55rem;
+        }
+        .forest-quiz-axis-track {
+            width: 100%;
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.16);
+            height: 10px;
+        }
+        .forest-quiz-axis-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(5, 150, 105, 0.95), rgba(16, 185, 129, 0.72));
+        }
+        .forest-quiz-question {
+            border-radius: 22px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(248, 250, 252, 0.9);
+            padding: 1rem;
+        }
+        .forest-quiz-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .forest-quiz-option span {
+            display: block;
+            border-radius: 18px;
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            background: #fff;
+            padding: 0.85rem 0.95rem;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #0f172a;
+            transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+        }
+        .forest-quiz-option input:checked + span {
+            border-color: rgba(5, 150, 105, 0.45);
+            background: rgba(236, 253, 245, 0.95);
+            transform: translateY(-1px);
+        }
+        .forest-quiz-details {
+            border-radius: 24px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255, 255, 255, 0.88);
+            padding: 1rem;
+        }
+        .forest-quiz-details summary {
+            cursor: pointer;
+            list-style: none;
+        }
+        .forest-quiz-details summary::-webkit-details-marker {
+            display: none;
+        }
+        .forest-home-banner {
+            position: relative;
+            overflow: hidden;
+            border-radius: 26px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background:
+                radial-gradient(circle at top right, rgba(16, 185, 129, 0.18), transparent 34%),
+                linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 253, 250, 0.92));
+            padding: 1.25rem;
+        }
     </style>
 </head>
 <body class="min-h-screen text-slate-900">
@@ -177,6 +254,9 @@
                 <div class="flex flex-wrap gap-3">
                     <a href="#rewards" class="forest-action bg-emerald-200 text-emerald-950">{{ data_get($copy, 'primary_cta_label', 'View rewards') }}</a>
                     <a href="#orders" class="forest-action border border-white/15 bg-white/10 text-white">{{ data_get($copy, 'secondary_cta_label', 'Review orders') }}</a>
+                    @if($profile)
+                        <a href="#scent-quiz" class="forest-action border border-white/15 bg-white/10 text-white">Take scent quiz</a>
+                    @endif
                 </div>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:min-w-[340px] lg:grid-cols-2">
@@ -239,6 +319,118 @@
                 <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Support</div>
                 <div class="mt-3 text-sm font-semibold text-slate-950">{{ data_get($copy, 'support_title', 'Support') }}</div>
                 <p class="mt-2 text-sm leading-6 text-slate-600">{{ data_get($copy, 'support_body', 'Need help? Reach out and we will follow up.') }}</p>
+            </article>
+        </section>
+
+        <section class="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]" id="scent-quiz">
+            <article class="forest-card p-5">
+                <div class="forest-quiz-shell">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Scent quiz</div>
+                            <h2 class="mt-2 text-xl font-semibold text-slate-950">{{ data_get($scentQuizDefinition, 'intro.title', 'Find your scent personality') }}</h2>
+                            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                                {{ data_get($scentQuizDefinition, 'intro.body', 'Answer the quiz, save the result to your account, and let that profile follow you into shopping.') }}
+                            </p>
+                        </div>
+                        <a href="{{ $scentQuizShopUrl }}" class="forest-action bg-slate-900 text-white">Shop with this profile</a>
+                    </div>
+
+                    @if($scentQuizNotice !== '')
+                        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                            {{ $scentQuizNotice }}
+                        </div>
+                    @endif
+
+                    @if($latestScentQuiz)
+                        <div class="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
+                            <div class="home-banner">
+                                <div class="forest-home-banner">
+                                    <div class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Saved to your account</div>
+                                    <div class="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{{ data_get($latestScentQuiz, 'headline', 'Your scent profile') }}</div>
+                                    <div class="mt-2 text-sm font-semibold text-emerald-900">{{ data_get($latestScentQuiz, 'personalityTitle', 'Scent personality') }}</div>
+                                    <p class="mt-2 text-sm leading-6 text-slate-600">{{ data_get($latestScentQuiz, 'personalityBody') }}</p>
+                                    <div class="mt-4 flex flex-wrap gap-2">
+                                        @foreach((array) data_get($latestScentQuiz, 'dominantTraits', []) as $trait)
+                                            <span class="forest-chip border-emerald-200 bg-emerald-50 text-emerald-900">{{ \Illuminate\Support\Str::headline((string) $trait) }}</span>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                @foreach($scentQuizAxes as $axis)
+                                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                        <div class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-900">
+                                            <span>{{ data_get($axis, 'label', 'Axis') }}</span>
+                                            <span>{{ (int) data_get($axis, 'score', 0) }}%</span>
+                                        </div>
+                                        <div class="forest-quiz-axis-track mt-3">
+                                            <div class="forest-quiz-axis-fill" style="width: {{ max(0, min(100, (int) data_get($axis, 'score', 0))) }}%;"></div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    <details class="forest-quiz-details" {{ $scentQuizOpen ? 'open' : '' }}>
+                        <summary class="flex items-center justify-between gap-4">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-950">{{ $latestScentQuiz ? 'Retake your scent quiz' : 'Take your scent quiz' }}</div>
+                                <div class="mt-1 text-xs text-slate-500">Results stay tied to this customer account for future shopping and reporting.</div>
+                            </div>
+                            <span class="forest-action border border-slate-200 bg-white text-slate-700">{{ count($scentQuizQuestions) }} questions</span>
+                        </summary>
+
+                        <form method="POST" action="{{ $scentQuizActionUrl }}" class="mt-4 grid gap-4">
+                            @csrf
+                            <div class="grid gap-4 lg:grid-cols-2">
+                                @foreach($scentQuizQuestions as $questionIndex => $question)
+                                    <section class="forest-quiz-question">
+                                        <input type="hidden" name="answers[{{ $questionIndex }}][question_id]" value="{{ data_get($question, 'id') }}">
+                                        <div class="text-sm font-semibold text-slate-950">{{ data_get($question, 'prompt', 'Question') }}</div>
+                                        <div class="mt-3 grid gap-2">
+                                            @foreach((array) data_get($question, 'options', []) as $option)
+                                                <label class="forest-quiz-option">
+                                                    <input
+                                                        type="radio"
+                                                        name="answers[{{ $questionIndex }}][option_id]"
+                                                        value="{{ data_get($option, 'id') }}"
+                                                        required
+                                                    >
+                                                    <span>{{ data_get($option, 'label', 'Option') }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </section>
+                                @endforeach
+                            </div>
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <p class="text-xs text-slate-500">Saving the quiz refreshes your account profile and enables quiz-attributed wishlist and purchase tracking.</p>
+                                <button type="submit" class="forest-action bg-emerald-200 text-emerald-950">Save scent profile</button>
+                            </div>
+                        </form>
+                    </details>
+                </div>
+            </article>
+
+            <article class="forest-card p-5">
+                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Why this matters</div>
+                <h2 class="mt-2 text-lg font-semibold text-slate-950">Turn scent taste into a living profile</h2>
+                <div class="mt-3 grid gap-3">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div class="text-sm font-semibold text-slate-950">Saved to your account</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">Each result is attached to your customer record, so the latest quiz stays with your account instead of disappearing after one visit.</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div class="text-sm font-semibold text-slate-950">Measured against shopping behavior</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">When the quiz sends you back into shopping, we can measure quiz-driven wishlist adds and candle purchases over time.</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div class="text-sm font-semibold text-slate-950">Weekly team visibility</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">A weekly summary now goes to <strong>info@theforestrystudio.com</strong> with recent takers, total takers, wishlist adds, and purchases tied back to the quiz.</p>
+                    </div>
+                </div>
             </article>
         </section>
 
@@ -453,8 +645,31 @@
                     <a href="{{ $dataDeletionLink }}" class="forest-action border border-slate-200 bg-white text-slate-700">Data requests</a>
                 @endif
             </div>
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                The scent quiz saves directly onto a signed-in customer account, so sign in first and then open this page again to take it.
+            </div>
         </section>
     @endif
 </main>
+@if($scentQuizAttributionPayload ?? null)
+    <script>
+        (function () {
+            const payload = @json($scentQuizAttributionPayload);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+
+            payload.landing_url = window.location.href;
+            payload.landing_path = window.location.pathname;
+            payload.captured_at = Date.now();
+
+            try {
+                window.localStorage.setItem('forestry:marketing:attribution', JSON.stringify(payload));
+            } catch (error) {
+                // Keep the account experience resilient even if localStorage is blocked.
+            }
+        }());
+    </script>
+@endif
 </body>
 </html>

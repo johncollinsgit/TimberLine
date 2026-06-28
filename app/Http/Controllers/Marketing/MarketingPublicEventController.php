@@ -12,10 +12,10 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewSummary;
-use App\Models\Order;
-use App\Models\OrderLine;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
+use App\Models\Order;
+use App\Models\OrderLine;
 use App\Services\Marketing\CandleCashAccessGate;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
@@ -28,6 +28,8 @@ use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MessagingContactChannelStateService;
 use App\Services\Marketing\MessagingConversationService;
+use App\Services\Marketing\ModernForestryScentQuizAnalyticsService;
+use App\Services\Mobile\ModernForestryMobileScentQuizService;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
@@ -594,7 +596,9 @@ class MarketingPublicEventController extends Controller
     public function customerDashboard(
         Request $request,
         CandleCashService $candleCashService,
-        ShopifyAppContentService $appContentService
+        ShopifyAppContentService $appContentService,
+        ModernForestryMobileScentQuizService $scentQuizService,
+        ModernForestryScentQuizAnalyticsService $scentQuizAnalytics
     ): View|RedirectResponse {
         $tenantContext = $this->resolveTenantContext($request, $this->tenantResolver);
         if (! is_numeric($tenantContext['tenant_id'] ?? null) || (int) ($tenantContext['tenant_id'] ?? 0) !== 1) {
@@ -631,6 +635,23 @@ class MarketingPublicEventController extends Controller
         $messages = $profile
             ? $this->customerDashboardMessages($profile, $tenantId, $profileStoreContext['store_key'] ?? null)
             : null;
+        $scentQuiz = $profile ? $scentQuizService->definition($profile) : null;
+
+        if ($profile && $request->boolean('scent_quiz')) {
+            $this->eventLogger->log('public_customer_scent_quiz_view', [
+                'status' => 'ok',
+                'profile' => $profile,
+                'source_surface' => 'shopify_app_proxy',
+                'endpoint' => '/shopify/marketing/account',
+                'source_type' => 'shopify_customer_dashboard_scent_quiz',
+                'source_id' => 'profile:'.$profile->id,
+                'meta' => [
+                    'store_key' => $profileStoreContext['store_key'] ?? null,
+                    'tenant_id' => $tenantId,
+                ],
+                'resolution_status' => 'resolved',
+            ]);
+        }
 
         $this->eventLogger->log('public_customer_dashboard_view', [
             'status' => $profile ? 'ok' : $lookupState,
@@ -675,19 +696,28 @@ class MarketingPublicEventController extends Controller
             'rewardsLabel' => trim((string) ($displayLabels['rewards_label'] ?? $displayLabels['rewards'] ?? 'Rewards')) ?: 'Rewards',
             'messageActionUrl' => $this->customerDashboardMessageActionUrl($request),
             'messageNotice' => $request->attributes->get('message_notice'),
+            'scentQuiz' => $scentQuiz,
+            'scentQuizActionUrl' => $this->customerDashboardScentQuizActionUrl($request),
+            'scentQuizNotice' => $request->attributes->get('scent_quiz_notice'),
+            'scentQuizAttributionPayload' => $request->attributes->get('scent_quiz_attribution_payload')
+                ?? ($request->attributes->get('scent_quiz_completed') && $profile
+                    ? $scentQuizAnalytics->attributionPayload($profile, 'Scent quiz complete')
+                    : null),
         ]);
     }
 
     public function sendCustomerMessage(
         Request $request,
         CandleCashService $candleCashService,
-        ShopifyAppContentService $appContentService
+        ShopifyAppContentService $appContentService,
+        ModernForestryMobileScentQuizService $scentQuizService,
+        ModernForestryScentQuizAnalyticsService $scentQuizAnalytics
     ): View {
         $resolution = $this->resolveCustomerDashboardProfileFromRequest($request);
         $profile = $resolution['profile'];
         $lookupState = (string) ($resolution['state'] ?? 'customer_login_required');
         if (! $profile instanceof MarketingProfile) {
-            return $this->customerDashboard($request, $candleCashService, $appContentService);
+            return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
         }
 
         $tenantId = $this->resolvedTenantId($profile, $this->resolveTenantContext($request, $this->tenantResolver)) ?? 1;
@@ -699,7 +729,8 @@ class MarketingPublicEventController extends Controller
 
         if ($body === '') {
             $request->attributes->set('message_notice', 'Please write a message before sending.');
-            return $this->customerDashboard($request, $candleCashService, $appContentService);
+
+            return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
         }
 
         if (! $canCompose || in_array($smsStatus, ['unsubscribed', 'suppressed'], true)) {
@@ -707,7 +738,8 @@ class MarketingPublicEventController extends Controller
                 'message_notice',
                 (string) ($messages['support_prompt'] ?? 'Messages are not available for this account right now. Use support instead.')
             );
-            return $this->customerDashboard($request, $candleCashService, $appContentService);
+
+            return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
         }
 
         $conversation = $this->conversationService->findOrCreateSmsConversation(
@@ -749,7 +781,64 @@ class MarketingPublicEventController extends Controller
 
         $request->attributes->set('message_notice', 'Message sent. We will continue the conversation here and in the Shopify inbox.');
 
-        return $this->customerDashboard($request, $candleCashService, $appContentService);
+        return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
+    }
+
+    public function saveCustomerScentQuizResult(
+        Request $request,
+        CandleCashService $candleCashService,
+        ShopifyAppContentService $appContentService,
+        ModernForestryMobileScentQuizService $scentQuizService,
+        ModernForestryScentQuizAnalyticsService $scentQuizAnalytics
+    ): View {
+        $resolution = $this->resolveCustomerDashboardProfileFromRequest($request);
+        $profile = $resolution['profile'];
+        if (! $profile instanceof MarketingProfile) {
+            $request->attributes->set('scent_quiz_notice', 'Sign in to your account before saving a scent quiz result.');
+
+            return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
+        }
+
+        $validated = $request->validate([
+            'answers' => ['required', 'array', 'min:1'],
+            'answers.*.question_id' => ['required', 'string', 'max:80'],
+            'answers.*.option_id' => ['required', 'string', 'max:80'],
+        ]);
+
+        try {
+            $result = $scentQuizService->saveResult($profile, (array) $validated['answers']);
+        } catch (\InvalidArgumentException $exception) {
+            $request->attributes->set('scent_quiz_notice', $exception->getMessage());
+
+            return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
+        }
+
+        $storeContext = $this->preferredStoreContextForProfile($profile);
+        $this->eventLogger->log('public_customer_scent_quiz_completed', [
+            'status' => 'ok',
+            'profile' => $profile,
+            'source_surface' => 'shopify_app_proxy',
+            'endpoint' => '/shopify/marketing/scent-quiz/results',
+            'source_type' => 'shopify_customer_dashboard_scent_quiz',
+            'source_id' => 'profile:'.$profile->id,
+            'meta' => [
+                'store_key' => $storeContext['store_key'] ?? null,
+                'tenant_id' => $storeContext['tenant_id'] ?? $profile->tenant_id,
+                'quiz_version' => $result['version'] ?? ModernForestryMobileScentQuizService::QUIZ_VERSION,
+                'headline' => $result['headline'] ?? null,
+                'dominant_traits' => $result['dominantTraits'] ?? [],
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        $request->attributes->set('scent_quiz_notice', 'Your scent profile is saved and now follows your account.');
+        $request->attributes->set('scent_quiz_completed', true);
+        $request->attributes->set(
+            'scent_quiz_attribution_payload',
+            $scentQuizAnalytics->attributionPayload($profile, 'Scent quiz result')
+        );
+
+        return $this->customerDashboard($request, $candleCashService, $appContentService, $scentQuizService, $scentQuizAnalytics);
     }
 
     /**
@@ -1057,6 +1146,15 @@ class MarketingPublicEventController extends Controller
         $routeName = $request->is('shopify/marketing/v1/*')
             ? 'marketing.shopify.v1.message'
             : 'marketing.shopify.message';
+
+        return route($routeName, $request->query(), false);
+    }
+
+    protected function customerDashboardScentQuizActionUrl(Request $request): string
+    {
+        $routeName = $request->is('shopify/marketing/v1/*')
+            ? 'marketing.shopify.v1.scent-quiz.submit'
+            : 'marketing.shopify.scent-quiz.submit';
 
         return route($routeName, $request->query(), false);
     }

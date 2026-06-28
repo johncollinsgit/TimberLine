@@ -62,6 +62,7 @@
   wireWishlistSignals();
   patchNetworkSignals();
   syncCartAttributes();
+  injectScentQuizBanner();
 
   function readConfig() {
     const node = document.getElementById(CONFIG_ID);
@@ -388,6 +389,11 @@
       fbclid: stringOrNull(currentAttribution.fbclid),
       fbc: stringOrNull(currentAttribution.fbc),
       fbp: stringOrNull(currentAttribution.fbp),
+      mf_source_label: stringOrNull(currentAttribution.mf_source_label),
+      mf_template_key: stringOrNull(currentAttribution.mf_template_key),
+      mf_profile_id: stringOrNull(currentAttribution.mf_profile_id),
+      mf_module_type: stringOrNull(currentAttribution.mf_module_type),
+      mf_link_label: stringOrNull(currentAttribution.mf_link_label),
     });
 
     if (Object.keys(attributes).length === 0) {
@@ -464,7 +470,42 @@
       _mf_utm_campaign: stringOrNull(currentAttribution.utm_campaign),
       _mf_utm_content: stringOrNull(currentAttribution.utm_content),
       _mf_utm_term: stringOrNull(currentAttribution.utm_term),
+      _mf_source_label: stringOrNull(currentAttribution.mf_source_label),
+      _mf_template_key: stringOrNull(currentAttribution.mf_template_key),
+      _mf_profile_id: stringOrNull(currentAttribution.mf_profile_id),
+      _mf_module_type: stringOrNull(currentAttribution.mf_module_type),
+      _mf_link_label: stringOrNull(currentAttribution.mf_link_label),
     });
+  }
+
+  function injectScentQuizBanner() {
+    if (String(config.pageType || '') !== 'index') {
+      return;
+    }
+
+    if (document.querySelector('[data-forestry-scent-quiz-banner="true"]')) {
+      return;
+    }
+
+    const main = document.querySelector('main') || document.body;
+    if (!(main instanceof HTMLElement)) {
+      return;
+    }
+
+    const banner = document.createElement('section');
+    banner.className = 'forestry-scent-quiz-banner';
+    banner.setAttribute('data-forestry-scent-quiz-banner', 'true');
+    banner.innerHTML = [
+      '<div class="forestry-scent-quiz-banner__content">',
+      '<div class="forestry-scent-quiz-banner__eyebrow">Scent quiz</div>',
+      '<h2>Find your candle personality and save it to your account.</h2>',
+      '<p>Answer the quiz, discover your dominant scent profile, and let Modern Forestry track the wishlist adds and purchases that follow.</p>',
+      '<a class="forestry-scent-quiz-banner__cta" href="/apps/forestry/account?scent_quiz=1">Take the quiz</a>',
+      '</div>',
+      '<div class="forestry-scent-quiz-banner__glow" aria-hidden="true"></div>',
+    ].join('');
+
+    main.insertBefore(banner, main.firstChild);
   }
 
   function appendHiddenInput(form, name, value) {
