@@ -13,6 +13,11 @@ test('shopify oauth always requests customer events pixel scopes', function (): 
     expect($scopes)->toContain('read_pixels');
     expect($scopes)->toContain('write_pixels');
     expect($scopes)->toContain('read_customer_events');
+    expect($scopes)->toContain('unauthenticated_read_checkouts');
+    expect($scopes)->toContain('unauthenticated_read_collection_listings');
+    expect($scopes)->toContain('unauthenticated_read_product_listings');
+    expect($scopes)->toContain('unauthenticated_read_selling_plans');
+    expect($scopes)->toContain('unauthenticated_write_checkouts');
     expect($scopes)->toContain('read_orders');
     expect($scopes)->toContain('read_products');
     expect($scopes)->toContain('read_customers');

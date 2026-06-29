@@ -1213,11 +1213,12 @@ Required environment keys:
 - `SHOPIFY_RETAIL_SHOP`
 - `SHOPIFY_RETAIL_CLIENT_ID`
 - `SHOPIFY_RETAIL_CLIENT_SECRET`
+- `SHOPIFY_RETAIL_STOREFRONT_ACCESS_TOKEN` (required for Modern Forestry mobile cart estimates, shipping/tax previews, and signed-in Storefront checkout handoff)
 - `SHOPIFY_WHOLESALE_SHOP`
 - `SHOPIFY_WHOLESALE_CLIENT_ID`
 - `SHOPIFY_WHOLESALE_CLIENT_SECRET`
 - `SHOPIFY_API_VERSION` (default `2026-01`)
-- `SHOPIFY_SCOPES` (default `read_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_discounts,write_discounts,read_webhooks,write_webhooks,read_pixels,write_pixels,read_customer_events`)
+- `SHOPIFY_SCOPES` (default `read_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_discounts,write_discounts,read_webhooks,write_webhooks,read_pixels,write_pixels,read_customer_events,unauthenticated_read_checkouts,unauthenticated_read_collection_listings,unauthenticated_read_product_listings,unauthenticated_read_selling_plans,unauthenticated_write_checkouts`)
 - `SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK` (default `false`, legacy only)
 - `SHOPIFY_ACTIVE_STORE_KEYS` (default `retail`)
 - `SHOPIFY_REQUIRED_STORE_KEYS` (default `retail`)

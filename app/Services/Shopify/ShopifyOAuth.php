@@ -11,6 +11,11 @@ class ShopifyOAuth
         'read_pixels',
         'write_pixels',
         'read_customer_events',
+        'unauthenticated_read_checkouts',
+        'unauthenticated_read_collection_listings',
+        'unauthenticated_read_product_listings',
+        'unauthenticated_read_selling_plans',
+        'unauthenticated_write_checkouts',
     ];
 
     public function buildAuthUrl(array $store, string $redirectUri, string $state): string

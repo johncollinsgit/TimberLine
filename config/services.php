@@ -185,7 +185,7 @@ return [
 
         'scopes' => env(
             'SHOPIFY_SCOPES',
-            'read_products,write_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_discounts,write_discounts,read_pixels,write_pixels,read_customer_events'
+            'read_products,write_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_discounts,write_discounts,read_pixels,write_pixels,read_customer_events,unauthenticated_read_checkouts,unauthenticated_read_collection_listings,unauthenticated_read_product_listings,unauthenticated_read_selling_plans,unauthenticated_write_checkouts'
         ),
         // Stores used by default when commands run without an explicit store argument.
         'active_store_keys' => env('SHOPIFY_ACTIVE_STORE_KEYS', 'retail'),
