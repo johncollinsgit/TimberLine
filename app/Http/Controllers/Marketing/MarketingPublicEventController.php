@@ -1323,16 +1323,16 @@ class MarketingPublicEventController extends Controller
             if ($logo !== false) {
                 imagealphablending($logo, true);
                 imagesavealpha($logo, true);
-                imagecopyresampled($image, $logo, 82, 84, 0, 0, 472, 118, imagesx($logo), imagesy($logo));
+                $this->copyContainedImage($image, $logo, 92, 72, 212, 140);
                 imagedestroy($logo);
             }
         }
 
-        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 92, 178, strtoupper('Scent Personality Type: '.$headline), $colors['sage'], 520, 1, 20);
-        $this->drawWrappedScentShareText($image, $regularFont, 18, 0, 92, 214, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 24);
+        $this->drawWrappedScentShareText($image, $boldFont, 24, 0, 92, 196, 'Find your Modern Forestry Scent Personality!', $colors['white'], 500, 2, 30);
+        $this->drawWrappedScentShareText($image, $regularFont, 16, 0, 92, 238, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 22);
 
-        $this->drawWrappedScentShareText($image, $boldFont, 26, 0, 92, 310, 'Archetype: '.$title, $colors['ink'], 440, 2, 34);
-        $this->drawWrappedScentShareText($image, $regularFont, 24, 0, 92, 358, $body, $colors['muted'], 440, 4, 32);
+        $this->drawWrappedScentShareText($image, $boldFont, 26, 0, 92, 304, 'Archetype: '.$title, $colors['ink'], 440, 2, 34);
+        $this->drawWrappedScentShareText($image, $regularFont, 21, 0, 92, 352, $body, $colors['muted'], 440, 3, 29);
 
         $traitX = 92;
         $traitY = 516;
@@ -1570,6 +1570,23 @@ class MarketingPublicEventController extends Controller
         }
 
         return null;
+    }
+
+    protected function copyContainedImage($destination, $source, int $targetX, int $targetY, int $targetWidth, int $targetHeight): void
+    {
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        if ($sourceWidth <= 0 || $sourceHeight <= 0) {
+            return;
+        }
+
+        $scale = min($targetWidth / $sourceWidth, $targetHeight / $sourceHeight);
+        $drawWidth = max(1, (int) round($sourceWidth * $scale));
+        $drawHeight = max(1, (int) round($sourceHeight * $scale));
+        $drawX = $targetX + (int) floor(($targetWidth - $drawWidth) / 2);
+        $drawY = $targetY + (int) floor(($targetHeight - $drawHeight) / 2);
+
+        imagecopyresampled($destination, $source, $drawX, $drawY, 0, 0, $drawWidth, $drawHeight, $sourceWidth, $sourceHeight);
     }
 
     protected function scentShareTextWidth(?string $font, int $size, string $text): int

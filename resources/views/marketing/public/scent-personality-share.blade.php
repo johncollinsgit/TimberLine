@@ -22,19 +22,20 @@
         $publicQuizActionUrl = trim((string) ($publicQuizActionUrl ?? ''));
         $publicQuizEventUrl = trim((string) ($publicQuizEventUrl ?? ''));
         $pageMode = in_array((string) ($pageMode ?? 'landing'), ['landing', 'quiz', 'results'], true) ? (string) $pageMode : 'landing';
-        $cardVersion = 'mf-scent-v3';
+        $cardVersion = 'mf-scent-v4';
         $shareUrl = url()->full();
         $shareImageUrl = route('marketing.public.scent-personality-share.image', ['token' => $result->public_share_token, 'v' => $cardVersion, 'card' => $cardVersion]);
         $logoUrl = asset('brand/modern-forestry-logo-white.png');
+        $pageTitle = 'Find your Modern Forestry Scent Personality!';
         $typeLabel = 'Scent Personality Type: '.$headline;
         $resultHeadline = trim((string) data_get($publicQuizResult, 'headline', '')) ?: $headline;
         $resultTitle = trim((string) data_get($publicQuizResult, 'personalityTitle', '')) ?: $title;
         $resultBody = trim((string) data_get($publicQuizResult, 'personalityBody', '')) ?: $body;
         $scoreAxes = $pageMode === 'results' && $publicQuizAxes !== [] ? $publicQuizAxes : $axes;
     @endphp
-    <title>{{ $headline }} | Modern Forestry</title>
+    <title>{{ $pageTitle }}</title>
     <meta name="description" content="{{ $body }}">
-    <meta property="og:title" content="{{ $typeLabel }}">
+    <meta property="og:title" content="{{ $pageTitle }}">
     <meta property="og:description" content="{{ $body }}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ $shareUrl }}">
@@ -43,7 +44,7 @@
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="{{ $headline }} scent personality card">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ $typeLabel }}">
+    <meta name="twitter:title" content="{{ $pageTitle }}">
     <meta name="twitter:description" content="{{ $body }}">
     <meta name="twitter:image" content="{{ $shareImageUrl }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
