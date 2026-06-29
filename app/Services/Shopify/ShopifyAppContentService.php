@@ -58,6 +58,14 @@ class ShopifyAppContentService
             'mobile_slide_3_mobile_image_url' => null,
             'mobile_slide_3_cta_label' => 'View Rewards',
             'mobile_slide_3_cta_url' => 'https://theforestrystudio.com/pages/rewards',
+            'mobile_bag_reminders_enabled' => true,
+            'mobile_bag_reminder_frequency_hours' => 24,
+            'mobile_bag_reminder_max_emails' => 3,
+            'mobile_bag_reminder_subject' => 'Your Modern Forestry bag is still waiting',
+            'mobile_bag_reminder_headline' => 'Your bag is still waiting',
+            'mobile_bag_reminder_body' => 'The candles you picked are still in your bag if you want to come back and finish checkout.',
+            'mobile_bag_reminder_cta_label' => 'Finish checkout',
+            'mobile_bag_reminder_cta_url' => 'https://theforestrystudio.com/cart',
         ];
     }
 
@@ -258,7 +266,48 @@ class ShopifyAppContentService
             'mobile_slide_3_mobile_image_url' => $this->normalizedUrl($source['mobile_slide_3_mobile_image_url'] ?? null, $defaults['mobile_slide_3_mobile_image_url']),
             'mobile_slide_3_cta_label' => $this->normalizedText($source['mobile_slide_3_cta_label'] ?? null, $defaults['mobile_slide_3_cta_label']),
             'mobile_slide_3_cta_url' => $this->normalizedUrl($source['mobile_slide_3_cta_url'] ?? null, $defaults['mobile_slide_3_cta_url']),
+            'mobile_bag_reminders_enabled' => $this->normalizedBoolean($source['mobile_bag_reminders_enabled'] ?? null, (bool) $defaults['mobile_bag_reminders_enabled']),
+            'mobile_bag_reminder_frequency_hours' => $this->normalizedInteger($source['mobile_bag_reminder_frequency_hours'] ?? null, (int) $defaults['mobile_bag_reminder_frequency_hours'], 6, 168),
+            'mobile_bag_reminder_max_emails' => $this->normalizedInteger($source['mobile_bag_reminder_max_emails'] ?? null, (int) $defaults['mobile_bag_reminder_max_emails'], 1, 10),
+            'mobile_bag_reminder_subject' => $this->normalizedText($source['mobile_bag_reminder_subject'] ?? null, $defaults['mobile_bag_reminder_subject']),
+            'mobile_bag_reminder_headline' => $this->normalizedText($source['mobile_bag_reminder_headline'] ?? null, $defaults['mobile_bag_reminder_headline']),
+            'mobile_bag_reminder_body' => $this->normalizedText($source['mobile_bag_reminder_body'] ?? null, $defaults['mobile_bag_reminder_body']),
+            'mobile_bag_reminder_cta_label' => $this->normalizedText($source['mobile_bag_reminder_cta_label'] ?? null, $defaults['mobile_bag_reminder_cta_label']),
+            'mobile_bag_reminder_cta_url' => $this->normalizedUrl($source['mobile_bag_reminder_cta_url'] ?? null, $defaults['mobile_bag_reminder_cta_url']),
         ];
+    }
+
+    protected function normalizedBoolean(mixed $value, bool $fallback): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_numeric($value)) {
+            return (bool) ((int) $value);
+        }
+
+        if (is_string($value)) {
+            $normalized = strtolower(trim($value));
+            if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+
+            if (in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+                return false;
+            }
+        }
+
+        return $fallback;
+    }
+
+    protected function normalizedInteger(mixed $value, int $fallback, int $min, int $max): int
+    {
+        if (! is_numeric($value)) {
+            return $fallback;
+        }
+
+        return max($min, min($max, (int) $value));
     }
 
     protected function normalizedText(mixed $value, ?string $fallback = null): ?string

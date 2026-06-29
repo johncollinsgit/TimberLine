@@ -15,6 +15,7 @@ use App\Services\Marketing\TwilioSmsService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
+use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -39,7 +40,8 @@ class ModernForestryMobileAccountService
         protected MessagingConversationService $conversationService,
         protected TwilioSmsService $twilioSmsService,
         protected ModernForestryMobileSupportSettingsService $supportSettings,
-        protected ModernForestryMobileScentQuizService $scentQuizService
+        protected ModernForestryMobileScentQuizService $scentQuizService,
+        protected ShopifyEmbeddedRewardsService $embeddedRewards
     ) {
     }
 
@@ -127,30 +129,25 @@ class ModernForestryMobileAccountService
         $balancePoints = $this->candleCashService->currentBalance($profile);
         $reward = $this->candleCashService->storefrontReward($tenantId);
         $rewardPayload = $this->candleCashService->storefrontRewardPayload($reward, $balancePoints, $tenantId);
+        $embeddedRewards = $this->embeddedRewards->payload($tenantId);
+        $earnItems = collect((array) data_get($embeddedRewards, 'earn.items', []))
+            ->filter(fn (mixed $item): bool => is_array($item)
+                && (bool) ($item['enabled'] ?? false)
+                && (bool) ($item['customer_visible'] ?? true))
+            ->values()
+            ->map(fn (array $item): array => [
+                'id' => (string) ($item['code'] ?? $item['id'] ?? Str::slug((string) ($item['title'] ?? 'earn'))),
+                'title' => (string) ($item['title'] ?? 'Earn Candle Cash'),
+                'body' => $this->earnPathBody($item),
+                'icon' => $this->earnPathIcon($item),
+                'valueLabel' => $this->nullableString($item['reward_amount_formatted'] ?? $item['candle_cash_value_formatted'] ?? null),
+            ])
+            ->all();
 
         return [
             'customer' => $this->customerPayload($profile),
             'balance' => $this->candleCashService->balancePayloadFromPoints($balancePoints),
-            'earn' => [
-                [
-                    'id' => 'purchase',
-                    'title' => 'Earn on purchases',
-                    'body' => 'Candle Cash is added from eligible Modern Forestry orders.',
-                    'icon' => 'bag',
-                ],
-                [
-                    'id' => 'reviews',
-                    'title' => 'Review your favorites',
-                    'body' => 'Verified reviews can unlock bonus Candle Cash when campaigns are active.',
-                    'icon' => 'star',
-                ],
-                [
-                    'id' => 'referrals',
-                    'title' => 'Share Modern Forestry',
-                    'body' => 'Referral and seasonal earning paths appear here as they become available.',
-                    'icon' => 'person.2',
-                ],
-            ],
+            'earn' => $earnItems,
             'rewards' => array_values(array_filter([$rewardPayload])),
             'history' => $this->rewardHistory($profile, $tenantId),
             'redemptions' => $this->redemptions($profile, $tenantId),
@@ -611,6 +608,44 @@ class ModernForestryMobileAccountService
             'expiresAt' => optional($redemption->expires_at)->toIso8601String(),
             'redeemedAt' => optional($redemption->redeemed_at)->toIso8601String(),
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $item
+     */
+    protected function earnPathBody(array $item): string
+    {
+        $description = $this->nullableString($item['description'] ?? null);
+        if ($description !== null) {
+            return $description;
+        }
+
+        $valueLabel = $this->nullableString($item['reward_amount_formatted'] ?? $item['candle_cash_value_formatted'] ?? null);
+        $actionType = $this->nullableString($item['action_type_label'] ?? null);
+
+        return collect([$valueLabel, $actionType])
+            ->filter()
+            ->implode(' · ') ?: 'Earn more Candle Cash through the live rewards tasks configured in Everbranch.';
+    }
+
+    /**
+     * @param  array<string,mixed>  $item
+     */
+    protected function earnPathIcon(array $item): string
+    {
+        $code = strtolower(trim((string) ($item['code'] ?? '')));
+        $title = strtolower(trim((string) ($item['title'] ?? '')));
+        $descriptor = $code.' '.$title;
+
+        return match (true) {
+            str_contains($descriptor, 'birthday') => 'birthday.cake.fill',
+            str_contains($descriptor, 'google') || str_contains($descriptor, 'review') => 'star.bubble.fill',
+            str_contains($descriptor, 'instagram') => 'camera.circle.fill',
+            str_contains($descriptor, 'refer') || str_contains($descriptor, 'friend') => 'person.2.fill',
+            str_contains($descriptor, 'club') || str_contains($descriptor, 'member') => 'crown.fill',
+            str_contains($descriptor, 'second order') || str_contains($descriptor, 'purchase') || str_contains($descriptor, 'order') => 'bag.fill',
+            default => 'sparkles',
+        };
     }
 
     /**

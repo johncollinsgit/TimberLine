@@ -22,6 +22,11 @@ class ModernForestrySocialShareRewardService
     /**
      * @var array<int,string>
      */
+    protected const SHARE_MODES = ['story', 'post', 'copy_link', 'generic'];
+
+    /**
+     * @var array<int,string>
+     */
     protected const TARGET_TYPES = ['purchased_product', 'product', 'scent_personality'];
 
     public function __construct(
@@ -60,6 +65,9 @@ class ModernForestrySocialShareRewardService
     {
         $platform = $this->normalizePlatform($platform);
         $target = $this->normalizeTarget($profile, $target);
+        $shareMode = $this->normalizeShareMode($context['share_mode'] ?? null);
+        $shareSource = $this->shareSource($platform, $shareMode);
+        $shareUrl = $this->contextualizedShareUrl((string) $target['share_url'], $shareSource);
 
         $claim = MarketingSocialShareClaim::query()->firstOrNew([
             'marketing_profile_id' => $profile->id,
@@ -70,9 +78,13 @@ class ModernForestrySocialShareRewardService
 
         $claim->forceFill([
             'tenant_id' => $this->tenantId($profile),
-            'share_url' => $target['share_url'],
+            'share_url' => $shareUrl,
             'started_at' => $claim->started_at ?: now(),
-            'metadata' => $this->claimMetadata($target, $context),
+            'metadata' => $this->claimMetadata($target, [
+                ...$context,
+                'share_mode' => $shareMode,
+                'share_source' => $shareSource,
+            ]),
         ]);
 
         if (! $claim->exists || ! $claim->claimed_at) {
@@ -92,8 +104,10 @@ class ModernForestrySocialShareRewardService
                 'platform' => $platform,
                 'target_type' => $target['type'],
                 'target_id' => $target['id'],
-                'share_url' => $target['share_url'],
+                'share_url' => $shareUrl,
                 'title' => $target['title'] ?? null,
+                'share_mode' => $shareMode,
+                'share_source' => $shareSource,
             ],
             'resolution_status' => 'resolved',
         ]);
@@ -111,8 +125,11 @@ class ModernForestrySocialShareRewardService
         $target = $this->normalizeTarget($profile, $target);
         $tenantId = $this->tenantId($profile);
         $sourceId = $this->sourceId($profile, $platform, $target);
+        $shareMode = $this->normalizeShareMode($context['share_mode'] ?? null);
+        $shareSource = $this->shareSource($platform, $shareMode);
+        $shareUrl = $this->contextualizedShareUrl((string) $target['share_url'], $shareSource);
 
-        return DB::transaction(function () use ($profile, $platform, $target, $payload, $context, $tenantId, $sourceId): array {
+        return DB::transaction(function () use ($profile, $platform, $target, $payload, $context, $tenantId, $sourceId, $shareMode, $shareSource, $shareUrl): array {
             $claim = MarketingSocialShareClaim::query()
                 ->where('marketing_profile_id', $profile->id)
                 ->where('platform', $platform)
@@ -128,10 +145,14 @@ class ModernForestrySocialShareRewardService
                     'platform' => $platform,
                     'target_type' => $target['type'],
                     'target_id' => $target['id'],
-                    'share_url' => $target['share_url'],
+                    'share_url' => $shareUrl,
                     'status' => 'started',
                     'started_at' => now(),
-                    'metadata' => $this->claimMetadata($target, $context),
+                    'metadata' => $this->claimMetadata($target, [
+                        ...$context,
+                        'share_mode' => $shareMode,
+                        'share_source' => $shareSource,
+                    ]),
                 ]);
             }
 
@@ -145,7 +166,7 @@ class ModernForestrySocialShareRewardService
             );
 
             $claim->forceFill([
-                'share_url' => $target['share_url'],
+                'share_url' => $shareUrl,
                 'status' => ((bool) ($award['already_awarded'] ?? false)) ? 'already_awarded' : 'awarded',
                 'proof_url' => $this->nullableString($payload['proof_url'] ?? null),
                 'proof_text' => $this->nullableString($payload['proof_text'] ?? null),
@@ -154,6 +175,8 @@ class ModernForestrySocialShareRewardService
                 'candle_cash_transaction_id' => (int) ($award['transaction_id'] ?? 0) ?: $claim->candle_cash_transaction_id,
                 'metadata' => $this->claimMetadata($target, [
                     ...$context,
+                    'share_mode' => $shareMode,
+                    'share_source' => $shareSource,
                     'already_awarded' => (bool) ($award['already_awarded'] ?? false),
                 ]),
             ])->save();
@@ -169,9 +192,11 @@ class ModernForestrySocialShareRewardService
                     'platform' => $platform,
                     'target_type' => $target['type'],
                     'target_id' => $target['id'],
-                    'share_url' => $target['share_url'],
+                    'share_url' => $shareUrl,
                     'already_awarded' => (bool) ($award['already_awarded'] ?? false),
                     'transaction_id' => (int) ($award['transaction_id'] ?? 0),
+                    'share_mode' => $shareMode,
+                    'share_source' => $shareSource,
                 ],
                 'resolution_status' => 'resolved',
             ]);
@@ -320,8 +345,42 @@ class ModernForestrySocialShareRewardService
             'body' => $target['body'] ?? null,
             'image_url' => $target['image_url'] ?? null,
             'surface' => $context['surface'] ?? null,
+            'share_mode' => $context['share_mode'] ?? null,
+            'share_source' => $context['share_source'] ?? null,
             'already_awarded' => $context['already_awarded'] ?? null,
         ], static fn (mixed $value): bool => $value !== null && $value !== '');
+    }
+
+    protected function normalizeShareMode(mixed $value): string
+    {
+        $mode = Str::lower(trim((string) $value));
+
+        return in_array($mode, self::SHARE_MODES, true) ? $mode : 'generic';
+    }
+
+    protected function shareSource(string $platform, string $shareMode): string
+    {
+        return match ([$platform, $shareMode]) {
+            ['facebook', 'story'] => 'facebook_story',
+            ['facebook', 'post'] => 'facebook_post',
+            ['instagram', 'story'] => 'instagram_story',
+            ['instagram', 'copy_link'] => 'copied_link',
+            default => 'generic_share',
+        };
+    }
+
+    protected function contextualizedShareUrl(string $shareUrl, string $shareSource): string
+    {
+        $resolved = trim($shareUrl);
+        if ($resolved === '') {
+            return $resolved;
+        }
+
+        $separator = str_contains($resolved, '?') ? '&' : '?';
+
+        return $resolved.$separator.http_build_query([
+            'source' => $shareSource,
+        ]);
     }
 
     /**

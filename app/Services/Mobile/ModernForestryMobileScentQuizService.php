@@ -31,20 +31,24 @@ class ModernForestryMobileScentQuizService
     public function definition(MarketingProfile $profile): array
     {
         return [
+            ...$this->publicDefinition(),
+            'latestResult' => $this->latestResultPayload($profile),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function publicDefinition(): array
+    {
+        return [
             'version' => self::QUIZ_VERSION,
             'intro' => [
                 'title' => 'Find your scent personality',
                 'body' => 'A 15-question profile that turns candle taste into a scent map, dominant traits, and personality-style copy.',
             ],
-            'axes' => array_map(
-                static fn (array $axis): array => [
-                    'id' => $axis['id'],
-                    'label' => $axis['label'],
-                ],
-                self::AXES
-            ),
+            'axes' => $this->axisDefinitions(),
             'questions' => $this->questions(),
-            'latestResult' => $this->latestResultPayload($profile),
         ];
     }
 
@@ -53,6 +57,123 @@ class ModernForestryMobileScentQuizService
      * @return array<string,mixed>
      */
     public function saveResult(MarketingProfile $profile, array $answers): array
+    {
+        $evaluated = $this->evaluateRawAnswers($answers);
+
+        $record = MarketingProfileScentQuizResult::query()->updateOrCreate(
+            ['marketing_profile_id' => $profile->id],
+            [
+                'tenant_id' => $profile->tenant_id,
+                'quiz_version' => self::QUIZ_VERSION,
+                'axis_scores' => $evaluated['axis_scores'],
+                'dominant_traits' => $evaluated['dominant_traits'],
+                'headline' => $evaluated['headline'],
+                'personality_title' => $evaluated['personality']['title'],
+                'personality_body' => $evaluated['personality']['body'],
+                'answers' => $evaluated['answers'],
+                'completed_at' => now(),
+            ]
+        );
+
+        return $this->resultPayload($record);
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $answers
+     * @return array<string,mixed>
+     */
+    public function evaluateAnswers(array $answers): array
+    {
+        return $this->resultPayloadFromComputed($this->evaluateRawAnswers($answers));
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function latestResultPayload(MarketingProfile $profile): ?array
+    {
+        $result = $profile->relationLoaded('scentQuizResult')
+            ? $profile->scentQuizResult
+            : $profile->scentQuizResult()->first();
+
+        if (! $result instanceof MarketingProfileScentQuizResult) {
+            return null;
+        }
+
+        return $this->resultPayload($result);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function resultPayload(MarketingProfileScentQuizResult $result): array
+    {
+        $scores = is_array($result->axis_scores) ? $result->axis_scores : [];
+        $traits = is_array($result->dominant_traits) ? array_values($result->dominant_traits) : [];
+
+        return [
+            'version' => (string) ($result->quiz_version ?: self::QUIZ_VERSION),
+            'headline' => (string) ($result->headline ?: $this->headline($traits)),
+            'personalityTitle' => (string) ($result->personality_title ?: 'Scent personality'),
+            'personalityBody' => (string) ($result->personality_body ?: 'Your scent personality will update as you take the quiz again.'),
+            'dominantTraits' => $traits,
+            'axes' => array_map(function (array $axis) use ($scores): array {
+                return [
+                    'id' => $axis['id'],
+                    'label' => $axis['label'],
+                    'score' => max(0, min(100, (int) ($scores[$axis['id']] ?? 0))),
+                ];
+            }, self::AXES),
+            'completedAt' => optional($result->completed_at)->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $evaluated
+     * @return array<string,mixed>
+     */
+    protected function resultPayloadFromComputed(array $evaluated): array
+    {
+        $scores = is_array($evaluated['axis_scores'] ?? null) ? $evaluated['axis_scores'] : [];
+        $traits = is_array($evaluated['dominant_traits'] ?? null) ? array_values($evaluated['dominant_traits']) : [];
+
+        return [
+            'version' => self::QUIZ_VERSION,
+            'headline' => (string) ($evaluated['headline'] ?? $this->headline($traits)),
+            'personalityTitle' => (string) data_get($evaluated, 'personality.title', 'Scent personality'),
+            'personalityBody' => (string) data_get($evaluated, 'personality.body', 'Your scent personality will update as you take the quiz again.'),
+            'dominantTraits' => $traits,
+            'axes' => array_map(function (array $axis) use ($scores): array {
+                return [
+                    'id' => $axis['id'],
+                    'label' => $axis['label'],
+                    'score' => max(0, min(100, (int) ($scores[$axis['id']] ?? 0))),
+                ];
+            }, self::AXES),
+            'answers' => is_array($evaluated['answers'] ?? null) ? array_values($evaluated['answers']) : [],
+            'completedAt' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<int,array{id:string,label:string}>
+     */
+    protected function axisDefinitions(): array
+    {
+        return array_map(
+            static fn (array $axis): array => [
+                'id' => $axis['id'],
+                'label' => $axis['label'],
+            ],
+            self::AXES
+        );
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $answers
+     * @return array<string,mixed>
+     */
+    protected function evaluateRawAnswers(array $answers): array
     {
         $questions = collect($this->questions())->keyBy('id');
         $submitted = collect($answers)
@@ -105,65 +226,12 @@ class ModernForestryMobileScentQuizService
             ->values()
             ->all();
 
-        $headline = $this->headline($dominantTraits);
-        $personality = $this->personalityCopy($dominantTraits, $normalizedScores);
-
-        $record = MarketingProfileScentQuizResult::query()->updateOrCreate(
-            ['marketing_profile_id' => $profile->id],
-            [
-                'tenant_id' => $profile->tenant_id,
-                'quiz_version' => self::QUIZ_VERSION,
-                'axis_scores' => $normalizedScores,
-                'dominant_traits' => $dominantTraits,
-                'headline' => $headline,
-                'personality_title' => $personality['title'],
-                'personality_body' => $personality['body'],
-                'answers' => $answerPayload,
-                'completed_at' => now(),
-            ]
-        );
-
-        return $this->resultPayload($record);
-    }
-
-    /**
-     * @return array<string,mixed>|null
-     */
-    public function latestResultPayload(MarketingProfile $profile): ?array
-    {
-        $result = $profile->relationLoaded('scentQuizResult')
-            ? $profile->scentQuizResult
-            : $profile->scentQuizResult()->first();
-
-        if (! $result instanceof MarketingProfileScentQuizResult) {
-            return null;
-        }
-
-        return $this->resultPayload($result);
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    protected function resultPayload(MarketingProfileScentQuizResult $result): array
-    {
-        $scores = is_array($result->axis_scores) ? $result->axis_scores : [];
-        $traits = is_array($result->dominant_traits) ? array_values($result->dominant_traits) : [];
-
         return [
-            'version' => (string) ($result->quiz_version ?: self::QUIZ_VERSION),
-            'headline' => (string) ($result->headline ?: $this->headline($traits)),
-            'personalityTitle' => (string) ($result->personality_title ?: 'Scent personality'),
-            'personalityBody' => (string) ($result->personality_body ?: 'Your scent personality will update as you take the quiz again.'),
-            'dominantTraits' => $traits,
-            'axes' => array_map(function (array $axis) use ($scores): array {
-                return [
-                    'id' => $axis['id'],
-                    'label' => $axis['label'],
-                    'score' => max(0, min(100, (int) ($scores[$axis['id']] ?? 0))),
-                ];
-            }, self::AXES),
-            'completedAt' => optional($result->completed_at)->toIso8601String(),
+            'axis_scores' => $normalizedScores,
+            'dominant_traits' => $dominantTraits,
+            'headline' => $this->headline($dominantTraits),
+            'personality' => $this->personalityCopy($dominantTraits, $normalizedScores),
+            'answers' => $answerPayload,
         ];
     }
 

@@ -6,6 +6,7 @@ use App\Models\MarketingProfileScentQuizResult;
 use App\Models\MarketingSocialShareClaim;
 use App\Models\MarketingStorefrontEvent;
 use App\Models\Tenant;
+use App\Services\Mobile\ModernForestryMobileScentQuizService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\ModernForestrySocialShareRewardService;
 
@@ -155,4 +156,88 @@ test('public scent personality share image renders a branded preview card', func
     $response->assertOk();
     expect($response->headers->get('content-type'))->toContain('image/png')
         ->and(strlen($response->getContent()))->toBeGreaterThan(5000);
+});
+
+test('public scent personality share page can run an anonymous quiz funnel and recommend products', function (): void {
+    config()->set('mobile_catalog.fake_enabled', true);
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+    ]);
+
+    $result = MarketingProfileScentQuizResult::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => ['clean' => 88, 'citrus' => 73, 'earthy' => 42],
+        'dominant_traits' => ['clean', 'citrus', 'earthy'],
+        'headline' => 'Clean + Citrus',
+        'personality_title' => 'The Sunlit Organizer',
+        'personality_body' => 'Fresh, bright, and a little polished.',
+        'public_share_token' => 'funnelsharetoken1234567890',
+        'answers' => [],
+        'completed_at' => now(),
+    ]);
+
+    $quiz = app(ModernForestryMobileScentQuizService::class)->publicDefinition();
+    $answers = collect($quiz['questions'])
+        ->map(fn (array $question): array => [
+            'question_id' => $question['id'],
+            'option_id' => $question['options'][0]['id'],
+        ])
+        ->values()
+        ->all();
+
+    $response = $this->post(route('marketing.public.scent-personality-share.submit', [
+        'token' => $result->public_share_token,
+        'source' => 'facebook_post',
+    ]), [
+        'source' => 'facebook_post',
+        'answers' => $answers,
+    ]);
+
+    $response->assertOk()
+        ->assertSeeText('Top 4 scent matches')
+        ->assertSeeText('Show my scent map')
+        ->assertSeeText('Save My Results')
+        ->assertSeeText('Candles to start with');
+
+    expect(MarketingStorefrontEvent::query()->where('event_type', 'public_scent_quiz_completed')->count())->toBe(1);
+});
+
+test('public scent personality product redirects preserve scent quiz attribution', function (): void {
+    config()->set('mobile_catalog.fake_enabled', true);
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+    ]);
+
+    $result = MarketingProfileScentQuizResult::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => ['woodsy' => 92, 'earthy' => 70],
+        'dominant_traits' => ['woodsy', 'earthy'],
+        'headline' => 'Woodsy + Earthy',
+        'personality_title' => 'The Grounded Explorer',
+        'personality_body' => 'Rooted and calm.',
+        'public_share_token' => 'productredirecttoken1234567890',
+        'answers' => [],
+        'completed_at' => now(),
+    ]);
+
+    $response = $this->get(route('marketing.public.scent-personality-share.product', [
+        'token' => $result->public_share_token,
+        'handle' => 'fraser-fir',
+        'source' => 'facebook_post',
+    ]));
+
+    $location = (string) $response->headers->get('Location');
+
+    $response->assertRedirect();
+    expect($location)
+        ->toContain('https://theforestrystudio.com/products/fraser-fir')
+        ->toContain('mf_source_label=scent_quiz')
+        ->toContain('mf_template_key=modern_forestry_scent_quiz')
+        ->toContain('mf_share_source=facebook_post');
 });

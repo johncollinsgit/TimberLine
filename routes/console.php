@@ -96,6 +96,14 @@ Schedule::command('marketing:send-modern-forestry-scent-quiz-report')
     ->withoutOverlapping(120)
     ->runInBackground();
 
+Schedule::command('marketing:send-modern-forestry-bag-reminders', [
+    '--tenant' => 1,
+    '--limit' => 100,
+])
+    ->hourlyAt(25)
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
 // Zap-style internal workflow automations (Asana -> Google Calendar, etc).
 Schedule::command('automation:run')
     ->everyTenMinutes()

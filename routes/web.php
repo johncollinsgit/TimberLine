@@ -455,6 +455,10 @@ Route::post('/api/mobile/v1/modern-forestry/rewards/redeem', [ModernForestryProd
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.rewards.redeem');
+Route::post('/api/mobile/v1/modern-forestry/bag/sync', [ModernForestryProductCatalogController::class, 'syncBag'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.bag.sync');
 Route::get('/api/mobile/v1/modern-forestry/product-reviews/status', [ModernForestryProductCatalogController::class, 'productReviewStatus'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.product-reviews.status');
@@ -1118,6 +1122,24 @@ Route::get('/share/scent-personality/{token}', [MarketingPublicEventController::
     ->where('token', '[A-Za-z0-9]{20,80}')
     ->middleware('throttle:60,1')
     ->name('marketing.public.scent-personality-share');
+Route::post('/share/scent-personality/{token}/quiz', [MarketingPublicEventController::class, 'submitScentPersonalityShareQuiz'])
+    ->where('token', '[A-Za-z0-9]{20,80}')
+    ->middleware('throttle:60,1')
+    ->name('marketing.public.scent-personality-share.submit');
+Route::post('/share/scent-personality/{token}/events', [MarketingPublicEventController::class, 'storeScentPersonalityShareEvent'])
+    ->where('token', '[A-Za-z0-9]{20,80}')
+    ->middleware('throttle:120,1')
+    ->name('marketing.public.scent-personality-share.event');
+Route::get('/share/scent-personality/{token}/products/{handle}', [MarketingPublicEventController::class, 'redirectScentPersonalityShareProduct'])
+    ->where('token', '[A-Za-z0-9]{20,80}')
+    ->where('handle', '[A-Za-z0-9\-_]+')
+    ->middleware('throttle:120,1')
+    ->name('marketing.public.scent-personality-share.product');
+Route::get('/share/scent-personality/{token}/products/{handle}/add-to-cart', [MarketingPublicEventController::class, 'addScentPersonalityShareProductToCart'])
+    ->where('token', '[A-Za-z0-9]{20,80}')
+    ->where('handle', '[A-Za-z0-9\-_]+')
+    ->middleware('throttle:120,1')
+    ->name('marketing.public.scent-personality-share.add-to-cart');
 Route::get('/share/product/{handle}', [MarketingPublicEventController::class, 'showProductShare'])
     ->where('handle', '[A-Za-z0-9\-_]+')
     ->middleware('throttle:60,1')

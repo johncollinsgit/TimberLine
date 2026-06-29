@@ -389,22 +389,38 @@
                                             <div class="text-sm font-semibold text-slate-950">Share your candle personality</div>
                                             <p class="mt-1 text-xs leading-5 text-slate-600">Share this result and claim {{ $socialShareRewardLabel }} once per platform.</p>
                                             <div class="mt-3 flex flex-wrap gap-2">
-                                                @foreach(['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $platform => $label)
-                                                    <button
-                                                        type="button"
-                                                        class="forest-action bg-emerald-200 text-emerald-950"
-                                                        data-social-share
-                                                        data-platform="{{ $platform }}"
-                                                        data-target='@json($socialShareScentTarget)'
-                                                    >Share on {{ $label }}</button>
-                                                    <button
-                                                        type="button"
-                                                        class="forest-action border border-slate-200 bg-white text-slate-700"
-                                                        data-social-claim
-                                                        data-platform="{{ $platform }}"
-                                                        data-target='@json($socialShareScentTarget)'
-                                                    >I shared on {{ $label }}</button>
-                                                @endforeach
+                                                <button
+                                                    type="button"
+                                                    class="forest-action bg-emerald-200 text-emerald-950"
+                                                    data-social-share
+                                                    data-platform="facebook"
+                                                    data-share-mode="post"
+                                                    data-target='@json($socialShareScentTarget)'
+                                                >Facebook Post</button>
+                                                <button
+                                                    type="button"
+                                                    class="forest-action border border-slate-200 bg-white text-slate-700"
+                                                    data-social-claim
+                                                    data-platform="facebook"
+                                                    data-share-mode="post"
+                                                    data-target='@json($socialShareScentTarget)'
+                                                >I shared on Facebook</button>
+                                                <button
+                                                    type="button"
+                                                    class="forest-action border border-slate-200 bg-white text-slate-700"
+                                                    data-social-share
+                                                    data-platform="instagram"
+                                                    data-share-mode="copy_link"
+                                                    data-target='@json($socialShareScentTarget)'
+                                                >Instagram Link</button>
+                                                <button
+                                                    type="button"
+                                                    class="forest-action border border-slate-200 bg-white text-slate-700"
+                                                    data-social-claim
+                                                    data-platform="instagram"
+                                                    data-share-mode="copy_link"
+                                                    data-target='@json($socialShareScentTarget)'
+                                                >I shared on Instagram</button>
                                             </div>
                                             <div class="forest-social-state mt-2" data-social-state></div>
                                         </div>
@@ -799,7 +815,7 @@
                 return json.data || json;
             }
 
-            function shareUrlFor(platform, shareUrl, text) {
+            function shareUrlFor(platform, shareUrl, text, shareMode) {
                 if (platform === 'facebook') {
                     return 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(text || 'Take a look at this from Modern Forestry.');
                 }
@@ -807,13 +823,13 @@
                 return shareUrl;
             }
 
-            async function openShare(platform, payload, target) {
+            async function openShare(platform, payload, target, shareMode) {
                 const claim = payload.claim || {};
                 const shareUrl = claim.shareUrl || target.share_url || target.shareUrl || window.location.href;
                 const title = target.title || 'Modern Forestry';
                 const text = target.body || 'I found something from Modern Forestry worth sharing.';
 
-                if (platform === 'instagram' && navigator.share) {
+                if (platform === 'instagram' && navigator.share && shareMode !== 'copy_link') {
                     await navigator.share({ title: title, text: text, url: shareUrl });
                     return;
                 }
@@ -822,19 +838,20 @@
                     await navigator.clipboard.writeText(text + '\n\n' + shareUrl);
                 }
 
-                window.open(shareUrlFor(platform, shareUrl, text), '_blank', 'noopener,noreferrer,width=720,height=680');
+                window.open(shareUrlFor(platform, shareUrl, text, shareMode), '_blank', 'noopener,noreferrer,width=720,height=680');
             }
 
             document.querySelectorAll('[data-social-share]').forEach(function (button) {
                 button.addEventListener('click', async function () {
                     const platform = button.getAttribute('data-platform') || '';
                     const target = targetFrom(button);
+                    const shareMode = button.getAttribute('data-share-mode') || '';
                     button.disabled = true;
                     statusFor(button, 'Opening share window...', false);
 
                     try {
-                        const payload = await postJson(startedUrl, { platform: platform, target: target });
-                        await openShare(platform, payload, target);
+                        const payload = await postJson(startedUrl, { platform: platform, shareMode: shareMode, target: target });
+                        await openShare(platform, payload, target, shareMode);
                         statusFor(button, 'After posting, tap “I shared” to claim your reward.', false);
                     } catch (error) {
                         statusFor(button, error.message || 'Unable to start this share.', true);
@@ -848,11 +865,12 @@
                 button.addEventListener('click', async function () {
                     const platform = button.getAttribute('data-platform') || '';
                     const target = targetFrom(button);
+                    const shareMode = button.getAttribute('data-share-mode') || '';
                     button.disabled = true;
                     statusFor(button, 'Checking your reward...', false);
 
                     try {
-                        const payload = await postJson(claimUrl, { platform: platform, target: target });
+                        const payload = await postJson(claimUrl, { platform: platform, shareMode: shareMode, target: target });
                         const already = Boolean(payload.alreadyAwarded);
                         const reward = (payload.reward && payload.reward.label) || @json($socialShareRewardLabel);
                         statusFor(button, already ? 'Already rewarded for this share.' : reward + ' added to your account.', false);

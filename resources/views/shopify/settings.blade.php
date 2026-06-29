@@ -536,6 +536,78 @@
                     <a class="settings-button settings-button--primary" href="{{ $editAppHref }}">Open Edit App</a>
                 </div>
             </article>
+
+            <article class="settings-card" id="bag-reminder-settings-card">
+                <div class="settings-head">
+                    <div>
+                        <h2>Bag Reminder Emails</h2>
+                        <p>
+                            Control how often the app reminds signed-in customers about candles left in their saved bag.
+                        </p>
+                    </div>
+                    <div class="settings-badges" id="bag-reminder-status"></div>
+                </div>
+
+                <div class="settings-inline-status" id="bag-reminder-alert" hidden></div>
+
+                <form id="bag-reminder-form">
+                    <div class="settings-toggle">
+                        <div class="settings-toggle-copy">
+                            <strong>Bag reminders enabled</strong>
+                            <span>When turned on, signed-in app shoppers can receive reminder emails for saved bags.</span>
+                        </div>
+                        <input id="bag-reminder-enabled" name="mobile_bag_reminders_enabled" type="checkbox">
+                    </div>
+
+                    <div class="settings-divider"></div>
+
+                    <div class="settings-grid">
+                        <div class="settings-field">
+                            <label for="bag-reminder-frequency-hours">Reminder Frequency (hours)</label>
+                            <input id="bag-reminder-frequency-hours" name="mobile_bag_reminder_frequency_hours" type="number" min="6" max="168" step="1">
+                            <small>How long to wait after the latest bag change before sending the next reminder.</small>
+                            <div class="settings-field-error" data-error-for="mobile_bag_reminder_frequency_hours"></div>
+                        </div>
+                        <div class="settings-field">
+                            <label for="bag-reminder-max-emails">Maximum Emails Per Bag</label>
+                            <input id="bag-reminder-max-emails" name="mobile_bag_reminder_max_emails" type="number" min="1" max="10" step="1">
+                            <small>Prevents customers from getting too many reminders for the same saved bag.</small>
+                            <div class="settings-field-error" data-error-for="mobile_bag_reminder_max_emails"></div>
+                        </div>
+                        <div class="settings-field">
+                            <label for="bag-reminder-subject">Email Subject</label>
+                            <input id="bag-reminder-subject" name="mobile_bag_reminder_subject" type="text" maxlength="160">
+                            <div class="settings-field-error" data-error-for="mobile_bag_reminder_subject"></div>
+                        </div>
+                        <div class="settings-field">
+                            <label for="bag-reminder-headline">Headline</label>
+                            <input id="bag-reminder-headline" name="mobile_bag_reminder_headline" type="text" maxlength="160">
+                            <div class="settings-field-error" data-error-for="mobile_bag_reminder_headline"></div>
+                        </div>
+                        <div class="settings-field" style="grid-column: 1 / -1;">
+                            <label for="bag-reminder-body">Body Copy</label>
+                            <textarea id="bag-reminder-body" name="mobile_bag_reminder_body" maxlength="240"></textarea>
+                            <div class="settings-field-error" data-error-for="mobile_bag_reminder_body"></div>
+                        </div>
+                        <div class="settings-field">
+                            <label for="bag-reminder-cta-label">Button Label</label>
+                            <input id="bag-reminder-cta-label" name="mobile_bag_reminder_cta_label" type="text" maxlength="80">
+                            <div class="settings-field-error" data-error-for="mobile_bag_reminder_cta_label"></div>
+                        </div>
+                        <div class="settings-field">
+                            <label for="bag-reminder-cta-url">Button URL</label>
+                            <input id="bag-reminder-cta-url" name="mobile_bag_reminder_cta_url" type="url" maxlength="500">
+                            <small>Use a storefront or app handoff URL customers can open after clicking the email.</small>
+                            <div class="settings-field-error" data-error-for="mobile_bag_reminder_cta_url"></div>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="settings-actions">
+                    <button class="settings-button settings-button--primary" type="button" id="bag-reminder-save">Save Reminder Settings</button>
+                    <button class="settings-button" type="button" id="bag-reminder-publish">Publish Reminder Settings</button>
+                </div>
+            </article>
         @endif
 
         @if(false && is_array($appContentBootstrap ?? null) && (bool) ($appContentBootstrap['authorized'] ?? false))
@@ -931,6 +1003,11 @@
             const appContentPublishButton = document.getElementById("app-content-publish");
             const contentPreviewDraft = document.getElementById("content-preview-draft");
             const contentPreviewLive = document.getElementById("content-preview-live");
+            const bagReminderForm = document.getElementById("bag-reminder-form");
+            const bagReminderAlert = document.getElementById("bag-reminder-alert");
+            const bagReminderStatus = document.getElementById("bag-reminder-status");
+            const bagReminderSaveButton = document.getElementById("bag-reminder-save");
+            const bagReminderPublishButton = document.getElementById("bag-reminder-publish");
             const providerSelect = document.getElementById("email-provider");
             const providerStatusInput = document.getElementById("provider-status-readonly");
             const providerSettingsContent = document.getElementById("provider-settings-content");
@@ -1559,6 +1636,14 @@
                     mobile_slide_3_mobile_image_url: null,
                     mobile_slide_3_cta_label: "View Rewards",
                     mobile_slide_3_cta_url: "https://theforestrystudio.com/pages/rewards",
+                    mobile_bag_reminders_enabled: true,
+                    mobile_bag_reminder_frequency_hours: 24,
+                    mobile_bag_reminder_max_emails: 3,
+                    mobile_bag_reminder_subject: "Your Modern Forestry bag is still waiting",
+                    mobile_bag_reminder_headline: "Your bag is still waiting",
+                    mobile_bag_reminder_body: "The candles you picked are still in your bag if you want to come back and finish checkout.",
+                    mobile_bag_reminder_cta_label: "Finish checkout",
+                    mobile_bag_reminder_cta_url: "https://theforestrystudio.com/cart",
                 };
 
                 const source = input && typeof input === "object" ? input : {};
@@ -1607,7 +1692,94 @@
                     mobile_slide_3_mobile_image_url: normalizeString(source.mobile_slide_3_mobile_image_url) || defaults.mobile_slide_3_mobile_image_url,
                     mobile_slide_3_cta_label: normalizeString(source.mobile_slide_3_cta_label) || defaults.mobile_slide_3_cta_label,
                     mobile_slide_3_cta_url: normalizeString(source.mobile_slide_3_cta_url) || defaults.mobile_slide_3_cta_url,
+                    mobile_bag_reminders_enabled: typeof source.mobile_bag_reminders_enabled === "boolean"
+                        ? source.mobile_bag_reminders_enabled
+                        : defaults.mobile_bag_reminders_enabled,
+                    mobile_bag_reminder_frequency_hours: Math.min(168, Math.max(6, Number.parseInt(source.mobile_bag_reminder_frequency_hours ?? defaults.mobile_bag_reminder_frequency_hours, 10) || defaults.mobile_bag_reminder_frequency_hours)),
+                    mobile_bag_reminder_max_emails: Math.min(10, Math.max(1, Number.parseInt(source.mobile_bag_reminder_max_emails ?? defaults.mobile_bag_reminder_max_emails, 10) || defaults.mobile_bag_reminder_max_emails)),
+                    mobile_bag_reminder_subject: normalizeString(source.mobile_bag_reminder_subject) || defaults.mobile_bag_reminder_subject,
+                    mobile_bag_reminder_headline: normalizeString(source.mobile_bag_reminder_headline) || defaults.mobile_bag_reminder_headline,
+                    mobile_bag_reminder_body: normalizeString(source.mobile_bag_reminder_body) || defaults.mobile_bag_reminder_body,
+                    mobile_bag_reminder_cta_label: normalizeString(source.mobile_bag_reminder_cta_label) || defaults.mobile_bag_reminder_cta_label,
+                    mobile_bag_reminder_cta_url: normalizeString(source.mobile_bag_reminder_cta_url) || defaults.mobile_bag_reminder_cta_url,
                 };
+            }
+
+            function reminderStatusMarkup(snapshot) {
+                return `
+                    <span class="settings-badge ${snapshot.mobile_bag_reminders_enabled ? "settings-badge--configured" : "settings-badge--warn"}">${snapshot.mobile_bag_reminders_enabled ? "Enabled" : "Paused"}</span>
+                    <span class="settings-badge">Every ${snapshot.mobile_bag_reminder_frequency_hours}h</span>
+                    <span class="settings-badge">Max ${snapshot.mobile_bag_reminder_max_emails}</span>
+                `;
+            }
+
+            function populateBagReminderForm() {
+                if (!bagReminderForm) {
+                    return;
+                }
+
+                const snapshot = contentState.draft || contentState.defaults;
+                const enabledInput = document.getElementById("bag-reminder-enabled");
+                const frequencyInput = document.getElementById("bag-reminder-frequency-hours");
+                const maxEmailsInput = document.getElementById("bag-reminder-max-emails");
+                const subjectInput = document.getElementById("bag-reminder-subject");
+                const headlineInput = document.getElementById("bag-reminder-headline");
+                const bodyInput = document.getElementById("bag-reminder-body");
+                const ctaLabelInput = document.getElementById("bag-reminder-cta-label");
+                const ctaUrlInput = document.getElementById("bag-reminder-cta-url");
+
+                if (enabledInput instanceof HTMLInputElement) {
+                    enabledInput.checked = Boolean(snapshot.mobile_bag_reminders_enabled);
+                }
+                if (frequencyInput instanceof HTMLInputElement) {
+                    frequencyInput.value = String(snapshot.mobile_bag_reminder_frequency_hours || 24);
+                }
+                if (maxEmailsInput instanceof HTMLInputElement) {
+                    maxEmailsInput.value = String(snapshot.mobile_bag_reminder_max_emails || 3);
+                }
+                if (subjectInput instanceof HTMLInputElement) {
+                    subjectInput.value = snapshot.mobile_bag_reminder_subject || "";
+                }
+                if (headlineInput instanceof HTMLInputElement) {
+                    headlineInput.value = snapshot.mobile_bag_reminder_headline || "";
+                }
+                if (bodyInput instanceof HTMLTextAreaElement) {
+                    bodyInput.value = snapshot.mobile_bag_reminder_body || "";
+                }
+                if (ctaLabelInput instanceof HTMLInputElement) {
+                    ctaLabelInput.value = snapshot.mobile_bag_reminder_cta_label || "";
+                }
+                if (ctaUrlInput instanceof HTMLInputElement) {
+                    ctaUrlInput.value = snapshot.mobile_bag_reminder_cta_url || "";
+                }
+
+                if (bagReminderStatus) {
+                    bagReminderStatus.innerHTML = reminderStatusMarkup(snapshot);
+                }
+            }
+
+            function collectBagReminderPayload() {
+                const snapshot = contentState.draft || contentState.defaults;
+                const enabledInput = document.getElementById("bag-reminder-enabled");
+                const frequencyInput = document.getElementById("bag-reminder-frequency-hours");
+                const maxEmailsInput = document.getElementById("bag-reminder-max-emails");
+                const subjectInput = document.getElementById("bag-reminder-subject");
+                const headlineInput = document.getElementById("bag-reminder-headline");
+                const bodyInput = document.getElementById("bag-reminder-body");
+                const ctaLabelInput = document.getElementById("bag-reminder-cta-label");
+                const ctaUrlInput = document.getElementById("bag-reminder-cta-url");
+
+                return normalizeContent({
+                    ...snapshot,
+                    mobile_bag_reminders_enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : Boolean(snapshot.mobile_bag_reminders_enabled),
+                    mobile_bag_reminder_frequency_hours: frequencyInput instanceof HTMLInputElement ? frequencyInput.value : snapshot.mobile_bag_reminder_frequency_hours,
+                    mobile_bag_reminder_max_emails: maxEmailsInput instanceof HTMLInputElement ? maxEmailsInput.value : snapshot.mobile_bag_reminder_max_emails,
+                    mobile_bag_reminder_subject: subjectInput instanceof HTMLInputElement ? subjectInput.value : snapshot.mobile_bag_reminder_subject,
+                    mobile_bag_reminder_headline: headlineInput instanceof HTMLInputElement ? headlineInput.value : snapshot.mobile_bag_reminder_headline,
+                    mobile_bag_reminder_body: bodyInput instanceof HTMLTextAreaElement ? bodyInput.value : snapshot.mobile_bag_reminder_body,
+                    mobile_bag_reminder_cta_label: ctaLabelInput instanceof HTMLInputElement ? ctaLabelInput.value : snapshot.mobile_bag_reminder_cta_label,
+                    mobile_bag_reminder_cta_url: ctaUrlInput instanceof HTMLInputElement ? ctaUrlInput.value : snapshot.mobile_bag_reminder_cta_url,
+                });
             }
 
             function escapeHtml(value) {
@@ -2202,6 +2374,39 @@
                 }
             }
 
+            async function saveBagReminderSettings(publish = false) {
+                if (!appContentBootstrap?.authorized || !appContentBootstrap?.tenant_id) {
+                    return;
+                }
+
+                clearErrors();
+                const endpoint = publish ? appContentBootstrap?.endpoints?.publish : appContentBootstrap?.endpoints?.save;
+                if (!endpoint) {
+                    return;
+                }
+
+                const payload = collectBagReminderPayload();
+                setAlert(bagReminderAlert, publish ? "Publishing bag reminder settings..." : "Saving bag reminder settings...", "neutral");
+
+                try {
+                    const response = await fetchJson(endpoint, {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    });
+
+                    const nextContent = response?.data?.settings || {};
+                    contentState.draft = normalizeContent(nextContent.draft || payload);
+                    contentState.published = nextContent.published ? normalizeContent(nextContent.published) : null;
+                    contentState.effective = normalizeContent(nextContent.effective || nextContent.published || contentState.defaults);
+                    populateBagReminderForm();
+                    setAlert(bagReminderAlert, response?.message || (publish ? "Bag reminder settings published." : "Bag reminder settings saved."), "success");
+                } catch (error) {
+                    const payloadError = extractError(error);
+                    setErrors(payloadError?.errors || {});
+                    setAlert(bagReminderAlert, payloadError?.message || error?.message || "Failed to save bag reminder settings.", "error");
+                }
+            }
+
             providerSelect.addEventListener("change", () => {
                 const previousProvider = String(state.settings.email_provider || "sendgrid");
                 state.providerDrafts[previousProvider] = providerDraftFromDom(previousProvider);
@@ -2270,6 +2475,18 @@
                 });
                 appContentSaveButton?.addEventListener("click", () => saveAppContent(false));
                 appContentPublishButton?.addEventListener("click", () => saveAppContent(true));
+            }
+
+            if (bagReminderForm) {
+                bagReminderForm.addEventListener("input", () => {
+                    const nextSnapshot = collectBagReminderPayload();
+                    if (bagReminderStatus) {
+                        bagReminderStatus.innerHTML = reminderStatusMarkup(nextSnapshot);
+                    }
+                });
+                bagReminderSaveButton?.addEventListener("click", () => saveBagReminderSettings(false));
+                bagReminderPublishButton?.addEventListener("click", () => saveBagReminderSettings(true));
+                populateBagReminderForm();
             }
 
             populateWidgetSettings();

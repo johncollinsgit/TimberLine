@@ -757,6 +757,14 @@ class ShopifyEmbeddedSettingsController extends Controller
             'mobile_slide_3_mobile_image_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
             'mobile_slide_3_cta_label' => ['sometimes', 'nullable', 'string', 'max:80'],
             'mobile_slide_3_cta_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
+            'mobile_bag_reminders_enabled' => ['sometimes', 'boolean'],
+            'mobile_bag_reminder_frequency_hours' => ['sometimes', 'nullable', 'integer', 'min:6', 'max:168'],
+            'mobile_bag_reminder_max_emails' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:10'],
+            'mobile_bag_reminder_subject' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'mobile_bag_reminder_headline' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'mobile_bag_reminder_body' => ['sometimes', 'nullable', 'string', 'max:240'],
+            'mobile_bag_reminder_cta_label' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'mobile_bag_reminder_cta_url' => ['sometimes', 'nullable', 'url', 'starts_with:http://,https://', 'max:500'],
         ])->validate();
     }
 

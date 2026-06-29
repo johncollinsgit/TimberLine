@@ -7,6 +7,7 @@ use App\Models\MobilePushDevice;
 use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ModernForestrySocialShareRewardService;
 use App\Services\Mobile\ModernForestryMobileAccountService;
+use App\Services\Mobile\ModernForestryMobileBagReminderService;
 use App\Services\Mobile\ModernForestryMobileCheckoutException;
 use App\Services\Mobile\ModernForestryMobileCheckoutService;
 use App\Services\Mobile\ModernForestryMobileCustomerAuthException;
@@ -34,6 +35,7 @@ class ModernForestryProductCatalogController extends Controller
             'items.*.attributes.*.value' => ['required_with:items.*.attributes', 'string', 'max:255'],
             'discountCode' => ['nullable', 'string', 'max:80'],
             'customerAccessToken' => ['nullable', 'string', 'max:4096'],
+            'customerEmail' => ['nullable', 'email:rfc', 'max:255'],
         ]);
 
         try {
@@ -41,7 +43,8 @@ class ModernForestryProductCatalogController extends Controller
                 'data' => $checkout->checkout(
                     $validated['items'],
                     $validated['discountCode'] ?? null,
-                    $validated['customerAccessToken'] ?? $request->bearerToken()
+                    $validated['customerAccessToken'] ?? $request->bearerToken(),
+                    $validated['customerEmail'] ?? null
                 ),
                 'meta' => [
                     'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
@@ -399,6 +402,42 @@ class ModernForestryProductCatalogController extends Controller
                 'source' => 'mobile',
             ],
         ], (bool) ($payload['ok'] ?? false) ? 200 : 422);
+    }
+
+    public function syncBag(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileBagReminderService $bagReminderService
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'items' => ['required', 'array'],
+            'items.*.productHandle' => ['nullable', 'string', 'max:255'],
+            'items.*.productTitle' => ['nullable', 'string', 'max:255'],
+            'items.*.variantId' => ['nullable', 'string', 'max:255'],
+            'items.*.variantTitle' => ['nullable', 'string', 'max:255'],
+            'items.*.quantity' => ['nullable', 'integer', 'min:1', 'max:99'],
+            'items.*.price' => ['nullable', 'string', 'max:60'],
+            'subtotalAmount' => ['nullable', 'string', 'max:60'],
+            'currencyCode' => ['nullable', 'string', 'max:8'],
+        ]);
+
+        return response()->json([
+            'data' => $bagReminderService->sync(
+                $session,
+                (array) ($validated['items'] ?? []),
+                isset($validated['subtotalAmount']) ? (string) $validated['subtotalAmount'] : null,
+                isset($validated['currencyCode']) ? (string) $validated['currencyCode'] : null,
+            ),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
     }
 
     public function accountMessage(
@@ -817,6 +856,7 @@ class ModernForestryProductCatalogController extends Controller
 
         $validated = $request->validate([
             'platform' => ['required', 'string', 'max:32'],
+            'shareMode' => ['nullable', 'string', 'max:32'],
             'target' => ['required', 'array'],
             'target.type' => ['required', 'string', 'max:64'],
             'target.id' => ['nullable', 'string', 'max:160'],
@@ -834,6 +874,7 @@ class ModernForestryProductCatalogController extends Controller
                 [
                     'surface' => 'modern_forestry_ios',
                     'endpoint' => '/api/mobile/v1/modern-forestry/social-share/started',
+                    'share_mode' => $validated['shareMode'] ?? null,
                 ]
             );
         } catch (\InvalidArgumentException $exception) {
@@ -861,6 +902,7 @@ class ModernForestryProductCatalogController extends Controller
 
         $validated = $request->validate([
             'platform' => ['required', 'string', 'max:32'],
+            'shareMode' => ['nullable', 'string', 'max:32'],
             'target' => ['required', 'array'],
             'target.type' => ['required', 'string', 'max:64'],
             'target.id' => ['nullable', 'string', 'max:160'],
@@ -884,6 +926,7 @@ class ModernForestryProductCatalogController extends Controller
                 [
                     'surface' => 'modern_forestry_ios',
                     'endpoint' => '/api/mobile/v1/modern-forestry/social-share/claim',
+                    'share_mode' => $validated['shareMode'] ?? null,
                 ]
             );
         } catch (\InvalidArgumentException $exception) {

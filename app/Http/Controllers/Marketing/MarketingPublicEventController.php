@@ -29,6 +29,7 @@ use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MessagingContactChannelStateService;
 use App\Services\Marketing\MessagingConversationService;
+use App\Services\Marketing\ModernForestryScentQuizRecommendationService;
 use App\Services\Marketing\ModernForestryScentQuizAnalyticsService;
 use App\Services\Marketing\ModernForestrySocialShareRewardService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
@@ -860,6 +861,7 @@ class MarketingPublicEventController extends Controller
 
         $validated = $request->validate([
             'platform' => ['required', 'string', 'max:32'],
+            'shareMode' => ['nullable', 'string', 'max:32'],
             'target' => ['required', 'array'],
             'target.type' => ['required', 'string', 'max:64'],
             'target.id' => ['nullable', 'string', 'max:160'],
@@ -877,6 +879,7 @@ class MarketingPublicEventController extends Controller
                 [
                     'surface' => 'shopify_account',
                     'endpoint' => '/shopify/marketing/social-share/started',
+                    'share_mode' => $validated['shareMode'] ?? null,
                 ]
             );
         } catch (\InvalidArgumentException $exception) {
@@ -897,6 +900,7 @@ class MarketingPublicEventController extends Controller
 
         $validated = $request->validate([
             'platform' => ['required', 'string', 'max:32'],
+            'shareMode' => ['nullable', 'string', 'max:32'],
             'target' => ['required', 'array'],
             'target.type' => ['required', 'string', 'max:64'],
             'target.id' => ['nullable', 'string', 'max:160'],
@@ -920,6 +924,7 @@ class MarketingPublicEventController extends Controller
                 [
                     'surface' => 'shopify_account',
                     'endpoint' => '/shopify/marketing/social-share/claim',
+                    'share_mode' => $validated['shareMode'] ?? null,
                 ]
             );
         } catch (\InvalidArgumentException $exception) {
@@ -929,16 +934,244 @@ class MarketingPublicEventController extends Controller
         return response()->json(['data' => $payload]);
     }
 
-    public function showScentPersonalityShare(string $token): View
+    public function showScentPersonalityShare(
+        string $token,
+        Request $request,
+        ModernForestryMobileScentQuizService $scentQuizService,
+        ModernForestryScentQuizRecommendationService $recommendations
+    ): View
     {
         $result = MarketingProfileScentQuizResult::query()
             ->where('public_share_token', $token)
             ->firstOrFail();
 
+        $shareSource = $this->normalizedPublicShareSource($request->query('source'));
+
+        $this->eventLogger->log('public_scent_quiz_landing_viewed', [
+            'status' => 'ok',
+            'tenant_id' => (int) ($result->tenant_id ?? 1),
+            'source_surface' => 'modern_forestry_public_scent_quiz',
+            'endpoint' => '/share/scent-personality/'.$token,
+            'source_type' => 'modern_forestry_public_scent_quiz',
+            'source_id' => $token,
+            'meta' => [
+                'share_source' => $shareSource,
+                'token' => $token,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return $this->renderScentPersonalityShareView(
+            $request,
+            $result,
+            $scentQuizService,
+            $recommendations,
+            $shareSource
+        );
+    }
+
+    public function submitScentPersonalityShareQuiz(
+        string $token,
+        Request $request,
+        ModernForestryMobileScentQuizService $scentQuizService,
+        ModernForestryScentQuizRecommendationService $recommendations
+    ): View {
+        $result = MarketingProfileScentQuizResult::query()
+            ->where('public_share_token', $token)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'answers' => ['required', 'array', 'size:15'],
+            'answers.*.question_id' => ['required', 'string', 'max:32'],
+            'answers.*.option_id' => ['required', 'string', 'max:64'],
+            'source' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $shareSource = $this->normalizedPublicShareSource($validated['source'] ?? $request->query('source'));
+        $publicResult = $scentQuizService->evaluateAnswers((array) $validated['answers']);
+        $recommendedProducts = $recommendations->topMatches($publicResult, 4);
+
+        $this->eventLogger->log('public_scent_quiz_completed', [
+            'status' => 'ok',
+            'tenant_id' => (int) ($result->tenant_id ?? 1),
+            'source_surface' => 'modern_forestry_public_scent_quiz',
+            'endpoint' => '/share/scent-personality/'.$token.'/quiz',
+            'source_type' => 'modern_forestry_public_scent_quiz',
+            'source_id' => $token,
+            'meta' => [
+                'share_source' => $shareSource,
+                'token' => $token,
+                'headline' => data_get($publicResult, 'headline'),
+                'dominant_traits' => data_get($publicResult, 'dominantTraits'),
+                'match_handles' => array_values(array_filter(array_map(
+                    static fn (array $product): string => (string) ($product['handle'] ?? ''),
+                    $recommendedProducts
+                ))),
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return $this->renderScentPersonalityShareView(
+            $request,
+            $result,
+            $scentQuizService,
+            $recommendations,
+            $shareSource,
+            $publicResult,
+            $recommendedProducts
+        );
+    }
+
+    public function storeScentPersonalityShareEvent(string $token, Request $request): JsonResponse
+    {
+        $result = MarketingProfileScentQuizResult::query()
+            ->where('public_share_token', $token)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'event' => ['required', 'string', 'in:quiz_started,save_result_prompt_shown,app_install_cta_clicked'],
+            'source' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $shareSource = $this->normalizedPublicShareSource($validated['source'] ?? null);
+
+        $this->eventLogger->log('public_scent_quiz_'.$validated['event'], [
+            'status' => 'ok',
+            'tenant_id' => (int) ($result->tenant_id ?? 1),
+            'source_surface' => 'modern_forestry_public_scent_quiz',
+            'endpoint' => '/share/scent-personality/'.$token.'/events',
+            'source_type' => 'modern_forestry_public_scent_quiz',
+            'source_id' => $token,
+            'meta' => [
+                'share_source' => $shareSource,
+                'token' => $token,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function redirectScentPersonalityShareProduct(
+        string $token,
+        string $handle,
+        Request $request,
+        ModernForestryMobileProductCatalogService $catalog
+    ): RedirectResponse {
+        $result = MarketingProfileScentQuizResult::query()
+            ->where('public_share_token', $token)
+            ->firstOrFail();
+
+        $product = $catalog->productDetail($handle);
+        $shareSource = $this->normalizedPublicShareSource($request->query('source'));
+        $destination = trim((string) data_get($product, 'url'));
+        if ($destination === '') {
+            $destination = rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
+                .'/products/'.ltrim($handle, '/');
+        }
+
+        $this->eventLogger->log('public_scent_quiz_product_clicked', [
+            'status' => 'ok',
+            'tenant_id' => (int) ($result->tenant_id ?? 1),
+            'source_surface' => 'modern_forestry_public_scent_quiz',
+            'endpoint' => '/share/scent-personality/'.$token.'/products/'.$handle,
+            'source_type' => 'modern_forestry_public_scent_quiz',
+            'source_id' => $token.':'.$handle,
+            'meta' => [
+                'share_source' => $shareSource,
+                'product_handle' => $handle,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return redirect()->away($this->storefrontAttributedUrl($destination, $shareSource, 'Scent quiz product'));
+    }
+
+    public function addScentPersonalityShareProductToCart(
+        string $token,
+        string $handle,
+        Request $request,
+        ModernForestryMobileProductCatalogService $catalog
+    ): RedirectResponse {
+        $result = MarketingProfileScentQuizResult::query()
+            ->where('public_share_token', $token)
+            ->firstOrFail();
+
+        $product = $catalog->productDetail($handle);
+        $shareSource = $this->normalizedPublicShareSource($request->query('source'));
+        $variantId = trim((string) data_get($product, 'variants.0.id', ''));
+
+        if ($variantId === '') {
+            return $this->redirectScentPersonalityShareProduct($token, $handle, $request, $catalog);
+        }
+
+        $base = rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/');
+        $destination = $base.'/cart/'.rawurlencode($variantId).':1';
+
+        $this->eventLogger->log('public_scent_quiz_add_to_cart', [
+            'status' => 'ok',
+            'tenant_id' => (int) ($result->tenant_id ?? 1),
+            'source_surface' => 'modern_forestry_public_scent_quiz',
+            'endpoint' => '/share/scent-personality/'.$token.'/products/'.$handle.'/add-to-cart',
+            'source_type' => 'modern_forestry_public_scent_quiz',
+            'source_id' => $token.':'.$handle.':cart',
+            'meta' => [
+                'share_source' => $shareSource,
+                'product_handle' => $handle,
+                'variant_id' => $variantId,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return redirect()->away($this->storefrontAttributedUrl($destination, $shareSource, 'Scent quiz add to cart'));
+    }
+
+    protected function renderScentPersonalityShareView(
+        Request $request,
+        MarketingProfileScentQuizResult $result,
+        ModernForestryMobileScentQuizService $scentQuizService,
+        ModernForestryScentQuizRecommendationService $recommendations,
+        string $shareSource,
+        ?array $publicQuizResult = null,
+        ?array $recommendedProducts = null
+    ): View {
+        $quizDefinition = $scentQuizService->publicDefinition();
+        $recommendedProducts ??= is_array($publicQuizResult)
+            ? $recommendations->topMatches($publicQuizResult, 4)
+            : [];
+        $saveResultsUrl = rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
+            .'/apps/forestry/account?scent_quiz=1&source='.rawurlencode($shareSource);
+        $appDownloadUrl = $this->modernForestryAppDownloadUrl($shareSource);
+        $shopYourMatchesUrl = $recommendedProducts !== []
+            ? route('marketing.public.scent-personality-share.product', [
+                'token' => $result->public_share_token,
+                'handle' => (string) data_get($recommendedProducts, '0.handle'),
+                'source' => $shareSource,
+            ])
+            : $this->storefrontAttributedUrl(
+                rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/').'/collections/all',
+                $shareSource,
+                'Scent quiz shop matches'
+            );
+
         return view('marketing/public/scent-personality-share', [
             'result' => $result,
             'axes' => $this->normalizedScentShareAxes($result),
             'dominantTraits' => is_array($result->dominant_traits) ? $result->dominant_traits : [],
+            'publicQuizDefinition' => $quizDefinition,
+            'publicQuizResult' => $publicQuizResult,
+            'recommendedProducts' => $recommendedProducts,
+            'publicQuizActionUrl' => route('marketing.public.scent-personality-share.submit', [
+                'token' => $result->public_share_token,
+                'source' => $shareSource,
+            ]),
+            'publicQuizEventUrl' => route('marketing.public.scent-personality-share.event', [
+                'token' => $result->public_share_token,
+            ]),
+            'shareSource' => $shareSource,
+            'saveResultsUrl' => $saveResultsUrl,
+            'appDownloadUrl' => $appDownloadUrl,
+            'shopYourMatchesUrl' => $shopYourMatchesUrl,
             'quizUrl' => rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
                 .'/apps/forestry/account?scent_quiz=1',
         ]);
@@ -1101,13 +1334,23 @@ class MarketingPublicEventController extends Controller
         ];
 
         $source = [];
-        foreach ((array) $result->axis_scores as $axis) {
-            $key = Str::slug((string) data_get($axis, 'key', data_get($axis, 'label', '')));
+        foreach ((array) $result->axis_scores as $axisKey => $axis) {
+            if (is_array($axis)) {
+                $key = Str::slug((string) data_get($axis, 'key', data_get($axis, 'label', '')));
+                if ($key === '') {
+                    continue;
+                }
+
+                $source[$key] = max(0, min(100, (int) data_get($axis, 'score', 0)));
+                continue;
+            }
+
+            $key = Str::slug((string) $axisKey);
             if ($key === '') {
                 continue;
             }
 
-            $source[$key] = max(0, min(100, (int) data_get($axis, 'score', 0)));
+            $source[$key] = max(0, min(100, (int) $axis));
         }
 
         $normalized = [];
@@ -1120,6 +1363,49 @@ class MarketingPublicEventController extends Controller
         }
 
         return $normalized;
+    }
+
+    protected function normalizedPublicShareSource(mixed $value): string
+    {
+        $resolved = Str::lower(trim((string) $value));
+        $allowed = [
+            'facebook_story',
+            'facebook_post',
+            'instagram_story',
+            'copied_link',
+            'generic_share',
+        ];
+
+        return in_array($resolved, $allowed, true) ? $resolved : 'generic_share';
+    }
+
+    protected function storefrontAttributedUrl(string $url, string $shareSource, string $linkLabel): string
+    {
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url.$separator.http_build_query([
+            'mf_source_label' => ModernForestryScentQuizAnalyticsService::ATTRIBUTION_SOURCE_LABEL,
+            'mf_template_key' => ModernForestryScentQuizAnalyticsService::ATTRIBUTION_TEMPLATE_KEY,
+            'mf_module_type' => ModernForestryScentQuizAnalyticsService::ATTRIBUTION_MODULE_TYPE,
+            'mf_link_label' => $linkLabel,
+            'mf_share_source' => $shareSource,
+        ]);
+    }
+
+    protected function modernForestryAppDownloadUrl(string $shareSource): string
+    {
+        $configured = trim((string) (
+            config('marketing.modern_forestry.app_download_url')
+            ?: config('services.modern_forestry.app_download_url')
+            ?: ''
+        ));
+
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        return rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
+            .'/apps/forestry/account?source='.rawurlencode($shareSource).'&app=1';
     }
 
     protected function drawRadarChart($image, int $centerX, int $centerY, int $radius, array $axes, ?string $boldFont, ?string $regularFont, array $colors): void

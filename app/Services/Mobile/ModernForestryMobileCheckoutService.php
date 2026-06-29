@@ -23,7 +23,12 @@ class ModernForestryMobileCheckoutService
      * @param  array<int,array<string,mixed>>  $items
      * @return array<string,mixed>
      */
-    public function checkout(array $items, ?string $discountCode = null, ?string $customerAccessToken = null): array
+    public function checkout(
+        array $items,
+        ?string $discountCode = null,
+        ?string $customerAccessToken = null,
+        ?string $customerEmail = null
+    ): array
     {
         $this->assertModernForestryTenant();
 
@@ -31,6 +36,7 @@ class ModernForestryMobileCheckoutService
         $lines = $this->normalizeLines($items);
         $discountCodes = $this->normalizeDiscountCodes($discountCode);
         $customerAccessToken = $this->normalizeCustomerAccessToken($customerAccessToken);
+        $customerEmail = $this->normalizeCustomerEmail($customerEmail);
         $storefrontToken = $this->storefrontAccessToken($store);
 
         if ($storefrontToken === null) {
@@ -62,9 +68,10 @@ class ModernForestryMobileCheckoutService
                             $lines
                         ),
                         'discountCodes' => $discountCodes,
-                        'buyerIdentity' => $customerAccessToken !== null
-                            ? ['customerAccessToken' => $customerAccessToken]
-                            : null,
+                        'buyerIdentity' => array_filter([
+                            'customerAccessToken' => $customerAccessToken,
+                            'email' => $customerEmail,
+                        ], static fn (mixed $value): bool => $value !== null && $value !== ''),
                         'attributes' => [
                             [
                                 'key' => 'source',
@@ -146,8 +153,14 @@ class ModernForestryMobileCheckoutService
             'cartId' => $this->publicId((string) ($cart['id'] ?? '')),
             'lines' => $this->lineSummaries($lines),
             'subtotal' => $this->moneyAmount($cart['cost']['subtotalAmount'] ?? null),
+            'tax' => $this->moneyAmount($cart['cost']['totalTaxAmount'] ?? null),
+            'shipping' => $this->deliveryEstimateAmount($cart['deliveryGroups'] ?? null),
+            'discount' => $this->discountAmountForCart($cart),
             'total' => $this->moneyAmount($cart['cost']['totalAmount'] ?? null),
+            'currencyCode' => $this->currencyCodeForCart($cart),
             'authenticated' => $customerAccessToken !== null,
+            'prefilledCustomer' => $this->prefilledCustomer($cart, $customerEmail),
+            'discountCodes' => $discountCodes,
             'errors' => [],
         ];
     }
@@ -377,6 +390,13 @@ class ModernForestryMobileCheckoutService
         return $token !== '' && strlen($token) <= 4096 ? $token : null;
     }
 
+    protected function normalizeCustomerEmail(?string $email): ?string
+    {
+        $email = trim((string) $email);
+
+        return $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+    }
+
     /**
      * @param  array<string,mixed>  $store
      */
@@ -416,8 +436,14 @@ class ModernForestryMobileCheckoutService
             'cartId' => 'cart-permalink',
             'lines' => $this->lineSummaries($lines),
             'subtotal' => $this->estimatedSubtotal($lines),
+            'tax' => null,
+            'shipping' => null,
+            'discount' => null,
             'total' => null,
+            'currencyCode' => 'USD',
             'authenticated' => false,
+            'prefilledCustomer' => false,
+            'discountCodes' => $discountCodes,
             'errors' => [],
         ];
     }
@@ -435,9 +461,31 @@ mutation ModernForestryMobileCartCreate($input: CartInput!) {
           amount
           currencyCode
         }
+        totalTaxAmount {
+          amount
+          currencyCode
+        }
         totalAmount {
           amount
           currencyCode
+        }
+      }
+      buyerIdentity {
+        email
+        customer {
+          id
+        }
+      }
+      deliveryGroups(first: 1) {
+        edges {
+          node {
+            deliveryOptions {
+              estimatedCost {
+                amount
+                currencyCode
+              }
+            }
+          }
         }
       }
     }
@@ -510,6 +558,110 @@ GRAPHQL;
             'amount' => number_format($subtotal, 2, '.', ''),
             'currencyCode' => 'USD',
         ];
+    }
+
+    /**
+     * @param  mixed  $deliveryGroups
+     * @return array{amount:string,currencyCode:string}|null
+     */
+    protected function deliveryEstimateAmount(mixed $deliveryGroups): ?array
+    {
+        if (! is_array($deliveryGroups)) {
+            return null;
+        }
+
+        $edges = $deliveryGroups['edges'] ?? null;
+        if (! is_array($edges)) {
+            return null;
+        }
+
+        foreach ($edges as $edge) {
+            if (! is_array($edge)) {
+                continue;
+            }
+
+            $node = $edge['node'] ?? null;
+            if (! is_array($node)) {
+                continue;
+            }
+
+            $deliveryOptions = $node['deliveryOptions'] ?? null;
+            if (! is_array($deliveryOptions)) {
+                continue;
+            }
+
+            foreach ($deliveryOptions as $option) {
+                if (! is_array($option)) {
+                    continue;
+                }
+
+                $estimate = $this->moneyAmount($option['estimatedCost'] ?? null);
+                if ($estimate !== null) {
+                    return $estimate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $cart
+     * @return array{amount:string,currencyCode:string}|null
+     */
+    protected function discountAmountForCart(array $cart): ?array
+    {
+        $subtotal = $this->moneyAmount($cart['cost']['subtotalAmount'] ?? null);
+        $tax = $this->moneyAmount($cart['cost']['totalTaxAmount'] ?? null);
+        $shipping = $this->deliveryEstimateAmount($cart['deliveryGroups'] ?? null);
+        $total = $this->moneyAmount($cart['cost']['totalAmount'] ?? null);
+
+        if ($subtotal === null || $total === null) {
+            return null;
+        }
+
+        $currencyCode = $subtotal['currencyCode'];
+        $baseline = (float) $subtotal['amount']
+            + (float) ($tax['amount'] ?? 0)
+            + (float) ($shipping['amount'] ?? 0);
+        $discount = max(0, round($baseline - (float) $total['amount'], 2));
+
+        if ($discount <= 0) {
+            return null;
+        }
+
+        return [
+            'amount' => number_format($discount, 2, '.', ''),
+            'currencyCode' => $currencyCode,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $cart
+     */
+    protected function currencyCodeForCart(array $cart): ?string
+    {
+        return $this->moneyAmount($cart['cost']['totalAmount'] ?? null)['currencyCode']
+            ?? $this->moneyAmount($cart['cost']['subtotalAmount'] ?? null)['currencyCode']
+            ?? null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $cart
+     */
+    protected function prefilledCustomer(array $cart, ?string $customerEmail = null): bool
+    {
+        $buyerIdentity = $cart['buyerIdentity'] ?? null;
+        if (! is_array($buyerIdentity)) {
+            return $customerEmail !== null;
+        }
+
+        $buyerEmail = trim((string) ($buyerIdentity['email'] ?? ''));
+        if ($buyerEmail !== '') {
+            return true;
+        }
+
+        return is_array($buyerIdentity['customer'] ?? null);
     }
 
     /**
