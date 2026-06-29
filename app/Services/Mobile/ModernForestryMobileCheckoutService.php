@@ -510,9 +510,6 @@ mutation ModernForestryMobileCartCreate($input: CartInput!) {
         countryCode
         email
         phone
-        customer {
-          id
-        }
       }
       discountCodes {
         code

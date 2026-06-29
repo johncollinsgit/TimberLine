@@ -2339,6 +2339,7 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
 
     $body = json_decode($storefrontRequest->body(), true);
 
+    expect($body['query'])->not->toContain('customer {');
     expect($body['variables']['input']['lines'][0]['merchandiseId'])->toBe('gid://shopify/ProductVariant/9001');
     expect($body['variables']['input']['lines'][0]['quantity'])->toBe(2);
     expect($body['variables']['input']['lines'][0]['attributes'])->toBe([
