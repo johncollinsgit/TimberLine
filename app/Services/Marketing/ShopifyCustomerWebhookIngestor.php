@@ -97,9 +97,19 @@ class ShopifyCustomerWebhookIngestor
             &$linkStatus,
             &$externalStatus
         ): void {
-            if ($profile) {
+            $profileForWrite = $profile
+                ? MarketingProfile::query()
+                    ->forTenantId($tenantId)
+                    ->whereKey($profile->id)
+                    ->lockForUpdate()
+                    ->first()
+                : null;
+
+            if ($profileForWrite) {
+                $this->hydrateProfileAddressFromDefaultAddress($profileForWrite, $customerPayload);
+
                 $linkStatus = $this->upsertShopifyLink(
-                    profile: $profile,
+                    profile: $profileForWrite,
                     tenantId: $tenantId,
                     storeKey: $storeKey,
                     shopifyCustomerId: $shopifyCustomerId,
@@ -109,7 +119,7 @@ class ShopifyCustomerWebhookIngestor
             }
 
             $externalStatus = $this->upsertExternalSnapshot(
-                profileId: $profile?->id,
+                profileId: $profileForWrite?->id,
                 tenantId: $tenantId,
                 storeKey: $storeKey,
                 shopifyCustomerId: $shopifyCustomerId,
@@ -333,6 +343,11 @@ class ShopifyCustomerWebhookIngestor
             'tags' => $this->nullableString($payload['tags'] ?? null),
         ], static fn (mixed $value): bool => $value !== null && $value !== '');
 
+        $defaultAddress = $this->defaultAddressSnapshot($payload);
+        if ($defaultAddress !== null) {
+            $rawMetafields['shopify_customer_default_address'] = $defaultAddress;
+        }
+
         CustomerExternalProfile::query()->updateOrCreate(
             $lookup,
             [
@@ -360,6 +375,90 @@ class ShopifyCustomerWebhookIngestor
         );
 
         return $existing ? 'updated' : 'created';
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     */
+    protected function hydrateProfileAddressFromDefaultAddress(MarketingProfile $profile, array $payload): bool
+    {
+        $defaultAddress = $this->profileAddressPayloadFromDefaultAddress($payload);
+        if ($defaultAddress === []) {
+            return false;
+        }
+
+        $updates = [];
+
+        foreach ($defaultAddress as $field => $value) {
+            if ($value === null) {
+                continue;
+            }
+
+            if ($this->nullableString($profile->{$field} ?? null) !== null) {
+                continue;
+            }
+
+            $updates[$field] = $value;
+        }
+
+        if ($updates === []) {
+            return false;
+        }
+
+        $profile->forceFill($updates)->save();
+
+        return true;
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,string>
+     */
+    protected function profileAddressPayloadFromDefaultAddress(array $payload): array
+    {
+        $defaultAddress = $this->defaultAddressSnapshot($payload);
+        if ($defaultAddress === null) {
+            return [];
+        }
+
+        return array_filter([
+            'address_line_1' => $this->nullableString($defaultAddress['address1'] ?? null),
+            'address_line_2' => $this->nullableString($defaultAddress['address2'] ?? null),
+            'city' => $this->nullableString($defaultAddress['city'] ?? null),
+            'state' => $this->nullableString($defaultAddress['province_code'] ?? null)
+                ?? $this->nullableString($defaultAddress['province'] ?? null),
+            'postal_code' => $this->nullableString($defaultAddress['zip'] ?? null),
+            'country' => $this->nullableString($defaultAddress['country_code'] ?? null)
+                ?? $this->nullableString($defaultAddress['country'] ?? null),
+        ], static fn (mixed $value): bool => $value !== null && $value !== '');
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,string>|null
+     */
+    protected function defaultAddressSnapshot(array $payload): ?array
+    {
+        $defaultAddress = data_get($payload, 'default_address');
+        if (! is_array($defaultAddress)) {
+            return null;
+        }
+
+        $snapshot = array_filter([
+            'name' => $this->nullableString($defaultAddress['name'] ?? null),
+            'company' => $this->nullableString($defaultAddress['company'] ?? null),
+            'phone' => $this->nullableString($defaultAddress['phone'] ?? null),
+            'address1' => $this->nullableString($defaultAddress['address1'] ?? null),
+            'address2' => $this->nullableString($defaultAddress['address2'] ?? null),
+            'city' => $this->nullableString($defaultAddress['city'] ?? null),
+            'province' => $this->nullableString($defaultAddress['province'] ?? null),
+            'province_code' => $this->uppercaseNullableString($defaultAddress['province_code'] ?? null),
+            'zip' => $this->nullableString($defaultAddress['zip'] ?? null),
+            'country' => $this->nullableString($defaultAddress['country'] ?? null),
+            'country_code' => $this->uppercaseNullableString($defaultAddress['country_code'] ?? null),
+        ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
+        return $snapshot !== [] ? $snapshot : null;
     }
 
     protected function existingShopifyLink(int $tenantId, string $sourceId): ?MarketingProfileLink
@@ -460,6 +559,13 @@ class ShopifyCustomerWebhookIngestor
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function uppercaseNullableString(mixed $value): ?string
+    {
+        $string = $this->nullableString($value);
+
+        return $string !== null ? strtoupper($string) : null;
     }
 
     protected function fullName(?string $firstName, ?string $lastName): ?string

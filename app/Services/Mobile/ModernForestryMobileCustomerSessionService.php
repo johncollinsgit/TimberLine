@@ -5,6 +5,7 @@ namespace App\Services\Mobile;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Services\Marketing\ShopifyCustomerAddressSyncService;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -15,7 +16,8 @@ use Illuminate\Support\Str;
 class ModernForestryMobileCustomerSessionService
 {
     public function __construct(
-        protected MarketingStorefrontIdentityService $identityService
+        protected MarketingStorefrontIdentityService $identityService,
+        protected ShopifyCustomerAddressSyncService $shopifyCustomerAddressSync
     ) {
     }
 
@@ -45,6 +47,8 @@ class ModernForestryMobileCustomerSessionService
         if (! $profile instanceof MarketingProfile) {
             return null;
         }
+
+        $profile = $this->hydrateProfileAddressIfNeeded($profile, $identity);
 
         return new ModernForestryMobileCustomerSession($profile, $token, $identity, $this->jwtClaims($token) ?? []);
     }
@@ -661,6 +665,27 @@ GRAPHQL,
         return $externalProfile instanceof CustomerExternalProfile
             ? $externalProfile->marketingProfile()->where('tenant_id', $tenantId)->first()
             : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $identity
+     */
+    protected function hydrateProfileAddressIfNeeded(MarketingProfile $profile, array $identity): MarketingProfile
+    {
+        if ($this->hasSavedAddress($profile)) {
+            return $profile;
+        }
+
+        $shopifyCustomerId = $this->nullableString($identity['shopify_customer_id'] ?? $identity['source_id'] ?? null);
+        if ($shopifyCustomerId === null) {
+            return $profile;
+        }
+
+        return $this->shopifyCustomerAddressSync->hydrateProfileAddress(
+            $profile,
+            $shopifyCustomerId,
+            (int) ($profile->tenant_id ?? 0)
+        );
     }
 
     /**

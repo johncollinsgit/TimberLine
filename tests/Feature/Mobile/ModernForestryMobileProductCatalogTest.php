@@ -2287,17 +2287,35 @@ test('mobile checkout maps shopify user errors to a safe response', function ():
 test('mobile checkout creates a shopify storefront cart and returns checkout url', function (): void {
     config()->set('services.shopify.stores.retail.storefront_access_token', 'storefront-test-token');
 
-    $storefrontRequest = null;
+    $storefrontCreateRequest = null;
+    $storefrontCheckoutUrlRequest = null;
 
-    Http::fake(function (Request $request) use (&$storefrontRequest) {
+    Http::fake(function (Request $request) use (&$storefrontCreateRequest, &$storefrontCheckoutUrlRequest) {
         if (str_contains($request->url(), '/admin/api/2026-01/graphql.json')) {
             return Http::response(shopifyMobileProductDetailPayload(), 200);
         }
 
         if (str_contains($request->url(), '/api/2026-01/graphql.json')) {
-            $storefrontRequest = $request;
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
 
-            return Http::response(shopifyStorefrontCartCreatePayload(), 200);
+            if (str_contains($query, 'cartCreate(')) {
+                $storefrontCreateRequest = $request;
+
+                return Http::response(shopifyStorefrontCartCreatePayload(
+                    checkoutUrl: 'https://modernforestry-test.myshopify.com/cart/c/test-checkout-initial'
+                ), 200);
+            }
+
+            if (str_contains($query, 'cart(id: $id)')) {
+                $storefrontCheckoutUrlRequest = $request;
+
+                return Http::response(shopifyStorefrontCartCheckoutUrlPayload(
+                    checkoutUrl: 'https://modernforestry-test.myshopify.com/cart/c/test-checkout-authenticated'
+                ), 200);
+            }
+
+            return Http::response([], 404);
         }
 
         return Http::response([], 404);
@@ -2325,7 +2343,7 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
         ->assertOk()
         ->assertJsonPath('meta.tenant', 'modern-forestry')
         ->assertJsonPath('meta.source', 'shopify')
-        ->assertJsonPath('data.checkoutUrl', 'https://modernforestry-test.myshopify.com/cart/c/test-checkout')
+        ->assertJsonPath('data.checkoutUrl', 'https://modernforestry-test.myshopify.com/cart/c/test-checkout-authenticated')
         ->assertJsonPath('data.cartId', 'cart-123')
         ->assertJsonPath('data.lines.0.productHandle', 'forest-ember-candle')
         ->assertJsonPath('data.lines.0.productTitle', 'Forest Ember Candle')
@@ -2334,10 +2352,12 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
         ->assertJsonPath('data.subtotal.amount', '48.00')
         ->assertJsonPath('data.total.currencyCode', 'USD');
 
-    expect($storefrontRequest)->not->toBeNull();
-    expect($storefrontRequest->hasHeader('X-Shopify-Storefront-Access-Token', 'storefront-test-token'))->toBeTrue();
+    expect($storefrontCreateRequest)->not->toBeNull();
+    expect($storefrontCheckoutUrlRequest)->not->toBeNull();
+    expect($storefrontCreateRequest->hasHeader('X-Shopify-Storefront-Access-Token', 'storefront-test-token'))->toBeTrue();
+    expect($storefrontCheckoutUrlRequest->hasHeader('X-Shopify-Storefront-Access-Token', 'storefront-test-token'))->toBeTrue();
 
-    $body = json_decode($storefrontRequest->body(), true);
+    $body = json_decode($storefrontCreateRequest->body(), true);
 
     expect($body['query'])->not->toContain('customer {');
     expect($body['variables']['input']['lines'][0]['merchandiseId'])->toBe('gid://shopify/ProductVariant/9001');
@@ -2350,6 +2370,9 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
     ]);
     expect($body['variables']['input']['discountCodes'])->toBe(['CANDLECASH10']);
     expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('customer-account-test-token');
+
+    $checkoutQueryBody = json_decode($storefrontCheckoutUrlRequest->body(), true);
+    expect($checkoutQueryBody['variables']['id'])->toBe('gid://shopify/Cart/cart-123');
 });
 
 test('mobile checkout preloads buyer identity delivery details and buyer ip from the signed in mobile profile', function (): void {
@@ -2379,46 +2402,51 @@ test('mobile checkout preloads buyer identity delivery details and buyer ip from
         }
 
         if ($request->url() === 'https://modernforestry-test.myshopify.com/api/2026-01/graphql.json') {
-            $storefrontRequest = $request;
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
 
-            return Http::response([
-                'data' => [
-                    'cartCreate' => [
-                        'cart' => [
-                            'id' => 'gid://shopify/Cart/cart-prefill-1',
-                            'checkoutUrl' => 'https://modernforestry-test.myshopify.com/cart/c/prefilled-checkout',
-                            'cost' => [
-                                'subtotalAmount' => [
-                                    'amount' => '24.00',
-                                    'currencyCode' => 'USD',
+            if (str_contains($query, 'cartCreate(')) {
+                $storefrontRequest = $request;
+
+                return Http::response([
+                    'data' => [
+                        'cartCreate' => [
+                            'cart' => [
+                                'id' => 'gid://shopify/Cart/cart-prefill-1',
+                                'checkoutUrl' => 'https://modernforestry-test.myshopify.com/cart/c/prefilled-checkout-initial',
+                                'cost' => [
+                                    'subtotalAmount' => [
+                                        'amount' => '24.00',
+                                        'currencyCode' => 'USD',
+                                    ],
+                                    'totalTaxAmount' => [
+                                        'amount' => '1.44',
+                                        'currencyCode' => 'USD',
+                                    ],
+                                    'totalAmount' => [
+                                        'amount' => '31.39',
+                                        'currencyCode' => 'USD',
+                                    ],
                                 ],
-                                'totalTaxAmount' => [
-                                    'amount' => '1.44',
-                                    'currencyCode' => 'USD',
+                                'buyerIdentity' => [
+                                    'countryCode' => 'US',
+                                    'email' => 'checkout@example.com',
+                                    'phone' => '+15555550123',
+                                    'customer' => [
+                                        'id' => 'gid://shopify/Customer/321',
+                                    ],
                                 ],
-                                'totalAmount' => [
-                                    'amount' => '31.39',
-                                    'currencyCode' => 'USD',
-                                ],
-                            ],
-                            'buyerIdentity' => [
-                                'countryCode' => 'US',
-                                'email' => 'checkout@example.com',
-                                'phone' => '+15555550123',
-                                'customer' => [
-                                    'id' => 'gid://shopify/Customer/321',
-                                ],
-                            ],
-                            'discountCodes' => [],
-                            'deliveryGroups' => [
-                                'edges' => [
-                                    [
-                                        'node' => [
-                                            'deliveryOptions' => [
-                                                [
-                                                    'estimatedCost' => [
-                                                        'amount' => '5.95',
-                                                        'currencyCode' => 'USD',
+                                'discountCodes' => [],
+                                'deliveryGroups' => [
+                                    'edges' => [
+                                        [
+                                            'node' => [
+                                                'deliveryOptions' => [
+                                                    [
+                                                        'estimatedCost' => [
+                                                            'amount' => '5.95',
+                                                            'currencyCode' => 'USD',
+                                                        ],
                                                     ],
                                                 ],
                                             ],
@@ -2426,11 +2454,22 @@ test('mobile checkout preloads buyer identity delivery details and buyer ip from
                                     ],
                                 ],
                             ],
+                            'userErrors' => [],
                         ],
-                        'userErrors' => [],
                     ],
-                ],
-            ], 200);
+                ], 200);
+            }
+
+            if (str_contains($query, 'cart(id: $id)')) {
+                return Http::response(shopifyStorefrontCartCheckoutUrlPayload(
+                    checkoutUrl: 'https://modernforestry-test.myshopify.com/cart/c/prefilled-checkout',
+                    email: 'checkout@example.com',
+                    phone: '+15555550123',
+                    countryCode: 'US'
+                ), 200);
+            }
+
+            return Http::response([], 404);
         }
 
         return Http::response([], 404);
@@ -2481,6 +2520,198 @@ test('mobile checkout preloads buyer identity delivery details and buyer ip from
         'phone' => '+15555550123',
         'provinceCode' => 'SC',
         'zip' => '29601',
+    ]);
+});
+
+test('mobile checkout hydrates a missing signed-in address from Shopify before building the cart', function (): void {
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
+    config()->set('services.shopify.stores.retail.storefront_access_token', 'storefront-test-token');
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Address',
+        'last_name' => 'Sync',
+        'email' => 'address.sync@example.com',
+        'normalized_email' => 'address.sync@example.com',
+        'phone' => '+15555550199',
+        'normalized_phone' => '+15555550199',
+        'address_line_1' => null,
+        'address_line_2' => null,
+        'city' => null,
+        'state' => null,
+        'postal_code' => null,
+        'country' => null,
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:321',
+        'source_meta' => ['shopify_store_key' => 'retail'],
+        'match_method' => 'seed',
+        'confidence' => 1.00,
+    ]);
+
+    $storefrontCreateRequest = null;
+
+    Http::fake(function (Request $request) use (&$storefrontCreateRequest) {
+        if ($request->url() === 'https://shopify.com/20812479/account/customer/api/2026-01/graphql') {
+            return Http::response([
+                'data' => [
+                    'customer' => [
+                        'id' => 'gid://shopify/Customer/321',
+                        'firstName' => 'Address',
+                        'lastName' => 'Sync',
+                        'emailAddress' => [
+                            'emailAddress' => 'address.sync@example.com',
+                        ],
+                        'phoneNumber' => [
+                            'phoneNumber' => '+15555550199',
+                        ],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($request->url(), '/admin/api/2026-01/customers/321.json')) {
+            return Http::response([
+                'customer' => [
+                    'id' => 321,
+                    'admin_graphql_api_id' => 'gid://shopify/Customer/321',
+                    'email' => 'address.sync@example.com',
+                    'phone' => '+15555550199',
+                    'first_name' => 'Address',
+                    'last_name' => 'Sync',
+                    'orders_count' => 4,
+                    'total_spent' => '112.00',
+                    'created_at' => '2026-01-10T12:00:00Z',
+                    'updated_at' => '2026-06-29T12:00:00Z',
+                    'verified_email' => true,
+                    'default_address' => [
+                        'address1' => '88 Evergreen Trail',
+                        'address2' => 'Suite 4',
+                        'city' => 'Greenville',
+                        'province' => 'South Carolina',
+                        'province_code' => 'SC',
+                        'zip' => '29607',
+                        'country' => 'United States',
+                        'country_code' => 'US',
+                    ],
+                ],
+            ], 200);
+        }
+
+        if ($request->url() === 'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json') {
+            return Http::response(shopifyMobileProductDetailPayload(), 200);
+        }
+
+        if ($request->url() === 'https://modernforestry-test.myshopify.com/api/2026-01/graphql.json') {
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
+
+            if (str_contains($query, 'cartCreate(')) {
+                $storefrontCreateRequest = $request;
+
+                return Http::response([
+                    'data' => [
+                        'cartCreate' => [
+                            'cart' => [
+                                'id' => 'gid://shopify/Cart/cart-address-sync-1',
+                                'checkoutUrl' => 'https://modernforestry-test.myshopify.com/cart/c/address-sync-initial',
+                                'cost' => [
+                                    'subtotalAmount' => [
+                                        'amount' => '24.00',
+                                        'currencyCode' => 'USD',
+                                    ],
+                                    'totalTaxAmount' => [
+                                        'amount' => '1.68',
+                                        'currencyCode' => 'USD',
+                                    ],
+                                    'totalAmount' => [
+                                        'amount' => '31.63',
+                                        'currencyCode' => 'USD',
+                                    ],
+                                ],
+                                'buyerIdentity' => [
+                                    'countryCode' => 'US',
+                                    'email' => 'address.sync@example.com',
+                                    'phone' => '+15555550199',
+                                ],
+                                'discountCodes' => [],
+                                'deliveryGroups' => [
+                                    'edges' => [
+                                        [
+                                            'node' => [
+                                                'deliveryOptions' => [
+                                                    [
+                                                        'estimatedCost' => [
+                                                            'amount' => '5.95',
+                                                            'currencyCode' => 'USD',
+                                                        ],
+                                                    ],
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            'userErrors' => [],
+                        ],
+                    ],
+                ], 200);
+            }
+
+            if (str_contains($query, 'cart(id: $id)')) {
+                return Http::response(shopifyStorefrontCartCheckoutUrlPayload(
+                    checkoutUrl: 'https://modernforestry-test.myshopify.com/cart/c/address-sync-checkout',
+                    email: 'address.sync@example.com',
+                    phone: '+15555550199',
+                    countryCode: 'US'
+                ), 200);
+            }
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->postJson('/api/mobile/v1/modern-forestry/checkout', [
+        'items' => [
+            [
+                'productHandle' => 'forest-ember-candle',
+                'variantId' => '9001',
+                'quantity' => 1,
+            ],
+        ],
+        'customerAccessToken' => 'live-customer-account-token',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.authenticated', true)
+        ->assertJsonPath('data.prefilledCustomer', true)
+        ->assertJsonPath('data.checkoutUrl', 'https://modernforestry-test.myshopify.com/cart/c/address-sync-checkout')
+        ->assertJsonPath('data.shipping.amount', '5.95')
+        ->assertJsonPath('data.tax.amount', '1.68');
+
+    $profile->refresh();
+
+    expect($profile->address_line_1)->toBe('88 Evergreen Trail')
+        ->and($profile->address_line_2)->toBe('Suite 4')
+        ->and($profile->city)->toBe('Greenville')
+        ->and($profile->state)->toBe('SC')
+        ->and($profile->postal_code)->toBe('29607')
+        ->and($profile->country)->toBe('US');
+
+    $body = json_decode((string) $storefrontCreateRequest?->body(), true);
+    expect($body['variables']['input']['delivery']['addresses'][0]['address']['deliveryAddress'])->toMatchArray([
+        'address1' => '88 Evergreen Trail',
+        'address2' => 'Suite 4',
+        'city' => 'Greenville',
+        'countryCode' => 'US',
+        'firstName' => 'Address',
+        'lastName' => 'Sync',
+        'phone' => '+15555550199',
+        'provinceCode' => 'SC',
+        'zip' => '29607',
     ]);
 });
 
@@ -2977,14 +3208,16 @@ function shopifyMobileCandleClubProductDetailPayload(): array
 /**
  * @return array<string,mixed>
  */
-function shopifyStorefrontCartCreatePayload(): array
+function shopifyStorefrontCartCreatePayload(
+    string $checkoutUrl = 'https://modernforestry-test.myshopify.com/cart/c/test-checkout'
+): array
 {
     return [
         'data' => [
             'cartCreate' => [
                 'cart' => [
                     'id' => 'gid://shopify/Cart/cart-123',
-                    'checkoutUrl' => 'https://modernforestry-test.myshopify.com/cart/c/test-checkout',
+                    'checkoutUrl' => $checkoutUrl,
                     'cost' => [
                         'subtotalAmount' => [
                             'amount' => '48.00',
@@ -2997,6 +3230,27 @@ function shopifyStorefrontCartCreatePayload(): array
                     ],
                 ],
                 'userErrors' => [],
+            ],
+        ],
+    ];
+}
+
+function shopifyStorefrontCartCheckoutUrlPayload(
+    string $checkoutUrl = 'https://modernforestry-test.myshopify.com/cart/c/test-checkout',
+    ?string $email = 'checkout@example.com',
+    ?string $phone = '+15555550123',
+    ?string $countryCode = 'US'
+): array
+{
+    return [
+        'data' => [
+            'cart' => [
+                'checkoutUrl' => $checkoutUrl,
+                'buyerIdentity' => array_filter([
+                    'email' => $email,
+                    'phone' => $phone,
+                    'countryCode' => $countryCode,
+                ], static fn (mixed $value): bool => $value !== null && $value !== ''),
             ],
         ],
     ];

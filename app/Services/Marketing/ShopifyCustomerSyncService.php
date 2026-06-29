@@ -101,6 +101,7 @@ class ShopifyCustomerSyncService
                         'accepts_marketing',
                         'email_marketing_consent',
                         'sms_marketing_consent',
+                        'default_address',
                     ]),
                 ]);
 

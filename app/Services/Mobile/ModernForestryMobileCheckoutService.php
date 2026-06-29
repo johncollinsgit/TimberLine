@@ -166,6 +166,10 @@ class ModernForestryMobileCheckoutService
             );
         }
 
+        if (($customerContext['accessToken'] ?? null) !== null) {
+            $cart = $this->refreshCheckoutUrlForCart($store, $headers, $cart) ?? $cart;
+        }
+
         $checkoutUrl = trim((string) ($cart['checkoutUrl'] ?? ''));
         if ($checkoutUrl === '') {
             throw new ModernForestryMobileCheckoutException(
@@ -537,6 +541,22 @@ mutation ModernForestryMobileCartCreate($input: CartInput!) {
 GRAPHQL;
     }
 
+    protected function cartCheckoutUrlQuery(): string
+    {
+        return <<<'GRAPHQL'
+query ModernForestryMobileCartCheckoutUrl($id: ID!) {
+  cart(id: $id) {
+    checkoutUrl
+    buyerIdentity {
+      countryCode
+      email
+      phone
+    }
+  }
+}
+GRAPHQL;
+    }
+
     /**
      * @return array{
      *   accessToken:?string,
@@ -896,6 +916,50 @@ GRAPHQL;
         }
 
         return true;
+    }
+
+    /**
+     * @param  array<string,mixed>  $store
+     * @param  array<string,string>  $headers
+     * @param  array<string,mixed>  $cart
+     * @return array<string,mixed>|null
+     */
+    protected function refreshCheckoutUrlForCart(array $store, array $headers, array $cart): ?array
+    {
+        $cartId = trim((string) ($cart['id'] ?? ''));
+        if ($cartId === '') {
+            return null;
+        }
+
+        $response = Http::withHeaders($headers)
+            ->timeout(15)
+            ->post($this->storefrontGraphqlUrl($store), [
+                'query' => $this->cartCheckoutUrlQuery(),
+                'variables' => [
+                    'id' => $cartId,
+                ],
+            ]);
+
+        if ($response->failed()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        if (! is_array($payload) || ! empty($payload['errors'])) {
+            return null;
+        }
+
+        $refreshedCart = $payload['data']['cart'] ?? null;
+        if (! is_array($refreshedCart)) {
+            return null;
+        }
+
+        $checkoutUrl = trim((string) ($refreshedCart['checkoutUrl'] ?? ''));
+        if ($checkoutUrl === '') {
+            return null;
+        }
+
+        return array_replace_recursive($cart, $refreshedCart);
     }
 
     /**

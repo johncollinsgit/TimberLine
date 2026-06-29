@@ -145,6 +145,17 @@ test('customers create webhook stores shopify commerce snapshot fields on the ex
         'last_name' => 'Customer',
         'orders_count' => 145,
         'total_spent' => '127784.75',
+        'default_address' => [
+            'name' => 'Snapshot Customer',
+            'address1' => '101 Pine Street',
+            'address2' => 'Suite B',
+            'city' => 'Greenville',
+            'province' => 'South Carolina',
+            'province_code' => 'sc',
+            'zip' => '29601',
+            'country' => 'United States',
+            'country_code' => 'us',
+        ],
     ]))->assertOk();
 
     $external = CustomerExternalProfile::query()
@@ -157,7 +168,43 @@ test('customers create webhook stores shopify commerce snapshot fields on the ex
 
     expect($external)->not->toBeNull()
         ->and((int) $external?->order_count)->toBe(145)
-        ->and((string) $external?->total_spent)->toBe('127784.75');
+        ->and((string) $external?->total_spent)->toBe('127784.75')
+        ->and(data_get($external?->raw_metafields, 'shopify_customer_default_address.address1'))->toBe('101 Pine Street')
+        ->and(data_get($external?->raw_metafields, 'shopify_customer_default_address.province_code'))->toBe('SC')
+        ->and(data_get($external?->raw_metafields, 'shopify_customer_default_address.country_code'))->toBe('US');
+});
+
+test('customers create webhook hydrates missing canonical profile address fields from shopify default address', function (): void {
+    postShopifyCustomerWebhook($this, '/webhooks/shopify/customers/create', shopifyCustomerPayload([
+        'id' => 9013,
+        'email' => 'address.customer@example.com',
+        'first_name' => 'Address',
+        'last_name' => 'Customer',
+        'default_address' => [
+            'name' => 'Address Customer',
+            'address1' => '415 Forest Lane',
+            'address2' => 'Apt 3',
+            'city' => 'Travelers Rest',
+            'province' => 'South Carolina',
+            'province_code' => 'sc',
+            'zip' => '29690',
+            'country' => 'United States',
+            'country_code' => 'us',
+        ],
+    ]))->assertOk();
+
+    $profile = MarketingProfile::query()
+        ->forTenantId($this->tenantId)
+        ->where('normalized_email', 'address.customer@example.com')
+        ->first();
+
+    expect($profile)->not->toBeNull()
+        ->and($profile?->address_line_1)->toBe('415 Forest Lane')
+        ->and($profile?->address_line_2)->toBe('Apt 3')
+        ->and($profile?->city)->toBe('Travelers Rest')
+        ->and($profile?->state)->toBe('SC')
+        ->and($profile?->postal_code)->toBe('29690')
+        ->and($profile?->country)->toBe('US');
 });
 
 test('customers create webhook promotes matching legacy source-linked profile into tenant scope instead of duplicating it', function (): void {
@@ -356,6 +403,12 @@ test('customers update webhook refreshes external snapshot and preserves richer 
         'normalized_email' => 'update.customer@example.com',
         'phone' => '+15554443333',
         'normalized_phone' => '5554443333',
+        'address_line_1' => '9 Existing Way',
+        'address_line_2' => 'Suite 500',
+        'city' => 'Asheville',
+        'state' => 'NC',
+        'postal_code' => '28801',
+        'country' => 'US',
     ]);
 
     MarketingProfileLink::query()->create([
@@ -396,6 +449,17 @@ test('customers update webhook refreshes external snapshot and preserves richer 
         'phone' => null,
         'accepts_marketing' => false,
         'updated_at' => '2026-03-18T15:22:00Z',
+        'default_address' => [
+            'name' => 'Preferred Customer',
+            'address1' => '415 Forest Lane',
+            'address2' => 'Apt 3',
+            'city' => 'Travelers Rest',
+            'province' => 'South Carolina',
+            'province_code' => 'sc',
+            'zip' => '29690',
+            'country' => 'United States',
+            'country_code' => 'us',
+        ],
     ]))->assertOk();
 
     $profile->refresh();
@@ -409,12 +473,20 @@ test('customers update webhook refreshes external snapshot and preserves richer 
 
     expect($profile->first_name)->toBe('Preferred')
         ->and($profile->phone)->toBe('+15554443333')
+        ->and($profile->address_line_1)->toBe('9 Existing Way')
+        ->and($profile->address_line_2)->toBe('Suite 500')
+        ->and($profile->city)->toBe('Asheville')
+        ->and($profile->state)->toBe('NC')
+        ->and($profile->postal_code)->toBe('28801')
+        ->and($profile->country)->toBe('US')
         ->and($external)->not->toBeNull()
         ->and((int) $external?->marketing_profile_id)->toBe((int) $profile->id)
         ->and($external?->first_name)->toBe('Preferred')
         ->and($external?->phone)->toBe('+15554443333')
         ->and($external?->accepts_marketing)->toBeFalse()
         ->and(data_get($external?->raw_metafields, 'shopify_customer_webhook.topic'))->toBe('customers/update')
+        ->and(data_get($external?->raw_metafields, 'shopify_customer_default_address.address1'))->toBe('415 Forest Lane')
+        ->and(data_get($external?->raw_metafields, 'shopify_customer_default_address.province_code'))->toBe('SC')
         ->and(MarketingConsentRequest::query()->count())->toBe(0)
         ->and(MarketingConsentEvent::query()->count())->toBe(0);
 });
@@ -485,6 +557,17 @@ function shopifyCustomerPayload(array $overrides = []): array
         'verified_email' => $overrides['verified_email'] ?? true,
         'email_marketing_consent' => $overrides['email_marketing_consent'] ?? ['state' => 'subscribed'],
         'sms_marketing_consent' => $overrides['sms_marketing_consent'] ?? ['state' => 'not_subscribed'],
+        'default_address' => $overrides['default_address'] ?? [
+            'name' => trim((string) (($overrides['first_name'] ?? 'Shopify') . ' ' . ($overrides['last_name'] ?? 'Customer'))),
+            'address1' => '12 Candle Trail',
+            'address2' => null,
+            'city' => 'Greenville',
+            'province' => 'South Carolina',
+            'province_code' => 'SC',
+            'zip' => '29601',
+            'country' => 'United States',
+            'country_code' => 'US',
+        ],
         'admin_graphql_api_id' => $overrides['admin_graphql_api_id'] ?? "gid://shopify/Customer/{$id}",
     ], $overrides);
 }
