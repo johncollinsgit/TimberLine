@@ -912,12 +912,12 @@
         @if ($activeTab === 'applications')
             <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <h3 class="text-lg font-semibold text-zinc-900">Tenant Applications</h3>
-                <p class="mt-1 text-sm text-zinc-600">Module access applications tied to this tenant.</p>
+                <p class="mt-1 text-sm text-zinc-600">Wholesale submissions and module access requests tied to this tenant.</p>
                 <div class="mt-4 overflow-hidden rounded-2xl border border-zinc-200">
                     <table class="w-full divide-y divide-zinc-200 text-sm">
                         <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-500">
                             <tr>
-                                <th class="px-4 py-3">Application</th>
+                                <th class="px-4 py-3">Request</th>
                                 <th class="px-4 py-3">Status</th>
                                 <th class="px-4 py-3">Created</th>
                                 <th class="px-4 py-3">Updated</th>
@@ -929,7 +929,10 @@
                                 <tr class="text-zinc-700">
                                     <td class="px-4 py-3">
                                         <div class="font-semibold text-zinc-900">{{ $application['title'] }}</div>
-                                        <div class="mt-1 font-mono text-xs text-zinc-500">{{ $application['module_key'] }}</div>
+                                        <div class="mt-1 text-xs text-zinc-500">{{ $application['subtitle'] ?? 'Application' }}</div>
+                                        @if (! empty($application['summary']))
+                                            <div class="mt-1 font-mono text-xs text-zinc-500">{{ $application['summary'] }}</div>
+                                        @endif
                                     </td>
                                     <td class="px-4 py-3">
                                         <span class="rounded-full border border-zinc-300 px-2 py-1 text-[11px] font-semibold text-zinc-700">{{ $application['status_label'] }}</span>
@@ -942,7 +945,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-sm text-zinc-500">No applications yet. Module access requests will appear here.</td>
+                                    <td colspan="5" class="px-4 py-8 text-center text-sm text-zinc-500">No applications yet. Wholesale submissions and module access requests will appear here.</td>
                                 </tr>
                             @endforelse
                         </tbody>

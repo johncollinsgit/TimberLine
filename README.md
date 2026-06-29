@@ -1241,6 +1241,21 @@ Notes:
 - `shopify:sync-customer-metafields` requires Admin API `read_customers` or `write_customers` scope; Customer Account `customer_*` scopes are not sufficient for Admin `customers` queries.
 - Webhooks are verified with HMAC and dispatched to a sync queue (Phase 1).
 
+### Forms v1 (Wholesale)
+
+- Tenant-scoped forms scaffolding now exists for wholesale intake:
+  - `form_templates`
+  - `tenant_forms`
+  - `form_submissions`
+- Canonical template config lives in `config/forms.php`.
+- The first built-in template is `wholesale_application`.
+- The wholesale storefront application provisions/uses tenant slug `modern-forestry-wholesale` by default and stores submissions in `form_submissions` while still creating the native Shopify customer and `customer_access_requests` record.
+- Landlord operators can provision a tenant form from a template via:
+  - `POST /landlord/tenants/{tenant}/forms/templates/{templateKey}`
+- Current built-in env knobs:
+  - `WHOLESALE_APPLICATION_REVIEW_EMAIL`
+  - `WHOLESALE_APPLICATION_STOREFRONT_TENANT_SLUG`
+
 Mobile catalog local/testing mode:
 - `MOBILE_CATALOG_FAKE_ENABLED=true` enables fake Modern Forestry catalog responses only in `local` or `testing`.
 - Fake catalog mode is for iOS development only; it does not call Shopify and does not require Shopify tokens.

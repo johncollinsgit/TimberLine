@@ -16,6 +16,7 @@
 
 ## Everbranch Readiness Snapshot (2026-05-21)
 - Dual-console switcher pass (2026-06-01): shared operator accounts can now expose explicit cross-host console switches between Everbranch Admin and attached tenant consoles from the canonical app shell. The current rollout includes a deployment migration that grants the requested flagship operator account platform-admin plus Modern Forestry tenant access, while preserving the distinct landlord and tenant host lanes.
+- Forms v1 wholesale intake scaffold (2026-06-29): Everbranch now has first-class `form_templates`, `tenant_forms`, and `form_submissions` tables plus provisioning services. The first built-in template is `wholesale_application`, seeded/provisioned to tenant slug `modern-forestry-wholesale`. Wholesale storefront application submits now continue to create the native Shopify customer and `customer_access_requests` record, while also writing a tenant-scoped `form_submissions` row for backend review workflows.
 - Everbranch is the product/platform brand. Modern Forestry is the flagship tenant and must remain stable.
 - Current posture: internal alpha SaaS with strong host, Shopify, module, and guarded billing foundations, but not ready for broad public/client onboarding.
 - PR 1 readiness evidence lives in `docs/operations/everbranch-master-readiness-plan.md` and the companion audit docs under `docs/operations/everbranch-*.md`.

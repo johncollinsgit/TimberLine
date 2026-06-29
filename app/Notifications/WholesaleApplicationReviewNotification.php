@@ -22,9 +22,7 @@ class WholesaleApplicationReviewNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $reviewUrl = route('admin.users', [
-            'search' => (string) $this->request->email,
-        ]);
+        $reviewUrl = route('admin.wholesale.applications.show', $this->request);
         $metadata = (array) ($this->request->metadata ?? []);
         $storeType = trim((string) ($metadata['business_type'] ?? ''));
         $website = trim((string) ($metadata['website'] ?? ''));
@@ -42,13 +40,13 @@ class WholesaleApplicationReviewNotification extends Notification
             ->line('Use the link below to review and approve the applicant.')
             ->line('Name: '.(string) $this->request->name)
             ->line('Email: '.(string) $this->request->email)
-            ->line('Company: '.(string) ($this->request->company ?: '—'))
-            ->line('Store type: '.($storeType !== '' ? ucwords($storeType) : '—'))
-            ->line('Website: '.($website !== '' ? $website : '—'))
-            ->line('Phone: '.($phone !== '' ? $phone : '—'))
-            ->line('Location: '.($location !== '' ? $location : '—'))
+            ->line('Company: '.(string) ($this->request->company ?: 'N/A'))
+            ->line('Store type: '.($storeType !== '' ? ucwords($storeType) : 'N/A'))
+            ->line('Website: '.($website !== '' ? $website : 'N/A'))
+            ->line('Phone: '.($phone !== '' ? $phone : 'N/A'))
+            ->line('Location: '.($location !== '' ? $location : 'N/A'))
             ->line('Requested intent: '.ucfirst((string) ($this->request->intent ?: 'production')))
             ->action('Review application', $reviewUrl)
-            ->line('The admin user page is filtered to the applicant email so you can jump straight to the record.');
+            ->line('The review page keeps the captured application together and links straight into approvals.');
     }
 }

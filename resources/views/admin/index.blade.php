@@ -37,5 +37,19 @@
                 </a>
             </div>
         </section>
+
+        <section class="fb-page-surface p-6">
+            <div class="text-sm font-semibold text-zinc-950">Wholesale Applications</div>
+            <div class="mt-1 text-sm text-zinc-600">
+                Review Modern Forestry Wholesale applications in a dedicated inbox while the reusable forms system stays underneath.
+            </div>
+
+            <div class="mt-4">
+                <a href="{{ route('admin.wholesale.applications') }}"
+                   class="fb-btn-soft fb-link-soft rounded-full">
+                    Open Wholesale Inbox
+                </a>
+            </div>
+        </section>
     </div>
 </x-app-layout>

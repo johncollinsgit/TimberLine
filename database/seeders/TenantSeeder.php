@@ -10,12 +10,17 @@ class TenantSeeder extends Seeder
     /**
      * Run the database seeds.
      */
-public function run(): void
-{
-    \App\Models\Tenant::firstOrCreate(
-        ['slug' => 'modern-forestry'],
-        ['name' => 'Modern Forestry']
-    );
-}
+    public function run(): void
+    {
+        \App\Models\Tenant::firstOrCreate(
+            ['slug' => 'modern-forestry'],
+            ['name' => 'Modern Forestry']
+        );
+
+        \App\Models\Tenant::firstOrCreate(
+            ['slug' => 'modern-forestry-wholesale'],
+            ['name' => 'Modern Forestry Wholesale']
+        );
+    }
 
 }

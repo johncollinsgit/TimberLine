@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CustomerAccessRequest extends Model
 {
@@ -52,5 +53,10 @@ class CustomerAccessRequest extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function formSubmission(): HasOne
+    {
+        return $this->hasOne(FormSubmission::class, 'customer_access_request_id');
     }
 }

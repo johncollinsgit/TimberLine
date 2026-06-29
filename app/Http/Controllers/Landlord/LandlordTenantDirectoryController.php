@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
 use App\Models\CustomerAccessRequest;
+use App\Models\FormSubmission;
 use App\Models\IntegrationHealthEvent;
 use App\Models\LandlordOperatorAction;
 use App\Models\MarketingProfile;
@@ -14,6 +15,7 @@ use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantModuleState;
 use App\Models\TenantOnboardingJourneyEvent;
 use App\Models\User;
+use App\Services\Forms\TenantFormProvisioningService;
 use App\Services\Onboarding\OnboardingJourneyDiagnosticsService;
 use App\Services\Onboarding\OnboardingJourneyEventPresenter;
 use App\Services\Onboarding\TenantSetupStatusService;
@@ -298,6 +300,26 @@ class LandlordTenantDirectoryController extends Controller
         return redirect()
             ->route('landlord.tenants.show', ['tenant' => (int) $tenant->id, 'tab' => 'overview'])
             ->with('status', 'Tenant blueprint updated.');
+    }
+
+    public function provisionFormFromTemplate(
+        Request $request,
+        Tenant $tenant,
+        string $templateKey,
+        TenantFormProvisioningService $formProvisioningService
+    ): RedirectResponse {
+        $normalizedKey = strtolower(trim($templateKey));
+        $availableTemplates = array_keys((array) config('forms.templates', []));
+
+        if (! in_array($normalizedKey, $availableTemplates, true)) {
+            abort(404);
+        }
+
+        $formProvisioningService->ensureTenantForm($tenant, $normalizedKey);
+
+        return redirect()
+            ->route('landlord.tenants.show', ['tenant' => (int) $tenant->id, 'tab' => 'applications'])
+            ->with('status', 'Tenant form provisioned from template.');
     }
 
     public function update(
@@ -624,7 +646,7 @@ class LandlordTenantDirectoryController extends Controller
             'tenantStatusOptions' => $this->tenantStatusOptions(),
             'moduleGroups' => $moduleGroups,
             'enabledModuleCount' => $enabledModuleCount,
-            'applications' => $this->tenantApplications((int) $hydratedTenant->id),
+            'applications' => $this->tenantApplications($hydratedTenant),
             'activityRows' => $this->tenantActivityRows((int) $hydratedTenant->id),
             'tenantCustomers' => $this->tenantCustomers((int) $hydratedTenant->id, $customerSearch),
             'customerSearch' => $customerSearch,
@@ -1227,43 +1249,153 @@ class LandlordTenantDirectoryController extends Controller
     /**
      * @return Collection<int,array<string,mixed>>
      */
-    protected function tenantApplications(int $tenantId): Collection
+    protected function tenantApplications(Tenant $tenant): Collection
     {
-        if (! Schema::hasTable('tenant_module_access_requests')) {
-            return collect();
+        $tenantId = (int) $tenant->id;
+        $tenantSlug = strtolower(trim((string) $tenant->slug));
+        $applications = collect();
+        $linkedAccessRequestIds = [];
+
+        if (Schema::hasTable('form_submissions')) {
+            /** @var Collection<int,FormSubmission> $submissionRows */
+            $submissionRows = FormSubmission::query()
+                ->where('tenant_id', $tenantId)
+                ->with([
+                    'form:id,name,slug',
+                    'accessRequest:id,status',
+                ])
+                ->orderByDesc('submitted_at')
+                ->orderByDesc('id')
+                ->limit(100)
+                ->get();
+
+            $linkedAccessRequestIds = $submissionRows
+                ->pluck('customer_access_request_id')
+                ->filter(fn ($value) => is_numeric($value) && (int) $value > 0)
+                ->map(fn ($value) => (int) $value)
+                ->values()
+                ->all();
+
+            $applications = $applications->concat(
+                $submissionRows->map(function (FormSubmission $row) use ($tenantId): array {
+                    $createdAt = $row->submitted_at ?? $row->created_at;
+
+                    return [
+                        'id' => (int) $row->id,
+                        'title' => (string) ($row->submitter_name ?: $row->submitter_email ?: 'Form submission'),
+                        'subtitle' => (string) (($row->form?->name ?: 'Tenant form') . ' submission'),
+                        'summary' => collect([
+                            trim((string) ($row->submitter_company ?? '')) ?: null,
+                            trim((string) ($row->submitter_email ?? '')) ?: null,
+                            trim((string) ($row->form?->slug ?? '')) !== ''
+                                ? 'form: ' . trim((string) $row->form?->slug)
+                                : null,
+                        ])->filter()->implode(' | '),
+                        'module_key' => 'tenant_form_submission',
+                        'status' => (string) ($row->status ?? 'submitted'),
+                        'status_label' => Str::headline((string) ($row->status ?? 'submitted')),
+                        'created_at' => optional($createdAt)->toDateTimeString(),
+                        'updated_at' => optional($row->updated_at)->toDateTimeString(),
+                        'actor' => $row->submitter_name ?: ($row->submitter_email ?: 'Unknown'),
+                        'action_url' => $row->customer_access_request_id
+                            ? route('admin.wholesale.applications.show', ['accessRequest' => (int) $row->customer_access_request_id])
+                            : route('landlord.tenants.show', ['tenant' => $tenantId, 'tab' => 'applications']),
+                        'sort_timestamp' => optional($createdAt)?->getTimestamp() ?? 0,
+                    ];
+                })
+            );
         }
 
-        /** @var Collection<int,TenantModuleAccessRequest> $rows */
-        $rows = TenantModuleAccessRequest::query()
-            ->where('tenant_id', $tenantId)
-            ->with([
-                'requester:id,name,email',
-                'resolver:id,name,email',
-            ])
-            ->orderByDesc('requested_at')
-            ->orderByDesc('id')
-            ->limit(100)
-            ->get();
+        if (Schema::hasTable('tenant_module_access_requests')) {
+            /** @var Collection<int,TenantModuleAccessRequest> $moduleRows */
+            $moduleRows = TenantModuleAccessRequest::query()
+                ->where('tenant_id', $tenantId)
+                ->with([
+                    'requester:id,name,email',
+                    'resolver:id,name,email',
+                ])
+                ->orderByDesc('requested_at')
+                ->orderByDesc('id')
+                ->limit(100)
+                ->get();
 
-        return $rows->map(function (TenantModuleAccessRequest $row) use ($tenantId): array {
-            $moduleKey = strtolower(trim((string) $row->module_key));
-            $moduleName = (string) data_get(config('module_catalog.modules'), $moduleKey.'.display_name', Str::headline($moduleKey));
+            $applications = $applications->concat(
+                $moduleRows->map(function (TenantModuleAccessRequest $row) use ($tenantId): array {
+                    $moduleKey = strtolower(trim((string) $row->module_key));
+                    $moduleName = (string) data_get(config('module_catalog.modules'), $moduleKey.'.display_name', Str::headline($moduleKey));
+                    $createdAt = $row->requested_at ?? $row->created_at;
+                    $updatedAt = $row->resolved_at ?? $row->updated_at;
 
-            return [
-                'id' => (int) $row->id,
-                'title' => $moduleName,
-                'module_key' => $moduleKey,
-                'status' => (string) ($row->status ?? 'pending'),
-                'status_label' => Str::headline((string) ($row->status ?? 'pending')),
-                'created_at' => optional($row->requested_at ?? $row->created_at)?->toDateTimeString(),
-                'updated_at' => optional($row->resolved_at ?? $row->updated_at)?->toDateTimeString(),
-                'actor' => $row->requester?->name ?: ($row->requester?->email ?: 'Unknown'),
-                'action_url' => route('landlord.tenants.show', [
-                    'tenant' => $tenantId,
-                    'tab' => 'settings',
-                ]),
-            ];
-        })->values();
+                    return [
+                        'id' => (int) $row->id,
+                        'title' => $moduleName,
+                        'subtitle' => 'Module access request',
+                        'summary' => $row->requester?->email ?: null,
+                        'module_key' => $moduleKey,
+                        'status' => (string) ($row->status ?? 'pending'),
+                        'status_label' => Str::headline((string) ($row->status ?? 'pending')),
+                        'created_at' => optional($createdAt)?->toDateTimeString(),
+                        'updated_at' => optional($updatedAt)?->toDateTimeString(),
+                        'actor' => $row->requester?->name ?: ($row->requester?->email ?: 'Unknown'),
+                        'action_url' => route('landlord.tenants.show', [
+                            'tenant' => $tenantId,
+                            'tab' => 'settings',
+                        ]),
+                        'sort_timestamp' => optional($createdAt)?->getTimestamp() ?? 0,
+                    ];
+                })
+            );
+        }
+
+        if (Schema::hasTable('customer_access_requests')) {
+            /** @var Collection<int,CustomerAccessRequest> $requestRows */
+            $requestRows = CustomerAccessRequest::query()
+                ->where(function (Builder $query) use ($tenantId, $tenantSlug): void {
+                    $query->where('tenant_id', $tenantId);
+
+                    if ($tenantSlug !== '') {
+                        $query->orWhere('requested_tenant_slug', $tenantSlug);
+                    }
+                })
+                ->with('user:id,name,email')
+                ->when($linkedAccessRequestIds !== [], fn (Builder $query) => $query->whereNotIn('id', $linkedAccessRequestIds))
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit(100)
+                ->get();
+
+            $applications = $applications->concat(
+                $requestRows->map(function (CustomerAccessRequest $row): array {
+                    $title = trim((string) ($row->name ?: $row->email ?: 'Wholesale applicant'));
+                    $summary = collect([
+                        trim((string) ($row->company ?? '')) ?: null,
+                        trim((string) ($row->email ?? '')) ?: null,
+                        trim((string) ($row->requested_tenant_slug ?? '')) !== ''
+                            ? 'slug: '.trim((string) $row->requested_tenant_slug)
+                            : null,
+                    ])->filter()->implode(' | ');
+
+                    return [
+                        'id' => (int) $row->id,
+                        'title' => $title,
+                        'subtitle' => 'Wholesale application',
+                        'summary' => $summary !== '' ? $summary : null,
+                        'module_key' => 'wholesale_application',
+                        'status' => (string) ($row->status ?? 'pending'),
+                        'status_label' => Str::headline((string) ($row->status ?? 'pending')),
+                        'created_at' => optional($row->created_at)->toDateTimeString(),
+                        'updated_at' => optional($row->updated_at ?? $row->approved_at ?? $row->rejected_at)->toDateTimeString(),
+                        'actor' => $row->name ?: ($row->email ?: ($row->user?->email ?: 'Unknown')),
+                        'action_url' => route('admin.wholesale.applications.show', ['accessRequest' => (int) $row->id]),
+                        'sort_timestamp' => optional($row->created_at)->getTimestamp() ?? 0,
+                    ];
+                })
+            );
+        }
+
+        return $applications
+            ->sortByDesc('sort_timestamp')
+            ->values();
     }
 
     /**

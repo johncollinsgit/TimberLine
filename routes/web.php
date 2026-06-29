@@ -59,6 +59,7 @@ use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\UiPreferencesController;
+use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Livewire\Admin\AdminHome;
@@ -239,6 +240,8 @@ $landlordRoutes = static function (): void {
         ->name('tenants.blueprint.update');
     Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
         ->name('tenants.show');
+    Route::post('/landlord/tenants/{tenant}/forms/templates/{templateKey}', [LandlordTenantDirectoryController::class, 'provisionFormFromTemplate'])
+        ->name('tenants.forms.templates.provision');
     Route::post('/landlord/tenants/{tenant}/role', [LandlordTenantDirectoryController::class, 'updateRole'])
         ->name('tenants.role.update');
     Route::post('/landlord/tenants/{tenant}/type', [LandlordTenantDirectoryController::class, 'updateType'])
@@ -637,6 +640,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Optional direct module routes
         Route::get('/admin/users', AdminUsersIndex::class)->name('admin.users');
+        Route::get('/admin/wholesale/applications', [WholesaleApplicationInboxController::class, 'index'])->name('admin.wholesale.applications');
+        Route::get('/admin/wholesale/applications/{accessRequest}', [WholesaleApplicationInboxController::class, 'show'])->name('admin.wholesale.applications.show');
+        Route::post('/admin/wholesale/applications/{accessRequest}/approve', [WholesaleApplicationInboxController::class, 'approve'])->name('admin.wholesale.applications.approve');
+        Route::post('/admin/wholesale/applications/{accessRequest}/reject', [WholesaleApplicationInboxController::class, 'reject'])->name('admin.wholesale.applications.reject');
+        Route::post('/admin/wholesale/applications/{accessRequest}/resend-activation', [WholesaleApplicationInboxController::class, 'resendActivation'])->name('admin.wholesale.applications.resend-activation');
         Route::get('/admin/catalog/scents', AdminScentsCrud::class)->name('admin.catalog.scents');
         Route::get('/admin/catalog/costs', AdminCostsCrud::class)->name('admin.catalog.costs');
         Route::get('/admin/catalog/sizes', AdminSizesCrud::class)->name('admin.catalog.sizes');

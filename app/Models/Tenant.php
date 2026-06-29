@@ -140,4 +140,14 @@ class Tenant extends Model
     {
         return $this->hasOne(TenantSetupStatus::class);
     }
+
+    public function forms(): HasMany
+    {
+        return $this->hasMany(TenantForm::class);
+    }
+
+    public function formSubmissions(): HasMany
+    {
+        return $this->hasMany(FormSubmission::class);
+    }
 }

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Notifications\WholesaleApplicationReviewNotification;
+use App\Services\Forms\TenantFormSubmissionService;
 use App\Services\Onboarding\CustomerAccessRequestService;
+use App\Services\Onboarding\WholesaleApplicationReviewInboxResolver;
 use App\Services\Shopify\ShopifyWholesaleApplicationCustomerService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,7 +15,11 @@ use Throwable;
 
 class PlatformAccessRequestController extends Controller
 {
-    public function store(Request $request, CustomerAccessRequestService $service): RedirectResponse
+    public function store(
+        Request $request,
+        CustomerAccessRequestService $service,
+        WholesaleApplicationReviewInboxResolver $reviewInboxResolver
+    ): RedirectResponse
     {
         $businessTypeKeys = array_keys((array) config('product_surfaces.access_request.business_types', []));
         $teamSizeKeys = array_keys((array) config('product_surfaces.access_request.team_sizes', []));
@@ -56,14 +62,7 @@ class PlatformAccessRequestController extends Controller
             'addons_interest' => (array) ($validated['addons_interest'] ?? []),
         ]);
 
-        try {
-            Notification::route(
-                'mail',
-                (string) config('product_surfaces.access_request.review_email', 'modernforestryteam@gmail.com')
-            )->notify(new WholesaleApplicationReviewNotification($requestRecord));
-        } catch (Throwable $e) {
-            report($e);
-        }
+        $this->notifyReviewInbox($requestRecord, $reviewInboxResolver);
 
         return redirect()
             ->route('platform.request-submitted', ['intent' => (string) $validated['intent']])
@@ -73,7 +72,9 @@ class PlatformAccessRequestController extends Controller
     public function storeForWholesaleStorefront(
         Request $request,
         CustomerAccessRequestService $service,
-        ShopifyWholesaleApplicationCustomerService $shopifyWholesaleApplicationCustomerService
+        ShopifyWholesaleApplicationCustomerService $shopifyWholesaleApplicationCustomerService,
+        WholesaleApplicationReviewInboxResolver $reviewInboxResolver,
+        TenantFormSubmissionService $tenantFormSubmissionService
     ) {
         $validated = $request->validate([
             'intent' => ['nullable', 'string', 'in:production,demo'],
@@ -106,6 +107,10 @@ class PlatformAccessRequestController extends Controller
             'name' => trim((string) ($contact['name'] ?? '')),
             'email' => trim((string) ($contact['email'] ?? '')),
             'company' => trim((string) ($contact['company'] ?? '')),
+            'requested_tenant_slug' => (string) config(
+                'product_surfaces.access_request.wholesale_storefront_tenant_slug',
+                'modern-forestry-wholesale'
+            ),
             'business_type' => trim((string) ($contact['store_type'] ?? '')),
             'website' => trim((string) ($contact['website'] ?? '')),
             'message' => trim((string) ($contact['body'] ?? $contact['business_info'] ?? '')),
@@ -133,14 +138,27 @@ class PlatformAccessRequestController extends Controller
         }
 
         try {
-            Notification::route(
-                'mail',
-                (string) config('product_surfaces.access_request.review_email', 'modernforestryteam@gmail.com')
-            )->notify(new WholesaleApplicationReviewNotification($requestRecord));
+            $tenantFormSubmissionService->recordWholesaleApplicationFromAccessRequest($requestRecord);
         } catch (Throwable $e) {
             report($e);
         }
 
+        $this->notifyReviewInbox($requestRecord, $reviewInboxResolver);
+
         return response()->noContent();
+    }
+
+    protected function notifyReviewInbox(
+        \App\Models\CustomerAccessRequest $requestRecord,
+        WholesaleApplicationReviewInboxResolver $reviewInboxResolver
+    ): void {
+        try {
+            Notification::route(
+                'mail',
+                $reviewInboxResolver->resolve($requestRecord)
+            )->notify(new WholesaleApplicationReviewNotification($requestRecord));
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 }

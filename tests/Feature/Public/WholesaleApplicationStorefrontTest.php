@@ -1,7 +1,11 @@
 <?php
 
 use App\Models\CustomerAccessRequest;
+use App\Models\FormSubmission;
+use App\Models\FormTemplate;
 use App\Models\ShopifyStore;
+use App\Models\Tenant;
+use App\Models\TenantForm;
 use App\Models\User;
 use App\Notifications\WholesaleApplicationReviewNotification;
 use Illuminate\Http\Client\Request;
@@ -15,6 +19,12 @@ beforeEach(function (): void {
     config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-client');
     config()->set('services.shopify.stores.wholesale.client_secret', 'wholesale-secret');
     config()->set('services.shopify.allow_env_token_fallback', false);
+
+    Tenant::query()->firstOrCreate([
+        'slug' => 'modern-forestry-wholesale',
+    ], [
+        'name' => 'Modern Forestry Wholesale',
+    ]);
 });
 
 function seedWholesaleShopifyStoreForStorefrontApplicationTests(): void
@@ -110,6 +120,7 @@ test('storefront wholesale application stores the applicant and notifies the rev
         ->and($requestRecord->status)->toBe('pending')
         ->and($requestRecord->email)->toBe('ops-review@example.com')
         ->and($requestRecord->name)->toBe('Ops Review')
+        ->and($requestRecord->requested_tenant_slug)->toBe('modern-forestry-wholesale')
         ->and((string) data_get($requestRecord->metadata, 'business_type'))->toBe('gift shop')
         ->and((string) data_get($requestRecord->metadata, 'phone'))->toBe('+1 555 555 1212')
         ->and((string) data_get($requestRecord->metadata, 'city'))->toBe('Charleston')
@@ -120,13 +131,24 @@ test('storefront wholesale application stores the applicant and notifies the rev
         ->and((bool) $user->is_active)->toBeFalse()
         ->and((string) $user->requested_via)->toBe('customer_production');
 
+    $template = FormTemplate::query()->where('key', 'wholesale_application')->first();
+    $tenantForm = TenantForm::query()->where('slug', 'wholesale-application')->first();
+    $formSubmission = FormSubmission::query()->where('customer_access_request_id', $requestRecord->id)->first();
+
+    expect($template)->not->toBeNull()
+        ->and($tenantForm)->not->toBeNull()
+        ->and($formSubmission)->not->toBeNull()
+        ->and((string) $tenantForm->channel)->toBe('wholesale_storefront')
+        ->and((string) $formSubmission->submitter_email)->toBe('ops-review@example.com')
+        ->and((string) data_get($formSubmission?->payload, 'company'))->toBe('Review Shop');
+
     Notification::assertSentOnDemand(WholesaleApplicationReviewNotification::class, function (
         WholesaleApplicationReviewNotification $notification,
         array $channels,
         \Illuminate\Notifications\AnonymousNotifiable $notifiable
-    ): bool {
+    ) use ($requestRecord): bool {
         $mailMessage = $notification->toMail($notifiable);
-        $expectedUrl = route('admin.users', ['search' => 'ops-review@example.com']);
+        $expectedUrl = route('admin.wholesale.applications.show', $requestRecord);
 
         expect($channels)->toContain('mail')
             ->and($notifiable->routes['mail'] ?? null)->toBe('modernforestryteam@gmail.com')
