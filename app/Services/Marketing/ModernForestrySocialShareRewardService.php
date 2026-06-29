@@ -290,9 +290,9 @@ class ModernForestrySocialShareRewardService
 
     protected function productShareUrl(string $handle): string
     {
-        $base = rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/');
-
-        return $base.'/products/'.ltrim($handle, '/').'?mf_source_label=social_share&mf_module_type=social_share';
+        return route('marketing.public.product-share', [
+            'handle' => ltrim($handle, '/'),
+        ]);
     }
 
     protected function normalizePlatform(string $platform): string

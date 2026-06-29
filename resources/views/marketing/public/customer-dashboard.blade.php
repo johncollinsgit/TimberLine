@@ -804,7 +804,7 @@
                     return 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl) + '&quote=' + encodeURIComponent(text || 'Take a look at this from Modern Forestry.');
                 }
 
-                return 'https://www.instagram.com/';
+                return shareUrl;
             }
 
             async function openShare(platform, payload, target) {

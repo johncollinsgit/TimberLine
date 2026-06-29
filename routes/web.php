@@ -1114,6 +1114,10 @@ Route::get('/share/scent-personality/{token}', [MarketingPublicEventController::
     ->where('token', '[A-Za-z0-9]{20,80}')
     ->middleware('throttle:60,1')
     ->name('marketing.public.scent-personality-share');
+Route::get('/share/product/{handle}', [MarketingPublicEventController::class, 'showProductShare'])
+    ->where('handle', '[A-Za-z0-9\-_]+')
+    ->middleware('throttle:60,1')
+    ->name('marketing.public.product-share');
 
 Route::prefix('shopify/marketing')
     ->name('marketing.shopify.')

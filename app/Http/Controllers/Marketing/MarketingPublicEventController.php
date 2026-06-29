@@ -31,6 +31,7 @@ use App\Services\Marketing\MessagingContactChannelStateService;
 use App\Services\Marketing\MessagingConversationService;
 use App\Services\Marketing\ModernForestryScentQuizAnalyticsService;
 use App\Services\Marketing\ModernForestrySocialShareRewardService;
+use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Mobile\ModernForestryMobileScentQuizService;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyStores;
@@ -940,6 +941,36 @@ class MarketingPublicEventController extends Controller
             'dominantTraits' => is_array($result->dominant_traits) ? $result->dominant_traits : [],
             'quizUrl' => rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
                 .'/apps/forestry/account?scent_quiz=1',
+        ]);
+    }
+
+    public function showProductShare(string $handle, ModernForestryMobileProductCatalogService $catalog): View|RedirectResponse
+    {
+        $product = $catalog->productDetail($handle);
+        if (! is_array($product)) {
+            return redirect()->away(
+                rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
+                .'/products/'.ltrim($handle, '/')
+            );
+        }
+
+        $title = trim((string) ($product['title'] ?? 'Modern Forestry candle')) ?: 'Modern Forestry candle';
+        $description = trim((string) ($product['mobileSummary'] ?? $product['description'] ?? 'A hand-poured candle from Modern Forestry.'))
+            ?: 'A hand-poured candle from Modern Forestry.';
+        $images = array_values((array) ($product['images'] ?? []));
+        $imageUrl = trim((string) (data_get($images, '0.url') ?? ''));
+        $productUrl = trim((string) ($product['url'] ?? ''));
+
+        return view('marketing/public/product-share', [
+            'product' => $product,
+            'headline' => $title.' | Modern Forestry',
+            'title' => $title,
+            'description' => $description,
+            'shareImageUrl' => $imageUrl !== '' ? $imageUrl : asset('brand/forestry-backstage-intro-tree.png'),
+            'productUrl' => $productUrl !== ''
+                ? $productUrl
+                : rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
+                    .'/products/'.ltrim((string) ($product['handle'] ?? $handle), '/'),
         ]);
     }
 
