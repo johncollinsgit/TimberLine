@@ -2190,6 +2190,45 @@ test('mobile checkout falls back to a validated shopify cart permalink when stor
         ->assertJsonPath('data.subtotal.amount', '24.00');
 });
 
+test('mobile checkout ignores unresolved customer account tokens and builds an anonymous storefront cart', function (): void {
+    config()->set('services.shopify.stores.retail.storefront_access_token', 'storefront-test-token');
+
+    $storefrontRequest = null;
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response(shopifyMobileProductDetailPayload(), 200),
+        'https://modernforestry-test.myshopify.com/api/2026-01/graphql.json' => function (Request $request) use (&$storefrontRequest) {
+            $storefrontRequest = $request;
+
+            return Http::response(
+                shopifyStorefrontCartCreatePayload('https://modernforestry-test.myshopify.com/cart/c/anonymous-checkout'),
+                200
+            );
+        },
+    ]);
+
+    $this->withToken('mf-test-profile:999999')
+        ->postJson('/api/mobile/v1/modern-forestry/checkout', [
+            'items' => [
+                [
+                    'productHandle' => 'forest-ember-candle',
+                    'variantId' => '9001',
+                    'quantity' => 1,
+                ],
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.authenticated', false)
+        ->assertJsonPath('data.prefilledCustomer', false)
+        ->assertJsonPath('data.checkoutUrl', 'https://modernforestry-test.myshopify.com/cart/c/anonymous-checkout');
+
+    $body = json_decode((string) $storefrontRequest?->body(), true);
+
+    expect(data_get($body, 'variables.input.buyerIdentity.customerAccessToken'))->toBeNull()
+        ->and(data_get($body, 'variables.input.buyerIdentity.email'))->toBeNull()
+        ->and(data_get($body, 'variables.input.buyerIdentity.phone'))->toBeNull();
+});
+
 test('mobile checkout requires modern forestry tenant one', function (): void {
     config()->set('services.shopify.stores.retail.storefront_access_token', 'storefront-test-token');
     Tenant::query()->whereKey(1)->update(['slug' => 'other-tenant']);

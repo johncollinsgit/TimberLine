@@ -41,13 +41,14 @@ class ModernForestryProductCatalogController extends Controller
         ]);
 
         $session = $sessions->resolveFromRequest($request, allowCreate: true);
+        $resolvedCustomerAccessToken = $session?->accessToken;
 
         try {
             return response()->json([
                 'data' => $checkout->checkout(
                     $validated['items'],
                     $validated['discountCode'] ?? null,
-                    $session?->accessToken ?? ($validated['customerAccessToken'] ?? $request->bearerToken()),
+                    $resolvedCustomerAccessToken,
                     $validated['customerEmail'] ?? null,
                     $validated['customerPhone'] ?? null,
                     $session,
