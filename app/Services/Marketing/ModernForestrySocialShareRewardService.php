@@ -194,7 +194,10 @@ class ModernForestrySocialShareRewardService
         }
 
         $token = $this->ensureScentShareToken($result);
-        $url = route('marketing.public.scent-personality-share', ['token' => $token]);
+        $url = route('marketing.public.scent-personality-share', [
+            'token' => $token,
+            'v' => (int) ($result->updated_at?->getTimestamp() ?: $result->id),
+        ]);
 
         return [
             'type' => 'scent_personality',

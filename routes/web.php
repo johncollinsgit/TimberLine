@@ -1110,6 +1110,10 @@ Route::post('/account/rewards/redeem', [MarketingPublicEventController::class, '
 Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class, 'showConsentConfirm'])
     ->middleware('throttle:30,1')
     ->name('marketing.public.consent-confirm');
+Route::get('/share/scent-personality/{token}/image.png', [MarketingPublicEventController::class, 'showScentPersonalityShareImage'])
+    ->where('token', '[A-Za-z0-9]{20,80}')
+    ->middleware('throttle:60,1')
+    ->name('marketing.public.scent-personality-share.image');
 Route::get('/share/scent-personality/{token}', [MarketingPublicEventController::class, 'showScentPersonalityShare'])
     ->where('token', '[A-Za-z0-9]{20,80}')
     ->middleware('throttle:60,1')

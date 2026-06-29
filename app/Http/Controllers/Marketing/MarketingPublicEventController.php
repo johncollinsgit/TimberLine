@@ -937,10 +937,24 @@ class MarketingPublicEventController extends Controller
 
         return view('marketing/public/scent-personality-share', [
             'result' => $result,
-            'axes' => is_array($result->axis_scores) ? $result->axis_scores : [],
+            'axes' => $this->normalizedScentShareAxes($result),
             'dominantTraits' => is_array($result->dominant_traits) ? $result->dominant_traits : [],
             'quizUrl' => rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
                 .'/apps/forestry/account?scent_quiz=1',
+        ]);
+    }
+
+    public function showScentPersonalityShareImage(string $token)
+    {
+        $result = MarketingProfileScentQuizResult::query()
+            ->where('public_share_token', $token)
+            ->firstOrFail();
+
+        $image = $this->renderScentPersonalityShareImage($result);
+
+        return response($image, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=3600',
         ]);
     }
 
@@ -972,6 +986,306 @@ class MarketingPublicEventController extends Controller
                 : rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
                     .'/products/'.ltrim((string) ($product['handle'] ?? $handle), '/'),
         ]);
+    }
+
+    protected function renderScentPersonalityShareImage(MarketingProfileScentQuizResult $result): string
+    {
+        if (! function_exists('imagecreatetruecolor')) {
+            abort(500, 'GD is required to render scent share images.');
+        }
+
+        $width = 1200;
+        $height = 630;
+        $image = imagecreatetruecolor($width, $height);
+        imagealphablending($image, true);
+        imagesavealpha($image, true);
+        imageantialias($image, true);
+
+        $colors = [
+            'cream' => imagecolorallocate($image, 248, 243, 236),
+            'paper' => imagecolorallocate($image, 255, 251, 245),
+            'mist' => imagecolorallocate($image, 236, 231, 222),
+            'forest' => imagecolorallocate($image, 36, 79, 56),
+            'forestDeep' => imagecolorallocate($image, 17, 43, 30),
+            'sage' => imagecolorallocate($image, 122, 149, 125),
+            'ink' => imagecolorallocate($image, 24, 29, 26),
+            'muted' => imagecolorallocate($image, 101, 96, 87),
+            'line' => imagecolorallocate($image, 220, 213, 202),
+            'emerald' => imagecolorallocate($image, 52, 120, 79),
+            'emeraldFill' => imagecolorallocatealpha($image, 52, 120, 79, 88),
+            'goldGlow' => imagecolorallocatealpha($image, 208, 169, 82, 92),
+            'white' => imagecolorallocate($image, 255, 255, 255),
+        ];
+
+        imagefilledrectangle($image, 0, 0, $width, $height, $colors['cream']);
+        imagefilledellipse($image, 1050, 90, 420, 260, $colors['goldGlow']);
+        imagefilledellipse($image, 122, 70, 220, 160, imagecolorallocatealpha($image, 52, 120, 79, 102));
+
+        imagefilledrectangle($image, 52, 48, $width - 52, $height - 48, $colors['paper']);
+        imagerectangle($image, 52, 48, $width - 52, $height - 48, $colors['mist']);
+
+        imagefilledrectangle($image, 52, 48, 640, 210, $colors['forest']);
+
+        $boldFont = $this->scentShareFontPath(true);
+        $regularFont = $this->scentShareFontPath(false);
+        $headline = trim((string) ($result->headline ?: 'My Modern Forestry scent personality')) ?: 'My Modern Forestry scent personality';
+        $title = trim((string) ($result->personality_title ?: 'Scent personality')) ?: 'Scent personality';
+        $body = trim((string) ($result->personality_body ?: 'I took the Modern Forestry candle personality quiz and found the scent profile that fits me best.'))
+            ?: 'I took the Modern Forestry candle personality quiz and found the scent profile that fits me best.';
+        $traits = array_values(array_filter((array) $result->dominant_traits));
+        $axes = $this->normalizedScentShareAxes($result);
+
+        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 92, 98, strtoupper('Modern Forestry scent personality'), $colors['white'], 520, 1, 20);
+        $this->drawWrappedScentShareText($image, $boldFont, 38, 0, 92, 152, $headline, $colors['white'], 480, 2, 48);
+        $this->drawWrappedScentShareText($image, $regularFont, 18, 0, 92, 246, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 24);
+
+        $this->drawWrappedScentShareText($image, $boldFont, 30, 0, 92, 334, $title, $colors['ink'], 420, 2, 38);
+        $this->drawWrappedScentShareText($image, $regularFont, 24, 0, 92, 382, $body, $colors['muted'], 440, 4, 32);
+
+        $traitX = 92;
+        $traitY = 516;
+        $maxTraitX = 640 - 92;
+        foreach (array_slice($traits, 0, 4) as $trait) {
+            $chipText = Str::headline((string) $trait);
+            $textWidth = $this->scentShareTextWidth($boldFont, 18, $chipText);
+            $chipWidth = max(118, $textWidth + 42);
+            if ($traitX + $chipWidth > $maxTraitX) {
+                $traitX = 92;
+                $traitY += 54;
+            }
+
+            imagefilledrectangle($image, $traitX, $traitY, $traitX + $chipWidth, $traitY + 38, $colors['forest']);
+            $this->drawWrappedScentShareText($image, $boldFont, 18, 0, $traitX + 18, $traitY + 26, $chipText, $colors['white'], $chipWidth - 24, 1, 22);
+            $traitX += $chipWidth + 12;
+        }
+
+        imagefilledrectangle($image, 690, 84, 1096, 546, imagecolorallocatealpha($image, 255, 255, 255, 24));
+        imagerectangle($image, 690, 84, 1096, 546, $colors['mist']);
+        $this->drawRadarChart($image, 893, 316, 165, $axes, $boldFont, $regularFont, $colors);
+
+        $treePath = public_path('brand/forestry-backstage-intro-tree.png');
+        if (is_file($treePath)) {
+            $logo = @imagecreatefrompng($treePath);
+            if ($logo !== false) {
+                imagealphablending($logo, true);
+                imagesavealpha($logo, true);
+                imagecopyresampled($image, $logo, 1000, 470, 0, 0, 64, 64, imagesx($logo), imagesy($logo));
+                imagedestroy($logo);
+            }
+        }
+
+        $this->drawWrappedScentShareText($image, $boldFont, 18, 0, 760, 586, 'Take your quiz at theforestrystudio.com', $colors['forestDeep'], 270, 2, 24);
+
+        ob_start();
+        imagepng($image);
+        $binary = (string) ob_get_clean();
+        imagedestroy($image);
+
+        return $binary;
+    }
+
+    /**
+     * @return array<int,array{key:string,label:string,score:int}>
+     */
+    protected function normalizedScentShareAxes(MarketingProfileScentQuizResult $result): array
+    {
+        $definitions = [
+            'floral' => 'Floral',
+            'woodsy' => 'Woodsy',
+            'smoky' => 'Smoky',
+            'sweet' => 'Sweet',
+            'masculine' => 'Masculine',
+            'earthy' => 'Earthy',
+            'clean' => 'Clean',
+            'citrus' => 'Citrus',
+        ];
+
+        $source = [];
+        foreach ((array) $result->axis_scores as $axis) {
+            $key = Str::slug((string) data_get($axis, 'key', data_get($axis, 'label', '')));
+            if ($key === '') {
+                continue;
+            }
+
+            $source[$key] = max(0, min(100, (int) data_get($axis, 'score', 0)));
+        }
+
+        $normalized = [];
+        foreach ($definitions as $key => $label) {
+            $normalized[] = [
+                'key' => $key,
+                'label' => $label,
+                'score' => (int) ($source[$key] ?? 0),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    protected function drawRadarChart($image, int $centerX, int $centerY, int $radius, array $axes, ?string $boldFont, ?string $regularFont, array $colors): void
+    {
+        $count = count($axes);
+        if ($count === 0) {
+            return;
+        }
+
+        $stepAngle = (2 * M_PI) / $count;
+        for ($ring = 1; $ring <= 4; $ring++) {
+            $ringRadius = (int) round(($radius / 4) * $ring);
+            $points = [];
+            for ($index = 0; $index < $count; $index++) {
+                $angle = -M_PI_2 + ($stepAngle * $index);
+                $points[] = (int) round($centerX + cos($angle) * $ringRadius);
+                $points[] = (int) round($centerY + sin($angle) * $ringRadius);
+            }
+            imagepolygon($image, $points, $count, $colors['line']);
+        }
+
+        $shapePoints = [];
+        foreach ($axes as $index => $axis) {
+            $angle = -M_PI_2 + ($stepAngle * $index);
+            $axisX = (int) round($centerX + cos($angle) * $radius);
+            $axisY = (int) round($centerY + sin($angle) * $radius);
+            imageline($image, $centerX, $centerY, $axisX, $axisY, $colors['line']);
+
+            $scoreRadius = (float) data_get($axis, 'score', 0) / 100 * $radius;
+            $pointX = (int) round($centerX + cos($angle) * $scoreRadius);
+            $pointY = (int) round($centerY + sin($angle) * $scoreRadius);
+            $shapePoints[] = $pointX;
+            $shapePoints[] = $pointY;
+        }
+
+        imagefilledpolygon($image, $shapePoints, $count, $colors['emeraldFill']);
+        imagepolygon($image, $shapePoints, $count, $colors['emerald']);
+
+        foreach ($axes as $index => $axis) {
+            $angle = -M_PI_2 + ($stepAngle * $index);
+            $labelRadius = $radius + 38;
+            $labelX = (int) round($centerX + cos($angle) * $labelRadius);
+            $labelY = (int) round($centerY + sin($angle) * $labelRadius);
+            $text = strtoupper((string) data_get($axis, 'label', 'SCENT'));
+            $textWidth = $this->scentShareTextWidth($boldFont, 15, $text);
+
+            $drawX = $labelX - (int) round($textWidth / 2);
+            if (cos($angle) > 0.35) {
+                $drawX -= 10;
+            } elseif (cos($angle) < -0.35) {
+                $drawX += 10;
+            }
+
+            $this->drawWrappedScentShareText($image, $boldFont, 15, 0, $drawX, $labelY + 6, $text, $colors['muted'], 150, 1, 18);
+        }
+    }
+
+    protected function scentShareFontPath(bool $bold): ?string
+    {
+        $candidates = $bold
+            ? [
+                resource_path('fonts/DejaVuSans-Bold.ttf'),
+                public_path('fonts/DejaVuSans-Bold.ttf'),
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+                '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf',
+                '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+                '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+            ]
+            : [
+                resource_path('fonts/DejaVuSans.ttf'),
+                public_path('fonts/DejaVuSans.ttf'),
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+                '/usr/share/fonts/truetype/freefont/FreeSans.ttf',
+                '/System/Library/Fonts/Supplemental/Arial.ttf',
+            ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && $candidate !== '' && is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    protected function scentShareTextWidth(?string $font, int $size, string $text): int
+    {
+        if ($font && function_exists('imagettfbbox')) {
+            $box = imagettfbbox($size, 0, $font, $text);
+            if (is_array($box)) {
+                return max(0, (int) abs(($box[2] ?? 0) - ($box[0] ?? 0)));
+            }
+        }
+
+        return imagefontwidth(5) * strlen($text);
+    }
+
+    protected function drawWrappedScentShareText($image, ?string $font, int $size, int $angle, int $x, int $y, string $text, int $color, int $maxWidth, int $maxLines, int $lineHeight): int
+    {
+        $lines = $this->wrapScentShareText($font, $size, $text, $maxWidth, $maxLines);
+        $baseline = $y;
+
+        foreach ($lines as $line) {
+            if ($font && function_exists('imagettftext')) {
+                imagettftext($image, $size, $angle, $x, $baseline, $color, $font, $line);
+            } else {
+                imagestring($image, 5, $x, max(0, $baseline - 18), $line, $color);
+            }
+
+            $baseline += $lineHeight;
+        }
+
+        return $baseline;
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function wrapScentShareText(?string $font, int $size, string $text, int $maxWidth, int $maxLines): array
+    {
+        $words = preg_split('/\s+/', trim($text)) ?: [];
+        if ($words === []) {
+            return [''];
+        }
+
+        $lines = [];
+        $current = '';
+        foreach ($words as $word) {
+            $candidate = trim($current.' '.$word);
+            if ($current !== '' && $this->scentShareTextWidth($font, $size, $candidate) > $maxWidth) {
+                $lines[] = $current;
+                $current = $word;
+            } else {
+                $current = $candidate;
+            }
+
+            if (count($lines) === $maxLines) {
+                break;
+            }
+        }
+
+        if ($current !== '' && count($lines) < $maxLines) {
+            $lines[] = $current;
+        }
+
+        if (count($lines) > $maxLines) {
+            $lines = array_slice($lines, 0, $maxLines);
+        }
+
+        if (count($lines) === $maxLines && count($words) > 0) {
+            $remaining = trim(implode(' ', array_slice($words, 0)));
+            if ($remaining !== '' && trim(implode(' ', $lines)) !== $remaining) {
+                $lastIndex = $maxLines - 1;
+                $trimmed = rtrim((string) ($lines[$lastIndex] ?? ''), " .");
+                while ($trimmed !== '' && $this->scentShareTextWidth($font, $size, $trimmed.'...') > $maxWidth) {
+                    $trimmedLength = function_exists('mb_strlen') ? mb_strlen($trimmed) : strlen($trimmed);
+                    $trimmed = function_exists('mb_substr')
+                        ? mb_substr($trimmed, 0, max(0, $trimmedLength - 1))
+                        : substr($trimmed, 0, max(0, $trimmedLength - 1));
+                }
+                $lines[$lastIndex] = $trimmed.'...';
+            }
+        }
+
+        return $lines;
     }
 
     /**

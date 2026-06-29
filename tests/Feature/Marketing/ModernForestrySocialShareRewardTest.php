@@ -118,7 +118,41 @@ test('public scent personality share page hides private customer data', function
         ->assertOk()
         ->assertSee('Woodsy + Smoky')
         ->assertSee('The Campfire Archivist')
-        ->assertSee('forestry-backstage-intro-tree.png', false)
+        ->assertSee('/share/scent-personality/'.$result->public_share_token.'/image.png', false)
         ->assertDontSee('Ada')
         ->assertDontSee('ada@example.com');
+});
+
+test('public scent personality share image renders a branded preview card', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+
+    $result = MarketingProfileScentQuizResult::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => [
+            ['key' => 'clean', 'label' => 'Clean', 'score' => 88],
+            ['key' => 'citrus', 'label' => 'Citrus', 'score' => 73],
+            ['key' => 'earthy', 'label' => 'Earthy', 'score' => 42],
+        ],
+        'dominant_traits' => ['clean', 'citrus', 'earthy'],
+        'headline' => 'Clean + Citrus',
+        'personality_title' => 'The Sunlit Organizer',
+        'personality_body' => 'Fresh, bright, and a little polished.',
+        'public_share_token' => 'previewcardsharetoken1234567890',
+        'answers' => [],
+        'completed_at' => now(),
+    ]);
+
+    $response = $this->get('/share/scent-personality/'.$result->public_share_token.'/image.png');
+
+    $response->assertOk();
+    expect($response->headers->get('content-type'))->toContain('image/png')
+        ->and(strlen($response->getContent()))->toBeGreaterThan(5000);
 });

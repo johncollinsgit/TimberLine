@@ -10,8 +10,9 @@
         $dominantTraits = array_values(array_filter((array) ($dominantTraits ?? [])));
         $axes = array_values((array) ($axes ?? []));
         $quizUrl = trim((string) ($quizUrl ?? 'https://theforestrystudio.com/apps/forestry/account?scent_quiz=1'));
-        $shareUrl = url()->current();
-        $shareImageUrl = asset('brand/forestry-backstage-intro-tree.png');
+        $cardVersion = (string) (optional($result->updated_at)->getTimestamp() ?: $result->id);
+        $shareUrl = url()->full();
+        $shareImageUrl = route('marketing.public.scent-personality-share.image', ['token' => $result->public_share_token, 'v' => $cardVersion]);
     @endphp
     <title>{{ $headline }} | Modern Forestry</title>
     <meta name="description" content="{{ $body }}">
@@ -20,6 +21,9 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ $shareUrl }}">
     <meta property="og:image" content="{{ $shareImageUrl }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{{ $headline }} scent personality card">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $headline }}">
     <meta name="twitter:description" content="{{ $body }}">
