@@ -1122,6 +1122,10 @@ Route::get('/share/scent-personality/{token}', [MarketingPublicEventController::
     ->where('token', '[A-Za-z0-9]{20,80}')
     ->middleware('throttle:60,1')
     ->name('marketing.public.scent-personality-share');
+Route::get('/share/scent-personality/{token}/quiz', [MarketingPublicEventController::class, 'showScentPersonalityShareQuiz'])
+    ->where('token', '[A-Za-z0-9]{20,80}')
+    ->middleware('throttle:60,1')
+    ->name('marketing.public.scent-personality-share.quiz');
 Route::post('/share/scent-personality/{token}/quiz', [MarketingPublicEventController::class, 'submitScentPersonalityShareQuiz'])
     ->where('token', '[A-Za-z0-9]{20,80}')
     ->middleware('throttle:60,1')

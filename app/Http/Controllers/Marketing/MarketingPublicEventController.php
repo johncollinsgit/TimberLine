@@ -966,7 +966,48 @@ class MarketingPublicEventController extends Controller
             $result,
             $scentQuizService,
             $recommendations,
-            $shareSource
+            $shareSource,
+            null,
+            null,
+            'landing'
+        );
+    }
+
+    public function showScentPersonalityShareQuiz(
+        string $token,
+        Request $request,
+        ModernForestryMobileScentQuizService $scentQuizService,
+        ModernForestryScentQuizRecommendationService $recommendations
+    ): View {
+        $result = MarketingProfileScentQuizResult::query()
+            ->where('public_share_token', $token)
+            ->firstOrFail();
+
+        $shareSource = $this->normalizedPublicShareSource($request->query('source'));
+
+        $this->eventLogger->log('public_scent_quiz_started', [
+            'status' => 'ok',
+            'tenant_id' => (int) ($result->tenant_id ?? 1),
+            'source_surface' => 'modern_forestry_public_scent_quiz',
+            'endpoint' => '/share/scent-personality/'.$token.'/quiz',
+            'source_type' => 'modern_forestry_public_scent_quiz',
+            'source_id' => $token,
+            'meta' => [
+                'share_source' => $shareSource,
+                'token' => $token,
+            ],
+            'resolution_status' => 'resolved',
+        ]);
+
+        return $this->renderScentPersonalityShareView(
+            $request,
+            $result,
+            $scentQuizService,
+            $recommendations,
+            $shareSource,
+            null,
+            null,
+            'quiz'
         );
     }
 
@@ -1018,7 +1059,8 @@ class MarketingPublicEventController extends Controller
             $recommendations,
             $shareSource,
             $publicResult,
-            $recommendedProducts
+            $recommendedProducts,
+            'results'
         );
     }
 
@@ -1029,7 +1071,7 @@ class MarketingPublicEventController extends Controller
             ->firstOrFail();
 
         $validated = $request->validate([
-            'event' => ['required', 'string', 'in:quiz_started,save_result_prompt_shown,app_install_cta_clicked'],
+            'event' => ['required', 'string', 'in:score_opened,quiz_started,save_result_prompt_shown,app_install_cta_clicked,app_download_clicked,add_to_cart_clicked'],
             'source' => ['nullable', 'string', 'max:64'],
         ]);
 
@@ -1099,7 +1141,7 @@ class MarketingPublicEventController extends Controller
 
         $product = $catalog->productDetail($handle);
         $shareSource = $this->normalizedPublicShareSource($request->query('source'));
-        $variantId = trim((string) data_get($product, 'variants.0.id', ''));
+        $variantId = $this->shopifyNumericId(data_get($product, 'variants.0.id', ''));
 
         if ($variantId === '') {
             return $this->redirectScentPersonalityShareProduct($token, $handle, $request, $catalog);
@@ -1133,7 +1175,8 @@ class MarketingPublicEventController extends Controller
         ModernForestryScentQuizRecommendationService $recommendations,
         string $shareSource,
         ?array $publicQuizResult = null,
-        ?array $recommendedProducts = null
+        ?array $recommendedProducts = null,
+        string $pageMode = 'landing'
     ): View {
         $quizDefinition = $scentQuizService->publicDefinition();
         $recommendedProducts ??= is_array($publicQuizResult)
@@ -1156,6 +1199,7 @@ class MarketingPublicEventController extends Controller
 
         return view('marketing/public/scent-personality-share', [
             'result' => $result,
+            'displayPersonalityTitle' => $this->scentShareDisplayTitle($result),
             'axes' => $this->normalizedScentShareAxes($result),
             'dominantTraits' => is_array($result->dominant_traits) ? $result->dominant_traits : [],
             'publicQuizDefinition' => $quizDefinition,
@@ -1172,6 +1216,11 @@ class MarketingPublicEventController extends Controller
             'saveResultsUrl' => $saveResultsUrl,
             'appDownloadUrl' => $appDownloadUrl,
             'shopYourMatchesUrl' => $shopYourMatchesUrl,
+            'publicQuizPageUrl' => route('marketing.public.scent-personality-share.quiz', [
+                'token' => $result->public_share_token,
+                'source' => $shareSource,
+            ]),
+            'pageMode' => $pageMode,
             'quizUrl' => rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
                 .'/apps/forestry/account?scent_quiz=1',
         ]);
@@ -1257,20 +1306,32 @@ class MarketingPublicEventController extends Controller
         imagefilledrectangle($image, 52, 48, $width - 52, $height - 48, $colors['paper']);
         imagerectangle($image, 52, 48, $width - 52, $height - 48, $colors['mist']);
 
-        imagefilledrectangle($image, 52, 48, 640, 210, $colors['forest']);
+        imagefilledrectangle($image, 52, 48, 640, 224, $colors['forest']);
 
         $boldFont = $this->scentShareFontPath(true);
         $regularFont = $this->scentShareFontPath(false);
         $headline = trim((string) ($result->headline ?: 'My Modern Forestry scent personality')) ?: 'My Modern Forestry scent personality';
-        $title = trim((string) ($result->personality_title ?: 'Scent personality')) ?: 'Scent personality';
+        $title = $this->scentShareDisplayTitle($result);
         $body = trim((string) ($result->personality_body ?: 'I took the Modern Forestry candle personality quiz and found the scent profile that fits me best.'))
             ?: 'I took the Modern Forestry candle personality quiz and found the scent profile that fits me best.';
         $traits = array_values(array_filter((array) $result->dominant_traits));
         $axes = $this->normalizedScentShareAxes($result);
 
-        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 92, 98, strtoupper('Modern Forestry scent personality'), $colors['white'], 520, 1, 20);
-        $this->drawWrappedScentShareText($image, $boldFont, 38, 0, 92, 152, $headline, $colors['white'], 480, 2, 48);
-        $this->drawWrappedScentShareText($image, $regularFont, 18, 0, 92, 246, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 24);
+        $treePath = public_path('brand/forestry-backstage-intro-tree.png');
+        if (is_file($treePath)) {
+            $logo = @imagecreatefrompng($treePath);
+            if ($logo !== false) {
+                imagealphablending($logo, true);
+                imagesavealpha($logo, true);
+                imagecopyresampled($image, $logo, 90, 82, 0, 0, 64, 64, imagesx($logo), imagesy($logo));
+                imagedestroy($logo);
+            }
+        }
+
+        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 172, 104, strtoupper('Modern Forestry soy candles'), $colors['white'], 420, 1, 20);
+        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 92, 160, strtoupper('Scent Personality Type'), $colors['sage'], 520, 1, 20);
+        $this->drawWrappedScentShareText($image, $boldFont, 36, 0, 92, 204, $headline, $colors['white'], 500, 2, 46);
+        $this->drawWrappedScentShareText($image, $regularFont, 18, 0, 92, 262, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 24);
 
         $this->drawWrappedScentShareText($image, $boldFont, 30, 0, 92, 334, $title, $colors['ink'], 420, 2, 38);
         $this->drawWrappedScentShareText($image, $regularFont, 24, 0, 92, 382, $body, $colors['muted'], 440, 4, 32);
@@ -1296,7 +1357,6 @@ class MarketingPublicEventController extends Controller
         imagerectangle($image, 690, 84, 1096, 546, $colors['mist']);
         $this->drawRadarChart($image, 893, 316, 165, $axes, $boldFont, $regularFont, $colors);
 
-        $treePath = public_path('brand/forestry-backstage-intro-tree.png');
         if (is_file($treePath)) {
             $logo = @imagecreatefrompng($treePath);
             if ($logo !== false) {
@@ -1315,6 +1375,27 @@ class MarketingPublicEventController extends Controller
         imagedestroy($image);
 
         return $binary;
+    }
+
+    protected function scentShareDisplayTitle(MarketingProfileScentQuizResult $result): string
+    {
+        $headline = Str::of((string) ($result->headline ?? ''))->lower()->replace(' ', '')->toString();
+        $title = trim((string) ($result->personality_title ?: 'Scent personality')) ?: 'Scent personality';
+
+        if ($headline === 'clean+citrus' && Str::of($title)->lower()->trim()->toString() === 'the crisp editor') {
+            return 'The Florida Surfer';
+        }
+
+        return $title;
+    }
+
+    protected function shopifyNumericId(mixed $value): string
+    {
+        $candidate = trim((string) $value);
+        $parts = explode('/', $candidate);
+        $id = trim((string) end($parts));
+
+        return preg_match('/\A[0-9]+\z/', $id) === 1 ? $id : '';
     }
 
     /**

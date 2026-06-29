@@ -36,6 +36,7 @@ class ModernForestryProductCatalogController extends Controller
             'discountCode' => ['nullable', 'string', 'max:80'],
             'customerAccessToken' => ['nullable', 'string', 'max:4096'],
             'customerEmail' => ['nullable', 'email:rfc', 'max:255'],
+            'customerPhone' => ['nullable', 'string', 'max:40'],
         ]);
 
         try {
@@ -44,7 +45,8 @@ class ModernForestryProductCatalogController extends Controller
                     $validated['items'],
                     $validated['discountCode'] ?? null,
                     $validated['customerAccessToken'] ?? $request->bearerToken(),
-                    $validated['customerEmail'] ?? null
+                    $validated['customerEmail'] ?? null,
+                    $validated['customerPhone'] ?? null
                 ),
                 'meta' => [
                     'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,

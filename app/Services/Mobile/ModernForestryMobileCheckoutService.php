@@ -27,7 +27,8 @@ class ModernForestryMobileCheckoutService
         array $items,
         ?string $discountCode = null,
         ?string $customerAccessToken = null,
-        ?string $customerEmail = null
+        ?string $customerEmail = null,
+        ?string $customerPhone = null
     ): array
     {
         $this->assertModernForestryTenant();
@@ -37,6 +38,7 @@ class ModernForestryMobileCheckoutService
         $discountCodes = $this->normalizeDiscountCodes($discountCode);
         $customerAccessToken = $this->normalizeCustomerAccessToken($customerAccessToken);
         $customerEmail = $this->normalizeCustomerEmail($customerEmail);
+        $customerPhone = $this->normalizeCustomerPhone($customerPhone);
         $storefrontToken = $this->storefrontAccessToken($store);
 
         if ($storefrontToken === null) {
@@ -71,6 +73,7 @@ class ModernForestryMobileCheckoutService
                         'buyerIdentity' => array_filter([
                             'customerAccessToken' => $customerAccessToken,
                             'email' => $customerEmail,
+                            'phone' => $customerPhone,
                         ], static fn (mixed $value): bool => $value !== null && $value !== ''),
                         'attributes' => [
                             [
@@ -161,6 +164,7 @@ class ModernForestryMobileCheckoutService
             'authenticated' => $customerAccessToken !== null,
             'prefilledCustomer' => $this->prefilledCustomer($cart, $customerEmail),
             'discountCodes' => $discountCodes,
+            'discountAccepted' => $this->discountCodesAccepted($cart, $discountCodes),
             'errors' => [],
         ];
     }
@@ -397,6 +401,13 @@ class ModernForestryMobileCheckoutService
         return $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
     }
 
+    protected function normalizeCustomerPhone(?string $phone): ?string
+    {
+        $phone = trim((string) $phone);
+
+        return $phone !== '' && preg_match('/\A[0-9+().\-\s]{7,40}\z/', $phone) === 1 ? $phone : null;
+    }
+
     /**
      * @param  array<string,mixed>  $store
      */
@@ -444,6 +455,7 @@ class ModernForestryMobileCheckoutService
             'authenticated' => false,
             'prefilledCustomer' => false,
             'discountCodes' => $discountCodes,
+            'discountAccepted' => $discountCodes === [],
             'errors' => [],
         ];
     }
@@ -472,9 +484,14 @@ mutation ModernForestryMobileCartCreate($input: CartInput!) {
       }
       buyerIdentity {
         email
+        phone
         customer {
           id
         }
+      }
+      discountCodes {
+        code
+        applicable
       }
       deliveryGroups(first: 1) {
         edges {
@@ -634,6 +651,37 @@ GRAPHQL;
             'amount' => number_format($discount, 2, '.', ''),
             'currencyCode' => $currencyCode,
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $cart
+     * @param  array<int,string>  $requestedCodes
+     */
+    protected function discountCodesAccepted(array $cart, array $requestedCodes): bool
+    {
+        if ($requestedCodes === []) {
+            return true;
+        }
+
+        $discountCodes = $cart['discountCodes'] ?? null;
+        if (! is_array($discountCodes)) {
+            return false;
+        }
+
+        $applicableCodes = collect($discountCodes)
+            ->filter(fn (mixed $code): bool => is_array($code) && (bool) ($code['applicable'] ?? false))
+            ->map(fn (array $code): string => strtoupper(trim((string) ($code['code'] ?? ''))))
+            ->filter()
+            ->values()
+            ->all();
+
+        foreach ($requestedCodes as $requestedCode) {
+            if (! in_array(strtoupper($requestedCode), $applicableCodes, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

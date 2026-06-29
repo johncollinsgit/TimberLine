@@ -297,6 +297,13 @@ class ModernForestryMobileScentQuizService
         $secondary = $dominantTraits[1] ?? null;
         $accent = $dominantTraits[2] ?? null;
 
+        if ($primary === 'clean' && $secondary === 'citrus') {
+            return [
+                'title' => 'The Florida Surfer',
+                'body' => 'You like clarity, lightness, and a sense of easy momentum. Your scent profile suggests someone who appreciates fresh starts, polished spaces, open windows, and candles that make everything feel a little more sunlit and put together. The Citrus streak adds a bright, coastal lift.',
+            ];
+        }
+
         $primaryTemplates = [
             'floral' => [
                 'title' => 'The Romantic Curator',
