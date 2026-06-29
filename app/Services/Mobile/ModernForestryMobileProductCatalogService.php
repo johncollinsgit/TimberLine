@@ -40,6 +40,8 @@ class ModernForestryMobileProductCatalogService
 
     protected const COLLECTIONS_CACHE_SECONDS = 180;
 
+    protected const PRODUCT_DETAIL_CACHE_SECONDS = 180;
+
     protected const HOME_CACHE_SECONDS = 120;
 
     protected const COLLECTION_PRODUCTS_CACHE_SECONDS = 180;
@@ -211,24 +213,30 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeProductDetail($handle);
         }
 
-        $client = $this->client();
+        return $this->rememberCatalogPayload(
+            sprintf('product-detail:v1:%s', $handle),
+            self::PRODUCT_DETAIL_CACHE_SECONDS,
+            function () use ($handle): ?array {
+                $client = $this->client();
 
-        $data = $client->query($this->productDetailQuery(), [
-            'query' => 'handle:'.$handle.' status:active',
-        ]);
+                $data = $client->query($this->productDetailQuery(), [
+                    'query' => 'handle:'.$handle.' status:active',
+                ]);
 
-        $nodes = $data['products']['nodes'] ?? [];
-        if (! is_array($nodes) || $nodes === []) {
-            return $this->fallbackProductDetail($client, $handle);
-        }
+                $nodes = $data['products']['nodes'] ?? [];
+                if (! is_array($nodes) || $nodes === []) {
+                    return $this->fallbackProductDetail($client, $handle);
+                }
 
-        $node = $nodes[0] ?? [];
+                $node = $nodes[0] ?? [];
 
-        if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
-            return $this->fallbackProductDetail($client, $handle);
-        }
+                if (! is_array($node) || ! $this->productNodeIsCustomerVisible($node)) {
+                    return $this->fallbackProductDetail($client, $handle);
+                }
 
-        return $this->mapProductDetail($node);
+                return $this->mapProductDetail($node);
+            }
+        );
     }
 
     /**

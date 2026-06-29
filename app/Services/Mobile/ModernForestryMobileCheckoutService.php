@@ -689,7 +689,7 @@ GRAPHQL;
 
     protected function preferredBuyerPhone(?string $value): ?string
     {
-        return $this->e164Phone($value) ?? $this->normalizeCustomerPhone($value);
+        return $this->e164Phone($value);
     }
 
     protected function e164Phone(?string $value): ?string

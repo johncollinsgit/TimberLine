@@ -1945,6 +1945,31 @@ test('mobile product detail endpoint returns 200 with public product data', func
         ->assertJsonPath('data.faq', []);
 });
 
+test('mobile product detail responses are cached for repeat lookups', function (): void {
+    $adminRequests = 0;
+
+    Http::fake(function (Request $request) use (&$adminRequests) {
+        if ($request->url() === 'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json') {
+            $adminRequests++;
+
+            return Http::response(shopifyMobileProductDetailPayload(), 200);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $service = app(ModernForestryMobileProductCatalogService::class);
+
+    $first = $service->productDetail('forest-ember-candle');
+    $second = $service->productDetail('forest-ember-candle');
+
+    expect($first)->toBeArray()
+        ->and($second)->toBeArray()
+        ->and($first['title'] ?? null)->toBe('Forest Ember Candle')
+        ->and($second['title'] ?? null)->toBe('Forest Ember Candle')
+        ->and($adminRequests)->toBe(1);
+});
+
 test('mobile product detail prefers canonical product media for variant images when Shopify keeps an older variant image first', function (): void {
     $payload = shopifyMobileProductDetailPayload();
     $payload['data']['products']['nodes'][0]['media'] = [
@@ -2326,6 +2351,12 @@ test('mobile checkout maps shopify user errors to a safe response', function ():
 test('mobile checkout creates a shopify storefront cart and returns checkout url', function (): void {
     config()->set('services.shopify.stores.retail.storefront_access_token', 'storefront-test-token');
 
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'customer.checkout@example.com',
+        'normalized_email' => 'customer.checkout@example.com',
+    ]);
+
     $storefrontCreateRequest = null;
     $storefrontCheckoutUrlRequest = null;
 
@@ -2360,23 +2391,23 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
         return Http::response([], 404);
     });
 
-    $response = $this->postJson('/api/mobile/v1/modern-forestry/checkout', [
-        'items' => [
-            [
-                'productHandle' => 'forest-ember-candle',
-                'variantId' => '9001',
-                'quantity' => 2,
-                'attributes' => [
-                    [
-                        'key' => 'Scent 1',
-                        'value' => 'Forest Ember',
+    $response = $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/checkout', [
+            'items' => [
+                [
+                    'productHandle' => 'forest-ember-candle',
+                    'variantId' => '9001',
+                    'quantity' => 2,
+                    'attributes' => [
+                        [
+                            'key' => 'Scent 1',
+                            'value' => 'Forest Ember',
+                        ],
                     ],
                 ],
             ],
-        ],
-        'discountCode' => ' candlecash10 ',
-        'customerAccessToken' => 'customer-account-test-token',
-    ]);
+            'discountCode' => ' candlecash10 ',
+        ]);
 
     $response
         ->assertOk()
@@ -2408,7 +2439,7 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
         ],
     ]);
     expect($body['variables']['input']['discountCodes'])->toBe(['CANDLECASH10']);
-    expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('customer-account-test-token');
+    expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('mf-test-profile:'.$profile->id);
 
     $checkoutQueryBody = json_decode($storefrontCheckoutUrlRequest->body(), true);
     expect($checkoutQueryBody['variables']['id'])->toBe('gid://shopify/Cart/cart-123');
@@ -2560,6 +2591,77 @@ test('mobile checkout preloads buyer identity delivery details and buyer ip from
         'provinceCode' => 'SC',
         'zip' => '29601',
     ]);
+});
+
+test('mobile checkout omits non-normalizable buyer phones before sending Shopify buyer identity', function (): void {
+    config()->set('services.shopify.stores.retail.storefront_access_token', 'storefront-test-token');
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Slow',
+        'last_name' => 'Checkout',
+        'email' => 'slow.checkout@example.com',
+        'normalized_email' => 'slow.checkout@example.com',
+        'phone' => '555-5555',
+        'normalized_phone' => null,
+        'address_line_1' => '123 Pine Street',
+        'city' => 'Greenville',
+        'state' => 'SC',
+        'postal_code' => '29601',
+        'country' => 'United States',
+    ]);
+
+    $storefrontRequest = null;
+
+    Http::fake(function (Request $request) use (&$storefrontRequest) {
+        if ($request->url() === 'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json') {
+            return Http::response(shopifyMobileProductDetailPayload(), 200);
+        }
+
+        if ($request->url() === 'https://modernforestry-test.myshopify.com/api/2026-01/graphql.json') {
+            $body = json_decode($request->body(), true);
+            $query = (string) ($body['query'] ?? '');
+
+            if (str_contains($query, 'cartCreate(')) {
+                $storefrontRequest = $request;
+
+                return Http::response(shopifyStorefrontCartCreatePayload(
+                    checkoutUrl: 'https://modernforestry-test.myshopify.com/cart/c/test-checkout-no-phone'
+                ), 200);
+            }
+
+            if (str_contains($query, 'cart(id: $id)')) {
+                return Http::response(shopifyStorefrontCartCheckoutUrlPayload(
+                    checkoutUrl: 'https://modernforestry-test.myshopify.com/cart/c/test-checkout-no-phone'
+                ), 200);
+            }
+
+            return Http::response([], 404);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/checkout', [
+            'items' => [
+                [
+                    'productHandle' => 'forest-ember-candle',
+                    'variantId' => '9001',
+                    'quantity' => 1,
+                ],
+            ],
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.checkoutUrl', 'https://modernforestry-test.myshopify.com/cart/c/test-checkout-no-phone');
+
+    expect($storefrontRequest)->not->toBeNull();
+
+    $body = json_decode((string) $storefrontRequest?->body(), true);
+
+    expect(data_get($body, 'variables.input.buyerIdentity.email'))->toBe('slow.checkout@example.com')
+        ->and(data_get($body, 'variables.input.buyerIdentity.phone'))->toBeNull()
+        ->and(data_get($body, 'variables.input.delivery.addresses.0.address.deliveryAddress.phone'))->toBeNull();
 });
 
 test('mobile checkout hydrates a missing signed-in address from Shopify before building the cart', function (): void {
