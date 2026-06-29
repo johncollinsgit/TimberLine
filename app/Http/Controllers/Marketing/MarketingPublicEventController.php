@@ -1317,24 +1317,22 @@ class MarketingPublicEventController extends Controller
         $traits = array_values(array_filter((array) $result->dominant_traits));
         $axes = $this->normalizedScentShareAxes($result);
 
-        $treePath = public_path('brand/forestry-backstage-intro-tree.png');
-        if (is_file($treePath)) {
-            $logo = @imagecreatefrompng($treePath);
+        $wordmarkPath = public_path('brand/modern-forestry-logo-white.png');
+        if (is_file($wordmarkPath)) {
+            $logo = @imagecreatefrompng($wordmarkPath);
             if ($logo !== false) {
                 imagealphablending($logo, true);
                 imagesavealpha($logo, true);
-                imagecopyresampled($image, $logo, 90, 82, 0, 0, 64, 64, imagesx($logo), imagesy($logo));
+                imagecopyresampled($image, $logo, 82, 84, 0, 0, 472, 118, imagesx($logo), imagesy($logo));
                 imagedestroy($logo);
             }
         }
 
-        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 172, 104, strtoupper('Modern Forestry soy candles'), $colors['white'], 420, 1, 20);
-        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 92, 160, strtoupper('Scent Personality Type'), $colors['sage'], 520, 1, 20);
-        $this->drawWrappedScentShareText($image, $boldFont, 36, 0, 92, 204, $headline, $colors['white'], 500, 2, 46);
-        $this->drawWrappedScentShareText($image, $regularFont, 18, 0, 92, 262, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 24);
+        $this->drawWrappedScentShareText($image, $boldFont, 15, 0, 92, 178, strtoupper('Scent Personality Type: '.$headline), $colors['sage'], 520, 1, 20);
+        $this->drawWrappedScentShareText($image, $regularFont, 18, 0, 92, 214, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 24);
 
-        $this->drawWrappedScentShareText($image, $boldFont, 30, 0, 92, 334, $title, $colors['ink'], 420, 2, 38);
-        $this->drawWrappedScentShareText($image, $regularFont, 24, 0, 92, 382, $body, $colors['muted'], 440, 4, 32);
+        $this->drawWrappedScentShareText($image, $boldFont, 26, 0, 92, 310, 'Archetype: '.$title, $colors['ink'], 440, 2, 34);
+        $this->drawWrappedScentShareText($image, $regularFont, 24, 0, 92, 358, $body, $colors['muted'], 440, 4, 32);
 
         $traitX = 92;
         $traitY = 516;
@@ -1357,6 +1355,7 @@ class MarketingPublicEventController extends Controller
         imagerectangle($image, 690, 84, 1096, 546, $colors['mist']);
         $this->drawRadarChart($image, 893, 316, 165, $axes, $boldFont, $regularFont, $colors);
 
+        $treePath = public_path('brand/forestry-backstage-intro-tree.png');
         if (is_file($treePath)) {
             $logo = @imagecreatefrompng($treePath);
             if ($logo !== false) {

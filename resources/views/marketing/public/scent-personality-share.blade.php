@@ -22,10 +22,10 @@
         $publicQuizActionUrl = trim((string) ($publicQuizActionUrl ?? ''));
         $publicQuizEventUrl = trim((string) ($publicQuizEventUrl ?? ''));
         $pageMode = in_array((string) ($pageMode ?? 'landing'), ['landing', 'quiz', 'results'], true) ? (string) $pageMode : 'landing';
-        $cardVersion = (string) (optional($result->updated_at)->getTimestamp() ?: $result->id);
+        $cardVersion = 'mf-scent-v3';
         $shareUrl = url()->full();
-        $shareImageUrl = route('marketing.public.scent-personality-share.image', ['token' => $result->public_share_token, 'v' => $cardVersion]);
-        $logoUrl = asset('brand/forestry-backstage-intro-tree.png');
+        $shareImageUrl = route('marketing.public.scent-personality-share.image', ['token' => $result->public_share_token, 'v' => $cardVersion, 'card' => $cardVersion]);
+        $logoUrl = asset('brand/modern-forestry-logo-white.png');
         $typeLabel = 'Scent Personality Type: '.$headline;
         $resultHeadline = trim((string) data_get($publicQuizResult, 'headline', '')) ?: $headline;
         $resultTitle = trim((string) data_get($publicQuizResult, 'personalityTitle', '')) ?: $title;
@@ -158,6 +158,13 @@
             letter-spacing: -0.06em;
         }
 
+        .hero-wordmark {
+            display: block;
+            width: min(100%, 520px);
+            margin-top: 18px;
+            object-fit: contain;
+        }
+
         .copy {
             max-width: 720px;
             font-size: clamp(16px, 2vw, 19px);
@@ -254,6 +261,12 @@
             display: none;
         }
 
+        .score-panel-footer {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 18px;
+        }
+
         .score-grid {
             display: grid;
             gap: 18px;
@@ -343,8 +356,19 @@
             padding: 18px;
         }
 
-        .question + .question {
-            margin-top: 14px;
+        .question[hidden] {
+            display: none;
+        }
+
+        .quiz-nav {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .quiz-nav-spacer {
+            flex: 1 1 0;
         }
 
         .option {
@@ -454,7 +478,7 @@
                     <input type="hidden" name="source" value="{{ $shareSource }}">
                     <div class="progress" aria-label="Quiz progress">
                         <div class="mb-2 flex items-center justify-between text-sm font-black">
-                            <span data-progress-label>Question 0 of {{ count($publicQuizQuestions) }}</span>
+                            <span data-progress-label>Question 1 of {{ count($publicQuizQuestions) }}</span>
                             <span>{{ count($publicQuizQuestions) }} quick questions</span>
                         </div>
                         <div class="progress-bar">
@@ -463,7 +487,7 @@
                     </div>
 
                     @foreach($publicQuizQuestions as $questionIndex => $question)
-                        <section class="question">
+                        <section class="question" data-question-step="{{ $questionIndex }}" @if($questionIndex !== 0) hidden @endif>
                             <input type="hidden" name="answers[{{ $questionIndex }}][question_id]" value="{{ data_get($question, 'id') }}">
                             <div class="text-xs font-black uppercase tracking-[0.16em] text-emerald-800">Question {{ $questionIndex + 1 }} of {{ count($publicQuizQuestions) }}</div>
                             <h2 class="mt-2 text-xl font-black">{{ data_get($question, 'prompt', 'Question') }}</h2>
@@ -480,25 +504,30 @@
                                     </label>
                                 @endforeach
                             </div>
+                            <div class="quiz-nav">
+                                @if($questionIndex === 0)
+                                    <span class="quiz-nav-spacer"></span>
+                                @else
+                                    <button type="button" class="action secondary" data-previous-question>Previous</button>
+                                @endif
+
+                                @if($questionIndex === count($publicQuizQuestions) - 1)
+                                    <button type="submit" class="action">Show my results</button>
+                                @else
+                                    <button type="button" class="action" data-next-question>Next</button>
+                                @endif
+                            </div>
                         </section>
                     @endforeach
-
-                    <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-                        <a href="{{ route('marketing.public.scent-personality-share', ['token' => $result->public_share_token, 'source' => $shareSource]) }}" class="action secondary">Back to profile</a>
-                        <button type="submit" class="action">Show my results</button>
-                    </div>
                 </form>
             </section>
         @else
             <section class="hero">
                 <div>
                     <div class="kicker">{{ $typeLabel }}</div>
-                    <h1>{{ $pageMode === 'results' ? $resultHeadline : $headline }}</h1>
+                    <img class="hero-wordmark" src="{{ $logoUrl }}" alt="Modern Forestry">
                     <p class="copy">{{ $pageMode === 'results' ? $resultBody : $body }}</p>
                     <div class="actions">
-                        @if($publicQuizPageUrl !== '')
-                            <a href="{{ $publicQuizPageUrl }}" class="action" data-quiz-trigger>Take the quiz</a>
-                        @endif
                         @if($shopYourMatchesUrl !== '')
                             <a href="{{ $shopYourMatchesUrl }}" class="action secondary">Shop the vibe</a>
                         @endif
@@ -528,9 +557,9 @@
                             <div class="archetype">Scent map</div>
                             <h2>See where {{ $pageMode === 'results' ? 'you' : 'I' }} scored</h2>
                         </div>
-                        <button class="action secondary" type="button" data-score-toggle>See where I scored</button>
+                        <button class="action secondary" type="button" data-score-toggle>Hide where I scored</button>
                     </div>
-                    <div class="score-panel mt-5" data-score-panel hidden>
+                    <div class="score-panel mt-5" data-score-panel>
                         <div class="score-grid">
                             <div class="radar">
                                 <svg viewBox="0 0 300 300" width="100%" role="img" aria-label="Scent personality radar chart">
@@ -577,6 +606,11 @@
                                 @endforeach
                             </div>
                         </div>
+                        @if($publicQuizPageUrl !== '')
+                            <div class="score-panel-footer">
+                                <a href="{{ $publicQuizPageUrl }}" class="action" data-quiz-trigger>Take the quiz!</a>
+                            </div>
+                        @endif
                     </div>
                 </div>
 
@@ -636,6 +670,7 @@
         const source = @json($shareSource);
         const totalQuestions = {{ count($publicQuizQuestions) }};
         let quizStarted = false;
+        let currentQuestion = 0;
 
         function track(eventName) {
             if (!eventUrl || !csrfToken) {
@@ -665,21 +700,29 @@
         }
 
         function updateProgress() {
-            const answeredNames = new Set();
-            document.querySelectorAll('[data-public-quiz-form] input[type="radio"]:checked').forEach(function (input) {
-                answeredNames.add(input.name);
-            });
-
-            const answered = answeredNames.size;
-            const percent = totalQuestions > 0 ? Math.round((answered / totalQuestions) * 100) : 0;
+            const percent = totalQuestions > 0 ? Math.round(((currentQuestion + 1) / totalQuestions) * 100) : 0;
             const fill = document.querySelector('[data-progress-fill]');
             const label = document.querySelector('[data-progress-label]');
             if (fill) {
                 fill.style.width = percent + '%';
             }
             if (label) {
-                label.textContent = 'Question ' + answered + ' of ' + totalQuestions;
+                label.textContent = 'Question ' + (currentQuestion + 1) + ' of ' + totalQuestions;
             }
+        }
+
+        function showQuestion(index) {
+            const questions = Array.from(document.querySelectorAll('[data-question-step]'));
+            if (!questions.length) {
+                return;
+            }
+
+            currentQuestion = Math.max(0, Math.min(index, questions.length - 1));
+            questions.forEach(function (question, questionIndex) {
+                question.toggleAttribute('hidden', questionIndex !== currentQuestion);
+            });
+            updateProgress();
+            questions[currentQuestion].scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         document.querySelectorAll('[data-quiz-trigger]').forEach(function (button) {
@@ -710,6 +753,33 @@
             });
         });
 
+        document.querySelectorAll('[data-next-question]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const question = button.closest('[data-question-step]');
+                if (!question) {
+                    return;
+                }
+
+                const selected = question.querySelector('input[type="radio"]:checked');
+                if (!selected) {
+                    const firstOption = question.querySelector('input[type="radio"]');
+                    if (firstOption) {
+                        firstOption.reportValidity();
+                    }
+                    return;
+                }
+
+                markQuizStarted();
+                showQuestion(currentQuestion + 1);
+            });
+        });
+
+        document.querySelectorAll('[data-previous-question]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                showQuestion(currentQuestion - 1);
+            });
+        });
+
         document.querySelectorAll('[data-add-to-cart-link]').forEach(function (link) {
             link.addEventListener('click', function () {
                 track('add_to_cart_clicked');
@@ -726,7 +796,11 @@
             });
         });
 
-        updateProgress();
+        if (document.querySelector('[data-score-panel]:not([hidden])')) {
+            track('score_opened');
+        }
+
+        showQuestion(0);
     })();
 </script>
 </body>
