@@ -11,6 +11,11 @@ class TenantHostBuilder
             return null;
         }
 
+        $mappedHost = $this->mappedHostForSlug($normalizedSlug);
+        if ($mappedHost !== null) {
+            return $mappedHost;
+        }
+
         $baseDomain = $this->baseDomain();
         if ($baseDomain === null) {
             return null;
@@ -133,5 +138,28 @@ class TenantHostBuilder
         $token = trim((string) $token, '-');
 
         return $token !== '' ? $token : null;
+    }
+
+    protected function mappedHostForSlug(string $normalizedSlug): ?string
+    {
+        $configured = config('tenancy.auth.host_map', []);
+        if (! is_array($configured)) {
+            return null;
+        }
+
+        foreach ($configured as $host => $slug) {
+            $candidateHost = $this->normalizeHost((string) $host);
+            $candidateSlug = $this->normalizeToken($slug);
+
+            if ($candidateHost === null || $candidateSlug === null) {
+                continue;
+            }
+
+            if ($candidateSlug === $normalizedSlug) {
+                return $candidateHost;
+            }
+        }
+
+        return null;
     }
 }
