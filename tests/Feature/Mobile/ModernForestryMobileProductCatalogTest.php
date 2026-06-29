@@ -325,6 +325,13 @@ test('mobile session status reports signed out by default and can honor a sessio
         'tenant_id' => 1,
         'email' => 'customer@example.com',
         'normalized_email' => 'customer@example.com',
+        'phone' => '+15555550123',
+        'normalized_phone' => '+15555550123',
+        'address_line_1' => '123 Pine Street',
+        'city' => 'Greenville',
+        'state' => 'SC',
+        'postal_code' => '29601',
+        'country' => 'US',
     ]);
 
     $this->withToken('mf-test-profile:'.$profile->id)
@@ -332,7 +339,14 @@ test('mobile session status reports signed out by default and can honor a sessio
         ->assertOk()
         ->assertJsonPath('authenticated', true)
         ->assertJsonPath('state', 'authenticated')
-        ->assertJsonPath('customer.email', 'customer@example.com');
+        ->assertJsonPath('customer.email', 'customer@example.com')
+        ->assertJsonPath('customer.phone', '+15555550123')
+        ->assertJsonPath('customer.addressLine1', '123 Pine Street')
+        ->assertJsonPath('customer.city', 'Greenville')
+        ->assertJsonPath('customer.state', 'SC')
+        ->assertJsonPath('customer.postalCode', '29601')
+        ->assertJsonPath('customer.country', 'US')
+        ->assertJsonPath('customer.hasSavedAddress', true);
 });
 
 test('mobile account and rewards endpoints require a signed in customer token', function (): void {
@@ -589,6 +603,14 @@ test('mobile account endpoint returns native safe account data only for signed i
         'last_name' => 'Woods',
         'email' => 'ada@example.com',
         'normalized_email' => 'ada@example.com',
+        'phone' => '+15555550123',
+        'normalized_phone' => '+15555550123',
+        'address_line_1' => '456 Cedar Lane',
+        'address_line_2' => 'Suite 8',
+        'city' => 'Greenville',
+        'state' => 'SC',
+        'postal_code' => '29607',
+        'country' => 'US',
         'accepts_email_marketing' => true,
     ]);
     MarketingProfileLink::query()->create([
@@ -639,6 +661,14 @@ test('mobile account endpoint returns native safe account data only for signed i
         ->getJson('/api/mobile/v1/modern-forestry/account')
         ->assertOk()
         ->assertJsonPath('data.customer.displayName', 'Ada Woods')
+        ->assertJsonPath('data.customer.phone', '+15555550123')
+        ->assertJsonPath('data.customer.addressLine1', '456 Cedar Lane')
+        ->assertJsonPath('data.customer.addressLine2', 'Suite 8')
+        ->assertJsonPath('data.customer.city', 'Greenville')
+        ->assertJsonPath('data.customer.state', 'SC')
+        ->assertJsonPath('data.customer.postalCode', '29607')
+        ->assertJsonPath('data.customer.country', 'US')
+        ->assertJsonPath('data.customer.hasSavedAddress', true)
         ->assertJsonPath('data.orders.0.orderNumber', 'MF-1001')
         ->assertJsonPath('data.orders.0.linePreview', 'Customer Gift Candle')
         ->assertJsonPath('data.wishlist.summary.active_count', 1)
@@ -857,6 +887,49 @@ test('mobile rewards endpoint returns balance rewards history and can redeem nat
         'is_active' => true,
     ]);
 
+    Http::fake(function (Request $request) {
+        if ($request->url() !== 'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json') {
+            return Http::response([], 404);
+        }
+
+        $payload = json_decode($request->body(), true);
+        $query = (string) ($payload['query'] ?? '');
+
+        if (str_contains($query, 'codeDiscountNodeByCode')) {
+            return Http::response([
+                'data' => [
+                    'codeDiscountNodeByCode' => null,
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'discountCodeBasicCreate')) {
+            return Http::response([
+                'data' => [
+                    'discountCodeBasicCreate' => [
+                        'codeDiscountNode' => [
+                            'id' => 'gid://shopify/DiscountCodeNode/9001',
+                            'codeDiscount' => [
+                                '__typename' => 'DiscountCodeBasic',
+                                'title' => 'Reward Credit Applied',
+                                'startsAt' => now()->toIso8601String(),
+                                'endsAt' => now()->addDays(30)->toIso8601String(),
+                                'combinesWith' => [
+                                    'orderDiscounts' => false,
+                                    'productDiscounts' => false,
+                                    'shippingDiscounts' => true,
+                                ],
+                            ],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        return Http::response([], 404);
+    });
+
     $this->withToken('mf-test-profile:'.$profile->id)
         ->getJson('/api/mobile/v1/modern-forestry/rewards')
         ->assertOk()
@@ -870,8 +943,88 @@ test('mobile rewards endpoint returns balance rewards history and can redeem nat
         ])
         ->assertOk()
         ->assertJsonPath('data.ok', true)
+        ->assertJsonPath('data.state', 'code_issued')
         ->assertJsonPath('data.redemption.status', 'issued')
         ->assertJsonPath('data.redemption.amountFormatted', '$10.00');
+
+    Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'codeDiscountNodeByCode'));
+    Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'discountCodeBasicCreate'));
+});
+
+test('mobile rewards redeem returns a clean failure when Shopify discount sync cannot finish', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'reward-sync@example.com',
+        'normalized_email' => 'reward-sync@example.com',
+    ]);
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 25,
+    ]);
+    CandleCashReward::query()->delete();
+    $reward = CandleCashReward::query()->create([
+        'name' => '$10 coupon',
+        'description' => 'Redeem for a $10 discount.',
+        'candle_cash_cost' => 10,
+        'reward_type' => 'coupon',
+        'reward_value' => '10USD',
+        'is_active' => true,
+    ]);
+
+    Http::fake(function (Request $request) {
+        if ($request->url() !== 'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json') {
+            return Http::response([], 404);
+        }
+
+        $payload = json_decode($request->body(), true);
+        $query = (string) ($payload['query'] ?? '');
+
+        if (str_contains($query, 'codeDiscountNodeByCode')) {
+            return Http::response([
+                'data' => [
+                    'codeDiscountNodeByCode' => null,
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'discountCodeBasicCreate')) {
+            return Http::response([
+                'data' => [
+                    'discountCodeBasicCreate' => [
+                        'codeDiscountNode' => null,
+                        'userErrors' => [
+                            [
+                                'field' => ['basicCodeDiscount', 'code'],
+                                'message' => 'Discount code could not be created.',
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $this->withToken('mf-test-profile:'.$profile->id)
+        ->postJson('/api/mobile/v1/modern-forestry/rewards/redeem', [
+            'rewardId' => $reward->id,
+        ])
+        ->assertStatus(422)
+        ->assertJsonPath('data.ok', false)
+        ->assertJsonPath('data.state', 'discount_sync_failed')
+        ->assertJsonPath('data.redemption', null)
+        ->assertJsonPath(
+            'data.message',
+            'We could not prepare your reward code for checkout. Your Candle Cash is available again, so please try once more in a moment.'
+        )
+        ->assertJsonPath('data.balance.amount', 25);
+
+    $redemption = \App\Models\CandleCashRedemption::query()->latest('id')->first();
+
+    expect($redemption)->not->toBeNull()
+        ->and($redemption?->status)->toBe('canceled')
+        ->and((float) CandleCashBalance::query()->where('marketing_profile_id', $profile->id)->value('balance'))->toBe(25.0);
 });
 
 test('mobile account message endpoint accepts signed in native support messages', function (): void {
@@ -2196,6 +2349,138 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
     ]);
     expect($body['variables']['input']['discountCodes'])->toBe(['CANDLECASH10']);
     expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('customer-account-test-token');
+});
+
+test('mobile checkout preloads buyer identity delivery details and buyer ip from the signed in mobile profile', function (): void {
+    config()->set('services.shopify.stores.retail.storefront_access_token', 'storefront-test-token');
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Maple',
+        'last_name' => 'Lane',
+        'email' => 'checkout@example.com',
+        'normalized_email' => 'checkout@example.com',
+        'phone' => '+15555550123',
+        'normalized_phone' => '+15555550123',
+        'address_line_1' => '123 Pine Street',
+        'address_line_2' => 'Apt 4',
+        'city' => 'Greenville',
+        'state' => 'SC',
+        'postal_code' => '29601',
+        'country' => 'United States',
+    ]);
+
+    $storefrontRequest = null;
+
+    Http::fake(function (Request $request) use (&$storefrontRequest) {
+        if ($request->url() === 'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json') {
+            return Http::response(shopifyMobileProductDetailPayload(), 200);
+        }
+
+        if ($request->url() === 'https://modernforestry-test.myshopify.com/api/2026-01/graphql.json') {
+            $storefrontRequest = $request;
+
+            return Http::response([
+                'data' => [
+                    'cartCreate' => [
+                        'cart' => [
+                            'id' => 'gid://shopify/Cart/cart-prefill-1',
+                            'checkoutUrl' => 'https://modernforestry-test.myshopify.com/cart/c/prefilled-checkout',
+                            'cost' => [
+                                'subtotalAmount' => [
+                                    'amount' => '24.00',
+                                    'currencyCode' => 'USD',
+                                ],
+                                'totalTaxAmount' => [
+                                    'amount' => '1.44',
+                                    'currencyCode' => 'USD',
+                                ],
+                                'totalAmount' => [
+                                    'amount' => '31.39',
+                                    'currencyCode' => 'USD',
+                                ],
+                            ],
+                            'buyerIdentity' => [
+                                'countryCode' => 'US',
+                                'email' => 'checkout@example.com',
+                                'phone' => '+15555550123',
+                                'customer' => [
+                                    'id' => 'gid://shopify/Customer/321',
+                                ],
+                            ],
+                            'discountCodes' => [],
+                            'deliveryGroups' => [
+                                'edges' => [
+                                    [
+                                        'node' => [
+                                            'deliveryOptions' => [
+                                                [
+                                                    'estimatedCost' => [
+                                                        'amount' => '5.95',
+                                                        'currencyCode' => 'USD',
+                                                    ],
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        return Http::response([], 404);
+    });
+
+    $response = $this->withToken('mf-test-profile:'.$profile->id)
+        ->withServerVariables(['REMOTE_ADDR' => '203.0.113.45'])
+        ->postJson('/api/mobile/v1/modern-forestry/checkout', [
+            'items' => [
+                [
+                    'productHandle' => 'forest-ember-candle',
+                    'variantId' => '9001',
+                    'quantity' => 1,
+                ],
+            ],
+        ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('data.authenticated', true)
+        ->assertJsonPath('data.prefilledCustomer', true)
+        ->assertJsonPath('data.shipping.amount', '5.95')
+        ->assertJsonPath('data.tax.amount', '1.44')
+        ->assertJsonPath('data.checkoutUrl', 'https://modernforestry-test.myshopify.com/cart/c/prefilled-checkout');
+
+    expect($storefrontRequest)->not->toBeNull();
+    expect($storefrontRequest?->hasHeader('Shopify-Storefront-Buyer-IP', '203.0.113.45'))->toBeTrue();
+
+    $body = json_decode((string) $storefrontRequest?->body(), true);
+
+    expect($body['variables']['input']['buyerIdentity'])->toMatchArray([
+        'customerAccessToken' => 'mf-test-profile:'.$profile->id,
+        'email' => 'checkout@example.com',
+        'phone' => '+15555550123',
+        'countryCode' => 'US',
+    ]);
+    expect($body['variables']['input']['delivery']['addresses'][0])->toMatchArray([
+        'selected' => true,
+        'oneTimeUse' => true,
+    ]);
+    expect($body['variables']['input']['delivery']['addresses'][0]['address']['deliveryAddress'])->toMatchArray([
+        'address1' => '123 Pine Street',
+        'address2' => 'Apt 4',
+        'city' => 'Greenville',
+        'countryCode' => 'US',
+        'firstName' => 'Maple',
+        'lastName' => 'Lane',
+        'phone' => '+15555550123',
+        'provinceCode' => 'SC',
+        'zip' => '29601',
+    ]);
 });
 
 test('mobile checkout response does not expose storefront token or shopify gids', function (): void {

@@ -68,6 +68,14 @@ class ModernForestryMobileCustomerSessionService
                 'firstName' => $this->nullableString($session->profile->first_name),
                 'lastName' => $this->nullableString($session->profile->last_name),
                 'email' => $this->nullableString($session->profile->email),
+                'phone' => $this->nullableString($session->profile->phone),
+                'addressLine1' => $this->nullableString($session->profile->address_line_1),
+                'addressLine2' => $this->nullableString($session->profile->address_line_2),
+                'city' => $this->nullableString($session->profile->city),
+                'state' => $this->nullableString($session->profile->state),
+                'postalCode' => $this->nullableString($session->profile->postal_code),
+                'country' => $this->nullableString($session->profile->country),
+                'hasSavedAddress' => $this->hasSavedAddress($session->profile),
             ],
             'checkedAt' => now()->toIso8601String(),
         ];
@@ -681,5 +689,17 @@ GRAPHQL,
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function hasSavedAddress(MarketingProfile $profile): bool
+    {
+        return array_filter([
+            $this->nullableString($profile->address_line_1),
+            $this->nullableString($profile->address_line_2),
+            $this->nullableString($profile->city),
+            $this->nullableString($profile->state),
+            $this->nullableString($profile->postal_code),
+            $this->nullableString($profile->country),
+        ]) !== [];
     }
 }

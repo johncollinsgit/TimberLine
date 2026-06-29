@@ -23,6 +23,7 @@ class ModernForestryProductCatalogController extends Controller
 {
     public function checkout(
         Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
         ModernForestryMobileCheckoutService $checkout
     ): JsonResponse {
         $validated = $request->validate([
@@ -39,14 +40,18 @@ class ModernForestryProductCatalogController extends Controller
             'customerPhone' => ['nullable', 'string', 'max:40'],
         ]);
 
+        $session = $sessions->resolveFromRequest($request, allowCreate: true);
+
         try {
             return response()->json([
                 'data' => $checkout->checkout(
                     $validated['items'],
                     $validated['discountCode'] ?? null,
-                    $validated['customerAccessToken'] ?? $request->bearerToken(),
+                    $session?->accessToken ?? ($validated['customerAccessToken'] ?? $request->bearerToken()),
                     $validated['customerEmail'] ?? null,
-                    $validated['customerPhone'] ?? null
+                    $validated['customerPhone'] ?? null,
+                    $session,
+                    $request->ip()
                 ),
                 'meta' => [
                     'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,

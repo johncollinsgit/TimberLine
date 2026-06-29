@@ -2,10 +2,11 @@
 
 namespace App\Services\Mobile;
 
+use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Services\Shopify\ShopifyStores;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
 
 class ModernForestryMobileCheckoutService
 {
@@ -15,8 +16,22 @@ class ModernForestryMobileCheckoutService
 
     public const MAX_QUANTITY = 99;
 
+    protected const COUNTRY_CODE_ALIASES = [
+        'AUSTRALIA' => 'AU',
+        'CANADA' => 'CA',
+        'ENGLAND' => 'GB',
+        'GREATBRITAIN' => 'GB',
+        'MEXICO' => 'MX',
+        'NEWZEALAND' => 'NZ',
+        'UNITEDKINGDOM' => 'GB',
+        'UNITEDSTATES' => 'US',
+        'UNITEDSTATESOFAMERICA' => 'US',
+        'USA' => 'US',
+    ];
+
     public function __construct(
-        protected ModernForestryMobileProductCatalogService $catalog
+        protected ModernForestryMobileProductCatalogService $catalog,
+        protected MarketingIdentityNormalizer $identityNormalizer
     ) {}
 
     /**
@@ -28,7 +43,9 @@ class ModernForestryMobileCheckoutService
         ?string $discountCode = null,
         ?string $customerAccessToken = null,
         ?string $customerEmail = null,
-        ?string $customerPhone = null
+        ?string $customerPhone = null,
+        ?ModernForestryMobileCustomerSession $session = null,
+        ?string $buyerIp = null
     ): array
     {
         $this->assertModernForestryTenant();
@@ -36,20 +53,30 @@ class ModernForestryMobileCheckoutService
         $store = $this->modernForestryRetailStore();
         $lines = $this->normalizeLines($items);
         $discountCodes = $this->normalizeDiscountCodes($discountCode);
-        $customerAccessToken = $this->normalizeCustomerAccessToken($customerAccessToken);
-        $customerEmail = $this->normalizeCustomerEmail($customerEmail);
-        $customerPhone = $this->normalizeCustomerPhone($customerPhone);
+        $customerContext = $this->customerContext(
+            $session?->profile,
+            $this->normalizeCustomerAccessToken($customerAccessToken ?? $session?->accessToken),
+            $customerEmail,
+            $customerPhone
+        );
         $storefrontToken = $this->storefrontAccessToken($store);
 
         if ($storefrontToken === null) {
             return $this->checkoutPermalink($store, $lines, $discountCodes);
         }
 
-        $response = Http::withHeaders([
+        $headers = [
             'X-Shopify-Storefront-Access-Token' => $storefrontToken,
             'Accept' => 'application/json',
             'Content-Type' => 'application/json',
-        ])
+        ];
+
+        $buyerIp = $this->normalizeBuyerIp($buyerIp);
+        if ($buyerIp !== null) {
+            $headers['Shopify-Storefront-Buyer-IP'] = $buyerIp;
+        }
+
+        $response = Http::withHeaders($headers)
             ->timeout(30)
             ->post($this->storefrontGraphqlUrl($store), [
                 'query' => $this->cartCreateMutation(),
@@ -70,11 +97,8 @@ class ModernForestryMobileCheckoutService
                             $lines
                         ),
                         'discountCodes' => $discountCodes,
-                        'buyerIdentity' => array_filter([
-                            'customerAccessToken' => $customerAccessToken,
-                            'email' => $customerEmail,
-                            'phone' => $customerPhone,
-                        ], static fn (mixed $value): bool => $value !== null && $value !== ''),
+                        'buyerIdentity' => $this->buyerIdentityInput($customerContext),
+                        'delivery' => $this->deliveryInput($customerContext),
                         'attributes' => [
                             [
                                 'key' => 'source',
@@ -161,8 +185,8 @@ class ModernForestryMobileCheckoutService
             'discount' => $this->discountAmountForCart($cart),
             'total' => $this->moneyAmount($cart['cost']['totalAmount'] ?? null),
             'currencyCode' => $this->currencyCodeForCart($cart),
-            'authenticated' => $customerAccessToken !== null,
-            'prefilledCustomer' => $this->prefilledCustomer($cart, $customerEmail),
+            'authenticated' => $customerContext['accessToken'] !== null,
+            'prefilledCustomer' => $this->prefilledCustomer($cart, $customerContext),
             'discountCodes' => $discountCodes,
             'discountAccepted' => $this->discountCodesAccepted($cart, $discountCodes),
             'errors' => [],
@@ -483,6 +507,7 @@ mutation ModernForestryMobileCartCreate($input: CartInput!) {
         }
       }
       buyerIdentity {
+        countryCode
         email
         phone
         customer {
@@ -513,6 +538,198 @@ mutation ModernForestryMobileCartCreate($input: CartInput!) {
   }
 }
 GRAPHQL;
+    }
+
+    /**
+     * @return array{
+     *   accessToken:?string,
+     *   email:?string,
+     *   phone:?string,
+     *   countryCode:?string,
+     *   delivery:?array<string,mixed>|null,
+     *   prefilled:bool
+     * }
+     */
+    protected function customerContext(
+        ?MarketingProfile $profile,
+        ?string $customerAccessToken,
+        ?string $customerEmail,
+        ?string $customerPhone
+    ): array {
+        $email = $this->normalizeCustomerEmail($customerEmail) ?? $this->profileEmail($profile);
+        $phone = $this->preferredBuyerPhone($customerPhone)
+            ?? $this->preferredBuyerPhone($profile?->normalized_phone ?: $profile?->phone);
+        $countryCode = $this->countryCodeFromProfile($profile);
+        $delivery = $this->deliveryAddressInput($profile, $customerPhone);
+
+        return [
+            'accessToken' => $customerAccessToken,
+            'email' => $email,
+            'phone' => $phone,
+            'countryCode' => $countryCode,
+            'delivery' => $delivery,
+            'prefilled' => $customerAccessToken !== null
+                || $email !== null
+                || $phone !== null
+                || $delivery !== null,
+        ];
+    }
+
+    /**
+     * @param  array{
+     *   accessToken:?string,
+     *   email:?string,
+     *   phone:?string,
+     *   countryCode:?string
+     * }  $customerContext
+     * @return array<string,mixed>|null
+     */
+    protected function buyerIdentityInput(array $customerContext): ?array
+    {
+        $buyerIdentity = array_filter([
+            'customerAccessToken' => $customerContext['accessToken'] ?? null,
+            'email' => $customerContext['email'] ?? null,
+            'phone' => $customerContext['phone'] ?? null,
+            'countryCode' => $customerContext['countryCode'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
+        return $buyerIdentity !== [] ? $buyerIdentity : null;
+    }
+
+    /**
+     * @param  array{delivery:?array<string,mixed>}  $customerContext
+     * @return array<string,mixed>|null
+     */
+    protected function deliveryInput(array $customerContext): ?array
+    {
+        $delivery = $customerContext['delivery'] ?? null;
+
+        return is_array($delivery) && $delivery !== [] ? $delivery : null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function deliveryAddressInput(?MarketingProfile $profile, ?string $customerPhone = null): ?array
+    {
+        if (! $profile instanceof MarketingProfile) {
+            return null;
+        }
+
+        $countryCode = $this->countryCodeFromProfile($profile);
+        if ($countryCode === null) {
+            return null;
+        }
+
+        $address = array_filter([
+            'address1' => $this->nullableString($profile->address_line_1),
+            'address2' => $this->nullableString($profile->address_line_2),
+            'city' => $this->nullableString($profile->city),
+            'countryCode' => $countryCode,
+            'firstName' => $this->nullableString($profile->first_name),
+            'lastName' => $this->nullableString($profile->last_name),
+            'phone' => $this->deliveryPhone($customerPhone, $profile),
+            'provinceCode' => $this->nullableString($profile->state),
+            'zip' => $this->nullableString($profile->postal_code),
+        ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
+        if (! $this->addressHasDestination($address)) {
+            return null;
+        }
+
+        return [
+            'addresses' => [
+                [
+                    'address' => [
+                        'deliveryAddress' => $address,
+                    ],
+                    'selected' => true,
+                    'oneTimeUse' => true,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $address
+     */
+    protected function addressHasDestination(array $address): bool
+    {
+        return ($address['countryCode'] ?? null) !== null
+            && array_filter([
+                $address['address1'] ?? null,
+                $address['city'] ?? null,
+                $address['provinceCode'] ?? null,
+                $address['zip'] ?? null,
+            ], static fn (?string $value): bool => $value !== null && $value !== '') !== [];
+    }
+
+    protected function deliveryPhone(?string $customerPhone, MarketingProfile $profile): ?string
+    {
+        return $this->e164Phone($customerPhone)
+            ?? $this->e164Phone((string) ($profile->normalized_phone ?: $profile->phone));
+    }
+
+    protected function preferredBuyerPhone(?string $value): ?string
+    {
+        return $this->e164Phone($value) ?? $this->normalizeCustomerPhone($value);
+    }
+
+    protected function e164Phone(?string $value): ?string
+    {
+        $value = $this->nullableString($value);
+        if ($value === null) {
+            return null;
+        }
+
+        if (preg_match('/\A\+[1-9]\d{7,14}\z/', $value) === 1) {
+            return $value;
+        }
+
+        return $this->identityNormalizer->toE164($value);
+    }
+
+    protected function profileEmail(?MarketingProfile $profile): ?string
+    {
+        return $this->normalizeCustomerEmail(
+            $profile?->email ?: $profile?->normalized_email
+        );
+    }
+
+    protected function countryCodeFromProfile(?MarketingProfile $profile): ?string
+    {
+        return $this->countryCode($profile?->country);
+    }
+
+    protected function countryCode(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $country = strtoupper(trim((string) $value));
+        if ($country === '') {
+            return null;
+        }
+
+        if (preg_match('/\A[A-Z]{2}\z/', $country) === 1) {
+            return $country;
+        }
+
+        $lookup = preg_replace('/[^A-Z]/', '', $country) ?? '';
+
+        return self::COUNTRY_CODE_ALIASES[$lookup] ?? null;
+    }
+
+    protected function normalizeBuyerIp(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $ip = trim((string) $value);
+
+        return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : null;
     }
 
     /**
@@ -697,11 +914,11 @@ GRAPHQL;
     /**
      * @param  array<string,mixed>  $cart
      */
-    protected function prefilledCustomer(array $cart, ?string $customerEmail = null): bool
+    protected function prefilledCustomer(array $cart, array $customerContext = []): bool
     {
         $buyerIdentity = $cart['buyerIdentity'] ?? null;
         if (! is_array($buyerIdentity)) {
-            return $customerEmail !== null;
+            return (bool) ($customerContext['prefilled'] ?? false);
         }
 
         $buyerEmail = trim((string) ($buyerIdentity['email'] ?? ''));
@@ -709,7 +926,18 @@ GRAPHQL;
             return true;
         }
 
-        return is_array($buyerIdentity['customer'] ?? null);
+        $buyerPhone = trim((string) ($buyerIdentity['phone'] ?? ''));
+        if ($buyerPhone !== '') {
+            return true;
+        }
+
+        $countryCode = trim((string) ($buyerIdentity['countryCode'] ?? ''));
+        if ($countryCode !== '') {
+            return true;
+        }
+
+        return is_array($buyerIdentity['customer'] ?? null)
+            || (bool) ($customerContext['prefilled'] ?? false);
     }
 
     /**
@@ -735,5 +963,16 @@ GRAPHQL;
         $id = trim((string) end($parts));
 
         return $id !== '' ? $id : trim($gid);
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 }

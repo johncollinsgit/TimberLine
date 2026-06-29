@@ -13,6 +13,7 @@ use App\Models\OrderLine;
 use App\Services\Marketing\MessagingConversationService;
 use App\Services\Marketing\TwilioSmsService;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
@@ -26,6 +27,7 @@ class ModernForestryMobileAccountService
 {
     protected const MOBILE_SUPPORT_SOURCE_TYPE = 'modern_forestry_app';
     protected const MOBILE_SUPPORT_STORE_KEY = 'retail';
+    protected const MOBILE_STOREFRONT_STORE_KEY = 'retail';
     protected const MOBILE_SUPPORT_SUBJECT = 'Modern Forestry app support';
 
     /**
@@ -35,6 +37,7 @@ class ModernForestryMobileAccountService
 
     public function __construct(
         protected CandleCashService $candleCashService,
+        protected CandleCashShopifyDiscountService $shopifyDiscounts,
         protected MarketingWishlistService $wishlistService,
         protected ModernForestryMobileProductCatalogService $catalog,
         protected MessagingConversationService $conversationService,
@@ -198,6 +201,18 @@ class ModernForestryMobileAccountService
             ? CandleCashRedemption::query()->with('reward')->find((int) $result['redemption_id'])
             : null;
 
+        if ((bool) ($result['ok'] ?? false) && $redemption instanceof CandleCashRedemption) {
+            $syncFailure = $this->rewardSyncFailurePayload(
+                $profile,
+                $redemption,
+                (string) ($result['state'] ?? 'try_again_later')
+            );
+
+            if ($syncFailure !== null) {
+                return $syncFailure;
+            }
+        }
+
         return [
             'ok' => (bool) ($result['ok'] ?? false),
             'state' => (string) ($result['state'] ?? 'try_again_later'),
@@ -313,10 +328,59 @@ class ModernForestryMobileAccountService
             ]))) ?: ($this->nullableString($profile->email) ?? 'Modern Forestry customer'),
             'email' => $this->nullableString($profile->email),
             'phone' => $this->nullableString($profile->phone),
+            'addressLine1' => $this->nullableString($profile->address_line_1),
+            'addressLine2' => $this->nullableString($profile->address_line_2),
+            'city' => $this->nullableString($profile->city),
+            'state' => $this->nullableString($profile->state),
+            'postalCode' => $this->nullableString($profile->postal_code),
+            'country' => $this->nullableString($profile->country),
+            'hasSavedAddress' => $this->hasSavedAddress($profile),
             'avatarUrl' => $this->profileAvatarUrl($profile),
             'acceptsEmailMarketing' => (bool) $profile->accepts_email_marketing,
             'acceptsSmsMarketing' => (bool) $profile->accepts_sms_marketing,
         ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function rewardSyncFailurePayload(
+        MarketingProfile $profile,
+        CandleCashRedemption $redemption,
+        string $state
+    ): ?array {
+        try {
+            $this->shopifyDiscounts->ensureDiscountForRedemption($redemption, self::MOBILE_STOREFRONT_STORE_KEY);
+
+            return null;
+        } catch (Throwable $exception) {
+            Log::warning('Modern Forestry mobile reward discount sync failed.', [
+                'marketing_profile_id' => (int) $profile->id,
+                'redemption_id' => (int) $redemption->id,
+                'redemption_code' => (string) ($redemption->redemption_code ?? ''),
+                'state' => $state,
+                'message' => $exception->getMessage(),
+            ]);
+
+            $balance = $this->candleCashService->currentBalance($profile);
+            $message = 'We could not prepare your reward code for checkout. Please try again in a moment.';
+
+            if ($state === 'code_issued') {
+                $restore = $this->candleCashService->cancelIssuedRedemptionAndRestoreBalance($redemption);
+                $balance = $restore['balance'] ?? $balance;
+                if ((bool) ($restore['restored'] ?? false)) {
+                    $message = 'We could not prepare your reward code for checkout. Your Candle Cash is available again, so please try once more in a moment.';
+                }
+            }
+
+            return [
+                'ok' => false,
+                'state' => 'discount_sync_failed',
+                'message' => $message,
+                'redemption' => null,
+                'balance' => $this->candleCashService->balancePayloadFromPoints($balance),
+            ];
+        }
     }
 
     /**
@@ -767,6 +831,18 @@ class ModernForestryMobileAccountService
         $string = trim((string) $value);
 
         return $string !== '' ? $string : null;
+    }
+
+    protected function hasSavedAddress(MarketingProfile $profile): bool
+    {
+        return array_filter([
+            $this->nullableString($profile->address_line_1),
+            $this->nullableString($profile->address_line_2),
+            $this->nullableString($profile->city),
+            $this->nullableString($profile->state),
+            $this->nullableString($profile->postal_code),
+            $this->nullableString($profile->country),
+        ]) !== [];
     }
 
     protected function profileAvatarUrl(MarketingProfile $profile): ?string
