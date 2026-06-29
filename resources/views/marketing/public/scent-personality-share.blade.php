@@ -23,7 +23,7 @@
         $publicQuizEventUrl = trim((string) ($publicQuizEventUrl ?? ''));
         $pageMode = in_array((string) ($pageMode ?? 'landing'), ['landing', 'quiz', 'results'], true) ? (string) $pageMode : 'landing';
         $cardVersion = (string) (optional($result->updated_at)->getTimestamp() ?: $result->id);
-        $shareUrl = url()->current();
+        $shareUrl = url()->full();
         $shareImageUrl = route('marketing.public.scent-personality-share.image', ['token' => $result->public_share_token, 'v' => $cardVersion]);
         $logoUrl = asset('brand/forestry-backstage-intro-tree.png');
         $typeLabel = 'Scent Personality Type: '.$headline;

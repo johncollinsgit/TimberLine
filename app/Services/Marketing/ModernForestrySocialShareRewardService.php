@@ -222,6 +222,7 @@ class ModernForestrySocialShareRewardService
         $url = route('marketing.public.scent-personality-share', [
             'token' => $token,
             'v' => (int) ($result->updated_at?->getTimestamp() ?: $result->id),
+            'card' => 'mf-scent-v2',
         ]);
 
         return [
