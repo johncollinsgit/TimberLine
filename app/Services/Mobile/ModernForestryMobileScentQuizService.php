@@ -114,8 +114,15 @@ class ModernForestryMobileScentQuizService
         return [
             'version' => (string) ($result->quiz_version ?: self::QUIZ_VERSION),
             'headline' => (string) ($result->headline ?: $this->headline($traits)),
-            'personalityTitle' => (string) ($result->personality_title ?: 'Scent personality'),
-            'personalityBody' => (string) ($result->personality_body ?: 'Your scent personality will update as you take the quiz again.'),
+            'personalityTitle' => $this->displayPersonalityTitle(
+                (string) ($result->headline ?: $this->headline($traits)),
+                (string) ($result->personality_title ?: 'Scent personality')
+            ),
+            'personalityBody' => $this->displayPersonalityBody(
+                (string) ($result->headline ?: $this->headline($traits)),
+                (string) ($result->personality_title ?: 'Scent personality'),
+                (string) ($result->personality_body ?: 'Your scent personality will update as you take the quiz again.')
+            ),
             'dominantTraits' => $traits,
             'axes' => array_map(function (array $axis) use ($scores): array {
                 return [
@@ -153,6 +160,30 @@ class ModernForestryMobileScentQuizService
             'answers' => is_array($evaluated['answers'] ?? null) ? array_values($evaluated['answers']) : [],
             'completedAt' => now()->toIso8601String(),
         ];
+    }
+
+    protected function displayPersonalityTitle(string $headline, string $title): string
+    {
+        $normalizedHeadline = Str::of($headline)->lower()->replace(' ', '')->toString();
+        $normalizedTitle = Str::of($title)->lower()->trim()->toString();
+
+        if ($normalizedHeadline === 'clean+citrus' && $normalizedTitle === 'the crisp editor') {
+            return 'The Florida Surfer';
+        }
+
+        return $title;
+    }
+
+    protected function displayPersonalityBody(string $headline, string $title, string $body): string
+    {
+        $normalizedHeadline = Str::of($headline)->lower()->replace(' ', '')->toString();
+        $normalizedTitle = Str::of($title)->lower()->trim()->toString();
+
+        if ($normalizedHeadline === 'clean+citrus' && $normalizedTitle === 'the crisp editor') {
+            return 'You like clarity, lightness, and a sense of easy momentum. Your scent profile suggests someone who appreciates fresh starts, polished spaces, open windows, and candles that make everything feel a little more sunlit and put together. The Citrus streak adds a bright, coastal lift.';
+        }
+
+        return $body;
     }
 
     /**
