@@ -2,6 +2,15 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Modern Forestry Mobile Checkout + Performance Rule (2026-06-29)
+
+- Mobile checkout is Shopify Storefront Cart API based when the storefront token is available. Do not regress it to a handcrafted permalink-only flow. The intended path is: validate bag lines against Laravel product detail, create Shopify cart, apply buyer identity, attach delivery address when available, and return Shopify `checkoutUrl`. Anonymous checkout remains supported.
+- Buyer identity phone is stricter in Shopify than local app formatting. Only send `buyerIdentity.phone` when it normalizes to E.164; omit non-normalizable values or signed-in checkout can fail with `Phone is invalid`.
+- Mobile sessions can be stale even when the phone thinks the user is signed in. Refresh/validate the session before depending on signed-in checkout, Candle Cash, or account-linked bag behavior.
+- `/api/mobile/v1/modern-forestry/home` is the slowest mobile endpoint on cold cache. It now serves a local shell first and defers full Shopify-backed refresh; continue moving the app toward stale-while-revalidate bootstrap so bag, product, and shop navigation do not feel blocked by Home.
+- `/api/mobile/v1/modern-forestry/products/{handle}` uses short server-side caching for repeat product detail access.
+- Production deploy warning: GitHub Actions can fail during `vite build` with exit code 137 under memory pressure. For backend-only PHP changes, a manual SSH deploy without rebuilding assets is acceptable, followed by `optimize:clear`, config/route/view cache rebuilds, `queue:restart`, and nginx/php-fpm reload when available. A failed asset build can leave the API feeling degraded or inconsistent until caches/processes are reset.
+
 ## Everbranch Readiness Operating Rule (2026-05-21)
 
 - Everbranch is the product/platform brand.

@@ -947,8 +947,8 @@ test('mobile rewards endpoint returns balance rewards history and can redeem nat
         ->assertJsonPath('data.redemption.status', 'issued')
         ->assertJsonPath('data.redemption.amountFormatted', '$10.00');
 
-    Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'codeDiscountNodeByCode'));
-    Http::assertSent(fn (Request $request): bool => str_contains((string) $request['query'], 'discountCodeBasicCreate'));
+    Http::assertSent(fn (Request $request): bool => str_contains((string) ($request->data()['query'] ?? ''), 'codeDiscountNodeByCode'));
+    Http::assertSent(fn (Request $request): bool => str_contains((string) ($request->data()['query'] ?? ''), 'discountCodeBasicCreate'));
 });
 
 test('mobile rewards redeem returns a clean failure when Shopify discount sync cannot finish', function (): void {
@@ -1585,8 +1585,9 @@ test('real mobile home always returns canonical seasonal collections with image 
     }
 });
 
-test('real mobile home featured products use actual purchase history before shopify fallback', function (): void {
+test('real mobile home returns a shell first and warms featured products from purchase history', function (): void {
     config()->set('mobile_catalog.fake_enabled', false);
+    $this->withoutDefer();
 
     $order = Order::factory()->create([
         'tenant_id' => 1,
@@ -1641,6 +1642,13 @@ test('real mobile home featured products use actual purchase history before shop
             return Http::response([], 404);
         },
     ]);
+
+    $coldPayload = $this->getJson('/api/mobile/v1/modern-forestry/home')
+        ->assertOk()
+        ->json();
+
+    expect($coldPayload['featuredCollections'])->toHaveCount(6);
+    expect($coldPayload['featuredProducts'])->toBe([]);
 
     $payload = $this->getJson('/api/mobile/v1/modern-forestry/home')
         ->assertOk()
@@ -3351,8 +3359,7 @@ function shopifyMobileCandleClubProductDetailPayload(): array
  */
 function shopifyStorefrontCartCreatePayload(
     string $checkoutUrl = 'https://modernforestry-test.myshopify.com/cart/c/test-checkout'
-): array
-{
+): array {
     return [
         'data' => [
             'cartCreate' => [
@@ -3381,8 +3388,7 @@ function shopifyStorefrontCartCheckoutUrlPayload(
     ?string $email = 'checkout@example.com',
     ?string $phone = '+15555550123',
     ?string $countryCode = 'US'
-): array
-{
+): array {
     return [
         'data' => [
             'cart' => [

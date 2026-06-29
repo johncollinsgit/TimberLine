@@ -42,7 +42,13 @@ class ModernForestryMobileProductCatalogService
 
     protected const PRODUCT_DETAIL_CACHE_SECONDS = 180;
 
-    protected const HOME_CACHE_SECONDS = 120;
+    protected const HOME_CACHE_FRESH_SECONDS = 120;
+
+    protected const HOME_CACHE_STALE_SECONDS = 1800;
+
+    protected const HOME_CACHE_REFRESH_LOCK_SECONDS = 90;
+
+    protected const FEATURED_PRODUCTS_CACHE_SECONDS = 300;
 
     protected const COLLECTION_PRODUCTS_CACHE_SECONDS = 180;
 
@@ -171,6 +177,18 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeProducts($limit);
         }
 
+        return $this->rememberCatalogPayload(
+            sprintf('featured-products:v1:%d', $limit),
+            self::FEATURED_PRODUCTS_CACHE_SECONDS,
+            fn (): array => $this->resolveFeaturedProducts($limit)
+        );
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function resolveFeaturedProducts(int $limit): array
+    {
         $products = $this->topPurchasedProducts($limit);
         $seen = array_fill_keys(array_map(
             static fn (array $product): string => (string) ($product['id'] ?? ''),
@@ -346,32 +364,164 @@ class ModernForestryMobileProductCatalogService
      */
     public function home(): array
     {
-        return $this->rememberCatalogPayload('home:v2', self::HOME_CACHE_SECONDS, function (): array {
-            $collections = $this->collections();
-            $content = $this->mobileAppContent();
+        if ($this->fakeCatalogEnabled()) {
+            return $this->buildHomePayload(
+                $this->collections(),
+                $this->mobileAppContent(),
+                $this->featuredProducts(6)
+            );
+        }
 
-            return [
-                'brand' => [
-                    'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
-                    'tagline' => 'Soy candles',
-                    'logoUrl' => null,
-                ],
-                'hero' => [
-                    'eyebrow' => $this->mobileContentValue($content, 'mobile_home_eyebrow', 'Modern Forestry'),
-                    'title' => $this->mobileContentValue($content, 'mobile_home_title', 'Hand-poured candles for a slower season.'),
-                    'subtitle' => $this->mobileContentValue($content, 'mobile_home_subtitle', 'Small-batch scents, seasonal favorites, and Candle Cash rewards.'),
-                    'logoUrl' => null,
-                    'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
-                    'tagline' => 'Soy candles',
-                    'slides' => ($content['__has_published_app_content'] ?? false)
-                        ? ($this->mobileContentHeroSlides($content) ?: $this->homeHeroSlides())
-                        : $this->homeHeroSlides(),
-                ],
-                'featuredCollections' => $collections,
-                'featuredProducts' => $this->featuredProducts(6),
-                'cards' => $this->homeCards(),
-            ];
-        });
+        return $this->cachedHomePayload();
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function cachedHomePayload(): array
+    {
+        $this->modernForestryTenant();
+
+        $key = $this->catalogCacheKey('home:v3');
+        $cached = Cache::get($key);
+
+        if ($this->isHomeCacheEntry($cached)) {
+            $cachedAt = (int) ($cached['cached_at'] ?? 0);
+
+            if ($cachedAt + self::HOME_CACHE_FRESH_SECONDS > now()->getTimestamp()) {
+                return $cached['payload'];
+            }
+
+            $this->deferHomeCacheRefresh($key);
+
+            return $cached['payload'];
+        }
+
+        $payload = $this->homeShellPayload();
+
+        Cache::put(
+            $key,
+            $this->homeCacheEntry($payload, now()->subSeconds(self::HOME_CACHE_FRESH_SECONDS)->getTimestamp()),
+            now()->addSeconds(self::HOME_CACHE_STALE_SECONDS)
+        );
+
+        $this->deferHomeCacheRefresh($key);
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function homeShellPayload(): array
+    {
+        $featuredProducts = Cache::get($this->catalogCacheKey('featured-products:v1:6'));
+
+        return $this->buildHomePayload(
+            $this->cachedCollectionsForHomeShell(),
+            $this->mobileAppContent(),
+            is_array($featuredProducts) ? $featuredProducts : []
+        );
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function refreshHomeCache(string $key): array
+    {
+        $payload = $this->buildHomePayload(
+            $this->collections(),
+            $this->mobileAppContent(),
+            $this->featuredProducts(6)
+        );
+
+        Cache::put(
+            $key,
+            $this->homeCacheEntry($payload),
+            now()->addSeconds(self::HOME_CACHE_STALE_SECONDS)
+        );
+
+        return $payload;
+    }
+
+    protected function deferHomeCacheRefresh(string $key): void
+    {
+        $lockKey = $key.':refreshing';
+
+        if (! Cache::add($lockKey, true, now()->addSeconds(self::HOME_CACHE_REFRESH_LOCK_SECONDS))) {
+            return;
+        }
+
+        defer(function () use ($key, $lockKey): void {
+            try {
+                $this->refreshHomeCache($key);
+            } catch (\Throwable) {
+                // Keep serving the last usable shell/payload when Shopify is slow or unavailable.
+            } finally {
+                Cache::forget($lockKey);
+            }
+        }, 'modern-forestry-mobile-home-refresh', true);
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function cachedCollectionsForHomeShell(): array
+    {
+        $collections = Cache::get($this->catalogCacheKey('collections:v1'));
+
+        return is_array($collections) ? $collections : $this->fallbackCollections();
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $collections
+     * @param  array<string,mixed>  $content
+     * @param  array<int,array<string,mixed>>  $featuredProducts
+     * @return array<string,mixed>
+     */
+    protected function buildHomePayload(array $collections, array $content, array $featuredProducts): array
+    {
+        return [
+            'brand' => [
+                'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
+                'tagline' => 'Soy candles',
+                'logoUrl' => null,
+            ],
+            'hero' => [
+                'eyebrow' => $this->mobileContentValue($content, 'mobile_home_eyebrow', 'Modern Forestry'),
+                'title' => $this->mobileContentValue($content, 'mobile_home_title', 'Hand-poured candles for a slower season.'),
+                'subtitle' => $this->mobileContentValue($content, 'mobile_home_subtitle', 'Small-batch scents, seasonal favorites, and Candle Cash rewards.'),
+                'logoUrl' => null,
+                'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
+                'tagline' => 'Soy candles',
+                'slides' => ($content['__has_published_app_content'] ?? false)
+                    ? ($this->mobileContentHeroSlides($content) ?: $this->homeHeroSlides())
+                    : $this->homeHeroSlides(),
+            ],
+            'featuredCollections' => $collections,
+            'featuredProducts' => $featuredProducts,
+            'cards' => $this->homeCards(),
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array{payload:array<string,mixed>,cached_at:int}
+     */
+    protected function homeCacheEntry(array $payload, ?int $cachedAt = null): array
+    {
+        return [
+            'payload' => $payload,
+            'cached_at' => $cachedAt ?? now()->getTimestamp(),
+        ];
+    }
+
+    protected function isHomeCacheEntry(mixed $value): bool
+    {
+        return is_array($value)
+            && isset($value['payload'], $value['cached_at'])
+            && is_array($value['payload'])
+            && is_numeric($value['cached_at']);
     }
 
     /**
@@ -906,6 +1056,14 @@ GRAPHQL;
      * @return array<int,array<string,mixed>>
      */
     protected function fakeCollections(): array
+    {
+        return $this->fallbackCollections();
+    }
+
+    /**
+     * @return array<int,array<string,mixed>>
+     */
+    protected function fallbackCollections(): array
     {
         return array_values(array_map(
             fn (array $definition): array => [
@@ -1636,10 +1794,15 @@ GRAPHQL;
     protected function rememberCatalogPayload(string $suffix, int $seconds, callable $resolver): mixed
     {
         return Cache::remember(
-            'modern_forestry_mobile_catalog:'.$suffix,
+            $this->catalogCacheKey($suffix),
             now()->addSeconds($seconds),
             $resolver
         );
+    }
+
+    protected function catalogCacheKey(string $suffix): string
+    {
+        return 'modern_forestry_mobile_catalog:'.$suffix;
     }
 
     /**

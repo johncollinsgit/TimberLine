@@ -1,5 +1,24 @@
 # Modern Forestry Backstage
 
+## Modern Forestry Mobile Checkout + Home Performance Notes (2026-06-29)
+
+- Mobile checkout uses Shopify Storefront Cart API when a storefront token is configured. The flow validates bag lines against Laravel product detail, creates a Shopify cart, applies buyer identity, attaches a delivery address when available, and returns Shopify `checkoutUrl`. Anonymous checkout is supported as the fallback path.
+- Shopify checkout phone handling: mobile checkout only forwards customer phone to Shopify buyer identity when the value can be normalized to E.164. This avoids Shopify rejecting otherwise valid signed-in carts with `Phone is invalid`.
+- Mobile sessions can look locally signed in while backend/customer tokens are stale. The app should refresh or validate the mobile session before relying on signed-in checkout, Candle Cash, or account-linked bag behavior.
+- Performance note: the mobile Home endpoint is currently the heaviest Modern Forestry payload on cold cache. `/api/mobile/v1/modern-forestry/home` now returns a local shell immediately on a true cold cache and refreshes the full Shopify-backed payload after the response. Product detail responses at `/api/mobile/v1/modern-forestry/products/{handle}` are cached server-side for repeat access.
+- Known remaining issue: Home cold-load performance is still not acceptable for production UX until the iOS bootstrap fully treats Home as stale-while-revalidate and keeps bag/product/shop navigation from feeling blocked by Home payload timing.
+- Deploy note: if production GitHub Actions fails during `vite build` with exit code 137, backend-only PHP changes may be deployed safely over SSH without rebuilding assets, provided no frontend bundle changes are required. A failed asset build can leave the API feeling degraded or inconsistent until caches and PHP processes are reset.
+- Backend-only production recovery process:
+  - fetch/checkout latest `main`
+  - `composer install --no-dev --prefer-dist --optimize-autoloader`
+  - `php artisan migrate --force`
+  - `php artisan optimize:clear`
+  - `php artisan config:cache`
+  - `php artisan route:cache`
+  - `php artisan view:cache`
+  - `php artisan queue:restart`
+  - reload nginx/php-fpm if available
+
 ## Modern Forestry Variant Media + Mobile Detail Notes (2026-06-23)
 
 - Shopify install/reinstall scopes for the retail store now include `write_products`, and the canonical reinstall route is `https://app.theeverbranch.com/shopify/reinstall/retail`.

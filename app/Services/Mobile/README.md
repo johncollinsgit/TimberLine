@@ -1,5 +1,16 @@
 # Mobile Catalog Services
 
+## Mobile Checkout + Home Bootstrap Performance (2026-06-29)
+
+- Modern Forestry mobile checkout uses Shopify Storefront Cart API when the storefront access token is configured. The checkout service validates bag lines against Laravel product detail, creates a Shopify cart, applies buyer identity, attaches delivery address data when available, and returns Shopify `checkoutUrl`.
+- Anonymous checkout is supported. Signed-in checkout should be treated as an enhancement that depends on a fresh backend/customer session.
+- Shopify buyer identity phone handling is intentionally strict: only send customer phone when it can be normalized to E.164. Invalid or non-normalizable local phone values must be omitted so Shopify does not reject the cart with `Phone is invalid`.
+- The app may appear signed in while backend/customer tokens are stale. Validate or refresh the mobile session before signed-in checkout, Candle Cash, or account-linked bag behavior.
+- Home remains the heaviest mobile endpoint on cold cache. The service now returns a local Home shell immediately on a true cold cache, keeps stale Home payloads usable, and defers the full Shopify-backed refresh after the response.
+- Product detail payloads are short-cached per handle for repeat access. Product detail still depends on Shopify Admin GraphQL for cold or expired cache lookups.
+- Known next work: make the iOS bootstrap fully tolerate stale-while-revalidate Home behavior so bag, product, and shop screens do not feel blocked by Home timing.
+- Deploy caution: GitHub Actions production deploy can fail during `vite build` with exit code 137 under memory pressure. Backend-only PHP fixes may be recovered with an SSH deploy that checks out latest `main`, runs Composer, migrations, `optimize:clear`, config/route/view cache rebuilds, `queue:restart`, and nginx/php-fpm reload when available. A failed asset build can leave the API feeling degraded or inconsistent until caches/processes are reset.
+
 ## Seasonal Cache + Mobile Shop Responsiveness (2026-06-26)
 
 - `ModernForestryMobileProductCatalogService.php` now short-caches the most expensive seasonal catalog payloads:
