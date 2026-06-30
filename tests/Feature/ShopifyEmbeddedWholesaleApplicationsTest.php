@@ -227,7 +227,63 @@ test('shopify embedded wholesale app can approve through a mapped shopify admin 
     expect($actor->email)->toBe('ops-review@example.com');
 });
 
-test('shopify embedded wholesale app blocks approval when no matching operator exists', function (): void {
+test('shopify embedded wholesale app auto provisions the current shopify admin as a wholesale operator for approval', function (): void {
+    Notification::fake();
+    Http::fake(function (HttpRequest $request) {
+        $payload = json_decode($request->body(), true);
+        $query = (string) data_get($payload, 'query', '');
+
+        if (str_contains($query, 'FindWholesaleCustomerByEmail')) {
+            return Http::response([
+                'data' => [
+                    'customers' => [
+                        'edges' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'UpsertWholesaleCustomer')) {
+            return Http::response([
+                'data' => [
+                    'customerSet' => [
+                        'customer' => [
+                            'id' => 'gid://shopify/Customer/901',
+                            'legacyResourceId' => '901',
+                            'email' => 'blocked@example.com',
+                            'firstName' => 'Blocked',
+                            'lastName' => 'Example',
+                            'phone' => null,
+                            'tags' => [],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        if (str_contains($query, 'AddWholesaleCustomerTag')) {
+            return Http::response([
+                'data' => [
+                    'tagsAdd' => [
+                        'node' => [
+                            'id' => 'gid://shopify/Customer/901',
+                            'legacyResourceId' => '901',
+                            'email' => 'blocked@example.com',
+                            'firstName' => 'Blocked',
+                            'lastName' => 'Example',
+                            'phone' => null,
+                            'tags' => ['wholesale'],
+                        ],
+                        'userErrors' => [],
+                    ],
+                ],
+            ], 200);
+        }
+
+        throw new RuntimeException('Unexpected Shopify request during embedded wholesale operator auto-provision test.');
+    });
+
     $accessRequest = seedEmbeddedWholesaleApplication('blocked@example.com');
 
     $response = $this->withHeaders([
@@ -242,10 +298,18 @@ test('shopify embedded wholesale app blocks approval when no matching operator e
         'decision_note' => 'Looks good.',
     ]);
 
-    $response->assertStatus(403)
-        ->assertJsonPath('ok', false)
-        ->assertJsonPath('message', 'Approval actions require a backstage operator account that matches your Shopify admin email.');
+    $response->assertOk()
+        ->assertJsonPath('ok', true);
 
     $accessRequest->refresh();
-    expect((string) $accessRequest->status)->toBe('pending');
+    $actor = User::query()->where('email', 'missing-operator@example.com')->first();
+
+    $applicant = User::query()->where('email', 'blocked@example.com')->firstOrFail();
+
+    expect($actor)->not->toBeNull()
+        ->and((string) $actor->role)->toBe('admin')
+        ->and((bool) $actor->is_active)->toBeTrue()
+        ->and((string) $accessRequest->status)->toBe('approved');
+
+    Notification::assertSentToTimes($applicant, ApprovalPasswordSetupNotification::class, 1);
 });

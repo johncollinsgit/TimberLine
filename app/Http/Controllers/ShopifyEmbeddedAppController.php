@@ -816,9 +816,53 @@ class ShopifyEmbeddedAppController extends Controller
             return null;
         }
 
-        return User::query()
+        $existing = User::query()
             ->whereRaw('LOWER(email) = ?', [$email])
             ->first();
+
+        if ($existing instanceof User) {
+            $tenant = $this->wholesaleTenant();
+            if ($tenant instanceof Tenant) {
+                $existing->tenants()->syncWithoutDetaching([
+                    (int) $tenant->id => ['role' => 'admin'],
+                ]);
+            }
+
+            if (! $existing->isAdmin() || ! (bool) $existing->is_active) {
+                $existing->forceFill([
+                    'role' => 'admin',
+                    'is_active' => true,
+                ])->save();
+            }
+
+            return $existing;
+        }
+
+        $tenant = $this->wholesaleTenant();
+        $name = trim((string) preg_replace('/[@._-]+/', ' ', strstr($email, '@', true) ?: $email));
+        $name = $name !== '' ? \Illuminate\Support\Str::title($name) : 'Wholesale Operator';
+
+        $created = User::query()->create([
+            'name' => $name,
+            'email' => $email,
+            'password' => \Illuminate\Support\Str::random(40),
+            'role' => 'admin',
+            'is_active' => true,
+            'requested_via' => 'shopify_embedded_wholesale',
+        ]);
+
+        $created->forceFill([
+            'email_verified_at' => now(),
+            'approved_at' => now(),
+        ])->save();
+
+        if ($tenant instanceof Tenant) {
+            $created->tenants()->syncWithoutDetaching([
+                (int) $tenant->id => ['role' => 'admin'],
+            ]);
+        }
+
+        return $created;
     }
 
     protected function canManageWholesaleApprovals(?User $user): bool
