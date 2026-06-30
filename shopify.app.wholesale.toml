@@ -2,7 +2,7 @@
 
 client_id = "1ec941453c4df97bb2402f696839b786"
 name = "MF Wholesale Backstage"
-application_url = "https://app.theeverbranch.com/shopify/app?store_key=wholesale"
+application_url = "https://app.theeverbranch.com/shopify/app/wholesale"
 embedded = true
 handle = "mf-wholesale-backstage"
 

@@ -50,22 +50,22 @@
     <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
     <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    @if($authorized && filled($shopifyApiKey))
+    @if(filled($shopifyApiKey))
         <meta name="shopify-api-key" content="{{ $shopifyApiKey }}">
     @endif
-    @if($authorized && filled($shopDomain))
+    @if(filled($shopDomain))
         <meta name="shopify-shop-domain" content="{{ $shopDomain }}">
     @endif
-    @if($authorized && filled($host))
+    @if(filled($host))
         <meta name="shopify-host" content="{{ $host }}">
     @endif
 
-    @if($authorized && filled($shopifyApiKey) && filled($host))
+    @if(filled($shopifyApiKey))
         <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
     @endif
 </head>
 <body>
-    @if($authorized && filled($shopifyApiKey) && filled($host))
+    @if(filled($shopifyApiKey))
         <s-app-nav>
             @foreach($navItems as $item)
                 @php

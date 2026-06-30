@@ -50,6 +50,48 @@ class ShopifyEmbeddedAppController extends Controller
         try {
             $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
             $fallbackRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label(null, 'rewards_label', 'Rewards'));
+            $hintedStore = $this->hintedBootstrapStore($request, $context);
+
+            if ($hintedStore !== null) {
+                $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
+                $dashboardConfig = $wantsFullDashboard
+                    ? $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload())
+                    : [];
+
+                $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+                    response()->view($view, [
+                        'authorized' => true,
+                        'status' => 'bootstrap_pending',
+                        'shopifyApiKey' => (string) ($hintedStore['client_id'] ?? ''),
+                        'shopDomain' => (string) ($hintedStore['shop'] ?? ''),
+                        'host' => (string) ($request->query('host') ?? ''),
+                        'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'store')).' Store',
+                        'headline' => 'Dashboard',
+                        'subheadline' => $wantsFullDashboard
+                            ? 'Revenue and setup at a glance.'
+                            : 'Fast loyalty snapshot for recent program activity.',
+                        'appNavigation' => $this->fallbackEmbeddedNavigation(),
+                        'pageActions' => [],
+                        'pageSubnav' => [],
+                        'dashboardBootstrap' => [
+                            'authorized' => true,
+                            'status' => 'bootstrap_pending',
+                            'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'store')).' Store',
+                            'links' => [],
+                            'dataEndpoint' => route('shopify.app.api.dashboard'),
+                            'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
+                            'initialData' => null,
+                            'config' => $dashboardConfig,
+                        ],
+                        'merchantJourney' => null,
+                    ])
+                ));
+
+                return $probe->addContext([
+                    'authorized' => true,
+                    'status' => 'bootstrap_pending',
+                ])->finish($response);
+            }
 
             if (($context['status'] ?? '') === 'open_from_shopify') {
                 $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
@@ -85,46 +127,6 @@ class ShopifyEmbeddedAppController extends Controller
                 return $probe->addContext([
                     'authorized' => false,
                     'status' => 'open_from_shopify',
-                ])->finish($response);
-            }
-
-            $hintedStore = $this->hintedBootstrapStore($request, $context);
-            if ($hintedStore !== null) {
-                $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
-                $dashboardConfig = $wantsFullDashboard
-                    ? $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload())
-                    : [];
-
-                $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
-                    response()->view($view, [
-                        'authorized' => true,
-                        'status' => 'bootstrap_pending',
-                        'shopifyApiKey' => (string) ($hintedStore['client_id'] ?? ''),
-                        'shopDomain' => (string) ($hintedStore['shop'] ?? ''),
-                        'host' => (string) ($request->query('host') ?? ''),
-                        'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'store')).' Store',
-                        'headline' => 'Dashboard',
-                        'subheadline' => 'Revenue and setup at a glance.',
-                        'appNavigation' => $this->fallbackEmbeddedNavigation(),
-                        'pageActions' => [],
-                        'pageSubnav' => [],
-                        'dashboardBootstrap' => [
-                            'authorized' => true,
-                            'status' => 'bootstrap_pending',
-                            'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'store')).' Store',
-                            'links' => [],
-                            'dataEndpoint' => route('shopify.app.api.dashboard'),
-                            'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
-                            'initialData' => null,
-                            'config' => $dashboardConfig,
-                        ],
-                        'merchantJourney' => null,
-                    ])
-                ));
-
-                return $probe->addContext([
-                    'authorized' => true,
-                    'status' => 'bootstrap_pending',
                 ])->finish($response);
             }
 
@@ -416,12 +418,7 @@ class ShopifyEmbeddedAppController extends Controller
     protected function hintedBootstrapStore(Request $request, ?array $context = null): ?array
     {
         $status = strtolower(trim((string) data_get($context, 'status', '')));
-        if (! in_array($status, ['missing_shop', 'unknown_shop', 'invalid_hmac'], true)) {
-            return null;
-        }
-
-        $host = trim((string) $request->query('host', ''));
-        if ($host === '') {
+        if (! in_array($status, ['open_from_shopify', 'missing_shop', 'unknown_shop', 'invalid_hmac'], true)) {
             return null;
         }
 
@@ -443,6 +440,26 @@ class ShopifyEmbeddedAppController extends Controller
         }
 
         return $store;
+    }
+
+    public function showWholesale(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantDisplayLabelResolver $displayLabelResolver,
+        TenantCommercialExperienceService $experienceService,
+        ModernForestryAlphaBootstrapService $alphaBootstrapService
+    ): Response {
+        $request->query->set('store_key', strtolower(trim((string) $request->query('store_key', ''))) ?: 'wholesale');
+
+        return $this->show(
+            $request,
+            $contextService,
+            $tenantResolver,
+            $displayLabelResolver,
+            $experienceService,
+            $alphaBootstrapService
+        );
     }
 
     /**

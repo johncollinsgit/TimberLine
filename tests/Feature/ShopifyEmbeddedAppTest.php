@@ -84,6 +84,20 @@ test('shopify embedded app route bootstraps wholesale shell from hinted store ke
         ->assertSee('data-dashboard-lite', false);
 });
 
+test('shopify embedded wholesale entry route bootstraps the wholesale shell without signed query params', function () {
+    configureEmbeddedWholesaleStore();
+
+    $response = $this->get(route('shopify.app.wholesale'));
+
+    $response->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertSee('data-dashboard-lite', false)
+        ->assertSee('name="shopify-api-key"', false)
+        ->assertSee('shopifycloud/app-bridge.js', false)
+        ->assertDontSeeText('Open this app from Shopify Admin to load store data.');
+});
+
 test('shopify embedded app route can load the full analytics dashboard from the stored session page context', function () {
     configureEmbeddedRetailStore();
 
