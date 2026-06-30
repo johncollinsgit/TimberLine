@@ -197,6 +197,30 @@ class ModernForestryMobileAccountService
             tenantId: $tenantId
         );
 
+        if (! (bool) ($result['ok'] ?? false) && (string) ($result['state'] ?? '') === 'redemption_blocked') {
+            $existingRedemption = $this->latestReusableIssuedRedemption($profile);
+
+            if ($existingRedemption instanceof CandleCashRedemption) {
+                $syncFailure = $this->rewardSyncFailurePayload(
+                    $profile,
+                    $existingRedemption,
+                    'already_has_active_code'
+                );
+
+                if ($syncFailure !== null) {
+                    return $syncFailure;
+                }
+
+                return [
+                    'ok' => true,
+                    'state' => 'already_has_active_code',
+                    'message' => $this->redemptionMessage('already_has_active_code'),
+                    'redemption' => $this->redemptionPayload($existingRedemption, $tenantId, true),
+                    'balance' => $this->candleCashService->balancePayloadFromPoints($this->candleCashService->currentBalance($profile)),
+                ];
+            }
+        }
+
         $redemption = isset($result['redemption_id']) && (int) $result['redemption_id'] > 0
             ? CandleCashRedemption::query()->with('reward')->find((int) $result['redemption_id'])
             : null;
@@ -220,6 +244,22 @@ class ModernForestryMobileAccountService
             'redemption' => $redemption instanceof CandleCashRedemption ? $this->redemptionPayload($redemption, $tenantId, true) : null,
             'balance' => $this->candleCashService->balancePayloadFromPoints($result['balance'] ?? $this->candleCashService->currentBalance($profile)),
         ];
+    }
+
+    protected function latestReusableIssuedRedemption(MarketingProfile $profile): ?CandleCashRedemption
+    {
+        return CandleCashRedemption::query()
+            ->with('reward')
+            ->where('marketing_profile_id', $profile->id)
+            ->where('status', 'issued')
+            ->whereNotNull('redemption_code')
+            ->where('redemption_code', '!=', '')
+            ->where(function ($query): void {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->orderByDesc('issued_at')
+            ->orderByDesc('id')
+            ->first();
     }
 
     /**
