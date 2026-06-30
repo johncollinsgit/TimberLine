@@ -90,12 +90,11 @@ test('shopify embedded wholesale entry route bootstraps the wholesale shell with
     $response = $this->get(route('shopify.app.wholesale'));
 
     $response->assertOk()
-        ->assertSeeText('Dashboard')
-        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
-        ->assertSee('data-dashboard-lite', false)
+        ->assertSeeText('Wholesale Applications')
+        ->assertSeeText('Review applications in one place')
         ->assertSee('name="shopify-api-key"', false)
         ->assertSee('shopifycloud/app-bridge.js', false)
-        ->assertDontSeeText('Open this app from Shopify Admin to load store data.');
+        ->assertDontSeeText('Fast loyalty snapshot for recent program activity.');
 });
 
 test('shopify embedded app route can load the full analytics dashboard from the stored session page context', function () {

@@ -6,6 +6,7 @@ use App\Models\CustomerAccessRequest;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Onboarding\CustomerAccessApprovalService;
+use App\Support\Wholesale\WholesaleApplicationInboxUrl;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -66,6 +67,7 @@ class WholesaleApplicationInboxController extends Controller
             'summary' => $summary,
             'tenant' => $tenant,
             'tenantSlug' => $tenantSlug,
+            'inboxUrl' => app(WholesaleApplicationInboxUrl::class)->inboxUrl($tenantSlug),
         ]);
     }
 
@@ -83,6 +85,8 @@ class WholesaleApplicationInboxController extends Controller
             'accessRequest' => $accessRequest,
             'detailRows' => $this->detailRows($accessRequest),
             'canManageApproval' => $this->canManageApproval(Auth::user()),
+            'inboxUrl' => app(WholesaleApplicationInboxUrl::class)->inboxUrl($this->wholesaleTenantSlug()),
+            'applicationUrl' => app(WholesaleApplicationInboxUrl::class)->detailUrl($accessRequest),
         ]);
     }
 

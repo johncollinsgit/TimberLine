@@ -3,7 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\CustomerAccessRequest;
-use App\Support\Tenancy\TenantHostBuilder;
+use App\Support\Wholesale\WholesaleApplicationInboxUrl;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -23,13 +23,7 @@ class WholesaleApplicationReviewNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $reviewPath = route('admin.wholesale.applications.show', $this->request, false);
-        $reviewHost = filled($this->request->requested_tenant_slug)
-            ? app(TenantHostBuilder::class)->hostForSlug((string) $this->request->requested_tenant_slug)
-            : null;
-        $reviewUrl = $reviewHost
-            ? (app(TenantHostBuilder::class)->urlForHostPath($reviewHost, $reviewPath) ?? route('admin.wholesale.applications.show', $this->request))
-            : route('admin.wholesale.applications.show', $this->request);
+        $reviewUrl = app(WholesaleApplicationInboxUrl::class)->detailUrl($this->request);
         $metadata = (array) ($this->request->metadata ?? []);
         $storeType = trim((string) ($metadata['business_type'] ?? ''));
         $website = trim((string) ($metadata['website'] ?? ''));

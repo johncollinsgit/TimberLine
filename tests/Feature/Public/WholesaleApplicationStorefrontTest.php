@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\TenantForm;
 use App\Models\User;
 use App\Notifications\WholesaleApplicationReviewNotification;
+use App\Support\Wholesale\WholesaleApplicationInboxUrl;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -148,7 +149,7 @@ test('storefront wholesale application stores the applicant and notifies the rev
         \Illuminate\Notifications\AnonymousNotifiable $notifiable
     ) use ($requestRecord): bool {
         $mailMessage = $notification->toMail($notifiable);
-        $expectedUrl = 'https://modern-forestry-wholesale.theeverbranch.com/admin/wholesale/applications/'.$requestRecord->id;
+        $expectedUrl = app(WholesaleApplicationInboxUrl::class)->detailUrl($requestRecord);
 
         expect($channels)->toContain('mail')
             ->and($notifiable->routes['mail'] ?? null)->toBe('modernforestryteam@gmail.com')
@@ -161,11 +162,7 @@ test('storefront wholesale application stores the applicant and notifies the rev
     expect($requests)->toHaveCount(2);
 });
 
-test('storefront wholesale notification uses mapped branded host when configured', function (): void {
-    config()->set('tenancy.auth.host_map', [
-        'admin.modernforestrywholesale.com' => 'modern-forestry-wholesale',
-    ]);
-
+test('storefront wholesale notification points to the embedded wholesale review app', function (): void {
     $requestRecord = CustomerAccessRequest::query()->create([
         'intent' => 'production',
         'status' => 'pending',
@@ -179,5 +176,5 @@ test('storefront wholesale notification uses mapped branded host when configured
     $mailMessage = $notification->toMail(new \Illuminate\Notifications\AnonymousNotifiable());
 
     expect((string) $mailMessage->actionUrl)
-        ->toBe('https://admin.modernforestrywholesale.com/admin/wholesale/applications/'.$requestRecord->id);
+        ->toBe(app(WholesaleApplicationInboxUrl::class)->detailUrl($requestRecord));
 });

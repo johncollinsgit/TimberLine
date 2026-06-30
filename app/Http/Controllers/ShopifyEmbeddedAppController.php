@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CustomerAccessRequest;
+use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Marketing\CandleCashEarnedReminderService;
+use App\Services\Onboarding\CustomerAccessApprovalService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardConfig;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\DashboardLite\ShopifyEmbeddedDashboardLiteDataService;
@@ -17,7 +21,9 @@ use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Services\Tenancy\TenantResolver;
+use DomainException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -445,21 +451,513 @@ class ShopifyEmbeddedAppController extends Controller
     public function showWholesale(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        TenantResolver $tenantResolver,
-        TenantDisplayLabelResolver $displayLabelResolver,
-        TenantCommercialExperienceService $experienceService,
-        ModernForestryAlphaBootstrapService $alphaBootstrapService
+        TenantResolver $tenantResolver
     ): Response {
+        $probe = $this->embeddedProbe($request);
+        $resolved = $probe->time('context', fn (): array => $this->resolveWholesaleWorkspaceContext($request, $contextService));
+        $tenant = $this->wholesaleTenant();
+        $tenantId = $tenant?->id ?? $tenantResolver->resolveTenantIdForStoreContext((array) ($resolved['store'] ?? []));
+        $probe->forTenant($tenantId);
+
+        $search = trim((string) $request->query('search', ''));
+        $status = strtolower(trim((string) $request->query('status', 'pending')));
+        $applications = $this->wholesaleApplications($search, $status, $tenant);
+        $summary = [
+            'pending' => $this->countWholesaleApplicationsByStatus('pending', $tenant),
+            'approved' => $this->countWholesaleApplicationsByStatus('approved', $tenant),
+            'rejected' => $this->countWholesaleApplicationsByStatus('rejected', $tenant),
+        ];
+        $actor = $this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null);
+        $canManageApproval = $this->canManageWholesaleApprovals($actor);
+
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+            response()->view('shopify.wholesale-applications-index', [
+                'authorized' => (bool) ($resolved['authorized'] ?? false),
+                'status' => (string) ($resolved['status'] ?? 'invalid_request'),
+                'shopifyApiKey' => $resolved['shopifyApiKey'] ?? null,
+                'shopDomain' => $resolved['shopDomain'] ?? null,
+                'host' => $resolved['host'] ?? null,
+                'storeLabel' => $resolved['storeLabel'] ?? 'Wholesale Store',
+                'headline' => $this->headlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Wholesale Applications'),
+                'subheadline' => $this->subheadlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Review, approve, and track Modern Forestry Wholesale applications in one place.'),
+                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'pageActions' => [],
+                'pageSubnav' => [],
+                'applications' => $applications,
+                'summary' => $summary,
+                'search' => $search,
+                'statusFilter' => $status,
+                'tenant' => $tenant,
+                'tenantSlug' => $this->wholesaleTenantSlug(),
+                'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
+                'actor' => $actor,
+                'canManageApproval' => $canManageApproval,
+            ]),
+            (int) ($resolved['httpStatus'] ?? 200)
+        ));
+
+        return $probe->addContext([
+            'authorized' => (bool) ($resolved['authorized'] ?? false),
+            'status' => (string) ($resolved['status'] ?? 'invalid_request'),
+        ])->finish($response);
+    }
+
+    public function showWholesaleApplication(
+        Request $request,
+        CustomerAccessRequest $accessRequest,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response {
+        $probe = $this->embeddedProbe($request);
+        $resolved = $probe->time('context', fn (): array => $this->resolveWholesaleWorkspaceContext($request, $contextService));
+        $this->assertWholesaleApplication($accessRequest);
+
+        $accessRequest->load([
+            'formSubmission.form.template',
+            'user:id,name,email,is_active,approved_at',
+            'tenant:id,name,slug',
+        ]);
+
+        $tenant = $this->wholesaleTenant();
+        $tenantId = $tenant?->id ?? $tenantResolver->resolveTenantIdForStoreContext((array) ($resolved['store'] ?? []));
+        $probe->forTenant($tenantId);
+
+        $actor = $this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null);
+        $canManageApproval = $this->canManageWholesaleApprovals($actor);
+
+        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+            response()->view('shopify.wholesale-applications-show', [
+                'authorized' => (bool) ($resolved['authorized'] ?? false),
+                'status' => (string) ($resolved['status'] ?? 'invalid_request'),
+                'shopifyApiKey' => $resolved['shopifyApiKey'] ?? null,
+                'shopDomain' => $resolved['shopDomain'] ?? null,
+                'host' => $resolved['host'] ?? null,
+                'storeLabel' => $resolved['storeLabel'] ?? 'Wholesale Store',
+                'headline' => $this->headlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Wholesale Application Review'),
+                'subheadline' => $this->subheadlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Review this application and approve or reject it without leaving Shopify Admin.'),
+                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'pageActions' => [],
+                'pageSubnav' => [],
+                'accessRequest' => $accessRequest,
+                'detailRows' => $this->wholesaleApplicationDetailRows($accessRequest),
+                'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
+                'actor' => $actor,
+                'canManageApproval' => $canManageApproval,
+            ]),
+            (int) ($resolved['httpStatus'] ?? 200)
+        ));
+
+        return $probe->addContext([
+            'authorized' => (bool) ($resolved['authorized'] ?? false),
+            'status' => (string) ($resolved['status'] ?? 'invalid_request'),
+        ])->finish($response);
+    }
+
+    public function approveWholesaleApplication(
+        Request $request,
+        CustomerAccessRequest $accessRequest,
+        ShopifyEmbeddedAppContext $contextService,
+        CustomerAccessApprovalService $approvalService
+    ): RedirectResponse|JsonResponse {
+        return $this->handleWholesaleApplicationDecision(
+            $request,
+            $accessRequest,
+            $contextService,
+            fn (int $actorUserId, ?string $note) => $approvalService->approve((int) $accessRequest->id, $actorUserId, $note),
+            'decision_note',
+            'Wholesale application approved and activation email sent.'
+        );
+    }
+
+    public function rejectWholesaleApplication(
+        Request $request,
+        CustomerAccessRequest $accessRequest,
+        ShopifyEmbeddedAppContext $contextService,
+        CustomerAccessApprovalService $approvalService
+    ): RedirectResponse|JsonResponse {
+        return $this->handleWholesaleApplicationDecision(
+            $request,
+            $accessRequest,
+            $contextService,
+            fn (int $actorUserId, ?string $note) => $approvalService->reject((int) $accessRequest->id, $actorUserId, $note),
+            'rejection_note',
+            'Wholesale application rejected.'
+        );
+    }
+
+    public function resendWholesaleApplicationActivation(
+        Request $request,
+        CustomerAccessRequest $accessRequest,
+        ShopifyEmbeddedAppContext $contextService,
+        CustomerAccessApprovalService $approvalService
+    ): RedirectResponse|JsonResponse {
+        return $this->handleWholesaleApplicationDecision(
+            $request,
+            $accessRequest,
+            $contextService,
+            fn (int $actorUserId, ?string $note) => $approvalService->resendActivation((int) $accessRequest->id, $actorUserId, $note),
+            'decision_note',
+            'Activation email resend processed.'
+        );
+    }
+
+    /**
+     * @return array{
+     *   authorized:bool,
+     *   status:string,
+     *   httpStatus:int,
+     *   store?:array<string,mixed>,
+     *   shopifyApiKey:?string,
+     *   shopDomain:?string,
+     *   host:?string,
+     *   storeLabel:string,
+     *   context?:array<string,mixed>
+     * }
+     */
+    protected function resolveWholesaleWorkspaceContext(Request $request, ShopifyEmbeddedAppContext $contextService): array
+    {
         $request->query->set('store_key', strtolower(trim((string) $request->query('store_key', ''))) ?: 'wholesale');
 
-        return $this->show(
+        $context = $contextService->resolvePageContext($request);
+
+        if (($context['ok'] ?? false) === true) {
+            $store = (array) ($context['store'] ?? []);
+
+            return [
+                'authorized' => true,
+                'status' => (string) ($context['status'] ?? 'ok'),
+                'httpStatus' => 200,
+                'store' => $store,
+                'shopifyApiKey' => (string) ($store['client_id'] ?? ''),
+                'shopDomain' => (string) ($context['shop_domain'] ?? ($store['shop'] ?? '')),
+                'host' => (string) ($context['host'] ?? ''),
+                'storeLabel' => ucfirst((string) ($store['key'] ?? 'wholesale')).' Store',
+                'context' => $context,
+            ];
+        }
+
+        $hintedStore = ShopifyStores::find('wholesale', true);
+        if (is_array($hintedStore)) {
+            $bootstrapContext = [
+                'store' => $hintedStore,
+                'shop_domain' => (string) ($hintedStore['shop'] ?? ''),
+                'host' => (string) ($context['host'] ?? $request->query('host', '')),
+            ];
+            $contextService->rememberPageContext($request, $bootstrapContext);
+
+            return [
+                'authorized' => true,
+                'status' => 'bootstrap_pending',
+                'httpStatus' => 200,
+                'store' => $hintedStore,
+                'shopifyApiKey' => (string) ($hintedStore['client_id'] ?? ''),
+                'shopDomain' => (string) ($hintedStore['shop'] ?? ''),
+                'host' => (string) ($bootstrapContext['host'] ?? ''),
+                'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'wholesale')).' Store',
+                'context' => array_merge($bootstrapContext, [
+                    'ok' => true,
+                    'status' => 'ok',
+                    'signed_query' => [],
+                ]),
+            ];
+        }
+
+        return [
+            'authorized' => false,
+            'status' => (string) ($context['status'] ?? 'invalid_request'),
+            'httpStatus' => (string) ($context['status'] ?? '') === 'open_from_shopify' ? 200 : 401,
+            'shopifyApiKey' => null,
+            'shopDomain' => $context['shop_domain'] ?? null,
+            'host' => $context['host'] ?? null,
+            'storeLabel' => 'Wholesale Store',
+        ];
+    }
+
+    protected function handleWholesaleApplicationDecision(
+        Request $request,
+        CustomerAccessRequest $accessRequest,
+        ShopifyEmbeddedAppContext $contextService,
+        callable $decision,
+        string $noteField,
+        string $successMessage
+    ): RedirectResponse|JsonResponse {
+        $context = $contextService->resolveMutationContext($request);
+        if (! (bool) ($context['ok'] ?? false)) {
+            $message = (string) data_get($this->invalidContextResponse($context)->getData(true), 'message', 'This embedded Shopify request could not be verified.');
+            $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'redirect_url' => $redirectUrl,
+                ], 401);
+            }
+
+            return redirect()->to($redirectUrl)->with('error', $message);
+        }
+
+        $this->assertWholesaleApplication($accessRequest);
+
+        $actor = $this->resolveWholesaleWorkspaceActor($context);
+        if (! $actor instanceof User) {
+            $message = 'Approval actions require a backstage operator account that matches your Shopify admin email.';
+            $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id], (string) ($context['host'] ?? null));
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'redirect_url' => $redirectUrl,
+                ], 403);
+            }
+
+            return redirect()->to($redirectUrl)->with('error', $message);
+        }
+
+        if (! $this->canManageWholesaleApprovals($actor)) {
+            $message = 'Your account can review applications here, but approval actions are reserved for wholesale operators.';
+            $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id], (string) ($context['host'] ?? null));
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'redirect_url' => $redirectUrl,
+                ], 403);
+            }
+
+            return redirect()->to($redirectUrl)->with('error', $message);
+        }
+
+        $validated = $request->validate([
+            $noteField => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $decision((int) $actor->id, $validated[$noteField] ?? null);
+            $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id], (string) ($context['host'] ?? null));
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => true,
+                    'message' => $successMessage,
+                    'redirect_url' => $redirectUrl,
+                ]);
+            }
+
+            return redirect()->to($redirectUrl)->with('status', $successMessage);
+        } catch (DomainException $e) {
+            $message = (string) $e->getMessage();
+            $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id], (string) ($context['host'] ?? null));
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'redirect_url' => $redirectUrl,
+                ], 422);
+            }
+
+            return redirect()->to($redirectUrl)->with('error', $message);
+        } catch (Throwable $e) {
+            report($e);
+            $message = 'This action failed. Please reload the application and try again.';
+            $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id], (string) ($context['host'] ?? null));
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'redirect_url' => $redirectUrl,
+                ], 500);
+            }
+
+            return redirect()->to($redirectUrl)->with('error', $message);
+        }
+    }
+
+    protected function wholesaleEmbeddedRoute(
+        Request $request,
+        string $routeName,
+        array $parameters = [],
+        ?string $hostOverride = null
+    ): string {
+        return $this->urlGenerator->redirectToRoute(
+            $routeName,
+            array_merge($parameters, ['store_key' => 'wholesale']),
             $request,
-            $contextService,
-            $tenantResolver,
-            $displayLabelResolver,
-            $experienceService,
-            $alphaBootstrapService
+            $hostOverride
         );
+    }
+
+    protected function wholesaleTenantSlug(): string
+    {
+        return (string) config(
+            'product_surfaces.access_request.wholesale_storefront_tenant_slug',
+            'modern-forestry-wholesale'
+        );
+    }
+
+    protected function wholesaleTenant(): ?Tenant
+    {
+        return Tenant::query()->where('slug', $this->wholesaleTenantSlug())->first();
+    }
+
+    protected function resolveWholesaleWorkspaceActor(?array $context = null): ?User
+    {
+        $sessionUser = auth()->user();
+        if ($sessionUser instanceof User) {
+            return $sessionUser;
+        }
+
+        $email = strtolower(trim((string) ($context['shopify_admin_email'] ?? '')));
+        if ($email === '') {
+            return null;
+        }
+
+        return User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+    }
+
+    protected function canManageWholesaleApprovals(?User $user): bool
+    {
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        $allowedRoles = array_values(array_filter(
+            array_map(static fn (mixed $role): string => strtolower(trim((string) $role)), (array) config('tenancy.landlord.operator_roles', ['admin'])),
+            static fn (string $role): bool => $role !== ''
+        ));
+
+        return in_array(strtolower(trim((string) $user->role)), $allowedRoles, true);
+    }
+
+    protected function wholesaleApplications(string $search, string $status, ?Tenant $tenant)
+    {
+        $tenantSlug = $this->wholesaleTenantSlug();
+
+        return CustomerAccessRequest::query()
+            ->with([
+                'formSubmission.form:id,name,slug',
+                'user:id,name,email,is_active',
+                'tenant:id,name,slug',
+            ])
+            ->where(function ($query) use ($tenant, $tenantSlug): void {
+                if ($tenant instanceof Tenant) {
+                    $query->where('tenant_id', (int) $tenant->id)
+                        ->orWhere('requested_tenant_slug', $tenantSlug);
+
+                    return;
+                }
+
+                $query->where('requested_tenant_slug', $tenantSlug);
+            })
+            ->when(in_array($status, ['pending', 'approved', 'rejected'], true), function ($query) use ($status): void {
+                $query->where('status', $status);
+            })
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($builder) use ($search): void {
+                    $builder
+                        ->where('name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%')
+                        ->orWhere('company', 'like', '%'.$search.'%');
+                });
+            })
+            ->orderByRaw("case when status = 'pending' then 0 when status = 'approved' then 1 when status = 'rejected' then 2 else 3 end")
+            ->orderByDesc('created_at')
+            ->paginate(25)
+            ->withQueryString();
+    }
+
+    protected function countWholesaleApplicationsByStatus(string $status, ?Tenant $tenant): int
+    {
+        $tenantSlug = $this->wholesaleTenantSlug();
+
+        return CustomerAccessRequest::query()
+            ->where('status', $status)
+            ->where(function ($query) use ($tenant, $tenantSlug): void {
+                if ($tenant instanceof Tenant) {
+                    $query->where('tenant_id', (int) $tenant->id)
+                        ->orWhere('requested_tenant_slug', $tenantSlug);
+
+                    return;
+                }
+
+                $query->where('requested_tenant_slug', $tenantSlug);
+            })
+            ->count();
+    }
+
+    protected function assertWholesaleApplication(CustomerAccessRequest $accessRequest): void
+    {
+        $tenantSlug = $this->wholesaleTenantSlug();
+        $tenantId = Tenant::query()->where('slug', $tenantSlug)->value('id');
+
+        abort_unless(
+            $accessRequest->requested_tenant_slug === $tenantSlug
+                || ($tenantId !== null && (int) $accessRequest->tenant_id === (int) $tenantId),
+            404
+        );
+    }
+
+    /**
+     * @return array<int,array{label:string,value:string}>
+     */
+    protected function wholesaleApplicationDetailRows(CustomerAccessRequest $accessRequest): array
+    {
+        $payload = (array) optional($accessRequest->formSubmission)->payload;
+        $metadata = (array) ($accessRequest->metadata ?? []);
+
+        $read = function (string ...$keys) use ($payload, $metadata, $accessRequest): string {
+            foreach ($keys as $key) {
+                $value = match ($key) {
+                    'name' => $accessRequest->name,
+                    'email' => $accessRequest->email,
+                    'company' => $accessRequest->company,
+                    'message' => $accessRequest->message,
+                    default => $payload[$key] ?? $metadata[$key] ?? null,
+                };
+
+                $string = trim((string) $value);
+                if ($string !== '') {
+                    return $string;
+                }
+            }
+
+            return '—';
+        };
+
+        return [
+            ['label' => 'Name', 'value' => $read('name')],
+            ['label' => 'Email', 'value' => $read('email')],
+            ['label' => 'Phone', 'value' => $read('phone')],
+            ['label' => 'Company', 'value' => $read('company')],
+            ['label' => 'Store type', 'value' => $read('store_type', 'business_type')],
+            ['label' => 'Website', 'value' => $read('website')],
+            ['label' => 'Position', 'value' => $read('position')],
+            ['label' => 'Referral source', 'value' => $read('referral')],
+            ['label' => 'Address', 'value' => $read('address')],
+            ['label' => 'Address line 2', 'value' => $read('address2')],
+            ['label' => 'City', 'value' => $read('city')],
+            ['label' => 'State', 'value' => $read('state')],
+            ['label' => 'Postal / ZIP', 'value' => $read('zip')],
+            ['label' => 'Country', 'value' => $read('country')],
+            ['label' => 'Retail license / resale #', 'value' => $read('retail_license_number')],
+            ['label' => 'Contact preference', 'value' => $read('contact_preference')],
+            ['label' => 'Current suppliers', 'value' => $read('current_suppliers')],
+            ['label' => 'Business info', 'value' => $read('business_info', 'message')],
+            ['label' => 'Agreement accepted', 'value' => $this->wholesaleAgreementValue($payload, $metadata)],
+        ];
+    }
+
+    protected function wholesaleAgreementValue(array $payload, array $metadata): string
+    {
+        $value = $payload['agreement'] ?? $metadata['agreement'] ?? null;
+
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'Yes' : 'No';
     }
 
     /**

@@ -1314,6 +1314,14 @@ Route::prefix('shopify/marketing/v1')
 Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/wholesale', [ShopifyEmbeddedAppController::class, 'showWholesale'])->name('shopify.app.wholesale');
+    Route::get('/app/wholesale/applications/{accessRequest}', [ShopifyEmbeddedAppController::class, 'showWholesaleApplication'])
+        ->name('shopify.app.wholesale.applications.show');
+    Route::post('/app/wholesale/applications/{accessRequest}/approve', [ShopifyEmbeddedAppController::class, 'approveWholesaleApplication'])
+        ->name('shopify.app.wholesale.applications.approve');
+    Route::post('/app/wholesale/applications/{accessRequest}/reject', [ShopifyEmbeddedAppController::class, 'rejectWholesaleApplication'])
+        ->name('shopify.app.wholesale.applications.reject');
+    Route::post('/app/wholesale/applications/{accessRequest}/resend-activation', [ShopifyEmbeddedAppController::class, 'resendWholesaleApplicationActivation'])
+        ->name('shopify.app.wholesale.applications.resend-activation');
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
     Route::get('/app/plans', [ShopifyEmbeddedAppController::class, 'plansAndAddons'])->name('shopify.app.plans');
     Route::get('/app/store', [ShopifyEmbeddedAppController::class, 'moduleStore'])->name('shopify.app.store');
