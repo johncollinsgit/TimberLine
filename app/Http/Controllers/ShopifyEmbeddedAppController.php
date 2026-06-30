@@ -480,7 +480,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'storeLabel' => $resolved['storeLabel'] ?? 'Wholesale Store',
                 'headline' => $this->headlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Wholesale Applications'),
                 'subheadline' => $this->subheadlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Review, approve, and track Modern Forestry Wholesale applications in one place.'),
-                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'appNavigation' => $this->wholesaleEmbeddedNavigation($tenantId),
                 'pageActions' => [],
                 'pageSubnav' => [],
                 'applications' => $applications,
@@ -535,7 +535,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'storeLabel' => $resolved['storeLabel'] ?? 'Wholesale Store',
                 'headline' => $this->headlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Wholesale Application Review'),
                 'subheadline' => $this->subheadlineForStatus((string) ($resolved['status'] ?? 'invalid_request'), 'Review this application and approve or reject it without leaving Shopify Admin.'),
-                'appNavigation' => $this->embeddedAppNavigation('home', null, $tenantId),
+                'appNavigation' => $this->wholesaleEmbeddedNavigation($tenantId),
                 'pageActions' => [],
                 'pageSubnav' => [],
                 'accessRequest' => $accessRequest,
@@ -1434,6 +1434,32 @@ class ShopifyEmbeddedAppController extends Controller
     protected function dashboardExperienceSubnav(string $activeKey, ?int $tenantId): array
     {
         return $this->shellPayloadBuilder->dashboardSubnav($activeKey, $tenantId, request());
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function wholesaleEmbeddedNavigation(?int $tenantId): array
+    {
+        $navigation = $this->embeddedAppNavigation('home', null, $tenantId);
+        $href = $this->urlGenerator->route('shopify.app.wholesale', ['store_key' => 'wholesale'], false);
+
+        $navigation['items'] = [[
+            'key' => 'home',
+            'label' => 'Applications',
+            'href' => $href,
+            'children' => [],
+            'prefetch_priority' => 'high',
+        ]];
+        $navigation['activeSection'] = 'home';
+        $navigation['activeChild'] = null;
+        $navigation['moduleStates'] = [];
+        $navigation['displayLabels'] = [];
+        $navigation['workspaceLabel'] = 'Wholesale Applications';
+        $navigation['commandSearchPlaceholder'] = 'Search wholesale applications';
+        $navigation['commandSearchDocuments'] = [];
+
+        return $navigation;
     }
 
     /**

@@ -97,9 +97,16 @@ test('shopify embedded wholesale app home renders the wholesale applications inb
 
     $response->assertOk()
         ->assertSeeText('Wholesale Applications')
+        ->assertSeeText('Applications')
         ->assertSeeText('Review applications in one place')
         ->assertSeeText('Jane Buyer')
-        ->assertDontSeeText('Fast loyalty snapshot for recent program activity.');
+        ->assertDontSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertDontSeeText('AI Assistant')
+        ->assertDontSeeText('Customers')
+        ->assertDontSeeText('Messages')
+        ->assertDontSeeText('Rewards')
+        ->assertDontSeeText('Edit App')
+        ->assertDontSeeText('Settings');
 });
 
 test('shopify embedded wholesale app detail renders captured application fields', function (): void {
