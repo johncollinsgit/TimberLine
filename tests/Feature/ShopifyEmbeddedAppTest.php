@@ -54,6 +54,36 @@ test('shopify embedded app route renders verified admin shell for configured sto
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
 });
 
+test('shopify embedded app route renders verified admin shell for wholesale store', function () {
+    configureEmbeddedWholesaleStore();
+
+    $response = $this->get(route('shopify.app', wholesaleEmbeddedSignedQuery()));
+
+    $response->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertSeeText('Recent customer purchase activity')
+        ->assertSee('<s-app-nav>', false)
+        ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
+
+    expect($response->headers->get('X-Frame-Options'))->toBeNull();
+});
+
+test('shopify embedded app route bootstraps wholesale shell from hinted store key when signed params are incomplete', function () {
+    configureEmbeddedWholesaleStore();
+
+    $response = $this->get(route('shopify.app', [
+        'store_key' => 'wholesale',
+        'host' => 'wholesale-admin-host-token',
+    ]));
+
+    $response->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertDontSeeText('We could not verify this Shopify request')
+        ->assertSee('data-dashboard-lite', false);
+});
+
 test('shopify embedded app route can load the full analytics dashboard from the stored session page context', function () {
     configureEmbeddedRetailStore();
 

@@ -245,6 +245,25 @@ class ShopifyEmbeddedAppContext
     }
 
     /**
+     * @param  array{
+     *   store:array<string,mixed>,
+     *   shop_domain:?string,
+     *   host:?string
+     * }  $context
+     */
+    public function rememberPageContext(Request $request, array $context): void
+    {
+        $this->storeSessionPageContext($request, [
+            'ok' => true,
+            'status' => 'ok',
+            'shop_domain' => $context['shop_domain'] ?? null,
+            'host' => $context['host'] ?? null,
+            'signed_query' => [],
+            'store' => $context['store'],
+        ]);
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     public function resolveContextToken(string $token): ?array

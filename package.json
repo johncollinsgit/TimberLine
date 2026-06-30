@@ -8,8 +8,11 @@
     "serve": "php artisan serve",
     "dev:full": "concurrently -k -n \"LARAVEL,VITE\" -c \"green,blue\" \"php artisan serve\" \"npm run dev\"",
     "shopify:app:dev": "shopify app dev",
+    "shopify:app:dev:wholesale": "shopify app dev --config wholesale",
     "shopify:app:deploy": "shopify app deploy",
+    "shopify:app:deploy:wholesale": "shopify app deploy --config wholesale",
     "shopify:app:info": "shopify app info",
+    "shopify:app:info:wholesale": "shopify app info --config wholesale",
     "qa:click-path": "node scripts/qa/click-path-audit.mjs",
     "qa:click-path:auth": "CLICK_PATH_CONFIG=tests/e2e/click-path-routes-auth.json node scripts/qa/click-path-audit.mjs"
   },

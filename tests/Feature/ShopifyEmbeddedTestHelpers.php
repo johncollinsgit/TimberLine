@@ -21,6 +21,23 @@ function configureEmbeddedRetailStore(?int $tenantId = null): void
     );
 }
 
+function configureEmbeddedWholesaleStore(?int $tenantId = null): void
+{
+    config()->set('services.shopify.stores.wholesale.shop', 's2vscq-rf.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-client-id');
+    config()->set('services.shopify.stores.wholesale.client_secret', 'wholesale-client-secret');
+
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'wholesale'],
+        [
+            'tenant_id' => $tenantId,
+            'shop_domain' => 's2vscq-rf.myshopify.com',
+            'access_token' => 'shpat_wholesale_test',
+            'installed_at' => now(),
+        ]
+    );
+}
+
 function configureStorefrontRetailStoreContext(
     string $shopDomain = 'retail.example.myshopify.com',
     string $clientId = 'birthday-retail-client'
@@ -49,6 +66,11 @@ function retailShopifySessionToken(array $overrides = []): string
     return shopifySessionToken('retail', $overrides);
 }
 
+function wholesaleShopifySessionToken(array $overrides = []): string
+{
+    return shopifySessionToken('wholesale', $overrides);
+}
+
 function retailEmbeddedSignedQuery(array $overrides = []): array
 {
     $timestamp = (string) \Carbon\CarbonImmutable::now()->timestamp;
@@ -59,6 +81,18 @@ function retailEmbeddedSignedQuery(array $overrides = []): array
         'embedded' => '1',
         'timestamp' => $timestamp,
     ], $overrides), 'shopify-client-secret');
+}
+
+function wholesaleEmbeddedSignedQuery(array $overrides = []): array
+{
+    $timestamp = (string) \Carbon\CarbonImmutable::now()->timestamp;
+
+    return shopifyEmbeddedSignedQuery(array_merge([
+        'shop' => 's2vscq-rf.myshopify.com',
+        'host' => 'wholesale-admin-host-token',
+        'embedded' => '1',
+        'timestamp' => $timestamp,
+    ], $overrides), 'wholesale-client-secret');
 }
 
 function retailEmbeddedExtendedSignedQuery(array $overrides = []): array

@@ -110,7 +110,12 @@ test('oauth callback triggers required webhook registration for connected store'
     ], 'retail-secret');
 
     $response = $this->get(route('shopify.callback', array_merge(['store' => 'retail'], $query)));
-    $response->assertRedirect(route('dashboard'));
+    $response->assertRedirect(route('shopify.app'));
+
+    $this->get(route('shopify.app'))
+        ->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.');
 
     Http::assertSent(fn (HttpRequest $request): bool =>
         $request->method() === 'POST'

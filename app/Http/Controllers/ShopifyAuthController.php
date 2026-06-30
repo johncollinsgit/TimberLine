@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ShopifyStore;
+use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyHmacVerifier;
 use App\Services\Shopify\ShopifyOAuth;
 use App\Services\Shopify\ShopifyStores;
@@ -68,6 +69,7 @@ class ShopifyAuthController extends Controller
         Request $request,
         ShopifyOAuth $oauth,
         ShopifyHmacVerifier $hmacVerifier,
+        ShopifyEmbeddedAppContext $embeddedAppContext,
         ShopifyWebhookSubscriptionService $webhookSubscriptionService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService,
         ShopifyWebPixelConnectionService $webPixelConnectionService
@@ -183,7 +185,13 @@ class ShopifyAuthController extends Controller
             $statusMessage = 'Shopify connected and webhook subscriptions were synced.';
         }
 
-        return redirect()->route('dashboard')->with('status', $statusMessage);
+        $embeddedAppContext->rememberPageContext($request, [
+            'store' => $config,
+            'shop_domain' => $shopDomain,
+            'host' => $request->query('host'),
+        ]);
+
+        return redirect()->route('shopify.app')->with('status', $statusMessage);
     }
 
     protected function matchesExpectedShop(array $config, string $shopDomain): bool

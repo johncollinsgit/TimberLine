@@ -1,0 +1,47 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "1ec941453c4df97bb2402f696839b786"
+name = "MF Wholesale Backstage"
+application_url = "https://app.theeverbranch.com/shopify/app?store_key=wholesale"
+embedded = true
+handle = "mf-wholesale-backstage"
+
+[build]
+automatically_update_urls_on_dev = false
+dev_store_url = "s2vscq-rf.myshopify.com"
+
+[webhooks]
+api_version = "2026-01"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request"]
+uri = "https://app.theeverbranch.com/webhooks/shopify/customers/data-request"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/redact"]
+uri = "https://app.theeverbranch.com/webhooks/shopify/customers/redact"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["shop/redact"]
+uri = "https://app.theeverbranch.com/webhooks/shopify/shop/redact"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "customer_read_customers,customer_read_draft_orders,customer_read_metaobjects,customer_read_orders,customer_write_customers,customer_write_orders,read_all_orders,read_analytics,read_assigned_fulfillment_orders,read_content,read_custom_pixels,read_customer_events,read_customers,read_discounts,read_discounts_allocator_functions,read_discovery,read_draft_orders,read_merchant_managed_fulfillment_orders,read_metaobject_definitions,read_metaobjects,read_order_edits,read_orders,read_pixels,read_price_rules,read_products,read_reports,read_themes,read_third_party_fulfillment_orders,unauthenticated_read_checkouts,unauthenticated_read_collection_listings,unauthenticated_read_product_listings,unauthenticated_read_selling_plans,unauthenticated_write_checkouts,write_assigned_fulfillment_orders,write_content,write_custom_pixels,write_customers,write_discounts,write_discounts_allocator_functions,write_discovery,write_draft_orders,write_merchant_managed_fulfillment_orders,write_metaobject_definitions,write_metaobjects,write_order_edits,write_orders,write_pixels,write_price_rules,write_products,write_themes,write_third_party_fulfillment_orders"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://app.theeverbranch.com/shopify/callback/wholesale"
+]
+
+[customer_authentication]
+redirect_uris = [
+  "https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback"
+]
+
+[app_proxy]
+url = "https://app.theeverbranch.com/shopify/marketing/v1"
+subpath = "forestry"
+prefix = "apps"

@@ -11,6 +11,7 @@ use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
 use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
+use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
@@ -20,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ShopifyEmbeddedAppController extends Controller
 {
@@ -43,31 +45,177 @@ class ShopifyEmbeddedAppController extends Controller
     ): Response {
         $wantsFullDashboard = filter_var($request->query('full', false), FILTER_VALIDATE_BOOLEAN);
         $probe = $this->embeddedProbe($request);
-        $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
-        $fallbackRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label(null, 'rewards_label', 'Rewards'));
+        $context = null;
 
-        if (($context['status'] ?? '') === 'open_from_shopify') {
-            $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
-            $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
+        try {
+            $context = $probe->time('context', fn (): array => $contextService->resolvePageContext($request));
+            $fallbackRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label(null, 'rewards_label', 'Rewards'));
 
-            $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
-                response()->view('shopify.dashboard', [
+            if (($context['status'] ?? '') === 'open_from_shopify') {
+                $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
+                $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
+
+                $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+                    response()->view('shopify.dashboard', [
+                        'authorized' => false,
+                        'status' => 'open_from_shopify',
+                        'shopifyApiKey' => null,
+                        'shopDomain' => null,
+                        'host' => null,
+                        'storeLabel' => 'Shopify Admin',
+                        'headline' => 'Dashboard',
+                        'subheadline' => 'Revenue and setup at a glance.',
+                        'appNavigation' => $appNavigation,
+                        'pageActions' => [],
+                        'pageSubnav' => [],
+                        'dashboardBootstrap' => [
+                            'authorized' => false,
+                            'status' => 'open_from_shopify',
+                            'storeLabel' => 'Shopify Admin',
+                            'links' => [],
+                            'dataEndpoint' => route('shopify.app.api.dashboard'),
+                            'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
+                            'initialData' => null,
+                            'config' => $dashboardConfig,
+                        ],
+                        'merchantJourney' => null,
+                    ])
+                ));
+
+                return $probe->addContext([
                     'authorized' => false,
                     'status' => 'open_from_shopify',
-                    'shopifyApiKey' => null,
-                    'shopDomain' => null,
-                    'host' => null,
-                    'storeLabel' => 'Shopify Admin',
+                ])->finish($response);
+            }
+
+            $hintedStore = $this->hintedBootstrapStore($request, $context);
+            if ($hintedStore !== null) {
+                $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
+                $dashboardConfig = $wantsFullDashboard
+                    ? $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload())
+                    : [];
+
+                $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+                    response()->view($view, [
+                        'authorized' => true,
+                        'status' => 'bootstrap_pending',
+                        'shopifyApiKey' => (string) ($hintedStore['client_id'] ?? ''),
+                        'shopDomain' => (string) ($hintedStore['shop'] ?? ''),
+                        'host' => (string) ($request->query('host') ?? ''),
+                        'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'store')).' Store',
+                        'headline' => 'Dashboard',
+                        'subheadline' => 'Revenue and setup at a glance.',
+                        'appNavigation' => $this->fallbackEmbeddedNavigation(),
+                        'pageActions' => [],
+                        'pageSubnav' => [],
+                        'dashboardBootstrap' => [
+                            'authorized' => true,
+                            'status' => 'bootstrap_pending',
+                            'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'store')).' Store',
+                            'links' => [],
+                            'dataEndpoint' => route('shopify.app.api.dashboard'),
+                            'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
+                            'initialData' => null,
+                            'config' => $dashboardConfig,
+                        ],
+                        'merchantJourney' => null,
+                    ])
+                ));
+
+                return $probe->addContext([
+                    'authorized' => true,
+                    'status' => 'bootstrap_pending',
+                ])->finish($response);
+            }
+
+            if (! ($context['ok'] ?? false)) {
+                $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
+                $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
+
+                $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+                    response()->view('shopify.dashboard', [
+                        'authorized' => false,
+                        'status' => 'invalid_request',
+                        'shopifyApiKey' => null,
+                        'shopDomain' => $context['shop_domain'] ?? null,
+                        'host' => $context['host'] ?? null,
+                        'storeLabel' => 'Shopify Admin',
+                        'headline' => 'Dashboard',
+                        'subheadline' => 'Revenue and setup at a glance.',
+                        'appNavigation' => $appNavigation,
+                        'pageActions' => [],
+                        'pageSubnav' => [],
+                        'dashboardBootstrap' => [
+                            'authorized' => false,
+                            'status' => 'invalid_request',
+                            'storeLabel' => 'Shopify Admin',
+                            'links' => [],
+                            'dataEndpoint' => route('shopify.app.api.dashboard'),
+                            'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
+                            'initialData' => null,
+                            'config' => $dashboardConfig,
+                        ],
+                        'merchantJourney' => null,
+                    ]),
+                    401
+                ));
+
+                return $probe->addContext([
+                    'authorized' => false,
+                    'status' => (string) ($context['status'] ?? 'invalid_request'),
+                ])->finish($response);
+            }
+
+            /** @var array<string,mixed> $store */
+            $store = $context['store'];
+            $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store));
+            if ($tenantId !== null && $wantsFullDashboard) {
+                $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
+            }
+            $probe->forTenant($tenantId);
+
+            $tenantRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label($tenantId, 'rewards_label', $fallbackRewardsLabel));
+            $dashboardLinks = [
+                [
+                    'label' => 'Customers',
+                    'href' => route('shopify.app.customers.manage', [], false),
+                ],
+                [
+                    'label' => $tenantRewardsLabel,
+                    'href' => route('shopify.app.rewards', [], false),
+                ],
+                [
+                    'label' => 'Open settings',
+                    'href' => route('shopify.app.settings', [], false),
+                ],
+            ];
+            $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
+            $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
+            $subheadline = $wantsFullDashboard
+                ? 'Revenue and setup at a glance.'
+                : 'Fast loyalty snapshot for recent program activity.';
+            $dashboardConfig = $wantsFullDashboard
+                ? $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload())
+                : [];
+
+            $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
+                response()->view($view, [
+                    'authorized' => true,
+                    'status' => 'ok',
+                    'shopifyApiKey' => (string) ($store['client_id'] ?? ''),
+                    'shopDomain' => (string) ($store['shop'] ?? ''),
+                    'host' => (string) ($context['host'] ?? ''),
+                    'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
                     'headline' => 'Dashboard',
-                    'subheadline' => 'Revenue and setup at a glance.',
+                    'subheadline' => $subheadline,
                     'appNavigation' => $appNavigation,
                     'pageActions' => [],
                     'pageSubnav' => [],
                     'dashboardBootstrap' => [
-                        'authorized' => false,
-                        'status' => 'open_from_shopify',
-                        'storeLabel' => 'Shopify Admin',
-                        'links' => [],
+                        'authorized' => true,
+                        'status' => 'ok',
+                        'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
+                        'links' => $dashboardLinks,
                         'dataEndpoint' => route('shopify.app.api.dashboard'),
                         'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                         'initialData' => null,
@@ -78,114 +226,59 @@ class ShopifyEmbeddedAppController extends Controller
             ));
 
             return $probe->addContext([
-                'authorized' => false,
-                'status' => 'open_from_shopify',
-            ])->finish($response);
-        }
-
-        if (! ($context['ok'] ?? false)) {
-            $dashboardConfig = $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload());
-            $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, null));
-
-            $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
-                response()->view('shopify.dashboard', [
-                    'authorized' => false,
-                    'status' => 'invalid_request',
-                    'shopifyApiKey' => null,
-                    'shopDomain' => $context['shop_domain'] ?? null,
-                    'host' => $context['host'] ?? null,
-                    'storeLabel' => 'Shopify Admin',
-                    'headline' => 'Dashboard',
-                    'subheadline' => 'Revenue and setup at a glance.',
-                    'appNavigation' => $appNavigation,
-                    'pageActions' => [],
-                    'pageSubnav' => [],
-                    'dashboardBootstrap' => [
-                        'authorized' => false,
-                        'status' => 'invalid_request',
-                        'storeLabel' => 'Shopify Admin',
-                        'links' => [],
-                        'dataEndpoint' => route('shopify.app.api.dashboard'),
-                        'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
-                        'initialData' => null,
-                        'config' => $dashboardConfig,
-                    ],
-                    'merchantJourney' => null,
-                ]),
-                401
-            ));
-
-            return $probe->addContext([
-                'authorized' => false,
-                'status' => (string) ($context['status'] ?? 'invalid_request'),
-            ])->finish($response);
-        }
-
-        /** @var array<string,mixed> $store */
-        $store = $context['store'];
-        $tenantId = $probe->time('tenant_resolve', fn (): ?int => $tenantResolver->resolveTenantIdForStoreContext($store));
-        // Avoid doing large alpha bootstrap upserts on the lightweight dashboard view.
-        // Other embedded pages still run this bootstrap as needed.
-        if ($tenantId !== null && $wantsFullDashboard) {
-            $probe->time('alpha_defaults', fn (): array => $alphaBootstrapService->ensureForTenant($tenantId, (string) ($store['key'] ?? '')));
-        }
-        $probe->forTenant($tenantId);
-
-        $tenantRewardsLabel = $probe->time('page_payload', fn (): string => $displayLabelResolver->label($tenantId, 'rewards_label', $fallbackRewardsLabel));
-        $dashboardLinks = [
-            [
-                'label' => 'Customers',
-                'href' => route('shopify.app.customers.manage', [], false),
-            ],
-            [
-                'label' => $tenantRewardsLabel,
-                'href' => route('shopify.app.rewards', [], false),
-            ],
-            [
-                'label' => 'Open settings',
-                'href' => route('shopify.app.settings', [], false),
-            ],
-        ];
-        $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('home', null, $tenantId));
-        $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
-        $subheadline = $wantsFullDashboard
-            ? 'Revenue and setup at a glance.'
-            : 'Fast loyalty snapshot for recent program activity.';
-        $dashboardConfig = $wantsFullDashboard
-            ? $probe->time('page_payload', fn (): array => app(ShopifyEmbeddedDashboardConfig::class)->payload())
-            : [];
-
-        $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
-            response()->view($view, [
                 'authorized' => true,
                 'status' => 'ok',
-                'shopifyApiKey' => (string) ($store['client_id'] ?? ''),
-                'shopDomain' => (string) ($store['shop'] ?? ''),
-                'host' => (string) ($context['host'] ?? ''),
-                'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
+            ])->finish($response);
+        } catch (Throwable $exception) {
+            Log::error('shopify.embedded.dashboard_show_failed', [
+                'shop_domain' => (string) ($request->query('shop', '')),
+                'host' => (string) ($request->query('host', '')),
+                'full' => $wantsFullDashboard,
+                'store_key' => (string) data_get($context, 'store.key', ''),
+                'status' => (string) data_get($context, 'status', 'unknown'),
+                'exception' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+            ]);
+
+            $store = is_array(data_get($context, 'store')) ? (array) data_get($context, 'store') : [];
+            $authorized = (bool) data_get($context, 'ok', false) && $store !== [];
+            $view = $wantsFullDashboard ? 'shopify.dashboard' : 'shopify.dashboard-lite';
+
+            $response = $this->embeddedResponse(response()->view($view, [
+                'authorized' => $authorized,
+                'status' => 'runtime_fallback',
+                'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+                'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ((string) data_get($context, 'shop_domain', '') ?: null),
+                'host' => $authorized ? (string) data_get($context, 'host', '') : ((string) data_get($context, 'host', '') ?: null),
+                'storeLabel' => $authorized
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
+                    : 'Shopify Admin',
                 'headline' => 'Dashboard',
-                'subheadline' => $subheadline,
-                'appNavigation' => $appNavigation,
+                'subheadline' => 'Temporary recovery mode while we finish loading store data.',
+                'appNavigation' => $this->fallbackEmbeddedNavigation(),
                 'pageActions' => [],
                 'pageSubnav' => [],
                 'dashboardBootstrap' => [
-                    'authorized' => true,
-                    'status' => 'ok',
-                    'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
-                    'links' => $dashboardLinks,
+                    'authorized' => $authorized,
+                    'status' => 'runtime_fallback',
+                    'storeLabel' => $authorized
+                        ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
+                        : 'Shopify Admin',
+                    'links' => [],
                     'dataEndpoint' => route('shopify.app.api.dashboard'),
                     'reminderEndpoint' => route('shopify.app.api.dashboard.candle-cash-reminders'),
                     'initialData' => null,
-                    'config' => $dashboardConfig,
+                    'config' => [],
                 ],
                 'merchantJourney' => null,
-            ])
-        ));
+            ]));
 
-        return $probe->addContext([
-            'authorized' => true,
-            'status' => 'ok',
-        ])->finish($response);
+            return $probe->addContext([
+                'authorized' => $authorized,
+                'status' => 'runtime_fallback',
+            ])->finish($response);
+        }
     }
 
     public function data(
@@ -237,14 +330,29 @@ class ShopifyEmbeddedAppController extends Controller
         $section = (string) $request->query('section', 'summary');
         $limit = (int) $request->query('limit', 20);
 
-        $data = $probe->time('page_payload', fn (): array => $this->dashboardLiteDataService->payload([
-            'tenant_id' => $tenantId,
-            'store_key' => $storeKey,
-            'timezone' => $storeTimezone,
-            'range' => $range,
-            'section' => $section,
-            'limit' => $limit,
-        ]));
+        try {
+            $data = $probe->time('page_payload', fn (): array => $this->dashboardLiteDataService->payload([
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'timezone' => $storeTimezone,
+                'range' => $range,
+                'section' => $section,
+                'limit' => $limit,
+            ]));
+        } catch (Throwable $exception) {
+            Log::error('shopify.embedded.dashboard_lite_failed', [
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'timezone' => $storeTimezone,
+                'range' => strtolower(trim($range)),
+                'section' => strtolower(trim($section)),
+                'exception' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+            ]);
+
+            $data = $this->emptyDashboardLitePayload($range, $storeKey, $storeTimezone, true);
+        }
 
         $response = response()->json([
             'ok' => true,
@@ -280,6 +388,107 @@ class ShopifyEmbeddedAppController extends Controller
         }
 
         return $probe->finish($response);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function fallbackEmbeddedNavigation(): array
+    {
+        return [
+            'items' => [],
+            'activeSection' => 'home',
+            'activeChild' => null,
+            'moduleStates' => [],
+            'tenantId' => null,
+            'displayLabels' => [],
+            'workspaceLabel' => 'Commerce',
+            'commandSearchEndpoint' => route('shopify.app.api.search'),
+            'commandSearchPlaceholder' => 'Search the workspace or jump to a task',
+            'commandSearchDocuments' => [],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $context
+     * @return array<string,mixed>|null
+     */
+    protected function hintedBootstrapStore(Request $request, ?array $context = null): ?array
+    {
+        $status = strtolower(trim((string) data_get($context, 'status', '')));
+        if (! in_array($status, ['missing_shop', 'unknown_shop', 'invalid_hmac'], true)) {
+            return null;
+        }
+
+        $host = trim((string) $request->query('host', ''));
+        if ($host === '') {
+            return null;
+        }
+
+        $storeKey = strtolower(trim((string) $request->query('store_key', '')));
+        if ($storeKey === '') {
+            return null;
+        }
+
+        $store = ShopifyStores::find($storeKey, true);
+        if (! is_array($store)) {
+            return null;
+        }
+
+        $clientId = trim((string) ($store['client_id'] ?? ''));
+        $shopDomain = trim((string) ($store['shop'] ?? ''));
+
+        if ($clientId === '' || $shopDomain === '') {
+            return null;
+        }
+
+        return $store;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function emptyDashboardLitePayload(string $range, ?string $storeKey, ?string $timezone, bool $fallback = false): array
+    {
+        return [
+            'meta' => [
+                'generatedAt' => now()->toIso8601String(),
+                'cacheTtlSeconds' => 0,
+                'cache' => [
+                    'summary' => ['hit' => false, 'key' => null],
+                    'activity' => ['hit' => false, 'key' => null],
+                ],
+                'fallback' => $fallback,
+            ],
+            'query' => [
+                'range' => strtolower(trim($range)) ?: 'today',
+                'from' => now()->startOfDay()->toIso8601String(),
+                'to' => now()->toIso8601String(),
+                'timezone' => $timezone ?: (string) config('app.timezone', 'UTC'),
+                'storeKey' => $storeKey,
+            ],
+            'summary' => [
+                'kpis' => [
+                    'customersPurchased' => 0,
+                    'purchaseCount' => 0,
+                    'returningCustomers' => 0,
+                    'returningRatePct' => 0.0,
+                    'candleCashEarned' => ['formatted' => '$0.00', 'points' => 0],
+                    'candleCashRedeemed' => ['formatted' => '$0.00', 'points' => 0],
+                    'openRewardCodes' => ['formatted' => '$0.00', 'count' => 0],
+                    'outstandingBalance' => ['formatted' => '$0.00', 'points' => 0],
+                ],
+                'movement' => [
+                    'earned' => ['formatted' => '$0.00', 'points' => 0],
+                    'redeemed' => ['formatted' => '$0.00', 'points' => 0],
+                    'net' => ['formatted' => '$0.00', 'points' => 0],
+                ],
+            ],
+            'activity' => [
+                'rows' => [],
+                'count' => 0,
+            ],
+        ];
     }
 
     public function startHere(
