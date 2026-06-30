@@ -1306,7 +1306,7 @@ class MarketingPublicEventController extends Controller
         imagefilledrectangle($image, 52, 48, $width - 52, $height - 48, $colors['paper']);
         imagerectangle($image, 52, 48, $width - 52, $height - 48, $colors['mist']);
 
-        imagefilledrectangle($image, 52, 48, 640, 224, $colors['forest']);
+        imagefilledrectangle($image, 52, 48, 640, 188, $colors['forest']);
 
         $boldFont = $this->scentShareFontPath(true);
         $regularFont = $this->scentShareFontPath(false);
@@ -1328,14 +1328,50 @@ class MarketingPublicEventController extends Controller
             }
         }
 
-        $this->drawWrappedScentShareText($image, $boldFont, 24, 0, 92, 196, 'Find your Modern Forestry Scent Personality!', $colors['white'], 500, 2, 30);
-        $this->drawWrappedScentShareText($image, $regularFont, 16, 0, 92, 238, 'Take the candle personality quiz, see your scent map, and share it with friends.', $colors['sage'], 470, 2, 22);
-
-        $this->drawWrappedScentShareText($image, $boldFont, 26, 0, 92, 304, 'Archetype: '.$title, $colors['ink'], 440, 2, 34);
-        $this->drawWrappedScentShareText($image, $regularFont, 21, 0, 92, 352, $body, $colors['muted'], 440, 3, 29);
+        $this->drawWrappedScentShareText(
+            $image,
+            $boldFont,
+            18,
+            0,
+            92,
+            234,
+            strtoupper($headline),
+            $colors['forest'],
+            500,
+            1,
+            22
+        );
+        $this->drawWrappedScentShareText(
+            $image,
+            $regularFont,
+            16,
+            0,
+            92,
+            268,
+            'Archetype',
+            $colors['sage'],
+            440,
+            1,
+            20
+        );
+        $this->drawWrappedScentShareText($image, $boldFont, 34, 0, 92, 320, $title, $colors['ink'], 470, 2, 40);
+        $this->drawWrappedScentShareText($image, $regularFont, 20, 0, 92, 408, $body, $colors['muted'], 452, 4, 28);
+        $this->drawWrappedScentShareText(
+            $image,
+            $regularFont,
+            17,
+            0,
+            92,
+            536,
+            'Take the candle personality quiz, see your scent map, and share it with friends.',
+            $colors['sage'],
+            452,
+            2,
+            24
+        );
 
         $traitX = 92;
-        $traitY = 516;
+        $traitY = 572;
         $maxTraitX = 640 - 92;
         foreach (array_slice($traits, 0, 4) as $trait) {
             $chipText = Str::headline((string) $trait);
