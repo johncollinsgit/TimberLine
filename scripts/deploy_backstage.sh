@@ -2,11 +2,18 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/home/forge/backstage.theforestrystudio.com/current}"
+DEPLOY_REF="${DEPLOY_REF:-}"
 
 cd "$APP_DIR"
 
-echo "== git pull =="
-git pull --ff-only
+echo "== sync git =="
+git fetch origin main
+
+if [ -n "$DEPLOY_REF" ]; then
+  git checkout -B main "$DEPLOY_REF"
+else
+  git checkout -B main FETCH_HEAD
+fi
 
 echo "== composer =="
 composer install --no-dev --prefer-dist --optimize-autoloader
@@ -19,7 +26,7 @@ php artisan optimize:clear
 
 echo "== cache for prod =="
 php artisan config:cache
-php artisan route:cache
+php artisan route:clear
 php artisan view:cache
 
 echo "== build assets =="
@@ -54,6 +61,7 @@ if ! run_npm_install; then
 fi
 
 npm run build
+rm -f public/hot
 
 echo "== restart queues =="
 php artisan queue:restart || true

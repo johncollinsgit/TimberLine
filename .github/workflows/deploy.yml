@@ -155,6 +155,7 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_REF: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH'; git fetch origin main; git checkout -B main FETCH_HEAD; composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev; if [ -f package.json ]; then npm ci; npm run build; rm -f public/hot; fi; php artisan migrate --force; php artisan route:clear; php artisan config:cache; php artisan view:cache; php artisan queue:restart"
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; APP_DIR='$DEPLOY_PATH' DEPLOY_REF='$DEPLOY_REF' bash '$DEPLOY_PATH/scripts/deploy_backstage.sh'"
