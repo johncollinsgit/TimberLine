@@ -88,8 +88,7 @@ test('storefront wholesale application stores the applicant and notifies the rev
         throw new \RuntimeException('Unexpected Shopify request during storefront wholesale application test.');
     });
 
-    $this->withoutMiddleware()
-        ->post(route('marketing.shopify.v1.wholesale.application'), [
+    $this->post(route('marketing.shopify.v1.wholesale.application'), [
             'intent' => 'production',
             'contact' => [
                 'name' => 'Ops Review',
