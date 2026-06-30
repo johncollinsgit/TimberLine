@@ -158,4 +158,4 @@ jobs:
           DEPLOY_REF: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; APP_DIR='$DEPLOY_PATH' DEPLOY_REF='$DEPLOY_REF' bash '$DEPLOY_PATH/scripts/deploy_backstage.sh'"
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH'; git fetch origin main; git reset --hard; git clean -fd; git checkout -B main '$DEPLOY_REF'; APP_DIR='$DEPLOY_PATH' DEPLOY_REF='$DEPLOY_REF' bash '$DEPLOY_PATH/scripts/deploy_backstage.sh'"

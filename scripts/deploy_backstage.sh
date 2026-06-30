@@ -8,6 +8,8 @@ cd "$APP_DIR"
 
 echo "== sync git =="
 git fetch origin main
+git reset --hard
+git clean -fd
 
 if [ -n "$DEPLOY_REF" ]; then
   git checkout -B main "$DEPLOY_REF"
