@@ -67,7 +67,7 @@
             <a href="{{ $embeddedUrl(route('shopify.app.wholesale', ['store_key' => 'wholesale'], false)) }}" class="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                 Back to applications
             </a>
-            <div class="text-sm text-zinc-600">
+            <div class="text-sm text-zinc-600" data-embedded-identity-label>
                 @if ($canManageApproval)
                     Signed in as {{ $actor?->email }}.
                 @else
@@ -144,11 +144,20 @@
             <div class="space-y-6">
                 <section class="fb-page-surface p-6">
                     <div class="text-sm font-semibold text-zinc-950">Review actions</div>
-                    @if ($canManageApproval && filled($contextToken))
+                    @if (filled($contextToken))
                         <div class="mt-3 space-y-4">
+                            <p class="text-sm text-zinc-600" data-embedded-approval-help>
+                                @if ($canManageApproval)
+                                    Approval actions are ready.
+                                @else
+                                    Finishing Shopify admin verification…
+                                @endif
+                            </p>
+
                             <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.approve', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3">
                                 @csrf
                                 <input type="hidden" name="context_token" value="{{ $contextToken }}">
+                                <input type="hidden" name="shopify_session_token" value="" data-embedded-session-token-input>
                                 <label class="block space-y-2">
                                     <span class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Approval note</span>
                                     <textarea
@@ -160,12 +169,12 @@
                                 </label>
                                 <div class="flex flex-wrap gap-2">
                                     @if ($accessRequest->status !== 'approved')
-                                        <button type="submit" class="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600">
+                                        <button type="submit" class="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button @disabled(! $canManageApproval)>
                                             Approve application
                                         </button>
                                     @endif
                                     @if ($accessRequest->status === 'approved')
-                                        <button type="submit" formaction="{{ $embeddedUrl(route('shopify.app.wholesale.applications.resend-activation', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                                        <button type="submit" formaction="{{ $embeddedUrl(route('shopify.app.wholesale.applications.resend-activation', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button @disabled(! $canManageApproval)>
                                             Resend activation
                                         </button>
                                     @endif
@@ -176,6 +185,7 @@
                                 <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3">
                                     @csrf
                                     <input type="hidden" name="context_token" value="{{ $contextToken }}">
+                                    <input type="hidden" name="shopify_session_token" value="" data-embedded-session-token-input>
                                     <label class="block space-y-2">
                                         <span class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Rejection note</span>
                                         <textarea
@@ -185,7 +195,7 @@
                                             placeholder="Optional reason for rejection"
                                         >{{ old('rejection_note', (string) ($accessRequest->rejection_note ?? '')) }}</textarea>
                                     </label>
-                                    <button type="submit" class="rounded-full bg-rose-700 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600">
+                                    <button type="submit" class="rounded-full bg-rose-700 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button @disabled(! $canManageApproval)>
                                         Reject application
                                     </button>
                                 </form>
@@ -212,5 +222,66 @@
             </div>
         </section>
     </div>
+
+    <script>
+        (function () {
+            const tokenInputs = Array.from(document.querySelectorAll('[data-embedded-session-token-input]'));
+            const actionButtons = Array.from(document.querySelectorAll('[data-embedded-approval-button]'));
+            const identityLabel = document.querySelector('[data-embedded-identity-label]');
+            const approvalHelp = document.querySelector('[data-embedded-approval-help]');
+
+            if (tokenInputs.length === 0 || !window.ForestryEmbeddedApp || typeof window.ForestryEmbeddedApp.getShopifySessionToken !== 'function') {
+                return;
+            }
+
+            function decodePayload(token) {
+                try {
+                    const parts = String(token || '').split('.');
+                    if (parts.length !== 3) {
+                        return {};
+                    }
+
+                    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+                    return JSON.parse(window.atob(padded));
+                } catch (error) {
+                    return {};
+                }
+            }
+
+            window.ForestryEmbeddedApp.getShopifySessionToken()
+                .then((token) => {
+                    if (typeof token !== 'string' || token.trim() === '') {
+                        throw new Error('Missing Shopify admin session token.');
+                    }
+
+                    tokenInputs.forEach((input) => {
+                        input.value = token;
+                    });
+
+                    actionButtons.forEach((button) => {
+                        button.removeAttribute('disabled');
+                    });
+
+                    const payload = decodePayload(token);
+                    const email = typeof payload.email === 'string' && payload.email.trim() !== ''
+                        ? payload.email.trim().toLowerCase()
+                        : null;
+
+                    if (identityLabel && email) {
+                        identityLabel.textContent = `Signed in as ${email}.`;
+                    }
+
+                    if (approvalHelp) {
+                        approvalHelp.textContent = 'Approval actions are ready.';
+                    }
+                })
+                .catch(() => {
+                    if (approvalHelp) {
+                        approvalHelp.textContent = 'Shopify admin verification did not load. Refresh this app from Shopify Admin and try again.';
+                    }
+                });
+        })();
+    </script>
 
 </x-shopify-embedded-shell>

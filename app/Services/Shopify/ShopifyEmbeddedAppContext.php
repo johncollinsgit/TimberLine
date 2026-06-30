@@ -325,7 +325,12 @@ class ShopifyEmbeddedAppContext
             return $authorization;
         }
 
-        return trim((string) $request->header('X-Shopify-Session-Token', ''));
+        $headerToken = trim((string) $request->header('X-Shopify-Session-Token', ''));
+        if ($headerToken !== '') {
+            return $headerToken;
+        }
+
+        return trim((string) $request->input('shopify_session_token', ''));
     }
 
     protected function normalizeShopDomain(string $shopDomain): string

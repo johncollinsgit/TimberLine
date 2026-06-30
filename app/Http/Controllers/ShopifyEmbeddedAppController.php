@@ -629,7 +629,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'status' => (string) ($context['status'] ?? 'ok'),
                 'httpStatus' => 200,
                 'store' => $store,
-                'shopifyApiKey' => (string) ($store['client_id'] ?? ''),
+                'shopifyApiKey' => $this->wholesaleEmbeddedClientId((string) ($store['client_id'] ?? '')),
                 'shopDomain' => (string) ($context['shop_domain'] ?? ($store['shop'] ?? '')),
                 'host' => (string) ($context['host'] ?? ''),
                 'storeLabel' => ucfirst((string) ($store['key'] ?? 'wholesale')).' Store',
@@ -651,7 +651,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'status' => 'bootstrap_pending',
                 'httpStatus' => 200,
                 'store' => $hintedStore,
-                'shopifyApiKey' => (string) ($hintedStore['client_id'] ?? ''),
+                'shopifyApiKey' => $this->wholesaleEmbeddedClientId((string) ($hintedStore['client_id'] ?? '')),
                 'shopDomain' => (string) ($hintedStore['shop'] ?? ''),
                 'host' => (string) ($bootstrapContext['host'] ?? ''),
                 'storeLabel' => ucfirst((string) ($hintedStore['key'] ?? 'wholesale')).' Store',
@@ -803,6 +803,22 @@ class ShopifyEmbeddedAppController extends Controller
     protected function wholesaleTenant(): ?Tenant
     {
         return Tenant::query()->where('slug', $this->wholesaleTenantSlug())->first();
+    }
+
+    protected function wholesaleEmbeddedClientId(?string $fallback = null): string
+    {
+        $configPath = base_path('shopify.app.wholesale.toml');
+        if (is_file($configPath)) {
+            $contents = @file_get_contents($configPath);
+            if (is_string($contents) && preg_match('/^\s*client_id\s*=\s*"([^"]+)"/m', $contents, $matches) === 1) {
+                $clientId = trim((string) ($matches[1] ?? ''));
+                if ($clientId !== '') {
+                    return $clientId;
+                }
+            }
+        }
+
+        return trim((string) $fallback);
     }
 
     protected function resolveWholesaleWorkspaceActor(?array $context = null): ?User

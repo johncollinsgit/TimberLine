@@ -129,7 +129,7 @@ test('shopify embedded wholesale app detail renders captured application fields'
         ->assertSeeText('Interested in carrying the line.');
 });
 
-test('shopify embedded wholesale app detail stays read only without a mapped operator account', function (): void {
+test('shopify embedded wholesale app detail renders approval controls and client-side identity bootstrap placeholders', function (): void {
     $accessRequest = seedEmbeddedWholesaleApplication();
 
     $response = $this->get(route('shopify.app.wholesale.applications.show', array_merge([
@@ -139,7 +139,8 @@ test('shopify embedded wholesale app detail stays read only without a mapped ope
 
     $response->assertOk()
         ->assertSeeText('Read-only mode until your Shopify admin email matches a wholesale operator.')
-        ->assertDontSeeText('Approve application');
+        ->assertSeeText('Approve application')
+        ->assertSee('shopify_session_token', false);
 });
 
 test('shopify embedded wholesale app can approve through a mapped shopify admin identity', function (): void {
