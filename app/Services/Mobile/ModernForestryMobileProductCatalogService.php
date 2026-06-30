@@ -2,6 +2,7 @@
 
 namespace App\Services\Mobile;
 
+use App\Jobs\RefreshModernForestryMobileHomeCache;
 use App\Models\OrderLine;
 use App\Models\Scent;
 use App\Models\Tenant;
@@ -9,9 +10,11 @@ use App\Services\Shopify\ModernForestryVariantMediaClassifier;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Shopify\ShopifyStores;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -365,11 +368,11 @@ class ModernForestryMobileProductCatalogService
     public function home(): array
     {
         if ($this->fakeCatalogEnabled()) {
-            return $this->buildHomePayload(
+            return $this->withHomeDiagnostics($this->buildHomePayload(
                 $this->collections(),
                 $this->mobileAppContent(),
                 $this->featuredProducts(6)
-            );
+            ), 'fake');
         }
 
         return $this->cachedHomePayload();
@@ -389,25 +392,29 @@ class ModernForestryMobileProductCatalogService
             $cachedAt = (int) ($cached['cached_at'] ?? 0);
 
             if ($cachedAt + self::HOME_CACHE_FRESH_SECONDS > now()->getTimestamp()) {
-                return $cached['payload'];
+                return $this->withHomeDiagnostics($cached['payload'], 'fresh', $cachedAt);
             }
 
-            $this->deferHomeCacheRefresh($key);
+            $refreshQueued = $this->deferHomeCacheRefresh($key);
 
-            return $cached['payload'];
+            return $this->withHomeDiagnostics($cached['payload'], 'stale', $cachedAt, $refreshQueued);
         }
 
+        $cachedAt = now()->subSeconds(self::HOME_CACHE_FRESH_SECONDS)->getTimestamp();
         $payload = $this->homeShellPayload();
 
         Cache::put(
             $key,
-            $this->homeCacheEntry($payload, now()->subSeconds(self::HOME_CACHE_FRESH_SECONDS)->getTimestamp()),
+            $this->homeCacheEntry(
+                $this->withHomeDiagnostics($payload, 'shell', $cachedAt),
+                $cachedAt
+            ),
             now()->addSeconds(self::HOME_CACHE_STALE_SECONDS)
         );
 
-        $this->deferHomeCacheRefresh($key);
+        $refreshQueued = $this->deferHomeCacheRefresh($key);
 
-        return $payload;
+        return $this->withHomeDiagnostics($payload, 'shell', $cachedAt, $refreshQueued);
     }
 
     /**
@@ -429,11 +436,11 @@ class ModernForestryMobileProductCatalogService
      */
     protected function refreshHomeCache(string $key): array
     {
-        $payload = $this->buildHomePayload(
+        $payload = $this->withHomeDiagnostics($this->buildHomePayload(
             $this->collections(),
             $this->mobileAppContent(),
             $this->featuredProducts(6)
-        );
+        ), 'fresh');
 
         Cache::put(
             $key,
@@ -444,23 +451,34 @@ class ModernForestryMobileProductCatalogService
         return $payload;
     }
 
-    protected function deferHomeCacheRefresh(string $key): void
+    public function handleQueuedHomeCacheRefresh(string $key): void
+    {
+        $lockKey = $key.':refreshing';
+
+        try {
+            $this->refreshHomeCache($key);
+        } catch (\Throwable $exception) {
+            Log::warning('modern forestry mobile home refresh failed', [
+                'cache_key' => $key,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+        } finally {
+            Cache::forget($lockKey);
+        }
+    }
+
+    protected function deferHomeCacheRefresh(string $key): bool
     {
         $lockKey = $key.':refreshing';
 
         if (! Cache::add($lockKey, true, now()->addSeconds(self::HOME_CACHE_REFRESH_LOCK_SECONDS))) {
-            return;
+            return false;
         }
 
-        defer(function () use ($key, $lockKey): void {
-            try {
-                $this->refreshHomeCache($key);
-            } catch (\Throwable) {
-                // Keep serving the last usable shell/payload when Shopify is slow or unavailable.
-            } finally {
-                Cache::forget($lockKey);
-            }
-        }, 'modern-forestry-mobile-home-refresh', true);
+        Bus::dispatch(new RefreshModernForestryMobileHomeCache($key));
+
+        return true;
     }
 
     /**
@@ -514,6 +532,29 @@ class ModernForestryMobileProductCatalogService
             'payload' => $payload,
             'cached_at' => $cachedAt ?? now()->getTimestamp(),
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    protected function withHomeDiagnostics(
+        array $payload,
+        string $mode,
+        ?int $cachedAt = null,
+        bool $refreshQueued = false
+    ): array {
+        $payload['diagnostics'] = [
+            'mode' => $mode,
+            'cachedAt' => $cachedAt,
+            'cacheAgeSeconds' => $cachedAt !== null ? max(0, now()->getTimestamp() - $cachedAt) : null,
+            'refreshQueued' => $refreshQueued,
+            'featuredCollectionsCount' => count($payload['featuredCollections'] ?? []),
+            'featuredProductsCount' => count($payload['featuredProducts'] ?? []),
+            'cardsCount' => count($payload['cards'] ?? []),
+        ];
+
+        return $payload;
     }
 
     protected function isHomeCacheEntry(mixed $value): bool

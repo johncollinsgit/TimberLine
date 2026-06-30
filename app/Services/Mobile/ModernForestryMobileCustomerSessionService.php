@@ -15,6 +15,10 @@ use Illuminate\Support\Str;
 
 class ModernForestryMobileCustomerSessionService
 {
+    protected const CUSTOMER_IDENTITY_CACHE_MAX_SECONDS = 900;
+
+    protected const CUSTOMER_IDENTITY_CACHE_FALLBACK_SECONDS = 300;
+
     public function __construct(
         protected MarketingStorefrontIdentityService $identityService,
         protected ShopifyCustomerAddressSyncService $shopifyCustomerAddressSync
@@ -38,7 +42,8 @@ class ModernForestryMobileCustomerSessionService
             return null;
         }
 
-        $identity = $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token);
+        $claims = $this->jwtClaims($token) ?? [];
+        $identity = $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token, $claims);
         if ($identity === null) {
             return null;
         }
@@ -50,7 +55,7 @@ class ModernForestryMobileCustomerSessionService
 
         $profile = $this->hydrateProfileAddressIfNeeded($profile, $identity);
 
-        return new ModernForestryMobileCustomerSession($profile, $token, $identity, $this->jwtClaims($token) ?? []);
+        return new ModernForestryMobileCustomerSession($profile, $token, $identity, $claims);
     }
 
     public function sessionPayload(?ModernForestryMobileCustomerSession $session): array
@@ -408,12 +413,23 @@ class ModernForestryMobileCustomerSessionService
     /**
      * @return array<string,mixed>|null
      */
-    protected function remoteCustomerIdentity(string $token): ?array
+    protected function remoteCustomerIdentity(string $token, array $claims = []): ?array
     {
         $endpoint = $this->graphqlEndpoint();
         if ($endpoint === '') {
             return null;
         }
+
+        $cacheKey = $this->customerIdentityCacheKey($token);
+        $cacheTtlSeconds = $this->customerIdentityCacheTtlSeconds($claims);
+        if ($cacheTtlSeconds > 0) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
+
+        $startedAt = hrtime(true);
 
         $response = Http::withHeaders([
                 'Authorization' => $token,
@@ -441,10 +457,14 @@ query ModernForestryMobileCustomer {
 GRAPHQL,
             ]);
 
+        $durationMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+
         if ($response->failed()) {
+            Cache::forget($cacheKey);
             Log::warning('Modern Forestry mobile customer auth session validation failed.', [
                 'status' => $response->status(),
                 'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
+                'duration_ms' => $durationMs,
                 'graphql_errors' => collect((array) $response->json('errors'))
                     ->pluck('message')
                     ->filter(fn (mixed $value): bool => is_string($value) && trim($value) !== '')
@@ -464,15 +484,18 @@ GRAPHQL,
             Log::warning('Modern Forestry mobile customer auth validation returned GraphQL errors.', [
                 'status' => $response->status(),
                 'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
+                'duration_ms' => $durationMs,
                 'graphql_errors' => $graphqlErrors,
             ]);
         }
 
         $customer = $response->json('data.customer');
         if (! is_array($customer)) {
+            Cache::forget($cacheKey);
             Log::warning('Modern Forestry mobile customer auth validation returned no customer record.', [
                 'status' => $response->status(),
                 'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
+                'duration_ms' => $durationMs,
                 'has_graphql_errors' => $graphqlErrors !== [],
             ]);
             return null;
@@ -482,10 +505,11 @@ GRAPHQL,
         $shopifyCustomerId = $this->nullableString($customer['id'] ?? null);
 
         if ($email === null && $shopifyCustomerId === null) {
+            Cache::forget($cacheKey);
             return null;
         }
 
-        return [
+        $identity = [
             'email' => $email,
             'first_name' => $this->nullableString($customer['firstName'] ?? null),
             'last_name' => $this->nullableString($customer['lastName'] ?? null),
@@ -494,6 +518,20 @@ GRAPHQL,
             'source_type' => 'shopify_customer',
             'source_id' => $shopifyCustomerId,
         ];
+
+        if ($cacheTtlSeconds > 0) {
+            Cache::put($cacheKey, $identity, now()->addSeconds($cacheTtlSeconds));
+        }
+
+        if ($durationMs >= 1500) {
+            Log::info('Modern Forestry mobile customer auth session validation resolved slowly.', [
+                'endpoint_host' => parse_url($endpoint, PHP_URL_HOST),
+                'duration_ms' => $durationMs,
+                'cache_ttl_seconds' => $cacheTtlSeconds,
+            ]);
+        }
+
+        return $identity;
     }
 
     /**
@@ -703,6 +741,30 @@ GRAPHQL,
         $decoded = json_decode((string) base64_decode($payload, true), true);
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    protected function customerIdentityCacheKey(string $token): string
+    {
+        return 'modern_forestry_mobile_customer_identity:'.hash('sha256', $token);
+    }
+
+    /**
+     * @param  array<string,mixed>  $claims
+     */
+    protected function customerIdentityCacheTtlSeconds(array $claims): int
+    {
+        $fallback = self::CUSTOMER_IDENTITY_CACHE_FALLBACK_SECONDS;
+        $expiresAt = data_get($claims, 'exp');
+        if (! is_numeric($expiresAt)) {
+            return $fallback;
+        }
+
+        $secondsUntilExpiry = ((int) $expiresAt) - now()->timestamp - 30;
+        if ($secondsUntilExpiry <= 0) {
+            return 0;
+        }
+
+        return min(self::CUSTOMER_IDENTITY_CACHE_MAX_SECONDS, $secondsUntilExpiry);
     }
 
     protected function nullableString(mixed $value): ?string

@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-06-30 — Modern Forestry Bag Recovery and Story Share Cleanup
+
+### What changed
+- Kept the Modern Forestry Bag recovery flow quiet when Shopify rejects saved delivery details with `Phone is invalid` but the backend retry succeeds.
+- Softened Bag refresh copy so failures are framed as a cart-refresh problem instead of a final checkout failure.
+- Kept Home operator diagnostics off the customer-facing Home screen while preserving the underlying shell/stale instrumentation for docs, logs, and tests.
+- Fixed Instagram Story share to prefer the native Story composer route instead of dropping customers onto the shared link page.
+- Tightened the Facebook/Instagram story handoff split so Facebook can keep its app-id query behavior without leaking that pattern into Instagram.
+
+### What did not change
+- Shopify checkout still remains the final source of truth for taxes, shipping, and applied Candle Cash math.
+- The Home shell/stale bootstrap behavior was preserved; this pass only cleaned up its presentation and documentation.
+
 ## 2026-06-23 — Modern Forestry Edit App Page
 
 ### What changed

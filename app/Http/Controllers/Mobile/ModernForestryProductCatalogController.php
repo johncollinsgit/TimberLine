@@ -17,6 +17,7 @@ use App\Services\Mobile\ModernForestryMobileScentQuizService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class ModernForestryProductCatalogController extends Controller
@@ -60,15 +61,20 @@ class ModernForestryProductCatalogController extends Controller
                 ],
             ]);
         } catch (ModernForestryMobileCheckoutException $exception) {
+            $error = [
+                'code' => $exception->publicCode(),
+                'message' => $exception->getMessage(),
+            ];
+            if ($exception->diagnostics() !== []) {
+                $error['diagnostics'] = $exception->diagnostics();
+            }
+
             return response()->json([
                 'data' => null,
                 'meta' => [
                     'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
                 ],
-                'error' => [
-                    'code' => $exception->publicCode(),
-                    'message' => $exception->getMessage(),
-                ],
+                'error' => $error,
             ], $exception->status());
         } catch (Throwable) {
             return response()->json([
@@ -196,7 +202,14 @@ class ModernForestryProductCatalogController extends Controller
     {
         try {
             $home = $catalog->home();
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            Log::warning('modern forestry mobile home endpoint failed', [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+            ]);
+
             return response()->json([
                 'hero' => null,
                 'featuredCollections' => [],

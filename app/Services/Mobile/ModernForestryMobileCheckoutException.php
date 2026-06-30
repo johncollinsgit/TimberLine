@@ -9,7 +9,8 @@ class ModernForestryMobileCheckoutException extends RuntimeException
     public function __construct(
         protected string $publicCode,
         string $message,
-        protected int $status = 422
+        protected int $status = 422,
+        protected array $diagnostics = []
     ) {
         parent::__construct($message);
     }
@@ -22,5 +23,10 @@ class ModernForestryMobileCheckoutException extends RuntimeException
     public function status(): int
     {
         return $this->status;
+    }
+
+    public function diagnostics(): array
+    {
+        return $this->diagnostics;
     }
 }

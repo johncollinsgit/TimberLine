@@ -49,6 +49,14 @@ beforeEach(function (): void {
     ]);
 });
 
+function mobileCustomerAccessToken(array $claims = []): string
+{
+    $header = rtrim(strtr(base64_encode(json_encode(['alg' => 'none', 'typ' => 'JWT'])), '+/', '-_'), '=');
+    $payload = rtrim(strtr(base64_encode(json_encode($claims)), '+/', '-_'), '=');
+
+    return $header.'.'.$payload.'.signature';
+}
+
 test('fake mobile catalog returns 200 in local or testing when enabled', function (): void {
     config()->set('mobile_catalog.fake_enabled', true);
     ShopifyStore::query()->delete();
@@ -357,6 +365,70 @@ test('mobile account and rewards endpoints require a signed in customer token', 
     $this->getJson('/api/mobile/v1/modern-forestry/rewards')
         ->assertUnauthorized()
         ->assertJsonPath('error.code', 'unauthenticated');
+});
+
+test('mobile signed-in session validation reuses cached shopify customer identity across rewards refreshes', function (): void {
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://shopify.com/20812479/account/customer/api/2026-01/graphql');
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'cached-rewards@example.com',
+        'normalized_email' => 'cached-rewards@example.com',
+        'address_line_1' => '406 Piedmont Rd',
+        'city' => 'Easley',
+        'state' => 'SC',
+        'postal_code' => '29642',
+        'country' => 'US',
+    ]);
+
+    MarketingProfileLink::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:12345',
+        'match_method' => 'test',
+        'confidence' => 1,
+    ]);
+
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 35,
+    ]);
+
+    Http::fake([
+        'https://shopify.com/20812479/account/customer/api/2026-01/graphql' => Http::response([
+            'data' => [
+                'customer' => [
+                    'id' => 'gid://shopify/Customer/12345',
+                    'firstName' => 'Cached',
+                    'lastName' => 'Customer',
+                    'emailAddress' => [
+                        'emailAddress' => 'cached-rewards@example.com',
+                    ],
+                    'phoneNumber' => null,
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $token = mobileCustomerAccessToken([
+        'exp' => now()->addHour()->timestamp,
+        'sub' => 'gid://shopify/Customer/12345',
+    ]);
+
+    $this->withToken($token)
+        ->getJson('/api/mobile/v1/modern-forestry/session-status')
+        ->assertOk()
+        ->assertJsonPath('authenticated', true)
+        ->assertJsonPath('customer.email', 'cached-rewards@example.com');
+
+    $this->withToken($token)
+        ->getJson('/api/mobile/v1/modern-forestry/rewards')
+        ->assertOk()
+        ->assertJsonPath('data.customer.email', 'cached-rewards@example.com')
+        ->assertJsonPath('data.balance.amount', 35);
+
+    Http::assertSentCount(1);
 });
 
 test('mobile auth session can create and validate a customer account token identity', function (): void {

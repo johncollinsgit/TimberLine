@@ -540,6 +540,24 @@ Scope completed in that sidecar:
 - Theme-side JS/CSS must not create parallel state systems.
 - Backend remains the single source of truth.
 
+## Modern Forestry Mobile Live Deploy Cohesion (2026-06-30)
+
+- The Modern Forestry mobile app is now sensitive to partial live deploys in two specific places:
+  - Home boot: the cached-home flow requires both `app/Services/Mobile/ModernForestryMobileProductCatalogService.php` and `app/Jobs/RefreshModernForestryMobileHomeCache.php`. If the service expects the queued job but the job is missing, Home can 503 before the shell payload returns.
+  - Checkout error handling: `app/Http/Controllers/Mobile/ModernForestryProductCatalogController.php`, `app/Services/Mobile/ModernForestryMobileCheckoutService.php`, and `app/Services/Mobile/ModernForestryMobileCheckoutException.php` must stay in sync. If the controller calls `$exception->diagnostics()` but the exception class is still old, Bag shows a raw HTTP 500 even though the intended checkout recovery path may be fine.
+- Treat these files as one deployment unit for Modern Forestry mobile changes:
+  - `app/Http/Controllers/Mobile/ModernForestryProductCatalogController.php`
+  - `app/Services/Mobile/ModernForestryMobileProductCatalogService.php`
+  - `app/Services/Mobile/ModernForestryMobileCheckoutService.php`
+  - `app/Services/Mobile/ModernForestryMobileCheckoutException.php`
+  - `app/Jobs/RefreshModernForestryMobileHomeCache.php`
+- Real-device QA after syncing those files confirmed:
+  - Home recovered and warmed from shell to fresh payload.
+  - Account loaded signed-in data again.
+  - Rewards resumed snapshot-first behavior.
+  - Bag stopped surfacing the stale HTTP 500 after a successful refresh.
+  - Native checkout opened Shopify successfully from the bag.
+
 ## Add-On Module Requirements
 
 Every add-on must explicitly define:
@@ -631,3 +649,10 @@ Do not skip upward on this ladder without documenting why the simpler level was 
   - storefront
   - admin/backstage
   - email follow-through
+
+## Modern Forestry Mobile Rewards Latency Note (2026-06-30)
+
+- If Rewards or Account suddenly feels like it takes around 8-10 seconds to become live after sign-in, check whether mobile requests are repeatedly calling Shopify Customer Account GraphQL just to resolve the same customer identity.
+- `ModernForestryMobileCustomerSessionService` now caches resolved customer identity by token hash for a short TTL clamped to JWT expiry. Preserve that behavior unless you are intentionally changing the auth trust model.
+- Signed-in mobile flows should continue omitting buyer phone in checkout identity and should continue treating Laravel as the canonical profile store after identity resolution.
+- On the client side, the app now kicks Account and Rewards refreshes together. Do not reintroduce a single serialized dashboard bootstrap path unless you also accept slower Rewards first paint.
