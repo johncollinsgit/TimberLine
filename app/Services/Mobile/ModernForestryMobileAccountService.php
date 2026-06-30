@@ -55,16 +55,86 @@ class ModernForestryMobileAccountService
     {
         $profile = $session->profile;
         $tenantId = $this->tenantId($profile);
+        $startedAt = microtime(true);
+
+        $customer = $this->safeAccountSection(
+            section: 'customer',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): array => $this->customerPayload($profile),
+            fallback: $this->fallbackCustomerPayload($profile)
+        );
+        $orders = $this->safeAccountSection(
+            section: 'orders',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): Collection => $this->orders($profile, $tenantId),
+            fallback: collect()
+        );
+        $support = $this->safeAccountSection(
+            section: 'support',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): array => $this->supportPayload($profile),
+            fallback: $this->fallbackSupportPayload()
+        );
+        $rewards = $this->safeAccountSection(
+            section: 'rewards',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): array => $this->rewardsSummary($profile, $tenantId),
+            fallback: $this->fallbackRewardsSummary($profile)
+        );
+        $wishlist = $this->safeAccountSection(
+            section: 'wishlist',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): array => $this->wishlistPayload($profile, $tenantId),
+            fallback: null
+        );
+        $notifications = $this->safeAccountSection(
+            section: 'notifications',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): array => $this->notificationsPayload($profile),
+            fallback: null
+        );
+        $insights = $this->safeAccountSection(
+            section: 'insights',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): array => $this->insightsPayload(
+                $profile,
+                $tenantId,
+                $orders instanceof Collection ? $orders : collect(),
+                is_array($wishlist) ? $wishlist : [],
+                is_array($rewards) ? $rewards : $this->fallbackRewardsSummary($profile)
+            ),
+            fallback: null
+        );
+        $scentQuiz = $this->safeAccountSection(
+            section: 'scentQuiz',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): ?array => $this->scentQuizService->latestResultPayload($profile),
+            fallback: null
+        );
+
+        Log::info('Modern Forestry mobile account payload timing.', [
+            'marketing_profile_id' => (int) $profile->id,
+            'tenant_id' => $tenantId,
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ]);
 
         return [
-            'customer' => $this->customerPayload($profile),
-            'orders' => $this->orders($profile, $tenantId)->take(10)->values()->all(),
-            'support' => $this->supportPayload($profile),
-            'rewards' => $this->rewardsSummary($profile, $tenantId),
-            'wishlist' => $this->wishlistPayload($profile, $tenantId),
-            'notifications' => $this->notificationsPayload($profile),
-            'insights' => $this->insightsPayload($profile, $tenantId),
-            'scentQuiz' => $this->scentQuizService->latestResultPayload($profile),
+            'customer' => $customer,
+            'orders' => $orders instanceof Collection ? $orders->take(10)->values()->all() : [],
+            'support' => $support,
+            'rewards' => $rewards,
+            'wishlist' => is_array($wishlist) ? $wishlist : null,
+            'notifications' => is_array($notifications) ? $notifications : null,
+            'insights' => is_array($insights) ? $insights : null,
+            'scentQuiz' => is_array($scentQuiz) ? $scentQuiz : null,
         ];
     }
 
@@ -641,22 +711,6 @@ class ModernForestryMobileAccountService
         $rawTitle = trim((string) ($line->raw_title ?? ''));
         $rawVariant = trim((string) ($line->raw_variant ?? ''));
         $matchedProduct = $this->matchProductForLine($rawTitle);
-        $matchedVariant = null;
-
-        if ($matchedProduct !== null) {
-            try {
-                $detail = $this->catalog->productDetail((string) ($matchedProduct['handle'] ?? ''));
-                if (is_array($detail)) {
-                    $matchedVariant = $this->matchVariantForLine((array) ($detail['variants'] ?? []), $rawVariant);
-                }
-            } catch (Throwable $exception) {
-                Log::warning('Modern Forestry mobile account variant enrichment failed.', [
-                    'order_line_id' => (int) $line->id,
-                    'product_handle' => $matchedProduct['handle'] ?? null,
-                    'message' => $exception->getMessage(),
-                ]);
-            }
-        }
 
         return [
             'id' => (int) $line->id,
@@ -664,8 +718,8 @@ class ModernForestryMobileAccountService
             'quantity' => max(1, (int) ($line->quantity ?: $line->ordered_qty ?: 1)),
             'productHandle' => $matchedProduct['handle'] ?? null,
             'productTitle' => $matchedProduct['title'] ?? ($rawTitle !== '' ? $rawTitle : null),
-            'variantId' => $matchedVariant['id'] ?? ($line->shopify_variant_id ? (string) $line->shopify_variant_id : null),
-            'variantTitle' => $matchedVariant['title'] ?? ($rawVariant !== '' ? $rawVariant : null),
+            'variantId' => $line->shopify_variant_id ? (string) $line->shopify_variant_id : null,
+            'variantTitle' => $rawVariant !== '' ? $rawVariant : null,
             'imageUrl' => $this->nullableString($line->image_url),
             'canReorder' => $matchedProduct !== null,
         ];
@@ -746,16 +800,23 @@ class ModernForestryMobileAccountService
     /**
      * @return array<string,mixed>
      */
-    protected function insightsPayload(MarketingProfile $profile, int $tenantId): array
+    protected function insightsPayload(
+        MarketingProfile $profile,
+        int $tenantId,
+        ?Collection $orders = null,
+        ?array $wishlist = null,
+        ?array $rewardsSummary = null
+    ): array
     {
-        $orders = $this->orders($profile, $tenantId);
-        $wishlist = $this->wishlistPayload($profile, $tenantId);
+        $orders = $orders ?? $this->orders($profile, $tenantId);
+        $wishlist = $wishlist ?? $this->wishlistPayload($profile, $tenantId);
+        $rewardsSummary = $rewardsSummary ?? $this->rewardsSummary($profile, $tenantId);
 
         return [
             'orderCount' => $orders->count(),
             'wishlistCount' => (int) data_get($wishlist, 'summary.active_count', 0),
             'wishlistListCount' => count((array) data_get($wishlist, 'lists', [])),
-            'rewardBalance' => data_get($this->rewardsSummary($profile, $tenantId), 'balance'),
+            'rewardBalance' => data_get($rewardsSummary, 'balance'),
             'topOrderTitles' => $orders->pluck('linePreview')->filter()->take(3)->values()->all(),
             'topWishlistProducts' => collect(data_get($wishlist, 'items', []))
                 ->pluck('product_title')
@@ -764,6 +825,106 @@ class ModernForestryMobileAccountService
                 ->take(3)
                 ->values()
                 ->all(),
+        ];
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable():T  $resolver
+     * @param  T  $fallback
+     * @return T
+     */
+    protected function safeAccountSection(
+        string $section,
+        MarketingProfile $profile,
+        int $tenantId,
+        callable $resolver,
+        mixed $fallback
+    ): mixed {
+        $startedAt = microtime(true);
+
+        try {
+            return $resolver();
+        } catch (Throwable $exception) {
+            Log::warning('Modern Forestry mobile account section failed.', [
+                'section' => $section,
+                'marketing_profile_id' => (int) $profile->id,
+                'tenant_id' => $tenantId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $fallback;
+        } finally {
+            Log::info('Modern Forestry mobile account section timing.', [
+                'section' => $section,
+                'marketing_profile_id' => (int) $profile->id,
+                'tenant_id' => $tenantId,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+        }
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function fallbackCustomerPayload(MarketingProfile $profile): array
+    {
+        return [
+            'id' => (int) $profile->id,
+            'firstName' => $this->nullableString($profile->first_name),
+            'lastName' => $this->nullableString($profile->last_name),
+            'displayName' => $this->nullableString($profile->email) ?? 'Modern Forestry customer',
+            'email' => $this->nullableString($profile->email),
+            'phone' => $this->nullableString($profile->phone),
+            'addressLine1' => $this->nullableString($profile->address_line_1),
+            'addressLine2' => $this->nullableString($profile->address_line_2),
+            'city' => $this->nullableString($profile->city),
+            'state' => $this->nullableString($profile->state),
+            'postalCode' => $this->nullableString($profile->postal_code),
+            'country' => $this->nullableString($profile->country),
+            'hasSavedAddress' => $this->hasSavedAddress($profile),
+            'avatarUrl' => $this->profileAvatarUrl($profile),
+            'acceptsEmailMarketing' => (bool) $profile->accepts_email_marketing,
+            'acceptsSmsMarketing' => (bool) $profile->accepts_sms_marketing,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function fallbackSupportPayload(): array
+    {
+        return [
+            'canMessage' => false,
+            'preferredChannel' => null,
+            'prompt' => 'Support messaging is unavailable right now.',
+            'conversationId' => null,
+            'unreadCount' => 0,
+            'messages' => [],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function fallbackRewardsSummary(MarketingProfile $profile): array
+    {
+        $balancePoints = 0;
+
+        try {
+            $balancePoints = $this->candleCashService->currentBalance($profile);
+        } catch (Throwable $exception) {
+            Log::warning('Modern Forestry mobile account rewards fallback balance failed.', [
+                'marketing_profile_id' => (int) $profile->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+
+        return [
+            'balance' => $this->candleCashService->balancePayloadFromPoints($balancePoints),
+            'availableCount' => 0,
+            'recentRedemptions' => [],
         ];
     }
 

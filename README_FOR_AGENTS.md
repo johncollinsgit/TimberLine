@@ -2,6 +2,35 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Modern Forestry Live Checkout Recovery + Account First Paint Rule (2026-06-30)
+
+- End-to-end checkout now prioritizes producing a usable Shopify checkout URL over preserving every signed-in prefill detail.
+- Signed-in mobile checkout recovery order is now:
+  - first attempt unchanged
+  - retry without `deliveryAddress.phone`
+  - retry without the full `delivery` block
+  - if Shopify still returns `Phone is invalid`, create a clean anonymous Shopify checkout and return it as a successful recovery
+- Treat `anonymous_checkout` as a designed fallback, not a visible customer error. Keep it operator-facing through logs/metadata only.
+- Keep `buyerIdentity.phone` omitted in the signed-in Modern Forestry mobile path.
+- `ModernForestryMobileCheckoutService` now emits one `checkoutAttemptId` across retries/fallback so phone repros can be matched to production logs quickly.
+- `GET /api/mobile/v1/modern-forestry/account` should stay lightweight on first paint:
+  - do not reintroduce synchronous per-line product-detail enrichment
+  - keep non-critical sections fail-soft so wishlist/support/rewards hiccups do not blank the whole Account tab
+  - preserve timing logs for `customer`, `orders`, `wishlist`, `support`, `rewards`, and total payload time
+
+## Modern Forestry Mobile Phone Invalid Recovery Rule (2026-06-30)
+
+- The signed-in Modern Forestry mobile checkout path already omits `buyerIdentity.phone`; do not add it back.
+- If Shopify returns `Phone is invalid` during mobile cart refresh, treat it as a recovery case before treating it as an error:
+  - first retry without `deliveryAddress.phone`
+  - if needed, retry once more without the entire `delivery` block
+- If recovery succeeds, return the recovered cart normally and do not promote it to a visible customer error state.
+- If recovery fails, include diagnostics metadata in the API error so the iOS bag can explain the cart-refresh problem without exposing raw Shopify phrasing.
+- Current root-cause theory is stale Shopify cart or delivery identity state, not the iOS client sending `buyerIdentity.phone`.
+- The Home API may still emit shell/stale diagnostics for operators and tests, but the iOS Home surface should keep that context off-screen.
+- Instagram Story sharing must use the native `instagram-stories://share` composer route. Do not cargo-cult the Facebook `source_application` query string onto Instagram, or the handoff can degrade into opening the share link page instead of the Story publisher.
+- Device-QA caveat: the current Debug iPhone build still points at the live `app.theeverbranch.com` mobile API, so a phone repro can persist even when the local Laravel patch is correct. Separate “local code fixed” from “backend deployed” before assuming the recovery logic regressed.
+
 ## Modern Forestry Mobile Checkout + Performance Rule (2026-06-29)
 
 - Mobile checkout is Shopify Storefront Cart API based when the storefront token is available. Do not regress it to a handcrafted permalink-only flow. The intended path is: validate bag lines against Laravel product detail, create Shopify cart, apply buyer identity, attach delivery address when available, and return Shopify `checkoutUrl`. Anonymous checkout remains supported.

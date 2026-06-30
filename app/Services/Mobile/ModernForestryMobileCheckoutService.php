@@ -7,6 +7,8 @@ use App\Models\Tenant;
 use App\Services\Shopify\ShopifyStores;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ModernForestryMobileCheckoutService
 {
@@ -53,12 +55,15 @@ class ModernForestryMobileCheckoutService
         $store = $this->modernForestryRetailStore();
         $lines = $this->normalizeLines($items);
         $discountCodes = $this->normalizeDiscountCodes($discountCode);
+        $profile = $session?->profile;
         $customerContext = $this->customerContext(
-            $session?->profile,
+            $profile,
             $this->normalizeCustomerAccessToken($customerAccessToken ?? $session?->accessToken),
             $customerEmail,
             $customerPhone
         );
+        $buyerIdentity = $this->buyerIdentityInput($customerContext);
+        $delivery = $this->deliveryInput($customerContext);
         $storefrontToken = $this->storefrontAccessToken($store);
 
         if ($storefrontToken === null) {
@@ -76,40 +81,272 @@ class ModernForestryMobileCheckoutService
             $headers['Shopify-Storefront-Buyer-IP'] = $buyerIp;
         }
 
+        $attemptId = Str::lower(Str::random(12));
+        $checkoutState = $this->createStorefrontCartWithRecovery(
+            $store,
+            $headers,
+            $lines,
+            $discountCodes,
+            $customerContext,
+            $profile,
+            $customerPhone,
+            $buyerIdentity,
+            $delivery,
+            $attemptId
+        );
+        $cart = $checkoutState['cart'];
+
+        if (($customerContext['accessToken'] ?? null) !== null) {
+            $cart = $this->refreshCheckoutUrlForCart($store, $headers, $cart) ?? $cart;
+        }
+
+        $checkoutUrl = trim((string) ($cart['checkoutUrl'] ?? ''));
+        if ($checkoutUrl === '') {
+            throw new ModernForestryMobileCheckoutException(
+                'checkout_unavailable',
+                'Checkout is temporarily unavailable.',
+                503
+            );
+        }
+
+        $response = [
+            'checkoutUrl' => $checkoutUrl,
+            'cartId' => $this->publicId((string) ($cart['id'] ?? '')),
+            'lines' => $this->lineSummaries($lines),
+            'subtotal' => $this->moneyAmount($cart['cost']['subtotalAmount'] ?? null),
+            'tax' => $this->moneyAmount($cart['cost']['totalTaxAmount'] ?? null),
+            'shipping' => $this->deliveryEstimateAmount($cart['deliveryGroups'] ?? null),
+            'discount' => $this->discountAmountForCart($cart),
+            'total' => $this->moneyAmount($cart['cost']['totalAmount'] ?? null),
+            'currencyCode' => $this->currencyCodeForCart($cart),
+            'authenticated' => $customerContext['accessToken'] !== null,
+            'prefilledCustomer' => $this->prefilledCustomer($cart, $customerContext),
+            'discountCodes' => $discountCodes,
+            'discountAccepted' => $this->discountCodesAccepted($cart, $discountCodes),
+            'errors' => [],
+        ];
+
+        if (($checkoutState['recovery'] ?? null) !== null) {
+            $response['recovery'] = $checkoutState['recovery'];
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $lines
+     * @param  array<int,string>  $discountCodes
+     * @param  array<string,mixed>  $customerContext
+     * @param  array<string,mixed>|null  $buyerIdentity
+     * @param  array<string,mixed>|null  $delivery
+     * @return array{cart:array<string,mixed>,recovery:?array<string,string>}
+     */
+    protected function createStorefrontCartWithRecovery(
+        array $store,
+        array $headers,
+        array $lines,
+        array $discountCodes,
+        array $customerContext,
+        ?MarketingProfile $profile,
+        ?string $customerPhone,
+        ?array $buyerIdentity,
+        ?array $delivery,
+        string $attemptId
+    ): array {
+        $retryState = 'none';
+        $retryOutcome = 'not_needed';
+        $currentDelivery = $delivery;
+
+        while (true) {
+            $cartCreate = $this->performCartCreateRequest(
+                $store,
+                $headers,
+                $lines,
+                $discountCodes,
+                $buyerIdentity,
+                $currentDelivery
+            );
+
+            $userErrors = $this->userErrors($cartCreate['userErrors'] ?? []);
+            if ($userErrors === []) {
+                $cart = $cartCreate['cart'] ?? null;
+                if (! is_array($cart)) {
+                    throw new ModernForestryMobileCheckoutException(
+                        'checkout_unavailable',
+                        'Checkout is temporarily unavailable.',
+                        503
+                    );
+                }
+
+                if ($retryState !== 'none') {
+                    $retryOutcome = 'recovered_'.$retryState;
+                    Log::info('modern forestry mobile checkout recovered after phone retry', [
+                        'checkoutAttemptId' => $attemptId,
+                        'retryState' => $retryState,
+                        'retryOutcome' => $retryOutcome,
+                    ]);
+                }
+
+                return [
+                    'cart' => $cart,
+                    'recovery' => $retryState === 'none'
+                        ? null
+                        : [
+                            'state' => $retryState,
+                            'message' => $this->recoveryMessage($retryState),
+                        ],
+                ];
+            }
+
+            $phoneInvalid = $this->containsPhoneInvalidUserError($userErrors);
+            $nextRetryState = $this->nextPhoneInvalidRetryState($currentDelivery);
+            $terminalDiagnostics = $this->checkoutDiagnostics(
+                $customerContext,
+                $profile,
+                $customerPhone,
+                $buyerIdentity,
+                $currentDelivery,
+                $retryOutcome,
+                $phoneInvalid ? 'shopify_phone_invalid' : 'shopify_user_error',
+                $attemptId
+            );
+
+            $this->logCheckoutUserErrors(
+                $userErrors,
+                $customerContext,
+                $profile,
+                $customerPhone,
+                $buyerIdentity,
+                $currentDelivery,
+                $attemptId,
+                $retryState,
+                $nextRetryState,
+                false
+            );
+
+            if (! $phoneInvalid || $nextRetryState === null) {
+                if (
+                    $phoneInvalid
+                    && $nextRetryState === null
+                    && ($customerContext['accessToken'] ?? null) !== null
+                ) {
+                    $retryOutcome = 'retrying_anonymous_checkout';
+
+                    $anonymousCartCreate = $this->performCartCreateRequest(
+                        $store,
+                        $headers,
+                        $lines,
+                        $discountCodes,
+                        null,
+                        null
+                    );
+
+                    $anonymousUserErrors = $this->userErrors($anonymousCartCreate['userErrors'] ?? []);
+                    if ($anonymousUserErrors === []) {
+                        $cart = $anonymousCartCreate['cart'] ?? null;
+                        if (! is_array($cart)) {
+                            throw new ModernForestryMobileCheckoutException(
+                                'checkout_unavailable',
+                                'Checkout is temporarily unavailable.',
+                                503
+                            );
+                        }
+
+                        Log::info('modern forestry mobile checkout recovered with anonymous fallback', [
+                            'checkoutAttemptId' => $attemptId,
+                            'retryState' => 'anonymous_checkout',
+                            'retryOutcome' => 'recovered_anonymous_checkout',
+                        ]);
+
+                        return [
+                            'cart' => $cart,
+                            'recovery' => [
+                                'state' => 'anonymous_checkout',
+                                'message' => $this->recoveryMessage('anonymous_checkout'),
+                            ],
+                        ];
+                    }
+
+                    $anonymousPhoneInvalid = $this->containsPhoneInvalidUserError($anonymousUserErrors);
+                    $retryOutcome = 'failed_after_anonymous_checkout';
+                    $terminalDiagnostics = $this->checkoutDiagnostics(
+                        $customerContext,
+                        $profile,
+                        $customerPhone,
+                        null,
+                        null,
+                        $retryOutcome,
+                        $anonymousPhoneInvalid ? 'shopify_phone_invalid' : 'shopify_user_error',
+                        $attemptId
+                    );
+
+                    $this->logCheckoutUserErrors(
+                        $anonymousUserErrors,
+                        $customerContext,
+                        $profile,
+                        $customerPhone,
+                        null,
+                        null,
+                        $attemptId,
+                        'anonymous_checkout',
+                        null,
+                        false
+                    );
+
+                    throw new ModernForestryMobileCheckoutException(
+                        'shopify_user_error',
+                        $anonymousUserErrors[0]['message'],
+                        422,
+                        $terminalDiagnostics
+                    );
+                }
+
+                if ($phoneInvalid) {
+                    $retryOutcome = $retryState === 'none'
+                        ? 'failed_without_retry'
+                        : 'failed_after_'.$retryState;
+                    $terminalDiagnostics['retryOutcome'] = $retryOutcome;
+                }
+
+                throw new ModernForestryMobileCheckoutException(
+                    'shopify_user_error',
+                    $userErrors[0]['message'],
+                    422,
+                    $terminalDiagnostics
+                );
+            }
+
+            $retryOutcome = 'retrying_'.$nextRetryState;
+            $currentDelivery = match ($nextRetryState) {
+                'removed_delivery_phone' => $this->deliveryWithoutPhone($currentDelivery),
+                'removed_delivery_context' => null,
+                default => $currentDelivery,
+            };
+            $retryState = $nextRetryState;
+        }
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $lines
+     * @param  array<int,string>  $discountCodes
+     * @param  array<string,mixed>|null  $buyerIdentity
+     * @param  array<string,mixed>|null  $delivery
+     * @return array<string,mixed>
+     */
+    protected function performCartCreateRequest(
+        array $store,
+        array $headers,
+        array $lines,
+        array $discountCodes,
+        ?array $buyerIdentity,
+        ?array $delivery
+    ): array {
         $response = Http::withHeaders($headers)
             ->timeout(30)
             ->post($this->storefrontGraphqlUrl($store), [
                 'query' => $this->cartCreateMutation(),
                 'variables' => [
-                    'input' => array_filter([
-                        'lines' => array_map(
-                            static fn (array $line): array => array_filter([
-                                'merchandiseId' => $line['merchandiseId'],
-                                'quantity' => $line['quantity'],
-                                'attributes' => ! empty($line['attributes']) ? array_map(
-                                    static fn (array $attribute): array => [
-                                        'key' => (string) ($attribute['key'] ?? ''),
-                                        'value' => (string) ($attribute['value'] ?? ''),
-                                    ],
-                                    $line['attributes']
-                                ) : null,
-                            ], static fn (mixed $value): bool => $value !== null && $value !== []),
-                            $lines
-                        ),
-                        'discountCodes' => $discountCodes,
-                        'buyerIdentity' => $this->buyerIdentityInput($customerContext),
-                        'delivery' => $this->deliveryInput($customerContext),
-                        'attributes' => [
-                            [
-                                'key' => 'source',
-                                'value' => 'modern_forestry_ios',
-                            ],
-                            [
-                                'key' => 'tenant_id',
-                                'value' => (string) self::TENANT_ID,
-                            ],
-                        ],
-                    ], static fn (mixed $value): bool => $value !== [] && $value !== null),
+                    'input' => $this->cartCreateInput($lines, $discountCodes, $buyerIdentity, $delivery),
                 ],
             ]);
 
@@ -148,53 +385,51 @@ class ModernForestryMobileCheckoutService
             );
         }
 
-        $userErrors = $this->userErrors($cartCreate['userErrors'] ?? []);
-        if ($userErrors !== []) {
-            throw new ModernForestryMobileCheckoutException(
-                'shopify_user_error',
-                $userErrors[0],
-                422
-            );
-        }
+        return $cartCreate;
+    }
 
-        $cart = $cartCreate['cart'] ?? null;
-        if (! is_array($cart)) {
-            throw new ModernForestryMobileCheckoutException(
-                'checkout_unavailable',
-                'Checkout is temporarily unavailable.',
-                503
-            );
-        }
-
-        if (($customerContext['accessToken'] ?? null) !== null) {
-            $cart = $this->refreshCheckoutUrlForCart($store, $headers, $cart) ?? $cart;
-        }
-
-        $checkoutUrl = trim((string) ($cart['checkoutUrl'] ?? ''));
-        if ($checkoutUrl === '') {
-            throw new ModernForestryMobileCheckoutException(
-                'checkout_unavailable',
-                'Checkout is temporarily unavailable.',
-                503
-            );
-        }
-
-        return [
-            'checkoutUrl' => $checkoutUrl,
-            'cartId' => $this->publicId((string) ($cart['id'] ?? '')),
-            'lines' => $this->lineSummaries($lines),
-            'subtotal' => $this->moneyAmount($cart['cost']['subtotalAmount'] ?? null),
-            'tax' => $this->moneyAmount($cart['cost']['totalTaxAmount'] ?? null),
-            'shipping' => $this->deliveryEstimateAmount($cart['deliveryGroups'] ?? null),
-            'discount' => $this->discountAmountForCart($cart),
-            'total' => $this->moneyAmount($cart['cost']['totalAmount'] ?? null),
-            'currencyCode' => $this->currencyCodeForCart($cart),
-            'authenticated' => $customerContext['accessToken'] !== null,
-            'prefilledCustomer' => $this->prefilledCustomer($cart, $customerContext),
+    /**
+     * @param  array<int,array<string,mixed>>  $lines
+     * @param  array<int,string>  $discountCodes
+     * @param  array<string,mixed>|null  $buyerIdentity
+     * @param  array<string,mixed>|null  $delivery
+     * @return array<string,mixed>
+     */
+    protected function cartCreateInput(
+        array $lines,
+        array $discountCodes,
+        ?array $buyerIdentity,
+        ?array $delivery
+    ): array {
+        return array_filter([
+            'lines' => array_map(
+                static fn (array $line): array => array_filter([
+                    'merchandiseId' => $line['merchandiseId'],
+                    'quantity' => $line['quantity'],
+                    'attributes' => ! empty($line['attributes']) ? array_map(
+                        static fn (array $attribute): array => [
+                            'key' => (string) ($attribute['key'] ?? ''),
+                            'value' => (string) ($attribute['value'] ?? ''),
+                        ],
+                        $line['attributes']
+                    ) : null,
+                ], static fn (mixed $value): bool => $value !== null && $value !== []),
+                $lines
+            ),
             'discountCodes' => $discountCodes,
-            'discountAccepted' => $this->discountCodesAccepted($cart, $discountCodes),
-            'errors' => [],
-        ];
+            'buyerIdentity' => $buyerIdentity,
+            'delivery' => $delivery,
+            'attributes' => [
+                [
+                    'key' => 'source',
+                    'value' => 'modern_forestry_ios',
+                ],
+                [
+                    'key' => 'tenant_id',
+                    'value' => (string) self::TENANT_ID,
+                ],
+            ],
+        ], static fn (mixed $value): bool => $value !== [] && $value !== null);
     }
 
     protected function assertModernForestryTenant(): Tenant
@@ -573,11 +808,14 @@ GRAPHQL;
         ?string $customerEmail,
         ?string $customerPhone
     ): array {
+        $allowStoredProfilePhoneFallback = $customerAccessToken === null;
         $email = $this->normalizeCustomerEmail($customerEmail) ?? $this->profileEmail($profile);
-        $phone = $this->preferredBuyerPhone($customerPhone)
-            ?? $this->preferredBuyerPhone($profile?->normalized_phone ?: $profile?->phone);
+        $phone = $this->preferredBuyerPhone($customerPhone);
+        if ($phone === null && $allowStoredProfilePhoneFallback) {
+            $phone = $this->preferredBuyerPhone($profile?->normalized_phone ?: $profile?->phone);
+        }
         $countryCode = $this->countryCodeFromProfile($profile);
-        $delivery = $this->deliveryAddressInput($profile, $customerPhone);
+        $delivery = $this->deliveryAddressInput($profile, $customerPhone, $allowStoredProfilePhoneFallback);
 
         return [
             'accessToken' => $customerAccessToken,
@@ -606,7 +844,6 @@ GRAPHQL;
         $buyerIdentity = array_filter([
             'customerAccessToken' => $customerContext['accessToken'] ?? null,
             'email' => $customerContext['email'] ?? null,
-            'phone' => $customerContext['phone'] ?? null,
             'countryCode' => $customerContext['countryCode'] ?? null,
         ], static fn (mixed $value): bool => $value !== null && $value !== '');
 
@@ -627,7 +864,11 @@ GRAPHQL;
     /**
      * @return array<string,mixed>|null
      */
-    protected function deliveryAddressInput(?MarketingProfile $profile, ?string $customerPhone = null): ?array
+    protected function deliveryAddressInput(
+        ?MarketingProfile $profile,
+        ?string $customerPhone = null,
+        bool $allowStoredProfilePhoneFallback = true
+    ): ?array
     {
         if (! $profile instanceof MarketingProfile) {
             return null;
@@ -645,7 +886,7 @@ GRAPHQL;
             'countryCode' => $countryCode,
             'firstName' => $this->nullableString($profile->first_name),
             'lastName' => $this->nullableString($profile->last_name),
-            'phone' => $this->deliveryPhone($customerPhone, $profile),
+            'phone' => $this->deliveryPhone($customerPhone, $profile, $allowStoredProfilePhoneFallback),
             'provinceCode' => $this->nullableString($profile->state),
             'zip' => $this->nullableString($profile->postal_code),
         ], static fn (mixed $value): bool => $value !== null && $value !== '');
@@ -681,10 +922,18 @@ GRAPHQL;
             ], static fn (?string $value): bool => $value !== null && $value !== '') !== [];
     }
 
-    protected function deliveryPhone(?string $customerPhone, MarketingProfile $profile): ?string
+    protected function deliveryPhone(
+        ?string $customerPhone,
+        MarketingProfile $profile,
+        bool $allowStoredProfilePhoneFallback = true
+    ): ?string
     {
-        return $this->e164Phone($customerPhone)
-            ?? $this->e164Phone((string) ($profile->normalized_phone ?: $profile->phone));
+        $phone = $this->e164Phone($customerPhone);
+        if ($phone !== null || ! $allowStoredProfilePhoneFallback) {
+            return $phone;
+        }
+
+        return $this->e164Phone((string) ($profile->normalized_phone ?: $profile->phone));
     }
 
     protected function preferredBuyerPhone(?string $value): ?string
@@ -1002,7 +1251,7 @@ GRAPHQL;
     }
 
     /**
-     * @return array<int,string>
+     * @return array<int,array{message:string,field:?string}>
      */
     protected function userErrors(mixed $errors): array
     {
@@ -1011,11 +1260,209 @@ GRAPHQL;
         }
 
         return array_values(array_filter(array_map(
-            static fn (mixed $error): ?string => is_array($error) && trim((string) ($error['message'] ?? '')) !== ''
-                ? trim((string) $error['message'])
-                : null,
+            function (mixed $error): ?array {
+                if (! is_array($error)) {
+                    return null;
+                }
+
+                $message = trim((string) ($error['message'] ?? ''));
+                if ($message === '') {
+                    return null;
+                }
+
+                $field = $this->userErrorField($error['field'] ?? null);
+
+                return [
+                    'message' => $this->formatUserErrorMessage($message, $field),
+                    'field' => $field,
+                ];
+            },
             $errors
         )));
+    }
+
+    protected function userErrorField(mixed $field): ?string
+    {
+        if (is_string($field)) {
+            $field = trim($field);
+
+            return $field !== '' ? $field : null;
+        }
+
+        if (! is_array($field)) {
+            return null;
+        }
+
+        $parts = array_values(array_filter(
+            array_map(
+                static fn (mixed $segment): ?string => is_scalar($segment)
+                    ? (trim((string) $segment) !== '' ? trim((string) $segment) : null)
+                    : null,
+                $field
+            ),
+            static fn (?string $segment): bool => $segment !== null && $segment !== ''
+        ));
+
+        if ($parts === []) {
+            return null;
+        }
+
+        if (($parts[0] ?? null) === 'input') {
+            array_shift($parts);
+        }
+
+        return $parts !== [] ? implode('.', $parts) : null;
+    }
+
+    protected function formatUserErrorMessage(string $message, ?string $field = null): string
+    {
+        $message = trim($message);
+        if ($field === null || $field === '') {
+            return $message;
+        }
+
+        return rtrim($message, ". \t\n\r\0\x0B").'. Shopify rejected '.$field.'.';
+    }
+
+    /**
+     * @param  array<int,array{message:string,field:?string}>  $userErrors
+     */
+    protected function containsPhoneInvalidUserError(array $userErrors): bool
+    {
+        foreach ($userErrors as $error) {
+            $message = strtolower((string) ($error['message'] ?? ''));
+            $field = strtolower((string) ($error['field'] ?? ''));
+
+            if (str_contains($message, 'phone is invalid') || str_contains($field, 'phone')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $delivery
+     */
+    protected function nextPhoneInvalidRetryState(?array $delivery): ?string
+    {
+        if (data_get($delivery, 'addresses.0.address.deliveryAddress.phone') !== null) {
+            return 'removed_delivery_phone';
+        }
+
+        if ($delivery !== null) {
+            return 'removed_delivery_context';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $delivery
+     * @return array<string,mixed>|null
+     */
+    protected function deliveryWithoutPhone(?array $delivery): ?array
+    {
+        if (! is_array($delivery)) {
+            return null;
+        }
+
+        $updated = $delivery;
+        unset($updated['addresses'][0]['address']['deliveryAddress']['phone']);
+
+        $remainingAddress = data_get($updated, 'addresses.0.address.deliveryAddress');
+        if (is_array($remainingAddress) && $remainingAddress === []) {
+            return null;
+        }
+
+        return $updated;
+    }
+
+    protected function recoveryMessage(string $retryState): string
+    {
+        return match ($retryState) {
+            'removed_delivery_phone' => 'Recovered this cart refresh by removing a saved delivery phone before retrying Shopify.',
+            'removed_delivery_context' => 'Recovered this cart refresh by removing saved delivery details before retrying Shopify.',
+            'anonymous_checkout' => 'Recovered this cart refresh by opening a clean Shopify checkout without saved delivery details.',
+            default => 'Recovered this cart refresh after retrying Shopify with lighter saved details.',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $customerContext
+     * @param  array<string,mixed>|null  $buyerIdentity
+     * @param  array<string,mixed>|null  $delivery
+     * @return array<string,mixed>
+     */
+    protected function checkoutDiagnostics(
+        array $customerContext,
+        ?MarketingProfile $profile,
+        ?string $customerPhone,
+        ?array $buyerIdentity,
+        ?array $delivery,
+        string $retryOutcome,
+        string $reason,
+        ?string $attemptId = null
+    ): array {
+        $profilePhone = $profile instanceof MarketingProfile
+            ? (string) ($profile->normalized_phone ?: $profile->phone)
+            : null;
+
+        return [
+            'reason' => $reason,
+            'authenticated' => ($customerContext['accessToken'] ?? null) !== null,
+            'requestPhoneProvided' => $this->nullableString($customerPhone) !== null,
+            'requestPhoneNormalized' => $this->e164Phone($customerPhone) !== null,
+            'profilePhoneAvailable' => $this->e164Phone($profilePhone) !== null,
+            'buyerPhoneSent' => data_get($buyerIdentity, 'phone') !== null,
+            'deliveryPhoneSent' => data_get($delivery, 'addresses.0.address.deliveryAddress.phone') !== null,
+            'deliverySent' => $delivery !== null,
+            'retryOutcome' => $retryOutcome,
+            'checkoutAttemptId' => $attemptId,
+        ];
+    }
+
+    /**
+     * @param  array<int,array{message:string,field:?string}>  $userErrors
+     * @param  array<string,mixed>  $customerContext
+     * @param  array<string,mixed>|null  $buyerIdentity
+     * @param  array<string,mixed>|null  $delivery
+     */
+    protected function logCheckoutUserErrors(
+        array $userErrors,
+        array $customerContext,
+        ?MarketingProfile $profile,
+        ?string $customerPhone,
+        ?array $buyerIdentity = null,
+        ?array $delivery = null,
+        ?string $attemptId = null,
+        string $retryState = 'none',
+        ?string $nextRetryState = null,
+        bool $recoverySucceeded = false
+    ): void {
+        Log::warning('modern forestry mobile checkout rejected by shopify', [
+            'checkoutAttemptId' => $attemptId,
+            'retryState' => $retryState,
+            'nextRetryState' => $nextRetryState,
+            'recoverySucceeded' => $recoverySucceeded,
+            ...$this->checkoutDiagnostics(
+                $customerContext,
+                $profile,
+                $customerPhone,
+                $buyerIdentity,
+                $delivery,
+                $nextRetryState !== null ? 'retrying_'.$nextRetryState : 'failed',
+                $this->containsPhoneInvalidUserError($userErrors) ? 'shopify_phone_invalid' : 'shopify_user_error',
+                $attemptId
+            ),
+            'userErrors' => array_map(
+                static fn (array $error): array => [
+                    'field' => $error['field'],
+                    'message' => $error['message'],
+                ],
+                $userErrors
+            ),
+        ]);
     }
 
     protected function publicId(string $gid): string
