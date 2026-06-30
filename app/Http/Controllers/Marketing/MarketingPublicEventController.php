@@ -1233,10 +1233,12 @@ class MarketingPublicEventController extends Controller
             ->firstOrFail();
 
         $image = $this->renderScentPersonalityShareImage($result);
+        $etag = '"'.$result->publicShareCardVersion().'"';
 
         return response($image, 200, [
             'Content-Type' => 'image/png',
-            'Cache-Control' => 'public, max-age=3600',
+            'Cache-Control' => 'public, max-age=31536000, immutable',
+            'ETag' => $etag,
         ]);
     }
 

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MarketingProfileScentQuizResult extends Model
 {
+    public const SHARE_CARD_VERSION = 'mf-scent-v4';
+
     protected $fillable = [
         'marketing_profile_id',
         'tenant_id',
@@ -38,5 +40,26 @@ class MarketingProfileScentQuizResult extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function publicShareRevision(): string
+    {
+        $revisionBasis = implode('|', [
+            (string) $this->id,
+            (string) ($this->updated_at?->format('YmdHis.u') ?? ''),
+            (string) ($this->completed_at?->format('YmdHis.u') ?? ''),
+            (string) ($this->headline ?? ''),
+            (string) ($this->personality_title ?? ''),
+            (string) ($this->personality_body ?? ''),
+            json_encode($this->dominant_traits ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]',
+            json_encode($this->axis_scores ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]',
+        ]);
+
+        return substr(sha1($revisionBasis), 0, 12);
+    }
+
+    public function publicShareCardVersion(): string
+    {
+        return self::SHARE_CARD_VERSION.'-'.$this->publicShareRevision();
     }
 }

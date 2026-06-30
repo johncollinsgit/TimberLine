@@ -22,9 +22,10 @@
         $publicQuizActionUrl = trim((string) ($publicQuizActionUrl ?? ''));
         $publicQuizEventUrl = trim((string) ($publicQuizEventUrl ?? ''));
         $pageMode = in_array((string) ($pageMode ?? 'landing'), ['landing', 'quiz', 'results'], true) ? (string) $pageMode : 'landing';
-        $cardVersion = 'mf-scent-v4';
-        $shareUrl = url()->full();
-        $shareImageUrl = route('marketing.public.scent-personality-share.image', ['token' => $result->public_share_token, 'v' => $cardVersion, 'card' => $cardVersion]);
+        $shareRevision = $result->publicShareRevision();
+        $cardVersion = $result->publicShareCardVersion();
+        $shareUrl = route('marketing.public.scent-personality-share', ['token' => $result->public_share_token, 'v' => $shareRevision, 'card' => $cardVersion]);
+        $shareImageUrl = route('marketing.public.scent-personality-share.image', ['token' => $result->public_share_token, 'v' => $shareRevision, 'card' => $cardVersion]);
         $logoUrl = asset('brand/modern-forestry-logo-white.png');
         $pageTitle = 'Find your Modern Forestry Scent Personality!';
         $typeLabel = 'Scent Personality Type: '.$headline;

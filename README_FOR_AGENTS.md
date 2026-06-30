@@ -2,6 +2,16 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Modern Forestry Facebook Scent-Share Preview Refresh Rule (2026-06-30)
+
+- Modern Forestry scent-personality sharing is intentionally **latest-only** per account. Retakes should update the current public share target instead of creating immutable historical share snapshots.
+- Facebook preview freshness depends on a result-derived revision token appearing in both:
+  - the public scent-share page URL
+  - the scent-share `og:image` / `twitter:image` URL
+- Do not regress the share metadata back to a token-only/static image URL. Facebook can cache that preview aggressively and keep showing the old card after a retake.
+- Keep the current `socialShareConfig` payload shape. The revision change belongs in the returned `share_url`, not in a new API field.
+- Do not switch this flow to per-retake token rotation or immutable share history unless product behavior is intentionally being redesigned.
+
 ## Modern Forestry Live Checkout Recovery + Account First Paint Rule (2026-06-30)
 
 - End-to-end checkout now prioritizes producing a usable Shopify checkout URL over preserving every signed-in prefill detail.

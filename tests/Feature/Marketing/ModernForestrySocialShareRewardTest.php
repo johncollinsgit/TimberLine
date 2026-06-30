@@ -124,6 +124,54 @@ test('public scent personality share page hides private customer data', function
         ->assertDontSee('ada@example.com');
 });
 
+test('public scent personality share page emits revisioned og metadata', function (): void {
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Ada',
+        'last_name' => 'Woods',
+        'email' => 'ada@example.com',
+        'normalized_email' => 'ada@example.com',
+    ]);
+
+    $result = MarketingProfileScentQuizResult::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => ['clean' => 88, 'citrus' => 73, 'earthy' => 42],
+        'dominant_traits' => ['clean', 'citrus', 'earthy'],
+        'headline' => 'Clean + Citrus',
+        'personality_title' => 'The Sunlit Organizer',
+        'personality_body' => 'Fresh, bright, and a little polished.',
+        'public_share_token' => 'revisionedsharetoken1234567890',
+        'answers' => [],
+        'completed_at' => '2026-06-30 12:00:00',
+    ]);
+
+    $response = $this->get('/share/scent-personality/'.$result->public_share_token);
+    $html = $response->getContent();
+
+    $response->assertOk();
+    expect($html)->toBeString();
+
+    preg_match('/<meta property="og:url" content="([^"]+)">/', (string) $html, $ogUrlMatch);
+    preg_match('/<meta property="og:image" content="([^"]+)">/', (string) $html, $ogImageMatch);
+
+    $ogUrl = isset($ogUrlMatch[1]) ? html_entity_decode($ogUrlMatch[1], ENT_QUOTES | ENT_HTML5) : null;
+    $ogImage = isset($ogImageMatch[1]) ? html_entity_decode($ogImageMatch[1], ENT_QUOTES | ENT_HTML5) : null;
+    $ogUrlQuery = [];
+    $ogImageQuery = [];
+
+    parse_str((string) parse_url((string) $ogUrl, PHP_URL_QUERY), $ogUrlQuery);
+    parse_str((string) parse_url((string) $ogImage, PHP_URL_QUERY), $ogImageQuery);
+
+    expect($ogUrl)->not->toBeNull()
+        ->and($ogImage)->not->toBeNull()
+        ->and($ogUrlQuery['v'] ?? null)->toBe($result->publicShareRevision())
+        ->and($ogUrlQuery['card'] ?? null)->toBe($result->publicShareCardVersion())
+        ->and($ogImageQuery['v'] ?? null)->toBe($result->publicShareRevision())
+        ->and($ogImageQuery['card'] ?? null)->toBe($result->publicShareCardVersion());
+});
+
 test('public scent personality share image renders a branded preview card', function (): void {
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => 1,
@@ -151,11 +199,59 @@ test('public scent personality share image renders a branded preview card', func
         'completed_at' => now(),
     ]);
 
-    $response = $this->get('/share/scent-personality/'.$result->public_share_token.'/image.png');
+    $response = $this->get('/share/scent-personality/'.$result->public_share_token.'/image.png?v='.$result->publicShareRevision().'&card='.$result->publicShareCardVersion());
 
     $response->assertOk();
     expect($response->headers->get('content-type'))->toContain('image/png')
+        ->and($response->headers->get('cache-control'))->toContain('immutable')
+        ->and($response->headers->get('etag'))->toBe('"'.$result->publicShareCardVersion().'"')
         ->and(strlen($response->getContent()))->toBeGreaterThan(5000);
+
+    $this->get('/share/scent-personality/'.$result->public_share_token.'/image.png')
+        ->assertOk();
+});
+
+test('scent personality share target revision changes after retake', function (): void {
+    $profile = MarketingProfile::factory()->create(['tenant_id' => 1]);
+    $service = app(ModernForestrySocialShareRewardService::class);
+
+    $result = MarketingProfileScentQuizResult::query()->create([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $profile->id,
+        'quiz_version' => 'scent-v1',
+        'axis_scores' => ['woodsy' => 92, 'earthy' => 70],
+        'dominant_traits' => ['woodsy', 'earthy'],
+        'headline' => 'Woodsy + Earthy',
+        'personality_title' => 'The Grounded Explorer',
+        'personality_body' => 'Rooted and calm.',
+        'public_share_token' => 'latestscenttargettoken1234567890',
+        'answers' => [],
+        'completed_at' => '2026-06-30 12:00:00',
+    ]);
+
+    $firstTarget = $service->scentPersonalityTarget($profile->fresh());
+    $firstQuery = [];
+    parse_str((string) parse_url((string) $firstTarget['share_url'], PHP_URL_QUERY), $firstQuery);
+
+    $result->timestamps = false;
+    $result->forceFill([
+        'axis_scores' => ['smoky' => 94, 'woodsy' => 81],
+        'dominant_traits' => ['smoky', 'woodsy'],
+        'headline' => 'Smoky + Woodsy',
+        'personality_title' => 'The Campfire Archivist',
+        'personality_body' => 'Smoky, grounded, and warm.',
+        'completed_at' => '2026-06-30 12:05:00',
+        'updated_at' => '2026-06-30 12:05:00',
+    ])->save();
+    $result->timestamps = true;
+
+    $secondTarget = $service->scentPersonalityTarget($profile->fresh());
+    $secondQuery = [];
+    parse_str((string) parse_url((string) $secondTarget['share_url'], PHP_URL_QUERY), $secondQuery);
+
+    expect($secondTarget['share_url'])->not->toBe($firstTarget['share_url'])
+        ->and($firstQuery['v'] ?? null)->not->toBe($secondQuery['v'] ?? null)
+        ->and($secondQuery['card'] ?? null)->toBe('mf-scent-v4-'.($secondQuery['v'] ?? ''));
 });
 
 test('public scent personality share page can run an anonymous quiz funnel and recommend products', function (): void {
@@ -198,7 +294,7 @@ test('public scent personality share page can run an anonymous quiz funnel and r
 
     $response->assertOk()
         ->assertSeeText('Top 4 scent matches')
-        ->assertSeeText('Show my scent map')
+        ->assertSeeText('Take the quiz!')
         ->assertSeeText('Save My Results')
         ->assertSeeText('Candles to start with');
 
