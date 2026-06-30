@@ -146,7 +146,7 @@
                     <div class="text-sm font-semibold text-zinc-950">Review actions</div>
                     @if ($canManageApproval && filled($contextToken))
                         <div class="mt-3 space-y-4">
-                            <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.approve', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3" data-embedded-auth-form>
+                            <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.approve', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3">
                                 @csrf
                                 <input type="hidden" name="context_token" value="{{ $contextToken }}">
                                 <label class="block space-y-2">
@@ -173,7 +173,7 @@
                             </form>
 
                             @if ($accessRequest->status !== 'approved')
-                                <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3" data-embedded-auth-form>
+                                <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3">
                                     @csrf
                                     <input type="hidden" name="context_token" value="{{ $contextToken }}">
                                     <label class="block space-y-2">
@@ -213,88 +213,4 @@
         </section>
     </div>
 
-    <script>
-        (function () {
-            const forms = Array.from(document.querySelectorAll('[data-embedded-auth-form]'));
-            if (forms.length === 0) {
-                return;
-            }
-
-            forms.forEach((form) => {
-                form.addEventListener('submit', async (event) => {
-                    event.preventDefault();
-
-                    const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
-                    const originalText = submitter ? submitter.textContent : null;
-                    if (submitter) {
-                        submitter.setAttribute('disabled', 'disabled');
-                        submitter.textContent = 'Working...';
-                    }
-
-                    try {
-                        let headers = {
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                        };
-
-                        if (window.ForestryEmbeddedApp && typeof window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders === 'function') {
-                            headers = await window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders({
-                                includeJsonContentType: false,
-                            });
-                            headers['Accept'] = 'application/json';
-                            headers['X-Requested-With'] = 'XMLHttpRequest';
-                        }
-
-                        const submitUrl = submitter && 'formAction' in submitter && typeof submitter.formAction === 'string' && submitter.formAction !== ''
-                            ? submitter.formAction
-                            : form.action;
-
-                        const response = await fetch(submitUrl, {
-                            method: 'POST',
-                            headers,
-                            body: new FormData(form),
-                            credentials: 'same-origin',
-                        });
-
-                        const responseType = response.headers.get('content-type') || '';
-                        if (!responseType.includes('application/json')) {
-                            window.location.assign(response.redirected && response.url ? response.url : window.location.href);
-                            return;
-                        }
-
-                        const payload = await response.json().catch(() => ({}));
-                        const redirectUrl = typeof payload.redirect_url === 'string' && payload.redirect_url !== ''
-                            ? payload.redirect_url
-                            : (response.redirected && response.url ? response.url : window.location.href);
-
-                        if (!response.ok || payload.ok === false) {
-                            if (payload.message && window.ForestryEmbeddedApp?.showToast) {
-                                window.ForestryEmbeddedApp.showToast(payload.message, 'error');
-                            }
-                            window.location.assign(redirectUrl);
-                            return;
-                        }
-
-                        if (payload.message && window.ForestryEmbeddedApp?.showToast) {
-                            window.ForestryEmbeddedApp.showToast(payload.message, 'success');
-                        }
-                        window.location.replace(redirectUrl);
-                    } catch (error) {
-                        const message = error?.message || 'We could not process that application action right now.';
-                        if (window.ForestryEmbeddedApp?.showToast) {
-                            window.ForestryEmbeddedApp.showToast(message, 'error');
-                        }
-                        form.submit();
-                    } finally {
-                        if (submitter) {
-                            submitter.removeAttribute('disabled');
-                            if (originalText !== null) {
-                                submitter.textContent = originalText;
-                            }
-                        }
-                    }
-                });
-            });
-        })();
-    </script>
 </x-shopify-embedded-shell>
