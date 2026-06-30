@@ -77,16 +77,68 @@
         </section>
 
         <section class="grid gap-6 xl:grid-cols-[minmax(0,2fr)_360px]">
-            <div class="fb-page-surface p-6">
-                <div class="text-sm font-semibold text-zinc-950">Application details</div>
-                <div class="mt-4 grid gap-4 md:grid-cols-2">
-                    @foreach ($detailRows as $row)
-                        <div class="rounded-2xl border border-zinc-200 bg-white p-4">
-                            <div class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{{ $row['label'] }}</div>
-                            <div class="mt-2 whitespace-pre-wrap break-words text-sm text-zinc-900">{{ $row['value'] }}</div>
+            <div class="space-y-6">
+                <section class="fb-page-surface p-6">
+                    <div class="text-sm font-semibold text-zinc-950">Application summary</div>
+                    <div class="mt-4 grid gap-6 lg:grid-cols-2">
+                        @foreach (($detailSections['summary'] ?? []) as $row)
+                            <div class="border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0">
+                                <div class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{{ $row['label'] }}</div>
+                                <div class="mt-1 whitespace-pre-wrap break-words text-base text-zinc-900">{{ $row['value'] }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                </section>
+
+                <section class="fb-page-surface p-6">
+                    <div class="text-sm font-semibold text-zinc-950">Business overview</div>
+                    <dl class="mt-4 grid gap-x-8 gap-y-4 md:grid-cols-2">
+                        @foreach (($detailSections['business'] ?? []) as $row)
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{{ $row['label'] }}</dt>
+                                <dd class="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">{{ $row['value'] }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                </section>
+
+                <section class="fb-page-surface p-6">
+                    <div class="text-sm font-semibold text-zinc-950">Store location</div>
+                    <dl class="mt-4 grid gap-x-8 gap-y-4 md:grid-cols-2">
+                        @foreach (($detailSections['location'] ?? []) as $row)
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{{ $row['label'] }}</dt>
+                                <dd class="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">{{ $row['value'] }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                </section>
+
+                @if (!empty($detailNarratives))
+                    <section class="fb-page-surface p-6">
+                        <div class="text-sm font-semibold text-zinc-950">Wholesale notes</div>
+                        <div class="mt-4 space-y-5">
+                            @foreach ($detailNarratives as $row)
+                                <div>
+                                    <div class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{{ $row['label'] }}</div>
+                                    <div class="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-800">{{ $row['value'] }}</div>
+                                </div>
+                            @endforeach
                         </div>
-                    @endforeach
-                </div>
+                    </section>
+                @endif
+
+                <section class="fb-page-surface p-6">
+                    <div class="text-sm font-semibold text-zinc-950">Compliance</div>
+                    <dl class="mt-4 grid gap-x-8 gap-y-4 md:grid-cols-2">
+                        @foreach (($detailSections['compliance'] ?? []) as $row)
+                            <div>
+                                <dt class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">{{ $row['label'] }}</dt>
+                                <dd class="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">{{ $row['value'] }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                </section>
             </div>
 
             <div class="space-y-6">
@@ -147,33 +199,16 @@
                 </section>
 
                 <section class="fb-page-surface p-6">
-                    <div class="text-sm font-semibold text-zinc-950">Capture health</div>
+                    <div class="text-sm font-semibold text-zinc-950">System record</div>
                     <dl class="mt-4 space-y-3 text-sm">
-                        <div class="flex items-start justify-between gap-4">
-                            <dt class="text-zinc-500">Access request ID</dt>
-                            <dd class="font-medium text-zinc-900">{{ $accessRequest->id }}</dd>
-                        </div>
-                        <div class="flex items-start justify-between gap-4">
-                            <dt class="text-zinc-500">Form submission</dt>
-                            <dd class="font-medium text-zinc-900">{{ $accessRequest->formSubmission?->id ? 'Captured' : 'Missing' }}</dd>
-                        </div>
-                        <div class="flex items-start justify-between gap-4">
-                            <dt class="text-zinc-500">Shopify user record</dt>
-                            <dd class="font-medium text-zinc-900">{{ $accessRequest->user?->email ?? 'Not linked yet' }}</dd>
-                        </div>
-                        <div class="flex items-start justify-between gap-4">
-                            <dt class="text-zinc-500">Tenant slug</dt>
-                            <dd class="font-mono text-xs text-zinc-900">{{ $accessRequest->requested_tenant_slug ?: ($accessRequest->tenant?->slug ?? '—') }}</dd>
-                        </div>
+                        @foreach (($detailSections['system'] ?? []) as $row)
+                            <div class="flex items-start justify-between gap-4">
+                                <dt class="text-zinc-500">{{ $row['label'] }}</dt>
+                                <dd class="text-right font-medium text-zinc-900">{{ $row['value'] }}</dd>
+                            </div>
+                        @endforeach
                     </dl>
                 </section>
-
-                @if (filled($accessRequest->message))
-                    <section class="fb-page-surface p-6">
-                        <div class="text-sm font-semibold text-zinc-950">Applicant note</div>
-                        <div class="mt-3 whitespace-pre-wrap text-sm text-zinc-700">{{ $accessRequest->message }}</div>
-                    </section>
-                @endif
             </div>
         </section>
     </div>
@@ -187,24 +222,29 @@
 
             forms.forEach((form) => {
                 form.addEventListener('submit', async (event) => {
-                    if (!window.ForestryEmbeddedApp || typeof window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders !== 'function') {
-                        return;
-                    }
-
                     event.preventDefault();
 
                     const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
                     const originalText = submitter ? submitter.textContent : null;
                     if (submitter) {
                         submitter.setAttribute('disabled', 'disabled');
+                        submitter.textContent = 'Working...';
                     }
 
                     try {
-                        const headers = await window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders({
-                            includeJsonContentType: false,
-                        });
-                        headers['Accept'] = 'application/json';
-                        headers['X-Requested-With'] = 'XMLHttpRequest';
+                        let headers = {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        };
+
+                        if (window.ForestryEmbeddedApp && typeof window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders === 'function') {
+                            headers = await window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders({
+                                includeJsonContentType: false,
+                            });
+                            headers['Accept'] = 'application/json';
+                            headers['X-Requested-With'] = 'XMLHttpRequest';
+                        }
+
                         const submitUrl = submitter && 'formAction' in submitter && typeof submitter.formAction === 'string' && submitter.formAction !== ''
                             ? submitter.formAction
                             : form.action;
@@ -216,26 +256,32 @@
                             credentials: 'same-origin',
                         });
 
+                        const responseType = response.headers.get('content-type') || '';
+                        if (!responseType.includes('application/json')) {
+                            window.location.assign(response.redirected && response.url ? response.url : window.location.href);
+                            return;
+                        }
+
                         const payload = await response.json().catch(() => ({}));
                         const redirectUrl = typeof payload.redirect_url === 'string' && payload.redirect_url !== ''
                             ? payload.redirect_url
-                            : window.location.href;
+                            : (response.redirected && response.url ? response.url : window.location.href);
 
                         if (!response.ok || payload.ok === false) {
-                            if (payload.message && window.ForestryEmbeddedApp.showToast) {
+                            if (payload.message && window.ForestryEmbeddedApp?.showToast) {
                                 window.ForestryEmbeddedApp.showToast(payload.message, 'error');
                             }
                             window.location.assign(redirectUrl);
                             return;
                         }
 
-                        if (payload.message && window.ForestryEmbeddedApp.showToast) {
+                        if (payload.message && window.ForestryEmbeddedApp?.showToast) {
                             window.ForestryEmbeddedApp.showToast(payload.message, 'success');
                         }
-                        window.location.assign(redirectUrl);
+                        window.location.replace(redirectUrl);
                     } catch (error) {
                         const message = error?.message || 'We could not process that application action right now.';
-                        if (window.ForestryEmbeddedApp.showToast) {
+                        if (window.ForestryEmbeddedApp?.showToast) {
                             window.ForestryEmbeddedApp.showToast(message, 'error');
                         }
                         form.submit();

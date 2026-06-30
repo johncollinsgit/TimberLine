@@ -539,7 +539,8 @@ class ShopifyEmbeddedAppController extends Controller
                 'pageActions' => [],
                 'pageSubnav' => [],
                 'accessRequest' => $accessRequest,
-                'detailRows' => $this->wholesaleApplicationDetailRows($accessRequest),
+                'detailSections' => $this->wholesaleApplicationDetailSections($accessRequest),
+                'detailNarratives' => $this->wholesaleApplicationNarratives($accessRequest),
                 'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
                 'actor' => $actor,
                 'canManageApproval' => $canManageApproval,
@@ -995,6 +996,125 @@ class ShopifyEmbeddedAppController extends Controller
             ['label' => 'Business info', 'value' => $read('business_info', 'message')],
             ['label' => 'Agreement accepted', 'value' => $this->wholesaleAgreementValue($payload, $metadata)],
         ];
+    }
+
+    /**
+     * @return array{
+     *   summary:array<int,array{label:string,value:string}>,
+     *   business:array<int,array{label:string,value:string}>,
+     *   location:array<int,array{label:string,value:string}>,
+     *   compliance:array<int,array{label:string,value:string}>,
+     *   system:array<int,array{label:string,value:string}>
+     * }
+     */
+    protected function wholesaleApplicationDetailSections(CustomerAccessRequest $accessRequest): array
+    {
+        $payload = (array) optional($accessRequest->formSubmission)->payload;
+        $metadata = (array) ($accessRequest->metadata ?? []);
+
+        $read = function (string ...$keys) use ($payload, $metadata, $accessRequest): string {
+            foreach ($keys as $key) {
+                $value = match ($key) {
+                    'name' => $accessRequest->name,
+                    'email' => $accessRequest->email,
+                    'company' => $accessRequest->company,
+                    'message' => $accessRequest->message,
+                    default => $payload[$key] ?? $metadata[$key] ?? null,
+                };
+
+                $string = trim((string) $value);
+                if ($string !== '') {
+                    return $string;
+                }
+            }
+
+            return '—';
+        };
+
+        $addressLines = array_values(array_filter([
+            $this->normalizeWholesaleDisplayValue($payload['address'] ?? $metadata['address'] ?? null),
+            $this->normalizeWholesaleDisplayValue($payload['address2'] ?? $metadata['address2'] ?? null),
+        ]));
+
+        $city = $this->normalizeWholesaleDisplayValue($payload['city'] ?? $metadata['city'] ?? null);
+        $state = $this->normalizeWholesaleDisplayValue($payload['state'] ?? $metadata['state'] ?? null);
+        $zip = $this->normalizeWholesaleDisplayValue($payload['zip'] ?? $metadata['zip'] ?? null);
+        $locality = collect([$city, $state, $zip])
+            ->filter(fn (?string $value): bool => filled($value))
+            ->implode(', ');
+
+        return [
+            'summary' => [
+                ['label' => 'Applicant', 'value' => $read('name')],
+                ['label' => 'Email', 'value' => $read('email')],
+                ['label' => 'Phone', 'value' => $read('phone')],
+                ['label' => 'Company', 'value' => $read('company')],
+                ['label' => 'Website', 'value' => $read('website')],
+                ['label' => 'Store type', 'value' => $read('store_type', 'business_type')],
+            ],
+            'business' => [
+                ['label' => 'Role / title', 'value' => $read('position')],
+                ['label' => 'Referral source', 'value' => $read('referral')],
+                ['label' => 'Contact preference', 'value' => $read('contact_preference')],
+                ['label' => 'Current suppliers', 'value' => $read('current_suppliers')],
+            ],
+            'location' => [
+                ['label' => 'Street address', 'value' => $addressLines !== [] ? implode("\n", $addressLines) : '—'],
+                ['label' => 'City / state / ZIP', 'value' => $locality !== '' ? $locality : '—'],
+                ['label' => 'Country', 'value' => $read('country')],
+            ],
+            'compliance' => [
+                ['label' => 'Retail license / resale #', 'value' => $read('retail_license_number')],
+                ['label' => 'Agreement accepted', 'value' => $this->wholesaleAgreementValue($payload, $metadata)],
+            ],
+            'system' => [
+                ['label' => 'Application ID', 'value' => (string) $accessRequest->id],
+                ['label' => 'Submitted', 'value' => optional($accessRequest->created_at)->format('F j, Y \a\t g:i A') ?: '—'],
+                ['label' => 'Tenant', 'value' => $accessRequest->tenant?->name ?? 'Modern Forestry Wholesale'],
+                ['label' => 'Tenant slug', 'value' => $accessRequest->requested_tenant_slug ?: ($accessRequest->tenant?->slug ?? '—')],
+                ['label' => 'Shopify user record', 'value' => $accessRequest->user?->email ?? 'Not linked yet'],
+                ['label' => 'Submission capture', 'value' => $accessRequest->formSubmission?->id ? 'Captured' : 'Missing'],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<int,array{label:string,value:string}>
+     */
+    protected function wholesaleApplicationNarratives(CustomerAccessRequest $accessRequest): array
+    {
+        $payload = (array) optional($accessRequest->formSubmission)->payload;
+        $metadata = (array) ($accessRequest->metadata ?? []);
+
+        $narratives = [
+            'Business background' => $payload['business_info'] ?? $metadata['business_info'] ?? null,
+            'Current suppliers' => $payload['current_suppliers'] ?? $metadata['current_suppliers'] ?? null,
+            'Applicant note' => $accessRequest->message,
+        ];
+
+        return collect($narratives)
+            ->map(function (mixed $value, string $label): ?array {
+                $normalized = $this->normalizeWholesaleDisplayValue($value);
+
+                if ($normalized === null) {
+                    return null;
+                }
+
+                return [
+                    'label' => $label,
+                    'value' => $normalized,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    protected function normalizeWholesaleDisplayValue(mixed $value): ?string
+    {
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 
     protected function wholesaleAgreementValue(array $payload, array $metadata): string

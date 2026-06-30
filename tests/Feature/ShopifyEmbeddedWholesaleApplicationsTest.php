@@ -119,9 +119,14 @@ test('shopify embedded wholesale app detail renders captured application fields'
 
     $response->assertOk()
         ->assertSeeText('Wholesale Application Review')
-        ->assertSeeText('Application details')
+        ->assertSeeText('Application summary')
+        ->assertSeeText('Business overview')
+        ->assertSeeText('Store location')
+        ->assertSeeText('Compliance')
+        ->assertSeeText('System record')
         ->assertSeeText('Greenville')
-        ->assertSeeText('Jane Shop');
+        ->assertSeeText('Jane Shop')
+        ->assertSeeText('Interested in carrying the line.');
 });
 
 test('shopify embedded wholesale app detail stays read only without a mapped operator account', function (): void {
@@ -222,6 +227,13 @@ test('shopify embedded wholesale app can approve through a mapped shopify admin 
     expect((string) $accessRequest->status)->toBe('approved')
         ->and((string) ($accessRequest->decision_note ?? ''))->toBe('Looks good.')
         ->and((bool) $user->is_active)->toBeTrue();
+
+    Http::assertSent(function (HttpRequest $request): bool {
+        $payload = json_decode($request->body(), true);
+        $query = (string) data_get($payload, 'query', '');
+
+        return str_contains($query, 'AddWholesaleCustomerTag');
+    });
 
     Notification::assertSentToTimes($user, ApprovalPasswordSetupNotification::class, 1);
     expect($actor->email)->toBe('ops-review@example.com');
