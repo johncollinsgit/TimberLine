@@ -412,6 +412,31 @@ class ModernForestryProductCatalogController extends Controller
         ], (bool) ($payload['ok'] ?? false) ? 200 : 422);
     }
 
+    public function releaseReward(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'redemptionId' => ['required', 'integer'],
+        ]);
+
+        $payload = $account->releaseRedemption($session, (int) $validated['redemptionId']);
+
+        return response()->json([
+            'data' => $payload,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ], (bool) ($payload['ok'] ?? false) ? 200 : 422);
+    }
+
     public function syncBag(
         Request $request,
         ModernForestryMobileCustomerSessionService $sessions,

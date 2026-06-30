@@ -458,6 +458,10 @@ Route::post('/api/mobile/v1/modern-forestry/rewards/redeem', [ModernForestryProd
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.rewards.redeem');
+Route::post('/api/mobile/v1/modern-forestry/rewards/release', [ModernForestryProductCatalogController::class, 'releaseReward'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.rewards.release');
 Route::post('/api/mobile/v1/modern-forestry/bag/sync', [ModernForestryProductCatalogController::class, 'syncBag'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')

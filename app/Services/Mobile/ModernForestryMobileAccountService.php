@@ -225,6 +225,81 @@ class ModernForestryMobileAccountService
     /**
      * @return array<string,mixed>
      */
+    public function releaseRedemption(ModernForestryMobileCustomerSession $session, int $redemptionId): array
+    {
+        $profile = $session->profile;
+        $tenantId = $this->tenantId($profile);
+
+        /** @var CandleCashRedemption|null $redemption */
+        $redemption = CandleCashRedemption::query()
+            ->with('reward')
+            ->where('marketing_profile_id', $profile->id)
+            ->find($redemptionId);
+
+        if (! $redemption) {
+            return [
+                'ok' => false,
+                'state' => 'redemption_not_found',
+                'message' => 'That Candle Cash code could not be found on this account anymore.',
+                'redemption' => null,
+                'balance' => $this->candleCashService->balancePayloadFromPoints($this->candleCashService->currentBalance($profile)),
+            ];
+        }
+
+        $status = strtolower((string) ($redemption->status ?? ''));
+
+        if ($status === 'redeemed') {
+            return [
+                'ok' => true,
+                'state' => 'already_redeemed',
+                'message' => 'That Candle Cash was already used in checkout.',
+                'redemption' => $this->redemptionPayload($redemption, $tenantId, true),
+                'balance' => $this->candleCashService->balancePayloadFromPoints($this->candleCashService->currentBalance($profile)),
+            ];
+        }
+
+        if (in_array($status, ['canceled', 'cancelled', 'expired'], true)) {
+            return [
+                'ok' => true,
+                'state' => 'already_released',
+                'message' => 'That Candle Cash is already back off the cart.',
+                'redemption' => $this->redemptionPayload($redemption, $tenantId, true),
+                'balance' => $this->candleCashService->balancePayloadFromPoints($this->candleCashService->currentBalance($profile)),
+            ];
+        }
+
+        if ($status !== 'issued') {
+            return [
+                'ok' => false,
+                'state' => 'release_unavailable',
+                'message' => 'That Candle Cash could not be cleared from checkout right now.',
+                'redemption' => $this->redemptionPayload($redemption, $tenantId, true),
+                'balance' => $this->candleCashService->balancePayloadFromPoints($this->candleCashService->currentBalance($profile)),
+            ];
+        }
+
+        $restore = $this->candleCashService->cancelIssuedRedemptionAndRestoreBalance(
+            $redemption,
+            'Canceled automatically because the mobile checkout was dismissed before the Candle Cash code was used.'
+        );
+
+        $released = (bool) ($restore['restored'] ?? false);
+        $freshRedemption = $redemption->fresh('reward') ?? $redemption;
+
+        return [
+            'ok' => $released,
+            'state' => $released ? 'released' : 'release_unavailable',
+            'message' => $released
+                ? 'Candle Cash was removed from the pending checkout and is available again.'
+                : 'That Candle Cash could not be cleared from checkout right now.',
+            'redemption' => $this->redemptionPayload($freshRedemption, $tenantId, true),
+            'balance' => $this->candleCashService->balancePayloadFromPoints($restore['balance'] ?? $this->candleCashService->currentBalance($profile)),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
     public function message(ModernForestryMobileCustomerSession $session, string $body, ?string $subject = null): array
     {
         $body = trim($body);
@@ -1007,7 +1082,7 @@ class ModernForestryMobileAccountService
             'already_has_active_code' => 'Your active reward code is ready.',
             'insufficient_candle_cash' => 'You need a little more Candle Cash before this reward is ready.',
             'reward_unavailable' => 'This reward is not available right now.',
-            'redemption_blocked' => 'Reward redemption is temporarily blocked.',
+            'redemption_blocked' => 'You already have an unused Candle Cash code on your account. Use that code first or wait for it to expire before creating another one.',
             default => 'Reward redemption is temporarily unavailable.',
         };
     }
