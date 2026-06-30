@@ -796,7 +796,7 @@ class CandleCashService
             );
 
             $normalizedPlatform = strtolower(trim((string) $platform));
-            $cost = in_array($normalizedPlatform, ['shopify', 'public_lookup'], true)
+            $cost = in_array($normalizedPlatform, ['shopify', 'public_lookup', 'modern_forestry_ios'], true)
                 ? $this->storefrontRewardPointsCost($reward)
                 : (int) $reward->candle_cash_cost;
             $current = CandleCashMeasurement::normalizeStoredAmount($balance->balance);
