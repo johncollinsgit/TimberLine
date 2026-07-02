@@ -129,6 +129,21 @@ test('shopify embedded wholesale app detail renders captured application fields'
         ->assertSeeText('Interested in carrying the line.');
 });
 
+test('shopify embedded wholesale app uses embedded app client id when configured', function (): void {
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-admin-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_id', 'wholesale-embedded-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_secret', 'wholesale-embedded-client-secret');
+
+    seedEmbeddedWholesaleApplication();
+
+    $response = $this->get(route('shopify.app.wholesale', [
+        'store_key' => 'wholesale',
+    ]));
+
+    $response->assertOk()
+        ->assertSee('<meta name="shopify-api-key" content="wholesale-embedded-client-id">', false);
+});
+
 test('shopify embedded wholesale app detail renders approval controls and client-side identity bootstrap placeholders', function (): void {
     $accessRequest = seedEmbeddedWholesaleApplication();
 

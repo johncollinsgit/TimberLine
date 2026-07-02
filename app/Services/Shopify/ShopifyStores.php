@@ -132,6 +132,10 @@ class ShopifyStores
             ?? config('services.shopify.wholesale.client_id');
         $wholesaleSecret = config('services.shopify.stores.wholesale.client_secret')
             ?? config('services.shopify.wholesale.client_secret');
+        $wholesaleEmbeddedClientId = config('services.shopify.stores.wholesale.embedded_client_id')
+            ?? config('services.shopify.wholesale.embedded_client_id');
+        $wholesaleEmbeddedSecret = config('services.shopify.stores.wholesale.embedded_client_secret')
+            ?? config('services.shopify.wholesale.embedded_client_secret');
 
         return [
             'retail' => [
@@ -153,6 +157,8 @@ class ShopifyStores
                 'timezone' => $wholesaleTimezone,
                 'secret' => $wholesaleSecret,
                 'client_id' => $wholesaleClientId,
+                'embedded_client_id' => $wholesaleEmbeddedClientId,
+                'embedded_secret' => $wholesaleEmbeddedSecret,
                 'api_version' => config('services.shopify.api_version', '2026-01'),
             ],
         ];

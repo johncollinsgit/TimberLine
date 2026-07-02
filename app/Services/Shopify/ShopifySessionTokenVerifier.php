@@ -6,6 +6,11 @@ use Illuminate\Support\Carbon;
 
 class ShopifySessionTokenVerifier
 {
+    public function __construct(
+        protected ShopifyEmbeddedAppCredentials $embeddedAppCredentials
+    ) {
+    }
+
     /**
      * @return array{
      *   ok:bool,
@@ -55,14 +60,19 @@ class ShopifySessionTokenVerifier
             return $this->failure('unknown_shop', $shopDomain);
         }
 
-        $secret = trim((string) ($store['secret'] ?? ''));
-        $clientId = trim((string) ($store['client_id'] ?? ''));
+        $audience = trim((string) ($payload['aud'] ?? ''));
+        $credentials = $this->embeddedAppCredentials->credentialsForStore($store);
 
-        if ($secret === '' || $clientId === '') {
+        if ($audience === '' || $credentials === []) {
             return $this->failure('invalid_session_token', $shopDomain);
         }
 
-        if (trim((string) ($payload['aud'] ?? '')) !== $clientId) {
+        $matchingCredentials = array_values(array_filter(
+            $credentials,
+            static fn (array $credential): bool => $credential['client_id'] === $audience
+        ));
+
+        if ($matchingCredentials === []) {
             return $this->failure('invalid_session_token', $shopDomain);
         }
 
@@ -75,14 +85,22 @@ class ShopifySessionTokenVerifier
             return $this->failure($timestampStatus, $shopDomain);
         }
 
-        $computedSignature = $this->base64UrlEncode(hash_hmac(
-            'sha256',
-            $encodedHeader . '.' . $encodedPayload,
-            $secret,
-            true
-        ));
+        $signatureVerified = false;
+        foreach ($matchingCredentials as $credential) {
+            $computedSignature = $this->base64UrlEncode(hash_hmac(
+                'sha256',
+                $encodedHeader . '.' . $encodedPayload,
+                $credential['secret'],
+                true
+            ));
 
-        if (! hash_equals($computedSignature, $encodedSignature)) {
+            if (hash_equals($computedSignature, $encodedSignature)) {
+                $signatureVerified = true;
+                break;
+            }
+        }
+
+        if (! $signatureVerified) {
             return $this->failure('invalid_session_token', $shopDomain);
         }
 

@@ -118,7 +118,7 @@ function shopifyEmbeddedSignedQuery(array $query, string $secret): array
     return $payload;
 }
 
-function shopifySessionToken(string $storeKey, array $overrides = []): string
+function shopifySessionToken(string $storeKey, array $overrides = [], ?string $secretOverride = null): string
 {
     $store = ShopifyStores::find($storeKey, true);
 
@@ -128,7 +128,7 @@ function shopifySessionToken(string $storeKey, array $overrides = []): string
 
     $shopDomain = trim((string) ($store['shop'] ?? ''));
     $clientId = trim((string) ($store['client_id'] ?? ''));
-    $secret = trim((string) ($store['secret'] ?? ''));
+    $secret = trim((string) ($secretOverride ?? ($store['secret'] ?? '')));
 
     if ($shopDomain === '' || $clientId === '' || $secret === '') {
         throw new RuntimeException("Shopify store [{$storeKey}] is missing session token credentials.");

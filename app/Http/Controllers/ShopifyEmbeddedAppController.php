@@ -11,6 +11,7 @@ use App\Services\Onboarding\CustomerAccessApprovalService;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardConfig;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\DashboardLite\ShopifyEmbeddedDashboardLiteDataService;
+use App\Services\Shopify\ShopifyEmbeddedAppCredentials;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
@@ -807,14 +808,11 @@ class ShopifyEmbeddedAppController extends Controller
 
     protected function wholesaleEmbeddedClientId(?string $fallback = null): string
     {
-        $configPath = base_path('shopify.app.wholesale.toml');
-        if (is_file($configPath)) {
-            $contents = @file_get_contents($configPath);
-            if (is_string($contents) && preg_match('/^\s*client_id\s*=\s*"([^"]+)"/m', $contents, $matches) === 1) {
-                $clientId = trim((string) ($matches[1] ?? ''));
-                if ($clientId !== '') {
-                    return $clientId;
-                }
+        $store = ShopifyStores::find('wholesale', true);
+        if (is_array($store)) {
+            $clientId = app(ShopifyEmbeddedAppCredentials::class)->clientIdForStore($store);
+            if ($clientId !== null) {
+                return $clientId;
             }
         }
 

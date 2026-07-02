@@ -208,6 +208,8 @@ return [
                 'access_token'  => env('SHOPIFY_WHOLESALE_ACCESS_TOKEN'),
                 'client_id'     => env('SHOPIFY_WHOLESALE_CLIENT_ID'),
                 'client_secret' => env('SHOPIFY_WHOLESALE_CLIENT_SECRET'),
+                'embedded_client_id' => env('SHOPIFY_WHOLESALE_EMBEDDED_CLIENT_ID'),
+                'embedded_client_secret' => env('SHOPIFY_WHOLESALE_EMBEDDED_CLIENT_SECRET'),
                 'timezone'      => env('SHOPIFY_WHOLESALE_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
             ],
 
