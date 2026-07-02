@@ -277,6 +277,69 @@ class SubscriptionModuleService
     }
 
     /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    public function recordCustomerCandleClubAction(MarketingProfile $profile, string $action, array $payload = []): array
+    {
+        $tenantId = (int) $profile->tenant_id;
+        $normalizedAction = $this->normalizeCustomerCandleClubAction($action);
+
+        if ($normalizedAction === null) {
+            return ['ok' => false, 'status' => 'unsupported_action', 'message' => 'This Candle Club action is not supported yet.'];
+        }
+
+        $contract = $this->activeCandleClubContractForProfile($profile);
+        $isPreview = false;
+        if (! $contract && $this->isCandleClubPreviewProfile($profile)) {
+            $contract = $this->previewCandleClubContract();
+            $isPreview = true;
+        }
+
+        if (! $contract) {
+            return [
+                'ok' => false,
+                'status' => 'not_eligible',
+                'message' => 'Only active Candle Club members can manage Candle Club.',
+                'candle_club' => $this->customerCandleClubPayload($profile),
+            ];
+        }
+
+        $contractSummary = $this->contractSummary($contract);
+        $shopifyMutation = $this->shopifyMutationForCustomerAction($normalizedAction);
+
+        DB::table('subscription_lifecycle_events')->insert([
+            'tenant_id' => $tenantId,
+            'subscription_contract_id' => $isPreview ? null : (int) $contract->id,
+            'actor_user_id' => null,
+            'event_type' => $normalizedAction,
+            'source' => 'mobile_app',
+            'status' => $isPreview ? 'shopify_preview_recorded' : 'intent_recorded',
+            'before_payload' => json_encode($contractSummary, JSON_THROW_ON_ERROR),
+            'after_payload' => json_encode($payload, JSON_THROW_ON_ERROR),
+            'metadata' => json_encode([
+                'shopify_source_of_truth' => true,
+                'shopify_mode' => $isPreview ? 'preview_no_live_mutation' : 'mutation_deferred_until_shopify_cutover',
+                'shopify_mutation' => $shopifyMutation,
+                'requires_shopify_subscription_contract_gid' => $contractSummary['shopify_subscription_contract_gid'] === '',
+                'mobile_customer_email' => Str::lower(trim((string) ($profile->normalized_email ?: $profile->email))),
+            ], JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [
+            'ok' => true,
+            'status' => $isPreview ? 'preview_recorded' : 'intent_recorded',
+            'action' => $normalizedAction,
+            'message' => $this->customerActionMessage($normalizedAction, $isPreview),
+            'shopify_mode' => $isPreview ? 'preview_no_live_mutation' : 'mutation_deferred_until_shopify_cutover',
+            'shopify_mutation' => $shopifyMutation,
+            'candle_club' => $this->customerCandleClubPayload($profile),
+        ];
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function customerCandleClubPayload(MarketingProfile $profile): array
@@ -316,18 +379,7 @@ class SubscriptionModuleService
     protected function previewCandleClubPayload(MarketingProfile $profile, ?array $poll): array
     {
         $tenantId = (int) $profile->tenant_id;
-        $contract = (object) [
-            'id' => 0,
-            'shopify_subscription_contract_gid' => 'gid://evergrove/PreviewSubscriptionContract/john-collins-candle-club',
-            'shopify_customer_gid' => 'gid://evergrove/PreviewCustomer/john-collins',
-            'status' => 'active',
-            'is_candle_club' => true,
-            'next_billing_date' => CarbonImmutable::now()->addWeeks(2)->toDateString(),
-            'next_shipping_date' => CarbonImmutable::now()->addWeeks(3)->toDateString(),
-            'completed_cycles' => 3,
-            'pause_count_current_commitment' => 0,
-            'commitment_ends_on' => CarbonImmutable::now()->addMonths(3)->toDateString(),
-        ];
+        $contract = $this->previewCandleClubContract();
 
         $previousScents = $this->previousChosenScents($tenantId);
         if ($previousScents === []) {
@@ -377,6 +429,67 @@ class SubscriptionModuleService
             'cancel_prompt' => $this->candleClubSettings($tenantId)['cancellation_prompt'],
             'preview' => true,
         ];
+    }
+
+    protected function previewCandleClubContract(): object
+    {
+        return (object) [
+            'id' => 0,
+            'shopify_subscription_contract_gid' => 'gid://evergrove/PreviewSubscriptionContract/john-collins-candle-club',
+            'shopify_customer_gid' => 'gid://evergrove/PreviewCustomer/john-collins',
+            'status' => 'active',
+            'is_candle_club' => true,
+            'next_billing_date' => CarbonImmutable::now()->addWeeks(2)->toDateString(),
+            'next_shipping_date' => CarbonImmutable::now()->addWeeks(3)->toDateString(),
+            'completed_cycles' => 3,
+            'pause_count_current_commitment' => 0,
+            'commitment_ends_on' => CarbonImmutable::now()->addMonths(3)->toDateString(),
+        ];
+    }
+
+    protected function normalizeCustomerCandleClubAction(string $action): ?string
+    {
+        $normalized = Str::snake(strtolower(trim($action)));
+
+        return [
+            'pause' => 'pause',
+            'cancel' => 'cancel',
+            'swap_16oz_scent' => 'swap_product',
+            'swap_to_active_16oz_scent' => 'swap_product',
+            'swap_product' => 'swap_product',
+            'update_shipping_address' => 'update_shipping_address',
+            'update_address' => 'update_shipping_address',
+            'update_payment_card' => 'send_payment_update_email',
+            'update_card' => 'send_payment_update_email',
+            'send_payment_update_email' => 'send_payment_update_email',
+        ][$normalized] ?? null;
+    }
+
+    protected function shopifyMutationForCustomerAction(string $action): string
+    {
+        return [
+            'pause' => 'subscriptionContractUpdate/subscriptionDraftUpdate/subscriptionDraftCommit',
+            'cancel' => 'subscriptionContractUpdate/subscriptionDraftUpdate/subscriptionDraftCommit',
+            'swap_product' => 'subscriptionContractUpdate/subscriptionDraftLineUpdate/subscriptionDraftCommit',
+            'update_shipping_address' => 'subscriptionContractUpdate/subscriptionDraftUpdate/subscriptionDraftCommit',
+            'send_payment_update_email' => 'customerPaymentMethodSendUpdateEmail',
+        ][$action] ?? 'manual_review';
+    }
+
+    protected function customerActionMessage(string $action, bool $isPreview): string
+    {
+        $suffix = $isPreview
+            ? ' Preview recorded without changing a live Shopify contract.'
+            : ' Recorded for Shopify subscription processing.';
+
+        return match ($action) {
+            'pause' => 'Pause request received.'.$suffix,
+            'cancel' => 'Cancellation request received.'.$suffix,
+            'swap_product' => 'Scent swap request received.'.$suffix,
+            'update_shipping_address' => 'Shipping address update request received.'.$suffix,
+            'send_payment_update_email' => 'Secure Shopify payment update email queued.'.$suffix,
+            default => 'Candle Club request received.'.$suffix,
+        };
     }
 
     /**

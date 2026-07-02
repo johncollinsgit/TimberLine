@@ -162,6 +162,19 @@ class ModernForestryMobileAccountService
     }
 
     /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    public function candleClubAction(ModernForestryMobileCustomerSession $session, array $payload): array
+    {
+        return $this->subscriptions->recordCustomerCandleClubAction(
+            $session->profile,
+            (string) ($payload['action'] ?? ''),
+            $payload
+        );
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function wishlistPayload(MarketingProfile $profile, int $tenantId): array

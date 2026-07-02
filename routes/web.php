@@ -410,6 +410,10 @@ Route::get('/api/mobile/v1/modern-forestry/account', [ModernForestryProductCatal
 Route::get('/api/mobile/v1/modern-forestry/account/candle-club', [ModernForestryProductCatalogController::class, 'candleClub'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.account.candle-club');
+Route::post('/api/mobile/v1/modern-forestry/account/candle-club/action', [ModernForestryProductCatalogController::class, 'candleClubAction'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.account.candle-club.action');
 Route::post('/api/mobile/v1/modern-forestry/account/message', [ModernForestryProductCatalogController::class, 'accountMessage'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')

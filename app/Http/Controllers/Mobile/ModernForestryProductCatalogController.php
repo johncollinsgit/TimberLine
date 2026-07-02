@@ -400,6 +400,33 @@ class ModernForestryProductCatalogController extends Controller
         ]);
     }
 
+    public function candleClubAction(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'action' => ['required', 'string', 'max:80'],
+            'scent' => ['nullable', 'string', 'max:255'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+            'address' => ['nullable', 'array'],
+            'metadata' => ['nullable', 'array'],
+        ]);
+
+        return response()->json([
+            'data' => $account->candleClubAction($session, $validated),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
     public function rewards(
         Request $request,
         ModernForestryMobileCustomerSessionService $sessions,

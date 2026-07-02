@@ -281,3 +281,61 @@ test('john preview account gets unlocked candle club menus while normal accounts
         ->and(data_get($locked, 'actions.can_vote'))->toBeFalse()
         ->and(data_get($locked, 'actions.can_pause'))->toBeFalse();
 });
+
+test('john preview profile records mobile candle club actions as shopify preview intents', function (): void {
+    $tenant = Tenant::query()->create([
+        'id' => 1,
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    $john = MarketingProfile::factory()->create([
+        'tenant_id' => $tenant->id,
+        'email' => 'johncollinsemail@gmail.com',
+        'normalized_email' => 'johncollinsemail@gmail.com',
+    ]);
+
+    $result = app(SubscriptionModuleService::class)->recordCustomerCandleClubAction($john, 'update_payment_card', [
+        'action' => 'update_payment_card',
+        'source' => 'ios_app',
+    ]);
+
+    expect($result['ok'])->toBeTrue()
+        ->and($result['status'])->toBe('preview_recorded')
+        ->and($result['action'])->toBe('send_payment_update_email')
+        ->and($result['shopify_mutation'])->toBe('customerPaymentMethodSendUpdateEmail')
+        ->and(data_get($result, 'candle_club.preview'))->toBeTrue();
+
+    $event = DB::table('subscription_lifecycle_events')->first();
+
+    expect($event)->not->toBeNull()
+        ->and($event->subscription_contract_id)->toBeNull()
+        ->and($event->event_type)->toBe('send_payment_update_email')
+        ->and($event->source)->toBe('mobile_app')
+        ->and($event->status)->toBe('shopify_preview_recorded')
+        ->and(data_get(json_decode((string) $event->metadata, true), 'shopify_mode'))->toBe('preview_no_live_mutation');
+});
+
+test('non candle club profile cannot record mobile candle club actions', function (): void {
+    $tenant = Tenant::query()->create([
+        'id' => 1,
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    $profile = MarketingProfile::factory()->create([
+        'tenant_id' => $tenant->id,
+        'email' => 'not-club@example.com',
+        'normalized_email' => 'not-club@example.com',
+    ]);
+
+    $result = app(SubscriptionModuleService::class)->recordCustomerCandleClubAction($profile, 'pause', [
+        'action' => 'pause',
+        'source' => 'ios_app',
+    ]);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['status'])->toBe('not_eligible')
+        ->and(data_get($result, 'candle_club.eligible'))->toBeFalse()
+        ->and(DB::table('subscription_lifecycle_events')->count())->toBe(0);
+});
