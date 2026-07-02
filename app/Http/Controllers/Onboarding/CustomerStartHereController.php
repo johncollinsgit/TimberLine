@@ -28,6 +28,7 @@ class CustomerStartHereController extends Controller
 
         $setupStatus = $setupStatusService->forTenant($tenant);
         $onboardingComplete = $completionService->isComplete($tenant);
+        $showElectricianTutorial = (bool) config('features.customer_electrician_tutorial', false);
 
         return response()->view('onboarding.start-here', [
             'tenant' => $tenant,
@@ -37,7 +38,8 @@ class CustomerStartHereController extends Controller
             'setupStatus' => $setupStatusService->payload($tenant, $setupStatus),
             'blueprintModuleRecommendations' => $blueprintModuleRecommendations->forTenantModel($tenant),
             'onboardingComplete' => $onboardingComplete,
-            'showOnboardingModal' => ! $onboardingComplete,
+            'showElectricianTutorial' => $showElectricianTutorial,
+            'showOnboardingModal' => $showElectricianTutorial && ! $onboardingComplete,
             'completionRedirectUrl' => route('dashboard', absolute: false),
         ]);
     }

@@ -13,6 +13,20 @@ class Wizard extends Component
 
     public ?string $completionRedirectUrl = null;
 
+    public function mount(): mixed
+    {
+        if (! request()->routeIs('landlord.onboarding.wizard') && ! config('features.customer_electrician_tutorial', false)) {
+            /** @var Tenant|null $tenant */
+            $tenant = request()->attributes->get('current_tenant');
+
+            return $this->redirectRoute('app.start', [
+                'tenant' => $tenant instanceof Tenant ? (string) $tenant->slug : null,
+            ], navigate: false);
+        }
+
+        return null;
+    }
+
     public function render()
     {
         /** @var Tenant|null $tenant */

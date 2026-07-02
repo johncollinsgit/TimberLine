@@ -231,11 +231,11 @@ test('missing setup status is created safely with undecided guidance', function 
         ->assertSeeText('Stage: Choosing setup path')
         ->assertSeeText('No import path has been chosen yet')
         ->assertSeeText('Mobile companion needs are undecided')
-        ->assertSee('data-onboarding-gate-root', false)
-        ->assertSee('data-onboarding-modal-open="0"', false)
-        ->assertSee('data-open-onboarding-modal', false)
-        ->assertSee('Electrician onboarding', false)
-        ->assertSee('data-onboarding-surface="modal"', false);
+        ->assertDontSee('data-onboarding-gate-root', false)
+        ->assertDontSee('data-onboarding-modal-open', false)
+        ->assertDontSee('data-open-onboarding-modal', false)
+        ->assertDontSee('Electrician onboarding', false)
+        ->assertDontSee('data-onboarding-surface="modal"', false);
 
     expect(TenantSetupStatus::query()->where('tenant_id', $tenant->id)->count())->toBe(1);
 });
@@ -265,10 +265,26 @@ test('completed tenant setup page keeps onboarding modal available without auto 
     $this->actingAs($user)
         ->get('http://acme.theeverbranch.com/start?tenant=acme')
         ->assertOk()
+        ->assertDontSee('data-onboarding-gate-root', false)
+        ->assertDontSee('data-onboarding-modal-open', false)
+        ->assertDontSee('Review setup')
+        ->assertDontSee('data-onboarding-modal-open="1"', false);
+});
+
+test('customer start page can restore electrician onboarding when the feature flag is enabled', function (): void {
+    config()->set('features.customer_electrician_tutorial', true);
+
+    $tenant = setupStatusTenant('acme');
+    $user = setupStatusUserForTenant($tenant);
+
+    $this->actingAs($user)
+        ->get('http://acme.theeverbranch.com/start?tenant=acme')
+        ->assertOk()
         ->assertSee('data-onboarding-gate-root', false)
         ->assertSee('data-onboarding-modal-open="0"', false)
-        ->assertSee('Review setup')
-        ->assertDontSee('data-onboarding-modal-open="1"', false);
+        ->assertSee('data-open-onboarding-modal', false)
+        ->assertSee('Electrician onboarding', false)
+        ->assertSee('data-onboarding-surface="modal"', false);
 });
 
 test('tenant setup status captures import module and mobile intent without generic mobile activation', function (): void {

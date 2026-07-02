@@ -574,7 +574,12 @@ class UnifiedAppNavigationService
             ],
         ];
 
-        if ($tenantId !== null && ($canAccessOps || $canAccessMarketing) && Route::has('onboarding.wizard')) {
+        if (
+            $tenantId !== null
+            && ($canAccessOps || $canAccessMarketing)
+            && Route::has('onboarding.wizard')
+            && config('features.customer_electrician_tutorial', false)
+        ) {
             $actions[] = [
                 'label' => 'Setup plan',
                 'description' => 'Create or continue a workspace setup plan.',

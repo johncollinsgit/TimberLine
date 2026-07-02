@@ -58,7 +58,7 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSeeText('Start as a client')
         ->assertSeeText('Login')
         ->assertSeeText('Landscaper')
-        ->assertSeeText('Electrician')
+        ->assertDontSeeText('Electrician')
         ->assertSeeText('Soap Maker')
         ->assertSee('brand/everbranch-lockup.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-mark.svg?v='.$cacheTag, false)
@@ -118,4 +118,12 @@ test('authenticated users are still redirected away from the public home route',
     $this->actingAs($user)
         ->get('http://theeverbranch.com/')
         ->assertRedirect(route('dashboard', absolute: false));
+});
+
+test('public home route can restore electrician profile when the customer tutorial flag is enabled', function (): void {
+    config()->set('features.customer_electrician_tutorial', true);
+
+    $this->get('http://theeverbranch.com/')
+        ->assertOk()
+        ->assertSeeText('Electrician');
 });

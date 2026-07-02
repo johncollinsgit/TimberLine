@@ -32,7 +32,7 @@ class PlatformProductPagesController extends Controller
 
         return response()->view('platform.access-request', [
             'surface' => (array) config('product_surfaces.demo', []),
-            'form_options' => (array) config('product_surfaces.access_request', []),
+            'form_options' => $experienceService->publicAccessRequestOptions(),
             'intent' => 'demo',
             'plan_cards' => (array) ($plansPayload['plan_cards'] ?? []),
             'addon_cards' => (array) ($plansPayload['addon_cards'] ?? []),
@@ -46,7 +46,7 @@ class PlatformProductPagesController extends Controller
 
         return response()->view('platform.access-request', [
             'surface' => (array) config('product_surfaces.start_client', []),
-            'form_options' => (array) config('product_surfaces.access_request', []),
+            'form_options' => $experienceService->publicAccessRequestOptions(),
             'intent' => 'production',
             'plan_cards' => (array) ($plansPayload['plan_cards'] ?? []),
             'addon_cards' => (array) ($plansPayload['addon_cards'] ?? []),

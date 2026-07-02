@@ -7,6 +7,7 @@ use App\Services\Forms\TenantFormSubmissionService;
 use App\Services\Onboarding\CustomerAccessRequestService;
 use App\Services\Onboarding\WholesaleApplicationReviewInboxResolver;
 use App\Services\Shopify\ShopifyWholesaleApplicationCustomerService;
+use App\Services\Tenancy\TenantCommercialExperienceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
@@ -18,14 +19,16 @@ class PlatformAccessRequestController extends Controller
     public function store(
         Request $request,
         CustomerAccessRequestService $service,
-        WholesaleApplicationReviewInboxResolver $reviewInboxResolver
+        WholesaleApplicationReviewInboxResolver $reviewInboxResolver,
+        TenantCommercialExperienceService $experienceService
     ): RedirectResponse
     {
-        $businessTypeKeys = array_keys((array) config('product_surfaces.access_request.business_types', []));
-        $teamSizeKeys = array_keys((array) config('product_surfaces.access_request.team_sizes', []));
-        $timelineKeys = array_keys((array) config('product_surfaces.access_request.timelines', []));
-        $importPathKeys = array_keys((array) config('product_surfaces.access_request.import_paths', []));
-        $mobileInterestKeys = array_keys((array) config('product_surfaces.access_request.mobile_interests', []));
+        $formOptions = $experienceService->publicAccessRequestOptions();
+        $businessTypeKeys = array_keys((array) ($formOptions['business_types'] ?? []));
+        $teamSizeKeys = array_keys((array) ($formOptions['team_sizes'] ?? []));
+        $timelineKeys = array_keys((array) ($formOptions['timelines'] ?? []));
+        $importPathKeys = array_keys((array) ($formOptions['import_paths'] ?? []));
+        $mobileInterestKeys = array_keys((array) ($formOptions['mobile_interests'] ?? []));
 
         $validated = $request->validate([
             'intent' => ['required', 'string', 'in:demo,production'],

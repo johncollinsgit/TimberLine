@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-07-01 — Everbranch Customer Electrician Tutorial Hide
+
+### What changed
+- Hid the customer-facing electrician onboarding/tutorial behind `FEATURE_CUSTOMER_ELECTRICIAN_TUTORIAL`, defaulting it off.
+- Removed `Electrician` from the public promo profile list and public access-request business-type choices while the flag is off.
+- Suppressed the tenant `/start` electrician onboarding teaser, modal shell, and reopen CTA while the flag is off.
+- Redirected customer `/onboarding` back to `/start` while the flag is off and hid the tenant `Setup plan` quick action.
+
+### What did not change
+- The underlying `electrician` template, landlord onboarding wizard, and internal blueprint/tooling remain intact for later restoration.
+- No billing, checkout, module activation, import automation, or landlord review behavior changed in this pass.
+
 ## 2026-06-30 — Modern Forestry Bag Recovery and Story Share Cleanup
 
 ### What changed

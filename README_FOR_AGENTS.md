@@ -2,6 +2,18 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Everbranch Customer Electrician Tutorial Restore Rule (2026-07-01)
+
+- The customer-facing electrician intake/tutorial is now intentionally hidden by default behind `FEATURE_CUSTOMER_ELECTRICIAN_TUTORIAL=false`.
+- Hidden customer/public surfaces include:
+  - the public promo `Electrician` profile
+  - public access-request/demo/start business-type options for `electrician`
+  - tenant `/start` electrician onboarding teaser, modal, and reopen CTA
+  - tenant `/onboarding` for customer users, which now redirects back to `/start` while the flag is off
+  - the tenant quick action labeled `Setup plan`
+- Landlord/internal electrician setup remains intact. Do not delete the `electrician` template key, blueprint metadata, or landlord onboarding lane just because the customer-facing tutorial is hidden.
+- To restore it later, turn `FEATURE_CUSTOMER_ELECTRICIAN_TUTORIAL=true` back on and keep the current filtering/redirect guards in place rather than re-adding hardcoded customer-facing electrician copy by hand.
+
 ## Modern Forestry Facebook Scent-Share Preview Refresh Rule (2026-06-30)
 
 - Modern Forestry scent-personality sharing is intentionally **latest-only** per account. Retakes should update the current public share target instead of creating immutable historical share snapshots.

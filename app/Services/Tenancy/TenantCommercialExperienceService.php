@@ -61,7 +61,7 @@ class TenantCommercialExperienceService
      */
     public function promoPayload(): array
     {
-        $promo = (array) config('product_surfaces.promo', []);
+        $promo = $this->publicPromoConfig();
         $planCards = $this->planCards(
             cardsConfig: (array) config('product_surfaces.plans.cards', []),
             preferredOrder: $this->normalizeKeys((array) ($promo['plan_order'] ?? [])),
@@ -76,6 +76,32 @@ class TenantCommercialExperienceService
             'catalog' => $catalog,
             'module_showcase' => $moduleShowcase,
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function publicPromoConfig(): array
+    {
+        $promo = (array) config('product_surfaces.promo', []);
+        $promo['preview_profiles'] = $this->filteredPublicPreviewProfiles(
+            (array) ($promo['preview_profiles'] ?? [])
+        );
+
+        return $promo;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function publicAccessRequestOptions(): array
+    {
+        $options = (array) config('product_surfaces.access_request', []);
+        $options['business_types'] = $this->filteredPublicBusinessTypes(
+            (array) ($options['business_types'] ?? [])
+        );
+
+        return $options;
     }
 
     /**
@@ -225,6 +251,45 @@ class TenantCommercialExperienceService
             'unlock_next' => $unlockNext,
             'coming_soon' => $comingSoon,
         ];
+    }
+
+    /**
+     * @param  array<int,array<string,mixed>>  $profiles
+     * @return array<int,array<string,mixed>>
+     */
+    protected function filteredPublicPreviewProfiles(array $profiles): array
+    {
+        if ($this->customerElectricianTutorialEnabled()) {
+            return array_values($profiles);
+        }
+
+        return array_values(array_filter($profiles, function (mixed $profile): bool {
+            if (! is_array($profile)) {
+                return false;
+            }
+
+            return strtolower(trim((string) ($profile['key'] ?? ''))) !== 'electrician';
+        }));
+    }
+
+    /**
+     * @param  array<string,string>  $businessTypes
+     * @return array<string,string>
+     */
+    protected function filteredPublicBusinessTypes(array $businessTypes): array
+    {
+        if ($this->customerElectricianTutorialEnabled()) {
+            return $businessTypes;
+        }
+
+        unset($businessTypes['electrician']);
+
+        return $businessTypes;
+    }
+
+    protected function customerElectricianTutorialEnabled(): bool
+    {
+        return (bool) config('features.customer_electrician_tutorial', false);
     }
 
     /**
