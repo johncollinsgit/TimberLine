@@ -721,7 +721,7 @@ class SubscriptionModuleService
 
         $email = Str::lower(trim((string) ($profile->normalized_email ?: $profile->email)));
 
-        return $email === 'johncollinesmail@gmail.com';
+        return in_array($email, ['johncollinsemail@gmail.com', 'johncollinesmail@gmail.com'], true);
     }
 
     protected function activeCandleClubContractForIdentifier(int $tenantId, string $type, string $identifier): ?object
