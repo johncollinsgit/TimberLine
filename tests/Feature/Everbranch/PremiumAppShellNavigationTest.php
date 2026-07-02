@@ -23,7 +23,7 @@ function pr27ShellTenant(string $slug, string $name, string $accountMode = 'prod
 
     TenantAccessProfile::query()->create([
         'tenant_id' => (int) $tenant->id,
-        'plan_key' => 'starter',
+        'plan_key' => 'base',
         'operating_mode' => 'direct',
         'source' => 'test',
         'metadata' => ['account_mode' => $accountMode],
@@ -59,7 +59,7 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
         ->assertSeeText('Shell Client')
         ->assertSeeText('Everbranch Admin')
         ->assertSeeText('Marketing')
-        ->assertSeeText('Features')
+        ->assertSeeText('Work')
         ->assertSeeText($user->email)
         ->assertDontSee('data-sidebar-sortable', false)
         ->assertDontSee('mf-console-switches', false)
@@ -72,7 +72,7 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
 
     $html = $response->getContent();
     $homePosition = strpos($html, 'data-sidebar-key="home"');
-    $workPosition = strpos($html, 'data-sidebar-key="production"');
+    $workPosition = strpos($html, 'data-sidebar-key="field-service"');
 
     expect($homePosition)->not->toBeFalse()
         ->and($workPosition)->not->toBeFalse()

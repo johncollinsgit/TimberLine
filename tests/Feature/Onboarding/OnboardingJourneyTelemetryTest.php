@@ -4,6 +4,7 @@ use App\Models\MarketingProfile;
 use App\Models\ShopifyImportRun;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleState;
 use App\Models\TenantOnboardingJourneyEvent;
 use App\Models\User;
 use App\Services\Onboarding\OnboardingJourneyTelemetryService;
@@ -245,7 +246,17 @@ test('first active module reached telemetry emits once when a non-default-enable
         ->json();
 
     $provisionedTenantId = (int) data_get($provision, 'result.provisioned_tenant.id');
+    TenantModuleState::query()->create([
+        'tenant_id' => $provisionedTenantId,
+        'module_key' => 'rewards',
+        'enabled_override' => true,
+        'setup_status' => 'configured',
+        'setup_completed_at' => now(),
+        'metadata' => ['source' => 'test'],
+    ]);
+
     $experience = app(TenantCommercialExperienceService::class);
+    $experience->forgetTenantCache($provisionedTenantId);
 
     $experience->merchantJourneyPayload($provisionedTenantId);
     $experience->merchantJourneyPayload($provisionedTenantId);
@@ -265,4 +276,3 @@ test('first active module reached telemetry emits once when a non-default-enable
         ->where('event_key', OnboardingJourneyTelemetryService::EVENT_FIRST_ACTIVE_MODULE)
         ->count())->toBe(1);
 });
-

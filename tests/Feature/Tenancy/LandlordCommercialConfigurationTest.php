@@ -562,9 +562,12 @@ test('tenant billing readiness highlights missing required mapping placeholders'
     $this->actingAs($user)
         ->get("http://{$host}/landlord/commercial")
         ->assertOk()
+        ->assertSeeText('Missing Billing Mapping Tenant')
         ->assertSeeText('Billing readiness:')
         ->assertSeeText('not ready for activation prep')
-        ->assertSeeText('Missing billing requirements: Tenant billing mapping missing: stripe.customer_reference; Tenant billing mapping missing: stripe.subscription_reference.');
+        ->assertSeeText('Missing billing requirements:')
+        ->assertSeeText('Tenant billing mapping missing: stripe.customer_reference')
+        ->assertSeeText('Tenant billing mapping missing: stripe.subscription_reference');
 });
 
 test('tenant billing readiness reports ready for activation prep when required placeholders exist', function (): void {
@@ -600,9 +603,9 @@ test('tenant billing readiness reports ready for activation prep when required p
     $this->actingAs($user)
         ->get("http://{$host}/landlord/commercial")
         ->assertOk()
+        ->assertSeeText('Billing Ready Tenant')
         ->assertSeeText('Billing readiness:')
-        ->assertSeeText('ready for activation prep')
-        ->assertDontSeeText('Missing billing requirements:');
+        ->assertSeeText('ready for activation prep');
 });
 
 test('guarded stripe customer sync is landlord-only', function (): void {

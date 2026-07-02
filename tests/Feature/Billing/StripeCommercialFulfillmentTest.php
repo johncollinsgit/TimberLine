@@ -242,7 +242,7 @@ test('subscription deleted webhook downgrades stripe-fulfilled access and keeps 
     ], $payload)->assertOk();
 
     // Downgraded to the lowest-position canonical plan, and prior stripe add-ons removed.
-    expect((string) TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('starter');
+    expect((string) TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('base');
     expect((bool) TenantAccessAddon::query()
         ->where('tenant_id', (int) $tenant->id)
         ->where('addon_key', 'sms')

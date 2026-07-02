@@ -45,7 +45,7 @@ test('public product pages display Everbranch as the platform brand', function (
 
     $this->get(route('platform.contact'))
         ->assertOk()
-        ->assertSeeText('Talk with the Everbranch team')
+        ->assertSeeText('Tell Everbranch what keeps getting lost.')
         ->assertDontSeeText('Contact Forestry Backstage');
 
     $this->get(route('platform.plans'))
