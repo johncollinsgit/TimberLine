@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-07-02 — Evergrove and Everbranch Public Story Pass
+
+### What changed
+- Reframed Evergrove Software as the parent software studio that builds practical apps, portals, automations, and products for small businesses.
+- Reframed Everbranch as the focused small-business operating workspace for customers, tasks, notes, follow-ups, messages, and daily work.
+- Added clearer parent/product relationship copy between Evergrove and Everbranch on the public homepages.
+- Updated public CTAs toward workflow audits for Evergrove and product/demo access for Everbranch.
+
+### What did not change
+- No routes, forms, calculators, billing behavior, Shopify behavior, module access, or tenant provisioning changed.
+- Existing public styling, brand assets, and layout systems remain in place.
+
 ## 2026-07-02 — Base Workspace Field Service Start
 
 ### What changed

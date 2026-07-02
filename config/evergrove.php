@@ -50,26 +50,26 @@ return [
         'og_image' => 'og-image.png',
     ],
     'positioning' => [
-        'eyebrow' => 'AI systems and custom software for practical businesses',
-        'headline' => 'Turn scattered operations into useful software.',
-        'summary' => 'Evergrove helps small and medium businesses plan, build, and maintain AI-assisted systems, Laravel applications, customer portals, automations, and better internal workflows.',
+        'eyebrow' => 'Practical software for small businesses',
+        'headline' => 'We build the software small businesses wish already existed.',
+        'summary' => 'Evergrove creates practical apps, portals, automations, and software products for small businesses that have outgrown sticky notes, spreadsheets, and scattered tools.',
     ],
     'services' => [
         [
-            'title' => 'AI systems consulting',
-            'summary' => 'Find the workflows where AI can reduce repeated work without adding noise, risk, or expensive theater.',
+            'title' => 'Workflow audits and software plans',
+            'summary' => 'Map the messy parts of the business, decide what should be fixed first, and turn the next step into a clear build plan.',
         ],
         [
-            'title' => 'Laravel and custom software',
-            'summary' => 'Design and build business-specific web apps, portals, dashboards, integrations, and operational tools.',
+            'title' => 'Custom internal apps',
+            'summary' => 'Build business-specific tools for customers, jobs, orders, materials, approvals, reporting, and daily team workflows.',
         ],
         [
-            'title' => 'Automation and integration',
-            'summary' => 'Connect Shopify, spreadsheets, email, internal processes, and reporting so teams stop retyping the same data.',
+            'title' => 'Portals and connected systems',
+            'summary' => 'Create customer portals, Shopify-connected systems, dashboards, and integrations that keep important work in one place.',
         ],
         [
-            'title' => 'Client portals and work visibility',
-            'summary' => 'Give customers a clean place to see status, milestones, deliverables, and what happens next.',
+            'title' => 'AI-assisted admin tools',
+            'summary' => 'Use AI where it is actually useful: repeated admin, summaries, follow-ups, drafts, and decisions that still need human review.',
         ],
     ],
     'tools' => [

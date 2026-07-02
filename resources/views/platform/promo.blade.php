@@ -17,7 +17,7 @@
 <html lang="en">
 <head>
     @include('partials.head', [
-        'title' => $productName.' | The Future of AI-Powered Small Business',
+        'title' => $productName.' | Small-Business Operating Workspace',
         'description' => $summary,
     ])
 </head>
@@ -71,7 +71,7 @@
                                     {{ $summary }}
                                 </p>
                                 <a href="#everbranch-public" class="fb-splash__button" data-splash-cta>
-                                    The Future of AI-Powered Small Business
+                                    See Everbranch in action
                                 </a>
                             </div>
                         </header>
@@ -79,14 +79,15 @@
                         <div class="fb-public-hero">
                             <div class="fb-public-hero__copy">
                                 <p class="fb-section-kicker">What it does</p>
-                                <h2>One place to see what is happening in your business.</h2>
+                                <h2>Give your company an app your team will actually use.</h2>
                                 <p>
-                                    Everbranch helps you keep track of customers, jobs, orders, money, materials,
-                                    messages, and follow-ups so fewer things slip through the cracks.
+                                    Everbranch gives customers, tasks, notes, follow-ups, messages, and next steps
+                                    one simple place to live, so your team does not have to hunt through texts,
+                                    spreadsheets, notebooks, and memory.
                                 </p>
                                 <div class="fb-hero-cta">
                                     <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Request access</a>
-                                    <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">View a demo</a>
+                                    <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">See Everbranch in action</a>
                                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
                                 </div>
                             </div>
@@ -97,11 +98,11 @@
                                 </div>
                                 <div class="fb-orbit-panel__list">
                                     <span>Customers</span>
-                                    <span>Work</span>
-                                    <span>Money</span>
+                                    <span>Tasks</span>
+                                    <span>Notes</span>
                                     <span>Materials</span>
-                                    <span>Communication</span>
-                                    <span>Next steps</span>
+                                    <span>Messages</span>
+                                    <span>Follow-ups</span>
                                 </div>
                             </aside>
                         </div>
@@ -109,26 +110,34 @@
                         <div class="fb-section fb-section--public" aria-label="What Everbranch does">
                             <div class="fb-section-header">
                                 <p class="fb-section-kicker">What Everbranch does</p>
-                                <h2>It helps you see the day clearly.</h2>
-                                <p>Everbranch is for teams who need a simple way to know what happened, what is happening, and what needs attention next.</p>
+                                <h2>It gives daily work a home.</h2>
+                                <p>Everbranch is for owners and teams who need a simple way to know what happened, what matters now, and what needs attention next.</p>
                             </div>
                             <div class="fb-grid fb-grid-4">
                                 <article class="fb-card fb-card--public">
                                     <h3>Keep customer details together</h3>
-                                    <p>See who called, bought, asked, requested work, or needs a follow-up.</p>
+                                    <p>See who called, bought, asked, requested work, or needs a follow-up before it gets forgotten.</p>
                                 </article>
                                 <article class="fb-card fb-card--public">
                                     <h3>Track the work</h3>
-                                    <p>Follow jobs, orders, batches, service calls, or visits with words that fit your business.</p>
+                                    <p>Follow jobs, orders, batches, service calls, tasks, or visits with words that fit your business.</p>
                                 </article>
                                 <article class="fb-card fb-card--public">
-                                    <h3>Understand the money</h3>
-                                    <p>See revenue, costs, materials, and effort before the numbers turn into a guessing game.</p>
+                                    <h3>Keep notes and messages close</h3>
+                                    <p>Put the context next to the customer or job instead of leaving it scattered across the team.</p>
                                 </article>
                                 <article class="fb-card fb-card--public">
                                     <h3>See what needs attention</h3>
                                     <p>Know which customer, job, message, or task needs the next move.</p>
                                 </article>
+                            </div>
+                        </div>
+
+                        <div class="fb-section fb-section--public" aria-label="Evergrove relationship">
+                            <div class="fb-section-header">
+                                <p class="fb-section-kicker">{{ $companyName }}</p>
+                                <h2>Built by Evergrove Software.</h2>
+                                <p>{{ $productName }} is built by {{ $companyName }} Software, a practical software company focused on tools for real operators, owner-led teams, and the work that needs a clearer home.</p>
                             </div>
                         </div>
                     </article>
@@ -137,8 +146,8 @@
                         <div class="fb-section fb-section--public" aria-label="Daily work">
                             <div class="fb-section-header">
                                 <p class="fb-section-kicker">Daily work</p>
-                                <h2>Start with the parts of your business you want help with first.</h2>
-                                <p>You do not have to set everything up at once. Start with customers, jobs, orders, materials, or follow-ups, then add more when it makes sense.</p>
+                                <h2>Start with the work that keeps slipping through the cracks.</h2>
+                                <p>You do not have to set everything up at once. Start with customers, jobs, tasks, notes, messages, materials, or follow-ups, then add more when it makes sense.</p>
                             </div>
                             <div class="fb-grid fb-grid-3">
                                 @foreach((array) ($content['how_it_works'] ?? []) as $step)

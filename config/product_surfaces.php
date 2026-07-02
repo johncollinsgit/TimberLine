@@ -10,27 +10,27 @@ $helloContact = 'hello@'.$contactDomain;
 return [
     'promo' => [
         'eyebrow' => 'Built for busy small businesses',
-        'headline' => 'All of your business, in one place',
-        'summary' => $productName.' brings customers, work, money, materials, communication, and next steps into one intelligent app.',
+        'headline' => 'One app for the work that keeps slipping through the cracks.',
+        'summary' => $productName.' brings customers, tasks, notes, follow-ups, messages, and next steps into a simple workspace your team can use every day.',
         'how_it_works' => [
             [
-                'title' => 'Tell us how your business runs',
-                'description' => 'Bring the basics together: customers, jobs, orders, materials, notes, and the places you already keep information.',
+                'title' => 'Bring the messy workflow',
+                'description' => 'Start with the customers, jobs, notes, follow-ups, messages, and daily work your team is already trying to manage.',
             ],
             [
-                'title' => 'Pick what matters first',
-                'description' => 'Start with the part that causes the most headaches, like follow-ups, job notes, order tracking, or materials.',
+                'title' => 'Set up your workspace',
+                'description' => 'Give the work a home so your team knows where to look and what needs attention next.',
             ],
             [
-                'title' => 'Get a clear next step',
-                'description' => 'We help you see what should happen next before anything paid, sensitive, or important changes.',
+                'title' => 'Run the day from one place',
+                'description' => 'Track next steps, follow up with customers, and move work forward with fewer dropped balls.',
             ],
         ],
         'preview_profiles' => [
             [
                 'key' => 'landscaper',
                 'label' => 'Landscaper',
-                'summary' => 'Keep customers, jobs, crew notes, materials, and follow-ups in one place.',
+                'summary' => 'Keep customers, jobs, crew notes, materials, photos, and follow-ups in one workspace.',
                 'signals' => [
                     'Jobs and crew notes',
                     'Materials and job costs',
@@ -40,7 +40,7 @@ return [
             [
                 'key' => 'electrician',
                 'label' => 'Electrician',
-                'summary' => 'Track service calls, customers, parts, notes, estimates, and follow-ups.',
+                'summary' => 'Track service calls, customers, parts, notes, tasks, estimates, and follow-ups.',
                 'signals' => [
                     'Service calls and job notes',
                     'Parts, receipts, and estimates',
@@ -50,7 +50,7 @@ return [
             [
                 'key' => 'soap_maker',
                 'label' => 'Soap Maker',
-                'summary' => 'Connect orders, batches, materials, inventory, wholesale needs, and repeat customers.',
+                'summary' => 'Connect orders, batches, materials, inventory, wholesale approvals, and repeat customers.',
                 'signals' => [
                     'Batches and materials',
                     'Orders, products, and inventory',
@@ -60,16 +60,16 @@ return [
         ],
         'preview_flow' => [
             [
-                'title' => 'See an example',
-                'description' => 'Look at a guided example with real-looking business details and no private data.',
+                'title' => 'See Everbranch in action',
+                'description' => 'Look at a guided example of customers, work, notes, and next steps living together.',
             ],
             [
                 'title' => 'Share what you need',
-                'description' => 'Tell us what kind of business you run, where your information lives, and what you want help with first.',
+                'description' => 'Tell us how your team works today, where information lives, and what keeps getting missed.',
             ],
             [
-                'title' => 'Start with a guide',
-                'description' => 'Your team gets a simple Start Here page that shows what is ready and what to do next.',
+                'title' => 'Start with one workspace',
+                'description' => 'Your team gets a simple place to see what is ready, what needs setup, and what to do next.',
             ],
         ],
         'plan_order' => [
@@ -83,7 +83,7 @@ return [
                 'href' => '/shopify/reinstall/retail',
             ],
             'demo' => [
-                'label' => 'See a live demo',
+                'label' => 'See Everbranch in action',
                 'href' => '/platform/demo',
             ],
             'start_client' => [

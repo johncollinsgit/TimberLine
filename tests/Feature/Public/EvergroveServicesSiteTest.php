@@ -15,19 +15,22 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('Evergrove')
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('Sign Up')
-        ->assertSeeText('Turn scattered operations into useful software.')
-        ->assertSeeText('AI systems consulting')
+        ->assertSeeText('We build the software small businesses wish already existed.')
+        ->assertSeeText('Start with a workflow audit')
+        ->assertSeeText('Workflow audits and software plans')
+        ->assertSeeText('Everbranch is one product created by Evergrove.')
         ->assertSeeText('Website and software project estimate')
         ->assertSeeText('Modern Forestry')
-        ->assertDontSeeText('Run the business you actually have.');
+        ->assertDontSeeText('One app for the work that keeps slipping through the cracks.');
 });
 
 test('everbranch public host keeps the everbranch product surface', function (): void {
     $this->get('http://theeverbranch.com/')
         ->assertOk()
-        ->assertSeeText('All of your business, in one place')
-        ->assertSeeText('Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent app.')
-        ->assertDontSeeText('Turn scattered operations into useful software.');
+        ->assertSeeText('One app for the work that keeps slipping through the cracks.')
+        ->assertSeeText('Everbranch brings customers, tasks, notes, follow-ups, messages, and next steps into a simple workspace your team can use every day.')
+        ->assertSeeText('Built by Evergrove Software.')
+        ->assertDontSeeText('We build the software small businesses wish already existed.');
 });
 
 test('authenticated users still see evergrove surface on evergrove public host', function (): void {
@@ -42,8 +45,8 @@ test('authenticated users still see evergrove surface on evergrove public host',
         ->get('http://evergrovesoftware.com/')
         ->assertOk()
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
-        ->assertSeeText('Turn scattered operations into useful software.')
-        ->assertDontSeeText('Run the business you actually have.');
+        ->assertSeeText('We build the software small businesses wish already existed.')
+        ->assertDontSeeText('One app for the work that keeps slipping through the cracks.');
 });
 
 test('app host sends guests toward login while lander redirects home', function (): void {
