@@ -243,3 +243,41 @@ test('paused or cancelled candle club contracts cannot request a voting code', f
     expect($result['ok'])->toBeFalse()
         ->and($result['status'])->toBe('not_eligible');
 })->with(['paused', 'cancelled', 'failed']);
+
+test('john preview account gets unlocked candle club menus while normal accounts stay locked', function (): void {
+    $tenant = Tenant::query()->create([
+        'id' => 1,
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    $john = MarketingProfile::factory()->create([
+        'tenant_id' => $tenant->id,
+        'email' => 'johncollinesmail@gmail.com',
+        'normalized_email' => 'johncollinesmail@gmail.com',
+    ]);
+
+    $normal = MarketingProfile::factory()->create([
+        'tenant_id' => $tenant->id,
+        'email' => 'not-club@example.com',
+        'normalized_email' => 'not-club@example.com',
+    ]);
+
+    $service = app(SubscriptionModuleService::class);
+    $preview = $service->customerCandleClubPayload($john);
+    $locked = $service->customerCandleClubPayload($normal);
+
+    expect($preview['eligible'])->toBeTrue()
+        ->and($preview['preview'])->toBeTrue()
+        ->and(data_get($preview, 'contract.status'))->toBe('active')
+        ->and(data_get($preview, 'active_poll.status'))->toBe('open')
+        ->and(data_get($preview, 'actions.can_vote'))->toBeTrue()
+        ->and(data_get($preview, 'actions.can_pause'))->toBeTrue()
+        ->and(data_get($preview, 'actions.can_cancel'))->toBeTrue()
+        ->and(data_get($preview, 'actions.can_update_address'))->toBeTrue()
+        ->and(data_get($preview, 'actions.can_update_card'))->toBeTrue()
+        ->and(data_get($preview, 'actions.can_swap_to_active_16oz_scent'))->toBeTrue()
+        ->and($locked['eligible'])->toBeFalse()
+        ->and(data_get($locked, 'actions.can_vote'))->toBeFalse()
+        ->and(data_get($locked, 'actions.can_pause'))->toBeFalse();
+});

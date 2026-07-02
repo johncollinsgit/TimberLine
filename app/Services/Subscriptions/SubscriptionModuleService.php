@@ -285,6 +285,10 @@ class SubscriptionModuleService
         $contract = $this->activeCandleClubContractForProfile($profile);
         $poll = $this->activePoll($tenantId);
 
+        if (! $contract && $this->isCandleClubPreviewProfile($profile)) {
+            return $this->previewCandleClubPayload($profile, $poll);
+        }
+
         return [
             'eligible' => $contract !== null,
             'status' => $contract ? 'active' : 'not_active',
@@ -302,6 +306,98 @@ class SubscriptionModuleService
                 'can_swap_to_active_16oz_scent' => $contract !== null,
             ],
             'cancel_prompt' => $this->candleClubSettings($tenantId)['cancellation_prompt'],
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>|null  $poll
+     * @return array<string,mixed>
+     */
+    protected function previewCandleClubPayload(MarketingProfile $profile, ?array $poll): array
+    {
+        $tenantId = (int) $profile->tenant_id;
+        $contract = (object) [
+            'id' => 0,
+            'shopify_subscription_contract_gid' => 'gid://evergrove/PreviewSubscriptionContract/john-collins-candle-club',
+            'shopify_customer_gid' => 'gid://evergrove/PreviewCustomer/john-collins',
+            'status' => 'active',
+            'is_candle_club' => true,
+            'next_billing_date' => CarbonImmutable::now()->addWeeks(2)->toDateString(),
+            'next_shipping_date' => CarbonImmutable::now()->addWeeks(3)->toDateString(),
+            'completed_cycles' => 3,
+            'pause_count_current_commitment' => 0,
+            'commitment_ends_on' => CarbonImmutable::now()->addMonths(3)->toDateString(),
+        ];
+
+        $previousScents = $this->previousChosenScents($tenantId);
+        if ($previousScents === []) {
+            $previousScents = [
+                [
+                    'title' => 'Coffeehouse',
+                    'body' => 'Rich espresso, vanilla cream, and warm woods.',
+                    'published_at' => CarbonImmutable::now()->subMonth()->toDateString(),
+                ],
+                [
+                    'title' => 'Walking on Sunshine',
+                    'body' => 'Bright citrus, agave, and clean summer air.',
+                    'published_at' => CarbonImmutable::now()->subMonths(2)->toDateString(),
+                ],
+                [
+                    'title' => 'Cabin Morning',
+                    'body' => 'Cedar, soft spice, and a quiet first cup.',
+                    'published_at' => CarbonImmutable::now()->subMonths(3)->toDateString(),
+                ],
+            ];
+        }
+
+        return [
+            'eligible' => true,
+            'status' => 'active',
+            'message' => 'Preview mode is unlocked for this account so the Candle Club menus can be tested before cutover.',
+            'contract' => $this->contractSummary($contract),
+            'active_poll' => $poll
+                ? $this->pollPayload((int) $poll['id'], $contract)
+                : $this->previewPollPayload(),
+            'vote_history' => [
+                [
+                    'poll_title' => 'June Candle Club vote',
+                    'option_label' => 'Coffeehouse',
+                    'voted_at' => CarbonImmutable::now()->subWeeks(4)->toDateString(),
+                ],
+            ],
+            'previous_chosen_scents' => $previousScents,
+            'actions' => [
+                'can_vote' => true,
+                'can_pause' => true,
+                'can_cancel' => true,
+                'can_update_address' => true,
+                'can_update_card' => true,
+                'can_swap_to_active_16oz_scent' => true,
+            ],
+            'cancel_prompt' => $this->candleClubSettings($tenantId)['cancellation_prompt'],
+            'preview' => true,
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function previewPollPayload(): array
+    {
+        return [
+            'id' => 0,
+            'title' => 'Vote for next month',
+            'description' => 'Preview ballot for testing the Candle Club app menu before subscription cutover.',
+            'status' => 'open',
+            'opens_at' => CarbonImmutable::now()->subDay()->toDateString(),
+            'closes_at' => CarbonImmutable::now()->addWeek()->toDateString(),
+            'share_url' => '/subscriptions/polls/preview-candle-club',
+            'options' => [
+                ['id' => 1, 'label' => 'Coffeehouse', 'votes' => 18],
+                ['id' => 2, 'label' => 'Cabin Morning', 'votes' => 12],
+                ['id' => 3, 'label' => 'Forest Rain', 'votes' => 9],
+            ],
+            'already_voted' => false,
         ];
     }
 
@@ -615,6 +711,17 @@ class SubscriptionModuleService
             ->where('is_candle_club', true)
             ->orderByDesc('id')
             ->first();
+    }
+
+    protected function isCandleClubPreviewProfile(MarketingProfile $profile): bool
+    {
+        if ((int) $profile->tenant_id !== 1) {
+            return false;
+        }
+
+        $email = Str::lower(trim((string) ($profile->normalized_email ?: $profile->email)));
+
+        return $email === 'johncollinesmail@gmail.com';
     }
 
     protected function activeCandleClubContractForIdentifier(int $tenantId, string $type, string $identifier): ?object
