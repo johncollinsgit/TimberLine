@@ -28,7 +28,10 @@
         @endif
 
         @if (session('error'))
-            <section class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-800">
+            <section
+                class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-800"
+                data-embedded-session-error
+            >
                 {{ session('error') }}
             </section>
         @endif
@@ -231,6 +234,7 @@
             const actionButtons = Array.from(document.querySelectorAll('[data-embedded-approval-button]'));
             const identityLabel = document.querySelector('[data-embedded-identity-label]');
             const approvalHelp = document.querySelector('[data-embedded-approval-help]');
+            const sessionErrorBanner = document.querySelector('[data-embedded-session-error]');
 
             if (tokenInputs.length === 0) {
                 return;
@@ -296,6 +300,13 @@
 
                 if (approvalHelp) {
                     approvalHelp.textContent = 'Approval actions are ready.';
+                }
+
+                if (sessionErrorBanner) {
+                    const bannerMessage = sessionErrorBanner.textContent || '';
+                    if (bannerMessage.toLowerCase().includes('verification')) {
+                        sessionErrorBanner.remove();
+                    }
                 }
 
                 verificationFinished = true;
