@@ -133,6 +133,73 @@
                             </div>
                         </div>
 
+                        <div class="fb-section fb-section--public" aria-label="Industry fit">
+                            <div class="fb-section-header">
+                                <p class="fb-section-kicker">Industry fit</p>
+                                <h2>Built for the messy middle of small business.</h2>
+                                <p>Whether you sell products, schedule jobs, manage crews, or coordinate projects, Everbranch gives your team one place for the details that usually live in texts, spreadsheets, notebooks, and memory.</p>
+                            </div>
+                            <div class="fb-industry-switcher" aria-label="Everbranch industry examples">
+                                <details class="fb-industry-card" open>
+                                    <summary>
+                                        <span>Retail &amp; product brands</span>
+                                        <strong>Customer notes, wholesale requests, inventory questions, event prep, reorders, and follow-ups.</strong>
+                                    </summary>
+                                    <div class="fb-industry-preview">
+                                        <p>Capture the customer or buyer request, organize the order or event details, assign the next step, and keep follow-up from disappearing after the sale.</p>
+                                        <div>
+                                            <span>Wholesale request</span>
+                                            <span>Event prep</span>
+                                            <span>Reorder follow-up</span>
+                                        </div>
+                                    </div>
+                                </details>
+                                <details class="fb-industry-card">
+                                    <summary>
+                                        <span>Electrical &amp; plumbing</span>
+                                        <strong>Job details, estimates, parts, customer messages, scheduling notes, and crew next steps.</strong>
+                                    </summary>
+                                    <div class="fb-industry-preview">
+                                        <p>Keep the visit details, estimate context, parts notes, and next crew action together so the customer does not have to explain the same thing twice.</p>
+                                        <div>
+                                            <span>Job note</span>
+                                            <span>Parts question</span>
+                                            <span>Crew next step</span>
+                                        </div>
+                                    </div>
+                                </details>
+                                <details class="fb-industry-card">
+                                    <summary>
+                                        <span>Construction &amp; project work</span>
+                                        <strong>Project notes, approvals, materials, change requests, subcontractor updates, and punch-list items.</strong>
+                                    </summary>
+                                    <div class="fb-industry-preview">
+                                        <p>Put project context, approvals, material questions, and punch-list items where the team can see what changed and what needs a decision.</p>
+                                        <div>
+                                            <span>Approval needed</span>
+                                            <span>Material note</span>
+                                            <span>Punch-list item</span>
+                                        </div>
+                                    </div>
+                                </details>
+                                <details class="fb-industry-card">
+                                    <summary>
+                                        <span>Service businesses</span>
+                                        <strong>Client records, appointments, recurring work, task handoffs, and follow-up reminders.</strong>
+                                    </summary>
+                                    <div class="fb-industry-preview">
+                                        <p>Give client details, appointments, recurring work, and handoffs a single place so the next person knows what happened and what to do.</p>
+                                        <div>
+                                            <span>Client record</span>
+                                            <span>Recurring work</span>
+                                            <span>Reminder</span>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                            <p class="fb-industry-close">Everbranch does not replace the way your business works. It gives that work a home.</p>
+                        </div>
+
                         <div class="fb-section fb-section--public" aria-label="Evergrove relationship">
                             <div class="fb-section-header">
                                 <p class="fb-section-kicker">{{ $companyName }}</p>

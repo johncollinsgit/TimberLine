@@ -1,5 +1,15 @@
 # UI Changelog
 
+## 2026-07-02 — Public Industry Fit Sections
+
+### What changed
+- Added clickable industry-fit cards to Everbranch showing how the same workspace pattern applies to retail/product brands, electrical/plumbing, construction/project work, and service businesses.
+- Added a broader Evergrove industry section for owner-led businesses, positioning Evergrove as the studio that can build practical systems for retail/product brands, trades, construction/project teams, and custom operations.
+- Added responsive styling for the new public industry cards without introducing a new JavaScript interaction.
+
+### What did not change
+- The industry examples are workflow examples only; no new specialized modules, routes, tenant features, billing, Shopify behavior, or form behavior changed.
+
 ## 2026-07-02 — Evergrove and Everbranch Public Story Pass
 
 ### What changed

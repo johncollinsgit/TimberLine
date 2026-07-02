@@ -19,6 +19,9 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('Start with a workflow audit')
         ->assertSeeText('Workflow audits and software plans')
         ->assertSeeText('Everbranch is one product created by Evergrove.')
+        ->assertSeeText('Software for owner-led businesses.')
+        ->assertSeeText('Trades & field teams')
+        ->assertSeeText('Construction & project teams')
         ->assertSeeText('Website and software project estimate')
         ->assertSeeText('Modern Forestry')
         ->assertDontSeeText('One app for the work that keeps slipping through the cracks.');
@@ -29,6 +32,10 @@ test('everbranch public host keeps the everbranch product surface', function ():
         ->assertOk()
         ->assertSeeText('One app for the work that keeps slipping through the cracks.')
         ->assertSeeText('Everbranch brings customers, tasks, notes, follow-ups, messages, and next steps into a simple workspace your team can use every day.')
+        ->assertSeeText('Built for the messy middle of small business.')
+        ->assertSeeText('Retail & product brands')
+        ->assertSeeText('Electrical & plumbing')
+        ->assertSeeText('Everbranch does not replace the way your business works. It gives that work a home.')
         ->assertSeeText('Built by Evergrove Software.')
         ->assertDontSeeText('We build the software small businesses wish already existed.');
 });
