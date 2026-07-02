@@ -1602,6 +1602,7 @@ body[data-premium-motion="public"].has-premium-motion .fb-splash__node--four {
   border: 1px solid rgba(13, 27, 30, 0.12);
   border-radius: var(--fb-radius-md);
   box-shadow: 0 20px 50px -42px rgba(8, 24, 27, 0.45);
+  cursor: pointer;
   overflow: hidden;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
@@ -1618,6 +1619,13 @@ body[data-premium-motion="public"].has-premium-motion .fb-splash__node--four {
   list-style: none;
   min-height: 12.5rem;
   padding: 1.1rem;
+  position: relative;
+}
+
+.fb-industry-card summary::after {
+  content: "";
+  inset: 0;
+  position: absolute;
 }
 
 .fb-industry-card summary::-webkit-details-marker {
@@ -5756,6 +5764,7 @@ textarea.assistant-field-input {
   border: 1px solid #deded8;
   border-radius: 8px;
   box-shadow: 0 22px 50px -44px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
   overflow: hidden;
 }
 
@@ -5770,6 +5779,13 @@ textarea.assistant-field-input {
   list-style: none;
   min-height: 13.5rem;
   padding: 1.15rem;
+  position: relative;
+}
+
+.eg-industry-card summary::after {
+  content: "";
+  inset: 0;
+  position: absolute;
 }
 
 .eg-industry-card summary::-webkit-details-marker {

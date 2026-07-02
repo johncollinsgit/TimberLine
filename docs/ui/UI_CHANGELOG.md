@@ -6,6 +6,7 @@
 - Replaced the static Everbranch hero orbit graphic with a public-safe interactive product demo.
 - Added clickable industry examples and a "Problem" to "Solution" reveal showing scattered work becoming an organized Everbranch workspace.
 - Added a lightweight public JavaScript module for scenario switching, autoplay, and reduced-motion behavior without adding dependencies.
+- Widened public industry-card click targets so the whole card toggles, not just the text.
 
 ### Why
 - The public site should show how Everbranch helps instead of only describing it.

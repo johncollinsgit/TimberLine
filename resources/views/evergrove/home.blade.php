@@ -115,28 +115,28 @@
                 <p>Evergrove builds practical systems for companies where the work is real, the details matter, and the team needs more than another spreadsheet.</p>
             </div>
             <div class="eg-industry-showcase" aria-label="Evergrove industry examples">
-                <details class="eg-industry-card" open>
+                <details class="eg-industry-card" data-clickable-details-card open>
                     <summary>
                         <span>Retail &amp; product brands</span>
                         <strong>Customer systems, order workflows, wholesale portals, inventory tools, event operations, and follow-up systems.</strong>
                     </summary>
                     <p>Good systems keep buyer questions, order details, event prep, inventory signals, and follow-ups from living in five separate places.</p>
                 </details>
-                <details class="eg-industry-card">
+                <details class="eg-industry-card" data-clickable-details-card>
                     <summary>
                         <span>Trades &amp; field teams</span>
                         <strong>Job dashboards, estimate tracking, crew workflows, parts requests, and customer updates.</strong>
                     </summary>
                     <p>The right app can give owners and crews a clearer view of the job, the customer, the parts needed, and the next action.</p>
                 </details>
-                <details class="eg-industry-card">
+                <details class="eg-industry-card" data-clickable-details-card>
                     <summary>
                         <span>Construction &amp; project teams</span>
                         <strong>Approvals, materials, change requests, documents, punch lists, and client-facing portals.</strong>
                     </summary>
                     <p>Project work needs a reliable home for decisions, materials, documents, change notes, and the items still waiting on someone.</p>
                 </details>
-                <details class="eg-industry-card">
+                <details class="eg-industry-card" data-clickable-details-card>
                     <summary>
                         <span>Custom operations</span>
                         <strong>When your process does not fit off-the-shelf software, Evergrove can help shape it into a practical app.</strong>

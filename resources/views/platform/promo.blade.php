@@ -277,7 +277,7 @@
                                 <p>Whether you sell products, schedule jobs, manage crews, or coordinate projects, Everbranch gives your team one place for the details that usually live in texts, spreadsheets, notebooks, and memory.</p>
                             </div>
                             <div class="fb-industry-switcher" aria-label="Everbranch industry examples">
-                                <details class="fb-industry-card" open>
+                                <details class="fb-industry-card" data-clickable-details-card open>
                                     <summary>
                                         <span>Retail &amp; product brands</span>
                                         <strong>Customer notes, wholesale requests, inventory questions, event prep, reorders, and follow-ups.</strong>
@@ -291,7 +291,7 @@
                                         </div>
                                     </div>
                                 </details>
-                                <details class="fb-industry-card">
+                                <details class="fb-industry-card" data-clickable-details-card>
                                     <summary>
                                         <span>Electrical &amp; plumbing</span>
                                         <strong>Job details, estimates, parts, customer messages, scheduling notes, and crew next steps.</strong>
@@ -305,7 +305,7 @@
                                         </div>
                                     </div>
                                 </details>
-                                <details class="fb-industry-card">
+                                <details class="fb-industry-card" data-clickable-details-card>
                                     <summary>
                                         <span>Construction &amp; project work</span>
                                         <strong>Project notes, approvals, materials, change requests, subcontractor updates, and punch-list items.</strong>
@@ -319,7 +319,7 @@
                                         </div>
                                     </div>
                                 </details>
-                                <details class="fb-industry-card">
+                                <details class="fb-industry-card" data-clickable-details-card>
                                     <summary>
                                         <span>Service businesses</span>
                                         <strong>Client records, appointments, recurring work, task handoffs, and follow-up reminders.</strong>

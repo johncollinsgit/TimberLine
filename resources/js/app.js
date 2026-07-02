@@ -34,6 +34,12 @@ const contextualModules = [
     mountExport: "mountPublicProductDemoNow",
   },
   {
+    key: "publicDetailsCards",
+    selectors: ["[data-clickable-details-card]"],
+    load: () => import("./public-details-cards"),
+    mountExport: "mountPublicDetailsCardsNow",
+  },
+  {
     key: "widgetDnd",
     selectors: ["[data-dashboard-root]", "[data-widget-root]"],
     load: () => import("./widget-dnd"),
