@@ -56,8 +56,11 @@ use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
+use App\Http\Controllers\ShopifyEmbeddedSubscriptionsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
 use App\Http\Controllers\ShopifyWebhookController;
+use App\Http\Controllers\SubscriptionPublicController;
+use App\Http\Controllers\SubscriptionStorefrontController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
@@ -403,6 +406,9 @@ Route::post('/api/mobile/v1/modern-forestry/auth/refresh', [ModernForestryProduc
 Route::get('/api/mobile/v1/modern-forestry/account', [ModernForestryProductCatalogController::class, 'account'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.account');
+Route::get('/api/mobile/v1/modern-forestry/account/candle-club', [ModernForestryProductCatalogController::class, 'candleClub'])
+    ->middleware('throttle:60,1')
+    ->name('mobile.modern-forestry.account.candle-club');
 Route::post('/api/mobile/v1/modern-forestry/account/message', [ModernForestryProductCatalogController::class, 'accountMessage'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
@@ -1063,6 +1069,27 @@ Route::prefix('webhooks/shopify')->group(function () {
     Route::post('/customers/update', [ShopifyWebhookController::class, 'customersUpdated'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.webhooks.customers.update');
+    Route::post('/subscription-contracts/create', [ShopifyWebhookController::class, 'subscriptionContractsCreate'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.subscription-contracts.create');
+    Route::post('/subscription-contracts/update', [ShopifyWebhookController::class, 'subscriptionContractsUpdate'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.subscription-contracts.update');
+    Route::post('/subscription-billing-attempts/success', [ShopifyWebhookController::class, 'subscriptionBillingAttemptsSuccess'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.subscription-billing-attempts.success');
+    Route::post('/subscription-billing-attempts/failure', [ShopifyWebhookController::class, 'subscriptionBillingAttemptsFailure'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.subscription-billing-attempts.failure');
+    Route::post('/customer-payment-methods/create', [ShopifyWebhookController::class, 'customerPaymentMethodsCreate'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customer-payment-methods.create');
+    Route::post('/customer-payment-methods/update', [ShopifyWebhookController::class, 'customerPaymentMethodsUpdate'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customer-payment-methods.update');
+    Route::post('/customer-payment-methods/revoke', [ShopifyWebhookController::class, 'customerPaymentMethodsRevoke'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customer-payment-methods.revoke');
     Route::post('/customers/data-request', [ShopifyPrivacyWebhookController::class, 'customersDataRequest'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.webhooks.customers.data-request');
@@ -1073,6 +1100,18 @@ Route::prefix('webhooks/shopify')->group(function () {
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.webhooks.shop.redact');
 });
+
+Route::get('/candle-club/vote/{poll}/{token}', [SubscriptionPublicController::class, 'showPoll'])
+    ->middleware('throttle:120,1')
+    ->name('subscriptions.public.poll');
+Route::post('/candle-club/vote/{poll}/{token}/code', [SubscriptionPublicController::class, 'requestVoteCode'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:20,1')
+    ->name('subscriptions.public.poll.code');
+Route::post('/candle-club/vote/{poll}/{token}/vote', [SubscriptionPublicController::class, 'castVote'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:20,1')
+    ->name('subscriptions.public.poll.vote');
 
 Route::prefix('webhooks/twilio')->group(function () {
     Route::post('/status', [TwilioWebhookController::class, 'status'])
@@ -1210,6 +1249,13 @@ Route::prefix('shopify/marketing')
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('birthday.claim');
         Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
+        Route::get('/candle-club/poll', [SubscriptionStorefrontController::class, 'poll'])->name('candle-club.poll');
+        Route::post('/candle-club/vote/code', [SubscriptionStorefrontController::class, 'requestVoteCode'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('candle-club.vote.code');
+        Route::post('/candle-club/vote', [SubscriptionStorefrontController::class, 'castVote'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('candle-club.vote');
         Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('candle-cash.tasks.submit');
@@ -1285,6 +1331,13 @@ Route::prefix('shopify/marketing/v1')
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('birthday.claim');
         Route::get('/candle-cash/status', [MarketingShopifyIntegrationController::class, 'candleCashStatus'])->name('candle-cash.status');
+        Route::get('/candle-club/poll', [SubscriptionStorefrontController::class, 'poll'])->name('candle-club.poll');
+        Route::post('/candle-club/vote/code', [SubscriptionStorefrontController::class, 'requestVoteCode'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('candle-club.vote.code');
+        Route::post('/candle-club/vote', [SubscriptionStorefrontController::class, 'castVote'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('candle-club.vote');
         Route::post('/candle-cash/tasks/submit', [MarketingShopifyIntegrationController::class, 'submitCandleCashTask'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('candle-cash.tasks.submit');
@@ -1328,6 +1381,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::post('/app/store/modules/{moduleKey}/activate', [ShopifyEmbeddedAppController::class, 'activateModule'])->name('shopify.app.store.activate');
     Route::post('/app/store/modules/{moduleKey}/request', [ShopifyEmbeddedAppController::class, 'requestModuleAccess'])->name('shopify.app.store.request');
     Route::get('/app/integrations', [ShopifyEmbeddedAppController::class, 'integrations'])->name('shopify.app.integrations');
+    Route::get('/app/subscriptions', [ShopifyEmbeddedSubscriptionsController::class, 'show'])->name('shopify.app.subscriptions');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
     Route::get('/app/rewards/earn', [ShopifyEmbeddedRewardsController::class, 'earn'])->name('shopify.app.rewards.earn');
     Route::get('/app/rewards/redeem', [ShopifyEmbeddedRewardsController::class, 'redeem'])->name('shopify.app.rewards.redeem');
@@ -1368,6 +1422,18 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('dashboard.candle-cash-reminders');
+        Route::patch('/subscriptions/candle-club/settings', [ShopifyEmbeddedSubscriptionsController::class, 'updateSettings'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('subscriptions.settings.update');
+        Route::post('/subscriptions/migration/dry-run', [ShopifyEmbeddedSubscriptionsController::class, 'startMigrationDryRun'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('subscriptions.migration.dry-run');
+        Route::post('/subscriptions/migration/approve-cutover', [ShopifyEmbeddedSubscriptionsController::class, 'approveCutover'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('subscriptions.migration.approve-cutover');
+        Route::post('/subscriptions/contracts/{contract}/actions', [ShopifyEmbeddedSubscriptionsController::class, 'action'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('subscriptions.contracts.action');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
         Route::get('/rewards/policy', [ShopifyEmbeddedRewardsController::class, 'policy'])
             ->name('rewards.policy');

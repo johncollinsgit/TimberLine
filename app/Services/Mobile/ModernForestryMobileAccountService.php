@@ -17,6 +17,7 @@ use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
+use App\Services\Subscriptions\SubscriptionModuleService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -44,7 +45,8 @@ class ModernForestryMobileAccountService
         protected TwilioSmsService $twilioSmsService,
         protected ModernForestryMobileSupportSettingsService $supportSettings,
         protected ModernForestryMobileScentQuizService $scentQuizService,
-        protected ShopifyEmbeddedRewardsService $embeddedRewards
+        protected ShopifyEmbeddedRewardsService $embeddedRewards,
+        protected SubscriptionModuleService $subscriptions
     ) {
     }
 
@@ -119,6 +121,18 @@ class ModernForestryMobileAccountService
             resolver: fn (): ?array => $this->scentQuizService->latestResultPayload($profile),
             fallback: null
         );
+        $candleClub = $this->safeAccountSection(
+            section: 'candleClub',
+            profile: $profile,
+            tenantId: $tenantId,
+            resolver: fn (): array => $this->subscriptions->customerCandleClubPayload($profile),
+            fallback: [
+                'status' => 'unknown',
+                'subscription' => null,
+                'eligiblePoll' => null,
+                'actions' => [],
+            ]
+        );
 
         Log::info('Modern Forestry mobile account payload timing.', [
             'marketing_profile_id' => (int) $profile->id,
@@ -135,7 +149,16 @@ class ModernForestryMobileAccountService
             'notifications' => is_array($notifications) ? $notifications : null,
             'insights' => is_array($insights) ? $insights : null,
             'scentQuiz' => is_array($scentQuiz) ? $scentQuiz : null,
+            'candleClub' => is_array($candleClub) ? $candleClub : null,
         ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function candleClub(ModernForestryMobileCustomerSession $session): array
+    {
+        return $this->subscriptions->customerCandleClubPayload($session->profile);
     }
 
     /**

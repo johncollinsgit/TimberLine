@@ -17,6 +17,13 @@ return [
         'refunds/create' => 'shopify.webhooks.refunds.create',
         'customers/create' => 'shopify.webhooks.customers.create',
         'customers/update' => 'shopify.webhooks.customers.update',
+        'subscription_contracts/create' => 'shopify.webhooks.subscription-contracts.create',
+        'subscription_contracts/update' => 'shopify.webhooks.subscription-contracts.update',
+        'subscription_billing_attempts/success' => 'shopify.webhooks.subscription-billing-attempts.success',
+        'subscription_billing_attempts/failure' => 'shopify.webhooks.subscription-billing-attempts.failure',
+        'customer_payment_methods/create' => 'shopify.webhooks.customer-payment-methods.create',
+        'customer_payment_methods/update' => 'shopify.webhooks.customer-payment-methods.update',
+        'customer_payment_methods/revoke' => 'shopify.webhooks.customer-payment-methods.revoke',
     ],
 
     /*

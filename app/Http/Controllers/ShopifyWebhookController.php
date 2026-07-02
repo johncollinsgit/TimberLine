@@ -6,6 +6,7 @@ use App\Jobs\ShopifySyncCustomerFromWebhook;
 use App\Jobs\ShopifyUpsertOrder;
 use App\Services\Marketing\IntegrationHealthEventRecorder;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Subscriptions\SubscriptionModuleService;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -51,6 +52,41 @@ class ShopifyWebhookController extends Controller
             app(TenantResolver::class),
             app(IntegrationHealthEventRecorder::class)
         );
+    }
+
+    public function subscriptionContractsCreate(Request $request): Response
+    {
+        return $this->handleSubscriptionWebhook($request, 'subscription_contracts/create');
+    }
+
+    public function subscriptionContractsUpdate(Request $request): Response
+    {
+        return $this->handleSubscriptionWebhook($request, 'subscription_contracts/update');
+    }
+
+    public function subscriptionBillingAttemptsSuccess(Request $request): Response
+    {
+        return $this->handleSubscriptionWebhook($request, 'subscription_billing_attempts/success');
+    }
+
+    public function subscriptionBillingAttemptsFailure(Request $request): Response
+    {
+        return $this->handleSubscriptionWebhook($request, 'subscription_billing_attempts/failure');
+    }
+
+    public function customerPaymentMethodsCreate(Request $request): Response
+    {
+        return $this->handleSubscriptionWebhook($request, 'customer_payment_methods/create');
+    }
+
+    public function customerPaymentMethodsUpdate(Request $request): Response
+    {
+        return $this->handleSubscriptionWebhook($request, 'customer_payment_methods/update');
+    }
+
+    public function customerPaymentMethodsRevoke(Request $request): Response
+    {
+        return $this->handleSubscriptionWebhook($request, 'customer_payment_methods/revoke');
     }
 
     protected function handleOrderWebhook(Request $request, TenantResolver $tenantResolver): Response
@@ -112,6 +148,34 @@ class ShopifyWebhookController extends Controller
             $data,
             $tenantId,
             $topic
+        );
+
+        return response('ok', 200);
+    }
+
+    protected function handleSubscriptionWebhook(Request $request, string $topic): Response
+    {
+        $resolved = $this->resolveVerifiedWebhookRequest($request);
+        if ($resolved['status'] !== 'ok') {
+            return response((string) ($resolved['message'] ?? 'Invalid request.'), (int) ($resolved['code'] ?? 422));
+        }
+
+        $store = (array) $resolved['store'];
+        $tenantId = app(TenantResolver::class)->resolveTenantIdForStoreContext($store);
+        if ($tenantId === null) {
+            Log::warning('shopify subscription webhook skipped: unresolved tenant context', [
+                'topic' => $topic,
+                'store_key' => $store['key'] ?? null,
+                'shop' => $store['shop'] ?? null,
+            ]);
+
+            return response('Tenant context unresolved.', 202);
+        }
+
+        app(SubscriptionModuleService::class)->recordShopifyWebhook(
+            $tenantId,
+            $topic,
+            (array) $resolved['data']
         );
 
         return response('ok', 200);
