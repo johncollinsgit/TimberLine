@@ -31,13 +31,6 @@ class EvergroveServicesController extends Controller
         return $this->tool('automation_savings');
     }
 
-    public function contact(): View
-    {
-        return view('evergrove.contact', [
-            'content' => (array) config('evergrove', []),
-        ]);
-    }
-
     public function lander(Request $request): RedirectResponse
     {
         return redirect()->to('/', 301);

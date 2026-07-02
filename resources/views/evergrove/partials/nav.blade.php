@@ -14,10 +14,11 @@
         </a>
 
         <div class="eg-site-links" aria-label="Public sections">
-            <a href="/#eg-story">Story</a>
-            <a href="/#eg-tools">Tools</a>
+            <a href="/#services">Services</a>
+            <a href="/#work">Work</a>
+            <a href="/#tools">Tools</a>
+            <a href="/#pricing">Pricing</a>
             <a href="/#everbranch">Everbranch</a>
-            <a href="{{ route('evergrove.contact') }}">Contact</a>
         </div>
 
         <div class="eg-site-actions">

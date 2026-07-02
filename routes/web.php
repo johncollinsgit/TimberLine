@@ -350,7 +350,6 @@ Route::get('/assistant/activity', function (Request $request, ShopifyEmbeddedUrl
 })->name('shopify.embedded.assistant.activity');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/lander', [EvergroveServicesController::class, 'lander'])->name('evergrove.lander');
-Route::get('/contact', [EvergroveServicesController::class, 'contact'])->name('evergrove.contact');
 Route::get('/tools/project-estimate', [EvergroveServicesController::class, 'projectEstimate'])->name('evergrove.tools.project-estimate');
 Route::get('/tools/ai-roi', [EvergroveServicesController::class, 'aiRoi'])->name('evergrove.tools.ai-roi');
 Route::get('/tools/automation-savings', [EvergroveServicesController::class, 'automationSavings'])->name('evergrove.tools.automation-savings');

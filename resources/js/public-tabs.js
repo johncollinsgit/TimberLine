@@ -40,7 +40,7 @@ export function mountPublicTabsNow() {
 
     const scope = root.closest(".fb-public-shell") || document;
     const triggers = Array.from(scope.querySelectorAll("[data-public-tab-trigger]"));
-    const panelAnchor = document.getElementById("everbranch-public") || root;
+    const panelAnchor = document.getElementById("everbranch-public");
 
     triggers.forEach((trigger, index) => {
       trigger.tabIndex = trigger.classList.contains("is-active") ? 0 : -1;
@@ -65,7 +65,6 @@ export function mountPublicTabsNow() {
       });
     });
 
-    const activeTrigger = triggers.find((trigger) => trigger.classList.contains("is-active"));
-    activateTab(root, tabKeyFromHash(root) || activeTrigger?.dataset.publicTabTrigger || triggers[0]?.dataset.publicTabTrigger, false);
+    activateTab(root, tabKeyFromHash(root) || triggers[0]?.dataset.publicTabTrigger, false);
   });
 }

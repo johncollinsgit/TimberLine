@@ -16,52 +16,39 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('Sign Up')
         ->assertSeeText('We build the software small businesses wish already existed.')
-        ->assertSeeText('Parent software studio')
         ->assertSeeText('Start with a workflow audit')
-        ->assertSeeText('Problem')
-        ->assertSeeText('What We Build')
-        ->assertSeeText('How It Works')
-        ->assertSeeText('Examples')
-        ->assertSeeText('Contact')
-        ->assertSee('data-public-tabs', false)
-        ->assertSee('data-evergrove-visual-demo', false)
-        ->assertSeeText('Pick the problem you keep explaining twice.')
+        ->assertSeeText('Workflow audits and software plans')
         ->assertSeeText('Everbranch is one product created by Evergrove.')
+        ->assertSeeText('Software for owner-led businesses.')
         ->assertSee('data-clickable-details-card', false)
         ->assertSeeText('Trades & field teams')
         ->assertSeeText('Construction & project teams')
         ->assertSeeText('Website and software project estimate')
         ->assertSeeText('Modern Forestry')
-        ->assertSee('/contact', false)
         ->assertDontSeeText('One app for the work that keeps slipping through the cracks.');
 });
 
 test('everbranch public host keeps the everbranch product surface', function (): void {
     $this->get('http://theeverbranch.com/')
         ->assertOk()
-        ->assertSeeText('Give your company an app your team will actually use.')
-        ->assertSeeText('The Problem')
-        ->assertSeeText('The Plan')
-        ->assertSeeText('See It Work')
-        ->assertSeeText('Who It Helps')
-        ->assertSeeText('Contact')
+        ->assertSeeText('One app for the work that keeps slipping through the cracks.')
+        ->assertSeeText('Everbranch brings customers, tasks, notes, follow-ups, messages, and next steps into a simple workspace your team can use every day.')
         ->assertSee('data-public-product-demo', false)
-        ->assertSee('id="product-theater"', false)
-        ->assertSee('data-product-demo-jump', false)
-        ->assertSeeText('Add a customer')
-        ->assertSeeText('Assign your team')
-        ->assertSeeText('Create an invoice')
-        ->assertSeeText('See net profit')
-        ->assertSeeText('Example workspace')
         ->assertSeeText('Problem')
         ->assertSeeText('Solution')
+        ->assertSeeText('Details are scattered')
+        ->assertSeeText('Everbranch gives it a home')
+        ->assertSeeText('Wholesale request → task → reorder follow-up')
+        ->assertSeeText('Job note → parts question → crew next step')
+        ->assertSeeText('Approval → material note → punch-list item')
+        ->assertSeeText('Client record → appointment → reminder')
         ->assertSeeText('Motion-safe version: detail captured, work organized, next step assigned, follow-up ready.')
         ->assertSeeText('Built for the messy middle of small business.')
         ->assertSee('data-clickable-details-card', false)
         ->assertSeeText('Retail & product brands')
         ->assertSeeText('Electrical & plumbing')
         ->assertSeeText('Everbranch does not replace the way your business works. It gives that work a home.')
-        ->assertSeeText('Bring the messy version. We will help shape the clean one.')
+        ->assertSeeText('Built by Evergrove Software.')
         ->assertDontSeeText('We build the software small businesses wish already existed.');
 });
 
@@ -79,16 +66,6 @@ test('authenticated users still see evergrove surface on evergrove public host',
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('We build the software small businesses wish already existed.')
         ->assertDontSeeText('One app for the work that keeps slipping through the cracks.');
-});
-
-test('evergrove contact route renders the workflow audit inquiry form', function (): void {
-    $this->get('http://evergrovesoftware.com/contact')
-        ->assertOk()
-        ->assertSeeText('Bring the messy version of the problem.')
-        ->assertSeeText('Start with a workflow audit')
-        ->assertSee('action="http://evergrovesoftware.com/services/inquiries"', false)
-        ->assertSee('name="source_page" value="evergrove_contact"', false)
-        ->assertSeeText('Send workflow notes');
 });
 
 test('app host sends guests toward login while lander redirects home', function (): void {
