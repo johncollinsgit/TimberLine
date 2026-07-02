@@ -91,19 +91,156 @@
                                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
                                 </div>
                             </div>
-                            <aside class="fb-orbit-panel" data-premium-surface aria-label="Everbranch focus areas">
-                                <div class="fb-orbit-panel__center">
-                                    <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                    <span>{{ $productName }}</span>
+                            <aside class="fb-product-demo" data-demo-mode="problem" data-premium-surface data-public-product-demo aria-label="Everbranch workflow example">
+                                <div class="fb-product-demo__tabs" role="tablist" aria-label="Small business examples">
+                                    <button
+                                        type="button"
+                                        class="is-active"
+                                        role="tab"
+                                        aria-selected="true"
+                                        data-product-demo-scenario="retail"
+                                        data-demo-customer="Pine &amp; Porch"
+                                        data-demo-type="Retail buyer"
+                                        data-demo-primary="Wholesale request"
+                                        data-demo-note="Asked for event bestsellers, case pricing, and a fall reorder reminder."
+                                        data-demo-task="Send line sheet and approve wholesale access"
+                                        data-demo-owner="Sarah"
+                                        data-demo-followup="Reorder follow-up ready for next Friday"
+                                        data-demo-feed-one="Buyer details captured"
+                                        data-demo-feed-two="Task assigned to Sarah"
+                                        data-demo-feed-three="Follow-up reminder queued"
+                                    >
+                                        <span>Retail</span>
+                                        <strong>Wholesale request → task → reorder follow-up</strong>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected="false"
+                                        data-product-demo-scenario="trades"
+                                        data-demo-customer="Monroe Ave Service Call"
+                                        data-demo-type="Electrical &amp; plumbing"
+                                        data-demo-primary="Job note"
+                                        data-demo-note="Breaker panel photo came in with a parts question and a customer timing note."
+                                        data-demo-task="Confirm parts and assign crew next step"
+                                        data-demo-owner="Eli"
+                                        data-demo-followup="Customer update due before 3 PM"
+                                        data-demo-feed-one="Job note saved"
+                                        data-demo-feed-two="Parts question added"
+                                        data-demo-feed-three="Crew next step assigned"
+                                    >
+                                        <span>Trades</span>
+                                        <strong>Job note → parts question → crew next step</strong>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected="false"
+                                        data-product-demo-scenario="construction"
+                                        data-demo-customer="Maple Street Remodel"
+                                        data-demo-type="Construction project"
+                                        data-demo-primary="Approval needed"
+                                        data-demo-note="Client approved the fixture change, but material timing and punch-list items need one place."
+                                        data-demo-task="Update materials and owner punch-list"
+                                        data-demo-owner="Maya"
+                                        data-demo-followup="Punch-list item ready for Friday review"
+                                        data-demo-feed-one="Approval captured"
+                                        data-demo-feed-two="Material note organized"
+                                        data-demo-feed-three="Punch-list item assigned"
+                                    >
+                                        <span>Projects</span>
+                                        <strong>Approval → material note → punch-list item</strong>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected="false"
+                                        data-product-demo-scenario="service"
+                                        data-demo-customer="Northline Maintenance"
+                                        data-demo-type="Service business"
+                                        data-demo-primary="Client record"
+                                        data-demo-note="Recurring appointment, open question, and handoff note are tied to the same customer."
+                                        data-demo-task="Schedule visit and send reminder"
+                                        data-demo-owner="Jordan"
+                                        data-demo-followup="Reminder ready for Monday morning"
+                                        data-demo-feed-one="Client record updated"
+                                        data-demo-feed-two="Appointment added"
+                                        data-demo-feed-three="Reminder prepared"
+                                    >
+                                        <span>Service</span>
+                                        <strong>Client record → appointment → reminder</strong>
+                                    </button>
                                 </div>
-                                <div class="fb-orbit-panel__list">
-                                    <span>Customers</span>
-                                    <span>Tasks</span>
-                                    <span>Notes</span>
-                                    <span>Materials</span>
-                                    <span>Messages</span>
-                                    <span>Follow-ups</span>
+
+                                <div class="fb-product-demo__frame" aria-live="polite">
+                                    <div class="fb-product-demo__topbar">
+                                        <span class="fb-product-demo__dot"></span>
+                                        <span class="fb-product-demo__dot"></span>
+                                        <span class="fb-product-demo__dot"></span>
+                                        <strong>{{ $productName }} workspace</strong>
+                                        <em data-product-demo-field="type">Retail buyer</em>
+                                    </div>
+                                    <div class="fb-product-demo__mode" role="tablist" aria-label="Problem and solution view">
+                                        <button type="button" class="is-active" role="tab" aria-selected="true" data-product-demo-mode="problem">
+                                            <span>Problem</span>
+                                            Details are scattered
+                                        </button>
+                                        <button type="button" role="tab" aria-selected="false" data-product-demo-mode="solution">
+                                            <span>Solution</span>
+                                            Everbranch gives it a home
+                                        </button>
+                                    </div>
+                                    <div class="fb-product-demo__mess" data-product-demo-problem aria-label="Scattered work example">
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--text">Text: “Can you resend pricing?”</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--sheet">Spreadsheet row missing follow-up</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--note">Notebook: call back Friday</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--photo">Photo + parts question</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--memory">Someone remembers the next step</span>
+                                    </div>
+                                    <div class="fb-product-demo__workspace">
+                                        <nav class="fb-product-demo__sidebar" aria-label="Example workspace sections">
+                                            <span class="is-active">Customers</span>
+                                            <span>Jobs</span>
+                                            <span>Tasks</span>
+                                            <span>Notes</span>
+                                            <span>Follow-ups</span>
+                                        </nav>
+                                        <section class="fb-product-demo__record" aria-label="Example record">
+                                            <div class="fb-product-demo__record-head">
+                                                <div>
+                                                    <p>Open record</p>
+                                                    <h3 data-product-demo-field="customer">Pine &amp; Porch</h3>
+                                                </div>
+                                                <span data-product-demo-field="primary">Wholesale request</span>
+                                            </div>
+                                            <p data-product-demo-field="note">Asked for event bestsellers, case pricing, and a fall reorder reminder.</p>
+                                            <div class="fb-product-demo__task-card">
+                                                <span>Next step</span>
+                                                <strong data-product-demo-field="task">Send line sheet and approve wholesale access</strong>
+                                                <small>Assigned to <b data-product-demo-field="owner">Sarah</b></small>
+                                            </div>
+                                        </section>
+                                        <section class="fb-product-demo__activity" aria-label="Example activity">
+                                            <p>Activity</p>
+                                            <ul>
+                                                <li data-product-demo-feed="one">Buyer details captured</li>
+                                                <li data-product-demo-feed="two">Task assigned to Sarah</li>
+                                                <li data-product-demo-feed="three">Follow-up reminder queued</li>
+                                            </ul>
+                                        </section>
+                                    </div>
+                                    <div class="fb-product-demo__workflow" aria-label="Example workflow progress">
+                                        <ol>
+                                            <li class="is-active" data-product-demo-step="0">Detail captured</li>
+                                            <li data-product-demo-step="1">Work organized</li>
+                                            <li data-product-demo-step="2">Next step assigned</li>
+                                            <li data-product-demo-step="3">Follow-up ready</li>
+                                        </ol>
+                                        <p data-product-demo-field="followup">Reorder follow-up ready for next Friday</p>
+                                    </div>
                                 </div>
+
+                                <p class="fb-product-demo__motion-note">Motion-safe version: detail captured, work organized, next step assigned, follow-up ready.</p>
                             </aside>
                         </div>
 

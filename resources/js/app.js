@@ -28,6 +28,12 @@ const contextualModules = [
     mountExport: "mountPublicTabsNow",
   },
   {
+    key: "publicProductDemo",
+    selectors: ["[data-public-product-demo]"],
+    load: () => import("./public-product-demo"),
+    mountExport: "mountPublicProductDemoNow",
+  },
+  {
     key: "widgetDnd",
     selectors: ["[data-dashboard-root]", "[data-widget-root]"],
     load: () => import("./widget-dnd"),

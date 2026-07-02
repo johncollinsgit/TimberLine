@@ -1,5 +1,20 @@
 # UI Changelog
 
+## 2026-07-02 — Everbranch Live Product Demo Hero
+
+### What changed
+- Replaced the static Everbranch hero orbit graphic with a public-safe interactive product demo.
+- Added clickable industry examples and a "Problem" to "Solution" reveal showing scattered work becoming an organized Everbranch workspace.
+- Added a lightweight public JavaScript module for scenario switching, autoplay, and reduced-motion behavior without adding dependencies.
+
+### Why
+- The public site should show how Everbranch helps instead of only describing it.
+- The hero now gives visitors a concrete, Attio-style "oh wow" moment while avoiding real tenant data or unsupported backend claims.
+
+### What did not change
+- This is a simulated public product example, not an authenticated app embed.
+- No routes, forms, billing, Shopify behavior, tenant permissions, or module activation changed.
+
 ## 2026-07-02 — Public Industry Fit Sections
 
 ### What changed
