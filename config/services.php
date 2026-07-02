@@ -228,4 +228,26 @@ return [
 
     ],
 
+    'pexels' => [
+        'key' => env('PEXELS_API_KEY'),
+    ],
+
+    'unsplash' => [
+        'access_key' => env('UNSPLASH_ACCESS_KEY'),
+    ],
+
+    'pixabay' => [
+        'key' => env('PIXABAY_API_KEY'),
+    ],
+
+    'stock_photos' => [
+        'provider_order' => env('STOCK_PHOTO_PROVIDER_ORDER', 'pexels,unsplash,pixabay'),
+    ],
+
+    'modern_forestry_app_review' => [
+        'email' => env('MF_APP_REVIEW_DEMO_EMAIL', 'app-review@theforestrystudio.com'),
+        'password_hash' => env('MF_APP_REVIEW_DEMO_PASSWORD_HASH', '$2y$12$nCOxrJ6p2NJXOYoC40XSf.Pz6IO5i8XjUaC/mcqteZBtUM0C0tiWO'),
+        'password' => env('MF_APP_REVIEW_DEMO_PASSWORD'),
+    ],
+
 ];

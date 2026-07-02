@@ -348,6 +348,33 @@ class ModernForestryProductCatalogController extends Controller
         ]);
     }
 
+    public function authReviewDemo(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions
+    ): JsonResponse {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:190'],
+            'password' => ['required', 'string', 'max:255'],
+        ]);
+
+        try {
+            $token = $sessions->issueAppReviewDemoToken(
+                (string) $validated['email'],
+                (string) $validated['password']
+            );
+        } catch (ModernForestryMobileCustomerAuthException $exception) {
+            return $this->mobileAuthErrorResponse($exception);
+        }
+
+        return response()->json([
+            'data' => $token,
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'app_review_demo',
+            ],
+        ]);
+    }
+
     protected function mobileAuthErrorResponse(ModernForestryMobileCustomerAuthException $exception): JsonResponse
     {
         return response()->json([
@@ -413,13 +440,44 @@ class ModernForestryProductCatalogController extends Controller
         $validated = $request->validate([
             'action' => ['required', 'string', 'max:80'],
             'scent' => ['nullable', 'string', 'max:255'],
+            'product_variant_gid' => ['nullable', 'string', 'max:190'],
+            'duration_months' => ['nullable', 'integer', 'min:1', 'max:12'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'address' => ['nullable', 'array'],
+            'poll_id' => ['nullable', 'integer', 'min:0'],
+            'option_id' => ['nullable', 'integer', 'min:0'],
             'metadata' => ['nullable', 'array'],
         ]);
 
         return response()->json([
             'data' => $account->candleClubAction($session, $validated),
+            'meta' => [
+                'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
+                'source' => 'mobile',
+            ],
+        ]);
+    }
+
+    public function candleClubScentFeedback(
+        Request $request,
+        ModernForestryMobileCustomerSessionService $sessions,
+        ModernForestryMobileAccountService $account,
+        int $monthlyScent
+    ): JsonResponse {
+        $session = $sessions->resolveFromRequest($request);
+        if (! $session) {
+            return $this->mobileUnauthorizedResponse();
+        }
+
+        $validated = $request->validate([
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'title' => ['nullable', 'string', 'max:190'],
+            'body' => ['required', 'string', 'max:2000'],
+            'source' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        return response()->json([
+            'data' => $account->candleClubScentFeedback($session, $monthlyScent, $validated),
             'meta' => [
                 'tenant' => ModernForestryMobileProductCatalogService::TENANT_SLUG,
                 'source' => 'mobile',

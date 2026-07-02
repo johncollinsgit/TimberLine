@@ -3,10 +3,13 @@
 namespace App\Services\Subscriptions;
 
 use App\Models\MarketingProfile;
+use App\Models\MarketingReviewHistory;
 use App\Models\Tenant;
+use App\Services\Media\FreeStockPhotoService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -82,6 +85,8 @@ class SubscriptionModuleService
                     ->where('subscription_poll_id', (int) $poll['id'])
                     ->count()
                 : 0,
+            'active_candle_club_customers' => $this->activeCandleClubCustomers($tenantId),
+            'monthly_scents' => $this->monthlyScentCards($tenantId),
         ];
     }
 
@@ -93,7 +98,7 @@ class SubscriptionModuleService
     {
         $data = [
             'commitment_months' => max(1, (int) ($payload['commitment_months'] ?? 6)),
-            'allowed_pauses_per_commitment' => max(0, (int) ($payload['allowed_pauses_per_commitment'] ?? 1)),
+            'allowed_pauses_per_commitment' => max(0, (int) ($payload['allowed_pauses_per_commitment'] ?? 2)),
             'pause_duration_options' => json_encode(array_values((array) ($payload['pause_duration_options'] ?? [1, 2, 3])), JSON_THROW_ON_ERROR),
             'renewal_reward_months' => max(1, (int) ($payload['renewal_reward_months'] ?? 6)),
             'first_gift_product_variant_gid' => $this->nullableString($payload['first_gift_product_variant_gid'] ?? null),
@@ -305,8 +310,22 @@ class SubscriptionModuleService
             ];
         }
 
+        $settings = $this->candleClubSettings($tenantId);
         $contractSummary = $this->contractSummary($contract);
         $shopifyMutation = $this->shopifyMutationForCustomerAction($normalizedAction);
+        $validatedPayload = $this->validatedCustomerActionPayload($normalizedAction, $payload, $contract, $settings);
+        if (! (bool) ($validatedPayload['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'status' => (string) ($validatedPayload['status'] ?? 'invalid_payload'),
+                'message' => (string) ($validatedPayload['message'] ?? 'Check the Candle Club request and try again.'),
+                'candle_club' => $this->customerCandleClubPayload($profile),
+            ];
+        }
+
+        if ($normalizedAction === 'vote') {
+            return $this->recordAuthenticatedCandleClubVote($profile, $contract, (array) $validatedPayload['payload'], $isPreview);
+        }
 
         DB::table('subscription_lifecycle_events')->insert([
             'tenant_id' => $tenantId,
@@ -316,7 +335,7 @@ class SubscriptionModuleService
             'source' => 'mobile_app',
             'status' => $isPreview ? 'shopify_preview_recorded' : 'intent_recorded',
             'before_payload' => json_encode($contractSummary, JSON_THROW_ON_ERROR),
-            'after_payload' => json_encode($payload, JSON_THROW_ON_ERROR),
+            'after_payload' => json_encode((array) $validatedPayload['payload'], JSON_THROW_ON_ERROR),
             'metadata' => json_encode([
                 'shopify_source_of_truth' => true,
                 'shopify_mode' => $isPreview ? 'preview_no_live_mutation' : 'mutation_deferred_until_shopify_cutover',
@@ -347,6 +366,7 @@ class SubscriptionModuleService
         $tenantId = (int) $profile->tenant_id;
         $contract = $this->activeCandleClubContractForProfile($profile);
         $poll = $this->activePoll($tenantId);
+        $settings = $this->candleClubSettings($tenantId);
 
         if (! $contract && $this->isCandleClubPreviewProfile($profile)) {
             return $this->previewCandleClubPayload($profile, $poll);
@@ -368,7 +388,15 @@ class SubscriptionModuleService
                 'can_update_card' => $contract !== null,
                 'can_swap_to_active_16oz_scent' => $contract !== null,
             ],
-            'cancel_prompt' => $this->candleClubSettings($tenantId)['cancellation_prompt'],
+            'commitment' => $contract ? $this->commitmentSummary($contract, $settings) : null,
+            'payment_method' => $contract ? $this->paymentMethodSummary($tenantId, $contract) : null,
+            'shipping_address' => $contract ? $this->shippingAddressPayload($contract) : null,
+            'action_menus' => [
+                'swap_options' => $contract ? $this->swapOptions($tenantId) : [],
+                'pause_duration_options' => array_values((array) ($settings['pause_duration_options'] ?? [1, 2])),
+            ],
+            'monthly_scents' => $contract ? $this->monthlyScentCards($tenantId, 6) : [],
+            'cancel_prompt' => $settings['cancellation_prompt'],
         ];
     }
 
@@ -426,6 +454,31 @@ class SubscriptionModuleService
                 'can_update_card' => true,
                 'can_swap_to_active_16oz_scent' => true,
             ],
+            'commitment' => $this->commitmentSummary($contract, $this->candleClubSettings($tenantId)),
+            'payment_method' => [
+                'status' => 'active',
+                'brand' => 'Visa',
+                'last_digits' => '4242',
+                'expiry_month' => '12',
+                'expiry_year' => '2028',
+                'last_update_email_sent_at' => null,
+            ],
+            'shipping_address' => [
+                'firstName' => 'John',
+                'lastName' => 'Collins',
+                'address1' => '123 Forest Lane',
+                'city' => 'Asheville',
+                'province' => 'North Carolina',
+                'provinceCode' => 'NC',
+                'zip' => '28801',
+                'country' => 'United States',
+                'countryCode' => 'US',
+            ],
+            'action_menus' => [
+                'swap_options' => $this->previewSwapOptions($previousScents),
+                'pause_duration_options' => [1, 2],
+            ],
+            'monthly_scents' => $this->previewMonthlyScents($previousScents),
             'cancel_prompt' => $this->candleClubSettings($tenantId)['cancellation_prompt'],
             'preview' => true,
         ];
@@ -462,6 +515,9 @@ class SubscriptionModuleService
             'update_payment_card' => 'send_payment_update_email',
             'update_card' => 'send_payment_update_email',
             'send_payment_update_email' => 'send_payment_update_email',
+            'vote' => 'vote',
+            'vote_for_next_month' => 'vote',
+            'cast_vote' => 'vote',
         ][$normalized] ?? null;
     }
 
@@ -473,6 +529,7 @@ class SubscriptionModuleService
             'swap_product' => 'subscriptionContractUpdate/subscriptionDraftLineUpdate/subscriptionDraftCommit',
             'update_shipping_address' => 'subscriptionContractUpdate/subscriptionDraftUpdate/subscriptionDraftCommit',
             'send_payment_update_email' => 'customerPaymentMethodSendUpdateEmail',
+            'vote' => 'none_vote_recorded_in_evergrove',
         ][$action] ?? 'manual_review';
     }
 
@@ -488,8 +545,91 @@ class SubscriptionModuleService
             'swap_product' => 'Scent swap request received.'.$suffix,
             'update_shipping_address' => 'Shipping address update request received.'.$suffix,
             'send_payment_update_email' => 'Secure Shopify payment update email queued.'.$suffix,
+            'vote' => 'Your Candle Club vote has been recorded.',
             default => 'Candle Club request received.'.$suffix,
         };
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    protected function recordAuthenticatedCandleClubVote(MarketingProfile $profile, object $contract, array $payload, bool $isPreview): array
+    {
+        if ($isPreview) {
+            return [
+                'ok' => true,
+                'status' => 'preview_vote_recorded',
+                'action' => 'vote',
+                'message' => 'Preview vote recorded without changing a live poll.',
+                'shopify_mode' => 'preview_no_live_mutation',
+                'shopify_mutation' => 'none_vote_recorded_in_evergrove',
+                'candle_club' => $this->customerCandleClubPayload($profile),
+            ];
+        }
+
+        $tenantId = (int) $profile->tenant_id;
+        $pollId = (int) ($payload['poll_id'] ?? 0);
+        $optionId = (int) ($payload['option_id'] ?? 0);
+        $contractGid = (string) ($contract->shopify_subscription_contract_gid ?? '');
+
+        $existing = DB::table('subscription_votes')
+            ->where('tenant_id', $tenantId)
+            ->where('subscription_poll_id', $pollId)
+            ->where('shopify_subscription_contract_gid', $contractGid)
+            ->first();
+
+        if ($existing) {
+            return [
+                'ok' => false,
+                'status' => 'already_voted',
+                'action' => 'vote',
+                'message' => 'This Candle Club subscription has already voted.',
+                'candle_club' => $this->customerCandleClubPayload($profile),
+            ];
+        }
+
+        DB::transaction(function () use ($tenantId, $pollId, $optionId, $contract, $contractGid, $profile): void {
+            DB::table('subscription_votes')->insert([
+                'tenant_id' => $tenantId,
+                'subscription_poll_id' => $pollId,
+                'subscription_poll_option_id' => $optionId,
+                'subscription_contract_id' => (int) $contract->id,
+                'marketing_profile_id' => (int) $profile->id,
+                'shopify_subscription_contract_gid' => $contractGid,
+                'shopify_customer_gid' => $contract->shopify_customer_gid,
+                'normalized_email' => $this->nullableString($profile->normalized_email ?? $profile->email ?? null),
+                'normalized_phone' => $this->nullableString($profile->normalized_phone ?? $profile->phone ?? null),
+                'source' => 'ios_app',
+                'metadata' => json_encode(['authenticated_mobile_vote' => true], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('subscription_lifecycle_events')->insert([
+                'tenant_id' => $tenantId,
+                'subscription_contract_id' => (int) $contract->id,
+                'actor_user_id' => null,
+                'event_type' => 'vote',
+                'source' => 'mobile_app',
+                'status' => 'vote_recorded',
+                'before_payload' => json_encode($this->contractSummary($contract), JSON_THROW_ON_ERROR),
+                'after_payload' => json_encode(['poll_id' => $pollId, 'option_id' => $optionId], JSON_THROW_ON_ERROR),
+                'metadata' => json_encode(['shopify_source_of_truth' => false, 'vote_source_of_truth' => 'evergrove'], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        return [
+            'ok' => true,
+            'status' => 'vote_recorded',
+            'action' => 'vote',
+            'message' => 'Your Candle Club vote has been recorded.',
+            'shopify_mode' => 'not_applicable',
+            'shopify_mutation' => 'none_vote_recorded_in_evergrove',
+            'candle_club' => $this->customerCandleClubPayload($profile),
+        ];
     }
 
     /**
@@ -729,6 +869,130 @@ class SubscriptionModuleService
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    public function submitCandleClubScentFeedback(MarketingProfile $profile, int $monthlyScentId, array $payload): array
+    {
+        if (! Schema::hasTable('subscription_candle_club_scent_feedback')) {
+            return ['ok' => false, 'status' => 'feedback_not_ready', 'message' => 'Candle Club scent feedback is not ready yet.'];
+        }
+
+        $tenantId = (int) $profile->tenant_id;
+        $contract = $this->activeCandleClubContractForProfile($profile);
+        if (! $contract && $this->isCandleClubPreviewProfile($profile)) {
+            $contract = $this->previewCandleClubContract();
+        }
+
+        if (! $contract) {
+            return ['ok' => false, 'status' => 'not_eligible', 'message' => 'Only active Candle Club members can review monthly Candle Club scents.'];
+        }
+
+        $monthlyScent = DB::table('subscription_candle_club_monthly_scents')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $monthlyScentId)
+            ->first();
+        if (! $monthlyScent) {
+            return ['ok' => false, 'status' => 'scent_not_found', 'message' => 'That Candle Club scent was not found.'];
+        }
+
+        $rating = max(1, min(5, (int) ($payload['rating'] ?? 5)));
+        $body = $this->nullableString($payload['body'] ?? null);
+        if ($body === null) {
+            return ['ok' => false, 'status' => 'missing_review_body', 'message' => 'Add a few words before sending feedback.'];
+        }
+
+        $feedbackId = DB::table('subscription_candle_club_scent_feedback')->insertGetId([
+            'tenant_id' => $tenantId,
+            'subscription_candle_club_monthly_scent_id' => $monthlyScentId,
+            'subscription_contract_id' => (int) ($contract->id ?? 0) > 0 ? (int) $contract->id : null,
+            'marketing_profile_id' => (int) $profile->id,
+            'rating' => $rating,
+            'title' => $this->nullableString($payload['title'] ?? null),
+            'body' => $body,
+            'visibility' => 'candle_club',
+            'status' => 'pending',
+            'metadata' => json_encode([
+                'source' => (string) ($payload['source'] ?? 'mobile_app'),
+                'private_first' => true,
+            ], JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return ['ok' => true, 'status' => 'feedback_recorded', 'id' => $feedbackId, 'message' => 'Thanks for the Candle Club feedback.'];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function exportCandleClubScentFeedback(int $tenantId, int $feedbackId, ?int $actorId = null): array
+    {
+        if (! Schema::hasTable('subscription_candle_club_scent_feedback')) {
+            return ['ok' => false, 'status' => 'feedback_not_ready', 'message' => 'Candle Club scent feedback is not ready yet.'];
+        }
+
+        $feedback = DB::table('subscription_candle_club_scent_feedback')
+            ->where('tenant_id', $tenantId)
+            ->where('id', $feedbackId)
+            ->first();
+        if (! $feedback) {
+            return ['ok' => false, 'status' => 'feedback_not_found', 'message' => 'Feedback was not found.'];
+        }
+
+        if ($feedback->exported_marketing_review_history_id) {
+            return ['ok' => true, 'status' => 'already_exported', 'review_id' => (int) $feedback->exported_marketing_review_history_id];
+        }
+
+        $monthlyScent = DB::table('subscription_candle_club_monthly_scents')
+            ->where('tenant_id', $tenantId)
+            ->where('id', (int) $feedback->subscription_candle_club_monthly_scent_id)
+            ->first();
+        if (! $monthlyScent) {
+            return ['ok' => false, 'status' => 'scent_not_found', 'message' => 'Monthly scent was not found.'];
+        }
+
+        $review = MarketingReviewHistory::query()->create([
+            'marketing_profile_id' => $feedback->marketing_profile_id,
+            'tenant_id' => $tenantId,
+            'provider' => 'evergrove',
+            'integration' => 'candle_club',
+            'store_key' => 'retail',
+            'external_customer_id' => 'candle-club-profile-'.($feedback->marketing_profile_id ?: 'unknown'),
+            'external_review_id' => 'candle-club-feedback-'.$feedback->id,
+            'rating' => $feedback->rating,
+            'title' => $feedback->title,
+            'body' => $feedback->body,
+            'is_published' => false,
+            'status' => 'pending',
+            'submission_source' => 'candle_club_feedback_export',
+            'is_verified_buyer' => true,
+            'product_id' => $monthlyScent->shopify_product_gid,
+            'product_handle' => $monthlyScent->shopify_product_handle,
+            'product_title' => $monthlyScent->title,
+            'submitted_at' => now(),
+            'reviewed_at' => now(),
+            'moderated_by' => $actorId,
+            'raw_payload' => [
+                'candle_club_feedback_id' => (int) $feedback->id,
+                'monthly_scent_id' => (int) $monthlyScent->id,
+                'private_first_export' => true,
+            ],
+        ]);
+
+        DB::table('subscription_candle_club_scent_feedback')
+            ->where('id', $feedbackId)
+            ->update([
+                'status' => 'exported',
+                'exported_marketing_review_history_id' => (int) $review->id,
+                'exported_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        return ['ok' => true, 'status' => 'exported', 'review_id' => (int) $review->id];
     }
 
     /**
@@ -1001,6 +1265,385 @@ class SubscriptionModuleService
                 'published_at' => $row->published_at,
             ])
             ->all();
+    }
+
+    protected function activeCandleClubCustomers(int $tenantId): array
+    {
+        $settings = $this->candleClubSettings($tenantId);
+
+        return DB::table('subscription_contracts')
+            ->leftJoin('subscription_customers', 'subscription_customers.id', '=', 'subscription_contracts.subscription_customer_id')
+            ->leftJoin('marketing_profiles', 'marketing_profiles.id', '=', 'subscription_contracts.marketing_profile_id')
+            ->where('subscription_contracts.tenant_id', $tenantId)
+            ->where('subscription_contracts.status', 'active')
+            ->where('subscription_contracts.is_candle_club', true)
+            ->orderBy('subscription_contracts.next_billing_date')
+            ->limit(100)
+            ->get([
+                'subscription_contracts.*',
+                'subscription_customers.email as customer_email',
+                'subscription_customers.phone as customer_phone',
+                'marketing_profiles.first_name as profile_first_name',
+                'marketing_profiles.last_name as profile_last_name',
+            ])
+            ->map(function (object $row) use ($tenantId, $settings): array {
+                $latestEvent = DB::table('subscription_lifecycle_events')
+                    ->where('tenant_id', $tenantId)
+                    ->where('subscription_contract_id', (int) $row->id)
+                    ->orderByDesc('id')
+                    ->first();
+
+                $name = trim((string) (($row->profile_first_name ?? '').' '.($row->profile_last_name ?? '')));
+
+                return [
+                    ...$this->contractSummary($row),
+                    'customer_name' => $name !== '' ? $name : 'Candle Club member',
+                    'customer_email' => $row->customer_email,
+                    'customer_phone' => $row->customer_phone,
+                    'commitment' => $this->commitmentSummary($row, $settings),
+                    'payment_method' => $this->paymentMethodSummary($tenantId, $row),
+                    'latest_event' => $latestEvent ? [
+                        'event_type' => (string) $latestEvent->event_type,
+                        'status' => (string) $latestEvent->status,
+                        'created_at' => $latestEvent->created_at,
+                    ] : null,
+                ];
+            })
+            ->all();
+    }
+
+    protected function commitmentSummary(object $contract, array $settings): array
+    {
+        $totalMonths = max(1, (int) ($settings['commitment_months'] ?? 6));
+        $completedCycles = max(0, (int) ($contract->completed_cycles ?? 0));
+        $allowedPauses = max(0, (int) ($settings['allowed_pauses_per_commitment'] ?? 2));
+        $pausesUsed = max(0, (int) ($contract->pause_count_current_commitment ?? 0));
+
+        return [
+            'total_months' => $totalMonths,
+            'completed_cycles' => $completedCycles,
+            'months_remaining' => $this->monthsRemaining($contract, $totalMonths, $completedCycles),
+            'allowed_pauses' => $allowedPauses,
+            'pauses_used' => $pausesUsed,
+            'pauses_remaining' => max(0, $allowedPauses - $pausesUsed),
+        ];
+    }
+
+    protected function monthsRemaining(object $contract, int $totalMonths, int $completedCycles): int
+    {
+        if (! empty($contract->commitment_ends_on)) {
+            $end = CarbonImmutable::parse((string) $contract->commitment_ends_on)->startOfMonth();
+            $now = CarbonImmutable::now()->startOfMonth();
+
+            return max(0, $now->diffInMonths($end, false));
+        }
+
+        return max(0, $totalMonths - $completedCycles);
+    }
+
+    protected function paymentMethodSummary(int $tenantId, object $contract): ?array
+    {
+        $gid = (string) ($contract->shopify_payment_method_gid ?? '');
+        if ($gid === '') {
+            return null;
+        }
+
+        $method = DB::table('subscription_payment_methods')
+            ->where('tenant_id', $tenantId)
+            ->where('shopify_payment_method_gid', $gid)
+            ->first();
+
+        if (! $method) {
+            return [
+                'status' => 'unknown',
+                'brand' => null,
+                'last_digits' => null,
+                'expiry_month' => null,
+                'expiry_year' => null,
+                'last_update_email_sent_at' => null,
+            ];
+        }
+
+        return [
+            'status' => (string) $method->status,
+            'brand' => $method->brand,
+            'last_digits' => $method->last_digits,
+            'expiry_month' => $method->expiry_month,
+            'expiry_year' => $method->expiry_year,
+            'last_update_email_sent_at' => $method->last_update_email_sent_at,
+        ];
+    }
+
+    protected function shippingAddressPayload(object $contract): ?array
+    {
+        $address = $this->decodeJson($contract->shipping_address ?? null);
+
+        return $address === [] ? null : $address;
+    }
+
+    protected function swapOptions(int $tenantId): array
+    {
+        $lineOptions = DB::table('subscription_contract_lines')
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('shopify_product_variant_gid')
+            ->where(function ($query): void {
+                $query->where('product_title', 'like', '%16oz%')
+                    ->orWhere('variant_title', 'like', '%16oz%')
+                    ->orWhere('product_title', 'like', '%16 oz%')
+                    ->orWhere('variant_title', 'like', '%16 oz%');
+            })
+            ->orderBy('product_title')
+            ->limit(12)
+            ->get()
+            ->unique('shopify_product_variant_gid')
+            ->map(fn (object $row): array => [
+                'id' => (string) $row->shopify_product_variant_gid,
+                'title' => trim((string) (($row->product_title ?: '16oz Candle').' '.($row->variant_title ? ' / '.$row->variant_title : ''))),
+                'body' => 'Active Shopify 16oz candle option.',
+                'product_variant_gid' => (string) $row->shopify_product_variant_gid,
+                'source' => 'active_16oz',
+            ])
+            ->values()
+            ->all();
+
+        $previousOptions = collect($this->previousChosenScents($tenantId))
+            ->take(3)
+            ->map(fn (array $scent): array => [
+                'id' => Str::slug((string) $scent['title']).'-previous',
+                'title' => (string) $scent['title'],
+                'body' => (string) ($scent['body'] ?? 'Previously chosen Candle Club scent.'),
+                'product_variant_gid' => null,
+                'source' => 'previous_chosen_scent',
+            ])
+            ->all();
+
+        return array_values([...$lineOptions, ...$previousOptions]);
+    }
+
+    protected function previewSwapOptions(array $previousScents): array
+    {
+        $defaults = [
+            ['title' => 'Coffeehouse', 'body' => 'Rich espresso, vanilla cream, and warm woods.'],
+            ['title' => 'Forest Rain', 'body' => 'Rain-washed fir, moss, and soft amber.'],
+        ];
+
+        return collect($defaults)
+            ->merge($previousScents)
+            ->take(5)
+            ->map(fn (array $scent, int $index): array => [
+                'id' => Str::slug((string) $scent['title']).'-preview-'.$index,
+                'title' => (string) $scent['title'],
+                'body' => (string) ($scent['body'] ?? 'Preview Candle Club scent.'),
+                'product_variant_gid' => $index < 2 ? 'gid://evergrove/PreviewVariant/'.Str::slug((string) $scent['title']) : null,
+                'source' => $index < 2 ? 'active_16oz' : 'previous_chosen_scent',
+            ])
+            ->values()
+            ->all();
+    }
+
+    protected function monthlyScentCards(int $tenantId, int $limit = 12): array
+    {
+        if (! Schema::hasTable('subscription_candle_club_monthly_scents')) {
+            return collect($this->previousChosenScents($tenantId))
+                ->map(fn (array $scent): array => [
+                    'id' => Str::slug((string) $scent['title']),
+                    'month_label' => $scent['published_at'] ?: 'Recent Candle Club',
+                    'title' => (string) $scent['title'],
+                    'body' => (string) ($scent['body'] ?? ''),
+                    'photo_url' => null,
+                    'average_rating' => null,
+                    'review_count' => 0,
+                    'shopify_product_gid' => null,
+                    'product_status' => 'not_created',
+                ])
+                ->values()
+                ->all();
+        }
+
+        return DB::table('subscription_candle_club_monthly_scents')
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->limit($limit)
+            ->get()
+            ->map(function (object $row) use ($tenantId): array {
+                $row = $this->ensureMonthlyScentPhoto($row);
+                $feedback = DB::table('subscription_candle_club_scent_feedback')
+                    ->where('tenant_id', $tenantId)
+                    ->where('subscription_candle_club_monthly_scent_id', (int) $row->id)
+                    ->whereIn('status', ['approved', 'exported'])
+                    ->selectRaw('count(*) as review_count, avg(rating) as average_rating')
+                    ->first();
+
+                return [
+                    'id' => (string) $row->id,
+                    'month_label' => CarbonImmutable::create((int) $row->year, (int) $row->month, 1)->format('F Y'),
+                    'title' => (string) $row->title,
+                    'body' => (string) ($row->description ?? ''),
+                    'photo_url' => $row->photo_url,
+                    'average_rating' => $feedback?->average_rating ? round((float) $feedback->average_rating, 1) : null,
+                    'review_count' => (int) ($feedback->review_count ?? 0),
+                    'shopify_product_gid' => $row->shopify_product_gid,
+                    'product_status' => (string) ($row->shopify_product_status ?? 'draft'),
+                    'photo_source' => $row->photo_source,
+                    'photo_author' => $row->photo_author,
+                ];
+            })
+            ->all();
+    }
+
+    protected function ensureMonthlyScentPhoto(object $row): object
+    {
+        if (! empty($row->photo_url)) {
+            return $row;
+        }
+
+        $query = $this->stockPhotoQueryForScent($row);
+        $photo = app(FreeStockPhotoService::class)->firstMatch($query);
+        $url = is_array($photo) ? ($photo['url'] ?? null) : null;
+        if (! is_string($url) || trim($url) === '') {
+            return $row;
+        }
+
+        DB::table('subscription_candle_club_monthly_scents')
+            ->where('id', (int) $row->id)
+            ->update([
+                'photo_url' => $url,
+                'photo_source' => $photo['source'] ?? null,
+                'photo_author' => $photo['author'] ?? null,
+                'photo_query' => $photo['query'] ?? $query,
+                'photo_metadata' => json_encode($photo['metadata'] ?? [], JSON_THROW_ON_ERROR),
+                'updated_at' => now(),
+            ]);
+
+        $row->photo_url = $url;
+        $row->photo_source = $photo['source'] ?? null;
+        $row->photo_author = $photo['author'] ?? null;
+
+        return $row;
+    }
+
+    protected function stockPhotoQueryForScent(object $row): string
+    {
+        $parts = [
+            (string) ($row->title ?? ''),
+            (string) ($row->description ?? ''),
+        ];
+
+        $query = trim(implode(' ', array_filter($parts)));
+
+        return $query !== '' ? Str::limit($query, 120, '') : 'candle fragrance';
+    }
+
+    protected function previewMonthlyScents(array $previousScents): array
+    {
+        return collect($previousScents)
+            ->take(3)
+            ->values()
+            ->map(fn (array $scent, int $index): array => [
+                'id' => 'preview-'.Str::slug((string) $scent['title']),
+                'month_label' => CarbonImmutable::now()->subMonths($index + 1)->format('F Y'),
+                'title' => (string) $scent['title'],
+                'body' => (string) ($scent['body'] ?? ''),
+                'photo_url' => null,
+                'average_rating' => $index === 0 ? 4.8 : null,
+                'review_count' => $index === 0 ? 12 : 0,
+                'shopify_product_gid' => 'gid://evergrove/PreviewProduct/'.Str::slug((string) $scent['title']),
+                'product_status' => 'draft',
+            ])
+            ->all();
+    }
+
+    protected function validatedCustomerActionPayload(string $action, array $payload, object $contract, array $settings): array
+    {
+        $clean = [
+            'source' => (string) ($payload['source'] ?? 'mobile_app'),
+        ];
+
+        if ($action === 'swap_product') {
+            $scent = $this->nullableString($payload['scent'] ?? null);
+            $variant = $this->nullableString($payload['product_variant_gid'] ?? data_get($payload, 'metadata.product_variant_gid'));
+            if (! $scent && ! $variant) {
+                return ['ok' => false, 'status' => 'missing_swap_choice', 'message' => 'Choose a scent before sending a swap request.'];
+            }
+
+            $clean['scent'] = $scent;
+            $clean['product_variant_gid'] = $variant;
+            $clean['metadata'] = (array) ($payload['metadata'] ?? []);
+        }
+
+        if ($action === 'pause') {
+            $commitment = $this->commitmentSummary($contract, $settings);
+            if ((int) $commitment['pauses_remaining'] <= 0) {
+                return ['ok' => false, 'status' => 'pause_allowance_used', 'message' => 'This Candle Club has no pauses left in the current commitment.'];
+            }
+
+            $duration = max(1, (int) ($payload['duration_months'] ?? data_get($payload, 'metadata.duration_months', 1)));
+            $allowedDurations = array_map('intval', (array) ($settings['pause_duration_options'] ?? [1, 2]));
+            if (! in_array($duration, $allowedDurations, true)) {
+                return ['ok' => false, 'status' => 'invalid_pause_duration', 'message' => 'Choose one of the available pause durations.'];
+            }
+
+            $clean['duration_months'] = $duration;
+        }
+
+        if ($action === 'update_shipping_address') {
+            $address = (array) ($payload['address'] ?? []);
+            if ($this->nullableString($address['address1'] ?? null) === null || $this->nullableString($address['city'] ?? null) === null) {
+                return ['ok' => false, 'status' => 'invalid_address', 'message' => 'Shipping address needs at least street and city.'];
+            }
+
+            $clean['address'] = $address;
+        }
+
+        if ($action === 'cancel') {
+            $reason = $this->nullableString($payload['reason'] ?? null);
+            if ($reason === null) {
+                return ['ok' => false, 'status' => 'missing_cancel_feedback', 'message' => 'Tell us what would make Candle Club better before sending cancellation.'];
+            }
+
+            $clean['reason'] = $reason;
+            $clean['commitment'] = $this->commitmentSummary($contract, $settings);
+        }
+
+        if ($action === 'send_payment_update_email') {
+            $clean['shopify_payment_method_gid'] = (string) ($contract->shopify_payment_method_gid ?? '');
+            $clean['security_note'] = 'Shopify sends the secure payment method update email; Evergrove stores no raw card data.';
+        }
+
+        if ($action === 'vote') {
+            $tenantId = (int) ($contract->tenant_id ?? 0);
+            $pollId = (int) ($payload['poll_id'] ?? data_get($payload, 'metadata.poll_id', 0));
+            $optionId = (int) ($payload['option_id'] ?? data_get($payload, 'metadata.option_id', 0));
+
+            if ($pollId <= 0 && str_contains((string) ($contract->shopify_subscription_contract_gid ?? ''), 'PreviewSubscriptionContract')) {
+                $clean['poll_id'] = 0;
+                $clean['option_id'] = $optionId;
+
+                return ['ok' => true, 'payload' => $clean];
+            }
+
+            $activePoll = $this->activePoll($tenantId);
+            if (! $activePoll || (int) $activePoll['id'] !== $pollId) {
+                return ['ok' => false, 'status' => 'poll_not_open', 'message' => 'Voting is not open for that Candle Club poll.'];
+            }
+
+            $option = DB::table('subscription_poll_options')
+                ->where('tenant_id', $tenantId)
+                ->where('subscription_poll_id', $pollId)
+                ->where('id', $optionId)
+                ->first();
+
+            if (! $option) {
+                return ['ok' => false, 'status' => 'invalid_vote_option', 'message' => 'Choose one of the current Candle Club voting options.'];
+            }
+
+            $clean['poll_id'] = $pollId;
+            $clean['option_id'] = $optionId;
+            $clean['option_label'] = (string) $option->label;
+        }
+
+        return ['ok' => true, 'payload' => $clean];
     }
 
     protected function defaultCancellationPrompt(): string

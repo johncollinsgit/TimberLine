@@ -181,6 +181,24 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
         return response()->json($payload, (bool) ($payload['ok'] ?? false) ? 200 : 422);
     }
 
+    public function exportFeedback(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        SubscriptionModuleService $subscriptions,
+        int $feedback
+    ): JsonResponse {
+        $tenantId = $this->tenantIdForApiRequest($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($tenantId === null) {
+            return response()->json(['ok' => false, 'status' => 'subscriptions_module_locked'], 403);
+        }
+
+        $payload = $subscriptions->exportCandleClubScentFeedback($tenantId, $feedback, $request->user()?->id);
+
+        return response()->json($payload, (bool) ($payload['ok'] ?? false) ? 200 : 422);
+    }
+
     protected function tenantIdForApiRequest(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,

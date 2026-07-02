@@ -9,6 +9,8 @@ use App\Services\Marketing\ShopifyCustomerAddressSyncService;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -43,7 +45,7 @@ class ModernForestryMobileCustomerSessionService
         }
 
         $claims = $this->jwtClaims($token) ?? [];
-        $identity = $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token, $claims);
+        $identity = $this->appReviewDemoIdentity($token) ?? $this->testingIdentity($token) ?? $this->remoteCustomerIdentity($token, $claims);
         if ($identity === null) {
             return null;
         }
@@ -56,6 +58,42 @@ class ModernForestryMobileCustomerSessionService
         $profile = $this->hydrateProfileAddressIfNeeded($profile, $identity);
 
         return new ModernForestryMobileCustomerSession($profile, $token, $identity, $claims);
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function issueAppReviewDemoToken(string $email, string $password): array
+    {
+        $configuredEmail = Str::lower(trim((string) config('services.modern_forestry_app_review.email', '')));
+        $passwordHash = trim((string) config('services.modern_forestry_app_review.password_hash', ''));
+        $plainPassword = trim((string) config('services.modern_forestry_app_review.password', ''));
+        $email = Str::lower(trim($email));
+
+        if ($configuredEmail === '' || ($passwordHash === '' && $plainPassword === '')) {
+            throw new ModernForestryMobileCustomerAuthException(
+                'app_review_demo_not_configured',
+                'The App Review demo account is not configured.',
+                503
+            );
+        }
+
+        $passwordMatches = $passwordHash !== ''
+            ? Hash::check($password, $passwordHash)
+            : hash_equals($plainPassword, $password);
+
+        if (! hash_equals($configuredEmail, $email) || ! $passwordMatches) {
+            throw new ModernForestryMobileCustomerAuthException(
+                'app_review_demo_invalid_credentials',
+                'The App Review demo credentials were not accepted.',
+                401
+            );
+        }
+
+        $profile = $this->ensureAppReviewDemoProfile($configuredEmail);
+        $this->ensureAppReviewDemoSubscriptionState($profile);
+
+        return $this->demoTokenPayload($profile);
     }
 
     public function sessionPayload(?ModernForestryMobileCustomerSession $session): array
@@ -229,6 +267,16 @@ class ModernForestryMobileCustomerSessionService
     public function refreshAccessToken(string $refreshToken): array
     {
         $refreshToken = trim($refreshToken);
+        $demoIdentity = $this->appReviewDemoIdentity($refreshToken);
+        if ($demoIdentity !== null) {
+            $profile = $this->profileForIdentity($demoIdentity, false);
+            if (! $profile instanceof MarketingProfile) {
+                throw ModernForestryMobileCustomerAuthException::validationFailed();
+            }
+
+            return $this->demoTokenPayload($profile);
+        }
+
         $clientId = $this->customerAccountString('client_id');
         $clientSecret = $this->customerAccountString('client_secret');
         $discovery = $this->customerAccountDiscovery();
@@ -408,6 +456,162 @@ class ModernForestryMobileCustomerSessionService
         }
 
         return null;
+    }
+
+    protected function appReviewDemoIdentity(string $token): ?array
+    {
+        if (preg_match('/\Amf-review-demo\.(\d+)\.(\d+)\.([a-f0-9]{64})\z/', $token, $matches) !== 1) {
+            return null;
+        }
+
+        $profileId = (int) $matches[1];
+        $expiresAt = (int) $matches[2];
+        if ($profileId <= 0 || $expiresAt <= time()) {
+            return null;
+        }
+
+        $expected = $this->appReviewDemoSignature($profileId, $expiresAt);
+        if (! hash_equals($expected, (string) $matches[3])) {
+            return null;
+        }
+
+        return [
+            'profile_id' => $profileId,
+            'source_type' => 'app_review_demo',
+            'source_id' => 'app_review_demo:'.$profileId,
+        ];
+    }
+
+    protected function ensureAppReviewDemoProfile(string $email): MarketingProfile
+    {
+        $profile = MarketingProfile::query()
+            ->where('tenant_id', ModernForestryMobileCheckoutService::TENANT_ID)
+            ->where('normalized_email', $email)
+            ->latest('id')
+            ->first();
+
+        if ($profile instanceof MarketingProfile) {
+            return $profile;
+        }
+
+        $resolved = $this->identityService->resolve([
+            'first_name' => 'App',
+            'last_name' => 'Reviewer',
+            'email' => $email,
+            'phone' => null,
+        ], [
+            'tenant_id' => ModernForestryMobileCheckoutService::TENANT_ID,
+            'allow_create' => true,
+            'source_type' => 'app_review_demo',
+            'source_id' => 'app_review_demo:'.sha1($email),
+            'source_label' => 'app_review_demo',
+            'source_channels' => ['modern_forestry_ios', 'app_review_demo'],
+        ]);
+
+        if (! $resolved['profile'] instanceof MarketingProfile) {
+            throw ModernForestryMobileCustomerAuthException::validationFailed();
+        }
+
+        return $resolved['profile'];
+    }
+
+    protected function ensureAppReviewDemoSubscriptionState(MarketingProfile $profile): void
+    {
+        $tenantId = ModernForestryMobileCheckoutService::TENANT_ID;
+        $now = now();
+
+        $contractId = DB::table('subscription_contracts')->updateOrInsert(
+            [
+                'tenant_id' => $tenantId,
+                'shopify_subscription_contract_gid' => 'gid://evergrove/AppReviewSubscriptionContract/modern-forestry-candle-club',
+            ],
+            [
+                'marketing_profile_id' => (int) $profile->id,
+                'shopify_customer_gid' => 'gid://evergrove/AppReviewCustomer/modern-forestry',
+                'status' => 'active',
+                'is_candle_club' => true,
+                'next_billing_date' => $now->copy()->addWeeks(2)->toDateString(),
+                'next_shipping_date' => $now->copy()->addWeeks(3)->toDateString(),
+                'completed_cycles' => 3,
+                'pause_count_current_commitment' => 0,
+                'commitment_ends_on' => $now->copy()->addMonths(3)->toDateString(),
+                'shipping_address' => json_encode([
+                    'firstName' => 'App',
+                    'lastName' => 'Reviewer',
+                    'address1' => '123 Forest Lane',
+                    'city' => 'Asheville',
+                    'province' => 'North Carolina',
+                    'provinceCode' => 'NC',
+                    'zip' => '28801',
+                    'country' => 'United States',
+                    'countryCode' => 'US',
+                ], JSON_THROW_ON_ERROR),
+                'metadata' => json_encode(['app_review_demo' => true, 'normalized_email' => (string) $profile->normalized_email], JSON_THROW_ON_ERROR),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]
+        );
+
+        $pollId = DB::table('subscription_polls')
+            ->where('tenant_id', $tenantId)
+            ->where('poll_type', 'candle_club_scent')
+            ->where('status', 'open')
+            ->orderByDesc('id')
+            ->value('id');
+
+        if (! $pollId) {
+            $pollId = DB::table('subscription_polls')->insertGetId([
+                'tenant_id' => $tenantId,
+                'poll_type' => 'candle_club_scent',
+                'title' => 'Vote for next month',
+                'description' => 'App Review demo ballot for Candle Club scent voting.',
+                'status' => 'open',
+                'opens_at' => $now->copy()->subDay(),
+                'closes_at' => $now->copy()->addWeek(),
+                'share_token' => Str::random(40),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+
+        foreach (['Coffeehouse', 'Cabin Morning', 'Forest Rain'] as $index => $label) {
+            DB::table('subscription_poll_options')->updateOrInsert(
+                [
+                    'tenant_id' => $tenantId,
+                    'subscription_poll_id' => (int) $pollId,
+                    'label' => $label,
+                ],
+                [
+                    'position' => $index + 1,
+                    'updated_at' => $now,
+                    'created_at' => $now,
+                ]
+            );
+        }
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function demoTokenPayload(MarketingProfile $profile): array
+    {
+        $expiresIn = 604800;
+        $expiresAt = time() + $expiresIn;
+        $profileId = (int) $profile->id;
+        $token = 'mf-review-demo.'.$profileId.'.'.$expiresAt.'.'.$this->appReviewDemoSignature($profileId, $expiresAt);
+
+        return [
+            'access_token' => $token,
+            'refresh_token' => $token,
+            'expires_in' => $expiresIn,
+            'id_token' => null,
+            'token_type' => 'Bearer',
+        ];
+    }
+
+    protected function appReviewDemoSignature(int $profileId, int $expiresAt): string
+    {
+        return hash_hmac('sha256', $profileId.'|'.$expiresAt, (string) config('app.key'));
     }
 
     /**

@@ -406,6 +406,10 @@ Route::post('/api/mobile/v1/modern-forestry/auth/refresh', [ModernForestryProduc
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.auth.refresh');
+Route::post('/api/mobile/v1/modern-forestry/auth/review-demo', [ModernForestryProductCatalogController::class, 'authReviewDemo'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.auth.review-demo');
 Route::get('/api/mobile/v1/modern-forestry/account', [ModernForestryProductCatalogController::class, 'account'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.account');
@@ -416,6 +420,10 @@ Route::post('/api/mobile/v1/modern-forestry/account/candle-club/action', [Modern
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
     ->name('mobile.modern-forestry.account.candle-club.action');
+Route::post('/api/mobile/v1/modern-forestry/account/candle-club/monthly-scents/{monthlyScent}/feedback', [ModernForestryProductCatalogController::class, 'candleClubScentFeedback'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('mobile.modern-forestry.account.candle-club.monthly-scents.feedback');
 Route::post('/api/mobile/v1/modern-forestry/account/message', [ModernForestryProductCatalogController::class, 'accountMessage'])
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:30,1')
@@ -1453,6 +1461,9 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/subscriptions/contracts/{contract}/actions', [ShopifyEmbeddedSubscriptionsController::class, 'action'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('subscriptions.contracts.action');
+        Route::post('/subscriptions/candle-club/feedback/{feedback}/export', [ShopifyEmbeddedSubscriptionsController::class, 'exportFeedback'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('subscriptions.candle-club.feedback.export');
         Route::get('/rewards', [ShopifyEmbeddedRewardsController::class, 'data'])->name('rewards');
         Route::get('/rewards/policy', [ShopifyEmbeddedRewardsController::class, 'policy'])
             ->name('rewards.policy');

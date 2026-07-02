@@ -29,7 +29,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('commitment_months')->default(6);
-            $table->unsignedInteger('allowed_pauses_per_commitment')->default(1);
+            $table->unsignedInteger('allowed_pauses_per_commitment')->default(2);
             $table->json('pause_duration_options')->nullable();
             $table->unsignedInteger('renewal_reward_months')->default(6);
             $table->string('first_gift_product_variant_gid', 190)->nullable();

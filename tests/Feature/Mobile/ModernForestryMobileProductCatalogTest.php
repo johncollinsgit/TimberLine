@@ -22,6 +22,7 @@ use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Shopify\ShopifyAppContentService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -445,6 +446,35 @@ test('mobile auth session can create and validate a customer account token ident
         'tenant_id' => 1,
         'normalized_email' => 'native@example.com',
     ]);
+});
+
+test('mobile app review demo login issues a token with candle club access', function (): void {
+    config()->set('services.modern_forestry_app_review.email', 'reviewer@example.com');
+    config()->set('services.modern_forestry_app_review.password_hash', Hash::make('review-password'));
+    config()->set('services.modern_forestry_app_review.password', null);
+
+    $token = $this->postJson('/api/mobile/v1/modern-forestry/auth/review-demo', [
+        'email' => 'reviewer@example.com',
+        'password' => 'review-password',
+    ])
+        ->assertOk()
+        ->assertJsonPath('meta.source', 'app_review_demo')
+        ->json('data.access_token');
+
+    expect($token)->toBeString()->toStartWith('mf-review-demo.');
+
+    $this->withToken($token)
+        ->postJson('/api/mobile/v1/modern-forestry/auth/session')
+        ->assertOk()
+        ->assertJsonPath('authenticated', true)
+        ->assertJsonPath('customer.email', 'reviewer@example.com');
+
+    $this->withToken($token)
+        ->getJson('/api/mobile/v1/modern-forestry/account/candle-club')
+        ->assertOk()
+        ->assertJsonPath('data.eligible', true)
+        ->assertJsonPath('data.status', 'active')
+        ->assertJsonPath('data.actions.can_vote', true);
 });
 
 test('mobile customer auth config exposes only public oauth fields', function (): void {

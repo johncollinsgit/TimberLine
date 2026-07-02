@@ -86,16 +86,13 @@ return new class extends Migration
     {
         $tenant = DB::table('tenants')
             ->where('id', 1)
+            ->where('slug', 'modern-forestry')
             ->first(['id']);
 
         if ($tenant && is_numeric($tenant->id)) {
             return (int) $tenant->id;
         }
 
-        $tenant = DB::table('tenants')
-            ->where('slug', 'modern-forestry')
-            ->first(['id']);
-
-        return $tenant && is_numeric($tenant->id) ? (int) $tenant->id : null;
+        return null;
     }
 };

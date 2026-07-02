@@ -175,6 +175,15 @@ class ModernForestryMobileAccountService
     }
 
     /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    public function candleClubScentFeedback(ModernForestryMobileCustomerSession $session, int $monthlyScentId, array $payload): array
+    {
+        return $this->subscriptions->submitCandleClubScentFeedback($session->profile, $monthlyScentId, $payload);
+    }
+
+    /**
      * @return array<string,mixed>
      */
     public function wishlistPayload(MarketingProfile $profile, int $tenantId): array
