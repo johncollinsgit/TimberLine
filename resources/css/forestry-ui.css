@@ -83,20 +83,22 @@
   box-shadow: 0 18px 46px -34px rgba(8, 24, 27, 0.55);
   color: rgba(52, 70, 73, 0.74);
   font-size: clamp(0.72rem, 1.05vw, 0.94rem);
+  max-width: min(18rem, 22vw);
   padding: 0.58rem 0.8rem;
   transition: opacity 520ms ease, transform 720ms var(--eb-motion-ease), filter 520ms ease;
+  white-space: nowrap;
 }
 
-.fb-problem-chip--one { left: 9%; top: 20%; transform: rotate(-4deg); }
-.fb-problem-chip--two { right: 7%; top: 18%; transform: rotate(5deg); animation-delay: 0.8s; }
-.fb-problem-chip--three { left: 5%; top: 48%; transform: rotate(3deg); animation-delay: 1.6s; }
-.fb-problem-chip--four { right: 8%; top: 52%; transform: rotate(-3deg); animation-delay: 2.4s; }
-.fb-problem-chip--five { left: 15%; bottom: 18%; transform: rotate(4deg); animation-delay: 3.2s; }
-.fb-problem-chip--six { right: 18%; bottom: 17%; transform: rotate(-4deg); animation-delay: 4s; }
-.fb-problem-chip--seven { left: 38%; top: 10%; transform: rotate(2deg); animation-delay: 1.2s; }
-.fb-problem-chip--eight { right: 34%; bottom: 9%; transform: rotate(-2deg); animation-delay: 2s; }
-.fb-problem-chip--nine { left: 24%; top: 66%; transform: rotate(-5deg); animation-delay: 2.8s; }
-.fb-problem-chip--ten { right: 25%; top: 34%; transform: rotate(4deg); animation-delay: 3.6s; }
+.fb-problem-chip--one { left: clamp(1rem, 4vw, 5rem); top: 14%; transform: rotate(-4deg); }
+.fb-problem-chip--two { right: clamp(1rem, 4vw, 5rem); top: 16%; transform: rotate(5deg); animation-delay: 0.8s; }
+.fb-problem-chip--three { left: clamp(1rem, 3vw, 4rem); top: 38%; transform: rotate(3deg); animation-delay: 1.6s; }
+.fb-problem-chip--four { right: clamp(1rem, 3vw, 4rem); top: 42%; transform: rotate(-3deg); animation-delay: 2.4s; }
+.fb-problem-chip--five { left: clamp(1rem, 5vw, 6rem); bottom: 25%; transform: rotate(4deg); animation-delay: 3.2s; }
+.fb-problem-chip--six { right: clamp(1rem, 5vw, 6rem); bottom: 25%; transform: rotate(-4deg); animation-delay: 4s; }
+.fb-problem-chip--seven { left: clamp(1rem, 16vw, 18rem); top: 5%; transform: rotate(2deg); animation-delay: 1.2s; }
+.fb-problem-chip--eight { right: clamp(1rem, 16vw, 18rem); bottom: 7%; transform: rotate(-2deg); animation-delay: 2s; }
+.fb-problem-chip--nine { left: clamp(1rem, 12vw, 14rem); top: 73%; transform: rotate(-5deg); animation-delay: 2.8s; }
+.fb-problem-chip--ten { right: clamp(1rem, 12vw, 14rem); top: 68%; transform: rotate(4deg); animation-delay: 3.6s; }
 
 .fb-problem-tree {
   align-items: center;
@@ -398,6 +400,10 @@
 }
 
 @media (max-width: 920px) {
+  .fb-problem-chip {
+    display: none;
+  }
+
   .fb-contact-panel,
   .fb-industry-switcher--clean {
     grid-template-columns: 1fr;
@@ -415,6 +421,33 @@
   }
 
   .fb-product-demo__topbar label {
+    display: none;
+  }
+}
+
+@media (max-width: 1480px) {
+  .fb-splash--intro-only .fb-splash__content {
+    max-width: min(760px, calc(100% - 28rem));
+  }
+
+  .fb-splash--intro-only .fb-problem-chip {
+    max-width: 13.5rem;
+  }
+
+  .fb-splash--intro-only .fb-problem-chip--seven,
+  .fb-splash--intro-only .fb-problem-chip--eight,
+  .fb-splash--intro-only .fb-problem-chip--nine,
+  .fb-splash--intro-only .fb-problem-chip--ten {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .fb-splash--intro-only .fb-splash__content {
+    max-width: min(780px, calc(100% - 3rem));
+  }
+
+  .fb-splash--intro-only .fb-problem-chip {
     display: none;
   }
 }

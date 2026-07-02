@@ -9,6 +9,7 @@ function mountRoot(root) {
 
   const chips = Array.from(root.querySelectorAll(".fb-problem-chip"));
   const tree = root.querySelector(".fb-problem-tree");
+  const splash = root.closest(".fb-splash");
 
   const growTree = () => {
     root.classList.add("is-grown");
@@ -23,7 +24,19 @@ function mountRoot(root) {
   };
 
   chips.forEach((chip) => chip.addEventListener("click", growTree));
-  tree?.addEventListener("click", resetGarden);
+  splash?.addEventListener("click", (event) => {
+    const clickedTree = tree?.contains(event.target);
+    const clickedLink = event.target.closest("a");
+
+    if (clickedTree) {
+      resetGarden();
+      return;
+    }
+
+    if (!clickedLink) {
+      growTree();
+    }
+  });
 }
 
 export function mountPublicProblemGardenNow() {
