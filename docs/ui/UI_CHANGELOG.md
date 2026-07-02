@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-07-02 — Everbranch Peace-of-Mind Home and Contact Flow
+
+### What changed
+- Reduced the Everbranch home tab to one intro section with the new peace-of-mind headline and family-time subline.
+- Moved the live product example into the top-level "See it work" tab, slowed the problem-to-solution reveal, and added more scattered-work examples.
+- Added a clickable problem garden that collapses scattered problems into the Everbranch mark/tree moment.
+- Reworked the "Who it helps" cards into cleaner industry-fit cards and added real Everbranch contact forms that submit to the landlord message queue.
+- Updated Evergrove's top navigation into story tabs and kept the contact form routed into the same landlord messages surface.
+
+### What did not change
+- No authenticated app data is embedded on public pages.
+- No billing, Shopify, tenant permission, module activation, or calculator behavior changed.
+
 ## 2026-07-02 — Everbranch Live Product Demo Hero
 
 ### What changed

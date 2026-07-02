@@ -77,7 +77,7 @@
             </aside>
         </section>
 
-        <section class="eg-proof-strip" aria-label="Evergrove proof points">
+        <section id="problem" class="eg-proof-strip" aria-label="Evergrove proof points">
             <div>
                 <span>Owner-led</span>
                 <p>built from real small-business operating pressure, not theory</p>
@@ -108,7 +108,7 @@
             </div>
         </section>
 
-        <section class="eg-section">
+        <section id="examples" class="eg-section">
             <div class="eg-section-head">
                 <p class="eg-kicker">Industry fit</p>
                 <h2>Software for owner-led businesses.</h2>
@@ -146,7 +146,7 @@
             </div>
         </section>
 
-        <section class="eg-section">
+        <section id="how-it-works" class="eg-section">
             <div class="eg-section-head">
                 <p class="eg-kicker">How it works</p>
                 <h2>A simple plan before anyone builds the wrong thing.</h2>
@@ -260,7 +260,7 @@
 
                 <form method="POST" action="{{ route('evergrove.inquiries.store') }}" class="eg-form-card">
                     @csrf
-                    <input type="hidden" name="source_page" value="evergrove_home" />
+                    <input type="hidden" name="source_page" value="evergrove_contact" />
 
                     @if (session('status'))
                         <div class="fb-state fb-state--success text-sm">{{ session('status') }}</div>

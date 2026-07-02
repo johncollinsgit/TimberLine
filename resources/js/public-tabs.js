@@ -41,6 +41,7 @@ export function mountPublicTabsNow() {
     const scope = root.closest(".fb-public-shell") || document;
     const triggers = Array.from(scope.querySelectorAll("[data-public-tab-trigger]"));
     const panelAnchor = document.getElementById("everbranch-public");
+    const jumpers = Array.from(scope.querySelectorAll("[data-public-tab-jump]"));
 
     triggers.forEach((trigger, index) => {
       trigger.tabIndex = trigger.classList.contains("is-active") ? 0 : -1;
@@ -62,6 +63,14 @@ export function mountPublicTabsNow() {
         const nextTrigger = triggers[nextIndex];
         nextTrigger?.focus();
         activateTab(root, nextTrigger?.dataset.publicTabTrigger);
+      });
+    });
+
+    jumpers.forEach((jumper) => {
+      jumper.addEventListener("click", (event) => {
+        event.preventDefault();
+        activateTab(root, jumper.dataset.publicTabJump);
+        panelAnchor?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
 

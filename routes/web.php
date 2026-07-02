@@ -214,6 +214,8 @@ $landlordRoutes = static function (): void {
         ->name('client-project-tickets.update');
     Route::get('/landlord/service-inquiries', [LandlordServiceInquiryController::class, 'index'])
         ->name('service-inquiries.index');
+    Route::get('/landlord/messages', [LandlordServiceInquiryController::class, 'index'])
+        ->name('messages.index');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
     Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])

@@ -13,12 +13,12 @@
             <img src="{{ $lockup }}" alt="Evergrove Software" />
         </a>
 
-        <div class="eg-site-links" aria-label="Public sections">
-            <a href="/#services">Services</a>
-            <a href="/#work">Work</a>
-            <a href="/#tools">Tools</a>
-            <a href="/#pricing">Pricing</a>
-            <a href="/#everbranch">Everbranch</a>
+        <div class="eg-site-links eg-site-links--tabs" aria-label="Public sections">
+            <a href="/#problem">Problem</a>
+            <a href="/#services">What We Build</a>
+            <a href="/#how-it-works">How It Works</a>
+            <a href="/#examples">Examples</a>
+            <a href="/#contact">Contact</a>
         </div>
 
         <div class="eg-site-actions">

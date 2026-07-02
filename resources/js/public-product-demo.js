@@ -3,9 +3,9 @@ const SCENARIO_SELECTOR = "[data-product-demo-scenario]";
 const MODE_SELECTOR = "[data-product-demo-mode]";
 const STEP_SELECTOR = "[data-product-demo-step]";
 
-const AUTOPLAY_DELAY = 5200;
-const SOLUTION_DELAY = 1500;
-const STEP_DELAY = 560;
+const AUTOPLAY_DELAY = 11200;
+const SOLUTION_DELAY = 5000;
+const STEP_DELAY = 760;
 
 function prefersReducedMotion() {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
@@ -123,7 +123,7 @@ function mountRoot(root) {
       return;
     }
 
-    queueTimer(runSolutionSteps, autoplay ? SOLUTION_DELAY : 420);
+    queueTimer(runSolutionSteps, SOLUTION_DELAY);
   };
 
   const scheduleAutoplay = () => {
@@ -151,6 +151,8 @@ function mountRoot(root) {
       applyMode(root, button.dataset.productDemoMode || "solution");
       if (button.dataset.productDemoMode === "solution") {
         setStep(root, 3);
+      } else {
+        setStep(root, 0);
       }
     });
   });

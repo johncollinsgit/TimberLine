@@ -17,7 +17,11 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('Sign Up')
         ->assertSeeText('We build the software small businesses wish already existed.')
         ->assertSeeText('Start with a workflow audit')
-        ->assertSeeText('Workflow audits and software plans')
+        ->assertSeeText('Problem')
+        ->assertSeeText('What We Build')
+        ->assertSeeText('How It Works')
+        ->assertSeeText('Examples')
+        ->assertSeeText('Contact')
         ->assertSeeText('Everbranch is one product created by Evergrove.')
         ->assertSeeText('Software for owner-led businesses.')
         ->assertSee('data-clickable-details-card', false)
@@ -25,31 +29,61 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('Construction & project teams')
         ->assertSeeText('Website and software project estimate')
         ->assertSeeText('Modern Forestry')
-        ->assertDontSeeText('One app for the work that keeps slipping through the cracks.');
+        ->assertDontSeeText('Less anxiety. Find peace. The one place to run your business.');
 });
 
 test('everbranch public host keeps the everbranch product surface', function (): void {
     $this->get('http://theeverbranch.com/')
         ->assertOk()
-        ->assertSeeText('One app for the work that keeps slipping through the cracks.')
-        ->assertSeeText('Everbranch brings customers, tasks, notes, follow-ups, messages, and next steps into a simple workspace your team can use every day.')
+        ->assertSeeText('Less anxiety. Find peace. The one place to run your business.')
+        ->assertSeeText('Everbranch helps small businesses organize customers, tasks, messages, files, and workflows in one simple system')
+        ->assertSeeText('Home')
+        ->assertSeeText('See it work')
+        ->assertSeeText('Who it helps')
+        ->assertSeeText('Contact')
+        ->assertSee('data-problem-garden', false)
+        ->assertSeeText('Invoice draft in email')
         ->assertSee('data-public-product-demo', false)
         ->assertSeeText('Problem')
         ->assertSeeText('Solution')
-        ->assertSeeText('Details are scattered')
-        ->assertSeeText('Everbranch gives it a home')
-        ->assertSeeText('Wholesale request → task → reorder follow-up')
-        ->assertSeeText('Job note → parts question → crew next step')
-        ->assertSeeText('Approval → material note → punch-list item')
-        ->assertSeeText('Client record → appointment → reminder')
+        ->assertSeeText('The details are scattered.')
+        ->assertSeeText('Everbranch gives them one home.')
+        ->assertSee('Wholesale request -> task -> reorder follow-up', false)
+        ->assertSee('Job note -> parts question -> crew next step', false)
+        ->assertSee('Approval -> material note -> punch-list item', false)
+        ->assertSee('Client record -> appointment -> reminder', false)
         ->assertSeeText('Motion-safe version: detail captured, work organized, next step assigned, follow-up ready.')
         ->assertSeeText('Built for the messy middle of small business.')
-        ->assertSee('data-clickable-details-card', false)
         ->assertSeeText('Retail & product brands')
         ->assertSeeText('Electrical & plumbing')
         ->assertSeeText('Everbranch does not replace the way your business works. It gives that work a home.')
-        ->assertSeeText('Built by Evergrove Software.')
+        ->assertSeeText('Tell us what keeps getting lost.')
         ->assertDontSeeText('We build the software small businesses wish already existed.');
+});
+
+test('everbranch contact page stores messages in the landlord queue', function (): void {
+    $this->get('http://theeverbranch.com/platform/contact')
+        ->assertOk()
+        ->assertSeeText('Tell Everbranch what keeps getting lost.')
+        ->assertSee('name="source_page" value="everbranch_contact"', false)
+        ->assertSeeText('Send message');
+
+    $this->from('http://theeverbranch.com/platform/contact')
+        ->post('/services/inquiries', [
+            'name' => 'Shop Owner',
+            'email' => 'owner@example.com',
+            'company' => 'Owner Co',
+            'current_tools' => 'texts and spreadsheets',
+            'pain_point' => 'Customer follow-ups disappear.',
+            'source_page' => 'everbranch_contact',
+        ])
+        ->assertRedirect('http://theeverbranch.com/platform/contact');
+
+    $inquiry = ServiceInquiry::query()->firstOrFail();
+
+    expect($inquiry->email)->toBe('owner@example.com')
+        ->and($inquiry->source_page)->toBe('everbranch_contact')
+        ->and($inquiry->pain_point)->toBe('Customer follow-ups disappear.');
 });
 
 test('authenticated users still see evergrove surface on evergrove public host', function (): void {
@@ -65,7 +99,7 @@ test('authenticated users still see evergrove surface on evergrove public host',
         ->assertOk()
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('We build the software small businesses wish already existed.')
-        ->assertDontSeeText('One app for the work that keeps slipping through the cracks.');
+        ->assertDontSeeText('Less anxiety. Find peace. The one place to run your business.');
 });
 
 test('app host sends guests toward login while lander redirects home', function (): void {
@@ -129,7 +163,7 @@ test('service inquiry submission stores calculator planning payload', function (
         ->and((array) $inquiry->calculator_payload)->toMatchArray($payload);
 });
 
-test('landlord operator can review service inquiries', function (): void {
+test('landlord operator can review service messages', function (): void {
     ServiceInquiry::query()->create([
         'name' => 'Lead One',
         'email' => 'lead@example.com',
@@ -149,7 +183,12 @@ test('landlord operator can review service inquiries', function (): void {
     $this->actingAs($admin)
         ->get(route('landlord.service-inquiries.index'))
         ->assertOk()
-        ->assertSeeText('Service Inquiry Queue')
+        ->assertSeeText('Messages & Inquiries')
         ->assertSeeText('Lead One')
         ->assertSeeText('automation_savings');
+
+    $this->actingAs($admin)
+        ->get(route('landlord.messages.index'))
+        ->assertOk()
+        ->assertSeeText('Messages & Inquiries');
 });

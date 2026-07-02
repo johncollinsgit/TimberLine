@@ -34,6 +34,12 @@ const contextualModules = [
     mountExport: "mountPublicProductDemoNow",
   },
   {
+    key: "publicProblemGarden",
+    selectors: ["[data-problem-garden]"],
+    load: () => import("./public-problem-garden"),
+    mountExport: "mountPublicProblemGardenNow",
+  },
+  {
     key: "publicDetailsCards",
     selectors: ["[data-clickable-details-card]"],
     load: () => import("./public-details-cards"),

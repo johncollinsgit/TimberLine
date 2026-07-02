@@ -30,6 +30,8 @@ class EvergroveServiceInquiryController extends Controller
             'calculator_payload' => ['nullable'],
         ]);
 
+        $sourcePage = $this->nullableText($validated['source_page'] ?? $request->path(), 120);
+
         ServiceInquiry::query()->create([
             'name' => $this->text($validated['name'] ?? '', 190),
             'email' => strtolower($this->text($validated['email'] ?? '', 190)),
@@ -40,12 +42,14 @@ class EvergroveServiceInquiryController extends Controller
             'pain_point' => $this->nullableText($validated['pain_point'] ?? null, 5000),
             'timeline' => $this->nullableText($validated['timeline'] ?? null, 80),
             'budget_range' => $this->nullableText($validated['budget_range'] ?? null, 80),
-            'source_page' => $this->nullableText($validated['source_page'] ?? $request->path(), 120),
+            'source_page' => $sourcePage,
             'calculator_payload' => $this->calculatorPayload($request->input('calculator_payload')),
             'status' => 'new',
         ]);
 
-        return back()->with('status', 'Thanks. Evergrove has your notes and will follow up shortly.');
+        $product = str_contains((string) $sourcePage, 'everbranch') ? 'Everbranch' : 'Evergrove';
+
+        return back()->with('status', "Thanks. {$product} has your note and will follow up shortly.");
     }
 
     /**
