@@ -85,14 +85,15 @@
                                 <button type="button" class="fb-problem-chip fb-problem-chip--eight">Customer asked twice</button>
                                 <button type="button" class="fb-problem-chip fb-problem-chip--nine">Task has no owner</button>
                                 <button type="button" class="fb-problem-chip fb-problem-chip--ten">Crew note in memory</button>
-                                <button type="button" class="fb-problem-tree" aria-label="Reset scattered problems">
-                                    <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                    <span>Everbranch</span>
-                                </button>
+                                <button type="button" class="fb-problem-chip fb-problem-chip--eleven">Employees need address</button>
+                                <button type="button" class="fb-problem-chip fb-problem-chip--twelve">Customer changed order</button>
+                                <button type="button" class="fb-problem-chip fb-problem-chip--thirteen">How much should I order?</button>
+                                <button type="button" class="fb-problem-chip fb-problem-chip--fourteen">Crew needs latest notes</button>
+                                <button type="button" class="fb-problem-chip fb-problem-chip--fifteen">Which invoice got paid?</button>
+                                <button type="button" class="fb-problem-chip fb-problem-chip--sixteen">Appointment moved again</button>
                             </div>
 
                             <div class="fb-splash__content" data-reveal>
-                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" class="fb-splash__mark" />
                                 <p class="fb-section-kicker">Small-business work, finally in one place</p>
                                 <h1>{{ $headline }}</h1>
                                 <p>{{ $summary }}</p>

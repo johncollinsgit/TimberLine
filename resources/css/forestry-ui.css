@@ -67,8 +67,7 @@
   justify-content: center;
 }
 
-.fb-problem-chip,
-.fb-problem-tree {
+.fb-problem-chip {
   border: 1px solid rgba(18, 60, 67, 0.13);
   border-radius: 999px;
   cursor: pointer;
@@ -78,105 +77,72 @@
 }
 
 .fb-problem-chip {
-  animation: fbProblemFloat 8s var(--eb-motion-ease) infinite alternate;
+  --chip-rotate: 0deg;
+  --float-x: 1.8rem;
+  --float-y: -1.5rem;
+  --float-r: 4deg;
+  animation: fbProblemFloat 5.8s ease-in-out infinite alternate;
   background: rgba(255, 255, 255, 0.78);
   box-shadow: 0 18px 46px -34px rgba(8, 24, 27, 0.55);
   color: rgba(52, 70, 73, 0.74);
   font-size: clamp(0.72rem, 1.05vw, 0.94rem);
   max-width: min(18rem, 22vw);
   padding: 0.58rem 0.8rem;
-  transition: opacity 520ms ease, transform 720ms var(--eb-motion-ease), filter 520ms ease;
+  transform: translate3d(0, 0, 0) rotate(var(--chip-rotate));
+  transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
   white-space: nowrap;
 }
 
-.fb-problem-chip--one { left: clamp(1rem, 4vw, 5rem); top: 14%; transform: rotate(-4deg); }
-.fb-problem-chip--two { right: clamp(1rem, 4vw, 5rem); top: 16%; transform: rotate(5deg); animation-delay: 0.8s; }
-.fb-problem-chip--three { left: clamp(1rem, 3vw, 4rem); top: 38%; transform: rotate(3deg); animation-delay: 1.6s; }
-.fb-problem-chip--four { right: clamp(1rem, 3vw, 4rem); top: 42%; transform: rotate(-3deg); animation-delay: 2.4s; }
-.fb-problem-chip--five { left: clamp(1rem, 5vw, 6rem); bottom: 25%; transform: rotate(4deg); animation-delay: 3.2s; }
-.fb-problem-chip--six { right: clamp(1rem, 5vw, 6rem); bottom: 25%; transform: rotate(-4deg); animation-delay: 4s; }
-.fb-problem-chip--seven { left: clamp(1rem, 16vw, 18rem); top: 5%; transform: rotate(2deg); animation-delay: 1.2s; }
-.fb-problem-chip--eight { right: clamp(1rem, 16vw, 18rem); bottom: 7%; transform: rotate(-2deg); animation-delay: 2s; }
-.fb-problem-chip--nine { left: clamp(1rem, 12vw, 14rem); top: 73%; transform: rotate(-5deg); animation-delay: 2.8s; }
-.fb-problem-chip--ten { right: clamp(1rem, 12vw, 14rem); top: 68%; transform: rotate(4deg); animation-delay: 3.6s; }
+.fb-problem-chip:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(18, 60, 67, 0.22);
+  box-shadow: 0 22px 52px -32px rgba(8, 24, 27, 0.7);
+}
 
-.fb-problem-tree {
-  align-items: center;
-  background:
-    radial-gradient(circle at 50% 30%, rgba(47, 125, 107, 0.16), transparent 55%),
-    rgba(255, 255, 255, 0.94);
-  box-shadow: 0 26px 74px -44px rgba(8, 24, 27, 0.68);
-  color: var(--fb-brand);
-  display: grid;
-  gap: 0.42rem;
-  left: 50%;
-  opacity: 0;
-  padding: 1rem 1.3rem;
-  place-items: center;
+.fb-problem-chip--one { --chip-rotate: -4deg; --float-x: 2.7rem; --float-y: -1.6rem; --float-r: 5deg; left: clamp(1rem, 4vw, 5rem); top: 14%; }
+.fb-problem-chip--two { --chip-rotate: 5deg; --float-x: -2.2rem; --float-y: 1.9rem; --float-r: -7deg; right: clamp(1rem, 4vw, 5rem); top: 16%; animation-delay: -0.8s; }
+.fb-problem-chip--three { --chip-rotate: 3deg; --float-x: 2.8rem; --float-y: 1.5rem; --float-r: -5deg; left: clamp(1rem, 3vw, 4rem); top: 38%; animation-delay: -1.6s; }
+.fb-problem-chip--four { --chip-rotate: -3deg; --float-x: -3rem; --float-y: -1.4rem; --float-r: 6deg; right: clamp(1rem, 3vw, 4rem); top: 42%; animation-delay: -2.4s; }
+.fb-problem-chip--five { --chip-rotate: 4deg; --float-x: 2rem; --float-y: -2.2rem; --float-r: -8deg; left: clamp(1rem, 5vw, 6rem); bottom: 25%; animation-delay: -3.2s; }
+.fb-problem-chip--six { --chip-rotate: -4deg; --float-x: -2.7rem; --float-y: 1.8rem; --float-r: 7deg; right: clamp(1rem, 5vw, 6rem); bottom: 25%; animation-delay: -4s; }
+.fb-problem-chip--seven { --chip-rotate: 2deg; --float-x: -1.8rem; --float-y: 2.4rem; --float-r: 5deg; left: clamp(1rem, 16vw, 18rem); top: 5%; animation-delay: -1.2s; }
+.fb-problem-chip--eight { --chip-rotate: -2deg; --float-x: 2.4rem; --float-y: -2rem; --float-r: -6deg; right: clamp(1rem, 16vw, 18rem); bottom: 7%; animation-delay: -2s; }
+.fb-problem-chip--nine { --chip-rotate: -5deg; --float-x: 3rem; --float-y: -1.8rem; --float-r: 8deg; left: clamp(1rem, 12vw, 14rem); top: 73%; animation-delay: -2.8s; }
+.fb-problem-chip--ten { --chip-rotate: 4deg; --float-x: -2rem; --float-y: 2.2rem; --float-r: -7deg; right: clamp(1rem, 12vw, 14rem); top: 68%; animation-delay: -3.6s; }
+.fb-problem-chip--eleven { --chip-rotate: 3deg; --float-x: 2.2rem; --float-y: 2.4rem; --float-r: -6deg; left: clamp(1rem, 22vw, 26rem); top: 22%; animation-delay: -0.4s; }
+.fb-problem-chip--twelve { --chip-rotate: -5deg; --float-x: -2.6rem; --float-y: -2rem; --float-r: 8deg; right: clamp(1rem, 22vw, 26rem); top: 30%; animation-delay: -1.9s; }
+.fb-problem-chip--thirteen { --chip-rotate: 4deg; --float-x: 2.9rem; --float-y: -2.3rem; --float-r: -8deg; left: clamp(1rem, 20vw, 24rem); bottom: 14%; animation-delay: -2.7s; }
+.fb-problem-chip--fourteen { --chip-rotate: -3deg; --float-x: -2.1rem; --float-y: 2.5rem; --float-r: 7deg; right: clamp(1rem, 24vw, 28rem); bottom: 15%; animation-delay: -3.9s; }
+.fb-problem-chip--fifteen { --chip-rotate: 5deg; --float-x: -2.5rem; --float-y: -1.7rem; --float-r: -9deg; left: clamp(1rem, 30vw, 36rem); top: 9%; animation-delay: -4.8s; }
+.fb-problem-chip--sixteen { --chip-rotate: -4deg; --float-x: 2.5rem; --float-y: 1.8rem; --float-r: 8deg; right: clamp(1rem, 31vw, 38rem); top: 8%; animation-delay: -5.5s; }
+
+.fb-splash__field.is-popping .fb-problem-chip {
+  animation: fbProblemPop 560ms var(--eb-motion-ease) both;
+  animation-delay: var(--pop-delay, 0ms);
   pointer-events: none;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(0.38);
-  transition: opacity 560ms ease 220ms, transform 900ms var(--eb-motion-ease) 220ms;
-}
-
-.fb-problem-tree img {
-  width: clamp(3rem, 6vw, 5rem);
-}
-
-.fb-problem-tree::before,
-.fb-problem-tree::after {
-  background: rgba(47, 125, 107, 0.22);
-  border-radius: 999px;
-  bottom: -4.2rem;
-  content: "";
-  height: 4.8rem;
-  position: absolute;
-  transform-origin: top center;
-  width: 0.24rem;
-}
-
-.fb-problem-tree::before {
-  transform: rotate(22deg) scaleY(0);
-}
-
-.fb-problem-tree::after {
-  transform: rotate(-24deg) scaleY(0);
-}
-
-.fb-splash__field.is-grown .fb-problem-chip {
-  filter: blur(2px);
-  opacity: 0;
-  transform: translate(0, 24px) scale(0.36);
-}
-
-.fb-splash__field.is-grown .fb-problem-tree {
-  border-radius: 2rem;
-  opacity: 1;
-  pointer-events: auto;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.fb-splash__field.is-grown .fb-problem-tree::before {
-  animation: fbTreeBranchLeft 900ms var(--eb-motion-ease) 760ms both;
-}
-
-.fb-splash__field.is-grown .fb-problem-tree::after {
-  animation: fbTreeBranchRight 900ms var(--eb-motion-ease) 860ms both;
 }
 
 @keyframes fbProblemFloat {
-  from { margin-top: 0; }
-  to { margin-top: -1.1rem; }
+  from { transform: translate3d(0, 0, 0) rotate(var(--chip-rotate)); }
+  to { transform: translate3d(var(--float-x), var(--float-y), 0) rotate(calc(var(--chip-rotate) + var(--float-r))); }
 }
 
-@keyframes fbTreeBranchLeft {
-  from { transform: rotate(22deg) scaleY(0); }
-  to { transform: rotate(22deg) scaleY(1); }
-}
-
-@keyframes fbTreeBranchRight {
-  from { transform: rotate(-24deg) scaleY(0); }
-  to { transform: rotate(-24deg) scaleY(1); }
+@keyframes fbProblemPop {
+  0% {
+    filter: blur(0);
+    opacity: 1;
+    transform: translate3d(var(--float-x), var(--float-y), 0) rotate(calc(var(--chip-rotate) + var(--float-r))) scale(1);
+  }
+  62% {
+    filter: blur(0);
+    opacity: 0.95;
+    transform: translate3d(calc(var(--pop-x, 0px) * 0.35), calc(var(--pop-y, -24px) * 0.35), 0) rotate(calc(var(--chip-rotate) + 10deg)) scale(1.16);
+  }
+  100% {
+    filter: blur(4px);
+    opacity: 0;
+    transform: translate3d(var(--pop-x, 0px), var(--pop-y, -42px), 0) rotate(calc(var(--chip-rotate) + var(--pop-r, 18deg))) scale(0.12);
+  }
 }
 
 .fb-section-header--centered {
@@ -434,10 +400,10 @@
     max-width: 13.5rem;
   }
 
-  .fb-splash--intro-only .fb-problem-chip--seven,
-  .fb-splash--intro-only .fb-problem-chip--eight,
-  .fb-splash--intro-only .fb-problem-chip--nine,
-  .fb-splash--intro-only .fb-problem-chip--ten {
+  .fb-splash--intro-only .fb-problem-chip--thirteen,
+  .fb-splash--intro-only .fb-problem-chip--fourteen,
+  .fb-splash--intro-only .fb-problem-chip--fifteen,
+  .fb-splash--intro-only .fb-problem-chip--sixteen {
     display: none;
   }
 }
@@ -1332,13 +1298,6 @@ body[data-premium-motion="public"].has-premium-motion .fb-splash__node--four {
   position: relative;
   text-align: center;
   z-index: 2;
-}
-
-.fb-splash__mark {
-  display: block;
-  height: clamp(5rem, 10vw, 8rem);
-  margin-bottom: 1.35rem;
-  width: auto;
 }
 
 .fb-splash h1 {

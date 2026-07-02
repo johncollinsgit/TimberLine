@@ -1,4 +1,47 @@
 const ROOT_SELECTOR = "[data-problem-garden]";
+const POP_DURATION = 620;
+
+function assignPopVector(chip, index, total) {
+  const angle = (Math.PI * 2 * index) / Math.max(1, total);
+  const distance = 72 + (index % 4) * 22;
+  const x = Math.cos(angle) * distance;
+  const y = Math.sin(angle) * distance - 34;
+  const rotation = index % 2 === 0 ? 22 : -24;
+
+  chip.style.setProperty("--pop-x", `${x.toFixed(1)}px`);
+  chip.style.setProperty("--pop-y", `${y.toFixed(1)}px`);
+  chip.style.setProperty("--pop-r", `${rotation}deg`);
+  chip.style.setProperty("--pop-delay", `${Math.min(index * 18, 180)}ms`);
+}
+
+function popProblems(root) {
+  if (root.classList.contains("is-popping")) {
+    return Promise.resolve();
+  }
+
+  const chips = Array.from(root.querySelectorAll(".fb-problem-chip"));
+  chips.forEach((chip, index) => assignPopVector(chip, index, chips.length));
+  root.classList.add("is-popping");
+
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, POP_DURATION);
+  });
+}
+
+function continueAction(link) {
+  const tabKey = link.dataset.publicTabJump || link.dataset.publicTabTrigger;
+  if (tabKey) {
+    document.dispatchEvent(new CustomEvent("everbranch:activate-public-tab", {
+      detail: { key: tabKey, scroll: true },
+    }));
+    return;
+  }
+
+  const href = link.getAttribute("href");
+  if (href && href !== "#") {
+    window.location.href = href;
+  }
+}
 
 function mountRoot(root) {
   if (root.dataset.problemGardenMounted === "true") {
@@ -7,35 +50,16 @@ function mountRoot(root) {
 
   root.dataset.problemGardenMounted = "true";
 
-  const chips = Array.from(root.querySelectorAll(".fb-problem-chip"));
-  const tree = root.querySelector(".fb-problem-tree");
-  const splash = root.closest(".fb-splash");
+  const shell = root.closest(".fb-public-shell") || document;
+  const heroActions = Array.from(shell.querySelectorAll("a.fb-btn, [data-public-tab-trigger]"));
 
-  const growTree = () => {
-    root.classList.add("is-grown");
-    chips.forEach((chip, index) => {
-      window.setTimeout(() => chip.classList.add("is-planted"), index * 45);
-    });
-  };
+  heroActions.forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
 
-  const resetGarden = () => {
-    root.classList.remove("is-grown");
-    chips.forEach((chip) => chip.classList.remove("is-planted"));
-  };
-
-  chips.forEach((chip) => chip.addEventListener("click", growTree));
-  splash?.addEventListener("click", (event) => {
-    const clickedTree = tree?.contains(event.target);
-    const clickedLink = event.target.closest("a");
-
-    if (clickedTree) {
-      resetGarden();
-      return;
-    }
-
-    if (!clickedLink) {
-      growTree();
-    }
+      popProblems(root).then(() => continueAction(link));
+    }, true);
   });
 }
 

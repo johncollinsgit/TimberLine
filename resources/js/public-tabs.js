@@ -74,6 +74,16 @@ export function mountPublicTabsNow() {
       });
     });
 
+    document.addEventListener("everbranch:activate-public-tab", (event) => {
+      const key = event.detail?.key;
+      if (!key) return;
+
+      activateTab(root, key);
+      if (event.detail?.scroll !== false) {
+        panelAnchor?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+
     activateTab(root, tabKeyFromHash(root) || triggers[0]?.dataset.publicTabTrigger, false);
   });
 }
