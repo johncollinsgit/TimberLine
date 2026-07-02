@@ -150,4 +150,19 @@ class Tenant extends Model
     {
         return $this->hasMany(FormSubmission::class);
     }
+
+    public function fieldServiceJobs(): HasMany
+    {
+        return $this->hasMany(FieldServiceJob::class);
+    }
+
+    public function fieldServiceMaterials(): HasMany
+    {
+        return $this->hasMany(FieldServiceMaterial::class);
+    }
+
+    public function fieldServiceVehicles(): HasMany
+    {
+        return $this->hasMany(FieldServiceVehicle::class);
+    }
 }

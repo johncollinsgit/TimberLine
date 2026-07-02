@@ -6,6 +6,9 @@ use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\Order;
+use App\Models\FieldServiceJob;
+use App\Models\FieldServiceMaterial;
+use App\Models\FieldServiceVehicle;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleCatalogService;
@@ -69,6 +72,20 @@ class UnifiedDashboardService
             ];
         }
 
+        if ($canAccessOps && $tenantId !== null && $useCase === 'field_service' && Schema::hasTable('field_service_jobs')) {
+            $openJobs = (int) FieldServiceJob::query()
+                ->forTenantId($tenantId)
+                ->whereNotIn('status', ['done'])
+                ->count();
+
+            return [
+                'label' => 'Open jobs',
+                'value' => number_format($openJobs),
+                'supporting' => 'Customer jobs waiting for work, materials, or follow-up',
+                'tone' => 'amber',
+            ];
+        }
+
         if ($canAccessMarketing && $tenantId !== null && Schema::hasTable('marketing_profiles') && in_array($useCase, ['crm', 'marketing', 'hybrid'], true)) {
             $reachable = (int) MarketingProfile::query()
                 ->forTenantId($tenantId)
@@ -118,6 +135,43 @@ class UnifiedDashboardService
     protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing): array
     {
         $cards = [];
+        $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
+
+        if ($tenantId !== null && $useCase === 'field_service') {
+            if (Schema::hasTable('marketing_profiles')) {
+                $cards[] = [
+                    'label' => 'Customers',
+                    'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->count()),
+                    'detail' => 'People and businesses you work for',
+                ];
+            }
+
+            if (Schema::hasTable('field_service_jobs')) {
+                $cards[] = [
+                    'label' => 'Jobs',
+                    'value' => number_format((int) FieldServiceJob::query()->forTenantId($tenantId)->count()),
+                    'detail' => 'Service work in this workspace',
+                ];
+            }
+
+            if (Schema::hasTable('field_service_materials')) {
+                $cards[] = [
+                    'label' => 'Materials',
+                    'value' => number_format((int) FieldServiceMaterial::query()->forTenantId($tenantId)->count()),
+                    'detail' => 'Parts and materials to track',
+                ];
+            }
+
+            if (Schema::hasTable('field_service_vehicles')) {
+                $cards[] = [
+                    'label' => 'Work vans',
+                    'value' => number_format((int) FieldServiceVehicle::query()->forTenantId($tenantId)->count()),
+                    'detail' => 'Vehicles in the field',
+                ];
+            }
+
+            return array_slice($cards, 0, 4);
+        }
 
         if ($canAccessMarketing && $tenantId !== null && Schema::hasTable('marketing_profiles')) {
             $cards[] = [
@@ -171,6 +225,35 @@ class UnifiedDashboardService
                 'tone' => 'neutral',
             ],
         ];
+
+        if ($canAccessOps && (string) ($profile['use_case_profile'] ?? 'ops') === 'field_service' && route('field-service.index', [], false)) {
+            $actions[] = [
+                'label' => 'Add a customer',
+                'description' => 'Create the customer and first job together.',
+                'href' => route('field-service.index'),
+                'tone' => 'success',
+            ];
+            $actions[] = [
+                'label' => 'Create a job',
+                'description' => 'Capture address, notes, materials, and assigned person.',
+                'href' => route('field-service.index'),
+                'tone' => 'info',
+            ];
+            $actions[] = [
+                'label' => 'Add materials',
+                'description' => 'Track parts, supplies, and job costs.',
+                'href' => route('field-service.index').'#materials',
+                'tone' => 'neutral',
+            ];
+            $actions[] = [
+                'label' => 'Invite your team',
+                'description' => 'Add the people who need access.',
+                'href' => route('admin.index', ['tab' => 'users']),
+                'tone' => 'neutral',
+            ];
+
+            return array_slice($actions, 0, 5);
+        }
 
         if ($canAccessMarketing) {
             $actions[] = [

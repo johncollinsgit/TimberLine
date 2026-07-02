@@ -61,6 +61,37 @@ test('resolver reports addon-gated module with upgrade prompt eligibility', func
         ->and($sms['upgrade_prompt_eligible'])->toBeTrue();
 });
 
+test('base workspace grants field service without shopify access', function (): void {
+    $tenant = Tenant::query()->create([
+        'name' => 'Bright Wire Electric',
+        'slug' => 'bright-wire-electric',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+
+    $resolved = app(TenantModuleAccessResolver::class)->resolveForTenant($tenant->id, [
+        'customers',
+        'field_service',
+        'shopify',
+        'reviews',
+        'campaigns',
+    ]);
+
+    expect($resolved['plan_key'])->toBe('base')
+        ->and($resolved['operating_mode'])->toBe('direct')
+        ->and($resolved['modules']['customers']['enabled'])->toBeTrue()
+        ->and($resolved['modules']['field_service']['enabled'])->toBeTrue()
+        ->and($resolved['modules']['shopify']['enabled'])->toBeFalse()
+        ->and($resolved['modules']['shopify']['reason'])->toBe('channel_not_supported')
+        ->and($resolved['modules']['reviews']['enabled'])->toBeFalse()
+        ->and($resolved['modules']['campaigns']['enabled'])->toBeFalse();
+});
+
 test('resolver grants addon-enabled module access', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Addon Tenant',
@@ -196,7 +227,7 @@ test('resolver preserves non-shopify operating mode while using canonical plan m
     ]);
 
     expect($resolved['operating_mode'])->toBe('direct')
-        ->and($resolved['plan_key'])->toBe('starter')
+        ->and($resolved['plan_key'])->toBe('base')
         ->and($resolved['modules']['onboarding']['has_access'])->toBeTrue()
         ->and($resolved['modules']['onboarding']['ui_state'])->toBe('setup_needed')
         ->and($resolved['modules']['sms']['has_access'])->toBeFalse()

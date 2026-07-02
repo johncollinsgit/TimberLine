@@ -87,6 +87,7 @@ class TenantExperienceProfileService
             'bulk_email_marketing',
             'diagnostics_advanced',
             'reporting',
+            'field_service',
         ]);
         $resolvedModules = is_array($moduleStates['modules'] ?? null) ? (array) $moduleStates['modules'] : [];
 
@@ -125,6 +126,7 @@ class TenantExperienceProfileService
                 'rewards_enabled' => $this->moduleEnabled($resolvedModules, 'rewards'),
                 'birthdays_enabled' => $this->moduleEnabled($resolvedModules, 'birthdays'),
                 'wishlist_enabled' => $this->moduleEnabled($resolvedModules, 'wishlist'),
+                'field_service_enabled' => $this->moduleEnabled($resolvedModules, 'field_service'),
                 'reporting_enabled' => $this->moduleEnabled($resolvedModules, 'reporting')
                     || $this->moduleEnabled($resolvedModules, 'diagnostics_advanced'),
             ],
@@ -203,6 +205,10 @@ class TenantExperienceProfileService
             return 'marketing';
         }
 
+        if ($this->moduleEnabled($resolvedModules, 'field_service')) {
+            return 'field_service';
+        }
+
         if ($hasCustomerSignals || $this->moduleEnabled($resolvedModules, 'customers') || $this->moduleEnabled($resolvedModules, 'bulk_email_marketing')) {
             return 'crm';
         }
@@ -223,10 +229,15 @@ class TenantExperienceProfileService
 
         $subtitle = match ($useCaseProfile) {
             'marketing' => 'Shopify-aware customer growth and retention workflows.',
+            'field_service' => 'Customers, jobs, materials, and field work in one place.',
             'crm' => 'Customer operations, follow-up, and module-driven workflows.',
             'hybrid' => 'Customers, commerce, and operations in one working surface.',
             default => 'Operational tools, data, and next actions in one place.',
         };
+
+        if ($useCaseProfile === 'field_service') {
+            $label = 'Field service workspace';
+        }
 
         return [
             'label' => $label,

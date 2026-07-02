@@ -108,9 +108,13 @@ class ProductionTenantProvisioningService
 
             $tenantId = (int) $tenant->id;
 
+            $planKey = $operatingMode === 'direct'
+                ? 'base'
+                : (string) config('entitlements.default_plan', 'starter');
+
             $profile = $this->commercialConfigService->assignTenantPlan(
                 tenantId: $tenantId,
-                planKey: (string) config('entitlements.default_plan', 'starter'),
+                planKey: $planKey,
                 operatingMode: $operatingMode,
                 source: 'onboarding_blueprint_provisioning',
                 actorId: (int) $actor->id

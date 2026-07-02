@@ -25,7 +25,7 @@ class TenantModuleCatalogService
      */
     public function tenantStorePayload(?int $tenantId, string $surface = 'shopify'): array
     {
-        $moduleDefinitions = $this->storeVisibleModuleDefinitions();
+        $moduleDefinitions = $this->storeVisibleModuleDefinitions($surface === 'public_site' ? 'public_site' : 'app_store');
         $moduleKeys = array_keys($moduleDefinitions);
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
         $moduleStates = $this->applyDisplayLabels(

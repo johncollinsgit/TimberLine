@@ -214,4 +214,9 @@ class MarketingProfile extends Model
     {
         return $this->hasOne(MarketingProfileScentQuizResult::class, 'marketing_profile_id');
     }
+
+    public function fieldServiceJobs(): HasMany
+    {
+        return $this->hasMany(FieldServiceJob::class, 'marketing_profile_id');
+    }
 }

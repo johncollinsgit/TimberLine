@@ -1,0 +1,73 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Concerns\HasTenantScope;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class FieldServiceJob extends Model
+{
+    use HasTenantScope;
+
+    protected $fillable = [
+        'tenant_id',
+        'marketing_profile_id',
+        'assigned_user_id',
+        'title',
+        'status',
+        'customer_name',
+        'customer_email',
+        'customer_phone',
+        'service_address_line_1',
+        'service_address_line_2',
+        'service_city',
+        'service_state',
+        'service_postal_code',
+        'service_country',
+        'description',
+        'scheduled_for',
+        'completed_at',
+        'metadata',
+    ];
+
+    protected $casts = [
+        'tenant_id' => 'integer',
+        'marketing_profile_id' => 'integer',
+        'assigned_user_id' => 'integer',
+        'scheduled_for' => 'datetime',
+        'completed_at' => 'datetime',
+        'metadata' => 'array',
+    ];
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(MarketingProfile::class, 'marketing_profile_id');
+    }
+
+    public function assignedUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(FieldServiceTask::class);
+    }
+
+    public function materials(): HasMany
+    {
+        return $this->hasMany(FieldServiceMaterial::class);
+    }
+
+    public function photos(): HasMany
+    {
+        return $this->hasMany(FieldServiceJobPhoto::class);
+    }
+}

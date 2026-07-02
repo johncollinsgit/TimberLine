@@ -46,11 +46,16 @@ class UnifiedAppNavigationService
         $isManager = $user?->isManager() ?? false;
         $isPouring = $user?->isPouring() ?? false;
         $canAccessOps = $isAdmin || $isManager;
-        $canAccessMarketing = $user?->canAccessMarketing() ?? false;
+        $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service'])['modules'] ?? [])
             : [];
+        $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
+        $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
+            ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
+        $isFlagshipTenant = $this->isFlagshipTenant($tenant);
+        $canAccessMarketing = $roleCanAccessMarketing && (! $fieldServiceEnabled || $marketingHeavyEnabled || $isFlagshipTenant);
 
         $homeHref = $canAccessOps || $canAccessMarketing
             ? route('dashboard')
@@ -79,22 +84,43 @@ class UnifiedAppNavigationService
         }
 
         if ($canAccessOps) {
-            $productionChildren = [
+            $workItems = [];
+
+            if ($fieldServiceEnabled && Route::has('field-service.index')) {
+                $fieldServiceChildren = [
+                    ['key' => 'field-service-jobs', 'icon' => 'briefcase', 'href' => route('field-service.index'), 'label' => 'Jobs', 'current' => request()->routeIs('field-service.*')],
+                    ['key' => 'field-service-materials', 'icon' => 'archive-box', 'href' => route('field-service.index').'#materials', 'label' => 'Materials', 'current' => false],
+                    ['key' => 'field-service-vehicles', 'icon' => 'truck', 'href' => route('field-service.index').'#vehicles', 'label' => 'Work vans', 'current' => false],
+                ];
+
+                $workItems[] = [
+                    'key' => 'field-service',
+                    'icon' => 'briefcase',
+                    'href' => route('field-service.index'),
+                    'label' => 'Work',
+                    'current' => request()->routeIs('field-service.*'),
+                    'children' => $fieldServiceChildren,
+                ];
+            }
+
+            if ($isFlagshipTenant) {
+                $productionChildren = [
                 ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => route('retail.plan'), 'label' => 'Pour Lists', 'current' => request()->routeIs('retail.plan')],
                 ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => request()->routeIs('events.*')],
                 ['key' => 'shipping', 'icon' => 'truck', 'href' => route('shipping.orders'), 'label' => 'Shipping', 'current' => request()->routeIs('shipping.*')],
                 ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')],
                 ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => request()->routeIs('markets.browser.*')],
                 ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => request()->routeIs('inventory.*')],
-            ];
-            $productionCurrent = collect($productionChildren)->contains(
-                fn (array $child): bool => (bool) ($child['current'] ?? false)
-            );
+                ];
+                $productionCurrent = collect($productionChildren)->contains(
+                    fn (array $child): bool => (bool) ($child['current'] ?? false)
+                );
 
-            $opsItems = [
-                ['key' => 'production', 'icon' => 'briefcase', 'href' => route('retail.plan'), 'label' => 'Work', 'current' => $productionCurrent, 'children' => $productionChildren],
-                ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => route('analytics.index'), 'label' => 'Reports', 'current' => request()->routeIs('analytics.*')],
-            ];
+                $workItems[] = ['key' => 'production', 'icon' => 'briefcase', 'href' => route('retail.plan'), 'label' => 'Work', 'current' => $productionCurrent, 'children' => $productionChildren];
+                $workItems[] = ['key' => 'analytics', 'icon' => 'chart-bar', 'href' => route('analytics.index'), 'label' => 'Reports', 'current' => request()->routeIs('analytics.*')];
+            }
+
+            $opsItems = $workItems;
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
             $items = $prioritizeGrowth
@@ -116,7 +142,7 @@ class UnifiedAppNavigationService
         $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
         $items = $this->orderedItems($items, $preferredSidebarOrder);
 
-        $adminSubItems = $canAccessOps ? $this->adminSubItems($isAdmin) : [];
+        $adminSubItems = $canAccessOps ? $this->adminSubItems($isAdmin, $tenant) : [];
         $marketingSubGroups = $canAccessMarketing ? $this->marketingSubGroups() : [];
         $birthdaySubGroups = $canAccessMarketing ? $this->birthdaySubGroups() : [];
 
@@ -129,7 +155,7 @@ class UnifiedAppNavigationService
             'marketing_sub_groups' => $marketingSubGroups,
             'birthday_sub_groups' => $birthdaySubGroups,
             'wiki_sections' => $this->wikiSections(),
-            'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId),
+            'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId, $fieldServiceEnabled),
             'ops_attention' => $canAccessOps ? $this->opsAttention() : ['unresolved_exceptions' => 0, 'latest_run' => null],
             'current_console' => $this->currentConsolePayload($tenant, $profile),
             'console_switches' => $this->consoleSwitches($user, $tenant, false),
@@ -396,10 +422,19 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array<string,mixed>>
      */
-    protected function adminSubItems(bool $isAdmin): array
+    protected function adminSubItems(bool $isAdmin, ?Tenant $tenant = null): array
     {
         $adminActive = request()->routeIs('admin.*') || request()->is('admin*');
         $adminTab = is_string(request()->query('tab')) ? (string) request()->query('tab') : '';
+
+        if (! $this->isFlagshipTenant($tenant)) {
+            return $isAdmin ? [[
+                'key' => 'users',
+                'label' => 'Team Access',
+                'href' => route('admin.index', ['tab' => 'users']),
+                'current' => $adminActive && $adminTab === 'users',
+            ]] : [];
+        }
 
         return [
             [
@@ -564,7 +599,7 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array<string,string>>
      */
-    protected function quickActions(array $profile, bool $canAccessOps, bool $canAccessMarketing, ?int $tenantId): array
+    protected function quickActions(array $profile, bool $canAccessOps, bool $canAccessMarketing, ?int $tenantId, bool $fieldServiceEnabled = false): array
     {
         $actions = [
             [
@@ -602,7 +637,23 @@ class UnifiedAppNavigationService
             }
         }
 
-        if ($canAccessOps) {
+        if ($canAccessOps && $fieldServiceEnabled && Route::has('field-service.index')) {
+            $actions[] = [
+                'label' => 'Create job',
+                'description' => 'Add a customer, address, and job in one step.',
+                'href' => route('field-service.index'),
+            ];
+            $actions[] = [
+                'label' => 'Add materials',
+                'description' => 'Track parts and materials for upcoming work.',
+                'href' => route('field-service.index').'#materials',
+            ];
+            $actions[] = [
+                'label' => 'Invite your team',
+                'description' => 'Add people who need access to this workspace.',
+                'href' => route('admin.index', ['tab' => 'users']),
+            ];
+        } elseif ($canAccessOps) {
             $actions[] = [
                 'label' => 'Review analytics',
                 'description' => 'Open operational metrics and drilldowns.',
@@ -659,6 +710,25 @@ class UnifiedAppNavigationService
         }
 
         return ! in_array((string) ($state['reason'] ?? ''), ['channel_not_supported', 'module_unavailable'], true);
+    }
+
+    protected function moduleStateEnabled(mixed $state): bool
+    {
+        return is_array($state) && (bool) ($state['enabled'] ?? false);
+    }
+
+    protected function isFlagshipTenant(?Tenant $tenant): bool
+    {
+        if (! $tenant instanceof Tenant) {
+            return false;
+        }
+
+        $slug = strtolower(trim((string) $tenant->slug));
+        $name = strtolower(trim((string) $tenant->name));
+        $alpha = (array) config('module_catalog.alpha_overrides.ai_assistant', []);
+
+        return in_array($slug, array_map('strtolower', (array) ($alpha['tenant_slugs'] ?? [])), true)
+            || in_array($name, array_map('strtolower', (array) ($alpha['tenant_names'] ?? [])), true);
     }
 
     protected function isLandlordShell(Request $request): bool

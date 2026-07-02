@@ -8,6 +8,7 @@ use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
+use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
@@ -521,6 +522,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{project}/requests/create', [ClientProjectTicketController::class, 'create'])->name('requests.create');
             Route::post('/{project}/requests', [ClientProjectTicketController::class, 'store'])->name('requests.store');
             Route::get('/{project}', [ClientProjectController::class, 'show'])->name('show');
+        });
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->prefix('field-service')
+        ->name('field-service.')
+        ->group(function (): void {
+            Route::get('/', [FieldServiceController::class, 'index'])->name('index');
+            Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
+            Route::post('/jobs/{job}/tasks', [FieldServiceController::class, 'storeTask'])->name('tasks.store');
+            Route::post('/jobs/{job}/photos', [FieldServiceController::class, 'storePhoto'])->name('photos.store');
+            Route::post('/materials', [FieldServiceController::class, 'storeMaterial'])->name('materials.store');
+            Route::post('/vehicles', [FieldServiceController::class, 'storeVehicle'])->name('vehicles.store');
         });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])

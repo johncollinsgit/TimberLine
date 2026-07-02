@@ -92,6 +92,22 @@ return [
     ],
 
     'plans' => [
+        'base' => [
+            'name' => (string) ($canonicalPlans['base']['name'] ?? 'Base Workspace'),
+            'track' => (string) ($canonicalPlans['base']['track'] ?? 'direct'),
+            'is_public' => (bool) ($canonicalPlans['base']['is_public'] ?? true),
+            'is_highest_standard' => false,
+            'position' => (int) ($canonicalPlans['base']['position'] ?? 5),
+            'currency' => 'USD',
+            'recurring_price_cents' => 9900,
+            'setup_price_cents' => 2900,
+            'included_usage' => [
+                'store_channels' => 0,
+                'contact_count' => 2000,
+            ],
+            'modules' => (array) ($canonicalPlans['base']['modules'] ?? []),
+            'eligible_addons' => (array) ($canonicalPlans['base']['eligible_addons'] ?? []),
+        ],
         'starter' => [
             'name' => (string) ($canonicalPlans['starter']['name'] ?? 'Starter'),
             'track' => (string) ($canonicalPlans['starter']['track'] ?? 'shopify'),
@@ -255,12 +271,13 @@ return [
             'position' => 15,
             'active' => true,
             'recommended_modules' => [
-                'starter' => ['customers', 'lead_capture', 'reporting', 'reviews', 'campaigns'],
-                'growth' => ['customers', 'lead_capture', 'reporting', 'reviews', 'campaigns', 'sms'],
-                'pro' => ['customers', 'lead_capture', 'reporting', 'reviews', 'campaigns', 'sms', 'ai'],
+                'base' => ['customers', 'field_service', 'reporting'],
+                'starter' => ['customers', 'field_service', 'reporting'],
+                'growth' => ['customers', 'field_service', 'reporting', 'sms'],
+                'pro' => ['customers', 'field_service', 'reporting', 'sms', 'ai'],
             ],
-            'dashboard_layout' => ['customers', 'lead_capture', 'reporting', 'campaigns'],
-            'navigation_emphasis' => ['customers', 'lead_capture', 'reporting'],
+            'dashboard_layout' => ['field_service', 'customers', 'reporting'],
+            'navigation_emphasis' => ['field_service', 'customers'],
             'onboarding_checklist' => [
                 'Confirm the electrician template and the first outcome',
                 'Choose the safe visible modules that should be available now',

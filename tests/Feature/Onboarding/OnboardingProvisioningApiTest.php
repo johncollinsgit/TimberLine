@@ -131,6 +131,7 @@ test('provisioning consumes a finalized demo blueprint and creates a fresh produ
 
     $newTenant = Tenant::query()->with(['accessProfile'])->findOrFail($newTenantId);
     expect($newTenant->accessProfile?->operating_mode)->toBe('direct')
+        ->and($newTenant->accessProfile?->plan_key)->toBe('base')
         ->and(data_get($newTenant->accessProfile?->metadata, 'account_mode'))->toBe('production')
         ->and((int) data_get($newTenant->accessProfile?->metadata, 'onboarding.provisioned_from.source_blueprint_id'))->toBe((int) $final->id)
         ->and(data_get($newTenant->accessProfile?->metadata, 'onboarding.template_key'))->toBe('candle')

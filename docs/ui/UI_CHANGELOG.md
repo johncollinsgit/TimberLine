@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-07-02 — Base Workspace Field Service Start
+
+### What changed
+- Added a tenant-facing Field Service workspace for customers, jobs, addresses, tasks, materials, photo/file links, and work vans.
+- Added simple first actions for field-service tenants: add a customer, create a job, invite your team, and add materials.
+- Hid Modern Forestry candle-production navigation from non-flagship field-service tenants.
+
+### What did not change
+- The public electrician tutorial remains hidden behind `FEATURE_CUSTOMER_ELECTRICIAN_TUTORIAL`.
+- Shopify remains optional; no Shopify billing, App Store publishing, or connector automation changed.
+
 ## 2026-07-01 — Everbranch Customer Electrician Tutorial Hide
 
 ### What changed
