@@ -21,11 +21,14 @@ return new class extends Migration
                 ]);
         }
 
+        Schema::dropIfExists('subscription_candle_club_scent_feedback');
+        Schema::dropIfExists('subscription_candle_club_monthly_scents');
+
         Schema::create('subscription_candle_club_monthly_scents', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('candle_club_scent_id')->nullable()->constrained('candle_club_scents')->nullOnDelete();
-            $table->foreignId('scent_id')->nullable()->constrained('scents')->nullOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('candle_club_scent_id')->nullable();
+            $table->foreignId('scent_id')->nullable();
             $table->unsignedSmallInteger('month');
             $table->unsignedSmallInteger('year');
             $table->string('title', 190);
@@ -48,26 +51,23 @@ return new class extends Migration
             $table->unique(['tenant_id', 'year', 'month'], 'subscription_cc_monthly_scents_period_unique');
             $table->index(['tenant_id', 'status'], 'subscription_cc_monthly_scents_status_idx');
             $table->index(['tenant_id', 'shopify_product_gid'], 'subscription_cc_monthly_scents_product_idx');
+            $table->foreign('tenant_id', 'sub_cc_monthly_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('candle_club_scent_id', 'sub_cc_monthly_recipe_fk')->references('id')->on('candle_club_scents')->nullOnDelete();
+            $table->foreign('scent_id', 'sub_cc_monthly_scent_fk')->references('id')->on('scents')->nullOnDelete();
         });
 
         Schema::create('subscription_candle_club_scent_feedback', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('subscription_candle_club_monthly_scent_id')
-                ->nullable()
-                ->constrained('subscription_candle_club_monthly_scents')
-                ->nullOnDelete();
-            $table->foreignId('subscription_contract_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('marketing_profile_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('subscription_candle_club_monthly_scent_id')->nullable();
+            $table->foreignId('subscription_contract_id')->nullable();
+            $table->foreignId('marketing_profile_id')->nullable();
             $table->unsignedTinyInteger('rating')->nullable();
             $table->string('title', 190)->nullable();
             $table->text('body')->nullable();
             $table->string('visibility', 40)->default('candle_club');
             $table->string('status', 40)->default('pending');
-            $table->foreignId('exported_marketing_review_history_id')
-                ->nullable()
-                ->constrained('marketing_review_histories')
-                ->nullOnDelete();
+            $table->foreignId('exported_marketing_review_history_id')->nullable();
             $table->timestamp('exported_at')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
@@ -75,6 +75,14 @@ return new class extends Migration
             $table->index(['tenant_id', 'status'], 'subscription_cc_scent_feedback_status_idx');
             $table->index(['tenant_id', 'subscription_candle_club_monthly_scent_id'], 'subscription_cc_scent_feedback_month_idx');
             $table->index(['tenant_id', 'marketing_profile_id'], 'subscription_cc_scent_feedback_profile_idx');
+            $table->foreign('tenant_id', 'sub_cc_feedback_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('subscription_candle_club_monthly_scent_id', 'sub_cc_feedback_month_fk')
+                ->references('id')
+                ->on('subscription_candle_club_monthly_scents')
+                ->nullOnDelete();
+            $table->foreign('subscription_contract_id', 'sub_cc_feedback_contract_fk')->references('id')->on('subscription_contracts')->nullOnDelete();
+            $table->foreign('marketing_profile_id', 'sub_cc_feedback_profile_fk')->references('id')->on('marketing_profiles')->nullOnDelete();
+            $table->foreign('exported_marketing_review_history_id', 'sub_cc_feedback_review_fk')->references('id')->on('marketing_review_histories')->nullOnDelete();
         });
     }
 
