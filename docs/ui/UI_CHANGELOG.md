@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-07-02 — Everbranch and Evergrove Show-Don't-Tell Redesign
+
+### What changed
+- Rebuilt the Everbranch public homepage around a centered product theater with clickable examples for adding a customer, assigning a team member, creating an example invoice, and seeing an example profit snapshot.
+- Replaced the old Everbranch public tabs with StoryBrand-style sections for the problem, plan, live product example, industries helped, and contact.
+- Reworked the Evergrove public homepage into a tabbed studio story with visual examples for the problem, what Evergrove builds, how the workflow audit works, example industries, and contact.
+- Added a dedicated Evergrove contact page using the existing service inquiry form flow.
+- Added the uploaded palette direction as reusable public colors: evergreen, mist blue, teal, soft gray, cream, moss, amber, and muted coral.
+
+### What did not change
+- Public demos are illustrative examples only; they do not embed authenticated app data or launch new billing/accounting modules.
+- Existing access-request, login, calculator, inquiry, Shopify, and tenant behavior stays intact.
+
 ## 2026-07-02 — Everbranch Live Product Demo Hero
 
 ### What changed

@@ -1,11 +1,7 @@
 @php
     $content = is_array($content ?? null) ? $content : [];
     $positioning = is_array($content['positioning'] ?? null) ? $content['positioning'] : [];
-    $services = is_array($content['services'] ?? null) ? $content['services'] : [];
     $tools = is_array($tools ?? null) ? $tools : [];
-    $businessSizes = is_array($content['business_sizes'] ?? null) ? $content['business_sizes'] : [];
-    $timelines = is_array($content['timeline_options'] ?? null) ? $content['timeline_options'] : [];
-    $budgetRanges = is_array($content['budget_ranges'] ?? null) ? $content['budget_ranges'] : [];
     $brandAssets = (array) ($content['brand_assets'] ?? []);
     $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eg3');
     $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/evergrove-logo.png')).'?v='.$assetVersion;
@@ -18,181 +14,146 @@
 <head>
     @include('partials.head', [
         'app_name' => 'Evergrove Software',
-        'title' => 'Evergrove Software | Practical Software for Small Businesses',
-        'description' => $positioning['summary'] ?? 'Evergrove builds practical apps, portals, automations, and software products for small businesses.',
+        'title' => 'Evergrove Software | Practical systems for owner-led businesses',
+        'description' => 'Evergrove builds practical apps, portals, automations, and products for small businesses that need the work to be clearer.',
         'brand_assets' => $brandAssets,
     ])
 </head>
-<body class="eg-public-body">
+<body class="eg-public-body eg-public-body--showcase">
     @include('evergrove.partials.nav')
 
     <main>
-        <section class="eg-hero" aria-label="Evergrove services">
-            <div class="eg-hero-copy">
+        <section class="eg-showcase-hero" aria-label="Evergrove services">
+            <div class="eg-showcase-hero__copy">
                 <img src="{{ $lockup }}" alt="Evergrove Software" class="eg-hero-logo" />
-                <p class="eg-kicker">{{ $positioning['eyebrow'] ?? 'AI systems and custom software' }}</p>
+                <p class="eg-kicker">Parent software studio</p>
                 <h1>{{ $positioning['headline'] ?? 'We build the software small businesses wish already existed.' }}</h1>
-                <p class="eg-lede">{{ $positioning['summary'] ?? 'Evergrove creates practical apps, portals, automations, and software products for small businesses that have outgrown sticky notes, spreadsheets, and scattered tools.' }}</p>
+                <p class="eg-lede">Evergrove turns scattered work into practical apps, portals, automations, and products your team can actually use.</p>
                 <div class="eg-actions">
-                    <a href="#contact" class="eg-button eg-button-primary">Start with a workflow audit</a>
-                    <a href="#work" class="eg-button eg-button-secondary">See what we build</a>
+                    <a href="{{ route('evergrove.contact') }}" class="eg-button eg-button-primary">Start with a workflow audit</a>
+                    <a href="#eg-story" class="eg-button eg-button-secondary">See what we build</a>
                     <a href="{{ $loginUrl }}" class="eg-button eg-button-secondary">Client portal</a>
                 </div>
             </div>
 
-            <aside class="eg-portal-preview" aria-label="Client portal preview">
-                <div class="eg-preview-head">
-                    <div>
-                        <p class="eg-preview-label">Client portal</p>
-                        <h2>Progress, scope, and requests in one place.</h2>
-                    </div>
-                    <span>On track</span>
+            <aside class="eg-live-board" aria-label="Evergrove software example">
+                <div class="eg-live-board__top">
+                    <span>Studio workflow</span>
+                    <strong>From messy process to working app</strong>
                 </div>
-                <div class="eg-preview-grid">
-                    <div>
-                        <p>Focus</p>
-                        <strong>Workflow</strong>
-                    </div>
-                    <div>
-                        <p>Next step</p>
-                        <strong>Build plan</strong>
-                    </div>
-                    <div>
-                        <p>Goal</p>
-                        <strong>Less admin</strong>
-                    </div>
+                <div class="eg-live-board__grid">
+                    <div class="eg-work-note eg-work-note--mist">Customer notes</div>
+                    <div class="eg-work-note eg-work-note--amber">Job photos</div>
+                    <div class="eg-work-note eg-work-note--coral">Follow-up gaps</div>
+                    <div class="eg-work-note eg-work-note--moss">Material questions</div>
                 </div>
-                <div class="eg-request-stack">
-                    <article>
-                        <span>Feature request</span>
-                        <strong>Quote calculator refinements</strong>
-                        <p>Scope, tasks, reference links, and client decisions stay attached to the project.</p>
-                    </article>
-                    <article>
-                        <span>Project task</span>
-                        <strong>Connect inquiry payload</strong>
-                        <p>Evergrove and the customer can see what is waiting, what is approved, and what changed.</p>
-                    </article>
+                <div class="eg-live-board__app">
+                    <span>Evergrove build</span>
+                    <strong>Customer + work + next step dashboard</strong>
+                    <p>Practical software shaped around the way the business already works.</p>
                 </div>
             </aside>
         </section>
 
-        <section class="eg-proof-strip" aria-label="Evergrove proof points">
+        <section id="eg-story" class="eg-story-shell" data-public-tabs aria-label="Evergrove story tabs">
+            <div class="eg-story-tabs" role="tablist" aria-label="Evergrove overview">
+                <a id="eg-tab-problem" href="#eg-story" class="is-active" role="tab" aria-selected="true" aria-controls="eg-panel-problem" data-public-tab-trigger="problem">Problem</a>
+                <a id="eg-tab-build" href="#eg-story" role="tab" aria-selected="false" aria-controls="eg-panel-build" data-public-tab-trigger="build">What We Build</a>
+                <a id="eg-tab-plan" href="#eg-story" role="tab" aria-selected="false" aria-controls="eg-panel-plan" data-public-tab-trigger="plan">How It Works</a>
+                <a id="eg-tab-examples" href="#eg-story" role="tab" aria-selected="false" aria-controls="eg-panel-examples" data-public-tab-trigger="examples">Examples</a>
+                <a id="eg-tab-contact" href="#eg-story" role="tab" aria-selected="false" aria-controls="eg-panel-contact" data-public-tab-trigger="contact">Contact</a>
+            </div>
+
+            <div class="eg-story-panels">
+                <article id="eg-panel-problem" class="eg-story-panel is-active" role="tabpanel" aria-labelledby="eg-tab-problem" data-public-tab-panel="problem">
+                    <div class="eg-story-copy">
+                        <p class="eg-kicker">The Problem</p>
+                        <h2>The work is real. The system is duct tape.</h2>
+                        <p>Most owner-led businesses are not short on effort. They are short on one clear place for customers, jobs, decisions, files, follow-ups, and money.</p>
+                    </div>
+                    <div class="eg-problem-visual" aria-label="Scattered business work">
+                        <span>Texts</span>
+                        <span>Spreadsheets</span>
+                        <span>Notebooks</span>
+                        <span>Photos</span>
+                        <span>Invoices</span>
+                        <strong>Owner memory</strong>
+                    </div>
+                </article>
+
+                <article id="eg-panel-build" class="eg-story-panel" role="tabpanel" aria-labelledby="eg-tab-build" data-public-tab-panel="build" hidden>
+                    <div class="eg-story-copy">
+                        <p class="eg-kicker">What We Build</p>
+                        <h2>Practical software, not another pile of tools.</h2>
+                        <p>Evergrove builds the right-sized system: a portal, internal app, workflow dashboard, automation, Shopify connector, or product lane.</p>
+                    </div>
+                    <div class="eg-build-visual" data-evergrove-visual-demo aria-label="Software Evergrove builds">
+                        <article><span>01</span><strong>Customer systems</strong><p>Keep people, notes, requests, and follow-ups together.</p></article>
+                        <article><span>02</span><strong>Work dashboards</strong><p>See jobs, materials, tasks, photos, and handoffs.</p></article>
+                        <article><span>03</span><strong>Portals</strong><p>Give customers or teams one clean place to act.</p></article>
+                        <article><span>04</span><strong>Automations</strong><p>Move repeated admin out of the owner's head.</p></article>
+                    </div>
+                </article>
+
+                <article id="eg-panel-plan" class="eg-story-panel" role="tabpanel" aria-labelledby="eg-tab-plan" data-public-tab-panel="plan" hidden>
+                    <div class="eg-story-copy">
+                        <p class="eg-kicker">How It Works</p>
+                        <h2>A short path before anyone builds the wrong thing.</h2>
+                        <p>Start with the messy workflow. Leave with the clearest next system.</p>
+                    </div>
+                    <ol class="eg-plan-visual" aria-label="Evergrove workflow audit plan">
+                        <li><span>Map</span><strong>Show us the messy version</strong><p>Texts, spreadsheets, photos, tools, and repeated admin.</p></li>
+                        <li><span>Shape</span><strong>Choose the useful system</strong><p>App, portal, automation, product, or simpler process.</p></li>
+                        <li><span>Build</span><strong>Launch the first working version</strong><p>Small enough to use. Clear enough to improve.</p></li>
+                    </ol>
+                </article>
+
+                <article id="eg-panel-examples" class="eg-story-panel" role="tabpanel" aria-labelledby="eg-tab-examples" data-public-tab-panel="examples" hidden>
+                    <div class="eg-story-copy">
+                        <p class="eg-kicker">Examples</p>
+                        <h2>Pick the problem you keep explaining twice.</h2>
+                        <p>These are starting points for a workflow audit, not boxed promises.</p>
+                    </div>
+                    <div class="eg-example-switcher" aria-label="Evergrove example systems">
+                        <details data-clickable-details-card open>
+                            <summary><span>Retail &amp; product brands</span><strong>Wholesale portals, customer systems, inventory questions, and event workflows.</strong></summary>
+                            <p>Modern Forestry is the proof ground: retail, wholesale, inventory, approvals, and operations living closer together.</p>
+                        </details>
+                        <details data-clickable-details-card>
+                            <summary><span>Trades &amp; field teams</span><strong>Job dashboards, estimate tracking, crew steps, parts requests, and customer updates.</strong></summary>
+                            <p>Useful for electricians, plumbers, service teams, and crews who need job context without digging through texts.</p>
+                        </details>
+                        <details data-clickable-details-card>
+                            <summary><span>Construction &amp; project teams</span><strong>Approvals, documents, materials, change requests, punch lists, and portals.</strong></summary>
+                            <p>Give each project a visible home for decisions, tasks, and what changed.</p>
+                        </details>
+                        <details data-clickable-details-card>
+                            <summary><span>Custom operations</span><strong>When off-the-shelf software almost fits, Evergrove can build the missing middle.</strong></summary>
+                            <p>The best build is often small: one workflow made clear enough for the whole team to use.</p>
+                        </details>
+                    </div>
+                </article>
+
+                <article id="eg-panel-contact" class="eg-story-panel" role="tabpanel" aria-labelledby="eg-tab-contact" data-public-tab-panel="contact" hidden>
+                    <div class="eg-story-copy">
+                        <p class="eg-kicker">Contact</p>
+                        <h2>Start with a workflow audit.</h2>
+                        <p>Bring the problem you keep patching by hand. We will help decide what should become software.</p>
+                    </div>
+                    <div class="eg-contact-mini">
+                        <a href="{{ route('evergrove.contact') }}" class="eg-button eg-button-primary">Start with a workflow audit</a>
+                        <a href="mailto:{{ $contactEmail }}" class="eg-button eg-button-secondary">{{ $contactEmail }}</a>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="eg-tools" class="eg-tool-strip" aria-label="Choose your problem">
             <div>
-                <span>Owner-led</span>
-                <p>built from real small-business operating pressure, not theory</p>
+                <p class="eg-kicker">Quick planning tools</p>
+                <h2>Choose the problem, then estimate the shape.</h2>
             </div>
-            <div>
-                <span>Modern Forestry</span>
-                <p>real systems for customers, orders, inventory, wholesale, and daily work</p>
-            </div>
-            <div>
-                <span>Everbranch</span>
-                <p>a focused product created by Evergrove for small-business operations</p>
-            </div>
-        </section>
-
-        <section id="services" class="eg-section">
-            <div class="eg-section-head">
-                <p class="eg-kicker">What we build</p>
-                <h2>Useful systems for the work your business repeats every week.</h2>
-                <p>Evergrove starts with the real workflow, then builds the smallest practical system that gives the owner and team more clarity.</p>
-            </div>
-            <div class="eg-card-grid eg-card-grid-4">
-                @foreach($services as $service)
-                    <article class="eg-card">
-                        <h3>{{ $service['title'] ?? 'Service' }}</h3>
-                        <p>{{ $service['summary'] ?? '' }}</p>
-                    </article>
-                @endforeach
-            </div>
-        </section>
-
-        <section class="eg-section">
-            <div class="eg-section-head">
-                <p class="eg-kicker">Industry fit</p>
-                <h2>Software for owner-led businesses.</h2>
-                <p>Evergrove builds practical systems for companies where the work is real, the details matter, and the team needs more than another spreadsheet.</p>
-            </div>
-            <div class="eg-industry-showcase" aria-label="Evergrove industry examples">
-                <details class="eg-industry-card" data-clickable-details-card open>
-                    <summary>
-                        <span>Retail &amp; product brands</span>
-                        <strong>Customer systems, order workflows, wholesale portals, inventory tools, event operations, and follow-up systems.</strong>
-                    </summary>
-                    <p>Good systems keep buyer questions, order details, event prep, inventory signals, and follow-ups from living in five separate places.</p>
-                </details>
-                <details class="eg-industry-card" data-clickable-details-card>
-                    <summary>
-                        <span>Trades &amp; field teams</span>
-                        <strong>Job dashboards, estimate tracking, crew workflows, parts requests, and customer updates.</strong>
-                    </summary>
-                    <p>The right app can give owners and crews a clearer view of the job, the customer, the parts needed, and the next action.</p>
-                </details>
-                <details class="eg-industry-card" data-clickable-details-card>
-                    <summary>
-                        <span>Construction &amp; project teams</span>
-                        <strong>Approvals, materials, change requests, documents, punch lists, and client-facing portals.</strong>
-                    </summary>
-                    <p>Project work needs a reliable home for decisions, materials, documents, change notes, and the items still waiting on someone.</p>
-                </details>
-                <details class="eg-industry-card" data-clickable-details-card>
-                    <summary>
-                        <span>Custom operations</span>
-                        <strong>When your process does not fit off-the-shelf software, Evergrove can help shape it into a practical app.</strong>
-                    </summary>
-                    <p>Start with the workflow your business already has, then build the system around the parts that create the most confusion or repeated admin.</p>
-                </details>
-            </div>
-        </section>
-
-        <section class="eg-section">
-            <div class="eg-section-head">
-                <p class="eg-kicker">How it works</p>
-                <h2>A simple plan before anyone builds the wrong thing.</h2>
-                <p>Good software starts by understanding the business, not by forcing the business into a generic tool.</p>
-            </div>
-            <div class="eg-card-grid eg-card-grid-3">
-                <article class="eg-card">
-                    <h3>1. Map the workflow</h3>
-                    <p>Bring the scattered notes, spreadsheets, texts, tools, and repeated admin. We turn the messy version into a clear operating map.</p>
-                </article>
-                <article class="eg-card">
-                    <h3>2. Build the right system</h3>
-                    <p>Create the app, portal, dashboard, automation, or product lane that fits the way the business actually works.</p>
-                </article>
-                <article class="eg-card">
-                    <h3>3. Improve it as you grow</h3>
-                    <p>Keep the system useful as the team changes, the work expands, and the owner needs fewer dropped balls.</p>
-                </article>
-            </div>
-        </section>
-
-        <section id="work" class="eg-section eg-section-contrast">
-            <div class="eg-section-head">
-                <p class="eg-kicker">Why Evergrove</p>
-                <h2>Small businesses deserve useful software without an enterprise budget.</h2>
-                <p>Most owners do not need a giant platform. They need a thoughtful software partner who can turn operational mess into tools the team will actually use.</p>
-            </div>
-            <div class="eg-split">
-                <article class="eg-card">
-                    <h3>What gets better</h3>
-                    <p>Less retyping, fewer mystery handoffs, clearer follow-ups, and dashboards that show the work instead of hiding it in messages and spreadsheets.</p>
-                </article>
-                <article class="eg-card">
-                    <h3>What we can build</h3>
-                    <p>Internal apps, customer portals, Shopify and customer systems, reporting tools, AI-assisted admin, workflow dashboards, and Everbranch implementations.</p>
-                </article>
-            </div>
-        </section>
-
-        <section id="tools" class="eg-section">
-            <div class="eg-section-head">
-                <p class="eg-kicker">Example Tools</p>
-                <h2>Start with a planning range, then talk through the real workflow.</h2>
-                <p>These calculators help frame the conversation before a project becomes a proposal.</p>
-            </div>
-            <div class="eg-card-grid eg-card-grid-3">
+            <div class="eg-tool-buttons">
                 @foreach($tools as $key => $tool)
                     @php
                         $routeName = match ((string) $key) {
@@ -201,139 +162,23 @@
                             default => 'evergrove.tools.project-estimate',
                         };
                     @endphp
-                    <article class="eg-card">
-                        <h3>{{ $tool['title'] ?? 'Calculator' }}</h3>
-                        <p>{{ $tool['summary'] ?? '' }}</p>
-                        <a href="{{ route($routeName) }}" class="eg-text-link">Open calculator</a>
-                    </article>
+                    <a href="{{ route($routeName) }}">
+                        <span>{{ $tool['title'] ?? 'Calculator' }}</span>
+                        <small>{{ $tool['summary'] ?? 'Open planning tool' }}</small>
+                    </a>
                 @endforeach
             </div>
         </section>
 
-        <section id="pricing" class="eg-section eg-section-contrast">
-            <div class="eg-section-head">
-                <p class="eg-kicker">Pricing</p>
-                <h2>Useful budget anchors before anyone gets on a call.</h2>
-                <p>Exact scope still depends on the business, but most Evergrove work fits one of these lanes.</p>
+        <section id="everbranch" class="eg-product-bridge eg-product-bridge--showcase" aria-label="Everbranch relationship">
+            <div>
+                <p class="eg-kicker">Everbranch</p>
+                <h2>Everbranch is one product created by Evergrove.</h2>
+                <p>Everbranch is the small-business operating app for customers, tasks, notes, follow-ups, messages, and daily work.</p>
             </div>
-            <div class="eg-card-grid eg-card-grid-3">
-                <article class="eg-card eg-price-card">
-                    <p>Audit and blueprint</p>
-                    <h3>$750-$2,500</h3>
-                    <span>Workflow map, AI opportunities, system plan, and build priorities.</span>
-                </article>
-                <article class="eg-card eg-price-card">
-                    <p>Automation or portal build</p>
-                    <h3>$2,500-$15,000</h3>
-                    <span>Focused Laravel, AI, integration, calculator, or customer visibility projects.</span>
-                </article>
-                <article class="eg-card eg-price-card">
-                    <p>Ongoing systems care</p>
-                    <h3>Monthly</h3>
-                    <span>Maintenance, improvements, monitoring, new feature requests, and workflow support.</span>
-                </article>
-            </div>
-        </section>
-
-        <section id="everbranch" class="eg-section">
-            <div class="eg-product-bridge">
-                <div>
-                    <p class="eg-kicker">Everbranch</p>
-                    <h2>Everbranch is one product created by Evergrove.</h2>
-                    <p>Everbranch is our small-business operating workspace, built for teams that need one place to manage customers, tasks, notes, follow-ups, messages, and daily work.</p>
-                </div>
-                <div class="eg-actions">
-                    <a href="{{ route('platform.promo') }}" class="eg-button eg-button-secondary">Explore Everbranch</a>
-                    <a href="{{ $loginUrl }}" class="eg-button eg-button-primary">Client portal</a>
-                </div>
-            </div>
-        </section>
-
-        <section id="contact" class="eg-section">
-            <div class="eg-contact-layout">
-                <div class="eg-section-head">
-                    <p class="eg-kicker">Workflow audit</p>
-                    <h2>Bring the messy version of the problem.</h2>
-                    <p>Share what is slow, repetitive, unclear, or expensive. Evergrove will help decide whether the right answer is an app, portal, automation, AI-assisted workflow, or a simpler process.</p>
-                    <p>Email: <a class="eg-text-link" href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a></p>
-                </div>
-
-                <form method="POST" action="{{ route('evergrove.inquiries.store') }}" class="eg-form-card">
-                    @csrf
-                    <input type="hidden" name="source_page" value="evergrove_home" />
-
-                    @if (session('status'))
-                        <div class="fb-state fb-state--success text-sm">{{ session('status') }}</div>
-                    @endif
-
-                    <div class="eg-form-grid">
-                        <label>
-                            Name
-                            <input name="name" type="text" value="{{ old('name') }}" required class="fb-input" />
-                            @error('name') <span>{{ $message }}</span> @enderror
-                        </label>
-                        <label>
-                            Email
-                            <input name="email" type="email" value="{{ old('email') }}" required class="fb-input" />
-                            @error('email') <span>{{ $message }}</span> @enderror
-                        </label>
-                    </div>
-
-                    <div class="eg-form-grid">
-                        <label>
-                            Company
-                            <input name="company" type="text" value="{{ old('company') }}" class="fb-input" />
-                        </label>
-                        <label>
-                            Website
-                            <input name="website" type="url" value="{{ old('website') }}" class="fb-input" placeholder="https://example.com" />
-                            @error('website') <span>{{ $message }}</span> @enderror
-                        </label>
-                    </div>
-
-                    <div class="eg-form-grid eg-form-grid-3">
-                        <label>
-                            Business size
-                            <select name="business_size" class="fb-input">
-                                <option value="">Select one</option>
-                                @foreach($businessSizes as $key => $label)
-                                    <option value="{{ $key }}" @selected(old('business_size') === $key)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                        <label>
-                            Timeline
-                            <select name="timeline" class="fb-input">
-                                <option value="">Select one</option>
-                                @foreach($timelines as $key => $label)
-                                    <option value="{{ $key }}" @selected(old('timeline') === $key)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                        <label>
-                            Budget range
-                            <select name="budget_range" class="fb-input">
-                                <option value="">Select one</option>
-                                @foreach($budgetRanges as $key => $label)
-                                    <option value="{{ $key }}" @selected(old('budget_range') === $key)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-                    </div>
-
-                    <label>
-                        Current tools
-                        <input name="current_tools" type="text" value="{{ old('current_tools') }}" class="fb-input" placeholder="Shopify, spreadsheets, QuickBooks, email, Asana..." />
-                    </label>
-
-                    <label>
-                        What should be easier?
-                        <textarea name="pain_point" rows="5" class="fb-input">{{ old('pain_point') }}</textarea>
-                        @error('pain_point') <span>{{ $message }}</span> @enderror
-                    </label>
-
-                    <button type="submit" class="eg-button eg-button-primary">Send workflow notes</button>
-                </form>
+            <div class="eg-actions">
+                <a href="{{ route('platform.promo') }}" class="eg-button eg-button-secondary">See Everbranch</a>
+                <a href="{{ route('evergrove.contact') }}" class="eg-button eg-button-primary">Talk through a system</a>
             </div>
         </section>
     </main>

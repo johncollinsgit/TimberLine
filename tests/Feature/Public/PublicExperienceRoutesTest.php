@@ -7,26 +7,31 @@ test('guest home route renders the marketing landing page by default', function 
 
     $response = $this->get('http://theeverbranch.com/')
         ->assertOk()
-        ->assertSee('class="fb-public-body fb-public-body--splash"', false)
-        ->assertSeeText('All of your business, in one place')
-        ->assertSeeText('The Future of AI-Powered Small Business')
-        ->assertSeeText('What it does')
-        ->assertSeeText('Daily work')
-        ->assertSeeText('Who it helps')
-        ->assertSeeText('Privacy')
+        ->assertSee('class="fb-public-body fb-public-body--showcase"', false)
+        ->assertSeeText('Give your company an app your team will actually use.')
+        ->assertSeeText('Small-business work, finally in one place')
+        ->assertSeeText('The Problem')
+        ->assertSeeText('The Plan')
+        ->assertSeeText('See It Work')
+        ->assertSeeText('Who It Helps')
+        ->assertSeeText('Contact')
         ->assertSee('href="#everbranch-public"', false)
         ->assertSee('id="everbranch-public"', false)
-        ->assertSeeText('Everbranch brings customers, work, money, materials, communication, and next steps into one intelligent app.')
-        ->assertSeeText('One place to see what is happening in your business.')
-        ->assertSeeText('Start with the parts of your business you want help with first.')
-        ->assertSeeText('Built for real small businesses, not software teams.')
-        ->assertSeeText('Bring in your information without losing control.')
-        ->assertSeeText('The right people see the right things')
+        ->assertSee('id="product-theater"', false)
+        ->assertSee('data-product-demo-jump', false)
+        ->assertSeeText('Add a customer')
+        ->assertSeeText('Assign your team')
+        ->assertSeeText('Create an invoice')
+        ->assertSeeText('See net profit')
+        ->assertSeeText('Example workspace')
+        ->assertSeeText('Different businesses. Same mess.')
+        ->assertSeeText('Give the work a home, then move it forward.')
+        ->assertSeeText('Bring the messy version. We will help shape the clean one.')
         ->assertSee('data-public-tabs', false)
         ->assertSee('role="tablist"', false)
-        ->assertSee('data-public-tab-trigger="product"', false)
-        ->assertSee('data-public-tab-trigger="privacy"', false)
-        ->assertSee('data-public-tab-panel="privacy"', false)
+        ->assertSee('data-public-tab-trigger="demo"', false)
+        ->assertSee('data-public-tab-trigger="contact"', false)
+        ->assertSee('data-public-tab-panel="contact"', false)
         ->assertDontSee('data-public-tab-trigger="integrations"', false)
         ->assertDontSee('data-public-tab-trigger="security"', false)
         ->assertDontSee('data-public-tab-panel="integrations"', false)
@@ -42,24 +47,22 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSeeInOrder([
             'class="fb-site-nav-wrap"',
             'id="everbranch-public"',
-            'id="panel-product"',
-            'id="splash"',
+            'id="panel-demo"',
+            'id="product-theater"',
         ], false)
         ->assertDontSee('fb-public-tabs__nav', false)
         ->assertDontSeeText('Explore Everbranch')
         ->assertDontSeeText('Choose the part of the business you want to understand first.')
-        ->assertDontSeeText('Workflows')
-        ->assertDontSeeText('Your info')
         ->assertDontSeeText('Trust')
         ->assertDontSeeText('Pricing')
         ->assertDontSeeText('Find the right starting point.')
         ->assertDontSee('href="/platform/plans"', false)
         ->assertDontSeeText('Shopify is supported. It is not the whole product.')
-        ->assertSeeText('Start as a client')
+        ->assertSeeText('Request access')
         ->assertSeeText('Login')
-        ->assertSeeText('Landscaper')
+        ->assertSeeText('Retail & product brands')
         ->assertDontSeeText('Electrician')
-        ->assertSeeText('Soap Maker')
+        ->assertSeeText('Service businesses')
         ->assertSee('brand/everbranch-lockup.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-mark.svg?v='.$cacheTag, false)
         ->assertDontSeeText('Forestry Backstage')
@@ -72,11 +75,9 @@ test('guest home route renders the marketing landing page by default', function 
     $visibleContent = strtolower((string) preg_replace('/\s+/', ' ', strip_tags($response->getContent())));
 
     foreach ([
-        'workflow',
         'signals',
         'advanced access',
         'review-controlled',
-        'workspace',
     ] as $jargonTerm) {
         expect($visibleContent)->not->toContain($jargonTerm);
     }
