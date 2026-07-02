@@ -138,7 +138,7 @@ test('shopify embedded wholesale app detail renders approval controls and client
     ], wholesaleEmbeddedSignedQuery())));
 
     $response->assertOk()
-        ->assertSeeText('Read-only mode until your Shopify admin email matches a wholesale operator.')
+        ->assertSeeText('Finishing Shopify admin verification')
         ->assertSeeText('Approve application')
         ->assertSee('shopify_session_token', false);
 });

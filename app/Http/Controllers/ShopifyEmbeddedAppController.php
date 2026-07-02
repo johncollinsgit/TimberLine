@@ -1104,8 +1104,7 @@ class ShopifyEmbeddedAppController extends Controller
 
         $narratives = [
             'Business background' => $payload['business_info'] ?? $metadata['business_info'] ?? null,
-            'Current suppliers' => $payload['current_suppliers'] ?? $metadata['current_suppliers'] ?? null,
-            'Applicant note' => $accessRequest->message,
+            'Applicant note' => $this->displayableWholesaleApplicantNote($accessRequest),
         ];
 
         return collect($narratives)
@@ -1124,6 +1123,23 @@ class ShopifyEmbeddedAppController extends Controller
             ->filter()
             ->values()
             ->all();
+    }
+
+    protected function displayableWholesaleApplicantNote(CustomerAccessRequest $accessRequest): ?string
+    {
+        $message = $this->normalizeWholesaleDisplayValue($accessRequest->message);
+        if ($message === null) {
+            return null;
+        }
+
+        $normalized = strtolower(trim($message));
+        $looksLikeGeneratedSummary = str_contains($normalized, 'wholesale application')
+            && str_contains($normalized, 'contact')
+            && str_contains($normalized, 'business')
+            && str_contains($normalized, 'address')
+            && str_contains($normalized, 'agreement accepted');
+
+        return $looksLikeGeneratedSummary ? null : $message;
     }
 
     protected function normalizeWholesaleDisplayValue(mixed $value): ?string

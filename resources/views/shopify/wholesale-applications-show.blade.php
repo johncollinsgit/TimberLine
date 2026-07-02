@@ -70,6 +70,8 @@
             <div class="text-sm text-zinc-600" data-embedded-identity-label>
                 @if ($canManageApproval)
                     Signed in as {{ $actor?->email }}.
+                @elseif (filled($contextToken))
+                    Finishing Shopify admin verification…
                 @else
                     Read-only mode until your Shopify admin email matches a wholesale operator.
                 @endif
@@ -230,7 +232,7 @@
             const identityLabel = document.querySelector('[data-embedded-identity-label]');
             const approvalHelp = document.querySelector('[data-embedded-approval-help]');
 
-            if (tokenInputs.length === 0 || !window.ForestryEmbeddedApp || typeof window.ForestryEmbeddedApp.getShopifySessionToken !== 'function') {
+            if (tokenInputs.length === 0) {
                 return;
             }
 
@@ -249,39 +251,84 @@
                 }
             }
 
-            window.ForestryEmbeddedApp.getShopifySessionToken()
-                .then((token) => {
-                    if (typeof token !== 'string' || token.trim() === '') {
-                        throw new Error('Missing Shopify admin session token.');
-                    }
+            function resolveSessionTokenHelper(timeoutMs = 10000) {
+                return new Promise((resolve, reject) => {
+                    const startedAt = Date.now();
 
-                    tokenInputs.forEach((input) => {
-                        input.value = token;
-                    });
+                    const tick = () => {
+                        const resolver = window.ForestryEmbeddedApp?.getShopifySessionToken;
+                        if (typeof resolver === 'function') {
+                            resolve(resolver.bind(window.ForestryEmbeddedApp));
+                            return;
+                        }
 
-                    actionButtons.forEach((button) => {
-                        button.removeAttribute('disabled');
-                    });
+                        if ((Date.now() - startedAt) >= timeoutMs) {
+                            reject(new Error('Shopify admin verification helper did not become available.'));
+                            return;
+                        }
 
-                    const payload = decodePayload(token);
-                    const email = typeof payload.email === 'string' && payload.email.trim() !== ''
-                        ? payload.email.trim().toLowerCase()
-                        : null;
+                        window.setTimeout(tick, 120);
+                    };
 
-                    if (identityLabel && email) {
-                        identityLabel.textContent = `Signed in as ${email}.`;
-                    }
-
-                    if (approvalHelp) {
-                        approvalHelp.textContent = 'Approval actions are ready.';
-                    }
-                })
-                .catch(() => {
-                    if (approvalHelp) {
-                        approvalHelp.textContent = 'Shopify admin verification did not load. Refresh this app from Shopify Admin and try again.';
-                    }
+                    tick();
                 });
+            }
+
+            let verificationFinished = false;
+
+            function applyVerifiedToken(token) {
+                tokenInputs.forEach((input) => {
+                    input.value = token;
+                });
+
+                actionButtons.forEach((button) => {
+                    button.removeAttribute('disabled');
+                });
+
+                const payload = decodePayload(token);
+                const email = typeof payload.email === 'string' && payload.email.trim() !== ''
+                    ? payload.email.trim().toLowerCase()
+                    : null;
+
+                if (identityLabel && email) {
+                    identityLabel.textContent = `Signed in as ${email}.`;
+                }
+
+                if (approvalHelp) {
+                    approvalHelp.textContent = 'Approval actions are ready.';
+                }
+
+                verificationFinished = true;
+            }
+
+            function bootstrapEmbeddedIdentity() {
+                if (verificationFinished) {
+                    return;
+                }
+
+                resolveSessionTokenHelper()
+                    .then((resolver) => resolver())
+                    .then((token) => {
+                        if (typeof token !== 'string' || token.trim() === '') {
+                            throw new Error('Missing Shopify admin session token.');
+                        }
+
+                        applyVerifiedToken(token.trim());
+                    })
+                    .catch(() => {
+                        if (approvalHelp) {
+                            approvalHelp.textContent = 'Shopify admin verification did not load. Refresh this app from Shopify Admin and try again.';
+                        }
+                    });
+            }
+
+            bootstrapEmbeddedIdentity();
+            window.addEventListener('pageshow', bootstrapEmbeddedIdentity, { once: true });
+            document.addEventListener('visibilitychange', () => {
+                if (!verificationFinished && document.visibilityState === 'visible') {
+                    bootstrapEmbeddedIdentity();
+                }
+            });
         })();
     </script>
-
 </x-shopify-embedded-shell>
