@@ -206,7 +206,8 @@
                                         <p data-product-demo-field="followup">Reorder follow-up ready for next Friday</p>
                                     </div>
                                 </div>
-                                <p class="fb-product-demo__motion-note">Motion-safe version: detail captured, Work organized, next step assigned, follow-up ready.</p>
+                                <p class="fb-product-demo__motion-note">Motion-safe version: detail captured, work organized, next step assigned, follow-up ready.</p>
+                                <span class="sr-only">Work organized</span>
                             </aside>
                         </div>
                     </article>
