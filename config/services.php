@@ -246,7 +246,7 @@ return [
 
     'modern_forestry_app_review' => [
         'email' => env('MF_APP_REVIEW_DEMO_EMAIL', 'app-review@theforestrystudio.com'),
-        'password_hash' => env('MF_APP_REVIEW_DEMO_PASSWORD_HASH', '$2y$12$nCOxrJ6p2NJXOYoC40XSf.Pz6IO5i8XjUaC/mcqteZBtUM0C0tiWO'),
+        'password_hash' => env('MF_APP_REVIEW_DEMO_PASSWORD_HASH', '$2y$12$yB2JKPtEPuPeWIWnNLKhAe6ZZw.n133j8v6uGqo9tbnKI.M/inFjS'),
         'password' => env('MF_APP_REVIEW_DEMO_PASSWORD'),
     ],
 
