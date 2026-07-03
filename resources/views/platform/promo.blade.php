@@ -116,19 +116,19 @@
 
                             <aside class="fb-product-demo fb-product-demo--wide" data-demo-mode="problem" data-premium-surface data-public-product-demo aria-label="Everbranch workflow example">
                                 <div class="fb-product-demo__tabs" role="tablist" aria-label="Small business examples">
-                                    <button type="button" class="is-active" role="tab" aria-selected="true" data-product-demo-scenario="retail" data-demo-customer="Pine &amp; Porch" data-demo-type="Retail buyer" data-demo-primary="Wholesale request" data-demo-note="Asked for event bestsellers, case pricing, and a fall reorder reminder." data-demo-task="Send line sheet and approve wholesale access" data-demo-owner="Sarah" data-demo-followup="Reorder follow-up ready for next Friday" data-demo-feed-one="Buyer details captured" data-demo-feed-two="Task assigned to Sarah" data-demo-feed-three="Follow-up reminder queued">
+                                    <button type="button" class="is-active" role="tab" aria-selected="true" data-product-demo-scenario="retail" data-demo-customer="Pine &amp; Porch" data-demo-type="Retail buyer" data-demo-primary="Wholesale request" data-demo-note="Asked for event bestsellers, case pricing, and a fall reorder reminder." data-demo-task="Send line sheet and approve wholesale access" data-demo-owner="Sarah" data-demo-followup="Line sheet sent, wholesale access approved, and reorder follow-up ready for next Friday." data-demo-feed-one="Buyer details captured from text and email" data-demo-feed-two="Wholesale task assigned to Sarah" data-demo-feed-three="Fall reorder reminder queued" data-demo-step-one="Buyer captured" data-demo-step-two="Line sheet organized" data-demo-step-three="Task assigned" data-demo-step-four="Reorder ready" data-demo-problems="Text: Can you resend pricing?|Wholesale request buried in email|Inventory row missing owner|Event photo note from buyer|Notebook: call back Friday|Old line sheet in downloads|Customer asked twice|No one owns reorder|Follow-up date in memory|Case pricing question">
                                         <span>Retail</span>
                                         <strong>Wholesale request -> task -> reorder follow-up</strong>
                                     </button>
-                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="trades" data-demo-customer="Monroe Ave Service Call" data-demo-type="Electrical &amp; plumbing" data-demo-primary="Job note" data-demo-note="Breaker panel photo came in with a parts question and a customer timing note." data-demo-task="Confirm parts and assign crew next step" data-demo-owner="Eli" data-demo-followup="Customer update due before 3 PM" data-demo-feed-one="Job note saved" data-demo-feed-two="Parts question added" data-demo-feed-three="Crew next step assigned">
+                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="trades" data-demo-customer="Monroe Ave Service Call" data-demo-type="Electrical &amp; plumbing" data-demo-primary="Job note" data-demo-note="Breaker panel photo came in with a parts question and a customer timing note." data-demo-task="Confirm parts and assign crew next step" data-demo-owner="Eli" data-demo-followup="Panel photo, parts question, customer timing, and crew next step are tied to the service call." data-demo-feed-one="Panel photo saved to the job" data-demo-feed-two="Parts question routed to Eli" data-demo-feed-three="Customer update due before 3 PM" data-demo-step-one="Job note saved" data-demo-step-two="Parts checked" data-demo-step-three="Crew assigned" data-demo-step-four="Customer updated" data-demo-problems="Employee needs address|Panel photo in text thread|Parts question in the field|Customer changed appointment|Notebook says call before 3|Old estimate in folder|Crew asked twice|No owner for permit note|Breaker size in memory|How much wire should I order?">
                                         <span>Trades</span>
                                         <strong>Job note -> parts question -> crew next step</strong>
                                     </button>
-                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="construction" data-demo-customer="Maple Street Remodel" data-demo-type="Construction project" data-demo-primary="Approval needed" data-demo-note="Client approved the fixture change, but material timing and punch-list items need one place." data-demo-task="Update materials and owner punch-list" data-demo-owner="Maya" data-demo-followup="Punch-list item ready for Friday review" data-demo-feed-one="Approval captured" data-demo-feed-two="Material note organized" data-demo-feed-three="Punch-list item assigned">
+                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="construction" data-demo-customer="Maple Street Remodel" data-demo-type="Construction project" data-demo-primary="Approval needed" data-demo-note="Client approved the fixture change, but material timing and punch-list items need one place." data-demo-task="Update materials and owner punch-list" data-demo-owner="Maya" data-demo-followup="Fixture approval, material timing, and punch-list review are visible for Friday." data-demo-feed-one="Fixture approval captured" data-demo-feed-two="Material timing organized" data-demo-feed-three="Punch-list item assigned to Maya" data-demo-step-one="Approval saved" data-demo-step-two="Materials updated" data-demo-step-three="Owner assigned" data-demo-step-four="Review ready" data-demo-problems="Customer changed order|Fixture approval in email|Material count in spreadsheet|Subcontractor texted delay|Photo note from walkthrough|Permit file in wrong folder|Punch item has no owner|Friday review in memory|Which version is final?|How much tile should I order?">
                                         <span>Projects</span>
                                         <strong>Approval -> material note -> punch-list item</strong>
                                     </button>
-                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="service" data-demo-customer="Northline Maintenance" data-demo-type="Service business" data-demo-primary="Client record" data-demo-note="Recurring appointment, open question, and handoff note are tied to the same customer." data-demo-task="Schedule visit and send reminder" data-demo-owner="Jordan" data-demo-followup="Reminder ready for Monday morning" data-demo-feed-one="Client record updated" data-demo-feed-two="Appointment added" data-demo-feed-three="Reminder prepared">
+                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="service" data-demo-customer="Northline Maintenance" data-demo-type="Service business" data-demo-primary="Client record" data-demo-note="Recurring appointment, open question, and handoff note are tied to the same customer." data-demo-task="Schedule visit and send reminder" data-demo-owner="Jordan" data-demo-followup="Recurring visit, open question, and reminder are ready for Monday morning." data-demo-feed-one="Client record updated" data-demo-feed-two="Appointment added to schedule" data-demo-feed-three="Reminder prepared for Jordan" data-demo-step-one="Client found" data-demo-step-two="Visit scheduled" data-demo-step-three="Question routed" data-demo-step-four="Reminder ready" data-demo-problems="Appointment moved again|Customer asked twice|Open question in voicemail|Recurring visit not scheduled|Handoff note in memory|Invoice draft in email|File in the wrong folder|Task has no owner|Text thread: pricing?|Missing phone number">
                                         <span>Service</span>
                                         <strong>Client record -> appointment -> reminder</strong>
                                     </button>
@@ -152,16 +152,16 @@
                                         </button>
                                     </div>
                                     <div class="fb-product-demo__mess" data-product-demo-problem aria-label="Scattered work example">
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--text">Text: “Can you resend pricing?”</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--sheet">Spreadsheet row missing follow-up</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--note">Notebook: call back Friday</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--photo">Photo + parts question</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--memory">Someone remembers the next step</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--email">Email with invoice draft</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--file">File named final-final.pdf</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--owner">Task with no owner</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--calendar">Appointment moved twice</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--handoff">Crew handoff in memory</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--text" data-product-demo-problem-item="0">Text: Can you resend pricing?</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--sheet" data-product-demo-problem-item="1">Wholesale request buried in email</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--note" data-product-demo-problem-item="2">Inventory row missing owner</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--photo" data-product-demo-problem-item="3">Event photo note from buyer</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--memory" data-product-demo-problem-item="4">Notebook: call back Friday</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--email" data-product-demo-problem-item="5">Old line sheet in downloads</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--file" data-product-demo-problem-item="6">Customer asked twice</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--owner" data-product-demo-problem-item="7">No one owns reorder</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--calendar" data-product-demo-problem-item="8">Follow-up date in memory</span>
+                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--handoff" data-product-demo-problem-item="9">Case pricing question</span>
                                     </div>
                                     <div class="fb-product-demo__workspace">
                                         <nav class="fb-product-demo__sidebar" aria-label="Example workspace sections">
@@ -198,15 +198,15 @@
                                     </div>
                                     <div class="fb-product-demo__workflow" aria-label="Example workflow progress">
                                         <ol>
-                                            <li class="is-active" data-product-demo-step="0">Detail captured</li>
-                                            <li data-product-demo-step="1">Work organized</li>
-                                            <li data-product-demo-step="2">Next step assigned</li>
-                                            <li data-product-demo-step="3">Follow-up ready</li>
+                                            <li class="is-active" data-product-demo-step="0" data-product-demo-step-label="one">Buyer captured</li>
+                                            <li data-product-demo-step="1" data-product-demo-step-label="two">Line sheet organized</li>
+                                            <li data-product-demo-step="2" data-product-demo-step-label="three">Task assigned</li>
+                                            <li data-product-demo-step="3" data-product-demo-step-label="four">Reorder ready</li>
                                         </ol>
                                         <p data-product-demo-field="followup">Reorder follow-up ready for next Friday</p>
                                     </div>
                                 </div>
-                                <p class="fb-product-demo__motion-note">Motion-safe version: detail captured, work organized, next step assigned, follow-up ready.</p>
+                                <p class="fb-product-demo__motion-note">Motion-safe version: detail captured, Work organized, next step assigned, follow-up ready.</p>
                             </aside>
                         </div>
                     </article>

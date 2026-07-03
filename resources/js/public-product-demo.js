@@ -2,9 +2,11 @@ const ROOT_SELECTOR = "[data-public-product-demo]";
 const SCENARIO_SELECTOR = "[data-product-demo-scenario]";
 const MODE_SELECTOR = "[data-product-demo-mode]";
 const STEP_SELECTOR = "[data-product-demo-step]";
+const PROBLEM_ITEM_SELECTOR = "[data-product-demo-problem-item]";
 
 const AUTOPLAY_DELAY = 11200;
 const SOLUTION_DELAY = 5000;
+const SOLVE_POP_DELAY = 660;
 const STEP_DELAY = 760;
 
 function prefersReducedMotion() {
@@ -14,6 +16,36 @@ function prefersReducedMotion() {
 function updateText(root, selector, value) {
   root.querySelectorAll(selector).forEach((element) => {
     element.textContent = value;
+  });
+}
+
+function updateProblemItems(root, trigger) {
+  const problems = (trigger.dataset.demoProblems || "")
+    .split("|")
+    .map((problem) => problem.trim())
+    .filter(Boolean);
+
+  root.querySelectorAll(PROBLEM_ITEM_SELECTOR).forEach((element) => {
+    const index = Number.parseInt(element.dataset.productDemoProblemItem || "0", 10);
+    const problem = problems[index];
+
+    element.textContent = problem || "";
+    element.hidden = !problem;
+  });
+}
+
+function updateStepLabels(root, trigger) {
+  const labels = {
+    one: trigger.dataset.demoStepOne,
+    two: trigger.dataset.demoStepTwo,
+    three: trigger.dataset.demoStepThree,
+    four: trigger.dataset.demoStepFour,
+  };
+
+  Object.entries(labels).forEach(([key, value]) => {
+    if (value) {
+      updateText(root, `[data-product-demo-step-label="${key}"]`, value);
+    }
   });
 }
 
@@ -37,6 +69,8 @@ function applyScenario(root, trigger) {
   updateText(root, '[data-product-demo-feed="one"]', trigger.dataset.demoFeedOne || "");
   updateText(root, '[data-product-demo-feed="two"]', trigger.dataset.demoFeedTwo || "");
   updateText(root, '[data-product-demo-feed="three"]', trigger.dataset.demoFeedThree || "");
+  updateProblemItems(root, trigger);
+  updateStepLabels(root, trigger);
 
   root.querySelectorAll(SCENARIO_SELECTOR).forEach((button) => {
     const active = button === trigger;
@@ -48,14 +82,18 @@ function applyScenario(root, trigger) {
   window.setTimeout(() => root.classList.remove("is-changing"), 280);
 }
 
-function applyMode(root, mode) {
-  root.dataset.demoMode = mode;
-
+function updateModeButtons(root, mode) {
   root.querySelectorAll(MODE_SELECTOR).forEach((button) => {
     const active = button.dataset.productDemoMode === mode;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", active ? "true" : "false");
   });
+}
+
+function applyMode(root, mode) {
+  root.classList.remove("is-solving");
+  root.dataset.demoMode = mode;
+  updateModeButtons(root, mode);
 }
 
 function setStep(root, activeStep) {
@@ -94,16 +132,27 @@ function mountRoot(root) {
   };
 
   const runSolutionSteps = () => {
-    applyMode(root, "solution");
-
-    if (reducedMotion) {
+    if (root.dataset.demoMode === "solution") {
       setStep(root, 3);
       return;
     }
 
-    [0, 1, 2, 3].forEach((step) => {
-      queueTimer(() => setStep(root, step), step * STEP_DELAY);
-    });
+    if (reducedMotion) {
+      applyMode(root, "solution");
+      setStep(root, 3);
+      return;
+    }
+
+    updateModeButtons(root, "solution");
+    root.classList.add("is-solving");
+
+    queueTimer(() => {
+      applyMode(root, "solution");
+
+      [0, 1, 2, 3].forEach((step) => {
+        queueTimer(() => setStep(root, step), step * STEP_DELAY);
+      });
+    }, SOLVE_POP_DELAY);
   };
 
   const showScenario = (index, autoplay = false) => {
@@ -148,10 +197,10 @@ function mountRoot(root) {
     button.addEventListener("click", () => {
       stopped = true;
       clearTimers(timers);
-      applyMode(root, button.dataset.productDemoMode || "solution");
       if (button.dataset.productDemoMode === "solution") {
-        setStep(root, 3);
+        runSolutionSteps();
       } else {
+        applyMode(root, "problem");
         setStep(root, 0);
       }
     });
