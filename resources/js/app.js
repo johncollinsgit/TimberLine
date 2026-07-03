@@ -28,6 +28,12 @@ const contextualModules = [
     mountExport: "mountPublicTabsNow",
   },
   {
+    key: "publicMobileNav",
+    selectors: ["[data-public-mobile-nav]"],
+    load: () => import("./public-mobile-nav"),
+    mountExport: "mountPublicMobileNavNow",
+  },
+  {
     key: "publicProductDemo",
     selectors: ["[data-public-product-demo]"],
     load: () => import("./public-product-demo"),

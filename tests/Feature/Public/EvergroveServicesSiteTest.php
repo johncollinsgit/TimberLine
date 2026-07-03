@@ -29,13 +29,13 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('Construction & project teams')
         ->assertSeeText('Website and software project estimate')
         ->assertSeeText('Modern Forestry')
-        ->assertDontSeeText('Less anxiety. Find peace. The one place to run your business.');
+        ->assertDontSeeText('Less Problems. More peace. The one place to run your business.');
 });
 
 test('everbranch public host keeps the everbranch product surface', function (): void {
     $this->get('http://theeverbranch.com/')
         ->assertOk()
-        ->assertSeeText('Less anxiety. Find peace. The one place to run your business.')
+        ->assertSeeText('Less Problems. More peace. The one place to run your business.')
         ->assertSeeText('Everbranch helps small businesses organize customers, tasks, messages, files, and workflows in one simple system')
         ->assertSeeText('Home')
         ->assertSeeText('See it work')
@@ -99,7 +99,7 @@ test('authenticated users still see evergrove surface on evergrove public host',
         ->assertOk()
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('We build the software small businesses wish already existed.')
-        ->assertDontSeeText('Less anxiety. Find peace. The one place to run your business.');
+        ->assertDontSeeText('Less Problems. More peace. The one place to run your business.');
 });
 
 test('app host sends guests toward login while lander redirects home', function (): void {

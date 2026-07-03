@@ -6,8 +6,17 @@
     $brandLockupPath = (string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg');
     $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
     $productName = (string) config('everbranch.product_name', 'Everbranch');
-    $headline = 'Less anxiety. Find peace. The one place to run your business.';
+    $headline = 'Less Problems. More peace. The one place to run your business.';
     $summary = 'Everbranch helps small businesses organize customers, tasks, messages, files, and workflows in one simple system, so nothing important gets lost in the noise so you can spend more time with your family.';
+    $startClientCta = is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null)
+        ? [
+            'href' => (string) $cta['start_client']['href'],
+            'label' => (string) ($cta['start_client']['label'] ?? 'Start as a client'),
+        ]
+        : [
+            'href' => route('platform.start'),
+            'label' => 'Request access',
+        ];
     $industryCards = [
         [
             'title' => 'Retail & product brands',
@@ -47,11 +56,25 @@
     @include('platform.partials.premium-motion')
 
     <div class="fb-public-shell fb-public-shell--wide">
-        <div class="fb-site-nav-wrap">
+        <div class="fb-site-nav-wrap" data-public-mobile-nav>
             <nav class="fb-site-nav fb-site-nav--premium" aria-label="Primary navigation">
-                <a href="#splash" class="fb-site-brand fb-site-brand--lockup">
-                    <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
-                </a>
+                <div class="fb-site-nav__bar">
+                    <a href="#splash" class="fb-site-brand fb-site-brand--lockup">
+                        <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
+                    </a>
+                    <button
+                        type="button"
+                        class="fb-site-nav__toggle"
+                        data-public-mobile-nav-toggle
+                        aria-expanded="false"
+                        aria-controls="public-mobile-drawer"
+                        aria-label="Open navigation menu"
+                    >
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                </div>
                 <div class="fb-site-links" role="tablist" aria-label="Public sections">
                     <a id="tab-product" href="#everbranch-public" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">Home</a>
                     <a id="tab-workflows" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">See it work</a>
@@ -60,13 +83,22 @@
                 </div>
                 <div class="fb-hero-cta fb-hero-cta--nav">
                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-                    @if(is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null))
-                        <a href="{{ $cta['start_client']['href'] }}" class="fb-btn fb-btn-primary">{{ $cta['start_client']['label'] ?? 'Start as a client' }}</a>
-                    @else
-                        <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Request access</a>
-                    @endif
+                    <a href="{{ $startClientCta['href'] }}" class="fb-btn fb-btn-primary">{{ $startClientCta['label'] }}</a>
                 </div>
             </nav>
+            <button type="button" class="fb-site-nav__backdrop" data-public-mobile-nav-backdrop hidden aria-hidden="true" tabindex="-1"></button>
+            <div id="public-mobile-drawer" class="fb-site-nav__drawer" data-public-mobile-nav-drawer hidden>
+                <div class="fb-site-nav__drawer-links" aria-label="Public sections">
+                    <a href="#everbranch-public" class="is-active" data-public-tab-trigger="product" data-public-mobile-nav-link="product">Home</a>
+                    <a href="#everbranch-public" data-public-tab-trigger="workflows" data-public-mobile-nav-link="workflows">See it work</a>
+                    <a href="#everbranch-public" data-public-tab-trigger="customers" data-public-mobile-nav-link="customers">Who it helps</a>
+                    <a href="#everbranch-public" data-public-tab-trigger="contact" data-public-mobile-nav-link="contact">Contact</a>
+                </div>
+                <div class="fb-site-nav__drawer-cta">
+                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary" data-public-mobile-nav-link="login">Login</a>
+                    <a href="{{ $startClientCta['href'] }}" class="fb-btn fb-btn-primary" data-public-mobile-nav-link="start">{{ $startClientCta['label'] }}</a>
+                </div>
+            </div>
         </div>
 
         <main id="everbranch-public" class="fb-public-main" tabindex="-1">
