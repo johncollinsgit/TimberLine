@@ -1,11 +1,13 @@
 const ROOT_SELECTOR = "[data-problem-garden]";
 const POP_DURATION = 620;
-const POINTER_RADIUS = 220;
-const MAX_REPEL_OFFSET = 42;
-const REPEL_FORCE = 0.12;
-const POINTER_VELOCITY_FORCE = 0.02;
-const SPRING_FORCE = 0.072;
-const DAMPING = 0.84;
+const POINTER_RADIUS = 252;
+const MAX_REPEL_OFFSET = 48;
+const REPEL_FORCE = 0.108;
+const POINTER_VELOCITY_FORCE = 0.018;
+const SPRING_FORCE = 0.058;
+const DAMPING = 0.838;
+const AMBIENT_DRIFT_SCALE = 1.65;
+const AMBIENT_WANDER_SCALE = 1.25;
 const POINTER_MEDIA_QUERY = "(hover: hover) and (pointer: fine)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
@@ -88,6 +90,7 @@ function createBubbleEngine(root, chips) {
     const idleAmplitudeY = parseLength(style.getPropertyValue("--float-y")) || (14 + (index % 3) * 3);
     const idleRotationAmplitude = parseAngle(style.getPropertyValue("--float-r")) || (4 + (index % 4));
     const baseRotation = parseAngle(style.getPropertyValue("--chip-rotate"));
+    const wanderScale = 1 + ((index % 5) * 0.12);
 
     return {
       chip,
@@ -97,11 +100,17 @@ function createBubbleEngine(root, chips) {
       width: 0,
       height: 0,
       baseRotation,
-      idleAmplitudeX,
-      idleAmplitudeY,
+      idleAmplitudeX: idleAmplitudeX * AMBIENT_DRIFT_SCALE,
+      idleAmplitudeY: idleAmplitudeY * (AMBIENT_DRIFT_SCALE + 0.08),
+      wanderRadiusX: (idleAmplitudeX * AMBIENT_WANDER_SCALE) + (index % 3) * 7,
+      wanderRadiusY: (idleAmplitudeY * (AMBIENT_WANDER_SCALE + 0.15)) + (index % 4) * 6,
       idleRotationAmplitude,
       idlePhase: (index + 1) * 0.92,
-      idleSpeed: 0.52 + ((index % 5) * 0.09),
+      wanderPhaseX: (index + 1) * 1.31,
+      wanderPhaseY: (index + 1) * 0.83,
+      idleSpeed: (0.42 + ((index % 5) * 0.07)) * wanderScale,
+      wanderSpeedX: 0.16 + ((index % 4) * 0.03),
+      wanderSpeedY: 0.13 + ((index % 3) * 0.025),
       repelX: 0,
       repelY: 0,
       velocityX: 0,
@@ -191,9 +200,16 @@ function createBubbleEngine(root, chips) {
 
       hasRenderableChip = true;
 
-      const idleX = Math.sin((time * state.idleSpeed) + state.idlePhase) * state.idleAmplitudeX;
-      const idleY = Math.cos((time * (state.idleSpeed * 0.88)) + (state.idlePhase * 1.17)) * state.idleAmplitudeY;
-      const idleRotation = state.baseRotation + (Math.sin((time * (state.idleSpeed * 0.62)) + (state.idlePhase * 0.7)) * state.idleRotationAmplitude);
+      const idleX =
+        (Math.sin((time * state.idleSpeed) + state.idlePhase) * state.idleAmplitudeX) +
+        (Math.sin((time * state.wanderSpeedX) + state.wanderPhaseX) * state.wanderRadiusX);
+      const idleY =
+        (Math.cos((time * (state.idleSpeed * 0.88)) + (state.idlePhase * 1.17)) * state.idleAmplitudeY) +
+        (Math.sin((time * state.wanderSpeedY) + state.wanderPhaseY) * state.wanderRadiusY);
+      const idleRotation =
+        state.baseRotation +
+        (Math.sin((time * (state.idleSpeed * 0.62)) + (state.idlePhase * 0.7)) * state.idleRotationAmplitude) +
+        (Math.sin((time * 0.21) + state.idlePhase) * 1.6);
 
       if (pointer.active) {
         const bubbleX = state.centerX + state.repelX;
@@ -205,7 +221,7 @@ function createBubbleEngine(root, chips) {
         if (distance < POINTER_RADIUS) {
           const falloff = 1 - (distance / POINTER_RADIUS);
           const pointerBoost = Math.min(Math.hypot(pointer.velocityX, pointer.velocityY), 42) * POINTER_VELOCITY_FORCE;
-          const force = (REPEL_FORCE + pointerBoost) * falloff * falloff;
+          const force = (REPEL_FORCE + pointerBoost) * falloff * falloff * (0.76 + (falloff * 0.24));
 
           state.velocityX += (deltaX / distance) * force * POINTER_RADIUS;
           state.velocityY += (deltaY / distance) * force * POINTER_RADIUS;

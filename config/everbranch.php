@@ -30,6 +30,9 @@ return [
     'product_name' => env('EVERBRANCH_PRODUCT_NAME', 'Everbranch'),
     'company_name' => env('EVERBRANCH_COMPANY_NAME', 'Evergrove'),
     'ecosystem_name' => env('EVERBRANCH_ECOSYSTEM_NAME', 'Evergrove'),
+    'bud' => [
+        'support_email' => env('EVERBRANCH_BUD_SUPPORT_EMAIL', 'johncollinsemail@gmail.com'),
+    ],
     'landlord_portal_name' => env('EVERBRANCH_LANDLORD_PORTAL_NAME', 'Everbranch Admin'),
     'legacy_internal_name' => env('EVERBRANCH_LEGACY_INTERNAL_NAME', 'Forestry Backstage'),
     'flagship_tenant_name' => env('EVERBRANCH_FLAGSHIP_TENANT_NAME', 'Modern Forestry'),

@@ -49,6 +49,7 @@ use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
 use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\PlatformProductPagesController;
+use App\Http\Controllers\PublicBudConversationController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
@@ -356,6 +357,9 @@ Route::get('/tools/project-estimate', [EvergroveServicesController::class, 'proj
 Route::get('/tools/ai-roi', [EvergroveServicesController::class, 'aiRoi'])->name('evergrove.tools.ai-roi');
 Route::get('/tools/automation-savings', [EvergroveServicesController::class, 'automationSavings'])->name('evergrove.tools.automation-savings');
 Route::post('/services/inquiries', [EvergroveServiceInquiryController::class, 'store'])->name('evergrove.inquiries.store');
+Route::post('/platform/bud/conversations', [PublicBudConversationController::class, 'store'])
+    ->middleware('throttle:20,1')
+    ->name('platform.bud.conversations');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');

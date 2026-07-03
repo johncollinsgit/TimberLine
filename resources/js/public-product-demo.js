@@ -3,6 +3,9 @@ const SCENARIO_SELECTOR = "[data-product-demo-scenario]";
 const MODE_SELECTOR = "[data-product-demo-mode]";
 const STEP_SELECTOR = "[data-product-demo-step]";
 const PROBLEM_ITEM_SELECTOR = "[data-product-demo-problem-item]";
+const PANE_SELECTOR = "[data-product-demo-pane]";
+const PANE_PANEL_SELECTOR = "[data-product-demo-pane-panel]";
+const BUD_SEARCH_SELECTOR = "[data-product-demo-bud-search]";
 
 const AUTOPLAY_DELAY = 11200;
 const SOLUTION_DELAY = 5000;
@@ -17,6 +20,31 @@ function updateText(root, selector, value) {
   root.querySelectorAll(selector).forEach((element) => {
     element.textContent = value;
   });
+}
+
+function parseStructuredList(value) {
+  return `${value || ""}`
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => item.split("::").map((segment) => segment.trim()));
+}
+
+function deriveInitials(name) {
+  const parts = `${name || ""}`
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return "--";
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase();
 }
 
 function updateProblemItems(root, trigger) {
@@ -49,6 +77,74 @@ function updateStepLabels(root, trigger) {
   });
 }
 
+function updateStats(root, trigger) {
+  const stats = parseStructuredList(trigger.dataset.demoStats);
+
+  root.querySelectorAll("[data-product-demo-stat]").forEach((element, index) => {
+    const [label = "", value = "", meta = ""] = stats[index] || [];
+    element.hidden = !label && !value && !meta;
+    updateText(element, "[data-product-demo-stat-label]", label);
+    updateText(element, "[data-product-demo-stat-value]", value);
+    updateText(element, "[data-product-demo-stat-meta]", meta);
+  });
+}
+
+function updateLinks(root, trigger) {
+  const links = parseStructuredList(trigger.dataset.demoLinks);
+
+  root.querySelectorAll("[data-product-demo-link]").forEach((element, index) => {
+    const [title = "", meta = ""] = links[index] || [];
+    element.hidden = !title && !meta;
+    updateText(element, "[data-product-demo-link-title]", title);
+    updateText(element, "[data-product-demo-link-meta]", meta);
+  });
+}
+
+function updateJobs(root, trigger) {
+  const jobs = parseStructuredList(trigger.dataset.demoJobs);
+
+  root.querySelectorAll("[data-product-demo-job]").forEach((element, index) => {
+    const [title = "", meta = ""] = jobs[index] || [];
+    element.hidden = !title && !meta;
+    updateText(element, "[data-product-demo-job-title]", title);
+    updateText(element, "[data-product-demo-job-meta]", meta);
+  });
+}
+
+function updateTeam(root, trigger) {
+  const team = parseStructuredList(trigger.dataset.demoTeam);
+
+  root.querySelectorAll("[data-product-demo-team]").forEach((element, index) => {
+    const [name = "", role = "", status = ""] = team[index] || [];
+    element.hidden = !name && !role && !status;
+    updateText(element, "[data-product-demo-team-avatar]", deriveInitials(name));
+    updateText(element, "[data-product-demo-team-name]", name);
+    updateText(element, "[data-product-demo-team-role]", role);
+    updateText(element, "[data-product-demo-team-status]", status);
+  });
+}
+
+function updateChart(root, trigger) {
+  const points = parseStructuredList(trigger.dataset.demoChart);
+  const values = points
+    .map(([, value = "0"]) => Number.parseFloat(value.replace(/[^0-9.]/g, "")) || 0);
+  const maxValue = Math.max(...values, 1);
+
+  root.querySelectorAll("[data-product-demo-chart]").forEach((element, index) => {
+    const [label = "", value = "0"] = points[index] || [];
+    const numericValue = Number.parseFloat(`${value}`.replace(/[^0-9.]/g, "")) || 0;
+    const fill = element.querySelector("[data-product-demo-chart-fill]");
+
+    element.hidden = !label && !value;
+    updateText(element, "[data-product-demo-chart-label]", label);
+    updateText(element, "[data-product-demo-chart-value]", value);
+
+    if (fill) {
+      fill.style.height = `${Math.max((numericValue / maxValue) * 100, 12)}%`;
+    }
+  });
+}
+
 function applyScenario(root, trigger) {
   const fields = {
     customer: trigger.dataset.demoCustomer,
@@ -71,6 +167,11 @@ function applyScenario(root, trigger) {
   updateText(root, '[data-product-demo-feed="three"]', trigger.dataset.demoFeedThree || "");
   updateProblemItems(root, trigger);
   updateStepLabels(root, trigger);
+  updateStats(root, trigger);
+  updateLinks(root, trigger);
+  updateJobs(root, trigger);
+  updateTeam(root, trigger);
+  updateChart(root, trigger);
 
   root.querySelectorAll(SCENARIO_SELECTOR).forEach((button) => {
     const active = button === trigger;
@@ -87,6 +188,25 @@ function updateModeButtons(root, mode) {
     const active = button.dataset.productDemoMode === mode;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+
+function applyPane(root, pane) {
+  root.dataset.demoPane = pane;
+
+  root.querySelectorAll(PANE_SELECTOR).forEach((button) => {
+    const active = button.dataset.productDemoPane === pane;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+
+  root.querySelectorAll(PANE_PANEL_SELECTOR).forEach((panel) => {
+    const visibility = `${panel.dataset.productDemoPanePanel || ""}`
+      .split(/\s+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    panel.hidden = visibility.length > 0 && !visibility.includes(pane);
   });
 }
 
@@ -118,10 +238,13 @@ function mountRoot(root) {
 
   const scenarioButtons = Array.from(root.querySelectorAll(SCENARIO_SELECTOR));
   const modeButtons = Array.from(root.querySelectorAll(MODE_SELECTOR));
+  const paneButtons = Array.from(root.querySelectorAll(PANE_SELECTOR));
+  const budSearchButton = root.querySelector(BUD_SEARCH_SELECTOR);
   const timers = new Set();
   const reducedMotion = prefersReducedMotion();
   let scenarioIndex = 0;
   let stopped = false;
+  let initialProblemIntroAvailable = true;
 
   const queueTimer = (callback, delay) => {
     const timer = window.setTimeout(() => {
@@ -164,15 +287,27 @@ function mountRoot(root) {
     scenarioIndex = index;
     clearTimers(timers);
     applyScenario(root, nextButton);
-    applyMode(root, "problem");
-    setStep(root, 0);
+    applyPane(root, root.dataset.demoPane || "home");
+    const shouldUseProblemIntro = initialProblemIntroAvailable && index === 0;
+
+    if (shouldUseProblemIntro) {
+      initialProblemIntroAvailable = false;
+      applyMode(root, "problem");
+      setStep(root, 0);
+    } else {
+      applyMode(root, "solution");
+      setStep(root, 3);
+    }
 
     if (reducedMotion) {
-      runSolutionSteps();
+      applyMode(root, "solution");
+      setStep(root, 3);
       return;
     }
 
-    queueTimer(runSolutionSteps, SOLUTION_DELAY);
+    if (shouldUseProblemIntro) {
+      queueTimer(runSolutionSteps, SOLUTION_DELAY);
+    }
   };
 
   const scheduleAutoplay = () => {
@@ -206,10 +341,43 @@ function mountRoot(root) {
     });
   });
 
+  paneButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      stopped = true;
+      applyPane(root, button.dataset.productDemoPane || "home");
+    });
+  });
+
+  if (budSearchButton) {
+    budSearchButton.addEventListener("click", () => {
+      stopped = true;
+
+      const scenario = scenarioButtons[scenarioIndex];
+      const pane = root.dataset.demoPane || "home";
+      const customer = scenario?.dataset.demoCustomer || "this business";
+      const type = scenario?.dataset.demoType || "small business";
+      const paneLabel = pane.charAt(0).toUpperCase() + pane.slice(1);
+
+      document.dispatchEvent(new CustomEvent("everbranch:bud-open", {
+        detail: {
+          prompt: `How could Everbranch help with ${paneLabel.toLowerCase()} for ${customer} (${type})?`,
+          source: "product_demo_search",
+          context: {
+            scenario: scenario?.dataset.productDemoScenario || "retail",
+            customer,
+            type,
+            pane,
+          },
+        },
+      }));
+    });
+  }
+
   root.addEventListener("pointerenter", () => {
     stopped = true;
   });
 
+  applyPane(root, "home");
   showScenario(0, true);
   scheduleAutoplay();
 }
