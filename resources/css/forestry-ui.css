@@ -122,6 +122,11 @@
   pointer-events: none;
 }
 
+.fb-problem-chip.is-popped {
+  animation: fbProblemPop 500ms var(--eb-motion-ease) both;
+  pointer-events: none;
+}
+
 @keyframes fbProblemFloat {
   from { transform: translate3d(0, 0, 0) rotate(var(--chip-rotate)); }
   to { transform: translate3d(var(--float-x), var(--float-y), 0) rotate(calc(var(--chip-rotate) + var(--float-r))); }

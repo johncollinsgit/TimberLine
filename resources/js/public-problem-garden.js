@@ -28,6 +28,17 @@ function popProblems(root) {
   });
 }
 
+function popSingleProblem(root, chip, index, total) {
+  if (root.classList.contains("is-popping") || chip.classList.contains("is-popped")) {
+    return;
+  }
+
+  assignPopVector(chip, index, total);
+  chip.classList.add("is-popped");
+  chip.disabled = true;
+  chip.setAttribute("aria-hidden", "true");
+}
+
 function continueAction(link) {
   const tabKey = link.dataset.publicTabJump || link.dataset.publicTabTrigger;
   if (tabKey) {
@@ -52,6 +63,16 @@ function mountRoot(root) {
 
   const shell = root.closest(".fb-public-shell") || document;
   const heroActions = Array.from(shell.querySelectorAll("a.fb-btn, [data-public-tab-trigger]"));
+  const chips = Array.from(root.querySelectorAll(".fb-problem-chip"));
+
+  chips.forEach((chip, index) => {
+    chip.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      popSingleProblem(root, chip, index, chips.length);
+    });
+  });
 
   heroActions.forEach((link) => {
     link.addEventListener("click", (event) => {
