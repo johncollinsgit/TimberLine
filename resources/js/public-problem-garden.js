@@ -1,10 +1,11 @@
 const ROOT_SELECTOR = "[data-problem-garden]";
 const POP_DURATION = 620;
 const POINTER_RADIUS = 220;
-const MAX_OFFSET = 34;
-const SPRING_FORCE = 0.035;
-const DAMPING = 0.9;
-const VELOCITY_SCALE = 0.024;
+const MAX_REPEL_OFFSET = 42;
+const REPEL_FORCE = 0.12;
+const POINTER_VELOCITY_FORCE = 0.02;
+const SPRING_FORCE = 0.072;
+const DAMPING = 0.84;
 const POINTER_MEDIA_QUERY = "(hover: hover) and (pointer: fine)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
@@ -19,31 +20,6 @@ function assignPopVector(chip, index, total) {
   chip.style.setProperty("--pop-y", `${y.toFixed(1)}px`);
   chip.style.setProperty("--pop-r", `${rotation}deg`);
   chip.style.setProperty("--pop-delay", `${Math.min(index * 18, 180)}ms`);
-}
-
-function popProblems(root) {
-  if (root.classList.contains("is-popping")) {
-    return Promise.resolve();
-  }
-
-  const chips = Array.from(root.querySelectorAll(".fb-problem-chip"));
-  chips.forEach((chip, index) => assignPopVector(chip, index, chips.length));
-  root.classList.add("is-popping");
-
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, POP_DURATION);
-  });
-}
-
-function popSingleProblem(root, chip, index, total) {
-  if (root.classList.contains("is-popping") || chip.classList.contains("is-popped")) {
-    return;
-  }
-
-  assignPopVector(chip, index, total);
-  chip.classList.add("is-popped");
-  chip.disabled = true;
-  chip.setAttribute("aria-hidden", "true");
 }
 
 function continueAction(link) {
@@ -61,83 +37,143 @@ function continueAction(link) {
   }
 }
 
-function setCursorOffset(chip, offsetX, offsetY) {
-  chip.style.setProperty("--cursor-x", `${offsetX.toFixed(2)}px`);
-  chip.style.setProperty("--cursor-y", `${offsetY.toFixed(2)}px`);
-  chip.style.setProperty("--cursor-r", `${(offsetX * 0.12).toFixed(2)}deg`);
+function parseLength(value) {
+  const trimmed = `${value ?? ""}`.trim();
+
+  if (trimmed === "") {
+    return 0;
+  }
+
+  if (trimmed.endsWith("rem")) {
+    const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    return (Number.parseFloat(trimmed) || 0) * rootFontSize;
+  }
+
+  return Number.parseFloat(trimmed) || 0;
 }
 
-function resetCursorOffset(chip) {
-  setCursorOffset(chip, 0, 0);
+function parseAngle(value) {
+  return Number.parseFloat(`${value ?? ""}`.trim()) || 0;
 }
 
-function createPointerField(root, chips) {
+function clamp(value, maxMagnitude) {
+  return Math.max(-maxMagnitude, Math.min(maxMagnitude, value));
+}
+
+function setBubbleTransform(state, translateX, translateY, rotation) {
+  state.translateX = translateX;
+  state.translateY = translateY;
+  state.rotation = rotation;
+
+  state.chip.style.setProperty("--bubble-tx", `${translateX.toFixed(2)}px`);
+  state.chip.style.setProperty("--bubble-ty", `${translateY.toFixed(2)}px`);
+  state.chip.style.setProperty("--bubble-rot", `${rotation.toFixed(2)}deg`);
+}
+
+function resetBubbleTransform(state) {
+  setBubbleTransform(state, 0, 0, state.baseRotation);
+}
+
+function createBubbleEngine(root, chips) {
   if (!window.matchMedia) {
     return null;
   }
 
   const pointerQuery = window.matchMedia(POINTER_MEDIA_QUERY);
   const reducedMotionQuery = window.matchMedia(REDUCED_MOTION_QUERY);
+  const interactionZone = root.closest(".fb-splash") || root.parentElement || root;
+  const chipStates = chips.map((chip, index) => {
+    const style = getComputedStyle(chip);
+    const idleAmplitudeX = parseLength(style.getPropertyValue("--float-x")) || (18 + (index % 4) * 4);
+    const idleAmplitudeY = parseLength(style.getPropertyValue("--float-y")) || (14 + (index % 3) * 3);
+    const idleRotationAmplitude = parseAngle(style.getPropertyValue("--float-r")) || (4 + (index % 4));
+    const baseRotation = parseAngle(style.getPropertyValue("--chip-rotate"));
 
-  const chipStates = chips.map((chip) => ({
-    chip,
-    baseX: 0,
-    baseY: 0,
-    offsetX: 0,
-    offsetY: 0,
-    velocityX: 0,
-    velocityY: 0,
-  }));
+    return {
+      chip,
+      index,
+      centerX: 0,
+      centerY: 0,
+      width: 0,
+      height: 0,
+      baseRotation,
+      idleAmplitudeX,
+      idleAmplitudeY,
+      idleRotationAmplitude,
+      idlePhase: (index + 1) * 0.92,
+      idleSpeed: 0.52 + ((index % 5) * 0.09),
+      repelX: 0,
+      repelY: 0,
+      velocityX: 0,
+      velocityY: 0,
+      translateX: 0,
+      translateY: 0,
+      rotation: baseRotation,
+    };
+  });
 
   const pointer = {
     active: false,
-    x: 0,
-    y: 0,
+    zoneX: 0,
+    zoneY: 0,
     velocityX: 0,
     velocityY: 0,
   };
 
   let animationFrame = 0;
-  let fieldActive = false;
+  let isRunning = false;
   let geometryDirty = true;
+  let isVisible = true;
+  let zoneLeft = 0;
+  let zoneTop = 0;
 
   const isEnabled = () => pointerQuery.matches && !reducedMotionQuery.matches;
 
-  const clamp = (value, max) => Math.max(-max, Math.min(max, value));
-
   const updateGeometry = () => {
-    const rootRect = root.getBoundingClientRect();
+    const zoneRect = interactionZone.getBoundingClientRect();
+    zoneLeft = zoneRect.left;
+    zoneTop = zoneRect.top;
 
     chipStates.forEach((state) => {
-      const chipRect = state.chip.getBoundingClientRect();
-      state.baseX = (chipRect.left - rootRect.left) + (chipRect.width / 2);
-      state.baseY = (chipRect.top - rootRect.top) + (chipRect.height / 2);
+      state.centerX = state.chip.offsetLeft + (state.chip.offsetWidth / 2);
+      state.centerY = state.chip.offsetTop + (state.chip.offsetHeight / 2);
+      state.width = state.chip.offsetWidth;
+      state.height = state.chip.offsetHeight;
     });
 
     geometryDirty = false;
   };
 
-  const stopField = () => {
-    fieldActive = false;
-    pointer.active = false;
+  const stop = ({ reset = false } = {}) => {
+    isRunning = false;
 
     if (animationFrame) {
       window.cancelAnimationFrame(animationFrame);
       animationFrame = 0;
     }
 
-    chipStates.forEach((state) => {
-      state.offsetX = 0;
-      state.offsetY = 0;
-      state.velocityX = 0;
-      state.velocityY = 0;
-      resetCursorOffset(state.chip);
-    });
+    pointer.active = false;
+    pointer.velocityX = 0;
+    pointer.velocityY = 0;
+
+    if (reset) {
+      chipStates.forEach((state) => {
+        if (state.chip.classList.contains("is-popped")) {
+          return;
+        }
+
+        state.repelX = 0;
+        state.repelY = 0;
+        state.velocityX = 0;
+        state.velocityY = 0;
+        resetBubbleTransform(state);
+      });
+    }
   };
 
-  const tick = () => {
-    if (!isEnabled()) {
-      stopField();
+  const tick = (now) => {
+    if (!isEnabled() || !isVisible) {
+      stop({ reset: true });
       return;
     }
 
@@ -145,66 +181,70 @@ function createPointerField(root, chips) {
       updateGeometry();
     }
 
-    let shouldContinue = pointer.active;
+    const time = now / 1000;
+    let hasRenderableChip = false;
 
     chipStates.forEach((state) => {
       if (state.chip.classList.contains("is-popped")) {
-        resetCursorOffset(state.chip);
         return;
       }
 
-      const centerX = state.baseX + state.offsetX;
-      const centerY = state.baseY + state.offsetY;
+      hasRenderableChip = true;
+
+      const idleX = Math.sin((time * state.idleSpeed) + state.idlePhase) * state.idleAmplitudeX;
+      const idleY = Math.cos((time * (state.idleSpeed * 0.88)) + (state.idlePhase * 1.17)) * state.idleAmplitudeY;
+      const idleRotation = state.baseRotation + (Math.sin((time * (state.idleSpeed * 0.62)) + (state.idlePhase * 0.7)) * state.idleRotationAmplitude);
 
       if (pointer.active) {
-        const deltaX = centerX - pointer.x;
-        const deltaY = centerY - pointer.y;
+        const bubbleX = state.centerX + state.repelX;
+        const bubbleY = state.centerY + state.repelY;
+        const deltaX = bubbleX - pointer.zoneX;
+        const deltaY = bubbleY - pointer.zoneY;
         const distance = Math.hypot(deltaX, deltaY) || 1;
 
         if (distance < POINTER_RADIUS) {
-          const influence = 1 - (distance / POINTER_RADIUS);
-          const pointerSpeed = Math.min(Math.hypot(pointer.velocityX, pointer.velocityY), 48);
-          const force = (0.9 + (pointerSpeed * VELOCITY_SCALE)) * influence * influence;
-          state.velocityX += (deltaX / distance) * force;
-          state.velocityY += (deltaY / distance) * force;
+          const falloff = 1 - (distance / POINTER_RADIUS);
+          const pointerBoost = Math.min(Math.hypot(pointer.velocityX, pointer.velocityY), 42) * POINTER_VELOCITY_FORCE;
+          const force = (REPEL_FORCE + pointerBoost) * falloff * falloff;
+
+          state.velocityX += (deltaX / distance) * force * POINTER_RADIUS;
+          state.velocityY += (deltaY / distance) * force * POINTER_RADIUS;
         }
       }
 
-      state.velocityX += -state.offsetX * SPRING_FORCE;
-      state.velocityY += -state.offsetY * SPRING_FORCE;
+      state.velocityX += -state.repelX * SPRING_FORCE;
+      state.velocityY += -state.repelY * SPRING_FORCE;
       state.velocityX *= DAMPING;
       state.velocityY *= DAMPING;
 
-      state.offsetX = clamp(state.offsetX + state.velocityX, MAX_OFFSET);
-      state.offsetY = clamp(state.offsetY + state.velocityY, MAX_OFFSET);
+      state.repelX = clamp(state.repelX + state.velocityX, MAX_REPEL_OFFSET);
+      state.repelY = clamp(state.repelY + state.velocityY, MAX_REPEL_OFFSET);
 
-      if (
-        Math.abs(state.offsetX) > 0.08
-        || Math.abs(state.offsetY) > 0.08
-        || Math.abs(state.velocityX) > 0.08
-        || Math.abs(state.velocityY) > 0.08
-      ) {
-        shouldContinue = true;
-      }
+      const translateX = idleX + state.repelX;
+      const translateY = idleY + state.repelY;
+      const rotation = idleRotation + (state.repelX * 0.05);
 
-      setCursorOffset(state.chip, state.offsetX, state.offsetY);
+      setBubbleTransform(state, translateX, translateY, rotation);
     });
 
-    if (!shouldContinue) {
-      fieldActive = false;
-      animationFrame = 0;
+    if (!hasRenderableChip) {
+      stop();
       return;
     }
 
     animationFrame = window.requestAnimationFrame(tick);
   };
 
-  const startField = () => {
-    if (!isEnabled() || fieldActive) {
+  const start = () => {
+    if (!isEnabled() || !isVisible || isRunning) {
       return;
     }
 
-    fieldActive = true;
+    if (geometryDirty) {
+      updateGeometry();
+    }
+
+    isRunning = true;
     animationFrame = window.requestAnimationFrame(tick);
   };
 
@@ -217,61 +257,156 @@ function createPointerField(root, chips) {
       updateGeometry();
     }
 
-    const rootRect = root.getBoundingClientRect();
-    const nextX = event.clientX - rootRect.left;
-    const nextY = event.clientY - rootRect.top;
+    const nextZoneX = event.clientX - zoneLeft;
+    const nextZoneY = event.clientY - zoneTop;
 
-    pointer.velocityX = nextX - pointer.x;
-    pointer.velocityY = nextY - pointer.y;
-    pointer.x = nextX;
-    pointer.y = nextY;
+    pointer.velocityX = nextZoneX - pointer.zoneX;
+    pointer.velocityY = nextZoneY - pointer.zoneY;
+    pointer.zoneX = nextZoneX;
+    pointer.zoneY = nextZoneY;
     pointer.active = true;
 
-    startField();
+    start();
   };
 
   const handlePointerLeave = () => {
     pointer.active = false;
     pointer.velocityX = 0;
     pointer.velocityY = 0;
-    startField();
+    start();
   };
 
-  root.addEventListener("pointerenter", () => {
-    if (isEnabled()) {
-      geometryDirty = true;
+  const visibilityObserver = typeof IntersectionObserver === "function"
+    ? new IntersectionObserver(([entry]) => {
+      isVisible = Boolean(entry?.isIntersecting);
+
+      if (isVisible) {
+        geometryDirty = true;
+        start();
+        return;
+      }
+
+      stop();
+    }, {
+      threshold: 0.01,
+    })
+    : null;
+
+  interactionZone.addEventListener("pointerenter", () => {
+    if (!isEnabled()) {
+      return;
     }
+
+    geometryDirty = true;
+    start();
   });
-  root.addEventListener("pointermove", handlePointerMove);
-  root.addEventListener("pointerleave", handlePointerLeave);
+  interactionZone.addEventListener("pointermove", handlePointerMove);
+  interactionZone.addEventListener("pointerleave", handlePointerLeave);
+
   window.addEventListener("resize", () => {
     geometryDirty = true;
+    start();
   });
   window.addEventListener("scroll", () => {
     geometryDirty = true;
   }, { passive: true });
-  pointerQuery.addEventListener("change", () => {
-    geometryDirty = true;
-    if (!isEnabled()) {
-      stopField();
+  document.addEventListener("visibilitychange", () => {
+    isVisible = document.visibilityState === "visible";
+
+    if (isVisible) {
+      geometryDirty = true;
+      start();
+      return;
     }
-  });
-  reducedMotionQuery.addEventListener("change", () => {
-    geometryDirty = true;
-    if (!isEnabled()) {
-      stopField();
-    }
+
+    stop();
   });
 
-  if (!isEnabled()) {
-    stopField();
+  pointerQuery.addEventListener("change", () => {
+    geometryDirty = true;
+
+    if (isEnabled()) {
+      start();
+      return;
+    }
+
+    stop({ reset: true });
+  });
+
+  reducedMotionQuery.addEventListener("change", () => {
+    geometryDirty = true;
+
+    if (isEnabled()) {
+      start();
+      return;
+    }
+
+    stop({ reset: true });
+  });
+
+  visibilityObserver?.observe(interactionZone);
+
+  if (isEnabled()) {
+    updateGeometry();
+    start();
+  } else {
+    stop({ reset: true });
   }
 
   return {
+    freezeChip(chip) {
+      const state = chipStates.find((entry) => entry.chip === chip);
+
+      if (!state) {
+        return;
+      }
+
+      setBubbleTransform(state, state.translateX, state.translateY, state.rotation);
+      state.velocityX = 0;
+      state.velocityY = 0;
+    },
+    freezeAll() {
+      chipStates.forEach((state) => {
+        if (state.chip.classList.contains("is-popped")) {
+          return;
+        }
+
+        setBubbleTransform(state, state.translateX, state.translateY, state.rotation);
+      });
+      stop();
+    },
     refresh() {
       geometryDirty = true;
+      start();
     },
   };
+}
+
+function popProblems(root, engine) {
+  if (root.classList.contains("is-popping")) {
+    return Promise.resolve();
+  }
+
+  const chips = Array.from(root.querySelectorAll(".fb-problem-chip"));
+  chips.forEach((chip, index) => assignPopVector(chip, index, chips.length));
+  engine?.freezeAll();
+  root.classList.add("is-popping");
+
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, POP_DURATION);
+  });
+}
+
+function popSingleProblem(root, chip, index, total, engine) {
+  if (root.classList.contains("is-popping") || chip.classList.contains("is-popped")) {
+    return;
+  }
+
+  assignPopVector(chip, index, total);
+  engine?.freezeChip(chip);
+  chip.classList.add("is-popped");
+  chip.disabled = true;
+  chip.setAttribute("aria-hidden", "true");
 }
 
 function mountRoot(root) {
@@ -284,14 +419,14 @@ function mountRoot(root) {
   const shell = root.closest(".fb-public-shell") || document;
   const heroActions = Array.from(shell.querySelectorAll("a.fb-btn, [data-public-tab-trigger]"));
   const chips = Array.from(root.querySelectorAll(".fb-problem-chip"));
-  const pointerField = createPointerField(root, chips);
+  const bubbleEngine = createBubbleEngine(root, chips);
 
   chips.forEach((chip, index) => {
     chip.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
 
-      popSingleProblem(root, chip, index, chips.length);
+      popSingleProblem(root, chip, index, chips.length, bubbleEngine);
     });
   });
 
@@ -300,12 +435,12 @@ function mountRoot(root) {
       event.preventDefault();
       event.stopImmediatePropagation();
 
-      pointerField?.refresh();
+      bubbleEngine?.refresh();
       document.dispatchEvent(new CustomEvent("everbranch:public-hero-action", {
         detail: { href: link.getAttribute("href"), tab: link.dataset.publicTabJump || link.dataset.publicTabTrigger || null },
       }));
 
-      popProblems(root).then(() => continueAction(link));
+      popProblems(root, bubbleEngine).then(() => continueAction(link));
     }, true);
   });
 }
