@@ -142,70 +142,89 @@
                         <div class="fb-section fb-section--public fb-section--theater" aria-label="See Everbranch work">
                             <div class="fb-section-header fb-section-header--centered">
                                 <p class="fb-section-kicker">See it work</p>
-                                <h2>Watch scattered work become one clear next step.</h2>
-                                <p>Choose a business moment. The problem stays visible first, then the workspace pulls the details together.</p>
+                                <h2>Too many apps for my small business.</h2>
+                                <p>Everbranch gives you one place for your brain to focus.</p>
                             </div>
 
-                            <aside class="fb-product-demo fb-product-demo--wide" data-demo-mode="problem" data-premium-surface data-public-product-demo aria-label="Everbranch workflow example">
-                                <div class="fb-product-demo__tabs" role="tablist" aria-label="Small business examples">
-                                    <button type="button" class="is-active" role="tab" aria-selected="true" data-product-demo-scenario="retail" data-demo-customer="Pine &amp; Porch" data-demo-type="Retail buyer" data-demo-primary="Wholesale request" data-demo-note="Asked for event bestsellers, case pricing, and a fall reorder reminder." data-demo-task="Send line sheet and approve wholesale access" data-demo-owner="Sarah" data-demo-followup="Line sheet sent, wholesale access approved, and reorder follow-up ready for next Friday." data-demo-feed-one="Buyer details captured from text and email" data-demo-feed-two="Wholesale task assigned to Sarah" data-demo-feed-three="Fall reorder reminder queued" data-demo-step-one="Buyer captured" data-demo-step-two="Line sheet organized" data-demo-step-three="Task assigned" data-demo-step-four="Reorder ready" data-demo-problems="Text: Can you resend pricing?|Wholesale request buried in email|Inventory row missing owner|Event photo note from buyer|Notebook: call back Friday|Old line sheet in downloads|Customer asked twice|No one owns reorder|Follow-up date in memory|Case pricing question" data-demo-stats="Active buyers::18::4 ready to reorder|Queued follow-ups::6::2 due today|This week revenue::$6.8k::92% on time" data-demo-links="Pine &amp; Porch buyer::Customer record|Fall Harvest reorder::Follow-up task|Case pricing sheet::Shared file" data-demo-jobs="Approve wholesale login::Due today|Prep market reorder set::Assigned to Omar|Friday reorder reminder::Scheduled" data-demo-team="Sarah::Sales ops::3 open items|Omar::Markets::2 follow-ups|Nina::Inventory::Count requested" data-demo-chart="Mon::4|Tue::6|Wed::5|Thu::8">
-                                        <span>Retail</span>
-                                    </button>
-                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="trades" data-demo-customer="Monroe Ave Service Call" data-demo-type="Electrical &amp; plumbing" data-demo-primary="Job note" data-demo-note="Breaker panel photo came in with a parts question and a customer timing note." data-demo-task="Confirm parts and assign crew next step" data-demo-owner="Eli" data-demo-followup="Panel photo, parts question, customer timing, and crew next step are tied to the service call." data-demo-feed-one="Panel photo saved to the job" data-demo-feed-two="Parts question routed to Eli" data-demo-feed-three="Customer update due before 3 PM" data-demo-step-one="Job note saved" data-demo-step-two="Parts checked" data-demo-step-three="Crew assigned" data-demo-step-four="Customer updated" data-demo-problems="Employee needs address|Panel photo in text thread|Parts question in the field|Customer changed appointment|Notebook says call before 3|Old estimate in folder|Crew asked twice|No owner for permit note|Breaker size in memory|How much wire should I order?" data-demo-stats="Open service calls::14::3 parts questions|Visits today::9::2 arrivals pending|On-time arrival::96%::Last 7 days" data-demo-links="Monroe Ave customer::Service record|40A breaker quote::Estimate|Panel photo set::Job files" data-demo-jobs="Confirm breaker size::Due 11 AM|Dispatch crew next step::Assigned to Eli|Customer update::Before 3 PM" data-demo-team="Eli::Lead tech::2 calls active|Rosa::Office::Waiting on part cost|Jules::Dispatch::Crew window held" data-demo-chart="Mon::5|Tue::7|Wed::6|Thu::4">
-                                        <span>Trades</span>
-                                    </button>
-                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="construction" data-demo-customer="Maple Street Remodel" data-demo-type="Construction project" data-demo-primary="Approval needed" data-demo-note="Client approved the fixture change, but material timing and punch-list items need one place." data-demo-task="Update materials and owner punch-list" data-demo-owner="Maya" data-demo-followup="Fixture approval, material timing, and punch-list review are visible for Friday." data-demo-feed-one="Fixture approval captured" data-demo-feed-two="Material timing organized" data-demo-feed-three="Punch-list item assigned to Maya" data-demo-step-one="Approval saved" data-demo-step-two="Materials updated" data-demo-step-three="Owner assigned" data-demo-step-four="Review ready" data-demo-problems="Customer changed order|Fixture approval in email|Material count in spreadsheet|Subcontractor texted delay|Photo note from walkthrough|Permit file in wrong folder|Punch item has no owner|Friday review in memory|Which version is final?|How much tile should I order?" data-demo-stats="Active punch items::27::5 ownerless|Material holds::5::2 vendor replies pending|This week booked::$42k::3 change orders" data-demo-links="Maple Street client::Project record|Fixture approval::Change order|Tile schedule::Material note" data-demo-jobs="Update fixture takeoff::Assigned to Maya|Confirm supplier lead time::Due Friday|Owner walkthrough recap::Queued" data-demo-team="Maya::Project manager::7 open items|Luis::Field lead::2 site notes|Ari::Procurement::Awaiting vendor reply" data-demo-chart="Mon::3|Tue::5|Wed::7|Thu::6">
-                                        <span>Projects</span>
-                                    </button>
-                                    <button type="button" role="tab" aria-selected="false" data-product-demo-scenario="service" data-demo-customer="Northline Maintenance" data-demo-type="Service business" data-demo-primary="Client record" data-demo-note="Recurring appointment, open question, and handoff note are tied to the same customer." data-demo-task="Schedule visit and send reminder" data-demo-owner="Jordan" data-demo-followup="Recurring visit, open question, and reminder are ready for Monday morning." data-demo-feed-one="Client record updated" data-demo-feed-two="Appointment added to schedule" data-demo-feed-three="Reminder prepared for Jordan" data-demo-step-one="Client found" data-demo-step-two="Visit scheduled" data-demo-step-three="Question routed" data-demo-step-four="Reminder ready" data-demo-problems="Appointment moved again|Customer asked twice|Open question in voicemail|Recurring visit not scheduled|Handoff note in memory|Invoice draft in email|File in the wrong folder|Task has no owner|Text thread: pricing?|Missing phone number" data-demo-stats="Active accounts::32::9 visits today|Reminder hit rate::91%::Last 30 days|Open questions::4::1 overdue reply" data-demo-links="Northline maintenance::Customer record|Monday visit block::Schedule|Open question::Handoff note" data-demo-jobs="Confirm gate access::Before 8 AM|Send visit reminder::Assigned to Jordan|Route recurring call::Queued" data-demo-team="Jordan::Account lead::4 follow-ups|Tess::Scheduler::2 visits moved|Micah::Field tech::Route ready" data-demo-chart="Mon::2|Tue::4|Wed::6|Thu::5">
-                                        <span>Service</span>
-                                    </button>
+                            <aside class="fb-product-demo fb-product-demo--wide fb-product-demo--slideshow" data-demo-stage="choose" data-demo-mode="problem" data-premium-surface data-public-product-demo aria-label="Everbranch workflow example">
+                                <div class="fb-product-demo__stage fb-product-demo__stage--choose" data-demo-stage-panel="choose">
+                                    <div class="fb-product-demo__question">
+                                        <p class="fb-section-kicker">Step 1</p>
+                                        <h3>What is your business?</h3>
+                                    </div>
+                                    <div class="fb-product-demo__category-grid" aria-label="Choose a business type">
+                                        <button type="button" class="is-active" data-product-demo-scenario="retail" data-demo-customer="Pine &amp; Porch" data-demo-type="Retail" data-demo-primary="Wholesale request" data-demo-note="Buyer, order, inventory, and follow-up in one view." data-demo-task="Send line sheet and approve wholesale access" data-demo-owner="Sarah" data-demo-stats="Customers::18::4 ready to reorder|Orders::$6.8k::this week|Follow-ups::6::2 due today" data-demo-links="Pine &amp; Porch buyer::Customer|Fall Harvest reorder::Task|Case pricing sheet::File" data-demo-jobs="Approve wholesale login::Due today|Prep market reorder set::Assigned to Omar|Friday reorder reminder::Scheduled" data-demo-mobile="Retail dashboard|6 follow-ups due|Wholesale request ready|Inventory question flagged">
+                                            <span>Retail</span>
+                                            <strong>Products, orders, customers, reorders.</strong>
+                                        </button>
+                                        <button type="button" data-product-demo-scenario="trades" data-demo-customer="Monroe Ave Service Call" data-demo-type="Trades" data-demo-primary="Job note" data-demo-note="Customer, crew, parts, and schedule together." data-demo-task="Confirm parts and assign crew next step" data-demo-owner="Eli" data-demo-stats="Jobs::14::3 parts questions|Visits::9::2 arrivals pending|On time::96%::last 7 days" data-demo-links="Monroe Ave customer::Service|40A breaker quote::Estimate|Panel photo set::Files" data-demo-jobs="Confirm breaker size::Due 11 AM|Dispatch crew next step::Assigned to Eli|Customer update::Before 3 PM" data-demo-mobile="Trades dashboard|9 visits today|Parts question active|Crew note saved">
+                                            <span>Trades</span>
+                                            <strong>Jobs, crews, estimates, parts.</strong>
+                                        </button>
+                                        <button type="button" data-product-demo-scenario="construction" data-demo-customer="Maple Street Remodel" data-demo-type="Projects" data-demo-primary="Approval needed" data-demo-note="Approvals, materials, and punch-list items connected." data-demo-task="Update materials and owner punch-list" data-demo-owner="Maya" data-demo-stats="Punch items::27::5 ownerless|Materials::5::2 vendor replies|Booked::$42k::3 changes" data-demo-links="Maple Street client::Project|Fixture approval::Change order|Tile schedule::Material" data-demo-jobs="Update fixture takeoff::Assigned to Maya|Confirm supplier lead time::Due Friday|Owner walkthrough recap::Queued" data-demo-mobile="Project dashboard|5 material holds|Approval saved|Punch list ready">
+                                            <span>Projects</span>
+                                            <strong>Approvals, materials, subs, files.</strong>
+                                        </button>
+                                        <button type="button" data-product-demo-scenario="service" data-demo-customer="Northline Maintenance" data-demo-type="Service" data-demo-primary="Client record" data-demo-note="Appointments, reminders, questions, and handoffs aligned." data-demo-task="Schedule visit and send reminder" data-demo-owner="Jordan" data-demo-stats="Accounts::32::9 visits today|Reminders::91%::hit rate|Questions::4::1 overdue" data-demo-links="Northline maintenance::Customer|Monday visit block::Schedule|Open question::Note" data-demo-jobs="Confirm gate access::Before 8 AM|Send visit reminder::Assigned to Jordan|Route recurring call::Queued" data-demo-mobile="Service dashboard|9 visits today|Reminder ready|Question routed">
+                                            <span>Service</span>
+                                            <strong>Clients, visits, reminders, handoffs.</strong>
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div class="fb-product-demo__frame" aria-live="polite">
-                                    <div class="fb-product-demo__topbar">
-                                        <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                        <strong>{{ $productName }} workspace</strong>
-                                        <button type="button" class="fb-product-demo__search-trigger" data-product-demo-bud-search aria-label="Ask Bud what you want to do">
-                                            <span>Search or ask what you want to do...</span><kbd>Cmd K</kbd>
-                                        </button>
-                                        <em data-product-demo-field="type">Retail buyer</em>
+                                <div class="fb-product-demo__stage fb-product-demo__stage--problem" data-demo-stage-panel="problem" hidden>
+                                    <div class="fb-product-demo__problem-copy">
+                                        <p data-product-demo-field="type">Retail</p>
+                                        <h3>If you're like us this is what you are working in and paying for</h3>
                                     </div>
-                                    <div class="fb-product-demo__mode" role="tablist" aria-label="Problem and solution view">
-                                        <button type="button" class="is-active fb-product-demo__mode-problem" role="tab" aria-selected="true" data-product-demo-mode="problem">
-                                            <span>Problem</span>
-                                            The details are scattered.
-                                        </button>
-                                        <button type="button" class="fb-product-demo__mode-solution" role="tab" aria-selected="false" data-product-demo-mode="solution">
-                                            <span>Solution</span>
-                                            Everbranch gives them one home.
-                                        </button>
+                                    <div class="fb-product-demo__app-screen" aria-label="Apps scattered across a small business">
+                                        <div class="fb-product-demo__app-cloud" data-product-demo-app-cloud>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--shopify"><b>S</b>Shopify</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--instagram"><b>IG</b>Instagram</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--gmail"><b>G</b>Gmail</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--phone"><b>P</b>Phone</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--quickbooks"><b>QB</b>QuickBooks</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--square"><b>SQ</b>Square</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--stripe"><b>ST</b>Stripe</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--slack"><b>#</b>Slack</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--calendar"><b>31</b>Calendar</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--drive"><b>D</b>Drive</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--excel"><b>X</b>Excel</span>
+                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--mailchimp"><b>MC</b>Mailchimp</span>
+                                        </div>
+                                        <div class="fb-product-demo__center-mark" aria-hidden="true">
+                                            <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
+                                        </div>
                                     </div>
-                                    <div class="fb-product-demo__mess" data-product-demo-problem aria-label="Scattered work example">
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--text" data-product-demo-problem-item="0">Text: Can you resend pricing?</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--sheet" data-product-demo-problem-item="1">Wholesale request buried in email</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--note" data-product-demo-problem-item="2">Inventory row missing owner</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--photo" data-product-demo-problem-item="3">Event photo note from buyer</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--memory" data-product-demo-problem-item="4">Notebook: call back Friday</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--email" data-product-demo-problem-item="5">Old line sheet in downloads</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--file" data-product-demo-problem-item="6">Customer asked twice</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--owner" data-product-demo-problem-item="7">No one owns reorder</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--calendar" data-product-demo-problem-item="8">Follow-up date in memory</span>
-                                        <span class="fb-product-demo__mess-item fb-product-demo__mess-item--handoff" data-product-demo-problem-item="9">Case pricing question</span>
+                                    <div class="fb-product-demo__problem-actions">
+                                        <button type="button" class="fb-product-demo__problem-button">THE PROBLEM</button>
+                                        <button type="button" class="fb-btn fb-btn-primary" data-demo-start-solution>Let's put everything in one place.</button>
                                     </div>
-                                    <div class="fb-product-demo__workspace">
+                                </div>
+
+                                <div class="fb-product-demo__stage fb-product-demo__stage--solution" data-demo-stage-panel="solution" hidden>
+                                    <div class="fb-product-demo__solution-copy">
+                                        <p class="fb-section-kicker">The solution</p>
+                                        <h3>Everbranch gives you one place for your brain to focus</h3>
+                                    </div>
+                                    <div class="fb-product-demo__solution-grid" aria-live="polite">
+                                        <div class="fb-product-demo__frame">
+                                            <div class="fb-product-demo__topbar">
+                                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
+                                                <strong>{{ $productName }}</strong>
+                                                <em data-product-demo-field="type">Retail</em>
+                                            </div>
+                                            <div class="fb-product-demo__workspace">
                                         <nav class="fb-product-demo__sidebar" aria-label="Example workspace sections">
-                                            <button type="button" class="is-active" data-product-demo-pane="home">Home</button>
-                                            <button type="button" data-product-demo-pane="customers">Customers</button>
-                                            <button type="button" data-product-demo-pane="work">Work</button>
-                                            <button type="button" data-product-demo-pane="tasks">Tasks</button>
-                                            <button type="button" data-product-demo-pane="files">Files</button>
-                                            <button type="button" data-product-demo-pane="reports">Reports</button>
+                                                    <button type="button" class="is-active" data-product-demo-pane="home">Home</button>
+                                                    <button type="button" data-product-demo-pane="customers">Customers</button>
+                                                    <button type="button" data-product-demo-pane="work">Work</button>
+                                                    <button type="button" data-product-demo-pane="tasks">Tasks</button>
+                                                    <button type="button" data-product-demo-pane="files">Files</button>
                                         </nav>
                                         <section class="fb-product-demo__record" aria-label="Example record">
                                             <div class="fb-product-demo__record-head">
                                                 <div>
-                                                    <p>Open record</p>
                                                     <h3 data-product-demo-field="customer">Pine &amp; Porch</h3>
                                                 </div>
                                                 <span data-product-demo-field="primary">Wholesale request</span>
@@ -227,7 +246,7 @@
                                                     <span data-product-demo-stat-meta>92% on time</span>
                                                 </button>
                                             </div>
-                                            <p data-product-demo-field="note" data-product-demo-pane-panel="home customers work">Asked for event bestsellers, case pricing, and a fall reorder reminder.</p>
+                                            <p data-product-demo-field="note" data-product-demo-pane-panel="home customers work">Buyer, order, inventory, and follow-up in one view.</p>
                                             <div class="fb-product-demo__record-grid" data-product-demo-pane-panel="home customers files tasks">
                                                 <div class="fb-product-demo__task-card" data-product-demo-pane-panel="home tasks">
                                                     <span>Next step</span>
@@ -270,81 +289,31 @@
                                                 </div>
                                             </div>
                                         </section>
-                                        <section class="fb-product-demo__activity" aria-label="Example activity">
-                                            <p>Activity</p>
-                                            <ul data-product-demo-pane-panel="home work">
-                                                <li><button type="button" class="fb-product-demo__feed-button" data-product-demo-feed="one">Buyer details captured</button></li>
-                                                <li><button type="button" class="fb-product-demo__feed-button" data-product-demo-feed="two">Task assigned to Sarah</button></li>
-                                                <li><button type="button" class="fb-product-demo__feed-button" data-product-demo-feed="three">Follow-up reminder queued</button></li>
-                                            </ul>
-                                            <div class="fb-product-demo__team-card" data-product-demo-pane-panel="home work tasks">
-                                                <p>Team</p>
-                                                <div class="fb-product-demo__team-list">
-                                                    <button type="button" class="fb-product-demo__team-item" data-product-demo-team>
-                                                        <span class="fb-product-demo__avatar" data-product-demo-team-avatar>SA</span>
-                                                        <span class="fb-product-demo__team-copy">
-                                                            <strong data-product-demo-team-name>Sarah</strong>
-                                                            <small data-product-demo-team-role>Sales ops</small>
-                                                        </span>
-                                                        <em data-product-demo-team-status>3 open items</em>
-                                                    </button>
-                                                    <button type="button" class="fb-product-demo__team-item" data-product-demo-team>
-                                                        <span class="fb-product-demo__avatar" data-product-demo-team-avatar>OM</span>
-                                                        <span class="fb-product-demo__team-copy">
-                                                            <strong data-product-demo-team-name>Omar</strong>
-                                                            <small data-product-demo-team-role>Markets</small>
-                                                        </span>
-                                                        <em data-product-demo-team-status>2 follow-ups</em>
-                                                    </button>
-                                                    <button type="button" class="fb-product-demo__team-item" data-product-demo-team>
-                                                        <span class="fb-product-demo__avatar" data-product-demo-team-avatar>NI</span>
-                                                        <span class="fb-product-demo__team-copy">
-                                                            <strong data-product-demo-team-name>Nina</strong>
-                                                            <small data-product-demo-team-role>Inventory</small>
-                                                        </span>
-                                                        <em data-product-demo-team-status>Count requested</em>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div class="fb-product-demo__chart-card" data-product-demo-pane-panel="home work reports">
-                                                <p>Workload trend</p>
-                                                <div class="fb-product-demo__chart">
-                                                    <button type="button" class="fb-product-demo__chart-bar" data-product-demo-chart>
-                                                        <span class="fb-product-demo__chart-track"><span class="fb-product-demo__chart-fill" data-product-demo-chart-fill></span></span>
-                                                        <strong data-product-demo-chart-value>4</strong>
-                                                        <span data-product-demo-chart-label>Mon</span>
-                                                    </button>
-                                                    <button type="button" class="fb-product-demo__chart-bar" data-product-demo-chart>
-                                                        <span class="fb-product-demo__chart-track"><span class="fb-product-demo__chart-fill" data-product-demo-chart-fill></span></span>
-                                                        <strong data-product-demo-chart-value>6</strong>
-                                                        <span data-product-demo-chart-label>Tue</span>
-                                                    </button>
-                                                    <button type="button" class="fb-product-demo__chart-bar" data-product-demo-chart>
-                                                        <span class="fb-product-demo__chart-track"><span class="fb-product-demo__chart-fill" data-product-demo-chart-fill></span></span>
-                                                        <strong data-product-demo-chart-value>5</strong>
-                                                        <span data-product-demo-chart-label>Wed</span>
-                                                    </button>
-                                                    <button type="button" class="fb-product-demo__chart-bar" data-product-demo-chart>
-                                                        <span class="fb-product-demo__chart-track"><span class="fb-product-demo__chart-fill" data-product-demo-chart-fill></span></span>
-                                                        <strong data-product-demo-chart-value>8</strong>
-                                                        <span data-product-demo-chart-label>Thu</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </section>
                                     </div>
-                                    <div class="fb-product-demo__workflow" aria-label="Example workflow progress" data-product-demo-pane-panel="home work tasks">
-                                        <ol>
-                                            <li class="is-active" data-product-demo-step="0" data-product-demo-step-label="one">Buyer captured</li>
-                                            <li data-product-demo-step="1" data-product-demo-step-label="two">Line sheet organized</li>
-                                            <li data-product-demo-step="2" data-product-demo-step-label="three">Task assigned</li>
-                                            <li data-product-demo-step="3" data-product-demo-step-label="four">Reorder ready</li>
-                                        </ol>
-                                        <p data-product-demo-field="followup">Reorder follow-up ready for next Friday</p>
+                                        </div>
+                                        <aside class="fb-product-demo__phone" aria-label="Everbranch mobile app preview">
+                                            <div class="fb-product-demo__phone-top">
+                                                <span></span>
+                                            </div>
+                                            <div class="fb-product-demo__phone-app">
+                                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
+                                                <strong>{{ $productName }}</strong>
+                                            </div>
+                                            <div class="fb-product-demo__phone-screen">
+                                                <p data-product-demo-mobile-line="0">Retail dashboard</p>
+                                                <h4 data-product-demo-mobile-line="1">6 follow-ups due</h4>
+                                                <ul>
+                                                    <li data-product-demo-mobile-line="2">Wholesale request ready</li>
+                                                    <li data-product-demo-mobile-line="3">Inventory question flagged</li>
+                                                </ul>
+                                            </div>
+                                        </aside>
+                                    </div>
+                                    <div class="fb-product-demo__solution-actions">
+                                        <button type="button" class="fb-btn fb-btn-secondary" data-demo-back-categories>Choose another business</button>
+                                        <a class="fb-btn fb-btn-primary" href="{{ route('login') }}">Lets get started</a>
                                     </div>
                                 </div>
-                                <p class="fb-product-demo__motion-note">Motion-safe version: detail captured, work organized, next step assigned, follow-up ready.</p>
-                                <span class="sr-only">Work organized</span>
                             </aside>
                         </div>
                     </article>
