@@ -80,6 +80,11 @@ class LandlordTenantDirectoryController extends Controller
                 ->sortByDesc('created_at')
                 ->take(6)
                 ->values(),
+            'onboardingGuideRows' => $tenants
+                ->filter(static fn (array $row): bool => is_array($row['onboarding_guide'] ?? null))
+                ->sortByDesc('created_at')
+                ->take(6)
+                ->values(),
             'onboardingTriage' => $onboardingTriage,
         ]);
     }
@@ -718,6 +723,27 @@ class LandlordTenantDirectoryController extends Controller
             ]);
         }
 
+        if (Schema::hasTable('tenant_user') && Schema::hasTable('users')) {
+            $userColumns = [
+                'users.id',
+                'users.name',
+                'users.email',
+                'users.role',
+                'users.requested_via',
+            ];
+
+            if (Schema::hasColumn('users', 'onboarding_guide_answers')) {
+                $userColumns[] = 'users.onboarding_guide_answers';
+            }
+
+            $query->with([
+                'users' => fn ($query) => $query
+                    ->select($userColumns)
+                    ->orderBy('tenant_user.created_at')
+                    ->orderBy('users.id'),
+            ]);
+        }
+
         if (Schema::hasTable('integration_health_events')) {
             $query->withCount([
                 'integrationHealthEvents as open_integration_health_events_count' => fn (Builder $query): Builder => $query->where('status', 'open'),
@@ -813,6 +839,43 @@ class LandlordTenantDirectoryController extends Controller
                 'open_integration_health_events' => $openHealthEventCount,
             ],
             'module_setup' => $moduleSetup,
+            'onboarding_guide' => $this->onboardingGuideForTenant($tenant),
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function onboardingGuideForTenant(Tenant $tenant): ?array
+    {
+        if (! $tenant->relationLoaded('users')) {
+            return null;
+        }
+
+        $owner = $tenant->users
+            ->first(function (User $user): bool {
+                $answers = $user->getAttribute('onboarding_guide_answers');
+
+                return is_array($answers) && $answers !== [];
+            });
+
+        if (! $owner instanceof User) {
+            return null;
+        }
+
+        $answers = $owner->getAttribute('onboarding_guide_answers');
+        if (! is_array($answers)) {
+            return null;
+        }
+
+        return [
+            'user' => [
+                'id' => (int) $owner->id,
+                'name' => (string) $owner->name,
+                'email' => (string) $owner->email,
+                'requested_via' => (string) ($owner->requested_via ?? ''),
+            ],
+            'answers' => $answers,
         ];
     }
 

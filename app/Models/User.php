@@ -32,6 +32,7 @@ class User extends Authenticatable
         'approved_by',
         'google_id',
         'google_avatar',
+        'onboarding_guide_answers',
     ];
 
     /**
@@ -61,6 +62,7 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'approval_requested_at' => 'datetime',
         'approved_at' => 'datetime',
+        'onboarding_guide_answers' => 'array',
         ];
     }
 

@@ -18,6 +18,10 @@ class HomeRedirect
             return route('landlord.dashboard', absolute: false);
         }
 
+        if (! $user->tenants()->exists()) {
+            return route('workspace.first-login', absolute: false);
+        }
+
         if ($tenant instanceof Tenant && self::tenantSetupIsIncomplete($tenant)) {
             return route('app.start', absolute: false);
         }

@@ -44,6 +44,7 @@ use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
 use App\Http\Controllers\Onboarding\CustomerStartHereController;
+use App\Http\Controllers\Onboarding\FirstLoginWorkspaceController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
 use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
@@ -504,6 +505,11 @@ Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProdu
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::get('/workspace/create', [FirstLoginWorkspaceController::class, 'show'])
+        ->name('workspace.first-login');
+    Route::post('/workspace/create', [FirstLoginWorkspaceController::class, 'store'])
+        ->name('workspace.first-login.store');
 
     // Dashboard
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->group(function () {

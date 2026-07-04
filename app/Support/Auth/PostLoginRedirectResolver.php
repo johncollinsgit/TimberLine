@@ -20,6 +20,10 @@ class PostLoginRedirectResolver
         $membershipMap = $this->membershipMap($memberships);
         $intent = $this->intentStore->pull($request);
 
+        if ($memberships->isEmpty() && ! HomeRedirect::isPlatformOperator($user)) {
+            return route('workspace.first-login', absolute: false);
+        }
+
         $tenantIntentExists = $intent !== null;
         $tenantIntentId = $intent['tenant_id'] ?? null;
         $tenantMembershipPassed = is_int($tenantIntentId)
