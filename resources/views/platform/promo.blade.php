@@ -202,6 +202,107 @@
                                     </div>
                                 </div>
 
+                                <div class="fb-product-demo__stage fb-product-demo__stage--explainer" data-demo-stage-panel="explainer" hidden>
+                                    <div class="fb-product-demo__slides" aria-live="polite">
+                                        <article class="fb-product-demo__story-slide is-active" data-demo-story-slide="0">
+                                            <div class="fb-product-demo__story-copy">
+                                                <p class="fb-section-kicker">Slide 1 of 6</p>
+                                                <h3>We know the ten-app headache.</h3>
+                                                <p>We are small business owners too. Ten apps, ten billings, ten logins, and somehow the one thing you need is still hiding.</p>
+                                            </div>
+                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--apps" aria-hidden="true">
+                                                <span>Shopify</span>
+                                                <span>Gmail</span>
+                                                <span>QuickBooks</span>
+                                                <span>Instagram</span>
+                                                <span>Calendar</span>
+                                                <span>Phone</span>
+                                            </div>
+                                        </article>
+                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="1" hidden>
+                                            <div class="fb-product-demo__story-copy">
+                                                <p class="fb-section-kicker">Slide 2 of 6</p>
+                                                <h3>Business got complicated. We simplify it.</h3>
+                                                <p>Not by forcing you into another generic tool. Everbranch custom makes the workspace around how your business actually runs.</p>
+                                            </div>
+                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--build" aria-hidden="true">
+                                                <span>Messy</span>
+                                                <span>Custom fit</span>
+                                                <span>Simple</span>
+                                            </div>
+                                        </article>
+                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="2" hidden>
+                                            <div class="fb-product-demo__story-copy">
+                                                <p class="fb-section-kicker">Slide 3 of 6</p>
+                                                <h3>All your branches, one dashboard.</h3>
+                                                <p>Invoicing, supplies, customers, employees, and messaging live together so your next move is easier to see.</p>
+                                            </div>
+                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--branches" aria-hidden="true">
+                                                <span>Invoicing</span>
+                                                <span>Supplies</span>
+                                                <span>Customers</span>
+                                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
+                                                <span>Employees</span>
+                                                <span>Messaging</span>
+                                                <span>Files</span>
+                                            </div>
+                                        </article>
+                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="3" hidden>
+                                            <div class="fb-product-demo__story-copy">
+                                                <p class="fb-section-kicker">Slide 4 of 6</p>
+                                                <h3>Stop trying apps that do not fit.</h3>
+                                                <p>Do not be another lost business owner hopping from subscription to subscription. Let us design the system around you.</p>
+                                            </div>
+                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--fit" aria-hidden="true">
+                                                <span>Generic app</span>
+                                                <span>Wrong fit</span>
+                                                <strong>Everbranch fit</strong>
+                                            </div>
+                                        </article>
+                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="4" hidden>
+                                            <div class="fb-product-demo__story-copy">
+                                                <p class="fb-section-kicker">Slide 5 of 6</p>
+                                                <h3>Your online app and phone app stay together.</h3>
+                                                <p>Use the dashboard at your desk, then keep the same customers, jobs, notes, and next steps in your pocket.</p>
+                                            </div>
+                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--devices" aria-hidden="true">
+                                                <span>Desktop</span>
+                                                <span>Phone</span>
+                                            </div>
+                                        </article>
+                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="5" hidden>
+                                            <div class="fb-product-demo__story-copy">
+                                                <p class="fb-section-kicker">Slide 6 of 6</p>
+                                                <h3>Pick what matters first.</h3>
+                                                <p>Website, app, sales conversations, billing, customers, jobs, files, employees, and more can all become part of one Everbranch home.</p>
+                                            </div>
+                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--modules" aria-hidden="true">
+                                                <span>Website</span>
+                                                <span>App</span>
+                                                <span>Sales</span>
+                                                <span>Billing</span>
+                                                <span>Customers</span>
+                                                <span>Jobs</span>
+                                                <span>Files</span>
+                                                <span>Team</span>
+                                            </div>
+                                        </article>
+                                    </div>
+                                    <div class="fb-product-demo__slide-controls">
+                                        <button type="button" class="fb-btn fb-btn-secondary" data-demo-slide-prev>Back</button>
+                                        <div class="fb-product-demo__slide-dots" aria-label="Explainer slide progress">
+                                            <button type="button" class="is-active" aria-label="Open slide 1" data-demo-slide-dot="0"></button>
+                                            <button type="button" aria-label="Open slide 2" data-demo-slide-dot="1"></button>
+                                            <button type="button" aria-label="Open slide 3" data-demo-slide-dot="2"></button>
+                                            <button type="button" aria-label="Open slide 4" data-demo-slide-dot="3"></button>
+                                            <button type="button" aria-label="Open slide 5" data-demo-slide-dot="4"></button>
+                                            <button type="button" aria-label="Open slide 6" data-demo-slide-dot="5"></button>
+                                        </div>
+                                        <button type="button" class="fb-btn fb-btn-primary" data-demo-slide-next>Next</button>
+                                        <button type="button" class="fb-btn fb-btn-primary" data-demo-show-solution hidden>Show me Everbranch</button>
+                                    </div>
+                                </div>
+
                                 <div class="fb-product-demo__stage fb-product-demo__stage--solution" data-demo-stage-panel="solution" hidden>
                                     <div class="fb-product-demo__solution-copy">
                                         <p class="fb-section-kicker">The solution</p>
