@@ -6,6 +6,11 @@ const BACK_SELECTOR = "[data-demo-back-categories]";
 const PANE_SELECTOR = "[data-product-demo-pane]";
 const PANE_PANEL_SELECTOR = "[data-product-demo-pane-panel]";
 const APP_BUBBLE_SELECTOR = ".fb-product-demo__app-bubble";
+const STORY_SLIDE_SELECTOR = "[data-demo-story-slide]";
+const SLIDE_DOT_SELECTOR = "[data-demo-slide-dot]";
+const SLIDE_PREV_SELECTOR = "[data-demo-slide-prev]";
+const SLIDE_NEXT_SELECTOR = "[data-demo-slide-next]";
+const SHOW_SOLUTION_SELECTOR = "[data-demo-show-solution]";
 
 const SOLVE_DELAY = 760;
 
@@ -138,6 +143,50 @@ function showProblem(root) {
   showStage(root, "problem");
 }
 
+function setStorySlide(root, index) {
+  const slides = Array.from(root.querySelectorAll(STORY_SLIDE_SELECTOR));
+  const dots = Array.from(root.querySelectorAll(SLIDE_DOT_SELECTOR));
+  const prevButton = root.querySelector(SLIDE_PREV_SELECTOR);
+  const nextButton = root.querySelector(SLIDE_NEXT_SELECTOR);
+  const showSolutionButton = root.querySelector(SHOW_SOLUTION_SELECTOR);
+  const maxIndex = Math.max(slides.length - 1, 0);
+  const activeIndex = Math.max(0, Math.min(index, maxIndex));
+
+  root.dataset.demoStorySlide = `${activeIndex}`;
+
+  slides.forEach((slide, slideIndex) => {
+    const active = slideIndex === activeIndex;
+    slide.hidden = !active;
+    slide.classList.toggle("is-active", active);
+  });
+
+  dots.forEach((dot, dotIndex) => {
+    const active = dotIndex === activeIndex;
+    dot.classList.toggle("is-active", active);
+    dot.setAttribute("aria-current", active ? "step" : "false");
+  });
+
+  if (prevButton) {
+    prevButton.disabled = activeIndex === 0;
+  }
+
+  if (nextButton) {
+    nextButton.hidden = activeIndex === maxIndex;
+  }
+
+  if (showSolutionButton) {
+    showSolutionButton.hidden = activeIndex !== maxIndex;
+  }
+}
+
+function showExplainer(root) {
+  root.classList.remove("is-solving");
+  root.classList.add("has-solved");
+  root.dataset.demoMode = "explainer";
+  setStorySlide(root, 0);
+  showStage(root, "explainer");
+}
+
 function setAppCollapseOffsets(root) {
   const stage = root.querySelector('[data-demo-stage-panel="problem"]');
   const centerMark = root.querySelector(".fb-product-demo__center-mark");
@@ -160,24 +209,26 @@ function setAppCollapseOffsets(root) {
   });
 }
 
-function showSolution(root, reducedMotion) {
+function showExplainerAfterCollapse(root, reducedMotion) {
   root.dataset.demoMode = "problem";
 
   if (reducedMotion) {
-    root.classList.add("has-solved");
-    root.dataset.demoMode = "solution";
-    showStage(root, "solution");
+    showExplainer(root);
     return;
   }
 
   setAppCollapseOffsets(root);
   root.classList.add("is-solving");
   window.setTimeout(() => {
-    root.classList.remove("is-solving");
-    root.classList.add("has-solved");
-    root.dataset.demoMode = "solution";
-    showStage(root, "solution");
+    showExplainer(root);
   }, SOLVE_DELAY);
+}
+
+function showSolution(root) {
+  root.classList.remove("is-solving");
+  root.classList.add("has-solved");
+  root.dataset.demoMode = "solution";
+  showStage(root, "solution");
 }
 
 function mountRoot(root) {
@@ -190,6 +241,9 @@ function mountRoot(root) {
   const scenarioButtons = Array.from(root.querySelectorAll(SCENARIO_SELECTOR));
   const startSolutionButton = root.querySelector(START_SOLUTION_SELECTOR);
   const backButton = root.querySelector(BACK_SELECTOR);
+  const slidePrevButton = root.querySelector(SLIDE_PREV_SELECTOR);
+  const slideNextButton = root.querySelector(SLIDE_NEXT_SELECTOR);
+  const showSolutionButton = root.querySelector(SHOW_SOLUTION_SELECTOR);
   const reducedMotion = prefersReducedMotion();
 
   scenarioButtons.forEach((button) => {
@@ -207,7 +261,27 @@ function mountRoot(root) {
   });
 
   startSolutionButton?.addEventListener("click", () => {
-    showSolution(root, reducedMotion);
+    showExplainerAfterCollapse(root, reducedMotion);
+  });
+
+  slidePrevButton?.addEventListener("click", () => {
+    const current = Number.parseInt(root.dataset.demoStorySlide || "0", 10);
+    setStorySlide(root, current - 1);
+  });
+
+  slideNextButton?.addEventListener("click", () => {
+    const current = Number.parseInt(root.dataset.demoStorySlide || "0", 10);
+    setStorySlide(root, current + 1);
+  });
+
+  showSolutionButton?.addEventListener("click", () => {
+    showSolution(root);
+  });
+
+  root.querySelectorAll(SLIDE_DOT_SELECTOR).forEach((dot) => {
+    dot.addEventListener("click", () => {
+      setStorySlide(root, Number.parseInt(dot.dataset.demoSlideDot || "0", 10));
+    });
   });
 
   backButton?.addEventListener("click", () => {
@@ -221,6 +295,7 @@ function mountRoot(root) {
   }
 
   applyPane(root, "home");
+  setStorySlide(root, 0);
   showStage(root, "choose");
 }
 
