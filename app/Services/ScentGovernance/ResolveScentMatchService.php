@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Schema;
 
 class ResolveScentMatchService
 {
+    /** @var array<string,true>|null */
+    protected ?array $scentNameTokens = null;
+
     /**
      * @param  array<string,mixed>  $context
      * @return Collection<int,array<string,mixed>>
@@ -36,6 +39,18 @@ class ResolveScentMatchService
             return collect();
         }
 
+        // Strip candle-domain noise (container/size/quantity words) so verbose titles
+        // like "Appalachian maple bourbon mason candle 4oz" still reach the real scent.
+        // Falls back to the raw tokens if cleaning would leave nothing to search on.
+        $searchTokens = $this->significantTokens($tokens);
+        if ($searchTokens === []) {
+            $searchTokens = $tokens;
+        }
+        $scoreNeedle = implode(' ', $searchTokens);
+        if ($scoreNeedle === '') {
+            $scoreNeedle = $needle;
+        }
+
         /** @var array<int,array<string,mixed>> $candidates */
         $candidates = [];
 
@@ -49,8 +64,8 @@ class ResolveScentMatchService
 
         $canonicalRows = Scent::query()
             ->with(['oilBlend:id,name'])
-            ->where(function (Builder $query) use ($tokens, $scentSearchColumns): void {
-                $this->applyLooseTextSearch($query, $tokens, $scentSearchColumns);
+            ->where(function (Builder $query) use ($searchTokens, $scentSearchColumns): void {
+                $this->applyLooseTextSearch($query, $searchTokens, $scentSearchColumns);
             })
             ->orderByRaw('COALESCE(display_name, name)')
             ->limit(180)
@@ -72,7 +87,7 @@ class ResolveScentMatchService
                 continue;
             }
 
-            $score = $this->candidateScoreFromFields($needle, [
+            $score = $this->candidateScoreFromFields($scoreNeedle, [
                 $name,
                 (string) ($scent->name ?? ''),
                 (string) ($scent->abbreviation ?? ''),
@@ -111,10 +126,10 @@ class ResolveScentMatchService
                 ->with(['canonicalScent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club,oil_blend_id'])
                 ->where('active', true)
                 ->whereNotNull('canonical_scent_id')
-                ->where(function (Builder $query) use ($tokens, $customSearchColumns, $scentSearchColumns): void {
-                    $this->applyLooseTextSearch($query, $tokens, $customSearchColumns);
-                    $query->orWhereHas('canonicalScent', function (Builder $canonicalQuery) use ($tokens, $scentSearchColumns): void {
-                        $this->applyLooseTextSearch($canonicalQuery, $tokens, $scentSearchColumns);
+                ->where(function (Builder $query) use ($searchTokens, $customSearchColumns, $scentSearchColumns): void {
+                    $this->applyLooseTextSearch($query, $searchTokens, $customSearchColumns);
+                    $query->orWhereHas('canonicalScent', function (Builder $canonicalQuery) use ($searchTokens, $scentSearchColumns): void {
+                        $this->applyLooseTextSearch($canonicalQuery, $searchTokens, $scentSearchColumns);
                     });
                 })
                 ->limit(300)
@@ -134,7 +149,7 @@ class ResolveScentMatchService
                 }
 
                 $customName = trim((string) $row->custom_scent_name);
-                $score = $this->candidateScoreFromFields($needle, [
+                $score = $this->candidateScoreFromFields($scoreNeedle, [
                     $customName,
                     $name,
                     (string) ($scent->name ?? ''),
@@ -175,8 +190,8 @@ class ResolveScentMatchService
             $aliases = ScentAlias::query()
                 ->with(['scent:id,name,display_name,is_wholesale_custom,is_blend,is_candle_club,oil_blend_id'])
                 ->whereIn('scope', array_values(array_unique($aliasScopes)))
-                ->where(function (Builder $query) use ($tokens): void {
-                    $this->applyLooseTextSearch($query, $tokens, ['alias']);
+                ->where(function (Builder $query) use ($searchTokens): void {
+                    $this->applyLooseTextSearch($query, $searchTokens, ['alias']);
                 })
                 ->limit(220)
                 ->get();
@@ -193,7 +208,7 @@ class ResolveScentMatchService
                 }
 
                 $score = max(
-                    $this->candidateScoreFromFields($needle, [
+                    $this->candidateScoreFromFields($scoreNeedle, [
                         (string) $alias->alias,
                         $name,
                         (string) ($scent->name ?? ''),
@@ -218,6 +233,44 @@ class ResolveScentMatchService
             }
         }
 
+        // Acronym / initialism pass — resolves short codes like "AMB" to
+        // "Appalachian Maple Bourbon" even when no abbreviation is stored.
+        $acronym = $this->acronymNeedle($searchTokens);
+        if ($acronym !== '') {
+            $acronymRows = Scent::query()->get([
+                'id', 'name', 'display_name', 'abbreviation',
+                'is_wholesale_custom', 'is_blend', 'is_candle_club', 'oil_blend_id',
+            ]);
+
+            foreach ($acronymRows as $scent) {
+                $name = (string) ($scent->display_name ?: $scent->name ?: '');
+                if ($name === '') {
+                    continue;
+                }
+
+                $abbr = strtolower(trim((string) ($scent->abbreviation ?? '')));
+                $initials = $this->scentInitials($name);
+
+                if ($abbr !== '' && $abbr === $acronym) {
+                    $this->upsertCandidate($candidates, [
+                        'id' => (int) $scent->id,
+                        'name' => $name,
+                        'mapping_type' => $this->candidateType($scent, false),
+                        'score' => 0.97,
+                        'why' => 'matched scent abbreviation',
+                    ]);
+                } elseif ($initials !== '' && $initials === $acronym) {
+                    $this->upsertCandidate($candidates, [
+                        'id' => (int) $scent->id,
+                        'name' => $name,
+                        'mapping_type' => $this->candidateType($scent, false),
+                        'score' => 0.95,
+                        'why' => 'matched scent initials',
+                    ]);
+                }
+            }
+        }
+
         $rows = array_values($candidates);
         usort($rows, function (array $a, array $b) use ($isWholesale): int {
             $aType = (string) ($a['mapping_type'] ?? '');
@@ -233,6 +286,7 @@ class ResolveScentMatchService
         return collect(array_slice($rows, 0, 8))
             ->map(function (array $row): array {
                 $row['score'] = (int) max(1, min(99, round(((float) ($row['score'] ?? 0)) * 100)));
+
                 return $row;
             })
             ->values();
@@ -389,11 +443,13 @@ class ResolveScentMatchService
 
         if (! isset($candidates[$id])) {
             $candidates[$id] = $candidate;
+
             return;
         }
 
         if ((float) ($candidate['score'] ?? 0) > (float) ($candidates[$id]['score'] ?? 0)) {
             $candidates[$id] = $candidate;
+
             return;
         }
 
@@ -407,6 +463,7 @@ class ResolveScentMatchService
         $compact = $this->normalizeSearchText($value);
         $compact = preg_replace('/[^a-z0-9]+/i', ' ', $compact) ?? $compact;
         $compact = preg_replace('/\s+/', ' ', $compact) ?? $compact;
+
         return trim($compact);
     }
 
@@ -416,6 +473,7 @@ class ResolveScentMatchService
         $clean = preg_replace('/\b(wholesale|retail|market|event)\b/i', '', $clean) ?? $clean;
         $clean = str_replace('&', 'and', $clean);
         $clean = preg_replace('/\s+/', ' ', $clean) ?? $clean;
+
         return trim($clean);
     }
 
@@ -447,5 +505,128 @@ class ResolveScentMatchService
 
         return max(0.0, min(1.0, max($similarScore, $distanceScore)));
     }
-}
 
+    /**
+     * Drop candle-domain noise tokens (containers, sizes, quantities) while never
+     * removing a token that is itself a real scent-name word.
+     *
+     * @param  array<int,string>  $tokens
+     * @return array<int,string>
+     */
+    protected function significantTokens(array $tokens): array
+    {
+        $stop = $this->matchStopwords();
+        $scentWords = $this->scentNameTokenSet();
+
+        $kept = [];
+        foreach ($tokens as $token) {
+            if ($token === '') {
+                continue;
+            }
+            // Keep anything that is a genuine scent-name word (e.g. a scent named "Cotton").
+            if (isset($scentWords[$token])) {
+                $kept[] = $token;
+
+                continue;
+            }
+            // Drop pure sizes/quantities like "4oz", "8", "16oz", "250ml".
+            if (preg_match('/^\d+(\.\d+)?(oz|ounce|ounces|ml|g|gram|grams|lb|lbs)?$/', $token) === 1) {
+                continue;
+            }
+            if (isset($stop[$token])) {
+                continue;
+            }
+            $kept[] = $token;
+        }
+
+        return array_values(array_unique($kept));
+    }
+
+    /**
+     * @return array<string,true>
+     */
+    protected function matchStopwords(): array
+    {
+        static $set = null;
+        if ($set !== null) {
+            return $set;
+        }
+
+        $words = [
+            'candle', 'candles', 'jar', 'jars', 'mason', 'tin', 'tins', 'glass', 'vessel', 'vessels',
+            'votive', 'votives', 'tumbler', 'tumblers', 'travel', 'refill', 'refills', 'melt', 'melts',
+            'wax', 'tart', 'tarts', 'soy', 'coconut', 'beeswax', 'cotton', 'wooden', 'wick', 'wicks', 'blend',
+            'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'single',
+            'pack', 'packs', 'set', 'sets', 'qty', 'pcs', 'pc', 'count', 'ct', 'x',
+            'the', 'a', 'an', 'of', 'with', 'and', 'for', 'oz', 'ounce', 'ounces', 'ml', 'g', 'gram',
+            'grams', 'lb', 'lbs', 'size', 'sizes', 'scent', 'scented', 'fragrance',
+        ];
+
+        return $set = array_fill_keys($words, true);
+    }
+
+    /**
+     * Set of every word that appears in a real scent name/display name, so we never
+     * strip a legitimate scent word as if it were noise.
+     *
+     * @return array<string,true>
+     */
+    protected function scentNameTokenSet(): array
+    {
+        if ($this->scentNameTokens !== null) {
+            return $this->scentNameTokens;
+        }
+
+        $set = [];
+        Scent::query()->select(['name', 'display_name'])->get()->each(function (Scent $scent) use (&$set): void {
+            foreach ([$scent->name, $scent->display_name] as $value) {
+                $compact = $this->compactSearchText($this->normalizeSearchText((string) $value));
+                foreach (explode(' ', $compact) as $word) {
+                    $word = trim($word);
+                    if ($word !== '') {
+                        $set[$word] = true;
+                    }
+                }
+            }
+        });
+
+        return $this->scentNameTokens = $set;
+    }
+
+    /**
+     * If the significant tokens are a single short alpha code (e.g. "amb"), return it
+     * so it can be matched against scent abbreviations / initials.
+     *
+     * @param  array<int,string>  $tokens
+     */
+    protected function acronymNeedle(array $tokens): string
+    {
+        if (count($tokens) !== 1) {
+            return '';
+        }
+
+        $token = $tokens[0];
+        if (strlen($token) < 2 || strlen($token) > 6 || ! ctype_alpha($token)) {
+            return '';
+        }
+
+        return $token;
+    }
+
+    protected function scentInitials(string $name): string
+    {
+        $compact = $this->compactSearchText($this->normalizeSearchText($name));
+        $stop = $this->matchStopwords();
+        $initials = '';
+
+        foreach (explode(' ', $compact) as $word) {
+            $word = trim($word);
+            if ($word === '' || isset($stop[$word])) {
+                continue;
+            }
+            $initials .= $word[0];
+        }
+
+        return $initials;
+    }
+}
