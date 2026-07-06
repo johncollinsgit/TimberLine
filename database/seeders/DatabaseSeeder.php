@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             MasterDataSeeder::class,
             OrderSeeder::class, // <-- singular (matches OrderSeeder.php)
             ScentTemplateSeeder::class,
+            DeveloperDashboardSeeder::class,
         ]);
     }
 }

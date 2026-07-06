@@ -14,6 +14,7 @@ use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
+use App\Http\Controllers\Landlord\LandlordDeveloperDashboardController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
@@ -193,6 +194,8 @@ $landlordRoutes = static function (): void {
         ->name('dashboard');
     Route::get('/landlord/readiness', LandlordSelfServiceReadinessController::class)
         ->name('readiness');
+    Route::get('/landlord/developer', LandlordDeveloperDashboardController::class)
+        ->name('developer');
     Route::get('/landlord/onboarding/journey', [LandlordOnboardingJourneyDiagnosticsController::class, 'index'])
         ->name('onboarding.journey');
     Route::get('/landlord/onboarding/wizard', \App\Livewire\Onboarding\Wizard::class)

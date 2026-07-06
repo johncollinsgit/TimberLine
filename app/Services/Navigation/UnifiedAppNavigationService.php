@@ -178,6 +178,7 @@ class UnifiedAppNavigationService
             ['key' => 'plan-billing-readiness', 'icon' => 'credit-card', 'href' => route('landlord.commercial-intent.index'), 'label' => 'Plan / Billing Readiness', 'current' => $request->routeIs('landlord.commercial-intent.*')],
             ['key' => 'shopify-readiness', 'icon' => 'shopping-bag', 'href' => route('landlord.readiness').'#shopify-app-readiness', 'label' => 'Shopify Readiness', 'current' => false],
             ['key' => 'system-readiness', 'icon' => 'shield-check', 'href' => route('landlord.readiness'), 'label' => 'System Readiness', 'current' => $request->routeIs('landlord.readiness')],
+            ['key' => 'developer', 'icon' => 'command-line', 'href' => route('landlord.developer'), 'label' => 'Developer', 'current' => $request->routeIs('landlord.developer')],
             ['key' => 'settings', 'icon' => 'cog-6-tooth', 'href' => route('landlord.dashboard'), 'label' => 'Settings', 'current' => false],
         ];
 

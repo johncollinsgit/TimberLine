@@ -95,6 +95,37 @@ mapping is rare. (An existing time-of-year proximity % match on events is the mo
   (`app/Console/Commands/OrdersPrune.php`) — dry-run + sqlite backup, deletes order-owned rows,
   NULLs value-bearing references, tested. **Not yet executed against prod** — run `--dry-run` there
   first, review counts, then `--force`.
+- **2026-07-06 · Production infra audit (two-droplets discovery).** Real prod = DO droplet
+  `129.212.138.111` (Forge `modern-forestry`/`backstage-pfw`); one nginx serves all domains
+  (canonical `theeverbranch.com` + legacy hosts), MySQL on-box, scheduler cron confirmed ACTIVE,
+  deploys via GitHub Actions on `main` (Forge site tracks stale `agent/codex`). Discovered a
+  second blank never-provisioned droplet also named "Backstage" (`134.209.43.25`) in the
+  `johncollinsemail@gmail.com` DO account — mistakenly resized to 8GB/$48-mo believing it was
+  prod; it serves nothing (destroy candidate). The DO account owning real prod is still
+  unlocated (candidate `modernforestryteam@gmail.com`). Real prod remains 1 vCPU / 2 GB —
+  resize still pending; RAM ~74% used at idle, known `vite build` OOM (exit 137) risk.
+- **2026-07-06 · Prod is a Laravel VPS; resized to 8 GB / 4 vCPU.** Invoice confirmed prod is a
+  Laravel-managed VPS (`growth-s-1vcpu-2gb`, $12/mo, DO-parity pricing, billed by Laravel — not in
+  John's DO account, so there was never a hidden account to find). The blank DO droplet John pays for
+  separately is unrelated waste (destroy candidate). Resized prod to 8 GB / 4 vCPU via Forge → Settings
+  → Size, fixing the `vite build` OOM. Enabled daily Forge database backups (Business plan) — closes the
+  no-backup risk; a restore drill is still outstanding.
+- **2026-07-06 · CI is now a real deploy gate.** `.github/workflows/deploy.yml` previously deployed
+  every push to `main` WITHOUT running tests (they ran only on manual dispatch). Now the Pest suite +
+  asset build run on every push and block the deploy on failure; missing Flux CI secrets fail loudly.
+  A manual `workflow_dispatch` with run_tests unchecked remains as an emergency-hotfix bypass.
+- **2026-07-06 · Tenant isolation guardrail (not a global-scope refactor).** Per repo doctrine ("do not
+  start broad multi-tenant refactors yet; prefer guardrail tests"), added
+  `tests/Feature/Tenancy/TenantIsolationGuardrailTest.php` locking in that `HasTenantScope::forTenant()`
+  isolates rows and documenting the opt-in footgun. Converting to an enforced global scope is queued on
+  the vision board rather than done blind on prod.
+- **2026-07-06 · Developer Control Center (landlord operator dashboard).** New `/landlord/developer`
+  page: live status (heartbeat/backup/issues/import), a production-readiness checklist, a recent-changes
+  log, and a vision board. Backed by `OperationalStatusService` + three landlord-global models
+  (`AgenticChange`, `VisionIdea`, `ReadinessChecklistItem`) seeded via `DeveloperDashboardSeeder`.
+  Convention: shipping a vision-board idea flips it to `done` (drops off the board) and flips the matching
+  checklist item to a checkmark. `ops:record-backup` feeds the "last backup" widget (wire to Forge's
+  post-backup hook).
 - **2026-07-06 · Upgrade scent-mapping intelligence (deterministic, suggest-only).** DONE. The
   live engine was `app/Services/ScentGovernance/ResolveScentMatchService.php` (not the dead
   `ScentGuessEngine`). Added candle-domain stopword stripping + initialism/acronym matching, so
