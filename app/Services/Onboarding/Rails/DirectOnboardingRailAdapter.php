@@ -25,7 +25,7 @@ class DirectOnboardingRailAdapter implements OnboardingRailAdapter
 
     public function prefillDefaults(OnboardingWizardContext $context): array
     {
-        $templateKey = 'electrician';
+        $templateKey = 'trades_electrical';
         $template = (array) config('commercial.templates.'.$templateKey, []);
         $labelDefaults = (array) config('tenant_blueprints.templates.'.$templateKey, []);
         $selectableModules = $this->selectableModuleKeysForTenant($context->tenantId);
@@ -39,7 +39,7 @@ class DirectOnboardingRailAdapter implements OnboardingRailAdapter
         return [
             'rail' => $this->rail()->value,
             'template_key' => $templateKey,
-            'desired_outcome_first' => 'Get the electrician workspace ready for intake, follow-up, and reporting.',
+            'desired_outcome_first' => 'Get the electrical workspace ready for intake, follow-up, and reporting.',
             'selected_modules' => $selectedModules,
             'data_source' => 'manual',
             'setup_preferences' => [
@@ -64,7 +64,7 @@ class DirectOnboardingRailAdapter implements OnboardingRailAdapter
 
     public function recommendations(array $draftBlueprint, OnboardingWizardContext $context): array
     {
-        $templateKey = strtolower(trim((string) ($draftBlueprint['template_key'] ?? 'electrician')));
+        $templateKey = strtolower(trim((string) ($draftBlueprint['template_key'] ?? 'trades_electrical')));
         $template = (array) config('commercial.templates.'.$templateKey, []);
         $recommended = $this->recommendedModuleKeysForTemplate($template);
         $selectableModules = $this->selectableModuleKeysForTenant($context->tenantId);
@@ -78,7 +78,7 @@ class DirectOnboardingRailAdapter implements OnboardingRailAdapter
         return [
             'recommended_modules' => $recommended,
             'notes' => [
-                'Direct setup starts with the electrician template and keeps only safe, visible module choices selectable.',
+                'Direct setup starts with the electrical preset and keeps only safe, visible module choices selectable.',
                 'Modules remain access-aware; recommendations do not override module access checks.',
             ],
         ];

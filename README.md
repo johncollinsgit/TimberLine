@@ -1,5 +1,51 @@
 # Modern Forestry Backstage
 
+## Everbranch Work Mobile API (2026-07-03)
+
+- Everbranch now has a generic internal mobile API for the shared **Everbranch Work** app at `/api/mobile/work/v1/*`.
+- The Work app is tenant-aware and uses `tenant_user` memberships as the source of truth. A single-tenant employee is opened directly into that workspace; a multi-tenant employee receives a small tenant-picker payload.
+- Mobile auth is invite/magic-link first:
+  - `POST /api/mobile/work/v1/auth/request-link`
+  - `POST /api/mobile/work/v1/auth/accept-link`
+  - protected endpoints use a custom bearer token stored hashed in `mobile_user_sessions`.
+- Bootstrap drives the app shell from backend state. It returns the selected tenant, available tenants, module states, tenant labels, permissions, and generated tabs. Launch tabs are intentionally minimal: Home, Jobs, Team.
+- The V1 data surface intentionally reuses existing Everbranch foundations:
+  - `MarketingProfile` for Customers
+  - field-service jobs/tasks/materials/photos/vehicles for Work and Tasks
+  - tenant users for Team
+  - `TenantModuleAccessResolver` and `TenantExperienceProfileService` for module/view decisions
+- Modern Forestry remains a separate tenant and branded customer-app path. Existing `/api/mobile/v1/modern-forestry/*` routes are unchanged.
+
+## Everbranch Work App Launch Slice (2026-07-03)
+
+- `everbranch-work-app/` is the new React Native/Expo app for iOS and Android.
+- The app is deliberately compact: Home, Jobs, Team, with no primary Customers/Messages/Settings tabs and no product-explanation copy.
+- Verified first-time users with no tenant now get a short confirm step that creates a self-serve Trades workspace immediately after confirmation.
+- New launch API additions:
+  - `GET /api/mobile/work/v1/home`
+  - `PATCH /api/mobile/work/v1/jobs/{job}`
+  - `POST /api/mobile/work/v1/team/invite`
+- Jobs and tasks support launch filters for `assigned=me`, `due=today|soon|overdue`, `status`, and `q`.
+- V1 permissions are role-aware: admins/owners can create jobs, assign users, and invite teammates; non-admin tenant users can update statuses, comment, mention, watch, and notify teammates.
+- App identity defaults are `com.everbranch.work` for iOS and Android, with `everbranch://` deep-link handling and Expo push-token registration.
+- Everbranch Work is the base product for everyone. Trades workflows are the first packaged vertical on top of it, with Electrical and Plumbing presets and a backward-compatible electrician alias. The app leans hard on jobs, task phases, site addresses, notes, lock-box codes, photos, messaging, and crew collaboration.
+
+## Everbranch Work Collaboration API (2026-07-03)
+
+- Everbranch Work now has the backend primitives needed for Asana/Monday-style internal collaboration: comments, explicit mentions, watchers/followers, activity timelines, badgeable in-app notifications, email delivery audit rows, and user-based push device registration.
+- Work-critical notification preferences are tenant/user/category scoped and default on for email, in-app, and push. Push delivery uses Expo push tokens first and records each attempt in `work_notification_deliveries`.
+- New employee notification tables are intentionally separate from Modern Forestry customer push:
+  - `work_notification_preferences`
+  - `work_push_devices`
+  - `work_notifications`
+  - `work_notification_deliveries`
+- Collaboration rows are tenant-scoped over the existing field-service work items:
+  - `work_item_comments`
+  - `work_item_watchers`
+  - `work_activity_events`
+- New mobile endpoints include notification list/read/preferences/push registration, direct team notify, job/task comments, job/task activity, and job/task watcher management. Mentions use explicit `mentioned_user_ids` in v1 payloads; text parsing can come later.
+- Assignment, task status, and task due-date mutations now record activity and notify relevant assignees/watchers when meaningful.
+
 ## Modern Forestry Mobile Checkout + Home Performance Notes (2026-06-29)
 
 - Mobile checkout uses Shopify Storefront Cart API when a storefront token is configured. The flow validates bag lines against Laravel product detail, creates a Shopify cart, applies buyer identity, attaches a delivery address when available, and returns Shopify `checkoutUrl`. Anonymous checkout is supported as the fallback path.

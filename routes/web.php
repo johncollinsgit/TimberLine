@@ -42,6 +42,7 @@ use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
+use App\Http\Controllers\Mobile\EverbranchWorkMobileController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
 use App\Http\Controllers\Onboarding\CustomerStartHereController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
@@ -371,6 +372,136 @@ Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalog
 Route::get('/.well-known/brand-discovery.json', [BrandDiscoveryController::class, 'wellKnown'])->name('discovery.well-known.brand');
 Route::get('/api/public/discovery/brand/{tenant}', [BrandDiscoveryController::class, 'byTenant'])->name('discovery.public.brand');
 Route::get('/api/public/discovery/structured/{tenant?}', [BrandDiscoveryController::class, 'structured'])->name('discovery.public.structured');
+
+Route::prefix('/api/mobile/work/v1')->name('mobile.work.')->group(function (): void {
+    Route::post('/auth/request-link', [EverbranchWorkMobileController::class, 'requestLink'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:10,1')
+        ->name('auth.request-link');
+    Route::post('/auth/accept-link', [EverbranchWorkMobileController::class, 'acceptLink'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:20,1')
+        ->name('auth.accept-link');
+    Route::post('/auth/logout', [EverbranchWorkMobileController::class, 'logout'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('auth.logout');
+
+    Route::get('/me', [EverbranchWorkMobileController::class, 'me'])
+        ->middleware('throttle:60,1')
+        ->name('me');
+    Route::get('/bootstrap', [EverbranchWorkMobileController::class, 'bootstrap'])
+        ->middleware('throttle:60,1')
+        ->name('bootstrap');
+    Route::get('/tenants', [EverbranchWorkMobileController::class, 'tenants'])
+        ->middleware('throttle:60,1')
+        ->name('tenants');
+    Route::post('/tenants/select', [EverbranchWorkMobileController::class, 'selectTenant'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('tenants.select');
+    Route::get('/workspace', [EverbranchWorkMobileController::class, 'workspace'])
+        ->middleware('throttle:60,1')
+        ->name('workspace');
+    Route::get('/home', [EverbranchWorkMobileController::class, 'home'])
+        ->middleware('throttle:60,1')
+        ->name('home');
+    Route::get('/notifications', [EverbranchWorkMobileController::class, 'notifications'])
+        ->middleware('throttle:60,1')
+        ->name('notifications');
+    Route::patch('/notifications/{notification}', [EverbranchWorkMobileController::class, 'updateNotification'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:60,1')
+        ->name('notifications.update');
+    Route::post('/notifications/read', [EverbranchWorkMobileController::class, 'markNotificationsRead'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:60,1')
+        ->name('notifications.read');
+    Route::get('/notification-preferences', [EverbranchWorkMobileController::class, 'notificationPreferences'])
+        ->middleware('throttle:60,1')
+        ->name('notification-preferences');
+    Route::patch('/notification-preferences', [EverbranchWorkMobileController::class, 'updateNotificationPreferences'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('notification-preferences.update');
+    Route::post('/notifications/push/register', [EverbranchWorkMobileController::class, 'registerPushDevice'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('notifications.push.register');
+    Route::get('/customers', [EverbranchWorkMobileController::class, 'customers'])
+        ->middleware('throttle:60,1')
+        ->name('customers');
+    Route::get('/jobs', [EverbranchWorkMobileController::class, 'jobs'])
+        ->middleware('throttle:60,1')
+        ->name('jobs');
+    Route::post('/jobs', [EverbranchWorkMobileController::class, 'storeJob'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('jobs.store');
+    Route::patch('/jobs/{job}', [EverbranchWorkMobileController::class, 'updateJob'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('jobs.update');
+    Route::get('/jobs/{job}/comments', [EverbranchWorkMobileController::class, 'jobComments'])
+        ->middleware('throttle:60,1')
+        ->name('jobs.comments');
+    Route::post('/jobs/{job}/comments', [EverbranchWorkMobileController::class, 'storeJobComment'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('jobs.comments.store');
+    Route::get('/jobs/{job}/activity', [EverbranchWorkMobileController::class, 'jobActivity'])
+        ->middleware('throttle:60,1')
+        ->name('jobs.activity');
+    Route::post('/jobs/{job}/watchers', [EverbranchWorkMobileController::class, 'addJobWatcher'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('jobs.watchers.store');
+    Route::delete('/jobs/{job}/watchers/{target}', [EverbranchWorkMobileController::class, 'removeJobWatcher'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('jobs.watchers.destroy');
+    Route::get('/tasks', [EverbranchWorkMobileController::class, 'tasks'])
+        ->middleware('throttle:60,1')
+        ->name('tasks');
+    Route::post('/jobs/{job}/tasks', [EverbranchWorkMobileController::class, 'storeTask'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('jobs.tasks.store');
+    Route::get('/tasks/{task}/comments', [EverbranchWorkMobileController::class, 'taskComments'])
+        ->middleware('throttle:60,1')
+        ->name('tasks.comments');
+    Route::post('/tasks/{task}/comments', [EverbranchWorkMobileController::class, 'storeTaskComment'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('tasks.comments.store');
+    Route::get('/tasks/{task}/activity', [EverbranchWorkMobileController::class, 'taskActivity'])
+        ->middleware('throttle:60,1')
+        ->name('tasks.activity');
+    Route::post('/tasks/{task}/watchers', [EverbranchWorkMobileController::class, 'addTaskWatcher'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('tasks.watchers.store');
+    Route::delete('/tasks/{task}/watchers/{target}', [EverbranchWorkMobileController::class, 'removeTaskWatcher'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('tasks.watchers.destroy');
+    Route::patch('/tasks/{task}', [EverbranchWorkMobileController::class, 'updateTask'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('tasks.update');
+    Route::get('/team', [EverbranchWorkMobileController::class, 'team'])
+        ->middleware('throttle:60,1')
+        ->name('team');
+    Route::post('/team/invite', [EverbranchWorkMobileController::class, 'inviteTeamMember'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('team.invite');
+    Route::post('/team/{target}/notify', [EverbranchWorkMobileController::class, 'notifyTeamMember'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->middleware('throttle:30,1')
+        ->name('team.notify');
+});
+
 Route::get('/api/mobile/v1/modern-forestry/home', [ModernForestryProductCatalogController::class, 'home'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.home');

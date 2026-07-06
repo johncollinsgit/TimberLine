@@ -42,6 +42,15 @@ class UnifiedAppNavigationService
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
 
+        if ($tenant instanceof Tenant) {
+            $channelType = (string) ($profile['channel_type'] ?? '');
+            $useCaseProfile = (string) ($profile['use_case_profile'] ?? '');
+
+            if ($channelType === 'direct' || $useCaseProfile === 'field_service') {
+                return $this->buildWorkShell($request, $user, $tenant, $profile);
+            }
+        }
+
         $isAdmin = $user?->isAdmin() ?? true;
         $isManager = $user?->isManager() ?? false;
         $isPouring = $user?->isPouring() ?? false;
@@ -219,6 +228,168 @@ class UnifiedAppNavigationService
             ],
             'console_switches' => $this->consoleSwitches($user, null, true),
             'shell_context' => 'landlord',
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    protected function buildWorkShell(Request $request, ?User $user, Tenant $tenant, array $profile): array
+    {
+        $tenantId = (int) $tenant->id;
+        $isAdmin = $user?->isAdmin() ?? true;
+        $isManager = $user?->isManager() ?? false;
+        $canAccessOps = $isAdmin || $isManager;
+
+        $moduleStates = $this->moduleAccessResolver->resolveForTenant($tenantId, [
+            'customers',
+            'field_service',
+            'messaging',
+            'uploads',
+            'reporting',
+            'settings',
+            'ai',
+        ])['modules'] ?? [];
+
+        $canViewCustomers = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
+        $canViewMessaging = $this->moduleStateEnabled($moduleStates['messaging'] ?? null);
+        $canViewJobs = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
+        $canViewReports = $this->moduleStateEnabled($moduleStates['reporting'] ?? null);
+        $canViewFiles = $this->moduleStateEnabled($moduleStates['uploads'] ?? null) || $canViewJobs;
+        $canViewAssistant = $this->moduleStateEnabled($moduleStates['ai'] ?? null) || $canAccessOps;
+
+        $items = [
+            ['key' => 'home', 'icon' => 'home', 'href' => route('dashboard'), 'label' => 'Home', 'current' => $request->routeIs('dashboard')],
+        ];
+
+        if ($canViewCustomers && Route::has('marketing.customers')) {
+            $items[] = [
+                'key' => 'customers',
+                'icon' => 'users',
+                'href' => route('marketing.customers'),
+                'label' => 'Customers',
+                'current' => $request->routeIs('marketing.customers*'),
+            ];
+        }
+
+        if ($canViewMessaging && Route::has('marketing.messages')) {
+            $items[] = [
+                'key' => 'messaging',
+                'icon' => 'chat-bubble-left-right',
+                'href' => route('marketing.messages'),
+                'label' => 'Messaging',
+                'current' => $request->routeIs('marketing.messages*'),
+            ];
+        }
+
+        if ($canViewJobs && Route::has('field-service.index')) {
+            $items[] = [
+                'key' => 'jobs',
+                'icon' => 'briefcase',
+                'href' => route('field-service.index'),
+                'label' => 'Jobs',
+                'current' => $request->routeIs('field-service.*'),
+            ];
+            $items[] = [
+                'key' => 'tasks',
+                'icon' => 'check-circle',
+                'href' => route('field-service.index').'#jobs',
+                'label' => 'Tasks',
+                'current' => $request->routeIs('field-service.*'),
+            ];
+        }
+
+        if ($canAccessOps && Route::has('admin.users')) {
+            $items[] = [
+                'key' => 'users',
+                'icon' => 'users',
+                'href' => route('admin.users'),
+                'label' => 'Users',
+                'current' => $request->routeIs('admin.users'),
+            ];
+        }
+
+        if ($canViewFiles) {
+            $items[] = [
+                'key' => 'files',
+                'icon' => 'document-duplicate',
+                'href' => Route::has('field-service.index') ? route('field-service.index').'#photos' : route('dashboard'),
+                'label' => 'Files',
+                'current' => false,
+            ];
+        }
+
+        if ($canViewReports && Route::has('analytics.index')) {
+            $items[] = [
+                'key' => 'reports',
+                'icon' => 'chart-bar',
+                'href' => route('analytics.index'),
+                'label' => 'Reports',
+                'current' => $request->routeIs('analytics.*'),
+            ];
+        }
+
+        if ($canAccessOps && Route::has('marketing.modules')) {
+            $items[] = [
+                'key' => 'app-store',
+                'icon' => 'squares-plus',
+                'href' => route('marketing.modules'),
+                'label' => 'App Store',
+                'current' => $request->routeIs('marketing.modules'),
+            ];
+        }
+
+        $accountChildren = [];
+        if ($canViewAssistant && Route::has('shopify.embedded.assistant')) {
+            $accountChildren[] = [
+                'key' => 'assistant',
+                'icon' => 'sparkles',
+                'href' => route('shopify.embedded.assistant'),
+                'label' => 'Bud AI',
+                'current' => $request->routeIs('shopify.embedded.assistant*'),
+            ];
+        }
+
+        if ($canAccessOps && Route::has('admin.index')) {
+            $accountChildren[] = [
+                'key' => 'account-settings',
+                'icon' => 'cog-6-tooth',
+                'href' => route('admin.index'),
+                'label' => 'Account',
+                'current' => $request->routeIs('admin.*'),
+            ];
+        }
+
+        $accountCurrent = collect($accountChildren)->contains(fn (array $child): bool => (bool) ($child['current'] ?? false));
+        $items[] = [
+            'key' => 'account',
+            'icon' => 'cog-6-tooth',
+            'href' => Route::has('admin.index') ? route('admin.index') : route('dashboard'),
+            'label' => 'Account',
+            'current' => $accountCurrent,
+            'children' => $accountChildren,
+        ];
+
+        return [
+            'tenant' => $tenant,
+            'tenant_id' => $tenantId,
+            'experience_profile' => $profile,
+            'items' => $this->orderedItems($this->normalizeNavigationItems($items), []),
+            'admin_sub_items' => [],
+            'marketing_sub_groups' => [],
+            'birthday_sub_groups' => [],
+            'wiki_sections' => [],
+            'quick_actions' => [
+                [
+                    'label' => 'Open jobs',
+                    'description' => 'Go to the jobs list for this workspace.',
+                    'href' => Route::has('field-service.index') ? route('field-service.index') : route('dashboard'),
+                ],
+            ],
+            'ops_attention' => ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'current_console' => $this->currentConsolePayload($tenant, $profile),
+            'console_switches' => $this->consoleSwitches($user, $tenant, false),
+            'shell_context' => 'tenant',
         ];
     }
 

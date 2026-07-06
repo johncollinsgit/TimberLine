@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "Everbranch Work",
+    "slug": "everbranch-work",
+    "scheme": "everbranch",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F7F5EF"
+    },
+    "ios": {
+      "bundleIdentifier": "com.everbranch.work",
+      "supportsTablet": false,
+      "associatedDomains": [
+        "applinks:app.theeverbranch.com"
+      ],
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "Everbranch Work sends job updates."
+      }
+    },
+    "android": {
+      "package": "com.everbranch.work",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F7F5EF"
+      },
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "everbranch"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "extra": {
+      "apiBaseUrl": "https://app.theeverbranch.com/api/mobile/work/v1",
+      "privacyUrl": "https://app.theeverbranch.com/privacy",
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

@@ -1,5 +1,29 @@
 # UI Changelog
 
+## 2026-07-04 — First-Login Trades Workspace
+
+### What changed
+- Added a minimal auth-side first-login screen that confirms workspace creation and seeds a Trades workspace from the self-serve blueprint path.
+- Kept the template choices tight: Trades, Electrical, Plumbing, and Home / Residential.
+- Ensured verified no-tenant users land in the workspace-creation step instead of an approval wall.
+
+### What did not change
+- Modern Forestry tenant and customer-app flows remain separate.
+- The main Everbranch Work app shell stays compact and operational-first.
+
+## 2026-07-03 — Everbranch Work App Launch Shell
+
+### What changed
+- Added `everbranch-work-app/`, a compact React Native/Expo shell for iOS and Android.
+- Set the primary app navigation to Home, Jobs, and Team.
+- Kept screen copy short and operational: compact rows, status chips, assignee/date metadata, and minimal empty states.
+- Added app identity assets, deep-link scheme, Expo push registration, and internal app privacy notes.
+
+### What did not change
+- Modern Forestry customer app routes and UI remain separate.
+- Customers, Messages, and Settings are not primary launch tabs.
+- No billing, Shopify checkout, public marketing, or customer storefront behavior changed.
+
 ## 2026-07-02 — Everbranch Peace-of-Mind Home and Contact Flow
 
 ### What changed

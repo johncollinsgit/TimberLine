@@ -145,7 +145,7 @@ class OnboardingBlueprintService
      */
     protected function normalize(array $input, OnboardingRail $rail, AccountMode $accountMode, bool $strict): array
     {
-        $templateKey = $this->nullableString($input['template_key'] ?? null);
+        $templateKey = $this->canonicalTemplateKey($this->nullableString($input['template_key'] ?? null));
         $this->assertTemplateKeyAllowed($templateKey);
 
         $normalizedModules = $this->canonicalModuleKeys((array) ($input['selected_modules'] ?? []));
@@ -260,6 +260,9 @@ class OnboardingBlueprintService
 
             if (($definition['active'] ?? true) !== false) {
                 $allowed[] = strtolower(trim((string) $key));
+                foreach ((array) ($definition['aliases'] ?? []) as $alias) {
+                    $allowed[] = strtolower(trim((string) $alias));
+                }
             }
         }
 
@@ -273,6 +276,40 @@ class OnboardingBlueprintService
                 'template_key' => ['Unknown template key: '.$templateKey],
             ]);
         }
+    }
+
+    protected function canonicalTemplateKey(?string $templateKey): ?string
+    {
+        if ($templateKey === null) {
+            return null;
+        }
+
+        $normalized = strtolower(trim($templateKey));
+        if ($normalized === '') {
+            return null;
+        }
+
+        $templates = (array) config('commercial.templates', []);
+        if (array_key_exists($normalized, $templates)) {
+            return $normalized;
+        }
+
+        foreach ($templates as $key => $definition) {
+            if (! is_array($definition)) {
+                continue;
+            }
+
+            $aliases = array_map(
+                static fn (mixed $alias): string => strtolower(trim((string) $alias)),
+                (array) ($definition['aliases'] ?? [])
+            );
+
+            if (in_array($normalized, $aliases, true)) {
+                return (string) $key;
+            }
+        }
+
+        return $normalized;
     }
 
     protected function railFromInput(array $input): OnboardingRail

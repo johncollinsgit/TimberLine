@@ -43,6 +43,7 @@ return [
             'vehicles' => 'field_service',
             'photos' => 'field_service',
             'files' => 'field_service',
+            'reports' => 'reporting',
         ],
     ],
 

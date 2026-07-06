@@ -1,5 +1,50 @@
 # Mobile Catalog Services
 
+## Everbranch Work Mobile API (2026-07-03)
+
+This folder still contains the Modern Forestry customer-app services, but the repo now also exposes a generic internal **Everbranch Work** mobile API from `App\Http\Controllers\Mobile\EverbranchWorkMobileController`.
+
+Boundaries:
+- **Everbranch Work** is the shared internal/operator app for tenant teams.
+- **Modern Forestry** remains a separate tenant and branded customer-facing app path.
+- Do not move Modern Forestry shop/catalog/customer-app assumptions into the Everbranch Work API unless a generic tenant contract is explicitly added and tested.
+
+Auth/session contract:
+- `POST /api/mobile/work/v1/auth/request-link` creates a short-lived `mobile_login_challenges` row for an active user with tenant membership. Unknown emails return the same generic success response and do not leak account state.
+- Sign-in email delivery uses `EverbranchWorkMagicLinkNotification` with `services.everbranch_work_mobile.deep_link_url` (`EVERBRANCH_WORK_MOBILE_DEEP_LINK_URL`) as the app deep-link base.
+- `POST /api/mobile/work/v1/auth/accept-link` consumes the one-time token and returns a custom bearer token backed by `mobile_user_sessions`.
+- The session stores `selected_tenant_id`; a single-tenant user is auto-selected, and multi-tenant users receive `requires_tenant_selection=true` until they call `/tenants/select`.
+- Protected Work endpoints use `Authorization: Bearer <token>` and never rely on Laravel browser session auth.
+
+Tenant-driven app shell:
+- `/api/mobile/work/v1/bootstrap` returns user, selected tenant, available tenants, workspace presentation, module states, generated tabs, labels, and permissions.
+- Launch tabs are intentionally sparse: Home, Jobs, Team. Keep Customers, Messages, Settings, and explanatory setup copy out of the primary phone navigation unless a later launch plan changes this.
+- Projects is a tenant label/presentation choice over the existing field-service job model for v1; do not create a separate project hierarchy until a tenant requirement justifies it.
+- `/api/mobile/work/v1/home` is the phone first-screen contract. It returns assigned jobs, due-soon tasks, blocked tasks, unread notifications, recent activity, and small counts only.
+- Jobs/tasks support `assigned=me`, `due=today|soon|overdue`, `status`, and `q` filters for compact app lists.
+- Permission payloads expose role-aware flags for job creation, assignment, team invites, and status updates.
+
+V1 data surfaces:
+- Customers: `MarketingProfile`
+- Work/Jobs and Tasks: `FieldServiceJob` + `FieldServiceTask`
+- Team: `tenant_user` memberships
+- Module and workspace decisions: `TenantModuleAccessResolver` + `TenantExperienceProfileService`
+
+Internal collaboration and notifications:
+- Everbranch Work now owns employee-focused notifications in `work_notification_preferences`, `work_push_devices`, `work_notifications`, and `work_notification_deliveries`. These are user/tenant records and must not use Modern Forestry customer `MobilePushDevice` rows.
+- Notification defaults are intentionally work-critical: email, in-app, and push preferences default to enabled for `direct_notify`, `assignment`, `mention`, `comment`, `status_change`, `due_date`, and `customer_message`.
+- Push registration lives at `POST /api/mobile/work/v1/notifications/push/register`; v1 sends through Expo push and records sent/failed rows in `work_notification_deliveries`.
+- Comments, watchers, and activity timelines are stored in `work_item_comments`, `work_item_watchers`, and `work_activity_events` over `field_service_job` and `field_service_task`.
+- Mentions are explicit `mentioned_user_ids` in v1. Validate every mentioned user through `tenant_user` before notifying them.
+- Assignment, task status, and task due-date changes should continue to create timeline events and notify assignees/watchers through `EverbranchWorkNotificationService`.
+- Direct team-member nudges use `POST /api/mobile/work/v1/team/{user}/notify`; this is the API counterpart for tapping a teammate in the app and sending them an email/in-app notification.
+- Tenant admins invite teammates with `POST /api/mobile/work/v1/team/invite`, which attaches `tenant_user` membership and sends a scoped magic link.
+
+Native app:
+- `everbranch-work-app/` is the Expo app for iOS and Android.
+- It consumes the Work API directly, stores the bearer token in SecureStore, accepts `everbranch://` magic links, registers Expo push tokens, and renders only Home, Jobs, and Team for v1.
+- The first vertical we are making feel polished is Trades, with Electrical and Plumbing presets. Job/site addresses, contact info, notes, lock-box codes, photos, comment threads, and phase-style stages should render cleanly in the shared app without changing the core platform contract.
+
 ## Mobile Checkout + Home Bootstrap Performance (2026-06-29)
 
 - Modern Forestry mobile checkout uses Shopify Storefront Cart API when the storefront access token is configured. The checkout service validates bag lines against Laravel product detail, creates a Shopify cart, applies buyer identity, attaches delivery address data when available, and returns Shopify `checkoutUrl`.
