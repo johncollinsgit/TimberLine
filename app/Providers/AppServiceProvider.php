@@ -2,9 +2,10 @@
 
 namespace App\Providers;
 
-use App\Models\User;
 use App\Models\MarketingReviewHistory;
+use App\Models\User;
 use App\Observers\MarketingReviewHistoryObserver;
+use App\Services\Integrations\ConnectionManager;
 use App\Services\Onboarding\Rails\DirectOnboardingRailAdapter;
 use App\Services\Onboarding\Rails\OnboardingRailAdapterRegistry;
 use App\Services\Onboarding\Rails\ShopifyOnboardingRailAdapter;
@@ -27,6 +28,13 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(ShopifyOnboardingRailAdapter::class),
                 $app->make(DirectOnboardingRailAdapter::class),
             ]);
+        });
+
+        // The single registry for per-tenant external-provider connections.
+        // Connectors are registered here as each provider is migrated onto the
+        // integration_connections store (none wired yet — foundation only).
+        $this->app->singleton(ConnectionManager::class, function (): ConnectionManager {
+            return new ConnectionManager([]);
         });
     }
 
