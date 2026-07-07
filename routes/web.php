@@ -551,7 +551,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{project}', [ClientProjectController::class, 'show'])->name('show');
         });
 
-    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:field_service'])
         ->prefix('field-service')
         ->name('field-service.')
         ->group(function (): void {
