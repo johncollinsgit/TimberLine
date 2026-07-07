@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\HasTenantScope;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  */
 class IntegrationConnection extends Model
 {
-    use HasTenantScope;
+    use BelongsToTenant;
 
     public const STATUS_PENDING = 'pending';
 

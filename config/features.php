@@ -9,4 +9,9 @@ return [
     'internal_onboarding_harness' => (bool) env('FEATURE_INTERNAL_ONBOARDING_HARNESS', false),
     'internal_onboarding_provisioning' => (bool) env('FEATURE_INTERNAL_ONBOARDING_PROVISIONING', false),
     'onboarding_journey_telemetry' => (bool) env('FEATURE_ONBOARDING_JOURNEY_TELEMETRY', true),
+
+    // Enforced tenant isolation backstop (App\Models\Scopes\TenantScope). OFF by
+    // default — arm only once every BelongsToTenant model's table is fully
+    // backfilled with tenant_id, so no flagship row can silently vanish.
+    'enforced_tenant_scope' => (bool) env('FEATURE_ENFORCED_TENANT_SCOPE', false),
 ];
