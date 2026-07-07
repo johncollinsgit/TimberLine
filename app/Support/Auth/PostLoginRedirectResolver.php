@@ -2,8 +2,8 @@
 
 namespace App\Support\Auth;
 
-use App\Models\User;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -11,8 +11,7 @@ class PostLoginRedirectResolver
 {
     public function __construct(
         protected AuthTenantIntentStore $intentStore,
-    ) {
-    }
+    ) {}
 
     public function resolve(Request $request, User $user, string $authMethod = 'password'): string
     {
@@ -20,7 +19,9 @@ class PostLoginRedirectResolver
         $membershipMap = $this->membershipMap($memberships);
         $intent = $this->intentStore->pull($request);
 
-        if ($memberships->isEmpty() && ! HomeRedirect::isPlatformOperator($user)) {
+        if ($memberships->isEmpty()
+            && ! HomeRedirect::isPlatformOperator($user)
+            && ! $this->shouldUseLegacyLandlordDoor($request, $user, $memberships)) {
             return route('workspace.first-login', absolute: false);
         }
 

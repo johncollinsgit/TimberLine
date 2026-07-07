@@ -115,9 +115,10 @@ test('authenticated users are still redirected away from the public home route',
         'role' => 'admin',
     ]);
 
+    // Memberless users are guided to create a workspace; either way they never see public home.
     $this->actingAs($user)
         ->get('http://theeverbranch.com/')
-        ->assertRedirect(route('dashboard', absolute: false));
+        ->assertRedirect(route('workspace.first-login', absolute: false));
 });
 
 test('public home route keeps trade examples available', function (): void {

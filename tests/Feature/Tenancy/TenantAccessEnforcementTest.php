@@ -24,7 +24,7 @@ test('user with tenant membership can access tenant scoped internal page', funct
         ->assertOk();
 });
 
-test('user without tenant membership is denied from tenant scoped page', function (): void {
+test('user without tenant membership is routed to workspace creation from a tenant scoped page', function (): void {
     Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -35,9 +35,10 @@ test('user without tenant membership is denied from tenant scoped page', functio
         'email_verified_at' => now(),
     ]);
 
+    // Denied access to the tenant page, but guided to create a workspace instead of a dead-end 403.
     $this->actingAs($user)
         ->get(route('marketing.providers-integrations'))
-        ->assertForbidden();
+        ->assertRedirectToRoute('workspace.first-login');
 });
 
 test('user cannot access another tenant store backed page', function (): void {
@@ -114,7 +115,7 @@ test('invalid tenant context fails safely', function (): void {
         ->assertForbidden();
 });
 
-test('privileged user without membership is auto-linked to host tenant for tenant-scoped access', function (): void {
+test('privileged user without membership is routed to workspace creation, not auto-linked to the flagship', function (): void {
     config()->set('tenancy.auth.host_map', [
         'portal.theeverbranch.com' => 'modern-forestry',
     ]);
@@ -129,14 +130,15 @@ test('privileged user without membership is auto-linked to host tenant for tenan
         'email_verified_at' => now(),
     ]);
 
+    // A role of admin/manager/marketing_manager is NOT a flagship-membership signal:
+    // the user is guided to create their own workspace, never silently joined to Modern Forestry.
     $this->actingAs($user)
         ->get('http://portal.theeverbranch.com/marketing/providers-integrations')
-        ->assertOk();
+        ->assertRedirectToRoute('workspace.first-login');
 
-    $this->assertDatabaseHas('tenant_user', [
+    $this->assertDatabaseMissing('tenant_user', [
         'tenant_id' => $tenant->id,
         'user_id' => $user->id,
-        'role' => 'marketing_manager',
     ]);
 });
 

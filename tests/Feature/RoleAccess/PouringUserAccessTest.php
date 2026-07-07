@@ -3,10 +3,13 @@
 use App\Models\User;
 
 test('pouring users are redirected to pouring room after login and from home', function () {
+    $tenant = \App\Models\Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+
     $user = User::factory()->create([
         'role' => 'pouring',
         'email_verified_at' => now(),
     ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id => ['role' => 'pouring']]);
 
     $login = $this->post(route('login.store'), [
         'email' => $user->email,

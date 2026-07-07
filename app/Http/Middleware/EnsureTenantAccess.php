@@ -17,8 +17,7 @@ class EnsureTenantAccess
     public function __construct(
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
         protected TenantOnboardingCompletionService $onboardingCompletionService
-    ) {
-    }
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -31,6 +30,14 @@ class EnsureTenantAccess
         if (! $tenant) {
             if (Tenant::query()->count() === 0) {
                 return $next($request);
+            }
+
+            // A signed-in, non-operator user who has no workspace yet is guided to
+            // create one instead of hitting a dead-end 403.
+            if ($user instanceof \App\Models\User
+                && ! HomeRedirect::isPlatformOperator($user)
+                && ! $user->tenants()->exists()) {
+                return redirect()->route('workspace.first-login');
             }
 
             abort(403, 'Tenant access is not configured for this user.');

@@ -3,10 +3,13 @@
 use App\Models\User;
 
 test('marketing manager users are redirected to marketing overview from home', function () {
+    $tenant = \App\Models\Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+
     $user = User::factory()->create([
         'role' => 'marketing_manager',
         'email_verified_at' => now(),
     ]);
+    $user->tenants()->syncWithoutDetaching([$tenant->id => ['role' => 'marketing_manager']]);
 
     $this->actingAs($user)
         ->get('http://theeverbranch.com/')

@@ -62,7 +62,7 @@ test('google callback links an existing active user and signs them in', function
 
     $response = $this->get(route('auth.google.callback'));
 
-    $response->assertRedirect(route('pouring.index', absolute: false));
+    $response->assertRedirect(route('workspace.first-login', absolute: false));
 
     $user->refresh();
 
@@ -111,7 +111,7 @@ test('google callback retries stateless when the session state expires', functio
 
     $response = $this->get(route('auth.google.callback'));
 
-    $response->assertRedirect(route('pouring.index', absolute: false));
+    $response->assertRedirect(route('workspace.first-login', absolute: false));
 
     $user->refresh();
 

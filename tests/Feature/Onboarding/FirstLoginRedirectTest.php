@@ -22,3 +22,19 @@ test('platform operators still go to the landlord dashboard even when they have 
     expect(HomeRedirect::pathFor($user))->toBe(route('landlord.dashboard', absolute: false));
 });
 
+test('a pouring user with a workspace membership lands in the pouring room, not workspace creation', function (): void {
+    $tenant = \App\Models\Tenant::query()->create(['name' => 'Acme Co', 'slug' => 'acme']);
+
+    $user = User::factory()->create([
+        'role' => 'pouring',
+        'is_active' => true,
+        'email_verified_at' => now(),
+        'approved_at' => now(),
+    ]);
+
+    $tenant->users()->syncWithoutDetaching([$user->id => ['role' => 'pouring']]);
+
+    // Role decides the landing only once the user actually belongs to a workspace.
+    expect(HomeRedirect::pathFor($user))->toBe(route('pouring.index', absolute: false));
+});
+
