@@ -19,12 +19,12 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('data-problem-garden', false)
         ->assertSee('data-public-product-demo', false)
         ->assertSeeText('Problem')
-        ->assertSeeText('Solution')
+        ->assertSeeText('The solution')
         ->assertSeeText('Retail')
         ->assertSeeText('Trades')
         ->assertSeeText('Projects')
         ->assertSeeText('Service')
-        ->assertSeeText('Motion-safe version: detail captured, work organized, next step assigned, follow-up ready.')
+        ->assertSeeText('Small-business work, finally in one place')
         ->assertSeeText('Built for the messy middle of small business.')
         ->assertSeeText('Electrical & plumbing')
         ->assertSeeText('Tell us what keeps getting lost.')
@@ -37,7 +37,7 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('aria-controls="public-mobile-drawer"', false)
         ->assertSee('data-public-mobile-nav-drawer hidden', false)
         ->assertSee('aria-expanded="false"', false)
-        ->assertSee('data-product-demo-bud-search', false)
+        ->assertSee('data-bud-input', false)
         ->assertSee('data-public-bud', false)
         ->assertSee('data-bud-toggle', false)
         ->assertSee('data-bud-panel hidden', false)
@@ -115,9 +115,10 @@ test('authenticated users are still redirected away from the public home route',
         'role' => 'admin',
     ]);
 
+    // Memberless users are guided to create a workspace; either way they never see public home.
     $this->actingAs($user)
         ->get('http://theeverbranch.com/')
-        ->assertRedirect(route('dashboard', absolute: false));
+        ->assertRedirect(route('workspace.first-login', absolute: false));
 });
 
 test('public home route keeps trade examples available', function (): void {

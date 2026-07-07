@@ -2,6 +2,24 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Production Infrastructure Reality (verified 2026-07-06)
+
+- Production is ONE DigitalOcean droplet: IP `129.212.138.111`, hostname `Backstage`, managed by Laravel Forge (`modern-forestry` / `backstage-pfw`). One nginx serves every domain: `theeverbranch.com` (canonical, incl. `app.` and tenant wildcards), `backstage.theforestrystudio.com` (legacy), `evergrovesoftware.com`, `forestrybackstage.com`. All are Cloudflare-proxied.
+- MySQL lives on the same droplet (`DB_CONNECTION=mysql`). The scheduler cron (`schedule:run` every minute) is installed directly in the forge crontab and IS active, even though Forge's UI scheduler toggle looks off.
+- Deploys ship from GitHub Actions on `main` via `scripts/deploy_backstage.sh`. The Forge site still tracks stale branch `agent/codex` — do not use Forge push-to-deploy.
+- Prod is a Laravel-managed Forge server (server ID `1165565`, VPC "Laravel Managed", created Feb 20 2026): Laravel provisions and bills the underlying DO droplet, so it does NOT appear in John's own DigitalOcean account. Resize/scale prod through Forge (or Laravel billing), not the DO console.
+- ⚠️ TRAP: a second, identically-named "Backstage" droplet (`134.209.43.25`) sits in John's personal DO account (`johncollinsemail@gmail.com`, GitHub login). It is a blank, never-provisioned box serving nothing (root-SSH verified 2026-07-06), billing ~$12/mo since Feb; it is NOT production. Always confirm the target IP is `129.212.138.111` before any prod infra action.
+- Prod was resized to 8 GB RAM / 4 vCPU on 2026-07-06 (fixes the earlier `vite build` exit-137 OOM). Resize a Laravel VPS via Forge → Settings → General → Size, not the DigitalOcean console.
+- Deploys are gated: `.github/workflows/deploy.yml` runs the Pest suite + asset build on every push to `main` and blocks the deploy on failure (a manual `workflow_dispatch` with run_tests unchecked is the only emergency bypass).
+
+## Developer Control Center (landlord operator dashboard)
+
+- Route `/landlord/developer` (`landlord.developer`), controller `App\Http\Controllers\Landlord\LandlordDeveloperDashboardController`, view `resources/views/landlord/developer/index.blade.php`. Landlord-operator only (host-locked group). Read-only.
+- Live data comes from `App\Services\Operations\OperationalStatusService` (scheduler heartbeat, last backup, open integration health events, last Shopify import). It is defensively `rescue()`-wrapped so one failing probe never blanks the page.
+- "Last backup" reads a cache key stamped by `php artisan ops:record-backup`. Wire that command to Forge's "run a command after backup" hook (Server → Database → Backups) so the widget reflects real backup completions.
+- Three landlord-global (NOT tenant-scoped) models back the content: `AgenticChange` (recent changes log), `VisionIdea` (vision board), `ReadinessChecklistItem` (production-readiness checklist, status `done|partial|todo`). Seed/update them idempotently with `php artisan db:seed --class=DeveloperDashboardSeeder` (rows keyed on `slug`).
+- **When you ship something that was on the vision board:** set the matching `VisionIdea` status to `done` (it then drops off the board — the controller filters `status != done`), flip the matching `ReadinessChecklistItem` to `done`, and add an `AgenticChange` entry. Do this in `DeveloperDashboardSeeder` (idempotent) so it stays reproducible, then run the seeder on prod.
+
 ## Everbranch Customer Electrician Tutorial Restore Rule (2026-07-01)
 
 - The customer-facing electrician intake/tutorial is now intentionally hidden by default behind `FEATURE_CUSTOMER_ELECTRICIAN_TUTORIAL=false`.

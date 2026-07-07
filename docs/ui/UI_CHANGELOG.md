@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-07-06 — Landlord Developer Control Center
+
+### What changed
+- Added a new landlord-operator page at `/landlord/developer` (`resources/views/landlord/developer/index.blade.php`) — a live operator dashboard: a status metric strip (scheduler status, last backup, open issues, last import), three clickable health cards (System status, Backups, Error tracking), a production-readiness checklist with done/in-progress/to-do marks and a completion bar, a clickable "Recent changes" log, and a "Vision board" of next steps.
+- Cards and checklist rows are clickable and open a shared detail popup, using Alpine (`x-data`/`x-if`/`x-for`) with the existing `.fb-overlay-soft` backdrop token. No new CSS was added.
+- Added a "Developer" item to the landlord sidebar (`UnifiedAppNavigationService::buildLandlordShell`).
+
+### Why
+- The operator/owner needs a single, clean at-a-glance view of system health, what the agents have changed, and what is queued next — with production-readiness tracked like grown-up software.
+
+### What did not change
+- Read-only surface: it reports status/history and does not deploy, mutate tenants, change billing, or activate modules.
+- No new CSS rules or shells; styling reuses existing Tailwind utilities and design tokens consistent with the other landlord pages (e.g. readiness).
+
 ## 2026-07-02 — Everbranch Peace-of-Mind Home and Contact Flow
 
 ### What changed

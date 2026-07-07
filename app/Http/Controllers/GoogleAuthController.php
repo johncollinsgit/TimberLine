@@ -167,13 +167,20 @@ class GoogleAuthController extends Controller
         }
 
         if ($user->getAttribute('is_active') === false) {
-            if ($user->getAttribute('approved_at') === null) {
-                return redirect()->route('login')
-                    ->with('status', 'Google account request received. An administrator must approve your access before you can sign in.');
-            }
+            if ($user->getAttribute('approved_at') === null && (string) ($user->getAttribute('requested_via') ?? '') === 'google') {
+                $user->forceFill([
+                    'is_active' => true,
+                    'approved_at' => now(),
+                ])->save();
+            } else {
+                if ($user->getAttribute('approved_at') === null) {
+                    return redirect()->route('login')
+                        ->with('status', 'Google account request received. An administrator must approve your access before you can sign in.');
+                }
 
-            return redirect()->route('login')
-                ->withErrors(['email' => 'This account is disabled. Contact an administrator.']);
+                return redirect()->route('login')
+                    ->withErrors(['email' => 'This account is disabled. Contact an administrator.']);
+            }
         }
 
         $user->forceFill([

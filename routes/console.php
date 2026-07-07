@@ -42,22 +42,47 @@ Schedule::command('queue:work database --queue=default --stop-when-empty --tries
     ->withoutOverlapping(10)
     ->runInBackground();
 
-// Shopify webhook subscription drift audit (non-destructive; repair is manual).
-Schedule::command('shopify:webhooks:verify', [
-    '--required-only' => true,
-])
-    ->dailyAt('01:35')
-    ->withoutOverlapping(60)
+// Liveness heartbeat: proves the scheduler cron itself is running. Web requests check
+// its freshness (see EvaluateSchedulerHeartbeat) so a stopped cron becomes detectable.
+Schedule::command('scheduler:heartbeat')
+    ->everyMinute()
+    ->withoutOverlapping(5)
     ->runInBackground();
 
-// Keep Shopify order snapshots fresh so message-attributed sales stay current.
-Schedule::command('shopify:import-orders', [
-    '--days' => 14,
-    '--status' => 'any',
-    '--limit' => 250,
+// Shopify webhook subscription drift audit for BOTH storefronts (non-destructive;
+// repair is manual). Auditing wholesale too keeps its real-time order webhooks healthy.
+foreach (['retail', 'wholesale'] as $shopifyStoreKey) {
+    Schedule::command('shopify:webhooks:verify', [
+        '--store' => $shopifyStoreKey,
+    ])
+        ->dailyAt('01:35')
+        ->withoutOverlapping(60)
+        ->runInBackground();
+}
+
+// Keep Shopify order snapshots fresh for BOTH storefronts (retail: theforestrystudio.com,
+// wholesale: modernforestrywholesale.com) so their orders import automatically.
+// Scheduled per-store on purpose: the no-arg import only covers active_store_keys
+// (retail by default), which would silently skip wholesale entirely.
+foreach (['retail', 'wholesale'] as $shopifyStoreKey) {
+    Schedule::command('shopify:import-orders', [
+        '--store' => $shopifyStoreKey,
+        '--days' => 14,
+        '--status' => 'any',
+        '--limit' => 250,
+    ])
+        ->everyThirtyMinutes()
+        ->withoutOverlapping(120)
+        ->runInBackground();
+}
+
+// Surface stale/stopped Shopify order imports per store (expired token, broken cron,
+// revoked scopes) as integration health alerts, and auto-clear them when imports resume.
+Schedule::command('shopify:import-health', [
+    '--stale-after' => 90,
 ])
-    ->everyThirtyMinutes()
-    ->withoutOverlapping(120)
+    ->hourlyAt(15)
+    ->withoutOverlapping(30)
     ->runInBackground();
 
 // Reconcile click->order attributions after order imports and webhook drift.

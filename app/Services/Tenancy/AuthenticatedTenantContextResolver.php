@@ -12,8 +12,7 @@ class AuthenticatedTenantContextResolver
 {
     public function __construct(
         protected TenantResolver $tenantResolver
-    ) {
-    }
+    ) {}
 
     public function resolveForRequest(Request $request, User $user): ?Tenant
     {
@@ -186,22 +185,49 @@ class AuthenticatedTenantContextResolver
 
     protected function canBootstrapHostTenantMembership(User $user): bool
     {
+        // Only genuine platform operators may be auto-joined to the flagship host
+        // tenant. Everyone else with no workspace is routed to create their own.
+        // NOTE: we deliberately do NOT trust the `admin`/`manager`/`marketing_manager`
+        // roles here — `admin` is the users.role DB default, so a self-provisioned
+        // account would otherwise be silently absorbed into the flagship tenant.
         $role = strtolower(trim((string) ($user->role ?? '')));
-        if ($role === '') {
-            // Legacy compatibility: blank/null global role historically behaved like admin.
-            $role = 'admin';
+        if ($role === 'platform_admin') {
+            return true;
         }
 
-        return in_array($role, ['admin', 'manager', 'marketing_manager'], true);
+        $operatorEmails = $this->landlordOperatorEmails();
+        if ($operatorEmails === []) {
+            return false;
+        }
+
+        $email = strtolower(trim((string) ($user->email ?? '')));
+
+        return $email !== '' && in_array($email, $operatorEmails, true);
     }
 
     protected function bootstrapTenantRole(User $user): string
     {
-        $role = strtolower(trim((string) ($user->role ?? '')));
-        if ($role === '' || ! in_array($role, ['admin', 'manager', 'marketing_manager'], true)) {
-            return 'admin';
+        return 'admin';
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    protected function landlordOperatorEmails(): array
+    {
+        $configured = config('tenancy.landlord.operator_emails', []);
+        if (! is_array($configured)) {
+            return [];
         }
 
-        return $role;
+        $emails = [];
+        foreach ($configured as $candidate) {
+            $normalized = strtolower(trim((string) $candidate));
+            if ($normalized !== '') {
+                $emails[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique($emails));
     }
 }

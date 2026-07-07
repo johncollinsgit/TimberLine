@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_tests:
-        description: Run test/build job before deploy
+        description: Run test/build gate before deploy (uncheck only for an emergency hotfix)
         required: false
         default: true
         type: boolean
@@ -26,15 +26,17 @@ jobs:
     outputs:
       run_tests: ${{ steps.gate.outputs.run_tests }}
     steps:
-      - name: Decide whether to run optional test/build job
+      - name: Decide whether to run the test/build gate
         id: gate
+        # Always run the gate on push to main. Only a manual dispatch that
+        # explicitly unchecks run_tests may bypass it (emergency hotfix).
         run: echo "run_tests=${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_tests == 'true' }}" >> "$GITHUB_OUTPUT"
 
   test_and_build:
-    name: Optional Test And Build
+    name: Test And Build Gate
     runs-on: ubuntu-latest
     needs: setup
-    if: github.event_name == 'workflow_dispatch' && needs.setup.outputs.run_tests == 'true'
+    if: needs.setup.outputs.run_tests == 'true'
     environment: Testing
     steps:
       - name: Checkout code
@@ -52,59 +54,41 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - name: Check test prerequisites
-        id: test_prereqs
+      - name: Verify test prerequisites (fail loudly)
         run: |
           set -euo pipefail
 
           if [ ! -f phpunit.xml ] || [ ! -d tests ]; then
-            echo "can_run_tests=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Test suite is not configured yet (missing phpunit.xml or tests/)."
-            exit 0
+            echo "::error::Deploy gate cannot run: missing phpunit.xml or tests/ directory."
+            exit 1
           fi
 
           if grep -q '"livewire/flux"' composer.json && { [ -z "${{ secrets.FLUX_USERNAME }}" ] || [ -z "${{ secrets.FLUX_LICENSE_KEY }}" ]; }; then
-            echo "can_run_tests=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping tests: FLUX_USERNAME and FLUX_LICENSE_KEY secrets are required for composer install."
-            exit 0
+            echo "::error::Deploy gate cannot run: FLUX_USERNAME and FLUX_LICENSE_KEY secrets are required to install dependencies. Set them on the Testing environment."
+            exit 1
           fi
 
-          echo "can_run_tests=true" >> "$GITHUB_OUTPUT"
-
-      - name: Placeholder when test setup is incomplete
-        if: steps.test_prereqs.outputs.can_run_tests != 'true'
-        run: echo "Test/build steps were skipped. Add missing test prerequisites to enable this stage."
-
       - name: Configure Flux composer auth
-        if: steps.test_prereqs.outputs.can_run_tests == 'true'
         env:
           FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
           FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
-        run: |
-          if [ -n "$FLUX_USERNAME" ] && [ -n "$FLUX_LICENSE_KEY" ]; then
-            composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
-          fi
+        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
 
       - name: Install PHP dependencies
-        if: steps.test_prereqs.outputs.can_run_tests == 'true'
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Install Node dependencies
-        if: steps.test_prereqs.outputs.can_run_tests == 'true'
         run: npm ci
 
       - name: Prepare app key for CI
-        if: steps.test_prereqs.outputs.can_run_tests == 'true'
         run: |
           cp .env.example .env
           php artisan key:generate
 
       - name: Build frontend assets
-        if: steps.test_prereqs.outputs.can_run_tests == 'true'
         run: npm run build
 
       - name: Run tests
-        if: steps.test_prereqs.outputs.can_run_tests == 'true'
         run: php -d memory_limit=512M ./vendor/bin/pest
 
   deploy:
@@ -113,10 +97,14 @@ jobs:
     needs:
       - setup
       - test_and_build
+    # Deploy only when the gate passed. A 'skipped' gate is allowed ONLY for the
+    # manual emergency-hotfix path (workflow_dispatch with run_tests unchecked);
+    # on a normal push the gate runs, so a test failure here blocks the deploy.
     if: >
       always() &&
       needs.setup.result == 'success' &&
-      (needs.test_and_build.result == 'success' || needs.test_and_build.result == 'skipped')
+      (needs.test_and_build.result == 'success' ||
+        (needs.test_and_build.result == 'skipped' && github.event_name == 'workflow_dispatch'))
     environment:
       name: production
     steps:

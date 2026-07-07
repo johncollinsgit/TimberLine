@@ -260,7 +260,7 @@ test('password reset continuation preserves tenant intent until next successful 
     $this->assertAuthenticatedAs($user);
 });
 
-test('existing login works with no tenant context', function (): void {
+test('login with no workspace routes to workspace creation', function (): void {
     $user = User::factory()->create([
         'role' => 'admin',
         'is_active' => true,
@@ -271,8 +271,9 @@ test('existing login works with no tenant context', function (): void {
         'password' => 'password',
     ]);
 
+    // A user with no workspace membership is guided to create one.
     $response->assertSessionHasNoErrors();
-    $response->assertRedirect(route('dashboard', absolute: false));
+    $response->assertRedirect(route('workspace.first-login', absolute: false));
     $response->assertSessionMissing('tenant_id');
     $response->assertSessionMissing('auth.tenant_intent');
     $this->assertAuthenticatedAs($user);

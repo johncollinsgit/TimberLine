@@ -14,6 +14,7 @@ use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
+use App\Http\Controllers\Landlord\LandlordDeveloperDashboardController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
@@ -44,6 +45,7 @@ use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
 use App\Http\Controllers\Onboarding\CustomerStartHereController;
+use App\Http\Controllers\Onboarding\FirstLoginWorkspaceController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
 use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
@@ -192,6 +194,8 @@ $landlordRoutes = static function (): void {
         ->name('dashboard');
     Route::get('/landlord/readiness', LandlordSelfServiceReadinessController::class)
         ->name('readiness');
+    Route::get('/landlord/developer', LandlordDeveloperDashboardController::class)
+        ->name('developer');
     Route::get('/landlord/onboarding/journey', [LandlordOnboardingJourneyDiagnosticsController::class, 'index'])
         ->name('onboarding.journey');
     Route::get('/landlord/onboarding/wizard', \App\Livewire\Onboarding\Wizard::class)
@@ -504,6 +508,11 @@ Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProdu
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::get('/workspace/create', [FirstLoginWorkspaceController::class, 'show'])
+        ->name('workspace.first-login');
+    Route::post('/workspace/create', [FirstLoginWorkspaceController::class, 'store'])
+        ->name('workspace.first-login.store');
 
     // Dashboard
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->group(function () {

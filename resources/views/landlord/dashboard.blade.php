@@ -68,6 +68,7 @@
                 <nav class="overflow-x-auto border-t border-zinc-200 px-6 py-3">
                     <ul class="flex min-w-max items-center gap-2 text-xs font-medium text-zinc-600">
                         <li><a href="#overview" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Overview</a></li>
+                        <li><a href="#owner-intake" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Owner intake</a></li>
                         <li><a href="#onboarding-triage" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Onboarding triage</a></li>
                         <li><a href="#recent-tenants" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Recent tenants</a></li>
                     </ul>
@@ -100,6 +101,101 @@
                             <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Needs attention</p>
                             <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($metrics['tenants_needing_attention'] ?? 0)) }}</p>
                         </article>
+                    </div>
+                </section>
+
+                @php
+                    $guideRows = collect($onboardingGuideRows ?? []);
+                @endphp
+
+                <section id="owner-intake" class="space-y-4 scroll-mt-36">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-zinc-950">Owner intake</h3>
+                            <p class="text-sm text-zinc-600">
+                                Answers saved under the Google-authenticated user during first-login setup.
+                            </p>
+                        </div>
+                        <div class="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-600">
+                            {{ number_format($guideRows->count()) }} recent
+                        </div>
+                    </div>
+
+                    <div class="grid gap-4 xl:grid-cols-2">
+                        @forelse ($guideRows as $row)
+                            @php
+                                $guide = is_array($row['onboarding_guide'] ?? null) ? (array) $row['onboarding_guide'] : [];
+                                $guideUser = is_array($guide['user'] ?? null) ? (array) $guide['user'] : [];
+                                $answers = is_array($guide['answers'] ?? null) ? (array) $guide['answers'] : [];
+                                $questions = is_array($answers['questions'] ?? null) ? (array) $answers['questions'] : [];
+                                $hardest = is_array($questions['hardest_part'] ?? null) ? (array) $questions['hardest_part'] : [];
+                                $teamSize = is_array($questions['team_size'] ?? null) ? (array) $questions['team_size'] : [];
+                                $needs = collect(is_array($questions['owner_need'] ?? null) ? (array) $questions['owner_need'] : []);
+                                $modules = collect(is_array($answers['selected_modules'] ?? null) ? (array) $answers['selected_modules'] : []);
+                                $appointment = is_array($answers['appointment'] ?? null) ? (array) $answers['appointment'] : null;
+                                $startPath = (string) ($answers['start_path'] ?? 'self');
+                            @endphp
+                            <article class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+                                <div class="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">{{ $row['name'] ?? 'Tenant' }}</p>
+                                        <h4 class="mt-1 text-lg font-semibold text-zinc-950">{{ $guideUser['name'] ?? 'New owner' }}</h4>
+                                        <p class="text-sm text-zinc-600">{{ $guideUser['email'] ?? 'No email captured' }}</p>
+                                    </div>
+                                    <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $startPath === 'guided' ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-700' }}">
+                                        {{ $startPath === 'guided' ? 'Wants help' : 'Self-guided' }}
+                                    </span>
+                                </div>
+
+                                <dl class="mt-5 grid gap-3 sm:grid-cols-2">
+                                    <div class="rounded-lg bg-zinc-50 p-3">
+                                        <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Hardest part</dt>
+                                        <dd class="mt-1 text-sm font-semibold text-zinc-900">{{ $hardest['label'] ?? 'Not answered' }}</dd>
+                                    </div>
+                                    <div class="rounded-lg bg-zinc-50 p-3">
+                                        <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Team</dt>
+                                        <dd class="mt-1 text-sm font-semibold text-zinc-900">{{ $teamSize['label'] ?? 'Not answered' }}</dd>
+                                    </div>
+                                </dl>
+
+                                @if ($needs->isNotEmpty())
+                                    <div class="mt-4">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Needs right now</p>
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            @foreach ($needs as $need)
+                                                <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">{{ $need['label'] ?? $need['value'] ?? 'Need' }}</span>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+
+                                @if ($appointment)
+                                    <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-800">Requested appointment</p>
+                                        <p class="mt-1 text-sm font-semibold text-emerald-950">{{ $appointment['slot_label'] ?? $appointment['slot'] ?? 'Slot pending' }}</p>
+                                        <p class="mt-1 text-xs text-emerald-900">{{ $appointment['phone'] ?? '' }}</p>
+                                    </div>
+                                @endif
+
+                                @if ($modules->isNotEmpty())
+                                    <div class="mt-4">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Clicked app modules</p>
+                                        <div class="mt-2 flex flex-wrap gap-2">
+                                            @foreach ($modules->take(10) as $module)
+                                                <span class="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-700">{{ $module['label'] ?? $module['key'] ?? 'Module' }}</span>
+                                            @endforeach
+                                            @if ($modules->count() > 10)
+                                                <span class="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-500">+{{ $modules->count() - 10 }} more</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endif
+                            </article>
+                        @empty
+                            <div class="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-5 text-sm text-zinc-600">
+                                No first-login guide answers have been captured yet.
+                            </div>
+                        @endforelse
                     </div>
                 </section>
 

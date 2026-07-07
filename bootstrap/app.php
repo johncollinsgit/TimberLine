@@ -26,6 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\ResolveHostTenantContext::class,
             \App\Http\Middleware\EnforceCanonicalRuntimeHost::class,
         ]);
+        // Runs after the response (terminate), throttled — detects a stopped scheduler cron.
+        $middleware->web(append: [
+            \App\Http\Middleware\EvaluateSchedulerHeartbeat::class,
+        ]);
         $middleware->validateCsrfTokens(except: [
             'shopify/app/api/dashboard/candle-cash-reminders',
             'shopify/app/api/rewards/earn/*',

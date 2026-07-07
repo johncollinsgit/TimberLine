@@ -17,9 +17,10 @@ test('users can authenticate using the login screen', function () {
         'password' => 'password',
     ]);
 
+    // A brand-new user has no workspace yet, so login sends them to create one.
     $response
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('dashboard', absolute: false));
+        ->assertRedirect(route('workspace.first-login', absolute: false));
 
     $this->assertAuthenticated();
 });
@@ -82,12 +83,13 @@ test('inactive users can not authenticate', function () {
     $this->assertGuest();
 });
 
-test('authenticated pouring users visiting login are redirected to pouring room', function () {
+test('authenticated users without a workspace visiting login are sent to workspace creation', function () {
     $user = User::factory()->create([
         'role' => 'pouring',
     ]);
 
     $response = $this->actingAs($user)->get(route('login'));
 
-    $response->assertRedirect(route('pouring.index', absolute: false));
+    // No workspace membership yet => guided to create one (role home only applies once joined).
+    $response->assertRedirect(route('workspace.first-login', absolute: false));
 });
