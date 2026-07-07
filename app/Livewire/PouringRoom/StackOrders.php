@@ -3,8 +3,10 @@
 namespace App\Livewire\PouringRoom;
 
 use App\Models\Order;
+use App\Models\User;
 use App\Services\Pouring\PouringQueueService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
 
 class StackOrders extends Component
@@ -27,15 +29,29 @@ class StackOrders extends Component
         $this->channel = $channel;
     }
 
+    /**
+     * Order queries constrained to the tenants the acting user belongs to, so a
+     * crafted orderId for another tenant's order updates zero rows. tenant.access
+     * does not wrap Livewire updates, so we scope by membership (always available)
+     * rather than the request tenant attribute.
+     */
+    protected function ownedOrders(): Builder
+    {
+        $user = auth()->user();
+        $tenantIds = $user instanceof User ? $user->accessibleTenantIds() : [];
+
+        return Order::query()->whereIn('tenant_id', $tenantIds);
+    }
+
     public function startOrder(int $orderId): void
     {
-        Order::query()->where('id', $orderId)->where('status', 'submitted_to_pouring')->update(['status' => 'pouring']);
+        $this->ownedOrders()->where('id', $orderId)->where('status', 'submitted_to_pouring')->update(['status' => 'pouring']);
         $this->dispatch('toast', ['type' => 'success', 'message' => 'Order started.']);
     }
 
     public function completeOrder(int $orderId): void
     {
-        Order::query()->where('id', $orderId)->whereIn('status', ['pouring', 'brought_down'])->update(['status' => 'brought_down']);
+        $this->ownedOrders()->where('id', $orderId)->whereIn('status', ['pouring', 'brought_down'])->update(['status' => 'brought_down']);
         $this->dispatch('toast', ['type' => 'success', 'message' => 'Order completed in pouring.']);
     }
 
@@ -50,7 +66,7 @@ class StackOrders extends Component
         if (empty($ids)) {
             return;
         }
-        Order::query()->whereIn('id', $ids)->whereIn('status', ['pouring', 'brought_down'])->update(['status' => 'brought_down']);
+        $this->ownedOrders()->whereIn('id', $ids)->whereIn('status', ['pouring', 'brought_down'])->update(['status' => 'brought_down']);
         $this->selected = [];
         $this->dispatch('toast', ['type' => 'success', 'message' => 'Selected orders submitted.']);
     }

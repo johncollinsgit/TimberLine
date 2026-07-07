@@ -9,25 +9,26 @@ use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CandleCashTaskEvent;
-use App\Models\MarketingReviewHistory;
 use App\Models\MarketingProfile;
+use App\Models\MarketingReviewHistory;
 use App\Models\MarketingSetting;
 use App\Models\Order;
 use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleState;
+use App\Services\Marketing\CandleCashGiftReportService;
 use App\Services\Marketing\CandleCashReferralService;
 use App\Services\Marketing\CandleCashRewardsOverviewService;
 use App\Services\Marketing\CandleCashService;
-use App\Services\Marketing\CandleCashGiftReportService;
 use App\Services\Marketing\CandleCashTaskEligibilityService;
 use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
-use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ProductReviewNotificationService;
+use App\Services\Marketing\ProductReviewService;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use App\Support\Marketing\CandleCashSectionRegistry;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -35,8 +36,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Collection;
-use Carbon\CarbonImmutable;
 
 class CandleCashPagesController extends Controller
 {
@@ -78,7 +77,7 @@ class CandleCashPagesController extends Controller
             return back()
                 ->withErrors($exception->errors())
                 ->withInput()
-                ->with('toast', ['style' => 'danger', 'message' => $this->displayLabel('rewards_label', 'Rewards') . ' rule could not be saved.']);
+                ->with('toast', ['style' => 'danger', 'message' => $this->displayLabel('rewards_label', 'Rewards').' rule could not be saved.']);
         }
 
         return back()->with('toast', ['style' => 'success', 'message' => 'Redeem rule updated.']);
@@ -132,7 +131,7 @@ class CandleCashPagesController extends Controller
         $task = CandleCashTask::query()->create($this->validatedTaskPayload($request));
 
         return redirect()->route('marketing.candle-cash.tasks')
-            ->with('toast', ['style' => 'success', 'message' => $this->displayLabel('rewards_label', 'Rewards') . ' task created: ' . $task->title]);
+            ->with('toast', ['style' => 'success', 'message' => $this->displayLabel('rewards_label', 'Rewards').' task created: '.$task->title]);
     }
 
     public function updateTask(Request $request, CandleCashTask $task): RedirectResponse
@@ -208,7 +207,7 @@ class CandleCashPagesController extends Controller
 
         $taskService->approveCompletion($completion, auth()->id(), $data['review_notes'] ?? null);
 
-        return back()->with('toast', ['style' => 'success', 'message' => 'Task approved and ' . strtolower($this->displayLabel('reward_credit_label', 'reward credit')) . ' credited.']);
+        return back()->with('toast', ['style' => 'success', 'message' => 'Task approved and '.strtolower($this->displayLabel('reward_credit_label', 'reward credit')).' credited.']);
     }
 
     public function rejectCompletion(Request $request, CandleCashTaskCompletion $completion, CandleCashTaskService $taskService): RedirectResponse
@@ -237,14 +236,14 @@ class CandleCashPagesController extends Controller
         $reviewsQuery = $this->reviewIndexQuery($tenantId)
             ->when($search !== '', function (Builder $builder) use ($search): void {
                 $builder->where(function (Builder $query) use ($search): void {
-                    $query->where('product_title', 'like', '%' . $search . '%')
-                        ->orWhere('product_handle', 'like', '%' . $search . '%')
-                        ->orWhere('reviewer_name', 'like', '%' . $search . '%')
-                        ->orWhere('reviewer_email', 'like', '%' . $search . '%')
-                        ->orWhere('body', 'like', '%' . $search . '%')
-                        ->orWhere('title', 'like', '%' . $search . '%')
-                        ->orWhere('reward_eligibility_status', 'like', '%' . $search . '%')
-                        ->orWhere('reward_award_status', 'like', '%' . $search . '%');
+                    $query->where('product_title', 'like', '%'.$search.'%')
+                        ->orWhere('product_handle', 'like', '%'.$search.'%')
+                        ->orWhere('reviewer_name', 'like', '%'.$search.'%')
+                        ->orWhere('reviewer_email', 'like', '%'.$search.'%')
+                        ->orWhere('body', 'like', '%'.$search.'%')
+                        ->orWhere('title', 'like', '%'.$search.'%')
+                        ->orWhere('reward_eligibility_status', 'like', '%'.$search.'%')
+                        ->orWhere('reward_award_status', 'like', '%'.$search.'%');
                 });
             })
             ->when($status !== 'all', fn (Builder $builder) => $builder->where('status', $status))
@@ -256,8 +255,7 @@ class CandleCashPagesController extends Controller
             ->when($customerId > 0, fn (Builder $builder) => $builder->where('marketing_profile_id', $customerId))
             ->orderByDesc('approved_at')
             ->orderByDesc('submitted_at')
-            ->orderByDesc('id')
-        ;
+            ->orderByDesc('id');
 
         $reviews = $reviewsQuery
             ->paginate(25)
@@ -268,7 +266,7 @@ class CandleCashPagesController extends Controller
             : $reviews->first();
 
         $filteredCustomer = $customerId > 0
-            ? MarketingProfile::query()->select(['id', 'first_name', 'last_name', 'email'])->find($customerId)
+            ? MarketingProfile::query()->forTenantId($tenantId)->select(['id', 'first_name', 'last_name', 'email'])->find($customerId)
             : null;
 
         $summaryQuery = MarketingReviewHistory::query()
@@ -386,8 +384,7 @@ class CandleCashPagesController extends Controller
         Request $request,
         MarketingReviewHistory $review,
         ProductReviewService $productReviewService
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $this->assertReviewInTenantScope($review, $request);
 
         $productReviewService->delete($review);
@@ -411,8 +408,10 @@ class CandleCashPagesController extends Controller
     {
         $search = trim((string) $request->query('search', ''));
         $selectedId = (int) $request->query('profile', 0);
+        $tenantId = $this->currentTenantId($request);
 
         $profiles = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->where(function (Builder $builder): void {
                 $builder->whereHas('candleCashTransactions')
                     ->orWhereHas('candleCashTaskCompletions')
@@ -421,10 +420,10 @@ class CandleCashPagesController extends Controller
             })
             ->when($search !== '', function (Builder $builder) use ($search): void {
                 $builder->where(function (Builder $query) use ($search): void {
-                    $query->where('first_name', 'like', '%' . $search . '%')
-                        ->orWhere('last_name', 'like', '%' . $search . '%')
-                        ->orWhere('email', 'like', '%' . $search . '%')
-                        ->orWhere('phone', 'like', '%' . $search . '%');
+                    $query->where('first_name', 'like', '%'.$search.'%')
+                        ->orWhere('last_name', 'like', '%'.$search.'%')
+                        ->orWhere('email', 'like', '%'.$search.'%')
+                        ->orWhere('phone', 'like', '%'.$search.'%');
                 });
             })
             ->withCount([
@@ -441,7 +440,7 @@ class CandleCashPagesController extends Controller
             ->withQueryString();
 
         $selectedProfile = $selectedId > 0
-            ? MarketingProfile::query()->with([
+            ? MarketingProfile::query()->forTenantId($tenantId)->with([
                 'candleCashBalance',
                 'candleCashTransactions' => fn ($builder) => $builder->latest('id')->limit(20),
                 'candleCashTaskCompletions.task:id,title,handle',
@@ -472,6 +471,11 @@ class CandleCashPagesController extends Controller
 
     public function adjustCustomer(Request $request, MarketingProfile $marketingProfile, CandleCashService $candleCashService): RedirectResponse
     {
+        // These routes are not wrapped by tenant.access, so guard the route-bound
+        // profile explicitly: a member of tenant N cannot adjust another tenant's
+        // reward balance (a financial cross-tenant IDOR otherwise).
+        $this->assertProfileBelongsToTenant($request, $marketingProfile);
+
         $data = $request->validate([
             'adjustment_type' => ['required', 'in:add,deduct'],
             'amount' => ['required', 'numeric', 'min:0.01', 'max:500'],
@@ -482,7 +486,7 @@ class CandleCashPagesController extends Controller
         if ($data['adjustment_type'] === 'deduct') {
             $points *= -1;
             if ($candleCashService->currentBalance($marketingProfile) < abs($points)) {
-                return back()->with('toast', ['style' => 'danger', 'message' => 'Cannot deduct more ' . strtolower($this->displayLabel('reward_credit_label', 'reward credit')) . ' than the current balance.']);
+                return back()->with('toast', ['style' => 'danger', 'message' => 'Cannot deduct more '.strtolower($this->displayLabel('reward_credit_label', 'reward credit')).' than the current balance.']);
             }
         }
 
@@ -491,11 +495,11 @@ class CandleCashPagesController extends Controller
             points: $points,
             type: $points >= 0 ? 'earn' : 'adjustment',
             source: 'admin_adjustment',
-            sourceId: 'profile:' . $marketingProfile->id . ':user:' . auth()->id() . ':' . now()->timestamp,
-            description: trim((string) ($data['note'] ?? '')) ?: 'Manual ' . strtolower($this->displayLabel('rewards_balance_label', 'Rewards balance')) . ' adjustment'
+            sourceId: 'profile:'.$marketingProfile->id.':user:'.auth()->id().':'.now()->timestamp,
+            description: trim((string) ($data['note'] ?? '')) ?: 'Manual '.strtolower($this->displayLabel('rewards_balance_label', 'Rewards balance')).' adjustment'
         );
 
-        return back()->with('toast', ['style' => 'success', 'message' => Str::title($this->displayLabel('rewards_balance_label', 'Rewards balance')) . ' adjusted.']);
+        return back()->with('toast', ['style' => 'success', 'message' => Str::title($this->displayLabel('rewards_balance_label', 'Rewards balance')).' adjusted.']);
     }
 
     public function referrals(Request $request): View
@@ -546,7 +550,8 @@ class CandleCashPagesController extends Controller
     public function reprocessReferral(CandleCashReferral $referral, CandleCashReferralService $referralService): RedirectResponse
     {
         $orderId = (int) $referral->qualifying_order_id;
-        $order = $orderId > 0 ? Order::query()->find($orderId) : null;
+        $tenantId = $this->currentTenantId(request());
+        $order = $orderId > 0 ? Order::query()->forTenantId($tenantId)->find($orderId) : null;
         if (! $order) {
             return back()->with('toast', ['style' => 'danger', 'message' => 'Qualifying order could not be found for this referral.']);
         }
@@ -561,8 +566,7 @@ class CandleCashPagesController extends Controller
     public function settings(
         CandleCashTaskService $taskService,
         GoogleBusinessProfileConnectionService $googleBusinessConnectionService
-    ): View
-    {
+    ): View {
         $tenantId = $this->currentTenantId(request());
 
         return view('marketing.candle-cash.show', [
@@ -614,7 +618,7 @@ class CandleCashPagesController extends Controller
                 'homepage_signup_copy' => trim((string) $data['homepage_signup_copy']),
                 'homepage_central_title' => trim((string) $data['homepage_central_title']),
                 'homepage_central_copy' => trim((string) $data['homepage_central_copy']),
-            ]), $this->displayLabel('rewards_program_label', 'Rewards program') . ' settings.', $tenantId);
+            ]), $this->displayLabel('rewards_program_label', 'Rewards program').' settings.', $tenantId);
         } elseif ($scope === 'referral') {
             $existing = $this->settingValue('candle_cash_referral_config', $tenantId);
             $data = $request->validate([
@@ -635,7 +639,7 @@ class CandleCashPagesController extends Controller
                 'qualifying_min_order_total' => $data['qualifying_min_order_total'] !== null ? (float) $data['qualifying_min_order_total'] : null,
                 'program_headline' => trim((string) $data['program_headline']),
                 'program_copy' => trim((string) $data['program_copy']),
-            ]), $this->displayLabel('rewards_label', 'Rewards') . ' referral settings.', $tenantId);
+            ]), $this->displayLabel('rewards_label', 'Rewards').' referral settings.', $tenantId);
         } elseif ($scope === 'frontend') {
             $existing = $this->settingValue('candle_cash_frontend_config', $tenantId);
             $data = $request->validate([
@@ -654,7 +658,7 @@ class CandleCashPagesController extends Controller
                 'faq_stack_copy' => trim((string) $data['faq_stack_copy']),
                 'faq_pending_copy' => trim((string) $data['faq_pending_copy']),
                 'faq_verification_copy' => trim((string) $data['faq_verification_copy']),
-            ]), $this->displayLabel('rewards_label', 'Rewards') . ' frontend copy settings.', $tenantId);
+            ]), $this->displayLabel('rewards_label', 'Rewards').' frontend copy settings.', $tenantId);
         } else {
             $existing = $this->settingValue('candle_cash_integration_config', $tenantId);
             $data = $request->validate([
@@ -716,7 +720,7 @@ class CandleCashPagesController extends Controller
                 'sms_signup_enabled' => array_key_exists('sms_signup_enabled', $data) ? (bool) $data['sms_signup_enabled'] : false,
                 'email_signup_enabled' => array_key_exists('email_signup_enabled', $data) ? (bool) $data['email_signup_enabled'] : false,
                 'vote_locked_join_url' => trim((string) ($data['vote_locked_join_url'] ?? '')) ?: null,
-            ]), $this->displayLabel('rewards_label', 'Rewards') . ' integration settings.', $tenantId);
+            ]), $this->displayLabel('rewards_label', 'Rewards').' integration settings.', $tenantId);
 
             $this->syncTenantModuleStates($tenantId, [
                 'reviews' => array_key_exists('reviews_enabled', $data) ? (bool) $data['reviews_enabled'] : data_get($existing, 'reviews_enabled', true),
@@ -724,7 +728,7 @@ class CandleCashPagesController extends Controller
             ]);
         }
 
-        return back()->with('toast', ['style' => 'success', 'message' => $this->displayLabel('rewards_label', 'Rewards') . ' settings saved.']);
+        return back()->with('toast', ['style' => 'success', 'message' => $this->displayLabel('rewards_label', 'Rewards').' settings saved.']);
     }
 
     /**
@@ -779,7 +783,7 @@ class CandleCashPagesController extends Controller
     protected function validatedTaskPayload(Request $request, ?CandleCashTask $task = null): array
     {
         $data = $request->validate([
-            'handle' => ['required', 'string', 'max:120', 'alpha_dash', 'unique:candle_cash_tasks,handle' . ($task ? ',' . $task->id : '')],
+            'handle' => ['required', 'string', 'max:120', 'alpha_dash', 'unique:candle_cash_tasks,handle'.($task ? ','.$task->id : '')],
             'title' => ['required', 'string', 'max:160'],
             'description' => ['nullable', 'string', 'max:500'],
             'reward_amount' => ['required', 'numeric', 'min:0', 'max:100'],
@@ -909,7 +913,7 @@ class CandleCashPagesController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $value
+     * @param  array<string,mixed>  $value
      */
     protected function saveSetting(string $key, array $value, string $description, ?int $tenantId = null): void
     {
@@ -969,6 +973,18 @@ class CandleCashPagesController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Abort 404 unless the marketing profile belongs to the acting user's current
+     * tenant. Used to guard route-model-bound profiles on routes that are not
+     * wrapped by tenant.access.
+     */
+    protected function assertProfileBelongsToTenant(Request $request, MarketingProfile $profile): void
+    {
+        $tenantId = $this->currentTenantId($request);
+
+        abort_unless($tenantId !== null && (int) $profile->tenant_id === $tenantId, 404);
     }
 
     protected function displayLabel(string $key, string $fallback): string
@@ -1038,7 +1054,7 @@ class CandleCashPagesController extends Controller
     }
 
     /**
-     * @param array<string,bool> $states
+     * @param  array<string,bool>  $states
      */
     protected function syncTenantModuleStates(?int $tenantId, array $states): void
     {

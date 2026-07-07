@@ -5,22 +5,24 @@ namespace App\Livewire\Shipping;
 use App\Models\Order;
 use App\Models\Scent;
 use App\Models\Size;
+use App\Models\User;
+use App\Services\Shipping\BusinessDayCalculator;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
-use App\Services\Shipping\BusinessDayCalculator;
-use Carbon\CarbonImmutable;
 
 class Orders extends Component
 {
     protected $listeners = [
         'scentSelected' => 'handleScentSelected',
     ];
+
     use WithPagination;
 
     /**
@@ -31,9 +33,13 @@ class Orders extends Component
 
     // Filters / view state
     public string $view = 'table';       // list | table | timeline | gantt
+
     public string $channel = 'all';     // all | wholesale | retail | event
+
     public string $source = 'all';      // all | shopify_retail | shopify_wholesale | manual
+
     public string $status = 'all';      // all | new | reviewed | ...
+
     public string $search = '';
 
     /** @var array<int,bool> */
@@ -41,24 +47,30 @@ class Orders extends Component
 
     // Sorting (used in list/table)
     public string $sort = 'ship_by_at';
-    public string $dir  = 'asc';
+
+    public string $dir = 'asc';
 
     // Timeline month (YYYY-MM)
     public string $timelineYm = '';
+
     // Gantt window start (YYYY-MM-DD)
     public string $ganttStart = '';
+
     public int $ganttDays = 120;
 
     // Order edit state
     public array $orderEditing = []; // [orderId => true]
-    public array $orderEdit    = []; // [orderId => ['due_at' => 'Y-m-d|null', 'ship_by_at' => 'Y-m-d|null', 'status' => '...']]
+
+    public array $orderEdit = []; // [orderId => ['due_at' => 'Y-m-d|null', 'ship_by_at' => 'Y-m-d|null', 'status' => '...']]
 
     // Line qty editing state
     // lineEdit[lineId] = ['qty' => int]
     // lineDirty[lineId] = true (sparse map: key exists only when dirty)
     // lineOrder[lineId] = orderId
-    public array $lineEdit  = [];
+    public array $lineEdit = [];
+
     public array $lineDirty = [];
+
     public array $lineOrder = [];
 
     // New line inputs per order
@@ -69,13 +81,13 @@ class Orders extends Component
     public array $orderNotice = [];
 
     protected $queryString = [
-        'view'       => ['except' => 'table'],
-        'channel'    => ['except' => 'all'],
-        'source'     => ['except' => 'all'],
-        'status'     => ['except' => 'all'],
-        'search'     => ['except' => ''],
-        'sort'       => ['except' => 'ship_by_at'],
-        'dir'        => ['except' => 'asc'],
+        'view' => ['except' => 'table'],
+        'channel' => ['except' => 'all'],
+        'source' => ['except' => 'all'],
+        'status' => ['except' => 'all'],
+        'search' => ['except' => ''],
+        'sort' => ['except' => 'ship_by_at'],
+        'dir' => ['except' => 'asc'],
         'timelineYm' => ['except' => ''],
         'ganttStart' => ['except' => ''],
         // NOTE: do NOT put 'page' here. Livewire handles pagination param separately.
@@ -92,18 +104,18 @@ class Orders extends Component
     ];
 
     private const SORTS = [
-        'ship_by_at'   => 'ship_by_at',
-        'due_at'       => 'due_at',
-        'newest'       => 'id',
-        'oldest'       => 'id',
+        'ship_by_at' => 'ship_by_at',
+        'due_at' => 'due_at',
+        'newest' => 'id',
+        'oldest' => 'id',
         'order_number' => 'order_number',
-        'order_type'   => 'order_type',
-        'customer'     => 'customer_name',
-        'source'       => 'source',
-        'container'    => 'container_name',
-        'status'       => 'status',
-        'lines_count'  => '__virtual__',
-        'qty_total'    => '__virtual__',
+        'order_type' => 'order_type',
+        'customer' => 'customer_name',
+        'source' => 'source',
+        'container' => 'container_name',
+        'status' => 'status',
+        'lines_count' => '__virtual__',
+        'qty_total' => '__virtual__',
     ];
 
     // Wick options
@@ -122,22 +134,96 @@ class Orders extends Component
     }
 
     // Reset paging on filter changes + clear edit state (prevents ghost edits across filters)
-    public function updatingView(): void       { $this->resetPage(); $this->expanded = []; $this->clearEdits(); }
-    public function updatingChannel(): void    { $this->resetPage(); $this->expanded = []; $this->clearEdits(); }
-    public function updatingSource(): void     { $this->resetPage(); $this->expanded = []; $this->clearEdits(); }
-    public function updatingStatus(): void     { $this->resetPage(); $this->expanded = []; $this->clearEdits(); }
-    public function updatingSearch(): void     { $this->resetPage(); $this->expanded = []; $this->clearEdits(); }
-    public function updatingSort(): void       { $this->resetPage(); $this->expanded = []; $this->clearEdits(); }
-    public function updatingDir(): void        { $this->resetPage(); $this->expanded = []; $this->clearEdits(); }
-    public function updatingTimelineYm(): void { $this->expanded = []; $this->clearEdits(); }
-    public function updatingGanttStart(): void { $this->expanded = []; $this->clearEdits(); }
+    public function updatingView(): void
+    {
+        $this->resetPage();
+        $this->expanded = [];
+        $this->clearEdits();
+    }
 
-    public function updatedView(): void    { $this->persistUserPreferences(); }
-    public function updatedChannel(): void { $this->persistUserPreferences(); }
-    public function updatedSource(): void  { $this->persistUserPreferences(); }
-    public function updatedStatus(): void  { $this->persistUserPreferences(); }
-    public function updatedSort(): void    { $this->persistUserPreferences(); }
-    public function updatedDir(): void     { $this->persistUserPreferences(); }
+    public function updatingChannel(): void
+    {
+        $this->resetPage();
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatingSource(): void
+    {
+        $this->resetPage();
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatingStatus(): void
+    {
+        $this->resetPage();
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatingSearch(): void
+    {
+        $this->resetPage();
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatingSort(): void
+    {
+        $this->resetPage();
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatingDir(): void
+    {
+        $this->resetPage();
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatingTimelineYm(): void
+    {
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatingGanttStart(): void
+    {
+        $this->expanded = [];
+        $this->clearEdits();
+    }
+
+    public function updatedView(): void
+    {
+        $this->persistUserPreferences();
+    }
+
+    public function updatedChannel(): void
+    {
+        $this->persistUserPreferences();
+    }
+
+    public function updatedSource(): void
+    {
+        $this->persistUserPreferences();
+    }
+
+    public function updatedStatus(): void
+    {
+        $this->persistUserPreferences();
+    }
+
+    public function updatedSort(): void
+    {
+        $this->persistUserPreferences();
+    }
+
+    public function updatedDir(): void
+    {
+        $this->persistUserPreferences();
+    }
 
     public function clearFilters(): void
     {
@@ -151,7 +237,7 @@ class Orders extends Component
 
     public function setViewMode(string $view): void
     {
-        if (!in_array($view, ['table', 'list', 'timeline', 'gantt'], true)) {
+        if (! in_array($view, ['table', 'list', 'timeline', 'gantt'], true)) {
             return;
         }
 
@@ -162,18 +248,20 @@ class Orders extends Component
 
     public function toggleSort(string $key): void
     {
-        if (!array_key_exists($key, self::SORTS)) {
+        if (! array_key_exists($key, self::SORTS)) {
             return;
         }
 
         if ($this->sort !== $key) {
             $this->sort = $key;
             $this->dir = 'asc';
+
             return;
         }
 
         if ($this->dir === 'asc') {
             $this->dir = 'desc';
+
             return;
         }
 
@@ -185,14 +273,14 @@ class Orders extends Component
     private function clearEdits(): void
     {
         $this->orderEditing = [];
-        $this->orderEdit    = [];
+        $this->orderEdit = [];
 
-        $this->lineEdit  = [];
+        $this->lineEdit = [];
         $this->lineDirty = [];
         $this->lineOrder = [];
 
-        $this->newLine      = [];
-        $this->orderNotice  = [];
+        $this->newLine = [];
+        $this->orderNotice = [];
 
         $this->resetValidation();
         $this->resetErrorBag();
@@ -201,7 +289,7 @@ class Orders extends Component
     private function applyUserPreferences(): void
     {
         $user = auth()->user();
-        if (!$user || !is_array($user->ui_preferences ?? null)) {
+        if (! $user || ! is_array($user->ui_preferences ?? null)) {
             return;
         }
 
@@ -226,7 +314,7 @@ class Orders extends Component
     private function persistUserPreferences(): void
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -244,24 +332,24 @@ class Orders extends Component
     // --- Expand/collapse ---
     public function toggle(int $orderId): void
     {
-        $opening = !($this->expanded[$orderId] ?? false);
+        $opening = ! ($this->expanded[$orderId] ?? false);
         $this->expanded[$orderId] = $opening;
 
-        if (!$opening) {
+        if (! $opening) {
             return;
         }
 
         $this->hydrateLineDraftsForOrder($orderId);
 
-        if (!isset($this->newLine[$orderId])) {
+        if (! isset($this->newLine[$orderId])) {
             $this->newLine[$orderId] = [
                 'scent_search' => '',
-                'scent_id'     => null,
-                'size_search'  => '',
-                'size_id'      => null,
-                'wick_id'      => null,
-                'wick'         => 'cotton',
-                'qty'          => 1,
+                'scent_id' => null,
+                'size_search' => '',
+                'size_id' => null,
+                'wick_id' => null,
+                'wick' => 'cotton',
+                'qty' => 1,
             ];
         }
     }
@@ -274,15 +362,15 @@ class Orders extends Component
             $this->expanded[$order->id] = true;
             $this->hydrateLineDraftsForOrder($order->id);
 
-            if (!isset($this->newLine[$order->id])) {
+            if (! isset($this->newLine[$order->id])) {
                 $this->newLine[$order->id] = [
                     'scent_search' => '',
-                    'scent_id'     => null,
-                    'size_search'  => '',
-                    'size_id'      => null,
-                    'wick_id'      => null,
-                    'wick'         => 'cotton',
-                    'qty'          => 1,
+                    'scent_id' => null,
+                    'size_search' => '',
+                    'size_id' => null,
+                    'wick_id' => null,
+                    'wick' => 'cotton',
+                    'qty' => 1,
                 ];
             }
         }
@@ -337,10 +425,23 @@ class Orders extends Component
         $this->clearEdits();
     }
 
+    /**
+     * Order queries constrained to the tenants the acting user belongs to, so a
+     * crafted orderId for another tenant's order 404s / updates zero rows.
+     * tenant.access does not wrap Livewire updates, so we scope by membership.
+     */
+    protected function ownedOrders(): Builder
+    {
+        $user = auth()->user();
+        $tenantIds = $user instanceof User ? $user->accessibleTenantIds() : [];
+
+        return Order::query()->whereIn('tenant_id', $tenantIds);
+    }
+
     // --- Order editing (due_at + ship_by_at + status) ---
     public function startEditing(int $orderId): void
     {
-        $order = Order::query()
+        $order = $this->ownedOrders()
             ->select(['id', 'due_at', 'ship_by_at', 'status'])
             ->findOrFail($orderId);
 
@@ -350,7 +451,7 @@ class Orders extends Component
         $this->orderEdit[$orderId] = [
             'due_at' => blank($order->due_at) ? null : Carbon::parse($order->due_at)->format('Y-m-d'),
             'ship_by_at' => blank($order->ship_by_at) ? null : Carbon::parse($order->ship_by_at)->format('Y-m-d'),
-            'status'   => $order->status,
+            'status' => $order->status,
             'recalc_ship_by' => false,
         ];
     }
@@ -375,11 +476,11 @@ class Orders extends Component
         $validated = validator($data, [
             'due_at' => ['nullable', 'date'],
             'ship_by_at' => ['nullable', 'date'],
-            'status'   => ['required', 'in:' . implode(',', self::STATUSES)],
+            'status' => ['required', 'in:'.implode(',', self::STATUSES)],
             'recalc_ship_by' => ['nullable', 'boolean'],
         ])->validate();
 
-        $order = Order::query()->findOrFail($orderId);
+        $order = $this->ownedOrders()->findOrFail($orderId);
 
         $hasOpenExceptions = $order->mappingExceptions()
             ->whereNull('resolved_at')
@@ -390,6 +491,7 @@ class Orders extends Component
                 'type' => 'warning',
                 'message' => 'Blocked: this order has unresolved scent mappings. Resolve before marking verified/complete.',
             ]);
+
             return;
         }
 
@@ -397,7 +499,7 @@ class Orders extends Component
             'status' => $validated['status'],
         ];
 
-        $recalc = !empty($validated['recalc_ship_by']);
+        $recalc = ! empty($validated['recalc_ship_by']);
         if ($recalc) {
             $calculator = app(BusinessDayCalculator::class);
             $shipBy = $this->computeShipByDate($order, $calculator);
@@ -413,7 +515,7 @@ class Orders extends Component
                 : Carbon::parse($validated['ship_by_at'])->startOfDay();
         }
 
-        Order::query()
+        $this->ownedOrders()
             ->whereKey($orderId)
             ->update($updates);
 
@@ -423,18 +525,22 @@ class Orders extends Component
     // --- Line qty editing ---
     private function markLineDirty(int $lineId): void
     {
-        if ($lineId <= 0) return;
+        if ($lineId <= 0) {
+            return;
+        }
 
         $this->lineDirty[$lineId] = true;
 
-        if (!isset($this->lineOrder[$lineId])) {
+        if (! isset($this->lineOrder[$lineId])) {
             $this->ensureLineOrderForLine($lineId);
         }
     }
 
     private function ensureLineOrderForLine(int $lineId): ?int
     {
-        if ($lineId <= 0) return null;
+        if ($lineId <= 0) {
+            return null;
+        }
 
         if (isset($this->lineOrder[$lineId])) {
             return (int) $this->lineOrder[$lineId];
@@ -445,6 +551,7 @@ class Orders extends Component
 
         if ($orderId) {
             $this->lineOrder[$lineId] = (int) $orderId;
+
             return (int) $orderId;
         }
 
@@ -471,11 +578,15 @@ class Orders extends Component
      */
     public function updated($name, $value): void
     {
-        if (!is_string($name)) return;
+        if (! is_string($name)) {
+            return;
+        }
 
         if (preg_match('/^lineEdit\.(\d+)\.qty$/', $name, $m)) {
             $lineId = (int) $m[1];
-            if ($lineId <= 0) return;
+            if ($lineId <= 0) {
+                return;
+            }
 
             $qty = max(0, (int) $value);
             $this->lineEdit[$lineId]['qty'] = $qty;
@@ -485,11 +596,14 @@ class Orders extends Component
 
         if (preg_match('/^orderEdit\.(\d+)\.ship_by_at$/', $name, $m)) {
             $orderId = (int) $m[1];
-            if ($orderId <= 0) return;
+            if ($orderId <= 0) {
+                return;
+            }
 
             $date = trim((string) $value);
             if ($date === '') {
                 $this->orderEdit[$orderId]['due_at'] = null;
+
                 return;
             }
 
@@ -531,10 +645,17 @@ class Orders extends Component
 
     public function saveOrderLines(int $orderId): void
     {
-        if (empty($this->lineDirty)) return;
+        if (empty($this->lineDirty)) {
+            return;
+        }
+
+        // Refuse to save lines against an order outside the acting user's tenants.
+        abort_unless($this->ownedOrders()->whereKey($orderId)->exists(), 404);
 
         $dirtyIds = array_keys($this->lineDirty);
-        if (!$dirtyIds) return;
+        if (! $dirtyIds) {
+            return;
+        }
 
         foreach ($dirtyIds as $lineId) {
             $lineId = (int) $lineId;
@@ -590,11 +711,12 @@ class Orders extends Component
 
     public function selectNewLineScent(int $orderId): void
     {
-        $text = trim((string)($this->newLine[$orderId]['scent_search'] ?? ''));
+        $text = trim((string) ($this->newLine[$orderId]['scent_search'] ?? ''));
 
         if ($text === '') {
             $this->newLine[$orderId]['scent_id'] = null;
             $this->addError("newLine.$orderId.scent_search", 'Type a scent name.');
+
             return;
         }
 
@@ -603,9 +725,10 @@ class Orders extends Component
             ->where('name', $text)
             ->first(['id', 'name']);
 
-        if (!$scent) {
+        if (! $scent) {
             $this->newLine[$orderId]['scent_id'] = null;
             $this->addError("newLine.$orderId.scent_search", 'Pick a scent from the list.');
+
             return;
         }
 
@@ -617,7 +740,7 @@ class Orders extends Component
 
     public function handleScentSelected(string $key, ?int $scentId = null, ?string $scentName = null): void
     {
-        if (!str_starts_with($key, 'order-')) {
+        if (! str_starts_with($key, 'order-')) {
             return;
         }
         $orderId = (int) str_replace('order-', '', $key);
@@ -631,11 +754,12 @@ class Orders extends Component
 
     public function selectNewLineSize(int $orderId): void
     {
-        $text = trim((string)($this->newLine[$orderId]['size_search'] ?? ''));
+        $text = trim((string) ($this->newLine[$orderId]['size_search'] ?? ''));
 
         if ($text === '') {
             $this->newLine[$orderId]['size_id'] = null;
             $this->addError("newLine.$orderId.size_search", 'Type a size code.');
+
             return;
         }
 
@@ -644,9 +768,10 @@ class Orders extends Component
             ->where('code', $text)
             ->first(['id', 'code']);
 
-        if (!$size) {
+        if (! $size) {
             $this->newLine[$orderId]['size_id'] = null;
             $this->addError("newLine.$orderId.size_search", 'Pick a size from the list.');
+
             return;
         }
 
@@ -659,7 +784,9 @@ class Orders extends Component
     public function deleteLine(int $lineId): void
     {
         $lineId = (int) $lineId;
-        if ($lineId <= 0) return;
+        if ($lineId <= 0) {
+            return;
+        }
 
         $orderId = $this->ensureLineOrderForLine($lineId);
 
@@ -698,11 +825,11 @@ class Orders extends Component
         $data = $this->newLine[$orderId] ?? [];
 
         $scentSearch = trim((string) ($data['scent_search'] ?? ''));
-        $sizeSearch  = trim((string) ($data['size_search'] ?? ''));
-        $qtyToAdd    = (int) ($data['qty'] ?? 0);
-        $wick        = strtolower(trim((string)($data['wick'] ?? 'cotton')));
+        $sizeSearch = trim((string) ($data['size_search'] ?? ''));
+        $qtyToAdd = (int) ($data['qty'] ?? 0);
+        $wick = strtolower(trim((string) ($data['wick'] ?? 'cotton')));
 
-        if (!in_array($wick, self::WICK_TYPES, true)) {
+        if (! in_array($wick, self::WICK_TYPES, true)) {
             $wick = 'cotton';
         }
 
@@ -713,7 +840,7 @@ class Orders extends Component
                 ->where('name', $scentSearch)
                 ->first(['id', 'name']);
         }
-        if (!$scent && !empty($data['scent_id'])) {
+        if (! $scent && ! empty($data['scent_id'])) {
             $scent = Scent::query()->find((int) $data['scent_id'], ['id', 'name']);
         }
 
@@ -724,16 +851,16 @@ class Orders extends Component
                 ->where('code', $sizeSearch)
                 ->first(['id', 'code']);
         }
-        if (!$size && !empty($data['size_id'])) {
+        if (! $size && ! empty($data['size_id'])) {
             $size = Size::query()->find((int) $data['size_id'], ['id', 'code']);
         }
 
         $lineHasWickId = Schema::hasColumn('order_lines', 'wick_id');
 
         $this->newLine[$orderId]['scent_id'] = $scent?->id;
-        $this->newLine[$orderId]['size_id']  = $size?->id;
-        $this->newLine[$orderId]['qty']      = $qtyToAdd;
-        $this->newLine[$orderId]['wick']     = $wick;
+        $this->newLine[$orderId]['size_id'] = $size?->id;
+        $this->newLine[$orderId]['qty'] = $qtyToAdd;
+        $this->newLine[$orderId]['wick'] = $wick;
         if ($lineHasWickId) {
             $this->newLine[$orderId]['wick_id'] = isset($data['wick_id'])
                 ? (int) $data['wick_id']
@@ -742,8 +869,8 @@ class Orders extends Component
 
         $rules = [
             'scent_id' => ['required', 'integer', Rule::exists('scents', 'id')],
-            'size_id'  => ['required', 'integer', Rule::exists('sizes', 'id')],
-            'qty'      => ['required', 'integer', 'min:1', 'max:9999'],
+            'size_id' => ['required', 'integer', Rule::exists('sizes', 'id')],
+            'qty' => ['required', 'integer', 'min:1', 'max:9999'],
         ];
 
         if ($lineHasWickId) {
@@ -755,8 +882,12 @@ class Orders extends Component
 
         validator($this->newLine[$orderId], $rules)
             ->after(function ($v) use ($scent, $size) {
-                if (!$scent) $v->errors()->add('scent_id', 'Pick a scent from the list.');
-                if (!$size)  $v->errors()->add('size_id', 'Pick a size from the list.');
+                if (! $scent) {
+                    $v->errors()->add('scent_id', 'Pick a scent from the list.');
+                }
+                if (! $size) {
+                    $v->errors()->add('size_id', 'Pick a size from the list.');
+                }
             })
             ->validate();
 
@@ -798,10 +929,11 @@ class Orders extends Component
                 }
 
                 $existing->save();
+
                 return;
             }
 
-            $line = new $lineModelClass();
+            $line = new $lineModelClass;
             $line->setAttribute('order_id', $orderId);
             $line->setAttribute('scent_id', $scent->id);
             $line->setAttribute('size_id', $size->id);
@@ -834,12 +966,12 @@ class Orders extends Component
 
         $this->newLine[$orderId] = [
             'scent_search' => '',
-            'scent_id'     => null,
-            'size_search'  => '',
-            'size_id'      => null,
-            'wick_id'      => null,
-            'wick'         => 'cotton',
-            'qty'          => 1,
+            'scent_id' => null,
+            'size_search' => '',
+            'size_id' => null,
+            'wick_id' => null,
+            'wick' => 'cotton',
+            'qty' => 1,
         ];
 
         $this->hydrateLineDraftsForOrder($orderId);
@@ -868,22 +1000,22 @@ class Orders extends Component
             $this->lineOrder[$id] = $orderId;
 
             $existingDraft = $this->lineEdit[$id]['qty'] ?? null;
-            if ($existingDraft === null || !isset($this->lineDirty[$id])) {
+            if ($existingDraft === null || ! isset($this->lineDirty[$id])) {
                 $this->lineEdit[$id] = [
                     'qty' => (int) (($line->ordered_qty ?? $line->quantity) ?? 0),
                 ];
             }
         }
 
-        if (!isset($this->newLine[$orderId])) {
+        if (! isset($this->newLine[$orderId])) {
             $this->newLine[$orderId] = [
                 'scent_search' => '',
-                'scent_id'     => null,
-                'size_search'  => '',
-                'size_id'      => null,
-                'wick_id'      => null,
-                'wick'         => 'cotton',
-                'qty'          => 1,
+                'scent_id' => null,
+                'size_search' => '',
+                'size_id' => null,
+                'wick_id' => null,
+                'wick' => 'cotton',
+                'qty' => 1,
             ];
         }
 
@@ -894,7 +1026,7 @@ class Orders extends Component
 
     private function lineModelClass(): string
     {
-        $order = new Order();
+        $order = new Order;
         $relation = $order->lines();
         $model = $relation->getModel();
 
@@ -905,7 +1037,9 @@ class Orders extends Component
     private function applyChannelFilter(Builder $q): Builder
     {
         $channel = $this->channel ?: 'all';
-        if ($channel === 'all') return $q;
+        if ($channel === 'all') {
+            return $q;
+        }
 
         if (Schema::hasColumn('orders', 'order_type')) {
             return $q->where('order_type', $channel);
@@ -914,6 +1048,7 @@ class Orders extends Component
         return $q->where(function (Builder $inner) use ($channel) {
             if ($channel === 'wholesale') {
                 $inner->where('container_name', 'like', 'Wholesale:%');
+
                 return;
             }
 
@@ -921,15 +1056,16 @@ class Orders extends Component
                 $inner->where('container_name', 'like', 'Market:%')
                     ->where(function (Builder $k) {
                         $k->where('container_name', 'like', '%festival%')
-                          ->orWhere('container_name', 'like', '%market%')
-                          ->orWhere('container_name', 'like', '%show%');
+                            ->orWhere('container_name', 'like', '%market%')
+                            ->orWhere('container_name', 'like', '%show%');
                     });
+
                 return;
             }
 
             $inner->where(function (Builder $k) {
                 $k->whereNull('container_name')
-                  ->orWhere('container_name', 'not like', 'Wholesale:%');
+                    ->orWhere('container_name', 'not like', 'Wholesale:%');
             });
         });
     }
@@ -941,7 +1077,7 @@ class Orders extends Component
         $search = trim($this->search);
 
         $sortKey = array_key_exists($this->sort, self::SORTS) ? $this->sort : 'ship_by_at';
-        $dir     = strtolower($this->dir) === 'desc' ? 'desc' : 'asc';
+        $dir = strtolower($this->dir) === 'desc' ? 'desc' : 'asc';
 
         $q = Order::query()
             ->select('orders.*')
@@ -950,9 +1086,9 @@ class Orders extends Component
                     $rel->with(['scent:id,name', 'size:id,code,label'])
                         ->where(function ($q) {
                             $q->whereNotNull('scent_id')
-                              ->orWhereNotNull('size_id')
-                              ->orWhereNotNull('scent_name')
-                              ->orWhereNotNull('size_code');
+                                ->orWhereNotNull('size_id')
+                                ->orWhereNotNull('scent_name')
+                                ->orWhereNotNull('size_code');
                         })
                         ->orderBy('pour_status')
                         ->orderBy('scent_name');
@@ -987,43 +1123,55 @@ class Orders extends Component
         }
 
         if ($search !== '') {
-            $s = '%' . $search . '%';
+            $s = '%'.$search.'%';
             $q->where(function (Builder $inner) use ($s) {
                 $inner->where('order_number', 'like', $s)
-                      ->orWhere('order_label', 'like', $s)
-                      ->orWhere('container_name', 'like', $s)
-                      ->orWhere('customer_name', 'like', $s)
-                      ->orWhereHas('lines', function (Builder $l) use ($s) {
-                          $l->where(function (Builder $ll) use ($s) {
-                              $ll->where('scent_name', 'like', $s)
-                                 ->orWhere('size_code', 'like', $s);
-                          });
-                      });
+                    ->orWhere('order_label', 'like', $s)
+                    ->orWhere('container_name', 'like', $s)
+                    ->orWhere('customer_name', 'like', $s)
+                    ->orWhereHas('lines', function (Builder $l) use ($s) {
+                        $l->where(function (Builder $ll) use ($s) {
+                            $ll->where('scent_name', 'like', $s)
+                                ->orWhere('size_code', 'like', $s);
+                        });
+                    });
             });
         }
 
         $q->tap(function (Builder $qq) use ($sortKey, $dir) {
             if ($sortKey === 'ship_by_at') {
                 $qq->orderByRaw('CASE WHEN ship_by_at IS NULL THEN 1 ELSE 0 END')
-                   ->orderBy('ship_by_at', $dir)
-                   ->orderByDesc('id');
+                    ->orderBy('ship_by_at', $dir)
+                    ->orderByDesc('id');
+
                 return;
             }
             if ($sortKey === 'due_at') {
                 $qq->orderByRaw('CASE WHEN due_at IS NULL THEN 1 ELSE 0 END')
-                   ->orderBy('due_at', $dir)
-                   ->orderByDesc('id');
+                    ->orderBy('due_at', $dir)
+                    ->orderByDesc('id');
+
                 return;
             }
 
-            if ($sortKey === 'newest') { $qq->orderByDesc('id'); return; }
-            if ($sortKey === 'oldest') { $qq->orderBy('id', 'asc'); return; }
+            if ($sortKey === 'newest') {
+                $qq->orderByDesc('id');
+
+                return;
+            }
+            if ($sortKey === 'oldest') {
+                $qq->orderBy('id', 'asc');
+
+                return;
+            }
             if ($sortKey === 'lines_count') {
                 $qq->orderBy('lines_count_sort', $dir)->orderByDesc('id');
+
                 return;
             }
             if ($sortKey === 'qty_total') {
                 $qq->orderBy('qty_total_sort', $dir)->orderByDesc('id');
+
                 return;
             }
 
@@ -1037,14 +1185,14 @@ class Orders extends Component
     private function timelineOrdersForMonth(Carbon $month): Collection
     {
         $start = CarbonImmutable::instance($month->copy()->startOfMonth()->startOfWeek()->startOfDay());
-        $end   = CarbonImmutable::instance($month->copy()->endOfMonth()->endOfWeek()->endOfDay());
+        $end = CarbonImmutable::instance($month->copy()->endOfMonth()->endOfWeek()->endOfDay());
         $calculator = app(BusinessDayCalculator::class);
 
         return $this->baseQuery()
             ->get()
             ->map(function (Order $order) use ($calculator, $start, $end) {
                 $effectiveShipBy = $this->computeShipByDate($order, $calculator);
-                if (!$effectiveShipBy) {
+                if (! $effectiveShipBy) {
                     return null;
                 }
 
@@ -1059,6 +1207,7 @@ class Orders extends Component
             ->filter()
             ->sortBy(function (Order $order) {
                 $date = (string) ($order->getAttribute('effective_ship_by_at') ?? '');
+
                 return $date.'|'.str_pad((string) $order->id, 10, '0', STR_PAD_LEFT);
             })
             ->values();
@@ -1068,7 +1217,7 @@ class Orders extends Component
     {
         $orders = $this->baseQuery()->paginate(15);
 
-        $timelineMonth  = null;
+        $timelineMonth = null;
         $timelineOrders = collect();
         $ganttOrders = collect();
         $ganttRows = collect();
@@ -1076,7 +1225,7 @@ class Orders extends Component
         $ganttEnd = null;
 
         if (($this->view ?? 'list') === 'timeline') {
-            $timelineMonth  = Carbon::createFromFormat('Y-m', $this->timelineYm)->startOfMonth();
+            $timelineMonth = Carbon::createFromFormat('Y-m', $this->timelineYm)->startOfMonth();
             $timelineOrders = $this->timelineOrdersForMonth($timelineMonth);
         }
         if (($this->view ?? 'list') === 'gantt') {
@@ -1090,6 +1239,7 @@ class Orders extends Component
             $ganttRows = $ganttOrders->map(function (Order $order) use ($calculator) {
                 $start = $this->computeGanttStart($order);
                 $end = $this->computeShipByDate($order, $calculator);
+
                 return [
                     'order' => $order,
                     'start' => $start,
@@ -1104,25 +1254,26 @@ class Orders extends Component
             ->get(['id', 'code']);
 
         return view('livewire.shipping.orders', [
-            'orders'         => $orders,
-            'statuses'       => array_merge(['all'], self::STATUSES),
-            'sorts'          => array_keys(self::SORTS),
-            'timelineMonth'  => $timelineMonth,
+            'orders' => $orders,
+            'statuses' => array_merge(['all'], self::STATUSES),
+            'sorts' => array_keys(self::SORTS),
+            'timelineMonth' => $timelineMonth,
             'timelineOrders' => $timelineOrders,
-            'ganttStart'     => $ganttStart,
-            'ganttEnd'       => $ganttEnd,
-            'ganttOrders'    => $ganttOrders,
-            'ganttRows'      => $ganttRows,
-            'ganttDays'      => $this->ganttDays,
-            'sizes'          => $sizes,
+            'ganttStart' => $ganttStart,
+            'ganttEnd' => $ganttEnd,
+            'ganttOrders' => $ganttOrders,
+            'ganttRows' => $ganttRows,
+            'ganttDays' => $this->ganttDays,
+            'sizes' => $sizes,
         ]);
     }
 
     private function computeGanttStart(Order $order): ?CarbonImmutable
     {
-        if (!$order->created_at) {
+        if (! $order->created_at) {
             return null;
         }
+
         return CarbonImmutable::parse($order->created_at)->startOfDay();
     }
 
@@ -1131,12 +1282,13 @@ class Orders extends Component
         if ($order->ship_by_at) {
             return CarbonImmutable::parse($order->ship_by_at)->startOfDay();
         }
-        if (!$order->created_at) {
+        if (! $order->created_at) {
             return null;
         }
         $start = CarbonImmutable::parse($order->created_at)->startOfDay();
         $type = $order->order_type ?? $order->channel ?? 'retail';
         $days = $type === 'wholesale' ? 10 : 3;
+
         return $calculator->addBusinessDays($start, $days)->startOfDay();
     }
 }
