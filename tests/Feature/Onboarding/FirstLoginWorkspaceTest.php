@@ -64,11 +64,16 @@ test('first-login workspace flow creates a trades workspace and lands the user i
         'operating_mode' => 'direct',
     ]);
 
-    $this->assertDatabaseHas('tenant_module_states', [
+    // Module picks are recorded as interests only — never auto-enabled.
+    $this->assertDatabaseMissing('tenant_module_states', [
         'tenant_id' => $tenant->id,
-        'module_key' => 'messaging',
         'enabled_override' => 1,
     ]);
+
+    $setupStatus = $tenant->fresh()->setupStatus;
+    expect($setupStatus)->not->toBeNull()
+        ->and($setupStatus->module_interests)->toContain('messaging')
+        ->and($setupStatus->module_interests)->toContain('field_service');
 
     $this->assertDatabaseHas('tenant_onboarding_blueprints', [
         'tenant_id' => $tenant->id,

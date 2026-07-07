@@ -3,19 +3,16 @@
 namespace App\Http\Controllers\Onboarding;
 
 use App\Http\Controllers\Controller;
-use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Onboarding\TenantOnboardingBlueprintStore;
-use App\Services\Onboarding\TenantSetupStatusService;
-use App\Services\Tenancy\LandlordCommercialConfigService;
+use App\Services\Onboarding\FirstLoginWorkspaceProvisioner;
 use App\Services\Tenancy\TenantBlueprintProfileService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 class FirstLoginWorkspaceController extends Controller
 {
@@ -30,6 +27,19 @@ class FirstLoginWorkspaceController extends Controller
 
         if (strtolower(trim((string) $user->role)) === 'platform_admin') {
             return redirect()->to(route('landlord.dashboard', absolute: false));
+        }
+
+        // New personable, popup-based flow (feature-flagged); falls back to the
+        // original full-page guide while the flag is off.
+        if (config('features.first_login_modal')) {
+            return response()->view('onboarding.first-login-workspace', [
+                'workspaceName' => $this->defaultWorkspaceName($user),
+                'businessTypes' => $this->businessTypeCards($blueprintService),
+                'teamSizes' => $this->teamSizeOptions(),
+                'hardestParts' => $this->hardestPartOptions(),
+                'toolOptions' => $this->moduleOptions(),
+                'recommendedTools' => $this->toolRecommendationMap(),
+            ]);
         }
 
         $options = $blueprintService->formOptions();
@@ -52,13 +62,8 @@ class FirstLoginWorkspaceController extends Controller
         ]);
     }
 
-    public function store(
-        Request $request,
-        TenantBlueprintProfileService $blueprintService,
-        LandlordCommercialConfigService $commercialService,
-        TenantSetupStatusService $setupStatusService,
-        TenantOnboardingBlueprintStore $blueprintStore
-    ): RedirectResponse {
+    public function store(Request $request, FirstLoginWorkspaceProvisioner $provisioner): RedirectResponse
+    {
         $user = $request->user();
         abort_unless($user instanceof User, 403);
 
@@ -75,135 +80,97 @@ class FirstLoginWorkspaceController extends Controller
             'template_key' => ['required', 'string', Rule::in($this->allowedTemplateKeys())],
             'hardest_part' => ['required', 'string', Rule::in(array_keys($this->hardestPartOptions()))],
             'team_size' => ['required', 'string', Rule::in(array_keys($this->teamSizeOptions()))],
-            'owner_need' => ['required', 'array', 'min:1', 'max:4'],
-            'owner_need.*' => ['required', 'string', Rule::in(array_keys($this->ownerNeedOptions()))],
+            'owner_need' => ['nullable', 'array', 'max:4'],
+            'owner_need.*' => ['string', Rule::in(array_keys($this->ownerNeedOptions()))],
             'start_path' => ['required', 'string', Rule::in(['guided', 'self'])],
             'appointment_slot' => [
                 'nullable',
-                'required_if:start_path,guided',
                 'string',
                 Rule::in(array_keys($this->appointmentSlots())),
                 Rule::notIn($this->bookedAppointmentSlots()),
             ],
-            'appointment_name' => ['nullable', 'required_if:start_path,guided', 'string', 'max:120'],
-            'appointment_email' => ['nullable', 'required_if:start_path,guided', 'email', 'max:255'],
+            'appointment_name' => ['nullable', 'string', 'max:120'],
+            'appointment_email' => ['nullable', 'email', 'max:255'],
             'appointment_phone' => ['nullable', 'string', 'max:40'],
             'module_choices' => ['nullable', 'array', 'max:20'],
-            'module_choices.*' => ['required', 'string', Rule::in(array_keys($this->moduleOptions()))],
+            'module_choices.*' => ['string', Rule::in(array_keys($this->moduleOptions()))],
         ]);
 
         $workspaceName = trim((string) $validated['workspace_name']);
         $selectedModuleKeys = $this->normalizeSelectedModules((array) ($validated['module_choices'] ?? []));
         $guideAnswers = $this->guideAnswerPayload($validated, $selectedModuleKeys);
-        $templateKey = $blueprintService->blueprintFromInput([
-            'business_template' => (string) $validated['template_key'],
-        ])['business_template'] ?? (string) $validated['template_key'];
 
-        $tenantId = null;
-        $tenantSlug = null;
-
-        DB::transaction(function () use (
-            $user,
-            $workspaceName,
-            $templateKey,
-            $blueprintService,
-            $commercialService,
-            $setupStatusService,
-            $blueprintStore,
-            &$tenantId,
-            &$tenantSlug,
-            $guideAnswers,
-            $selectedModuleKeys
-        ): void {
-            if (! in_array((string) $user->role, ['admin', 'manager', 'marketing_manager', 'platform_admin'], true)) {
-                $user->forceFill([
-                    'role' => 'admin',
-                    'is_active' => true,
-                    'approved_at' => $user->approved_at ?? now(),
-                ])->save();
-            }
-
-            if (Schema::hasColumn('users', 'onboarding_guide_answers')) {
-                $user->forceFill([
-                    'onboarding_guide_answers' => $guideAnswers,
-                ])->save();
-            }
-
-            $tenant = Tenant::query()->create([
-                'name' => $workspaceName,
-                'slug' => $this->uniqueTenantSlug($workspaceName),
-            ]);
-            $tenantId = (int) $tenant->id;
-            $tenantSlug = (string) $tenant->slug;
-
-            $tenant->users()->syncWithoutDetaching([
-                (int) $user->id => [
-                    'role' => 'admin',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
-            ]);
-
-            $profile = $commercialService->assignTenantPlan(
-                tenantId: $tenantId,
-                planKey: 'base',
-                operatingMode: 'direct',
-                source: 'self_serve_first_login',
-                actorId: (int) $user->id
+        try {
+            $result = $provisioner->provision(
+                $user,
+                $workspaceName,
+                (string) $validated['template_key'],
+                $selectedModuleKeys,
+                $guideAnswers
             );
-
-            $blueprint = $blueprintService->blueprintFromInput([
-                'business_template' => $templateKey,
-                'operating_mode' => 'direct',
-                'data_source_preference' => 'manual',
-            ]);
-
-            $blueprint['blueprint_review_status'] = 'reviewed';
-            $blueprint['blueprint_review_status_label'] = 'Reviewed';
-            $blueprint['blueprint_reviewed_by'] = (int) $user->id;
-            $blueprint['blueprint_reviewed_at'] = now()->toIso8601String();
-
-            $setupStatus = $setupStatusService->forTenant($tenant);
-            $blueprintService->applyBlueprint($tenant, $profile->refresh(), $setupStatus, $blueprint, 'production', true);
-
-            $starterModules = array_values((array) ($blueprint['starter_modules'] ?? []));
-            if (in_array('messaging', $starterModules, true)) {
-                $commercialService->setTenantModuleState(
-                    tenantId: $tenantId,
-                    moduleKey: 'messaging',
-                    enabledOverride: true,
-                    setupStatus: 'configured',
-                    actorId: (int) $user->id
-                );
-            }
-
-            foreach ($selectedModuleKeys as $moduleKey) {
-                if (is_array(config('module_catalog.modules.'.$moduleKey))) {
-                    $commercialService->setTenantModuleState(
-                        tenantId: $tenantId,
-                        moduleKey: $moduleKey,
-                        enabledOverride: true,
-                        setupStatus: 'not_started',
-                        actorId: (int) $user->id
-                    );
-                }
-            }
-
-            $finalPayload = $this->finalBlueprintPayload($tenant, $templateKey, $blueprint, $guideAnswers, $selectedModuleKeys);
-            $blueprintStore->finalize($tenantId, $finalPayload, (int) $user->id, [
-                'source' => 'self_serve_first_login',
-            ]);
-        });
-
-        if (! is_int($tenantId) || $tenantId <= 0) {
-            return back()->withErrors(['workspace_name' => 'Workspace creation did not complete. Please try again.'])->withInput();
+        } catch (RuntimeException) {
+            return back()
+                ->withErrors(['workspace_name' => 'Workspace creation did not complete. Please try again.'])
+                ->withInput();
         }
 
-        $request->session()->put('tenant_id', $tenantId);
+        $request->session()->put('tenant_id', $result['tenant_id']);
 
         return redirect()
-            ->to(route('dashboard', ['tenant' => $tenantSlug], false))
+            ->to(route('dashboard', ['tenant' => $result['tenant_slug']], false))
             ->with('status', 'Workspace created.');
+    }
+
+    /**
+     * Domain-neutral business types for the popup, sourced from config-driven
+     * blueprint templates (candle maker, landscaping, electrician, law, apparel,
+     * generic, custom) so it works for any business without code changes.
+     *
+     * @return array<int,array{key:string,label:string,blurb:string}>
+     */
+    protected function businessTypeCards(TenantBlueprintProfileService $blueprintService): array
+    {
+        $blurbs = [
+            'generic' => 'A clean, flexible workspace for any small business.',
+            'candle_maker' => 'Orders, batches, products, and the makers behind them.',
+            'landscaping' => 'Jobs, crews, properties, and seasonal work.',
+            'electrician' => 'Jobs, estimates, parts, and scheduling for the field.',
+            'law' => 'Clients, matters, and the work that moves them forward.',
+            'apparel' => 'Products, orders, and the customers who love them.',
+            'custom' => 'Not sure yet — we will shape it around how you work.',
+        ];
+
+        $cards = [];
+        foreach ($blueprintService->templateOptions() as $key => $label) {
+            $cards[] = [
+                'key' => (string) $key,
+                'label' => (string) $label,
+                'blurb' => (string) ($blurbs[$key] ?? 'Shaped around how your business works.'),
+            ];
+        }
+
+        return $cards;
+    }
+
+    /**
+     * Light per-business-type "popular starting point" highlight for the tool
+     * picker. Display-only guidance; picks are recorded as interests, not enabled.
+     *
+     * @return array<string,array<int,string>>
+     */
+    protected function toolRecommendationMap(): array
+    {
+        $common = ['customers', 'billing', 'messaging', 'reporting'];
+
+        return [
+            'generic' => $common,
+            'custom' => $common,
+            'candle_maker' => ['customers', 'billing', 'shopify', 'campaigns', 'reporting'],
+            'apparel' => ['customers', 'billing', 'shopify', 'campaigns', 'reporting'],
+            'landscaping' => ['customers', 'field_service', 'billing', 'messaging', 'reporting'],
+            'electrician' => ['customers', 'field_service', 'billing', 'messaging', 'reporting'],
+            'law' => ['customers', 'billing', 'messaging', 'reporting'],
+        ];
     }
 
     /**
@@ -244,11 +211,24 @@ class FirstLoginWorkspaceController extends Controller
     }
 
     /**
+     * Accepts both the original trades presets and the config-driven blueprint
+     * template keys (+ their aliases), so the popup and the fallback both validate.
+     *
      * @return array<int,string>
      */
     protected function allowedTemplateKeys(): array
     {
-        return ['trades', 'trades_electrical', 'trades_plumbing', 'home_residential', 'electrician'];
+        $legacy = ['trades', 'trades_electrical', 'trades_plumbing', 'home_residential', 'electrician'];
+
+        $blueprintKeys = [];
+        foreach ((array) config('tenant_blueprints.templates', []) as $key => $definition) {
+            $blueprintKeys[] = (string) $key;
+            foreach ((array) data_get($definition, 'aliases', []) as $alias) {
+                $blueprintKeys[] = Str::slug(strtolower(trim((string) $alias)), '_');
+            }
+        }
+
+        return array_values(array_unique(array_filter(array_merge($legacy, $blueprintKeys))));
     }
 
     /**
@@ -274,7 +254,7 @@ class FirstLoginWorkspaceController extends Controller
     {
         $hardestPart = (string) $validated['hardest_part'];
         $teamSize = (string) $validated['team_size'];
-        $ownerNeeds = array_values(array_map('strval', (array) $validated['owner_need']));
+        $ownerNeeds = array_values(array_map('strval', (array) ($validated['owner_need'] ?? [])));
         $startPath = (string) $validated['start_path'];
         $appointmentSlot = trim((string) ($validated['appointment_slot'] ?? ''));
         $appointmentSlots = $this->appointmentSlots();
@@ -479,21 +459,6 @@ class FirstLoginWorkspaceController extends Controller
         ];
     }
 
-    protected function uniqueTenantSlug(string $name): string
-    {
-        $base = Str::slug($name);
-        $base = $base !== '' ? $base : 'workspace';
-        $slug = $base;
-        $index = 2;
-
-        while (Tenant::query()->where('slug', $slug)->exists()) {
-            $slug = $base.'-'.$index;
-            $index++;
-        }
-
-        return $slug;
-    }
-
     /**
      * @return array<string,string>
      */
@@ -540,61 +505,5 @@ class FirstLoginWorkspaceController extends Controller
             ->unique()
             ->values()
             ->all();
-    }
-
-    /**
-     * @param  array<string,mixed>  $blueprint
-     * @return array<string,mixed>
-     */
-    protected function finalBlueprintPayload(Tenant $tenant, string $templateKey, array $blueprint, array $guideAnswers, array $selectedModuleKeys): array
-    {
-        $selectedModules = array_values(array_unique(array_filter(array_map(
-            static fn (mixed $value): string => strtolower(trim((string) $value)),
-            (array) ($blueprint['starter_modules'] ?? [])
-        ))));
-        $selectedModules = array_values(array_unique(array_merge($selectedModules, $selectedModuleKeys)));
-        $selectedModules = array_values(array_intersect($selectedModules, [
-            'customers',
-            'field_service',
-            'reporting',
-            'messaging',
-            'lead_capture',
-            'email',
-            'sms',
-            'integrations',
-            'uploads',
-            'shopify',
-            'quickbooks',
-            'square',
-            'workflow_automations',
-            'ai',
-            'notifications',
-            'campaigns',
-            'settings',
-            'mobile_connection',
-        ]));
-
-        return [
-            'rail' => 'direct',
-            'account_mode' => 'production',
-            'template_key' => $templateKey,
-            'desired_outcome_first' => (string) ($blueprint['primary_outcome'] ?? 'Launch the workspace'),
-            'selected_modules' => $selectedModules,
-            'data_source' => 'manual',
-            'setup_preferences' => [
-                'label_overrides' => [],
-                'client_brand' => [
-                    'display_name' => (string) $tenant->name,
-                    'logo_alt' => (string) $tenant->name,
-                ],
-            ],
-            'mobile_intent' => [
-                'needs_mobile_access' => true,
-                'mobile_roles_needed' => ['field_staff'],
-                'mobile_jobs_requested' => ['prioritize_work', 'update_production_progress', 'photos_uploads', 'quick_notes'],
-                'mobile_priority' => 'high',
-            ],
-            'first_login_guide' => $guideAnswers,
-        ];
     }
 }
