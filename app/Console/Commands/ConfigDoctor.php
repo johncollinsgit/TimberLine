@@ -29,7 +29,9 @@ class ConfigDoctor extends Command
             ],
             'Shopify retail store (primary storefront)' => [
                 ['services.shopify.stores.retail.shop', 'SHOPIFY_RETAIL_SHOP', $isProd],
-                ['services.shopify.stores.retail.access_token', 'SHOPIFY_RETAIL_ACCESS_TOKEN', $isProd],
+                // Access token is preferred from the encrypted DB store (shopify_stores),
+                // so an empty env token is expected — not required.
+                ['services.shopify.stores.retail.access_token', 'SHOPIFY_RETAIL_ACCESS_TOKEN', false],
                 ['services.shopify.stores.retail.client_id', 'SHOPIFY_RETAIL_CLIENT_ID', $isProd],
                 ['services.shopify.stores.retail.client_secret', 'SHOPIFY_RETAIL_CLIENT_SECRET', $isProd],
             ],
