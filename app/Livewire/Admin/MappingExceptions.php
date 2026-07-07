@@ -10,7 +10,9 @@ use App\Models\OrderLine;
 use App\Models\Scent;
 use App\Models\ShopifyImportRun;
 use App\Models\Size;
+use App\Models\User;
 use App\Services\ScentGovernance\ResolveScentMatchService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +26,19 @@ class MappingExceptions extends Component
     protected $listeners = [
         'scentSelected' => 'handleScentSelected',
     ];
+
+    /**
+     * Order queries constrained to the tenants the acting user belongs to, so the
+     * order-modal / order-index reads cannot surface another tenant's orders.
+     * tenant.access does not wrap Livewire updates, so we scope by membership.
+     */
+    protected function ownedOrders(): Builder
+    {
+        $user = auth()->user();
+        $tenantIds = $user instanceof User ? $user->accessibleTenantIds() : [];
+
+        return Order::query()->whereIn('tenant_id', $tenantIds);
+    }
 
     public int $page = 1;
 
@@ -1295,7 +1310,7 @@ class MappingExceptions extends Component
         if ($this->groupBy === 'order' && $groups) {
             $orderIds = collect($groups->items())->pluck('order_id')->filter()->unique()->all();
             if ($orderIds) {
-                $orderIndex = Order::query()
+                $orderIndex = $this->ownedOrders()
                     ->whereIn('id', $orderIds)
                     ->get()
                     ->keyBy('id')
@@ -1307,7 +1322,7 @@ class MappingExceptions extends Component
         $orderModalLines = [];
         $orderModalPayloads = [];
         if ($this->showOrderModal && $this->orderModalId) {
-            $orderModal = Order::query()->find($this->orderModalId);
+            $orderModal = $this->ownedOrders()->find($this->orderModalId);
             if ($orderModal) {
                 $orderModalLines = OrderLine::query()
                     ->where('order_id', $orderModal->id)

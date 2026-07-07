@@ -52,6 +52,9 @@ class EnsureTenantAccess
 
         $request->attributes->set('current_tenant', $tenant);
         $request->attributes->set('current_tenant_id', (int) $tenant->id);
+        // Make the resolved tenant available to the enforced global TenantScope,
+        // which reads it from anywhere (not just the request attributes).
+        app(\App\Support\Tenancy\TenantContext::class)->set((int) $tenant->id);
         View::share('currentTenant', $tenant);
 
         return $next($request);

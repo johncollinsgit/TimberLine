@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Marketing;
 
+use App\Http\Controllers\Concerns\ResolvesRequestTenant;
 use App\Http\Controllers\Controller;
 use App\Models\MarketingIdentityReview;
 use App\Models\MarketingProfile;
@@ -13,13 +14,15 @@ use Illuminate\Http\Request;
 
 class MarketingIdentityReviewController extends Controller
 {
+    use ResolvesRequestTenant;
+
     public function index(Request $request): View
     {
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', 'pending'));
         $perPage = max(10, min(100, (int) $request->query('per_page', 25)));
 
-        if (!in_array($status, ['all', 'pending', 'resolved', 'ignored'], true)) {
+        if (! in_array($status, ['all', 'pending', 'resolved', 'ignored'], true)) {
             $status = 'pending';
         }
 
@@ -27,12 +30,12 @@ class MarketingIdentityReviewController extends Controller
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($nested) use ($search): void {
-                    $nested->where('raw_first_name', 'like', '%' . $search . '%')
-                        ->orWhere('raw_last_name', 'like', '%' . $search . '%')
-                        ->orWhere('raw_email', 'like', '%' . $search . '%')
-                        ->orWhere('raw_phone', 'like', '%' . $search . '%')
-                        ->orWhere('source_type', 'like', '%' . $search . '%')
-                        ->orWhere('source_id', 'like', '%' . $search . '%');
+                    $nested->where('raw_first_name', 'like', '%'.$search.'%')
+                        ->orWhere('raw_last_name', 'like', '%'.$search.'%')
+                        ->orWhere('raw_email', 'like', '%'.$search.'%')
+                        ->orWhere('raw_phone', 'like', '%'.$search.'%')
+                        ->orWhere('source_type', 'like', '%'.$search.'%')
+                        ->orWhere('source_id', 'like', '%'.$search.'%');
                 });
             })
             ->with(['reviewer:id,name,email', 'proposedMarketingProfile:id,first_name,last_name,email'])
@@ -57,6 +60,9 @@ class MarketingIdentityReviewController extends Controller
 
         $payload = is_array($review->payload) ? $review->payload : [];
         $profileSearch = trim((string) $request->query('profile_search', ''));
+        // These routes are not wrapped by tenant.access; candidate profiles must
+        // never surface another tenant's customers.
+        $tenantId = $this->currentTenantId($request);
 
         $candidateIds = collect([
             ...((array) ($payload['email_match_profile_ids'] ?? [])),
@@ -71,13 +77,14 @@ class MarketingIdentityReviewController extends Controller
             ->values();
 
         $candidateProfiles = MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->when($candidateIds->isNotEmpty(), fn ($query) => $query->whereIn('id', $candidateIds->all()))
             ->when($profileSearch !== '', function ($query) use ($profileSearch): void {
                 $query->where(function ($nested) use ($profileSearch): void {
-                    $nested->where('first_name', 'like', '%' . $profileSearch . '%')
-                        ->orWhere('last_name', 'like', '%' . $profileSearch . '%')
-                        ->orWhere('email', 'like', '%' . $profileSearch . '%')
-                        ->orWhere('phone', 'like', '%' . $profileSearch . '%');
+                    $nested->where('first_name', 'like', '%'.$profileSearch.'%')
+                        ->orWhere('last_name', 'like', '%'.$profileSearch.'%')
+                        ->orWhere('email', 'like', '%'.$profileSearch.'%')
+                        ->orWhere('phone', 'like', '%'.$profileSearch.'%');
                 });
             })
             ->orderByDesc('updated_at')
@@ -86,6 +93,7 @@ class MarketingIdentityReviewController extends Controller
 
         if ($candidateProfiles->isEmpty() && $profileSearch === '') {
             $candidateProfiles = MarketingProfile::query()
+                ->forTenantId($tenantId)
                 ->orderByDesc('updated_at')
                 ->limit(10)
                 ->get();
@@ -111,7 +119,11 @@ class MarketingIdentityReviewController extends Controller
             'resolution_notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $profile = MarketingProfile::query()->findOrFail((int) $data['profile_id']);
+        // Scope to the acting tenant so a review can only be merged into one of the
+        // caller's own profiles, never another tenant's (404 otherwise).
+        $profile = MarketingProfile::query()
+            ->forTenantId($this->currentTenantId($request))
+            ->findOrFail((int) $data['profile_id']);
         $syncService->resolveReviewToExistingProfile(
             review: $review,
             profile: $profile,
@@ -181,7 +193,7 @@ class MarketingIdentityReviewController extends Controller
                 'key' => $key,
                 'label' => $section['label'],
                 'href' => route($section['route']),
-                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
+                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
             ];
         }
 

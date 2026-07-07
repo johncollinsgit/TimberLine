@@ -2,12 +2,14 @@
 
 namespace App\Providers;
 
-use App\Models\User;
 use App\Models\MarketingReviewHistory;
+use App\Models\User;
 use App\Observers\MarketingReviewHistoryObserver;
+use App\Services\Integrations\ConnectionManager;
 use App\Services\Onboarding\Rails\DirectOnboardingRailAdapter;
 use App\Services\Onboarding\Rails\OnboardingRailAdapterRegistry;
 use App\Services\Onboarding\Rails\ShopifyOnboardingRailAdapter;
+use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +30,17 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(DirectOnboardingRailAdapter::class),
             ]);
         });
+
+        // The single registry for per-tenant external-provider connections.
+        // Connectors are registered here as each provider is migrated onto the
+        // integration_connections store (none wired yet — foundation only).
+        $this->app->singleton(ConnectionManager::class, function (): ConnectionManager {
+            return new ConnectionManager([]);
+        });
+
+        // Holds the tenant the current request/job acts for, read by the enforced
+        // TenantScope. `scoped` so it is flushed between requests/jobs.
+        $this->app->scoped(TenantContext::class);
     }
 
     /**

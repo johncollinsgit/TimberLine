@@ -3,8 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -55,14 +55,14 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-        'email_verified_at' => 'datetime',
-        'password' => 'hashed',
-        'dashboard_layout' => 'array',
-        'ui_preferences' => 'array',
-        'is_active' => 'boolean',
-        'approval_requested_at' => 'datetime',
-        'approved_at' => 'datetime',
-        'onboarding_guide_answers' => 'array',
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'dashboard_layout' => 'array',
+            'ui_preferences' => 'array',
+            'is_active' => 'boolean',
+            'approval_requested_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'onboarding_guide_answers' => 'array',
         ];
     }
 
@@ -108,5 +108,22 @@ class User extends Authenticatable
         return $this->belongsToMany(Tenant::class, 'tenant_user')
             ->withPivot(['role'])
             ->withTimestamps();
+    }
+
+    /**
+     * The tenant ids this user is a member of — the set of tenants they may act
+     * within. Used to fail-safely scope tenant-owned queries (a member of tenant N
+     * can only touch tenant N's rows), which closes cross-tenant IDOR at query
+     * sites that run outside the tenant.access middleware (e.g. Livewire
+     * components, where the request tenant attribute is not reliably present).
+     *
+     * @return array<int, int>
+     */
+    public function accessibleTenantIds(): array
+    {
+        return $this->tenants()
+            ->pluck('tenants.id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 }
