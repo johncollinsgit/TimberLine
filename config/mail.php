@@ -112,7 +112,10 @@ return [
 
     'from' => [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-        'name' => env('MAIL_FROM_NAME', 'Example'),
+        // Sender name is driven by the Everbranch product name, not MAIL_FROM_NAME
+        // (which prod resolves to "${APP_NAME}" = "Laravel"). Keeps transactional
+        // email branded as Everbranch without touching APP_NAME.
+        'name' => env('EVERBRANCH_PRODUCT_NAME', 'Everbranch'),
     ],
 
 ];
