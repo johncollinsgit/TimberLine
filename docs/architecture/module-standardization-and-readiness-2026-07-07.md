@@ -2,6 +2,16 @@
 
 > 2026-07-07 · Read-only audit of all 16 modules + the module framework + the integration/OAuth layer, plus the target "Standard Module Contract" every module plugs into. This is the map for professionalizing Everbranch into a cohesive, modular, provably-isolated multi-tenant platform **without** redesigning the flagship (candle-ops) modules before they're finished/tested.
 
+## Progress (updated 2026-07-07, later same day)
+
+Shipped since this audit was written:
+- **Step 1 — module entitlement gate: DONE.** `module:{key}` route middleware (`EnsureModuleAccess`) enforces `TenantModuleAccessResolver`'s decision at the request layer; applied to field-service as the reference. Entitlements are no longer nav-only.
+- **Step 2 — enforced isolation: substantially done.** All five Tier-1 IDOR sites (StackOrders, Shipping, MappingExceptions, CandleCash `adjustCustomer`, MarketingIdentityReview) are closed — scoped to the acting user's memberships (`User::accessibleTenantIds()`) / the canonical `ResolvesRequestTenant` helper, with cross-tenant + flagship-preservation tests. A gated global-scope **backstop** exists: `App\Models\Concerns\BelongsToTenant` (global `TenantScope` + auto-stamp + `forAllTenants()` escape) reading `App\Support\Tenancy\TenantContext`, proven on `IntegrationConnection`. It is **OFF** behind `FEATURE_ENFORCED_TENANT_SCOPE` and null-safe. **Remaining: backfill every `BelongsToTenant` table, adopt the trait on those models, then arm the flag behind a canary.**
+- **Step 5 — integration_connections: foundation DONE.** The `integration_connections` table + `IntegrationConnection` model + `ProviderConnector` interface + `ConnectionManager` + `integrations:refresh-connections` command exist (additive; no live flow migrated yet).
+- **Step 6 — backfill: partial.** `orders` + `marketing_profiles` backfilled to the flagship. The ~11 operational tables that lack a `tenant_id` column still need one.
+
+Not yet started: steps 3 (declarative nav), 4 (config_schema + settings store), 7 (module interface + registry), and migrating the four bespoke OAuth flows onto `integration_connections`.
+
 ## The one-paragraph synthesis
 
 The audit found almost **no numeric `tenant_id === 1` hardcoding**. Flagship coupling lives in four structural forms: candle *vocabulary* baked into shared code (scent/pour/box/wax), operational tables with **no `tenant_id` column** (markets, events, pouring, retail plans), queries that never call `->forTenant()`, and nav gated by a slug-based `isFlagshipTenant` check. Every module audit independently surfaced the **same two systemic gaps**, which are therefore the highest-leverage fixes:
