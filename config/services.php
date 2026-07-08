@@ -221,7 +221,7 @@ return [
             'authorization_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT'),
             'token_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT'),
             'graphql_endpoint' => env('SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT'),
-            'redirect_uri' => env('SHOPIFY_CUSTOMER_ACCOUNT_REDIRECT_URI', 'shop.20812479.modernforestry://shopify-customer-auth'),
+            'redirect_uri' => env('SHOPIFY_CUSTOMER_ACCOUNT_REDIRECT_URI', 'https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback'),
             'callback_scheme' => env('SHOPIFY_CUSTOMER_ACCOUNT_CALLBACK_SCHEME', 'shop.20812479.modernforestry'),
             'scopes' => env('SHOPIFY_CUSTOMER_ACCOUNT_SCOPES', 'openid email customer-account-api:full'),
         ],

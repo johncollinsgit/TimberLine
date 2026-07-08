@@ -139,7 +139,7 @@ class ModernForestryMobileCustomerSessionService
         $tokenEndpoint = $this->tokenEndpoint($discovery);
         $graphqlEndpoint = $this->graphqlEndpoint($discovery);
         $redirectUri = $this->customerAccountString('redirect_uri')
-            ?: 'shop.20812479.modernforestry://shopify-customer-auth';
+            ?: 'https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback';
         $scopes = $this->customerAccountString('scopes')
             ?: 'openid email customer-account-api:full';
         $callbackScheme = $this->nativeCallbackScheme($redirectUri);
