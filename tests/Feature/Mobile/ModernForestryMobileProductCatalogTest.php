@@ -518,6 +518,7 @@ test('mobile customer auth config reports incomplete production oauth setup', fu
         ->assertJsonPath('data.configured', false)
         ->assertJsonPath('data.clientId', null)
         ->assertJsonPath('data.authorizationEndpoint', null)
+        ->assertJsonPath('data.redirectUri', 'https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback')
         ->assertJsonPath('data.callbackScheme', 'shop.20812479.modernforestry');
 });
 

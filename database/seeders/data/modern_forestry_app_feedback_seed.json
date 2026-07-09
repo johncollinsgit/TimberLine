@@ -1,0 +1,161 @@
+{
+  "board": "Modern Forestry — App Feedback & Bug Tracker",
+  "generated": "2026-07-08",
+  "source": "Candle Club beta feedback (Facebook / iMessage / texts), reporters anonymized to User N",
+  "permissions": {
+    "admin": "info@theforestrystudio.com — full CRUD (edit, status, delete, merge)",
+    "public": "add-only — anyone may submit a ticket; name is optional on new submissions"
+  },
+  "statusLegend": {
+    "fixed": "Corrected and build-verified; ships in the next TestFlight build",
+    "in-progress": "Actively being worked",
+    "needs-qa": "Change is live/committed; awaiting on-device confirmation",
+    "planned": "Agreed, not yet started",
+    "under-consideration": "Logged, decision pending"
+  },
+  "backendState": {
+    "asOf": "2026-07-08",
+    "authConfig": "configured=true (SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID/_SECRET set in Forge prod)",
+    "redirectUri": "https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback",
+    "callbackScheme": "shop.20812479.modernforestry",
+    "note": "Shopify rejects the raw native scheme ('Invalid redirect_uri scheme'). Shopify now redirects to the HTTPS Laravel callback, which bridges back to the native scheme. The iOS app reads all of this from /auth/config at runtime, so no client change was needed.",
+    "socialSignIn": "Facebook verified On; Google enabled — pending confirmation it renders beside Facebook on the live hosted sheet."
+  },
+  "tickets": [
+    {
+      "id": 1,
+      "type": "bug",
+      "title": "Sign-in times out / kicks you out before you can finish",
+      "detail": "Login times out within seconds; the emailed one-time-code screen disappears before the code can be entered. Happened on iPhone and iPad, with either email or the Shop connection.",
+      "reporters": ["User 1", "User 5", "User 6", "User 10"],
+      "status": "fixed",
+      "resolution": "Three causes, all resolved. (1) App: removed the 20s watchdog that cancelled the interactive auth session (028d06a). (2) Backend: prod was missing SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID so /auth/config reported not-configured — now set in Forge. (3) Redirect: Shopify rejected the native scheme; Laravel now exposes an HTTPS callback that bridges back (6614ad3). Live /auth/config verified configured=true."
+    },
+    {
+      "id": 2,
+      "type": "bug",
+      "title": "Login pre-fills the wrong / old email",
+      "detail": "Sign-in defaulted to a stale, incorrect email address the tester no longer uses, because the web session reused shared Safari/Shop cookies.",
+      "reporters": ["User 6"],
+      "status": "fixed",
+      "resolution": "Switched the auth session to ephemeral / cookie-isolated (315039d) so the user always authenticates as themselves. VERIFIED ON DEVICE 2026-07-08: the hosted sign-in sheet's email field renders blank, no stale address. See ticket 13 for the trade-off this creates with social sign-in."
+    },
+    {
+      "id": 3,
+      "type": "bug",
+      "title": "Rewards tab asks me to sign in again",
+      "detail": "Profile stays logged in (photo, saved candles) but the Rewards tab prompts for a second login.",
+      "reporters": ["User 2"],
+      "status": "needs-qa",
+      "resolution": "Cause: if the token lapsed mid-session (no foreground transition to trigger the existing refresh), authenticated loads 401'd — Rewards fell to its sign-in gate while Account still rendered a cached snapshot. Added CustomerSession.ensureFreshToken(): a no-op when the token is valid, silent refresh when near expiry, never signs the user out on failure (12bd4fb). Build-verified; confirm on device."
+    },
+    {
+      "id": 4,
+      "type": "bug",
+      "title": "\"Save to Wishlist\" says unavailable, but the item actually saves",
+      "detail": "Tapping save shows 'wishlist unavailable', yet the item appears on the account/wishlist page afterward.",
+      "reporters": ["User 7", "User 8"],
+      "status": "fixed",
+      "resolution": "The save succeeded (2xx) but a strict response decode threw, surfacing a false error. Now decodes best-effort so a successful save never reports failure (6c38aaf)."
+    },
+    {
+      "id": 5,
+      "type": "bug",
+      "title": "Saving quiz-recommended candles shows \"could not be saved\"",
+      "detail": "At the end of the scent quiz, saving suggested candles returned an error message.",
+      "reporters": ["User 2"],
+      "status": "fixed",
+      "resolution": "Same root cause and fix as ticket 4 — both run through the shared add-to-wishlist call (6c38aaf)."
+    },
+    {
+      "id": 6,
+      "type": "bug",
+      "title": "Quiz can't be taken without signing in",
+      "detail": "Trying to take the scent quiz forces a sign-in, which then failed.",
+      "reporters": ["User 1", "User 5"],
+      "status": "planned",
+      "resolution": "Near-term: login now works, which removes the wall. Longer-term: the quiz load AND submit endpoints both require a bearer token, so true anonymous play needs new anonymous quiz endpoints on the backend (only saving would then prompt sign-in)."
+    },
+    {
+      "id": 7,
+      "type": "feature-request",
+      "title": "Offer another way to log in besides Shopify credentials",
+      "detail": "Login only presented Shopify credentials; testers asked for alternatives and found the hand-off confusing.",
+      "reporters": ["User 3"],
+      "status": "in-progress",
+      "resolution": "Google and Facebook social sign-in credentials are now configured in Shopify Customer Accounts. Facebook verified On. Google enabled — see ticket 12 for remaining QA. These are genuine options (no decoy buttons); Shopify remains the secure identity backend."
+    },
+    {
+      "id": 8,
+      "type": "improvement",
+      "title": "Unclear whether to 'Sign in as Reviewer' or just browse",
+      "detail": "The Reviewer Access panel confused testers about how to sign in.",
+      "reporters": ["User 3"],
+      "status": "planned",
+      "resolution": "Clarify copy and de-emphasize Reviewer Access for normal customers. It is an App Store review bypass and must remain reachable for Apple's reviewers, so it cannot simply be deleted."
+    },
+    {
+      "id": 9,
+      "type": "feature-request",
+      "title": "Android version?",
+      "detail": "Tester asked whether an Android app is planned.",
+      "reporters": ["User 4"],
+      "status": "under-consideration",
+      "resolution": "Confirmed: no Android build exists anywhere (searched for Gradle/Kotlin/Flutter/React Native/Capacitor). iOS-only today. If prioritized, a cross-platform (Expo/React Native) rewrite is the likely path for v2."
+    },
+    {
+      "id": 10,
+      "type": "feature-request",
+      "title": "Add a dedicated Sale / clearance section",
+      "detail": "Tester suggested a specific section for sale items.",
+      "reporters": ["User 9"],
+      "status": "fixed",
+      "resolution": "Added a 'Sale' shelf at the top of the Shop, keyed to the live sale-items collection, with a sale-red accent and a photo banner (a535e85)."
+    },
+    {
+      "id": 11,
+      "type": "improvement",
+      "title": "Hide the Shopify login/branding as much as possible",
+      "detail": "The hosted sign-in shows shopify.com, and Google's consent screen says \"Continue to shopify.com\" rather than Modern Forestry. We want the sign-in to feel like our brand, not a third-party hand-off.",
+      "reporters": ["Modern Forestry (internal)"],
+      "status": "planned",
+      "resolution": "MECHANISM CONFIRMED 2026-07-08 (Shopify docs + live discovery doc). The 'shopify.com' title is drawn by iOS, not the app: ASWebAuthenticationSession always displays the loaded page's host as an anti-phishing safeguard, and Apple exposes no API to hide/rename/restyle it. NO app change can remove it — this is true of every OAuth login on iOS (Auth0/Okta/Firebase sell custom auth domains for exactly this reason). NO NATIVE-FORM ALTERNATIVE EXISTS ANYMORE: the old escape hatch (classic customer accounts + Storefront API customerAccessTokenCreate, a fully native email/password form) is dead — that mutation was removed in API version 2025-04 and legacy customer accounts were deprecated Feb 2026 with a hard sunset later in 2026. Customer Account API OAuth (PKCE, served from shopify.com/authentication) is the mandated replacement and requires the hosted flow. FIX (the only lever): register a custom customer-accounts domain (account.theforestrystudio.com) INSIDE Shopify — Cloudflare only hosts the DNS record Shopify dictates; a CNAME alone will not work. Shopify docs: default sign-in is shopify.com/authentication/<id>/login, and after connecting a subdomain customers 'access the sign-in page at account.your-store.com/authentication/login'; 'the subdomain becomes the primary domain name for all customer account pages'. Because Laravel is discovery-first and iOS reads /auth/config at runtime, the branded domain reaches the title bar with ZERO code changes. *** CRITICAL ORDERING: Shopify's docs require you to update the Google and Facebook provider settings (redirect URIs + sign-out URLs) with the new subdomain BEFORE making the change in Shopify, or social sign-in breaks. *** VERIFY BY: re-fetching https://theforestrystudio.com/.well-known/openid-configuration and checking whether authorization_endpoint's host moved off shopify.com. NOTE: Apple's 'wants to use shopify.com to sign in' consent alert is ALREADY suppressed because the session is ephemeral (315039d). OPEN QUESTION: whether the purple 'Continue with Shop' button can be disabled under Settings > Customer accounts > sign-in options — that is the loudest Shopify branding on the sheet. Fully removing Shopify would mean abandoning Customer Account OAuth, severing the identity link to orders/rewards/Everbranch — not recommended, and no longer has a supported alternative."
+    },
+    {
+      "id": 12,
+      "type": "task",
+      "title": "QA: confirm Google appears beside Facebook on the live sign-in sheet",
+      "detail": "Google social sign-in was enabled in Shopify after the credentials were saved; Facebook is verified On.",
+      "reporters": ["Modern Forestry (internal)"],
+      "status": "fixed",
+      "resolution": "VERIFIED ON DEVICE 2026-07-08: both Google and Facebook buttons render on the live hosted sign-in sheet, alongside 'Continue with Shop' and email. Social sign-in QA closed."
+    },
+    {
+      "id": 13,
+      "type": "task",
+      "title": "Decide: ephemeral auth session vs. one-tap social sign-in",
+      "detail": "The ephemeral (cookie-isolated) session that fixed the wrong-email prefill (ticket 2) also means the sign-in sheet cannot reuse an existing Safari Google/Facebook session — so social sign-in asks for credentials on a fresh login instead of one-tap.",
+      "reporters": ["Modern Forestry (internal)"],
+      "status": "in-progress",
+      "resolution": "Recommendation: keep ephemeral. Tokens persist, so an interactive login is a rare, one-time cost, and it guarantees the user always authenticates as themselves (the wrong-email bug actively blocked a tester). ADDITIONAL BENEFIT found 2026-07-08: an ephemeral session also suppresses Apple's system consent alert (\"'modernforestry' Wants to Use 'shopify.com' to Sign In\"), which only appears for cookie-sharing sessions — so ephemeral already removes one prominent Shopify mention (see ticket 11). Validate the real-world feel on device before finalizing."
+    },
+    {
+      "id": 14,
+      "type": "task",
+      "title": "Confirm App Store Guideline 4.8 compliance now that Google/Facebook login is enabled",
+      "detail": "Apple's Guideline 4.8 (Login Services) requires that an app using a third-party or social login service to set up/authenticate the primary account also offers an equivalent privacy-preserving option — one that limits data collection to name and email, lets the user keep the email private, and doesn't track them for advertising without consent.",
+      "reporters": ["Modern Forestry (internal)"],
+      "status": "under-consideration",
+      "resolution": "The app previously shipped (v1.0 build 2) with no social login. Google and Facebook are now enabled on the Shopify-hosted sign-in sheet, which may draw 4.8 scrutiny on the next submission. The Shopify email one-time-code option very likely satisfies the 'equivalent option' requirement (email only, no ad tracking). Confirm before resubmitting; if Apple pushes back, the fallback is adding Sign in with Apple as a Shopify social provider (verify Shopify supports it) or leaning on the email-code path. CAUTION: adding Sign in with Apple interacts badly with ticket 15 — Apple 'Hide My Email' relay addresses guarantee a duplicate customer account."
+    },
+    {
+      "id": 15,
+      "type": "risk",
+      "title": "Social sign-in can create a duplicate customer account when the provider email differs",
+      "detail": "A customer with existing orders/Candle Cash under email A who taps 'Continue with Google/Facebook' where that provider carries email B will land in a SECOND Shopify customer record — separate order history and separate rewards balance.",
+      "reporters": ["Modern Forestry (internal)"],
+      "status": "under-consideration",
+      "resolution": "VERIFIED (Shopify docs + community): Shopify keys customers by EMAIL, not by login method; social sign-in syncs only the email. Same email across Google/Facebook/email-code = same account (Shopify enforces unique emails and matches). Different email = new account. This is not app-fixable — account resolution is entirely Shopify-side by email. Levers: (1) Shopify's unique-email rule prevents same-email dupes; (2) Shopify admin customer MERGE tool cleans up duplicates (info@); (3) sign-in copy nudging customers to use their order email. CONFIRMED IN EVERBRANCH CODE 2026-07-08: the rewards chain is Shopify customer (per-email) -> MarketingProfile (resolved via shopify_customer_id / external_customer_id in ModernForestryMobileCustomerSessionService) -> CandleCashBalance (belongsTo marketing_profile_id). So a different-email duplicate gets a different MarketingProfile and therefore a SEPARATE / zero Candle Cash balance; same email stays unified. A duplicate loses rewards visibility, confirmed. MERGE PATH ANSWERED 2026-07-09 (Everbranch code read): a Shopify customer-merge does NOT reconcile the Everbranch profile or Candle Cash. (a) profileForIdentity resolves the MarketingProfile via MarketingProfileLink.source_id = Shopify customer ID, never by email. (b) Everbranch handles only customers/create, customers/update, customers/redact webhooks — NO customers/merge and NO customers/delete — so on a Shopify merge the survivor gets a customers/update (updates only its own profile) while the losing customer's MarketingProfileLink + Candle Cash are orphaned; nothing moves the balance to the survivor. (c) There is NO transfer/reassign-balance-between-profiles capability anywhere; the admin 'duplicate' flow in MarketingCustomersController only prevents a NEW duplicate at manual-create time (attach to an existing profile), it does not combine two existing profiles' balances. Cleanup today is therefore manual and lossy (operator hand-keys the orphaned balance onto the survivor via a Candle Cash adjustment). RECOMMENDED BACKEND FIX (not iOS): subscribe to Shopify's customers/merge webhook and reconcile — re-point the MarketingProfileLink to the surviving customer and move the CandleCashTransactions / credit the net balance. GOTCHA: Sign in with Apple 'Hide My Email' relay addresses (@privaterelay.appleid.com) are per-app-unique and will ALWAYS produce a duplicate; factor into ticket 14."
+    }
+  ]
+}

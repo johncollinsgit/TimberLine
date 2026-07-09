@@ -9,6 +9,7 @@ use App\Models\ClientProjectTicketTask;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
+use Database\Seeders\ModernForestryAppFeedbackSeeder;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -185,4 +186,32 @@ test('landlord operator can triage client project tickets without exposing inter
         ->and($ticket->priority)->toBe('high')
         ->and($ticket->landlord_notes)->toBe('Internal pricing thought.')
         ->and(TenantModuleEntitlement::query()->where('tenant_id', $tenant->id)->exists())->toBeFalse();
+});
+
+test('modern forestry app feedback seed localizes tickets to the client project request board', function (): void {
+    $this->seed(ModernForestryAppFeedbackSeeder::class);
+
+    $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
+    $user = clientTicketUser($tenant);
+
+    $project = ClientProject::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('title', 'Modern Forestry App Request Board')
+        ->firstOrFail();
+
+    expect(ClientProjectTicket::query()->where('client_project_id', $project->id)->count())->toBe(15)
+        ->and(ClientProjectTicket::query()
+            ->where('client_project_id', $project->id)
+            ->where('title', 'QA: confirm Google appears beside Facebook on the live sign-in sheet')
+            ->value('status'))->toBe('done')
+        ->and(ClientProjectTicket::query()
+            ->where('client_project_id', $project->id)
+            ->where('title', 'Confirm App Store Guideline 4.8 compliance now that Google/Facebook login is enabled')
+            ->value('type'))->toBe('app_request');
+
+    $this->actingAs($user)
+        ->get(route('client.projects.requests.index'))
+        ->assertOk()
+        ->assertSeeText('Modern Forestry App Request Board')
+        ->assertSeeText('Confirm App Store Guideline 4.8 compliance now that Google/Facebook login is enabled');
 });

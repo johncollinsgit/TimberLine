@@ -1,5 +1,16 @@
 # Modern Forestry Backstage
 
+## Modern Forestry App Request Board Deployment Notes (2026-07-09)
+
+- The Modern Forestry app feedback tracker is now localized inside the existing client project request system, not a standalone Shopify/Remix app.
+- Production deploy creates the board through migration `2026_07_09_103000_seed_modern_forestry_app_request_board.php`, which runs the idempotent `ModernForestryAppFeedbackSeeder` outside the `testing` environment.
+- The source payload is `database/seeders/data/modern_forestry_app_feedback_seed.json`; it currently imports 15 app-feedback/request items into the Modern Forestry tenant.
+- The generated project is `Modern Forestry App Request Board`; tickets are stored as normal `client_project_tickets`, client-visible, and manageable from the existing client request/admin triage screens.
+- Status mapping: `fixed` -> `done`, `in-progress` -> `in_progress`, `needs-qa` -> `in_review`, `planned` -> `scoped`, `under-consideration` -> `needs_discovery`.
+- Type mapping: `feature-request` -> `feature`, `bug`/`task` -> `app_request`, `improvement` -> `change_request`, `risk` -> `question`.
+- The public standalone tracker plan in `modernforestry-feedback-tracker/` is superseded by this localized board unless a separate public add-only board is requested later.
+- Focused verification: `php artisan test tests/Feature/ClientProjects/ClientProjectTicketWorkflowTest.php`.
+
 ## Modern Forestry Mobile Checkout + Home Performance Notes (2026-06-29)
 
 - Mobile checkout uses Shopify Storefront Cart API when a storefront token is configured. The flow validates bag lines against Laravel product detail, creates a Shopify cart, applies buyer identity, attaches a delivery address when available, and returns Shopify `checkoutUrl`. Anonymous checkout is supported as the fallback path.
@@ -1296,6 +1307,17 @@ Mobile catalog local/testing mode:
 - Shopify Customer Account auth is now discovery-first in production: Laravel prefers `https://theforestrystudio.com/.well-known/openid-configuration` and `/.well-known/customer-account-api` for the live authorization, token, and Customer Account GraphQL endpoints, then falls back to the configured env values only when discovery is unavailable.
 - This matters because Shopify’s live Customer Account endpoints can drift by API version or customer-account domain; a stale hardcoded `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT` is a direct cause of “Shopify sign-in finished, but the customer session could not be verified.”
 - The live Modern Forestry storefront currently advertises `token_endpoint_auth_methods_supported=["client_secret_basic"]`, so production should include `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` unless Shopify changes that discovery document.
+
+2026-07-08 Claude handoff: Modern Forestry native login/social sign-in state:
+- iOS login hardening is code-complete on the native `next-version` branch. Relevant commits are `028d06a` (remove the 20s interactive sign-in timeout), `315039d` (use an ephemeral web auth session to prevent stale/wrong-email SSO prefill), `12bd4fb` (proactive mid-session token refresh so Rewards does not force a re-login), and `6c38aaf` (suppress false wishlist/quiz-save errors after successful saves). `a535e85` adds the Sale collection shelf.
+- Production Forge now has `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID` and `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` set from the matching Modern Forestry Backstage Shopify app credential pair. The live ID suffix is `087c`; the secret must not be documented or echoed. Laravel config was cleared and re-cached after the env update.
+- The live Customer Account redirect is now `https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback`, and the native callback scheme remains `shop.20812479.modernforestry`. This fixes Shopify's `Invalid redirect_uri scheme` error that appeared when the app sent `shop.20812479.modernforestry://shopify-customer-auth` directly to Shopify. Shopify accepts the HTTPS callback registered in `shopify.app.toml`, then Laravel bridges back to the native scheme.
+- Backend safety commit `6614ad3` (`Fix mobile customer auth redirect fallback`) changes the Laravel fallback redirect from the native scheme to the registered HTTPS callback and adds a regression assertion. Targeted auth tests passed: `php artisan test tests/Feature/Mobile/ModernForestryMobileProductCatalogTest.php --filter='mobile customer auth'` returned 3 passing tests / 17 assertions.
+- Live `/api/mobile/v1/modern-forestry/auth/config` was verified after the fix: `configured=true`, `redirectUri=https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback`, and `callbackScheme=shop.20812479.modernforestry`.
+- Google and Facebook social login credentials were created in Shopify Customer Accounts. Google OAuth client ID suffix is the Google-provided `.apps.googleusercontent.com` client used in Shopify; do not document the secret. Facebook App ID is `1548847009979092`; do not document the app secret. Facebook was verified as `On` in Shopify and appears on the hosted sign-in screen. Google was later confirmed enabled as `On` in Shopify after the credentials were saved; verify the next live hosted sign-in sheet shows Google beside Facebook before closing social sign-in QA.
+- New Customer Accounts sign-in is Shopify-hosted. The logo/branding can be customized in Shopify admin, but iOS `ASWebAuthenticationSession` will still show the auth domain/title such as `shopify.com` and Apple's system "wants to sign in" context. That cannot be fully hidden without replacing Shopify Customer Account OAuth with a different auth system.
+- Next TODO: improve the hosted sign-in brand/domain by creating a Shopify customer accounts subdomain such as `account.theforestrystudio.com`, setting it as the customer accounts primary domain, then updating Google and Facebook social sign-in provider settings with the new Shopify-generated JavaScript origins, redirect URLs, and deauthorize/revoke URLs. This is the only likely path to make Google say `Continue to account.theforestrystudio.com` instead of `Continue to shopify.com`; it is a Shopify/DNS/OAuth-provider configuration task, not an iOS code fix.
+- Verification already performed: one simulator build of the native app succeeded, one physical-device build for John's iPhone succeeded, the app installed on John's iPhone, and `xcrun devicectl` launched `com.theforestrystudio.modernforestry`. Use Terminal/Xcode for follow-up builds rather than VS Code if code-5 crashes recur; a prior watcher mitigation added `.vscode/settings.json` to exclude build output.
 
 Recent mobile catalog pass notes:
 - Collection payloads now request collection media plus best-selling product imagery so the phone app can show stronger shelf art.

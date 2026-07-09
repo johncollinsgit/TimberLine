@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             OrderSeeder::class, // <-- singular (matches OrderSeeder.php)
             ScentTemplateSeeder::class,
             DeveloperDashboardSeeder::class,
+            ModernForestryAppFeedbackSeeder::class,
         ]);
     }
 }
