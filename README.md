@@ -5,11 +5,15 @@
 - The Modern Forestry app feedback tracker is now localized inside the existing client project request system, not a standalone Shopify/Remix app.
 - Customer-facing board URL: `https://theforestrystudio.com/apps/forestry/feedback`.
 - Customers can submit add-only feature requests/bugs/questions from the storefront board and see public columns for being worked on, under consideration, and done.
+- The storefront board uses an Apple-style product launch layout with the real Modern Forestry app home screenshot at `public/brand/modern-forestry-app-home.png`.
+- Every public ticket is clickable at `/apps/forestry/feedback/{ticket}` and supports customer comments/questions.
+- Anonymous upvotes are stored in `client_project_ticket_votes` and surfaced as visible request rankings.
+- Public comments/questions are stored in `client_project_ticket_comments`; they are visible immediately and attached to the same internal ticket.
 - Internal management remains in Everbranch through the existing client project request/admin triage surfaces.
 - Production deploy creates the board through migration `2026_07_09_103000_seed_modern_forestry_app_request_board.php`, which runs the idempotent `ModernForestryAppFeedbackSeeder` outside the `testing` environment.
 - The source payload is `database/seeders/data/modern_forestry_app_feedback_seed.json`; it currently imports 15 app-feedback/request items into the Modern Forestry tenant.
 - The generated project is `Modern Forestry App Request Board`; tickets are stored as normal `client_project_tickets`, client-visible, and manageable from the existing client request/admin triage screens.
-- Public app-proxy implementation: `GET/POST /shopify/marketing/v1/feedback`, served on the Shopify storefront at `/apps/forestry/feedback`.
+- Public app-proxy implementation: `GET/POST /shopify/marketing/v1/feedback` plus ticket detail/comment/vote routes, served on the Shopify storefront at `/apps/forestry/feedback`.
 - Status mapping: `fixed` -> `done`, `in-progress` -> `in_progress`, `needs-qa` -> `in_review`, `planned` -> `scoped`, `under-consideration` -> `needs_discovery`.
 - Type mapping: `feature-request` -> `feature`, `bug`/`task` -> `app_request`, `improvement` -> `change_request`, `risk` -> `question`.
 - The public standalone tracker plan in `modernforestry-feedback-tracker/` is superseded by this localized board unless a separate public add-only board is requested later.

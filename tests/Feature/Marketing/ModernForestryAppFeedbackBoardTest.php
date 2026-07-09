@@ -22,8 +22,11 @@ test('modern forestry app feedback board renders for signed storefront customers
 
     $this->get(route('marketing.shopify.v1.feedback', $query))
         ->assertOk()
-        ->assertSeeText('Requests, fixes, and what shipped.')
+        ->assertSeeText('Help shape what ships next.')
+        ->assertSee('modern-forestry-app-home.png')
+        ->assertSeeText('Most requested.')
         ->assertSeeText('QA: confirm Google appears beside Facebook on the live sign-in sheet')
+        ->assertSee('/apps/forestry/feedback/', false)
         ->assertDontSeeText('Everbranch Admin')
         ->assertDontSeeText('Client request triage');
 });
@@ -63,6 +66,46 @@ test('modern forestry app feedback board accepts add only storefront submissions
         ->and($ticket->customer_visible)->toBeTrue()
         ->and($ticket->metadata['source'] ?? null)->toBe('modern_forestry_public_feedback_board')
         ->and(ClientProjectTicket::query()->where('client_project_id', $project->id)->count())->toBe(16);
+});
+
+test('modern forestry app feedback tickets are clickable and accept anonymous votes and comments', function (): void {
+    $this->seed(ModernForestryAppFeedbackSeeder::class);
+
+    $ticket = ClientProjectTicket::query()
+        ->where('title', 'Offer another way to log in besides Shopify credentials')
+        ->firstOrFail();
+
+    $query = modernForestryFeedbackSignedQuery([
+        'shop' => 'theforestrystudio.myshopify.com',
+        'path_prefix' => '/apps/forestry',
+    ], 'feedback-proxy-secret');
+
+    $this->get(route('marketing.shopify.v1.feedback.show', ['ticket' => $ticket] + $query))
+        ->assertOk()
+        ->assertSeeText('Customers asked for familiar sign-in choices instead of only email-code login.')
+        ->assertSeeText('Google and Facebook sign-in options have been enabled on the hosted sign-in screen.')
+        ->assertSeeText('Add a comment');
+
+    $this->post(route('marketing.shopify.v1.feedback.vote', ['ticket' => $ticket] + $query), [])
+        ->assertOk()
+        ->assertSeeText('Vote counted.')
+        ->assertSeeText('1 votes');
+
+    $this->post(route('marketing.shopify.v1.feedback.vote', ['ticket' => $ticket] + $query), [])
+        ->assertOk();
+
+    expect($ticket->feedbackVotes()->count())->toBe(1);
+
+    $this->post(route('marketing.shopify.v1.feedback.comments.store', ['ticket' => $ticket] + $query), [
+        'author_name' => 'Candle tester',
+        'body' => 'Could Apple sign-in be an option too?',
+        'website' => '',
+    ])
+        ->assertOk()
+        ->assertSeeText('Comment added.')
+        ->assertSeeText('Could Apple sign-in be an option too?');
+
+    expect($ticket->publicComments()->count())->toBe(1);
 });
 
 /**

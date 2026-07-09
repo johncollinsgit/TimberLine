@@ -117,6 +117,23 @@ class ClientProjectTicket extends Model
         return $this->hasMany(ClientProjectTicketTask::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function comments(): HasMany
+    {
+        return $this->hasMany(ClientProjectTicketComment::class)->latest('id');
+    }
+
+    public function publicComments(): HasMany
+    {
+        return $this->hasMany(ClientProjectTicketComment::class)
+            ->where('public_visible', true)
+            ->latest('id');
+    }
+
+    public function feedbackVotes(): HasMany
+    {
+        return $this->hasMany(ClientProjectTicketVote::class);
+    }
+
     public function references(): HasMany
     {
         return $this->hasMany(ClientProjectTicketReference::class)->orderBy('sort_order')->orderBy('id');

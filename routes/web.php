@@ -1268,6 +1268,15 @@ Route::prefix('shopify/marketing')
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->middleware('throttle:20,1')
             ->name('feedback.store');
+        Route::get('/feedback/{ticket}', [ModernForestryAppFeedbackController::class, 'show'])->name('feedback.show');
+        Route::post('/feedback/{ticket}/comments', [ModernForestryAppFeedbackController::class, 'comment'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->middleware('throttle:20,1')
+            ->name('feedback.comments.store');
+        Route::post('/feedback/{ticket}/vote', [ModernForestryAppFeedbackController::class, 'vote'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->middleware('throttle:40,1')
+            ->name('feedback.vote');
         Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.redeem');
@@ -1355,6 +1364,15 @@ Route::prefix('shopify/marketing/v1')
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->middleware('throttle:20,1')
             ->name('feedback.store');
+        Route::get('/feedback/{ticket}', [ModernForestryAppFeedbackController::class, 'show'])->name('feedback.show');
+        Route::post('/feedback/{ticket}/comments', [ModernForestryAppFeedbackController::class, 'comment'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->middleware('throttle:20,1')
+            ->name('feedback.comments.store');
+        Route::post('/feedback/{ticket}/vote', [ModernForestryAppFeedbackController::class, 'vote'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->middleware('throttle:40,1')
+            ->name('feedback.vote');
         Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.redeem');
