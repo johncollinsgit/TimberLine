@@ -128,7 +128,7 @@ test('workflow automation setup saves encrypted tenant credentials and preserves
         ->get(route('marketing.providers-integrations'))
         ->assertOk()
         ->assertSeeText('Asana to Google Calendar')
-        ->assertSeeText('Native Zap Replacement')
+        ->assertSeeText('Calendar Sync')
         ->assertSeeText('Saved for this tenant')
         ->assertSeeText('asan********1234');
 });
