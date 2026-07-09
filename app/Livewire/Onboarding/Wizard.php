@@ -58,6 +58,8 @@ class Wizard extends Component
 
         $surface = strtolower(trim((string) ($this->surface ?: 'page')));
         $isModalSurface = $surface === 'modal';
+        $isFirstLoginSurface = $surface === 'first-login';
+        $isEmbeddedSurface = $isModalSurface || $isFirstLoginSurface;
 
         $catalogPayload = app(TenantModuleCatalogService::class)->tenantStorePayload((int) $tenant->id, 'public_site');
         $modules = array_values((array) ($catalogPayload['modules'] ?? []));
@@ -98,21 +100,27 @@ class Wizard extends Component
             'canProvision' => $canProvision,
             'requestedRail' => $requestedRail !== '' ? $requestedRail : null,
             'moduleCards' => $moduleCards,
-            'wizardEyebrow' => $isModalSurface
+            'wizardEyebrow' => $isFirstLoginSurface
+                ? 'First login'
+                : ($isModalSurface
                 ? 'Electrician onboarding'
-                : ($isLandlordProvisioning ? 'Landlord Provisioning' : 'Workspace Blueprint'),
-            'wizardTitle' => $isModalSurface
+                : ($isLandlordProvisioning ? 'Landlord Provisioning' : 'Workspace Blueprint')),
+            'wizardTitle' => $isFirstLoginSurface
+                ? 'Finish your workspace setup'
+                : ($isModalSurface
                 ? 'Set up your electrician workspace'
-                : ($isLandlordProvisioning ? 'Provision a Tenant' : 'Create Tenant Blueprint'),
-            'wizardSubtitle' => $isModalSurface
+                : ($isLandlordProvisioning ? 'Provision a Tenant' : 'Create Tenant Blueprint')),
+            'wizardSubtitle' => $isFirstLoginSurface
+                ? 'Use one guided flow to pick a starting template, keep only the safe modules you need now, and confirm the setup before you open the workspace.'
+                : ($isModalSurface
                 ? 'Three quick steps: pick the electrician template, choose a few safe modules, and confirm the setup.'
                 : ($isLandlordProvisioning
                 ? 'Build a tenant blueprint from a few answers. Tenant creation, access, modules, and billing remain landlord-controlled and guarded.'
-                : 'Create or revise the tenant setup blueprint. Customer-facing setup status lives in Start Here.'),
+                : 'Create or revise the tenant setup blueprint. Customer-facing setup status lives in Start Here.')),
             'completionRedirectUrl' => $this->completionRedirectUrl,
         ]);
 
-        if (! $isModalSurface) {
+        if (! $isEmbeddedSurface) {
             $view->layout('layouts.app', [
                 'title' => $isLandlordProvisioning ? 'Provision a Tenant' : 'Create Tenant Blueprint',
             ]);

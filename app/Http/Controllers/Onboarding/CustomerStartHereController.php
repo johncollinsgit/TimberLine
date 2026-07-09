@@ -39,7 +39,6 @@ class CustomerStartHereController extends Controller
             'blueprintModuleRecommendations' => $blueprintModuleRecommendations->forTenantModel($tenant),
             'onboardingComplete' => $onboardingComplete,
             'showElectricianTutorial' => $showElectricianTutorial,
-            'showOnboardingModal' => $showElectricianTutorial && ! $onboardingComplete,
             'completionRedirectUrl' => route('dashboard', absolute: false),
         ]);
     }

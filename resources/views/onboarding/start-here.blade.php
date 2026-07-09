@@ -44,88 +44,100 @@
     $billingReturn = strtolower(trim((string) request()->query('billing', '')));
     $onboardingComplete = (bool) ($onboardingComplete ?? false);
     $showElectricianTutorial = (bool) ($showElectricianTutorial ?? false);
-    $showOnboardingModal = (bool) ($showOnboardingModal ?? false);
+    $showGuidedFirstLogin = $showElectricianTutorial && ! $onboardingComplete;
     $completionRedirectUrl = (string) ($completionRedirectUrl ?? route('dashboard', absolute: false));
+    $brandAssetVersion = (string) config('everbranch.brand_assets.cache_tag', 'eb1');
+    $brandMark = asset((string) config('everbranch.brand_assets.mark', 'brand/everbranch-mark.svg')).'?v='.$brandAssetVersion;
 @endphp
 
 <x-layouts::app.sidebar title="Start Here">
     <flux:main>
-        <div class="fb-workflow-shell" @if($showElectricianTutorial) data-onboarding-gate-root data-onboarding-modal-open="{{ $showOnboardingModal ? '1' : '0' }}" @endif>
-            <header class="fb-workflow-header">
-                <div class="fb-eyebrow">Start Here</div>
-                <h1 class="fb-title-xl">{{ $tenantName }}</h1>
-                <p class="fb-subtitle">
-                    @if($showElectricianTutorial)
-                        {{ $onboardingComplete ? 'Your workspace setup is complete. You can review status here or jump straight into the workspace.' : 'A short, guided setup for the first electrician client. We will pick a template, choose a few safe modules, and confirm the starting point.' }}
-                    @else
-                        Use this page to track setup status, current guidance, and the next reviewed steps for your workspace.
-                    @endif
-                </p>
-
-                <div class="fb-metric-grid">
-                    <div class="fb-metric">
-                        <div class="fb-metric-label">Plan</div>
-                        <div class="fb-metric-value">{{ $plan['label'] ?? 'Unknown' }}</div>
-                    </div>
-                    <div class="fb-metric">
-                        <div class="fb-metric-label">Active now</div>
-                        <div class="fb-metric-value">{{ count($activeNow) }}</div>
-                    </div>
-                    <div class="fb-metric">
-                        <div class="fb-metric-label">Setup next</div>
-                        <div class="fb-metric-value">{{ count($availableNext) }}</div>
-                    </div>
-                    <div class="fb-metric">
-                        <div class="fb-metric-label">Unlock next</div>
-                        <div class="fb-metric-value">{{ count($purchasable) }}</div>
-                    </div>
-                </div>
-
-                @if($showElectricianTutorial)
-                    <div class="mt-5 flex flex-wrap items-center gap-3">
-                        @if($showOnboardingModal)
-                            <button type="button" class="fb-btn-soft fb-btn-accent fb-link-soft" data-open-onboarding-modal>
-                                Continue setup
-                            </button>
-                            <span class="text-sm text-zinc-600">The modal opens automatically on first sign-in, but you can reopen it here anytime.</span>
-                        @else
-                            <span class="text-sm text-zinc-600">The onboarding blueprint is complete. You can still reopen the setup flow for review.</span>
-                            <button type="button" class="fb-btn-soft fb-link-soft" data-open-onboarding-modal>
-                                Review setup
-                            </button>
-                        @endif
-                    </div>
-                @endif
-            </header>
-
-            @if($showElectricianTutorial)
-                <dialog
-                    class="fb-onboarding-dialog w-[min(1200px,calc(100vw-1rem))] max-w-none rounded-[32px] border border-zinc-200 bg-white p-0 shadow-[0_40px_120px_rgba(15,23,42,0.28)] backdrop:bg-[rgba(11,15,20,0.4)] backdrop:backdrop-blur-md"
-                    aria-labelledby="onboarding-modal-title"
-                    data-onboarding-modal
-                >
-                    <div class="max-h-[92vh] overflow-y-auto bg-[radial-gradient(circle_at_top_left,_rgba(237,247,245,0.95),_rgba(255,255,255,1)_48%,_rgba(248,249,250,1))]">
-                        <div class="flex items-start justify-between gap-4 border-b border-zinc-200 px-6 py-5">
-                            <div>
-                                <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Electrician onboarding</div>
-                                <h2 id="onboarding-modal-title" class="mt-1 text-2xl font-semibold text-zinc-950">Finish setup in three calm steps.</h2>
-                                <p class="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
-                                    Pick the electrician template, choose the safe modules you need now, and confirm the review so the workspace can open.
-                                </p>
+        <div class="fb-workflow-shell">
+            @if($showGuidedFirstLogin)
+                <section class="mb-6 grid gap-6 xl:grid-cols-[minmax(0,_0.82fr)_minmax(0,_1.18fr)]" data-first-login-welcome="true">
+                    <article class="overflow-hidden rounded-[32px] border border-zinc-200 bg-[radial-gradient(circle_at_top_left,_rgba(236,247,244,0.98),_rgba(255,255,255,1)_48%,_rgba(247,249,250,1))] p-6 shadow-[0_36px_80px_-54px_rgba(15,23,42,0.28)] md:p-8">
+                        <div class="flex items-center gap-4">
+                            <div class="flex size-14 shrink-0 items-center justify-center rounded-[20px] border border-emerald-200 bg-white shadow-[0_18px_42px_-28px_rgba(16,185,129,0.55)]">
+                                <img src="{{ $brandMark }}" alt="" class="size-8" />
                             </div>
-                            <button type="button" class="rounded-full border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100" data-close-onboarding-modal>
-                                Close
-                            </button>
+                            <div>
+                                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-800">Everbranch</div>
+                                <h1 class="mt-1 text-3xl font-semibold tracking-[-0.04em] text-zinc-950 md:text-4xl">One clear first step.</h1>
+                            </div>
                         </div>
 
-                        <div class="px-4 py-4 md:px-6 md:py-6">
-                            @livewire('onboarding.wizard', ['surface' => 'modal', 'completionRedirectUrl' => $completionRedirectUrl], key('onboarding-modal-'.$tenant->id))
+                        <p class="mt-6 max-w-xl text-base leading-7 text-zinc-600">
+                            Fresh login should lead with one guided setup flow, not two competing introductions. Finish the guided setup on the right, then use the full setup status below as your ongoing source of truth.
+                        </p>
+
+                        <div class="mt-6 grid gap-3 sm:grid-cols-3">
+                            <div class="rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3">
+                                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Plan</div>
+                                <div class="mt-2 text-lg font-semibold text-zinc-950">{{ $plan['label'] ?? 'Unknown' }}</div>
+                            </div>
+                            <div class="rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3">
+                                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Setup next</div>
+                                <div class="mt-2 text-lg font-semibold text-zinc-950">{{ count($availableNext) }}</div>
+                            </div>
+                            <div class="rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3">
+                                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Access review</div>
+                                <div class="mt-2 text-lg font-semibold text-zinc-950">{{ $setupStatus['landlord_review_label'] ?? 'Pending review' }}</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 space-y-3 text-sm leading-6 text-zinc-600">
+                            <div class="rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3">
+                                Pick a starting template, keep only the safe modules you need now, and confirm how Everbranch should guide the workspace.
+                            </div>
+                            <div class="rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3">
+                                Billing, paid unlocks, and connector automation still stay review-driven. This first-login flow only captures setup intent safely.
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex flex-wrap items-center gap-3">
+                            <a href="#setup-status" class="fb-btn-soft fb-link-soft">View full setup status</a>
+                            <span class="text-xs text-zinc-500">You can always come back to the setup details after the guided flow.</span>
+                        </div>
+                    </article>
+
+                    <div class="min-w-0">
+                        @livewire('onboarding.wizard', ['surface' => 'first-login', 'completionRedirectUrl' => $completionRedirectUrl], key('onboarding-first-login-'.$tenant->id))
+                    </div>
+                </section>
+            @else
+                <header class="fb-workflow-header">
+                    <div class="fb-eyebrow">Start Here</div>
+                    <h1 class="fb-title-xl">{{ $tenantName }}</h1>
+                    <p class="fb-subtitle">
+                        @if($showElectricianTutorial && $onboardingComplete)
+                            Your first-login setup is complete. Use this page to review status, current guidance, and the next reviewed steps for your workspace.
+                        @else
+                            Use this page to track setup status, current guidance, and the next reviewed steps for your workspace.
+                        @endif
+                    </p>
+
+                    <div class="fb-metric-grid">
+                        <div class="fb-metric">
+                            <div class="fb-metric-label">Plan</div>
+                            <div class="fb-metric-value">{{ $plan['label'] ?? 'Unknown' }}</div>
+                        </div>
+                        <div class="fb-metric">
+                            <div class="fb-metric-label">Active now</div>
+                            <div class="fb-metric-value">{{ count($activeNow) }}</div>
+                        </div>
+                        <div class="fb-metric">
+                            <div class="fb-metric-label">Setup next</div>
+                            <div class="fb-metric-value">{{ count($availableNext) }}</div>
+                        </div>
+                        <div class="fb-metric">
+                            <div class="fb-metric-label">Unlock next</div>
+                            <div class="fb-metric-value">{{ count($purchasable) }}</div>
                         </div>
                     </div>
-                </dialog>
+                </header>
             @endif
 
-            <section class="fb-panel mb-6" data-everbranch-setup-status="true">
+            <section id="setup-status" class="fb-panel mb-6" data-everbranch-setup-status="true">
                 <div class="fb-panel-head">
                     <div>
                         <div class="fb-panel-title">Setup status</div>

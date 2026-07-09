@@ -277,14 +277,25 @@ test('customer start page can restore electrician onboarding when the feature fl
     $tenant = setupStatusTenant('acme');
     $user = setupStatusUserForTenant($tenant);
 
+    app(TenantSetupStatusService::class)->updateTenantStatus($tenant, [
+        'business_profile_status' => 'ready',
+        'import_path' => 'manual',
+        'square_status' => 'not_requested',
+        'csv_manual_status' => 'requested',
+        'module_interests' => [],
+        'mobile_interest' => 'undecided',
+    ]);
+
     $this->actingAs($user)
         ->get('http://acme.theeverbranch.com/start?tenant=acme')
         ->assertOk()
-        ->assertSee('data-onboarding-gate-root', false)
-        ->assertSee('data-onboarding-modal-open="0"', false)
-        ->assertSee('data-open-onboarding-modal', false)
-        ->assertSee('Electrician onboarding', false)
-        ->assertSee('data-onboarding-surface="modal"', false);
+        ->assertSee('data-first-login-welcome="true"', false)
+        ->assertSee('data-onboarding-surface="first-login"', false)
+        ->assertSeeText('One clear first step.')
+        ->assertSeeText('Finish your workspace setup')
+        ->assertDontSee('data-onboarding-gate-root', false)
+        ->assertDontSee('data-onboarding-modal-open', false)
+        ->assertDontSee('data-open-onboarding-modal', false);
 });
 
 test('tenant setup status captures import module and mobile intent without generic mobile activation', function (): void {
