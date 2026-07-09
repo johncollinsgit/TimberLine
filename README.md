@@ -1,5 +1,16 @@
 # Modern Forestry Backstage
 
+## Modern Forestry App Request Board Deployment Notes (2026-07-09)
+
+- The Modern Forestry app feedback tracker is now localized inside the existing client project request system, not a standalone Shopify/Remix app.
+- Production deploy creates the board through migration `2026_07_09_103000_seed_modern_forestry_app_request_board.php`, which runs the idempotent `ModernForestryAppFeedbackSeeder` outside the `testing` environment.
+- The source payload is `database/seeders/data/modern_forestry_app_feedback_seed.json`; it currently imports 15 app-feedback/request items into the Modern Forestry tenant.
+- The generated project is `Modern Forestry App Request Board`; tickets are stored as normal `client_project_tickets`, client-visible, and manageable from the existing client request/admin triage screens.
+- Status mapping: `fixed` -> `done`, `in-progress` -> `in_progress`, `needs-qa` -> `in_review`, `planned` -> `scoped`, `under-consideration` -> `needs_discovery`.
+- Type mapping: `feature-request` -> `feature`, `bug`/`task` -> `app_request`, `improvement` -> `change_request`, `risk` -> `question`.
+- The public standalone tracker plan in `modernforestry-feedback-tracker/` is superseded by this localized board unless a separate public add-only board is requested later.
+- Focused verification: `php artisan test tests/Feature/ClientProjects/ClientProjectTicketWorkflowTest.php`.
+
 ## Modern Forestry Mobile Checkout + Home Performance Notes (2026-06-29)
 
 - Mobile checkout uses Shopify Storefront Cart API when a storefront token is configured. The flow validates bag lines against Laravel product detail, creates a Shopify cart, applies buyer identity, attaches a delivery address when available, and returns Shopify `checkoutUrl`. Anonymous checkout is supported as the fallback path.
