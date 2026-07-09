@@ -6,6 +6,7 @@
     $status = (string) ($status ?? session('status', ''));
     $formAction = (string) ($formAction ?? '');
     $appScreenshotUrl = (string) ($appScreenshotUrl ?? asset('brand/modern-forestry-app-home.png'));
+    $boardStartsOpen = $activeTicket !== null || $status !== '' || $errors->any();
 @endphp
 <!doctype html>
 <html lang="en">
@@ -48,6 +49,9 @@
                 radial-gradient(circle at 90% 0%, rgba(186, 243, 212, .28), transparent 32rem),
                 linear-gradient(180deg, #fffdf8 0%, #f7f3ec 54%, #fffdf8 100%);
         }
+
+        .board-open .intro-gate { display: none; }
+        .board-content[hidden] { display: none; }
 
         .wrap {
             width: min(1180px, calc(100% - 32px));
@@ -176,7 +180,7 @@
 
         .status-note,
         .errors {
-            margin-top: 18px;
+            margin: 22px auto 0;
             border-radius: 18px;
             padding: 14px 16px;
             font-weight: 750;
@@ -221,16 +225,44 @@
             font-size: 17px;
         }
 
+        .request-drawer {
+            border: 1px solid rgba(24, 23, 22, .10);
+            border-radius: 28px;
+            background: rgba(255, 255, 255, .76);
+            box-shadow: 0 24px 70px rgba(31, 51, 41, .10);
+            overflow: hidden;
+        }
+
+        .request-drawer summary {
+            display: grid;
+            gap: 8px;
+            list-style: none;
+            cursor: pointer;
+            padding: clamp(20px, 4vw, 30px);
+        }
+
+        .request-drawer summary::-webkit-details-marker { display: none; }
+
+        .request-drawer summary strong {
+            color: var(--forest);
+            font-size: clamp(28px, 4vw, 46px);
+            line-height: 1;
+        }
+
+        .request-drawer summary span {
+            max-width: 620px;
+            color: var(--muted);
+            font-size: 17px;
+        }
+
         .request-form {
             display: grid;
             grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
             gap: 18px;
-            border: 1px solid rgba(24, 23, 22, .10);
-            border-radius: 28px;
-            background: rgba(255, 255, 255, .74);
+            border-top: 1px solid rgba(24, 23, 22, .10);
+            background: rgba(255, 255, 255, .56);
             backdrop-filter: blur(20px);
             padding: clamp(18px, 4vw, 28px);
-            box-shadow: 0 24px 70px rgba(31, 51, 41, .10);
         }
 
         .form-grid {
@@ -531,6 +563,47 @@
             gap: 12px;
         }
 
+        .ticket-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            display: grid;
+            align-items: center;
+            justify-items: center;
+            background: rgba(24, 23, 22, .32);
+            padding: 18px;
+        }
+
+        .ticket-modal[hidden] { display: none; }
+
+        .ticket-dialog {
+            width: min(920px, 100%);
+            max-height: min(820px, calc(100svh - 36px));
+            overflow: auto;
+            border: 1px solid rgba(255, 255, 255, .56);
+            border-radius: 30px;
+            background: rgba(255, 253, 248, .96);
+            box-shadow: 0 36px 90px rgba(31, 51, 41, .28);
+        }
+
+        .modal-close {
+            border: 1px solid rgba(24, 23, 22, .12);
+            border-radius: 999px;
+            background: white;
+            color: var(--forest);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 850;
+            padding: 9px 12px;
+        }
+
+        .ticket-dialog .detail-panel {
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
         @media (max-width: 980px) {
             .hero,
             .request-form,
@@ -566,27 +639,26 @@
                 display: grid;
             }
         }
+
     </style>
 </head>
-<body>
+<body class="{{ $boardStartsOpen ? 'board-open' : 'intro-active' }}">
+    <noscript>
+        <style>
+            .intro-gate { display: none; }
+            .board-content[hidden] { display: block; }
+        </style>
+    </noscript>
     <main class="page">
-        <section class="hero wrap">
+        <section class="hero wrap intro-gate">
             <div>
                 <div class="eyebrow">Modern Forestry app launch board</div>
                 <h1>Help shape what ships next.</h1>
                 <p class="lede">Vote on app ideas, ask questions on each request, and see the fixes and features already moving from customer feedback into the Modern Forestry app.</p>
                 <div class="hero-actions">
-                    <a class="button primary" href="#request">Share an idea</a>
-                    <a class="button" href="#roadmap">Explore the roadmap</a>
+                    <a class="button primary" href="#request" data-open-board="#request">Share an idea</a>
+                    <a class="button" href="#roadmap" data-open-board="#roadmap">Explore the roadmap</a>
                 </div>
-
-                @if($status !== '')
-                    <div class="status-note">{{ $status }}</div>
-                @endif
-
-                @if($errors->any())
-                    <div class="errors">{{ $errors->first() }}</div>
-                @endif
             </div>
 
             <div class="phone-frame" aria-label="Modern Forestry app home screenshot">
@@ -598,54 +670,67 @@
             </div>
         </section>
 
+        <div id="boardContent" class="board-content" @if(! $boardStartsOpen) hidden @endif>
+            @if($status !== '')
+                <div class="wrap">
+                    <div class="status-note">{{ $status }}</div>
+                </div>
+            @endif
+
+            @if($errors->any())
+                <div class="wrap">
+                    <div class="errors">{{ $errors->first() }}</div>
+                </div>
+            @endif
+
         <section id="request" class="section">
             <div class="wrap">
-                <div class="section-head">
-                    <div>
-                        <h2>Make a request.</h2>
-                        <p class="section-copy">Tell us what would make the app easier, faster, or more fun to use. Requests appear on the board so other customers can vote and add questions.</p>
-                    </div>
-                </div>
+                <details class="request-drawer" @if($errors->any()) open @endif>
+                    <summary>
+                        <strong>Make a request.</strong>
+                        <span>Share a feature idea, improvement, bug, or question. Other customers can vote and add context.</span>
+                    </summary>
 
-                <form class="request-form" method="POST" action="{{ $formAction }}">
-                    <div class="form-grid">
-                        <label>
-                            Type
-                            <select name="request_type" required>
-                                <option value="feature" @selected(old('request_type') === 'feature')>Feature idea</option>
-                                <option value="improvement" @selected(old('request_type') === 'improvement')>Improvement</option>
-                                <option value="bug" @selected(old('request_type') === 'bug')>Bug</option>
-                                <option value="question" @selected(old('request_type') === 'question')>Question</option>
-                            </select>
-                        </label>
-                        <label>
-                            Short title
-                            <input name="title" value="{{ old('title') }}" maxlength="120" required>
-                        </label>
-                        <label>
-                            What would you like to see?
-                            <textarea name="detail" maxlength="2500" required>{{ old('detail') }}</textarea>
-                        </label>
-                        <div class="form-row">
+                    <form class="request-form" method="POST" action="{{ $formAction }}">
+                        <div class="form-grid">
                             <label>
-                                Name
-                                <input name="name" value="{{ old('name') }}" maxlength="80">
+                                Type
+                                <select name="request_type" required>
+                                    <option value="feature" @selected(old('request_type') === 'feature')>Feature idea</option>
+                                    <option value="improvement" @selected(old('request_type') === 'improvement')>Improvement</option>
+                                    <option value="bug" @selected(old('request_type') === 'bug')>Bug</option>
+                                    <option value="question" @selected(old('request_type') === 'question')>Question</option>
+                                </select>
                             </label>
                             <label>
-                                Email
-                                <input name="email" type="email" value="{{ old('email') }}" maxlength="190">
+                                Short title
+                                <input name="title" value="{{ old('title') }}" maxlength="120" required>
                             </label>
+                            <label>
+                                What would you like to see?
+                                <textarea name="detail" maxlength="2500" required>{{ old('detail') }}</textarea>
+                            </label>
+                            <div class="form-row">
+                                <label>
+                                    Name
+                                    <input name="name" value="{{ old('name') }}" maxlength="80">
+                                </label>
+                                <label>
+                                    Email
+                                    <input name="email" type="email" value="{{ old('email') }}" maxlength="190">
+                                </label>
+                            </div>
+                            <div class="hidden-field">
+                                <label>Website<input name="website" tabindex="-1" autocomplete="off"></label>
+                            </div>
                         </div>
-                        <div class="hidden-field">
-                            <label>Website<input name="website" tabindex="-1" autocomplete="off"></label>
+                        <div class="launch-copy">
+                            <h3>Customers are part of the launch.</h3>
+                            <p>Feature requests are ranked by anonymous upvotes. Questions and comments help us understand the real-world use case before we build.</p>
+                            <button class="button primary" type="submit">Submit request</button>
                         </div>
-                    </div>
-                    <div class="launch-copy">
-                        <h3>Customers are part of the launch.</h3>
-                        <p>Feature requests are ranked by anonymous upvotes. Questions and comments help us understand the real-world use case before we build.</p>
-                        <button class="button primary" type="submit">Submit request</button>
-                    </div>
-                </form>
+                    </form>
+                </details>
             </div>
         </section>
 
@@ -659,7 +744,7 @@
                 </div>
                 <div class="ranking">
                     @forelse($rankedRequests as $ticket)
-                        <a class="rank-card" href="{{ $ticket['url'] }}">
+                        <a class="rank-card" href="{{ $ticket['url'] }}" data-ticket-open="{{ $ticket['id'] }}">
                             <div class="rank-top">
                                 <span>#{{ $loop->iteration }}</span>
                                 <span class="vote-count">{{ $ticket['votes'] }}</span>
@@ -673,75 +758,6 @@
                 </div>
             </div>
         </section>
-
-        @if($activeTicket)
-            <section id="ticket" class="section">
-                <div class="wrap">
-                    <article class="detail-panel">
-                        <div class="detail-top">
-                            <div>
-                                <div class="meta">
-                                    <span class="pill hot">{{ $activeTicket['status_label'] }}</span>
-                                    <span class="pill">{{ $activeTicket['type_label'] }}</span>
-                                    <span class="pill">{{ $activeTicket['votes'] }} votes</span>
-                                    <span class="pill">{{ $activeTicket['comments_count'] }} comments</span>
-                                </div>
-                                <h2>{{ $activeTicket['title'] }}</h2>
-                            </div>
-                            <form class="mini-form" method="POST" action="{{ $activeTicket['vote_action'] }}">
-                                <button class="vote-button" type="submit">Upvote</button>
-                            </form>
-                        </div>
-
-                        <div class="detail-copy">
-                            <article>
-                                <h3>What customers are asking for</h3>
-                                <p>{{ $activeTicket['summary'] }}</p>
-                            </article>
-                            <article>
-                                <h3>What is happening</h3>
-                                <p>{{ $activeTicket['update'] }}</p>
-                            </article>
-                        </div>
-
-                        <div class="comments">
-                            <div>
-                                <h3>Questions and comments</h3>
-                                <div class="comment-list">
-                                    @forelse($activeTicket['comments'] as $comment)
-                                        <article class="comment">
-                                            <strong>{{ $comment['author_name'] }}</strong>
-                                            @if($comment['created_at'])
-                                                <span>{{ $comment['created_at'] }}</span>
-                                            @endif
-                                            <p>{{ $comment['body'] }}</p>
-                                        </article>
-                                    @empty
-                                        <div class="empty">No comments yet. Ask a question or add more context.</div>
-                                    @endforelse
-                                </div>
-                            </div>
-
-                            <form class="comment-form" method="POST" action="{{ $activeTicket['comment_action'] }}">
-                                <h3>Add a comment</h3>
-                                <label>
-                                    Name
-                                    <input name="author_name" maxlength="80">
-                                </label>
-                                <label>
-                                    Question or comment
-                                    <textarea name="body" maxlength="1600" required></textarea>
-                                </label>
-                                <div class="hidden-field">
-                                    <label>Website<input name="website" tabindex="-1" autocomplete="off"></label>
-                                </div>
-                                <button class="button primary" type="submit">Post comment</button>
-                            </form>
-                        </div>
-                    </article>
-                </div>
-            </section>
-        @endif
 
         <section id="roadmap" class="section">
             <div class="wrap">
@@ -764,7 +780,7 @@
                             <div class="ticket-stack">
                                 @forelse($columnTickets as $ticket)
                                     <article class="ticket-card">
-                                        <a href="{{ $ticket['url'] }}">
+                                        <a href="{{ $ticket['url'] }}" data-ticket-open="{{ $ticket['id'] }}">
                                             <div class="meta">
                                                 <span class="pill {{ $ticket['status'] === 'done' ? 'shipped' : 'hot' }}">{{ $ticket['status_label'] }}</span>
                                                 <span class="pill">{{ $ticket['type_label'] }}</span>
@@ -774,7 +790,7 @@
                                             <p>{{ $ticket['summary'] }}</p>
                                         </a>
                                         <div class="card-actions">
-                                            <a class="open-link" href="{{ $ticket['url'] }}">Comment or ask</a>
+                                            <a class="open-link" href="{{ $ticket['url'] }}" data-ticket-open="{{ $ticket['id'] }}">Comment or ask</a>
                                             <form class="mini-form" method="POST" action="{{ $ticket['vote_action'] }}">
                                                 <button class="vote-button" type="submit">Upvote</button>
                                             </form>
@@ -789,6 +805,196 @@
                 </div>
             </div>
         </section>
+        </div>
+
+        <div class="ticket-modal" id="ticketModal" role="dialog" aria-modal="true" aria-labelledby="ticketModalTitle" @if(! $activeTicket) hidden @endif>
+            <div class="ticket-dialog">
+                <article class="detail-panel">
+                    <div class="detail-top">
+                        <div>
+                            <div class="meta">
+                                <span class="pill hot" data-ticket-status>{{ $activeTicket['status_label'] ?? '' }}</span>
+                                <span class="pill" data-ticket-type>{{ $activeTicket['type_label'] ?? '' }}</span>
+                                <span class="pill" data-ticket-votes>{{ isset($activeTicket['votes']) ? $activeTicket['votes'].' votes' : '' }}</span>
+                                <span class="pill" data-ticket-comments-count>{{ isset($activeTicket['comments_count']) ? $activeTicket['comments_count'].' comments' : '' }}</span>
+                            </div>
+                            <h2 id="ticketModalTitle" data-ticket-title>{{ $activeTicket['title'] ?? '' }}</h2>
+                        </div>
+                        <div class="card-actions">
+                            <form class="mini-form" method="POST" action="{{ $activeTicket['vote_action'] ?? '' }}" data-ticket-vote-form>
+                                <button class="vote-button" type="submit">Upvote</button>
+                            </form>
+                            <button class="modal-close" type="button" data-ticket-close>Close</button>
+                        </div>
+                    </div>
+
+                    <div class="detail-copy">
+                        <article>
+                            <h3>What customers are asking for</h3>
+                            <p data-ticket-summary>{{ $activeTicket['summary'] ?? '' }}</p>
+                        </article>
+                        <article>
+                            <h3>What is happening</h3>
+                            <p data-ticket-update>{{ $activeTicket['update'] ?? '' }}</p>
+                        </article>
+                    </div>
+
+                    <div class="comments">
+                        <div>
+                            <h3>Questions and comments</h3>
+                            <div class="comment-list" data-ticket-comments>
+                                @if($activeTicket)
+                                    @forelse($activeTicket['comments'] as $comment)
+                                        <article class="comment">
+                                            <strong>{{ $comment['author_name'] }}</strong>
+                                            @if($comment['created_at'])
+                                                <span>{{ $comment['created_at'] }}</span>
+                                            @endif
+                                            <p>{{ $comment['body'] }}</p>
+                                        </article>
+                                    @empty
+                                        <div class="empty">No comments yet. Ask a question or add more context.</div>
+                                    @endforelse
+                                @endif
+                            </div>
+                        </div>
+
+                        <form class="comment-form" method="POST" action="{{ $activeTicket['comment_action'] ?? '' }}" data-ticket-comment-form>
+                            <h3>Add a comment</h3>
+                            <label>
+                                Name
+                                <input name="author_name" maxlength="80">
+                            </label>
+                            <label>
+                                Question or comment
+                                <textarea name="body" maxlength="1600" required></textarea>
+                            </label>
+                            <div class="hidden-field">
+                                <label>Website<input name="website" tabindex="-1" autocomplete="off"></label>
+                            </div>
+                            <button class="button primary" type="submit">Post comment</button>
+                        </form>
+                    </div>
+                </article>
+            </div>
+        </div>
+
+        <script type="application/json" id="feedback-ticket-data">@json($tickets->keyBy('id')->all())</script>
+        <script>
+            (() => {
+                const body = document.body;
+                const boardContent = document.getElementById('boardContent');
+                const ticketData = JSON.parse(document.getElementById('feedback-ticket-data')?.textContent || '{}');
+                const modal = document.getElementById('ticketModal');
+                const activeTicketId = @json($activeTicket['id'] ?? null);
+
+                const setText = (selector, value) => {
+                    const node = modal.querySelector(selector);
+                    if (node) node.textContent = value || '';
+                };
+
+                const openBoard = (target) => {
+                    body.classList.add('board-open');
+                    boardContent.hidden = false;
+
+                    const targetNode = document.querySelector(target || '#roadmap');
+                    if (targetNode) {
+                        window.requestAnimationFrame(() => targetNode.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+                    }
+                };
+
+                const renderComments = (comments) => {
+                    const list = modal.querySelector('[data-ticket-comments]');
+                    list.replaceChildren();
+
+                    if (!comments || comments.length === 0) {
+                        const empty = document.createElement('div');
+                        empty.className = 'empty';
+                        empty.textContent = 'No comments yet. Ask a question or add more context.';
+                        list.append(empty);
+                        return;
+                    }
+
+                    comments.forEach((comment) => {
+                        const item = document.createElement('article');
+                        item.className = 'comment';
+
+                        const author = document.createElement('strong');
+                        author.textContent = comment.author_name || 'A Modern Forestry customer';
+                        item.append(author);
+
+                        if (comment.created_at) {
+                            const date = document.createElement('span');
+                            date.textContent = comment.created_at;
+                            item.append(date);
+                        }
+
+                        const body = document.createElement('p');
+                        body.textContent = comment.body || '';
+                        item.append(body);
+
+                        list.append(item);
+                    });
+                };
+
+                const openTicket = (id) => {
+                    const ticket = ticketData[id];
+                    if (!ticket) return;
+
+                    setText('[data-ticket-status]', ticket.status_label);
+                    setText('[data-ticket-type]', ticket.type_label);
+                    setText('[data-ticket-votes]', `${ticket.votes} votes`);
+                    setText('[data-ticket-comments-count]', `${ticket.comments_count} comments`);
+                    setText('[data-ticket-title]', ticket.title);
+                    setText('[data-ticket-summary]', ticket.summary);
+                    setText('[data-ticket-update]', ticket.update);
+
+                    modal.querySelector('[data-ticket-vote-form]').action = ticket.vote_action;
+                    modal.querySelector('[data-ticket-comment-form]').action = ticket.comment_action;
+                    renderComments(ticket.comments);
+
+                    modal.hidden = false;
+                    body.style.overflow = 'hidden';
+                    modal.querySelector('[data-ticket-close]').focus({ preventScroll: true });
+                };
+
+                const closeTicket = () => {
+                    modal.hidden = true;
+                    body.style.overflow = '';
+                };
+
+                document.querySelectorAll('[data-open-board]').forEach((link) => {
+                    link.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        openBoard(link.dataset.openBoard);
+                    });
+                });
+
+                document.querySelectorAll('[data-ticket-open]').forEach((link) => {
+                    link.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        openTicket(link.dataset.ticketOpen);
+                    });
+                });
+
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal || event.target.closest('[data-ticket-close]')) {
+                        closeTicket();
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && !modal.hidden) {
+                        closeTicket();
+                    }
+                });
+
+                if (activeTicketId) {
+                    openBoard('#roadmap');
+                    openTicket(activeTicketId);
+                }
+            })();
+        </script>
     </main>
 </body>
 </html>

@@ -25,10 +25,12 @@ test('modern forestry app feedback board renders for signed storefront customers
         ->assertSeeText('Help shape what ships next.')
         ->assertSee('modern-forestry-app-home.png')
         ->assertSeeText('Most requested.')
-        ->assertSeeText('QA: confirm Google appears beside Facebook on the live sign-in sheet')
+        ->assertSeeText('Google and Facebook sign-in check')
+        ->assertSee('data-ticket-open', false)
         ->assertSee('/apps/forestry/feedback/', false)
         ->assertDontSeeText('Everbranch Admin')
-        ->assertDontSeeText('Client request triage');
+        ->assertDontSeeText('Client request triage')
+        ->assertDontSeeText('ephemeral auth session');
 });
 
 test('modern forestry app feedback board accepts add only storefront submissions', function (): void {

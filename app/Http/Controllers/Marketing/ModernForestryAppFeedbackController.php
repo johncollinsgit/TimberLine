@@ -237,7 +237,7 @@ class ModernForestryAppFeedbackController extends Controller
         return [
             'id' => (int) $ticket->id,
             'url' => '/apps/forestry/feedback/'.(int) $ticket->id,
-            'title' => (string) $ticket->title,
+            'title' => $copy['title'] ?? (string) $ticket->title,
             'summary' => $copy['summary'],
             'update' => $copy['update'],
             'status' => (string) $ticket->status,
@@ -286,7 +286,7 @@ class ModernForestryAppFeedbackController extends Controller
     }
 
     /**
-     * @return array{summary:string,update:string}
+     * @return array{title?:string,summary:string,update:string}
      */
     protected function customerCopy(ClientProjectTicket $ticket): array
     {
@@ -294,62 +294,77 @@ class ModernForestryAppFeedbackController extends Controller
 
         $copy = [
             1 => [
+                'title' => 'Sign-in has more time to finish',
                 'summary' => 'Some customers were getting knocked out of sign-in before they had time to finish.',
                 'update' => 'We extended the sign-in flow and fixed the handoff so customers have time to complete login normally.',
             ],
             2 => [
-                'summary' => 'The sign-in page could remember an old email from the browser instead of starting fresh.',
-                'update' => 'Sign-in now opens in a fresh session, so customers can choose the right email every time.',
+                'title' => 'Sign-in starts with the right email',
+                'summary' => 'The sign-in page could show an old saved email instead of letting customers pick the right one.',
+                'update' => 'Sign-in now starts by asking which email to use, so customers can choose the right account every time.',
             ],
             3 => [
+                'title' => 'Rewards stays connected',
                 'summary' => 'Rewards could ask for sign-in again even when the rest of the account still looked connected.',
                 'update' => 'The app now refreshes account access quietly in the background so Rewards stays connected.',
             ],
             4 => [
+                'title' => 'Wishlist saves show the right message',
                 'summary' => 'Wishlist saves were working, but the app sometimes showed a confusing unavailable message.',
                 'update' => 'Successful saves now show as successful, so the message matches what actually happened.',
             ],
             5 => [
+                'title' => 'Quiz candle saves are clearer',
                 'summary' => 'Saving candle picks from the scent quiz could show an error even when the item saved.',
                 'update' => 'Quiz recommendations now use the improved wishlist save path.',
             ],
             6 => [
+                'title' => 'Try the scent quiz before signing in',
                 'summary' => 'Customers want to explore the scent quiz before being asked to sign in.',
                 'update' => 'Login is working now; anonymous quiz play is on the roadmap so saving can happen later.',
             ],
             7 => [
+                'title' => 'More sign-in choices',
                 'summary' => 'Customers asked for familiar sign-in choices instead of only email-code login.',
                 'update' => 'Google and Facebook sign-in options have been enabled on the hosted sign-in screen.',
             ],
             8 => [
+                'title' => 'Clearer reviewer access wording',
                 'summary' => 'Reviewer Access could look like something regular customers were supposed to use.',
                 'update' => 'We are clarifying the wording so normal customers know where to go.',
             ],
             9 => [
+                'title' => 'Android app interest',
                 'summary' => 'Customers have asked whether Modern Forestry will be available on Android.',
                 'update' => 'The app is iPhone-first today. Android interest is being tracked for future planning.',
             ],
             10 => [
+                'title' => 'Sale section in the app',
                 'summary' => 'Customers wanted a faster way to browse sale and clearance candles.',
                 'update' => 'A dedicated Sale shelf has been added to the Shop experience.',
             ],
             11 => [
+                'title' => 'More Modern Forestry branding during sign-in',
                 'summary' => 'The sign-in step should feel like Modern Forestry, not a random third-party page.',
                 'update' => 'The account domain and sign-in branding have been moved toward Modern Forestry styling wherever the platform allows.',
             ],
             12 => [
+                'title' => 'Google and Facebook sign-in check',
                 'summary' => 'We needed to confirm Google sign-in appeared alongside Facebook.',
                 'update' => 'Google and Facebook now both appear on the live sign-in screen.',
             ],
             13 => [
-                'summary' => 'A fresh sign-in session protects customers from accidentally using the wrong saved account.',
-                'update' => 'We are keeping the safer fresh-session behavior while watching the convenience tradeoff.',
+                'title' => 'Safer sign-in account choice',
+                'summary' => 'Customers want the app to avoid using an old saved email by mistake.',
+                'update' => 'We are keeping the safer sign-in setup that asks customers to choose their account, even if it means a little less one-tap convenience.',
             ],
             14 => [
-                'summary' => 'Adding social sign-in means we need to keep App Store login rules in mind.',
+                'title' => 'Privacy-friendly sign-in choices',
+                'summary' => 'Adding Google and Facebook sign-in means we still need a simple private option for customers who do not use those accounts.',
                 'update' => 'The email-code sign-in path remains available as the privacy-friendly option.',
             ],
             15 => [
+                'title' => 'Keep rewards tied to the right email',
                 'summary' => 'Using a different Google or Facebook email can create a separate customer account.',
                 'update' => 'We are tracking clearer guidance and account-merge handling so rewards stay easy to understand.',
             ],
