@@ -235,7 +235,7 @@ return [
             ],
             'growth' => [
                 'name' => 'Growth',
-                'price_display' => 'From $249/mo',
+                'price_display' => 'From $299/mo',
                 'summary' => 'Adds loyalty/rewards, birthdays, and eligibility for marketing/bulk email operations.',
                 'highlights' => [
                     'Loyalty/rewards + birthday lifecycle',
@@ -313,6 +313,39 @@ return [
     'start_client' => [
         'headline' => "Simplify your life,\nGet more time with your family.",
         'submit_label' => 'Request production access',
+        'plan_comparison' => [
+            'eyebrow' => 'One platform. Everything you need.',
+            'title' => 'Launch partner pricing',
+            'subtitle' => 'Starter includes everything. Growth gives you more capacity.',
+            'savings_note' => 'Most businesses spend $249–$1,400+/mo juggling multiple apps. Average monthly savings: $150–$1,300+.',
+            'recommended' => 'growth',
+            'plans' => [
+                'starter' => [
+                    'label' => 'Starter',
+                    'price' => '$149',
+                    'cadence' => '/mo',
+                    'badge' => null,
+                ],
+                'growth' => [
+                    'label' => 'Growth',
+                    'price' => '$299',
+                    'cadence' => '/mo',
+                    'badge' => 'Most popular',
+                ],
+            ],
+            'features' => [
+                ['label' => 'Team members', 'starter' => 'Up to 3 users', 'growth' => 'Unlimited users'],
+                ['label' => 'Text messages', 'starter' => '500 texts/mo', 'growth' => '5,000 texts/mo'],
+                ['label' => 'Email contacts', 'starter' => 'Up to 2,000 contacts', 'growth' => 'Up to 15,000 contacts'],
+                ['label' => 'Automation workflows', 'starter' => 'Basic automations', 'growth' => 'Advanced automations'],
+                ['label' => 'Custom branding', 'starter' => 'Basic branding (logo, colors)', 'growth' => 'Full custom branding'],
+                ['label' => 'Analytics', 'starter' => 'Standard analytics', 'growth' => 'Advanced analytics'],
+                ['label' => 'Customer support', 'starter' => 'Email support', 'growth' => 'Priority support'],
+                ['label' => 'Integrations & API', 'starter' => '—', 'growth' => 'API & advanced integrations'],
+                ['label' => 'Onboarding', 'starter' => '$499 one-time', 'growth' => '$999 one-time'],
+                ['label' => 'Boarding fee', 'starter' => '$299 one-time', 'growth' => '$299 one-time'],
+            ],
+        ],
     ],
 
     'integrations' => [

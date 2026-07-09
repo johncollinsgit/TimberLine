@@ -1,5 +1,10 @@
 @php
     $content = is_array($surface ?? null) ? $surface : [];
+    $planComparison = is_array($content['plan_comparison'] ?? null) ? $content['plan_comparison'] : [];
+    $comparePlans = is_array($planComparison['plans'] ?? null) ? $planComparison['plans'] : [];
+    $compareFeatures = is_array($planComparison['features'] ?? null) ? $planComparison['features'] : [];
+    $comparePlanKeys = array_keys($comparePlans);
+    $recommendedComparePlan = (string) ($planComparison['recommended'] ?? '');
     $intentValue = in_array(($intent ?? ''), ['demo', 'production'], true) ? (string) $intent : 'production';
     $planCards = is_array($plan_cards ?? null) ? $plan_cards : [];
     $addonCards = is_array($addon_cards ?? null) ? $addon_cards : [];
@@ -52,14 +57,75 @@
         <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary fb-contact-back">Back to homepage</a>
 
         <section class="fb-card fb-contact-overview fb-start-hero" aria-label="Request overview" data-reveal data-premium-surface>
-            <h1 class="fb-start-hero__title">
-                @foreach($heroHeadlineLines as $heroLine)
-                    <span>{{ $heroLine }}</span>
-                @endforeach
-            </h1>
+            @if($planComparison !== [] && $comparePlans !== [])
+                <div class="fb-start-tabs" role="tablist" aria-label="Start sections">
+                    <a id="tab-start-overview" href="#tab-start-overview" class="fb-start-tab is-active" role="tab" aria-selected="true" aria-controls="panel-start-overview" data-public-tab-trigger="overview">Overview</a>
+                    <a id="tab-start-pricing" href="#tab-start-pricing" class="fb-start-tab" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-start-pricing" data-public-tab-trigger="pricing">Pricing</a>
+                </div>
+
+                <div class="fb-start-tabpanels" data-public-tabs>
+                    <div id="panel-start-overview" class="fb-public-tab-panel is-active" role="tabpanel" aria-labelledby="tab-start-overview" data-public-tab-panel="overview">
+                        <h1 class="fb-start-hero__title">
+                            @foreach($heroHeadlineLines as $heroLine)
+                                <span>{{ $heroLine }}</span>
+                            @endforeach
+                        </h1>
+                    </div>
+
+                    <div id="panel-start-pricing" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-start-pricing" data-public-tab-panel="pricing" hidden>
+                        <div class="fb-plan-compare">
+                            @if(filled($planComparison['eyebrow'] ?? null))
+                                <p class="fb-section-kicker">{{ $planComparison['eyebrow'] }}</p>
+                            @endif
+                            <h2 class="fb-start-hero__title fb-plan-compare__title">{{ $planComparison['title'] ?? 'Pricing' }}</h2>
+                            @if(filled($planComparison['subtitle'] ?? null))
+                                <p class="fb-plan-compare__subtitle">{{ $planComparison['subtitle'] }}</p>
+                            @endif
+
+                            <div class="fb-plan-compare__table" style="--fb-plan-count: {{ count($comparePlans) }}">
+                                <div class="fb-plan-compare__row fb-plan-compare__row--head">
+                                    <span class="fb-plan-compare__feature"></span>
+                                    @foreach($comparePlans as $planKey => $plan)
+                                        <span class="fb-plan-compare__plan {{ $planKey === $recommendedComparePlan ? 'is-recommended' : '' }}">
+                                            @if(filled($plan['badge'] ?? null))
+                                                <span class="fb-plan-compare__badge">{{ $plan['badge'] }}</span>
+                                            @endif
+                                            <span class="fb-plan-compare__plan-name">{{ $plan['label'] ?? $planKey }}</span>
+                                            <span class="fb-plan-compare__price">{{ $plan['price'] ?? '' }}<span class="fb-plan-compare__cadence">{{ $plan['cadence'] ?? '' }}</span></span>
+                                        </span>
+                                    @endforeach
+                                </div>
+
+                                @foreach($compareFeatures as $feature)
+                                    <div class="fb-plan-compare__row">
+                                        <span class="fb-plan-compare__feature">{{ $feature['label'] ?? '' }}</span>
+                                        @foreach($comparePlanKeys as $planKey)
+                                            <span class="fb-plan-compare__value {{ $planKey === $recommendedComparePlan ? 'is-recommended' : '' }}">{{ $feature[$planKey] ?? '' }}</span>
+                                        @endforeach
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            @if(filled($planComparison['savings_note'] ?? null))
+                                <p class="fb-plan-compare__savings">{{ $planComparison['savings_note'] }}</p>
+                            @endif
+
+                            <div class="fb-start-actions fb-plan-compare__actions">
+                                <a href="#start-access-form" class="fb-btn fb-btn-primary">Become a launch partner</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @else
+                <h1 class="fb-start-hero__title">
+                    @foreach($heroHeadlineLines as $heroLine)
+                        <span>{{ $heroLine }}</span>
+                    @endforeach
+                </h1>
+            @endif
         </section>
 
-        <section class="fb-start-layout" aria-label="Access request form" data-reveal>
+        <section id="start-access-form" class="fb-start-layout" aria-label="Access request form" data-reveal>
             <div class="fb-card fb-start-form-card" data-premium-surface>
                 @if (session('status'))
                     <div class="fb-state fb-state--success mb-4">{{ session('status') }}</div>

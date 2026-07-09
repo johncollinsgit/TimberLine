@@ -130,7 +130,7 @@
                                 <h1>{{ $headline }}</h1>
                                 <p>{{ $summary }}</p>
                                 <div class="fb-hero-cta fb-hero-cta--centered">
-                                    <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Request access</a>
+                                    <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Become a launch partner with Everbranch</a>
                                     <a href="#everbranch-public" class="fb-btn fb-btn-secondary" data-public-tab-jump="workflows">See Everbranch in action</a>
                                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
                                 </div>

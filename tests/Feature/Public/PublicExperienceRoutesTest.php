@@ -60,7 +60,7 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertDontSeeText('Privacy')
         ->assertDontSeeText('Pricing')
         ->assertDontSee('href="/platform/plans"', false)
-        ->assertSeeText('Request access')
+        ->assertSeeText('Become a launch partner with Everbranch')
         ->assertSeeText('Login')
         ->assertSee('brand/everbranch-lockup.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-mark.svg?v='.$cacheTag, false)

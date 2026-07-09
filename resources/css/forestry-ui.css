@@ -7983,3 +7983,177 @@ textarea.assistant-field-input {
 .fb-product-demo__mode button.is-active.fb-product-demo__mode-solution {
   box-shadow: 0 12px 32px -28px rgba(41, 86, 62, 0.65), inset 0 -3px 0 rgba(91, 138, 111, 0.52);
 }
+
+/* Start page (/platform/start): Overview / Pricing tab strip + plan comparison */
+.fb-start-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin: 0 auto 1.25rem;
+  padding: 0.25rem;
+  background: var(--fb-surface-subtle);
+  border: 1px solid var(--fb-border);
+  border-radius: 999px;
+}
+
+.fb-start-tab {
+  border-radius: 999px;
+  padding: 0.5rem 1.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--fb-text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 160ms var(--eb-motion-ease), color 160ms var(--eb-motion-ease);
+}
+
+.fb-start-tab:hover {
+  color: var(--fb-text-primary);
+}
+
+.fb-start-tab.is-active {
+  background: var(--fb-surface);
+  color: var(--fb-text-primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.fb-plan-compare {
+  text-align: center;
+}
+
+.fb-plan-compare__title {
+  font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+  max-width: none;
+  line-height: 1.05;
+}
+
+.fb-plan-compare__subtitle {
+  color: var(--fb-text-secondary);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin: 0.6rem auto 0;
+  max-width: 46ch;
+}
+
+.fb-plan-compare__table {
+  margin: 1.5rem auto 0;
+  border: 1px solid var(--fb-border);
+  border-radius: 16px;
+  overflow: hidden;
+  text-align: left;
+}
+
+.fb-plan-compare__row {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(var(--fb-plan-count, 2), 1fr);
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--fb-border);
+}
+
+.fb-plan-compare__row:first-child {
+  border-top: 0;
+}
+
+.fb-plan-compare__row:nth-child(even) {
+  background: var(--fb-surface-subtle);
+}
+
+.fb-plan-compare__row--head {
+  align-items: end;
+  background: var(--fb-surface-muted);
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.fb-plan-compare__feature {
+  color: var(--fb-text-primary);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.fb-plan-compare__row--head .fb-plan-compare__feature {
+  font-weight: 700;
+}
+
+.fb-plan-compare__value {
+  color: var(--fb-text-secondary);
+  font-size: 0.92rem;
+}
+
+.fb-plan-compare__plan {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.fb-plan-compare__plan-name {
+  color: var(--fb-text-primary);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.fb-plan-compare__price {
+  color: var(--fb-text-primary);
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+.fb-plan-compare__cadence {
+  color: var(--fb-text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-left: 0.15rem;
+}
+
+.fb-plan-compare__badge {
+  align-self: flex-start;
+  background: var(--fb-accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  margin-bottom: 0.15rem;
+}
+
+.fb-plan-compare__plan.is-recommended .fb-plan-compare__price,
+.fb-plan-compare__value.is-recommended {
+  color: var(--fb-accent);
+}
+
+.fb-plan-compare__value.is-recommended {
+  font-weight: 600;
+}
+
+.fb-plan-compare__savings {
+  color: var(--fb-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 1rem auto 0;
+  max-width: 60ch;
+}
+
+.fb-plan-compare__actions {
+  justify-content: center;
+  margin-top: 1.25rem;
+}
+
+@media (max-width: 560px) {
+  .fb-plan-compare__row {
+    grid-template-columns: 1.2fr repeat(var(--fb-plan-count, 2), 1fr);
+    gap: 0.35rem;
+    padding: 0.65rem 0.7rem;
+  }
+
+  .fb-plan-compare__feature,
+  .fb-plan-compare__value {
+    font-size: 0.82rem;
+  }
+
+  .fb-plan-compare__price {
+    font-size: 1.2rem;
+  }
+}

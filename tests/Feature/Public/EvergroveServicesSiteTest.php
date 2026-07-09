@@ -16,6 +16,7 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('Sign Up')
         ->assertSeeText('We build the software small businesses wish already existed.')
+        ->assertSeeText('Become a launch partner with Everbranch')
         ->assertSeeText('Start with a workflow audit')
         ->assertSeeText('Problem')
         ->assertSeeText('What We Build')

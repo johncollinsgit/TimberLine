@@ -131,7 +131,7 @@ return [
             'is_highest_standard' => false,
             'position' => (int) ($canonicalPlans['growth']['position'] ?? 20),
             'currency' => 'USD',
-            'recurring_price_cents' => 24900,
+            'recurring_price_cents' => 29900,
             'setup_price_cents' => 7900,
             'included_usage' => [
                 'store_channels' => 1,

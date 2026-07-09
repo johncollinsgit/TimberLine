@@ -12,6 +12,8 @@
     $contactEmail = (string) ($content['contact_email'] ?? 'hello@evergrovesoftware.com');
     $appBaseUrl = rtrim((string) config('app.url', url('/')), '/');
     $loginUrl = $appBaseUrl.'/login';
+    $everbranchStartUrl = config('tenancy.domains.canonical.scheme', 'https').'://'
+        .config('tenancy.domains.canonical.public_host', 'theeverbranch.com').'/platform/start';
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -34,7 +36,8 @@
                 <h1>{{ $positioning['headline'] ?? 'We build the software small businesses wish already existed.' }}</h1>
                 <p class="eg-lede">{{ $positioning['summary'] ?? 'Evergrove creates practical apps, portals, automations, and software products for small businesses that have outgrown sticky notes, spreadsheets, and scattered tools.' }}</p>
                 <div class="eg-actions">
-                    <a href="#contact" class="eg-button eg-button-primary">Start with a workflow audit</a>
+                    <a href="{{ $everbranchStartUrl }}" class="eg-button eg-button-primary">Become a launch partner with Everbranch</a>
+                    <a href="#contact" class="eg-button eg-button-secondary">Start with a workflow audit</a>
                     <a href="#work" class="eg-button eg-button-secondary">See what we build</a>
                     <a href="{{ $loginUrl }}" class="eg-button eg-button-secondary">Client portal</a>
                 </div>
