@@ -88,7 +88,7 @@ return [
         'oauth_access_token' => env('GOOGLE_CALENDAR_ACCESS_TOKEN'),
         'redirect_uri' => env('GOOGLE_CALENDAR_REDIRECT_URI', $defaultGoogleCalendarRedirect),
         'oauth_state_cache_store' => env('GOOGLE_CALENDAR_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
-        'oauth_scopes' => env('GOOGLE_CALENDAR_OAUTH_SCOPES', 'https://www.googleapis.com/auth/calendar'),
+        'oauth_scopes' => env('GOOGLE_CALENDAR_OAUTH_SCOPES', 'https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/calendar.calendarlist.readonly'),
     ],
 
     'asana' => [
