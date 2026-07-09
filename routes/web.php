@@ -39,6 +39,7 @@ use App\Http\Controllers\Marketing\MarketingRecommendationsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
+use App\Http\Controllers\Marketing\ModernForestryAppFeedbackController;
 use App\Http\Controllers\Marketing\MarketingWishlistController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
@@ -1262,6 +1263,11 @@ Route::prefix('shopify/marketing')
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
         Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
         Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::get('/feedback', [ModernForestryAppFeedbackController::class, 'index'])->name('feedback');
+        Route::post('/feedback', [ModernForestryAppFeedbackController::class, 'store'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->middleware('throttle:20,1')
+            ->name('feedback.store');
         Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.redeem');
@@ -1344,6 +1350,11 @@ Route::prefix('shopify/marketing/v1')
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
         Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
         Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::get('/feedback', [ModernForestryAppFeedbackController::class, 'index'])->name('feedback');
+        Route::post('/feedback', [ModernForestryAppFeedbackController::class, 'store'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->middleware('throttle:20,1')
+            ->name('feedback.store');
         Route::post('/rewards/redeem', [MarketingShopifyIntegrationController::class, 'requestRedemption'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('rewards.redeem');

@@ -3,13 +3,17 @@
 ## Modern Forestry App Request Board Deployment Notes (2026-07-09)
 
 - The Modern Forestry app feedback tracker is now localized inside the existing client project request system, not a standalone Shopify/Remix app.
+- Customer-facing board URL: `https://theforestrystudio.com/apps/forestry/feedback`.
+- Customers can submit add-only feature requests/bugs/questions from the storefront board and see public columns for being worked on, under consideration, and done.
+- Internal management remains in Everbranch through the existing client project request/admin triage surfaces.
 - Production deploy creates the board through migration `2026_07_09_103000_seed_modern_forestry_app_request_board.php`, which runs the idempotent `ModernForestryAppFeedbackSeeder` outside the `testing` environment.
 - The source payload is `database/seeders/data/modern_forestry_app_feedback_seed.json`; it currently imports 15 app-feedback/request items into the Modern Forestry tenant.
 - The generated project is `Modern Forestry App Request Board`; tickets are stored as normal `client_project_tickets`, client-visible, and manageable from the existing client request/admin triage screens.
+- Public app-proxy implementation: `GET/POST /shopify/marketing/v1/feedback`, served on the Shopify storefront at `/apps/forestry/feedback`.
 - Status mapping: `fixed` -> `done`, `in-progress` -> `in_progress`, `needs-qa` -> `in_review`, `planned` -> `scoped`, `under-consideration` -> `needs_discovery`.
 - Type mapping: `feature-request` -> `feature`, `bug`/`task` -> `app_request`, `improvement` -> `change_request`, `risk` -> `question`.
 - The public standalone tracker plan in `modernforestry-feedback-tracker/` is superseded by this localized board unless a separate public add-only board is requested later.
-- Focused verification: `php artisan test tests/Feature/ClientProjects/ClientProjectTicketWorkflowTest.php`.
+- Focused verification: `php artisan test tests/Feature/Marketing/ModernForestryAppFeedbackBoardTest.php tests/Feature/ClientProjects/ClientProjectTicketWorkflowTest.php`.
 
 ## Modern Forestry Mobile Checkout + Home Performance Notes (2026-06-29)
 
