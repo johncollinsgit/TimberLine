@@ -9,10 +9,15 @@ return [
         'asana_google_calendar' => AsanaGoogleCalendarWorkflowDriver::class,
     ],
 
+    // This is a neutral, user-agnostic template of defaults only. Real per-tenant
+    // instances (project, calendar, and OAuth credentials) live in each tenant's
+    // `tenant_marketing_settings` row and shadow this template at runtime — see
+    // TenantWorkflowAutomationSettingsService + AutomationWorkflowEngine::resolvedDefinitions().
+    // Do NOT bake a specific tenant's project/calendar/tokens in here.
     'workflows' => [
         'asana_to_google_calendar' => [
             'enabled' => (bool) env('AUTOMATION_ASANA_TO_GCAL_ENABLED', false),
-            'tenant_id' => (int) env('AUTOMATION_ASANA_TENANT_ID', 1),
+            'tenant_id' => (int) env('AUTOMATION_ASANA_TENANT_ID', 0),
             'required_module' => 'workflow_automations',
             'driver' => 'asana_google_calendar',
             'trigger' => [
@@ -23,7 +28,7 @@ return [
                 'max_tasks_per_run' => (int) env('AUTOMATION_ASANA_MAX_TASKS_PER_RUN', 500),
             ],
             'action' => [
-                'calendar_id' => env('AUTOMATION_GCAL_CALENDAR_ID', env('ASANA_SKYLIGHT_CALENDAR_ID')),
+                'calendar_id' => env('AUTOMATION_GCAL_CALENDAR_ID'),
                 'timezone' => env('AUTOMATION_GCAL_TIMEZONE', 'America/New_York'),
                 'default_start_time' => env('AUTOMATION_GCAL_DEFAULT_START_TIME', '12:00:00'),
                 'default_duration_minutes' => (int) env('AUTOMATION_GCAL_DEFAULT_DURATION_MINUTES', 60),
