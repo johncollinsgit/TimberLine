@@ -57,6 +57,8 @@ test('modern forestry app feedback board accepts add only storefront submissions
     ])
         ->assertOk()
         ->assertSeeText('Thanks. Your request was added to the board.')
+        ->assertSee('data-modal-status', false)
+        ->assertSeeText('Close')
         ->assertSeeText('Let me reorder my favorite candle faster');
 
     $ticket = ClientProjectTicket::query()
@@ -91,6 +93,8 @@ test('modern forestry app feedback tickets are clickable and accept anonymous vo
     $this->post(route('marketing.shopify.v1.feedback.vote', ['ticket' => $ticket] + $query), [])
         ->assertOk()
         ->assertSeeText('Vote counted.')
+        ->assertSee('data-modal-status', false)
+        ->assertSeeText('Close')
         ->assertSeeText('1 votes');
 
     $this->post(route('marketing.shopify.v1.feedback.vote', ['ticket' => $ticket] + $query), [])
@@ -105,6 +109,8 @@ test('modern forestry app feedback tickets are clickable and accept anonymous vo
     ])
         ->assertOk()
         ->assertSeeText('Comment added.')
+        ->assertSee('data-modal-status', false)
+        ->assertSeeText('Close')
         ->assertSeeText('Could Apple sign-in be an option too?');
 
     expect($ticket->publicComments()->count())->toBe(1);

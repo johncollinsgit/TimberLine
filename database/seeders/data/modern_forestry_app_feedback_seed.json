@@ -46,8 +46,8 @@
       "title": "Rewards tab asks me to sign in again",
       "detail": "Profile stays logged in (photo, saved candles) but the Rewards tab prompts for a second login.",
       "reporters": ["User 2"],
-      "status": "needs-qa",
-      "resolution": "Cause: if the token lapsed mid-session (no foreground transition to trigger the existing refresh), authenticated loads 401'd — Rewards fell to its sign-in gate while Account still rendered a cached snapshot. Added CustomerSession.ensureFreshToken(): a no-op when the token is valid, silent refresh when near expiry, never signs the user out on failure (12bd4fb). Build-verified; confirm on device."
+      "status": "fixed",
+      "resolution": "Cause: if the token lapsed mid-session (no foreground transition to trigger the existing refresh), authenticated loads 401'd — Rewards fell to its sign-in gate while Account still rendered a cached snapshot. Added CustomerSession.ensureFreshToken(): a no-op when the token is valid, silent refresh when near expiry, never signs the user out on failure (12bd4fb). VERIFIED ON DEVICE 2026-07-09: Rewards opened from Account without a second sign-in gate and showed the Candle Cash snapshot."
     },
     {
       "id": 4,
@@ -82,8 +82,8 @@
       "title": "Offer another way to log in besides Shopify credentials",
       "detail": "Login only presented Shopify credentials; testers asked for alternatives and found the hand-off confusing.",
       "reporters": ["User 3"],
-      "status": "in-progress",
-      "resolution": "Google and Facebook social sign-in credentials are now configured in Shopify Customer Accounts. Facebook verified On. Google enabled — see ticket 12 for remaining QA. These are genuine options (no decoy buttons); Shopify remains the secure identity backend."
+      "status": "fixed",
+      "resolution": "Google and Facebook social sign-in credentials are now configured in Shopify Customer Accounts. Facebook verified On. Google enabled and verified in ticket 12. These are genuine options (no decoy buttons); Shopify remains the secure identity backend."
     },
     {
       "id": 8,
@@ -118,8 +118,8 @@
       "title": "Hide the Shopify login/branding as much as possible",
       "detail": "The hosted sign-in shows shopify.com, and Google's consent screen says \"Continue to shopify.com\" rather than Modern Forestry. We want the sign-in to feel like our brand, not a third-party hand-off.",
       "reporters": ["Modern Forestry (internal)"],
-      "status": "planned",
-      "resolution": "MECHANISM CONFIRMED 2026-07-08 (Shopify docs + live discovery doc). The 'shopify.com' title is drawn by iOS, not the app: ASWebAuthenticationSession always displays the loaded page's host as an anti-phishing safeguard, and Apple exposes no API to hide/rename/restyle it. NO app change can remove it — this is true of every OAuth login on iOS (Auth0/Okta/Firebase sell custom auth domains for exactly this reason). NO NATIVE-FORM ALTERNATIVE EXISTS ANYMORE: the old escape hatch (classic customer accounts + Storefront API customerAccessTokenCreate, a fully native email/password form) is dead — that mutation was removed in API version 2025-04 and legacy customer accounts were deprecated Feb 2026 with a hard sunset later in 2026. Customer Account API OAuth (PKCE, served from shopify.com/authentication) is the mandated replacement and requires the hosted flow. FIX (the only lever): register a custom customer-accounts domain (account.theforestrystudio.com) INSIDE Shopify — Cloudflare only hosts the DNS record Shopify dictates; a CNAME alone will not work. Shopify docs: default sign-in is shopify.com/authentication/<id>/login, and after connecting a subdomain customers 'access the sign-in page at account.your-store.com/authentication/login'; 'the subdomain becomes the primary domain name for all customer account pages'. Because Laravel is discovery-first and iOS reads /auth/config at runtime, the branded domain reaches the title bar with ZERO code changes. *** CRITICAL ORDERING: Shopify's docs require you to update the Google and Facebook provider settings (redirect URIs + sign-out URLs) with the new subdomain BEFORE making the change in Shopify, or social sign-in breaks. *** VERIFY BY: re-fetching https://theforestrystudio.com/.well-known/openid-configuration and checking whether authorization_endpoint's host moved off shopify.com. NOTE: Apple's 'wants to use shopify.com to sign in' consent alert is ALREADY suppressed because the session is ephemeral (315039d). OPEN QUESTION: whether the purple 'Continue with Shop' button can be disabled under Settings > Customer accounts > sign-in options — that is the loudest Shopify branding on the sheet. Fully removing Shopify would mean abandoning Customer Account OAuth, severing the identity link to orders/rewards/Everbranch — not recommended, and no longer has a supported alternative."
+      "status": "fixed",
+      "resolution": "MECHANISM CONFIRMED 2026-07-08 (Shopify docs + live discovery doc). The iOS title bar is drawn by ASWebAuthenticationSession as an anti-phishing safeguard, and Apple exposes no API to hide/rename/restyle it. FIX APPLIED: the Shopify customer-accounts domain was moved to account.theforestrystudio.com and the hosted sign-in uses Modern Forestry branding. VERIFIED ON DEVICE 2026-07-09: the sheet title shows account.theforestrystudio.com, the Modern Forestry logo is present, and Google/Facebook buttons render. Remaining platform limit: Shopify's hosted account flow can still show Shopify-owned labels such as Continue with Shop; fully removing Shopify would mean abandoning Customer Account OAuth and breaking the identity link to orders/rewards/Everbranch, so this is now as branded as the supported platform path allows."
     },
     {
       "id": 12,
@@ -136,8 +136,8 @@
       "title": "Decide: ephemeral auth session vs. one-tap social sign-in",
       "detail": "The ephemeral (cookie-isolated) session that fixed the wrong-email prefill (ticket 2) also means the sign-in sheet cannot reuse an existing Safari Google/Facebook session — so social sign-in asks for credentials on a fresh login instead of one-tap.",
       "reporters": ["Modern Forestry (internal)"],
-      "status": "in-progress",
-      "resolution": "Recommendation: keep ephemeral. Tokens persist, so an interactive login is a rare, one-time cost, and it guarantees the user always authenticates as themselves (the wrong-email bug actively blocked a tester). ADDITIONAL BENEFIT found 2026-07-08: an ephemeral session also suppresses Apple's system consent alert (\"'modernforestry' Wants to Use 'shopify.com' to Sign In\"), which only appears for cookie-sharing sessions — so ephemeral already removes one prominent Shopify mention (see ticket 11). Validate the real-world feel on device before finalizing."
+      "status": "fixed",
+      "resolution": "Decision: keep the safer account-choice flow. Tokens persist, so an interactive login is a rare, one-time cost, and it guarantees the user always authenticates as themselves (the wrong-email bug actively blocked a tester). ADDITIONAL BENEFIT found 2026-07-08: the isolated sign-in session also suppresses Apple's system consent alert (\"'modernforestry' Wants to Use 'shopify.com' to Sign In\"), which only appears for cookie-sharing sessions — so this already removes one prominent Shopify mention (see ticket 11)."
     },
     {
       "id": 14,

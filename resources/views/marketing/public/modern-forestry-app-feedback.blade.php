@@ -187,6 +187,10 @@
         }
 
         .status-note {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
             border: 1px solid rgba(95, 133, 107, .22);
             background: rgba(186, 243, 212, .34);
             color: var(--forest);
@@ -196,6 +200,18 @@
             border: 1px solid rgba(198, 106, 161, .32);
             background: rgba(198, 106, 161, .10);
             color: #7c315d;
+        }
+
+        .notice-close {
+            flex: 0 0 auto;
+            border: 1px solid rgba(31, 51, 41, .18);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .72);
+            color: var(--forest);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 850;
+            padding: 7px 10px;
         }
 
         .section {
@@ -604,6 +620,19 @@
             box-shadow: none;
         }
 
+        .modal-confirmation {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            border: 1px solid rgba(95, 133, 107, .22);
+            border-radius: 18px;
+            background: rgba(186, 243, 212, .34);
+            color: var(--forest);
+            font-weight: 800;
+            padding: 14px 16px;
+        }
+
         @media (max-width: 980px) {
             .hero,
             .request-form,
@@ -673,7 +702,10 @@
         <div id="boardContent" class="board-content" @if(! $boardStartsOpen) hidden @endif>
             @if($status !== '')
                 <div class="wrap">
-                    <div class="status-note">{{ $status }}</div>
+                    <div class="status-note" data-dismissible-notice>
+                        <span>{{ $status }}</span>
+                        <button class="notice-close" type="button" data-dismiss-notice>Close</button>
+                    </div>
                 </div>
             @endif
 
@@ -810,6 +842,13 @@
         <div class="ticket-modal" id="ticketModal" role="dialog" aria-modal="true" aria-labelledby="ticketModalTitle" @if(! $activeTicket) hidden @endif>
             <div class="ticket-dialog">
                 <article class="detail-panel">
+                    @if($status !== '')
+                        <div class="modal-confirmation" data-modal-status>
+                            <span>{{ $status }}</span>
+                            <button class="notice-close" type="button" data-ticket-close>Close</button>
+                        </div>
+                    @endif
+
                     <div class="detail-top">
                         <div>
                             <div class="meta">
@@ -981,6 +1020,12 @@
                     if (event.target === modal || event.target.closest('[data-ticket-close]')) {
                         closeTicket();
                     }
+                });
+
+                document.querySelectorAll('[data-dismiss-notice]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        button.closest('[data-dismissible-notice]')?.remove();
+                    });
                 });
 
                 document.addEventListener('keydown', (event) => {
