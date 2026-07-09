@@ -210,8 +210,8 @@ test('landlord analytics tenants endpoint returns required tenant table fields a
         ->assertJsonPath('data.0.id', $atlas->id)
         ->assertJsonPath('data.0.name', 'Atlas Forest Co')
         ->assertJsonPath('data.0.plan_key', 'growth')
-        ->assertJsonPath('data.0.monthly_subscription_cents', 34800)
-        ->assertJsonPath('data.0.subscription_income_to_date_cents', 34800)
+        ->assertJsonPath('data.0.monthly_subscription_cents', 39800)
+        ->assertJsonPath('data.0.subscription_income_to_date_cents', 39800)
         ->assertJsonPath('data.0.sales_generated_cents', 19950)
         ->assertJsonPath('data.0.rewards_redeemed_cents', 2000)
         ->assertJsonPath('data.0.customers_onboarded', 2)
@@ -284,7 +284,7 @@ test('landlord analytics activity endpoint returns module revenue grouping and s
         ->assertJsonPath('chart.chart_type', 'bar')
         ->assertJsonPath('chart.stacked', true)
         ->assertJsonPath('chart.xaxis_type', 'category')
-        ->assertJsonPath('chart.total', 34800);
+        ->assertJsonPath('chart.total', 39800);
 
     expect(collect((array) $moduleResponse->json('chart.series'))->pluck('name')->all())
         ->toContain('Growth', 'SMS');
@@ -295,14 +295,14 @@ test('landlord analytics activity endpoint returns module revenue grouping and s
     $subscriptionResponse
         ->assertOk()
         ->assertJsonPath('chart.unit', 'currency')
-        ->assertJsonPath('chart.total', 34800)
+        ->assertJsonPath('chart.total', 39800)
         ->assertJsonPath('chart.delta_label', '0%')
         ->assertJsonPath('chart.delta_tone', 'neutral')
         ->assertJsonPath('chart.empty_state', null);
 
     $subscriptionSeries = $subscriptionResponse->json('chart.series.0.data');
     expect($subscriptionSeries)->toBeArray()->not->toBeEmpty();
-    expect(collect($subscriptionSeries)->contains(fn (array $point): bool => (int) ($point['y'] ?? 0) === 34800))->toBeTrue();
+    expect(collect($subscriptionSeries)->contains(fn (array $point): bool => (int) ($point['y'] ?? 0) === 39800))->toBeTrue();
 });
 
 test('landlord analytics endpoints return safe empty states for zero-data and no-match filters', function (): void {
