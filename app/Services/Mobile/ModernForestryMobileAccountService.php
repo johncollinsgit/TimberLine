@@ -10,25 +10,27 @@ use App\Models\MessagingConversationMessage;
 use App\Models\MobilePushDevice;
 use App\Models\Order;
 use App\Models\OrderLine;
-use App\Services\Marketing\MessagingConversationService;
-use App\Services\Marketing\TwilioSmsService;
 use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
 use App\Services\Marketing\MarketingWishlistService;
-use App\Services\Mobile\ModernForestryMobileProductCatalogService;
+use App\Services\Marketing\MessagingConversationService;
+use App\Services\Marketing\TwilioSmsService;
 use App\Services\Shopify\ShopifyEmbeddedRewardsService;
 use App\Services\Subscriptions\SubscriptionModuleService;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
 class ModernForestryMobileAccountService
 {
     protected const MOBILE_SUPPORT_SOURCE_TYPE = 'modern_forestry_app';
+
     protected const MOBILE_SUPPORT_STORE_KEY = 'retail';
+
     protected const MOBILE_STOREFRONT_STORE_KEY = 'retail';
+
     protected const MOBILE_SUPPORT_SUBJECT = 'Modern Forestry app support';
 
     /**
@@ -47,8 +49,7 @@ class ModernForestryMobileAccountService
         protected ModernForestryMobileScentQuizService $scentQuizService,
         protected ShopifyEmbeddedRewardsService $embeddedRewards,
         protected SubscriptionModuleService $subscriptions
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -208,8 +209,8 @@ class ModernForestryMobileAccountService
     }
 
     /**
-     * @param array<string,mixed> $product
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $product
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function addWishlistItem(MarketingProfile $profile, array $product, array $options = []): array
@@ -223,8 +224,8 @@ class ModernForestryMobileAccountService
     }
 
     /**
-     * @param array<string,mixed> $product
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $product
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function removeWishlistItem(MarketingProfile $profile, array $product, array $options = []): array
@@ -851,8 +852,7 @@ class ModernForestryMobileAccountService
         ?Collection $orders = null,
         ?array $wishlist = null,
         ?array $rewardsSummary = null
-    ): array
-    {
+    ): array {
         $orders = $orders ?? $this->orders($profile, $tenantId);
         $wishlist = $wishlist ?? $this->wishlistPayload($profile, $tenantId);
         $rewardsSummary = $rewardsSummary ?? $this->rewardsSummary($profile, $tenantId);
@@ -1262,7 +1262,7 @@ class ModernForestryMobileAccountService
     }
 
     /**
-     * @param array<int,array<string,mixed>> $variants
+     * @param  array<int,array<string,mixed>>  $variants
      * @return array<string,mixed>|null
      */
     protected function matchVariantForLine(array $variants, string $rawVariant): ?array
@@ -1310,6 +1310,10 @@ class ModernForestryMobileAccountService
 
         try {
             $this->twilioSmsService->sendSms($destination, $message, [
+                'tenant_id' => (int) $profile->tenant_id,
+                'idempotency_key' => 'mobile-support-alert:'.$profile->id.':'.sha1($body),
+                'ledger_source_type' => 'marketing_profile',
+                'source_id' => $profile->id,
                 'status_callback_url' => null,
             ]);
         } catch (Throwable $exception) {

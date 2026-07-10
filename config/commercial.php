@@ -172,8 +172,9 @@ return [
             'position' => 20,
             'currency' => 'USD',
             'recurring_price_cents' => 9900,
-            'setup_price_cents' => 0,
-            'modules' => (array) ($canonicalAddons['sms']['modules'] ?? ['sms']),
+            'setup_price_cents' => 9900,
+            'included_usage' => ['sms_usage' => 1000, 'email_usage' => 5000],
+            'modules' => (array) ($canonicalAddons['sms']['modules'] ?? ['messaging', 'email', 'sms']),
         ],
         'messaging' => [
             'name' => (string) ($canonicalAddons['messaging']['name'] ?? 'Messaging'),
@@ -181,7 +182,8 @@ return [
             'currency' => 'USD',
             'recurring_price_cents' => 1999,
             'setup_price_cents' => 0,
-            'modules' => (array) ($canonicalAddons['messaging']['modules'] ?? ['messaging']),
+            'included_usage' => ['email_usage' => 5000],
+            'modules' => (array) ($canonicalAddons['messaging']['modules'] ?? ['messaging', 'email']),
         ],
         'additional_channels' => [
             'name' => (string) ($canonicalAddons['additional_channels']['name'] ?? 'Additional Stores/Channels'),
@@ -198,7 +200,8 @@ return [
             'currency' => 'USD',
             'recurring_price_cents' => 12900,
             'setup_price_cents' => 0,
-            'modules' => (array) ($canonicalAddons['bulk_email_marketing']['modules'] ?? ['bulk_email_marketing']),
+            'included_usage' => ['email_usage' => 50000],
+            'modules' => (array) ($canonicalAddons['bulk_email_marketing']['modules'] ?? ['messaging', 'email', 'campaigns', 'bulk_email_marketing']),
             'legacy_grants' => (array) ($canonicalAddons['bulk_email_marketing']['legacy_grants'] ?? ['email']),
         ],
         'future_niche_modules' => [

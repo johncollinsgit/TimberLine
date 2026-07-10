@@ -7,23 +7,22 @@ use App\Models\BirthdayRewardIssuance;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
-use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
+use App\Services\Marketing\Messaging\TenantMessagingGateway;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
 
 class BirthdayEmailDispatchService
 {
     public function __construct(
-        protected TenantEmailDispatchService $emailDispatchService,
+        protected TenantMessagingGateway $messagingGateway,
         protected TenantEmailSettingsService $emailSettingsService,
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingEmailReadiness $emailReadiness,
         protected TenantMarketingSettingsResolver $marketingSettingsResolver
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function sendIssuanceEmail(BirthdayRewardIssuance $issuance, array $options = []): array
@@ -153,12 +152,17 @@ class BirthdayEmailDispatchService
         if ($failure) {
             $sendResult = $this->failureResult($selectedProvider, (string) $failure['code'], (string) $failure['message']);
         } else {
-            $sendResult = $this->emailDispatchService->sendEmail(
-                toEmail: $toEmail,
+            $sendResult = $this->messagingGateway->sendEmail(
+                tenantId: (int) $tenantId,
+                to: $toEmail,
                 subject: $subject,
                 textBody: $textBody,
                 options: [
                     'tenant_id' => $tenantId,
+                    'delivery_id' => $delivery->id,
+                    'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+                    'ledger_source_type' => 'marketing_email_delivery',
+                    'source_id' => $delivery->id,
                     'store_context' => $storeContext,
                     'store_key' => $storeKey,
                     'from_name' => $this->nullableString($settings['from_name'] ?? null),
@@ -287,7 +291,7 @@ class BirthdayEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $metadata
+     * @param  array<string,mixed>  $metadata
      * @return array<string,mixed>
      */
     protected function templateExtra(array $metadata, BirthdayRewardIssuance $issuance, ?string $applyUrl): array
@@ -324,26 +328,26 @@ class BirthdayEmailDispatchService
         $escaped = e($text);
         $html = str_replace(["\r\n", "\n", "\r"], '<br>', $escaped);
 
-        return '<p>' . $html . '</p>';
+        return '<p>'.$html.'</p>';
     }
 
     protected function birthdayApplyPath(string $rewardCode): string
     {
-        $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=birthday';
+        $redirect = '/cart?forestry_reward_code='.rawurlencode($rewardCode).'&forestry_reward_kind=birthday';
 
-        return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
+        return '/discount/'.rawurlencode($rewardCode).'?redirect='.rawurlencode($redirect);
     }
 
     protected function storefrontUrl(string $path): string
     {
         $base = rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/');
 
-        return $base . $path;
+        return $base.$path;
     }
 
     protected function eventKey(BirthdayRewardIssuance $issuance, string $templateKey): string
     {
-        return 'birthday_email:' . (int) $issuance->id . ':' . $templateKey;
+        return 'birthday_email:'.(int) $issuance->id.':'.$templateKey;
     }
 
     protected function birthdayDateValue(int $month, int $day): ?string

@@ -18,8 +18,7 @@ class TenantRewardsReminderDispatchService
         protected TwilioSenderConfigService $twilioSenderConfigService,
         protected TwilioSmsService $twilioSmsService,
         protected MarketingDeliveryTrackingService $deliveryTrackingService
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string,mixed>  $policy
@@ -145,6 +144,7 @@ class TenantRewardsReminderDispatchService
                     $processedItems[] = $this->presentProcessedRow($reward, $processed, $includeContent ? $this->previewForChannel($policy, $reward, $entry) : null);
                     $this->applyProcessedSummary($summary, $processed);
                     $this->incrementSkipReason($skipReasonCounts, (string) ($processed['skip_reason'] ?? 'manual_skip'));
+
                     continue;
                 }
 
@@ -154,6 +154,7 @@ class TenantRewardsReminderDispatchService
                     $processedItems[] = $this->presentProcessedRow($reward, $processed, $includeContent ? $this->previewForChannel($policy, $reward, $entry) : null);
                     $this->applyProcessedSummary($summary, $processed);
                     $this->incrementSkipReason($skipReasonCounts, (string) ($processed['skip_reason'] ?? 'launch_not_ready'));
+
                     continue;
                 }
 
@@ -524,6 +525,10 @@ class TenantRewardsReminderDispatchService
             (string) ($preview['body'] ?? ''),
             [
                 'tenant_id' => $tenantId,
+                'delivery_id' => $delivery->id,
+                'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+                'ledger_source_type' => 'marketing_email_delivery',
+                'source_id' => $delivery->id,
                 'campaign_type' => 'tenant_rewards_reminder',
                 'template_key' => 'tenant_rewards_expiration_reminder',
                 'customer_id' => $this->positiveInt($entry['marketing_profile_id'] ?? null),
@@ -667,6 +672,11 @@ class TenantRewardsReminderDispatchService
         ]);
 
         $send = $this->twilioSmsService->sendSms($toPhone, (string) ($preview['body'] ?? ''), [
+            'tenant_id' => (int) $delivery->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-message-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_message_delivery',
+            'source_id' => $delivery->id,
             'status_callback_url' => $this->statusCallbackUrl(),
         ]);
 

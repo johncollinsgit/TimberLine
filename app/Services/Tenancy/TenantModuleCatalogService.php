@@ -4,9 +4,9 @@ namespace App\Services\Tenancy;
 
 use App\Models\TenantModuleAccessRequest;
 use App\Support\Tenancy\TenantModuleActionPresenter;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class TenantModuleCatalogService
@@ -17,8 +17,7 @@ class TenantModuleCatalogService
         protected LandlordCommercialConfigService $commercialConfigService,
         protected LandlordOperatorActionAuditService $auditService,
         protected TenantBlueprintModuleRecommendationService $blueprintRecommendations
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -71,6 +70,7 @@ class TenantModuleCatalogService
                 'entitlement_requirement_label' => (string) ($productMetadata['entitlement_requirement_label'] ?? 'Access review required'),
                 'tenant_visibility_label' => (string) ($productMetadata['tenant_visibility_label'] ?? 'Hidden unless explicitly safe'),
                 'product_summary' => (string) ($productMetadata['product_summary'] ?? ''),
+                'buyer_setup' => is_array($productMetadata['buyer_setup'] ?? null) ? (array) $productMetadata['buyer_setup'] : [],
                 'blueprint_display_state' => 'unavailable',
                 'blueprint_display_state_label' => 'Unavailable',
                 'blueprint_recommendation_reason' => 'Catalog display state only.',
@@ -163,6 +163,7 @@ class TenantModuleCatalogService
                 'required_integrations_label' => (string) ($productMetadata['required_integrations_label'] ?? 'No required integration'),
                 'mobile_relevance_label' => (string) ($productMetadata['mobile_relevance_label'] ?? 'Not mobile-specific'),
                 'pricing_impact_label' => (string) ($productMetadata['pricing_impact_label'] ?? 'Pricing impact not configured'),
+                'buyer_setup' => is_array($productMetadata['buyer_setup'] ?? null) ? (array) $productMetadata['buyer_setup'] : [],
                 'status' => strtolower(trim((string) ($definition['status'] ?? 'disabled'))),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
                 'channels' => array_values(array_map('strval', (array) ($definition['channels'] ?? []))),
@@ -503,7 +504,80 @@ class TenantModuleCatalogService
             'entitlement_requirement_label' => $this->entitlementRequirementLabel($includedPlans, $billingMode),
             'tenant_visibility_label' => $this->tenantVisibilityLabel($definition),
             'product_summary' => $this->productSummary($definition, $moduleState, $billingMode),
+            'buyer_setup' => $this->buyerSetup($moduleKey, $definition, $moduleState, $billingMode),
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     * @param  array<string,mixed>|null  $moduleState
+     * @return array<string,mixed>
+     */
+    protected function buyerSetup(string $moduleKey, array $definition, ?array $moduleState, string $billingMode): array
+    {
+        $configured = is_array($definition['buyer_setup'] ?? null) ? (array) $definition['buyer_setup'] : [];
+        $displayName = trim((string) ($definition['display_name'] ?? Str::headline($moduleKey)));
+        $description = trim((string) ($definition['description'] ?? ''));
+        $stateDescription = trim((string) ($moduleState['reason_description'] ?? $moduleState['description'] ?? ''));
+        $whatYouNeed = $this->normalizeBuyerSetupList((array) ($configured['what_you_need'] ?? []));
+        $setupSteps = $this->normalizeBuyerSetupList((array) ($configured['setup_steps'] ?? []));
+
+        if ($whatYouNeed === []) {
+            $requiredIntegrations = $this->requiredIntegrations(
+                $definition,
+                array_values(array_map(
+                    static fn (mixed $channel): string => strtolower(trim((string) $channel)),
+                    (array) ($definition['channels'] ?? [])
+                ))
+            );
+            $whatYouNeed = $requiredIntegrations === []
+                ? ['A clear owner for setup and a few minutes to review the module.']
+                : ['Access to '.strtolower($this->requiredIntegrationsLabel($requiredIntegrations)).' and a setup owner.'];
+        }
+
+        if ($setupSteps === []) {
+            $setupSteps = [
+                'Review the module fit for this workspace.',
+                $billingMode === 'add_on' ? 'Request or add access when you are ready.' : 'Confirm the workspace has access.',
+                'Open the module and complete any guided setup items.',
+            ];
+        }
+
+        $outcome = trim((string) ($configured['outcome'] ?? ''));
+        if ($outcome === '') {
+            $outcome = $description !== ''
+                ? $description
+                : 'Give the workspace a clearer path for '.$displayName.'.';
+        }
+
+        $nextStep = trim((string) ($configured['next_step'] ?? ''));
+        if ($nextStep === '') {
+            $nextStep = $stateDescription !== ''
+                ? $stateDescription
+                : ($billingMode === 'add_on' ? 'Request access, then complete the guided setup.' : 'Review access and open the module when ready.');
+        }
+
+        return [
+            'outcome' => $outcome,
+            'best_for' => trim((string) ($configured['best_for'] ?? 'Teams that want '.$displayName.' available inside the same workspace.')),
+            'what_you_need' => $whatYouNeed,
+            'next_step' => $nextStep,
+            'setup_steps' => $setupSteps,
+            'primary_action' => trim((string) ($configured['primary_action'] ?? 'Review module')),
+            'help_text' => trim((string) ($configured['help_text'] ?? 'You can review this module without changing billing or access.')),
+        ];
+    }
+
+    /**
+     * @param  array<int,mixed>  $items
+     * @return array<int,string>
+     */
+    protected function normalizeBuyerSetupList(array $items): array
+    {
+        return array_values(array_filter(array_map(
+            static fn (mixed $item): string => trim((string) $item),
+            $items
+        )));
     }
 
     /**

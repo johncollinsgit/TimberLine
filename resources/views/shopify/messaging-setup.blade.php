@@ -40,6 +40,7 @@
         $supportAlertSaveEndpoint = trim((string) ($supportAlerts['save_endpoint'] ?? ''));
         $trackingMissingRequestedScopes = array_values((array) ($trackingScopeState['missing_requested'] ?? []));
         $trackingEndpoints = is_array($messageAnalyticsTrackingEndpoints ?? null) ? $messageAnalyticsTrackingEndpoints : [];
+        $platformSetup = is_array($messagingPlatformSetup ?? null) ? $messagingPlatformSetup : [];
 
         $embeddedContextQuery = collect(request()->query())
             ->filter(fn ($value) => $value !== null && $value !== '')
@@ -57,7 +58,7 @@
 
         .message-setup-card {
             border: 1px solid rgba(15, 23, 42, 0.1);
-            border-radius: 14px;
+            border-radius: 8px;
             background: #fff;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
             padding: 14px;
@@ -83,7 +84,7 @@
 
         .message-setup-guide {
             border: 1px dashed rgba(15, 23, 42, 0.16);
-            border-radius: 12px;
+            border-radius: 8px;
             background: rgba(248, 250, 252, 0.65);
             padding: 14px;
             display: grid;
@@ -129,7 +130,7 @@
 
         .message-setup-button {
             min-height: 36px;
-            border-radius: 999px;
+            border-radius: 6px;
             border: 1px solid rgba(15, 23, 42, 0.14);
             background: #fff;
             color: #0f172a;
@@ -152,7 +153,7 @@
 
         .message-setup-empty {
             border: 1px dashed rgba(15, 23, 42, 0.16);
-            border-radius: 12px;
+            border-radius: 8px;
             background: rgba(248, 250, 252, 0.7);
             padding: 12px;
             display: grid;
@@ -273,7 +274,7 @@
                         @if($trackingSetup !== [])
                             <div class="message-setup-empty" aria-label="Storefront tracking deployment">
                                 <p class="message-setup-muted">
-                                    Storefront tracking ships from this repo as a Shopify theme app embed plus a Shopify web pixel. Deploy extensions, enable the Forestry embed in Theme Editor, then verify tagged storefront visits against <code>{{ (string) ($trackingProxy['health_path'] ?? '/apps/forestry/health') }}</code>.
+                                    Storefront tracking ships as an Everbranch theme app embed plus a Shopify web pixel. Deploy extensions, enable the Everbranch embed in Theme Editor, then verify tagged storefront visits against <code>{{ (string) ($trackingProxy['health_path'] ?? '/apps/forestry/health') }}</code>.
                                 </p>
                                 <div class="message-setup-links">
                                     <span class="message-setup-status">Theme embed inferred: {{ (bool) ($trackingHealthTheme['inferred_enabled'] ?? false) ? 'Yes' : 'No' }}</span>
@@ -361,7 +362,7 @@
                         @endif
 
                         <div class="message-setup-empty" aria-label="Mobile support alert routing">
-                            <h4>Modern Forestry app support alerts</h4>
+                            <h4>Mobile app support alerts</h4>
                             <p class="message-setup-muted">When a customer sends a support message from the app, Everbranch will text this number with the message body so your team sees it right away.</p>
                             <label class="message-setup-muted" for="support-alert-phone-input">Support alert phone number</label>
                             <div class="message-setup-actions">
@@ -371,7 +372,7 @@
                                     value="{{ $supportAlertPhone }}"
                                     placeholder="+18646165468"
                                     data-support-alert-phone-input
-                                    style="min-width: 220px; min-height: 36px; border-radius: 999px; border: 1px solid rgba(15, 23, 42, 0.14); padding: 0 12px; font-size: 13px;"
+                                    style="min-width: 220px; min-height: 36px; border-radius: 6px; border: 1px solid rgba(15, 23, 42, 0.14); padding: 0 12px; font-size: 13px;"
                                 >
                                 <button
                                     type="button"
@@ -388,6 +389,95 @@
                     </div>
                 </x-tenancy.module-state-card>
             @endif
+
+            <article class="message-setup-card" aria-labelledby="sending-identities-title">
+                <div>
+                    <h2 id="sending-identities-title">Sending identities and usage</h2>
+                    <p class="message-setup-muted">Each company gets separate provider resources. Customers see your verified sender, and replies follow the inbox choice shown below.</p>
+                </div>
+                @foreach(['email_account' => 'Email', 'sms_account' => 'Text messaging'] as $accountKey => $accountLabel)
+                    @php $account = is_array($platformSetup[$accountKey] ?? null) ? $platformSetup[$accountKey] : []; @endphp
+                    <div class="message-setup-guide">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h4>{{ $accountLabel }}</h4>
+                            <span class="message-setup-status">{{ str((string) ($account['status'] ?? 'not configured'))->replace('_', ' ')->title() }}</span>
+                        </div>
+                        @if($account === [])
+                            <p class="message-setup-muted">Next: ask your Everbranch administrator to start the isolated provider setup for this company.</p>
+                        @elseif($accountKey === 'email_account')
+                            <p class="message-setup-muted">Provider: {{ str((string) ($account['provider'] ?? ''))->replace('_', ' ')->title() }} · domain: {{ $account['authenticated_domain'] ?? 'waiting for domain' }}</p>
+                            @if(!empty($account['dns_records']))
+                                <p class="message-setup-muted">Next: add these DNS records with your domain host. Keep every host and value exactly as shown.</p>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full border-collapse text-left text-xs">
+                                        <thead><tr class="border-b border-zinc-200"><th class="p-2">Type</th><th class="p-2">Host</th><th class="p-2">Value</th></tr></thead>
+                                        <tbody>
+                                            @foreach((array) $account['dns_records'] as $record)
+                                                <tr class="border-b border-zinc-100"><td class="p-2 font-medium">{{ $record['type'] ?? '' }}</td><td class="break-all p-2">{{ $record['host'] ?? '' }}</td><td class="break-all p-2">{{ $record['value'] ?? '' }}</td></tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                @if(($platformSetup['verification_refresh_enabled'] ?? false) && ($account['status'] ?? '') !== 'ready')
+                                    <button type="button" class="message-setup-button" data-refresh-domain-verification data-endpoint="{{ $platformSetup['verification_refresh_endpoint'] ?? '' }}">Check verification</button>
+                                @endif
+                            @endif
+                        @else
+                            <p class="message-setup-muted">Number: {{ $account['sender_identifier'] ?? 'assigned after registration' }}</p>
+                            @if(($account['status'] ?? '') !== 'ready')<p class="message-setup-muted">Next: complete the customer profile, brand, campaign, Messaging Service, and number registration. Sending stays blocked until all five are approved.</p>@endif
+                        @endif
+                    </div>
+                @endforeach
+
+                <div class="message-setup-guide">
+                    <h4>Email send-as and replies</h4>
+                    @forelse((array) ($platformSetup['sender_profiles'] ?? []) as $profile)
+                        <div class="border-t border-zinc-200 pt-2 text-sm">
+                            <strong>{{ $profile['display_name'] }} &lt;{{ $profile['from_email'] }}&gt;</strong>
+                            <p class="message-setup-muted">{{ ($profile['reply_mode'] ?? '') === 'direct_inbox' ? 'Replies go directly to '.$profile['reply_to_email'].'.' : 'Replies stay in the Everbranch shared inbox.' }} {{ !empty($profile['is_default']) ? 'Default sender.' : '' }}</p>
+                        </div>
+                    @empty
+                        <p class="message-setup-muted">Next: verify your sending domain, then add the first From address and choose whether replies go to your mailbox or stay in Everbranch.</p>
+                    @endforelse
+                    @if(is_array($platformSetup['email_account'] ?? null))
+                        <div class="grid gap-2 border-t border-zinc-200 pt-3 sm:grid-cols-2" data-sender-profile-form>
+                            <input class="rounded-md border-zinc-300 text-sm" name="label" placeholder="Label, such as Support">
+                            <input class="rounded-md border-zinc-300 text-sm" name="display_name" placeholder="Name customers see">
+                            <input class="rounded-md border-zinc-300 text-sm" name="from_email" type="email" placeholder="support@yourcompany.com">
+                            <input class="rounded-md border-zinc-300 text-sm" name="reply_to_email" type="email" placeholder="Mailbox for direct replies">
+                            <select class="rounded-md border-zinc-300 text-sm" name="reply_mode"><option value="direct_inbox">Reply to my inbox</option><option value="everbranch_inbox">Keep replies in Everbranch</option></select>
+                            <label class="flex items-center gap-2 text-sm text-zinc-700"><input type="checkbox" name="is_default" value="1" checked> Use as the default sender</label>
+                            <button type="button" class="message-setup-button message-setup-button--primary sm:col-span-2" data-save-sender-profile data-endpoint="{{ $platformSetup['sender_save_endpoint'] ?? '' }}">Save sender</button>
+                        </div>
+                    @endif
+                    @if(collect((array) ($platformSetup['sender_profiles'] ?? []))->where('verification_status', 'verified')->isNotEmpty())
+                        <div class="grid gap-2 border-t border-zinc-200 pt-3 sm:grid-cols-[1fr_1fr_auto]" data-sender-test-form>
+                            <select class="rounded-md border-zinc-300 text-sm" name="sender_profile_id">
+                                @foreach((array) ($platformSetup['sender_profiles'] ?? []) as $profile)
+                                    @if(($profile['verification_status'] ?? '') === 'verified')<option value="{{ $profile['id'] }}">{{ $profile['label'] }} · {{ $profile['from_email'] }}</option>@endif
+                                @endforeach
+                            </select>
+                            <input class="rounded-md border-zinc-300 text-sm" name="to_email" type="email" placeholder="Where should the test go?">
+                            <button type="button" class="message-setup-button" data-test-sender-profile data-endpoint="{{ $platformSetup['sender_test_endpoint'] ?? '' }}">Send test</button>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="message-setup-guide">
+                    <h4>Monthly usage and prepaid credit</h4>
+                    <p class="message-setup-muted">Email: {{ number_format((int) data_get($platformSetup, 'email_usage.used_units', 0)) }} of {{ number_format((int) data_get($platformSetup, 'email_usage.included_units', 0)) }} included. Text: {{ number_format((int) data_get($platformSetup, 'sms_usage.used_units', 0)) }} of {{ number_format((int) data_get($platformSetup, 'sms_usage.included_units', 0)) }} included segments.</p>
+                    <p class="message-setup-muted">Available prepaid credit: ${{ number_format(((int) data_get($platformSetup, 'email_usage.credit_available_micros', 0)) / 1000000, 2) }}.</p>
+                    @if($platformSetup['credit_checkout_enabled'] ?? false)
+                        <div class="message-setup-actions">
+                            @foreach((array) ($platformSetup['credit_packs_cents'] ?? []) as $packCents)
+                                <form method="POST" action="{{ $platformSetup['credit_checkout_endpoint'] }}">@csrf<input type="hidden" name="pack_cents" value="{{ $packCents }}"><button class="message-setup-button" type="submit">Add ${{ number_format($packCents / 100, 0) }}</button></form>
+                            @endforeach
+                        </div>
+                    @else
+                        <p class="message-setup-muted">Credit checkout will appear here after the administrator enables Stripe one-time payments.</p>
+                    @endif
+                </div>
+            </article>
         @endif
     </section>
 
@@ -398,6 +488,11 @@
                 const connectPixelButton = document.querySelector('[data-connect-storefront-pixel]');
                 const saveSupportAlertButton = document.querySelector('[data-save-support-alert-phone]');
                 const supportAlertPhoneInput = document.querySelector('[data-support-alert-phone-input]');
+                const senderProfileForm = document.querySelector('[data-sender-profile-form]');
+                const saveSenderButton = document.querySelector('[data-save-sender-profile]');
+                const senderTestForm = document.querySelector('[data-sender-test-form]');
+                const testSenderButton = document.querySelector('[data-test-sender-profile]');
+                const refreshVerificationButton = document.querySelector('[data-refresh-domain-verification]');
                 const setupStatusNode = document.getElementById('message-setup-inline-status');
 
                 function setSetupStatus(message, tone = 'neutral') {
@@ -556,6 +651,63 @@
                         } finally {
                             saveSupportAlertButton.disabled = false;
                             supportAlertPhoneInput.disabled = false;
+                        }
+                    });
+                }
+
+                if (saveSenderButton && senderProfileForm) {
+                    saveSenderButton.addEventListener('click', async () => {
+                        saveSenderButton.disabled = true;
+                        setSetupStatus('Saving sender…');
+                        const value = (name) => senderProfileForm.querySelector(`[name="${name}"]`)?.value || '';
+                        try {
+                            const payload = await postJson(saveSenderButton.dataset.endpoint, {
+                                label: value('label'),
+                                display_name: value('display_name'),
+                                from_email: value('from_email'),
+                                reply_to_email: value('reply_to_email'),
+                                reply_mode: value('reply_mode'),
+                                is_default: Boolean(senderProfileForm.querySelector('[name="is_default"]')?.checked),
+                            });
+                            setSetupStatus(payload?.message || 'Sender saved. Reloading…', 'success');
+                            window.setTimeout(() => window.location.reload(), 700);
+                        } catch (error) {
+                            setSetupStatus(error instanceof Error ? error.message : 'Could not save sender.', 'error');
+                            saveSenderButton.disabled = false;
+                        }
+                    });
+                }
+
+                if (testSenderButton && senderTestForm) {
+                    testSenderButton.addEventListener('click', async () => {
+                        testSenderButton.disabled = true;
+                        setSetupStatus('Sending test email…');
+                        try {
+                            const payload = await postJson(testSenderButton.dataset.endpoint, {
+                                sender_profile_id: senderTestForm.querySelector('[name="sender_profile_id"]')?.value,
+                                to_email: senderTestForm.querySelector('[name="to_email"]')?.value,
+                            });
+                            setSetupStatus(payload?.message || 'Test email sent.', 'success');
+                        } catch (error) {
+                            setSetupStatus(error instanceof Error ? error.message : 'Test email failed.', 'error');
+                        } finally {
+                            testSenderButton.disabled = false;
+                        }
+                    });
+                }
+
+                if (refreshVerificationButton) {
+                    refreshVerificationButton.addEventListener('click', async () => {
+                        refreshVerificationButton.disabled = true;
+                        setStatus('Checking DNS verification…');
+                        try {
+                            const payload = await postJson(refreshVerificationButton.dataset.endpoint, {});
+                            setStatus(payload.message || 'Verification checked.', payload.ok ? 'success' : 'error');
+                            if (payload.ok && payload.data?.verified) window.location.reload();
+                        } catch (error) {
+                            setStatus(error.message || 'Could not check verification.', 'error');
+                        } finally {
+                            refreshVerificationButton.disabled = false;
                         }
                     });
                 }

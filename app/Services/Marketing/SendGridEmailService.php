@@ -3,16 +3,17 @@
 namespace App\Services\Marketing;
 
 use App\Services\Marketing\Email\TenantEmailDispatchService;
+use App\Services\Marketing\Messaging\TenantMessagingGateway;
 
 class SendGridEmailService
 {
     public function __construct(
-        protected TenantEmailDispatchService $dispatchService
-    ) {
-    }
+        protected TenantEmailDispatchService $dispatchService,
+        protected TenantMessagingGateway $gateway,
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{
      *   success:bool,
      *   provider:string,
@@ -28,12 +29,15 @@ class SendGridEmailService
      */
     public function sendEmail(string $toEmail, string $subject, string $bodyText, array $options = []): array
     {
-        $result = $this->dispatchService->sendEmail(
-            toEmail: $toEmail,
-            subject: $subject,
-            textBody: $bodyText,
-            options: $options,
-        );
+        $tenantId = is_numeric($options['tenant_id'] ?? null) ? (int) $options['tenant_id'] : 0;
+        $result = $tenantId > 0 && (bool) config('features.tenant_messaging_platform')
+            ? $this->gateway->sendEmail($tenantId, $toEmail, $subject, $bodyText, $options)
+            : $this->dispatchService->sendEmail(
+                toEmail: $toEmail,
+                subject: $subject,
+                textBody: $bodyText,
+                options: $options,
+            );
 
         return [
             'success' => (bool) ($result['success'] ?? false),

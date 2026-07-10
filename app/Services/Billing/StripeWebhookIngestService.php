@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Models\StripeWebhookEvent;
 use App\Models\Tenant;
 use App\Models\TenantCommercialOverride;
+use App\Services\Marketing\Messaging\TenantMessagingUsageService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -17,8 +18,8 @@ class StripeWebhookIngestService
     public function __construct(
         protected LandlordOperatorActionAuditService $auditService,
         protected StripeCommercialFulfillmentService $fulfillmentService,
-    ) {
-    }
+        protected TenantMessagingUsageService $messagingUsage,
+    ) {}
 
     /**
      * @return array{ok:bool,status_code:int,message:string}
@@ -57,6 +58,10 @@ class StripeWebhookIngestService
 
         $object = is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [];
         $metadata = is_array($object['metadata'] ?? null) ? (array) $object['metadata'] : [];
+
+        if (($metadata['purpose'] ?? null) === 'messaging_credit') {
+            return $this->fulfillMessagingCredit($eventId, $eventType, $object, $metadata);
+        }
 
         if (! $this->supportsEventType($eventType)) {
             $receipt = $this->storeReceiptOnce($eventId, $eventType, $livemode, null, null, $event, 'ignored_unsupported');
@@ -292,6 +297,31 @@ class StripeWebhookIngestService
         ], true);
     }
 
+    /** @param array<string,mixed> $object @param array<string,mixed> $metadata */
+    protected function fulfillMessagingCredit(string $eventId, string $eventType, array $object, array $metadata): array
+    {
+        if (! in_array($eventType, ['checkout.session.completed', 'checkout.session.async_payment_succeeded'], true)) {
+            return ['ok' => true, 'status_code' => 200, 'message' => 'ignored'];
+        }
+
+        $tenantId = (int) ($metadata['tenant_id'] ?? 0);
+        $packCents = (int) ($metadata['pack_cents'] ?? 0);
+        $amountTotal = (int) ($object['amount_total'] ?? 0);
+        $paymentStatus = strtolower(trim((string) ($object['payment_status'] ?? '')));
+        $allowedPacks = array_map('intval', (array) config('marketing.messaging.platform.credit_packs_cents', []));
+        if ($tenantId < 1 || ! in_array($packCents, $allowedPacks, true) || $amountTotal !== $packCents || ! in_array($paymentStatus, ['paid', 'no_payment_required'], true)) {
+            return ['ok' => false, 'status_code' => 400, 'message' => 'Invalid messaging credit checkout.'];
+        }
+
+        $this->messagingUsage->fund($tenantId, $packCents * 10000, $eventId, [
+            'stripe_event_id' => $eventId,
+            'stripe_checkout_session_id' => $object['id'] ?? null,
+            'pack_cents' => $packCents,
+        ]);
+
+        return ['ok' => true, 'status_code' => 200, 'message' => 'processed_credit'];
+    }
+
     protected function extractCheckoutSessionId(string $eventType, array $object): ?string
     {
         if ($eventType === 'checkout.session.completed') {
@@ -391,6 +421,7 @@ class StripeWebhookIngestService
             [$key, $value] = array_map('trim', explode('=', $part, 2));
             if ($key === 't') {
                 $timestamp = is_numeric($value) ? (int) $value : null;
+
                 continue;
             }
             if ($key === 'v1' && $value !== '') {

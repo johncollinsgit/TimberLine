@@ -4,6 +4,7 @@ namespace App\Services\Marketing\Email;
 
 use App\Services\Marketing\Email\Providers\CustomEmailProvider;
 use App\Services\Marketing\Email\Providers\SendGridEmailProvider;
+use App\Services\Marketing\Email\Providers\SesTenantEmailProvider;
 use App\Services\Marketing\Email\Providers\ShopifyEmailProvider;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Support\Facades\Log;
@@ -14,10 +15,10 @@ class TenantEmailProviderResolver
         protected TenantEmailSettingsService $settingsService,
         protected TenantResolver $tenantResolver,
         protected SendGridEmailProvider $sendGridProvider,
+        protected SesTenantEmailProvider $sesTenantProvider,
         protected ShopifyEmailProvider $shopifyProvider,
         protected CustomEmailProvider $customProvider,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{
@@ -59,7 +60,7 @@ class TenantEmailProviderResolver
     }
 
     /**
-     * @param array<string,mixed> $storeContext
+     * @param  array<string,mixed>  $storeContext
      * @return array{
      *   tenant_id:?int,
      *   provider:EmailProvider,
@@ -77,6 +78,8 @@ class TenantEmailProviderResolver
     protected function providerForKey(string $providerKey): EmailProvider
     {
         return match ($providerKey) {
+            'ses_tenant' => $this->sesTenantProvider,
+            'sendgrid_subuser' => $this->sendGridProvider,
             'shopify_email' => $this->shopifyProvider,
             'custom' => $this->customProvider,
             default => $this->sendGridProvider,
@@ -84,7 +87,7 @@ class TenantEmailProviderResolver
     }
 
     /**
-     * @param array<string,mixed> $settings
+     * @param  array<string,mixed>  $settings
      * @return array<int,string>
      */
     protected function configurationIssues(string $providerKey, array $settings): array

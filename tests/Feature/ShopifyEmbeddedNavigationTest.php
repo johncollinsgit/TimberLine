@@ -225,9 +225,10 @@ test('embedded navigation order includes messaging when module access is enabled
             $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $items);
             $labels = array_map(static fn (array $item): string => (string) ($item['label'] ?? ''), $items);
 
-            return $keys === ['home', 'subscriptions', 'assistant', 'customers', 'messaging', 'rewards', 'edit_app', 'settings']
+            return $keys === ['home', 'subscriptions', 'assistant', 'customers', 'reporting', 'messaging', 'rewards', 'edit_app', 'settings']
                 && $labels[2] === 'AI Assistant'
-                && $labels[4] === 'Messages';
+                && $labels[4] === 'Marketing Results'
+                && $labels[5] === 'Messages';
         });
 });
 

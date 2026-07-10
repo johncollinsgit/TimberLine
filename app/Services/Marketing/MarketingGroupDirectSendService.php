@@ -17,11 +17,10 @@ class MarketingGroupDirectSendService
         protected MarketingDeliveryTrackingService $deliveryTrackingService,
         protected MarketingIdentityNormalizer $normalizer,
         protected MarketingEmailReadiness $emailReadiness
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{processed:int,sent:int,failed:int,skipped:int,dry_run:int,channel:string}
      */
     public function sendToGroup(
@@ -141,6 +140,11 @@ class MarketingGroupDirectSendService
         ]);
 
         $send = $this->twilioSmsService->sendSms($toPhone, $message, [
+            'tenant_id' => (int) $profile->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-message-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_message_delivery',
+            'source_id' => $delivery->id,
             'dry_run' => $dryRun,
             'sender_key' => $senderKey,
             'status_callback_url' => $this->statusCallbackUrl(),
@@ -210,7 +214,7 @@ class MarketingGroupDirectSendService
             'tenant_id' => $profile->tenant_id,
             'provider' => $resolvedProvider,
             'campaign_type' => 'group_direct_send',
-            'template_key' => 'group_' . $group->id,
+            'template_key' => 'group_'.$group->id,
             'email' => $email,
             'status' => 'sending',
             'raw_payload' => [
@@ -222,7 +226,7 @@ class MarketingGroupDirectSendService
                 'tenant_id' => $profile->tenant_id,
                 'customer_id' => $profile->id,
                 'campaign_type' => 'group_direct_send',
-                'template_key' => 'group_' . $group->id,
+                'template_key' => 'group_'.$group->id,
                 'provider' => $resolvedProvider,
                 'provider_resolution_source' => (string) ($providerContext['resolution_source'] ?? 'none'),
                 'provider_readiness_status' => (string) ($providerContext['readiness_status'] ?? 'error'),
@@ -234,8 +238,12 @@ class MarketingGroupDirectSendService
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $message, [
             'dry_run' => $dryRun,
             'tenant_id' => $profile->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_email_delivery',
+            'source_id' => $delivery->id,
             'campaign_type' => 'group_direct_send',
-            'template_key' => 'group_' . $group->id,
+            'template_key' => 'group_'.$group->id,
             'customer_id' => $profile->id,
             'metadata' => [
                 'marketing_group_id' => $group->id,
@@ -244,7 +252,7 @@ class MarketingGroupDirectSendService
             ],
             'categories' => [
                 'group-direct-send',
-                'group-' . $group->id,
+                'group-'.$group->id,
             ],
             'custom_args' => [
                 'marketing_email_delivery_id' => (string) $delivery->id,

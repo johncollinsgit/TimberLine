@@ -27,11 +27,10 @@ class MarketingSmsExecutionService
         protected MarketingSmsEligibilityService $smsEligibilityService,
         protected MarketingTenantOwnershipService $ownershipService,
         protected MessageClickTrackingService $messageClickTrackingService
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,int>
      */
     public function sendApprovedForCampaign(MarketingCampaign $campaign, array $options = []): array
@@ -136,7 +135,7 @@ class MarketingSmsExecutionService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function retryRecipient(MarketingCampaignRecipient $recipient, array $options = []): array
@@ -148,7 +147,7 @@ class MarketingSmsExecutionService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function sendRecipient(MarketingCampaignRecipient $recipient, array $options = []): array
@@ -326,6 +325,11 @@ class MarketingSmsExecutionService
         ])->save();
 
         $sendResult = $this->twilioSmsService->sendSms($toPhone, $resolvedMessage, [
+            'tenant_id' => (int) $delivery->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-message-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_message_delivery',
+            'source_id' => $delivery->id,
             'dry_run' => $dryRun,
             'sender_key' => $senderKey ?: $this->senderKeyFromRecipient($recipient),
             'status_callback_url' => $this->statusCallbackUrl(),
@@ -494,7 +498,7 @@ class MarketingSmsExecutionService
     }
 
     /**
-     * @param array<string,mixed> $range
+     * @param  array<string,mixed>  $range
      */
     protected function hasRange(array $range): bool
     {

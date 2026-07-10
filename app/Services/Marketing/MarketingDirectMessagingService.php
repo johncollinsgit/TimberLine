@@ -7,7 +7,6 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingMessageGroupMember;
 use App\Models\MarketingProfile;
-use App\Services\Marketing\MessagingEmailReplyAddressService;
 use App\Services\Shopify\ShopifyEmbeddedEmailComposerService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,8 +26,7 @@ class MarketingDirectMessagingService
         protected ShopifyEmbeddedEmailComposerService $emailComposerService,
         protected SmsMessageSafetyService $smsMessageSafetyService,
         protected MessagingEmailReplyAddressService $emailReplyAddressService
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<int,array{
@@ -39,7 +37,7 @@ class MarketingDirectMessagingService
      *   normalized_phone:?string,
      *   source_type:string
      * }> $recipients
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{
      *   processed:int,
      *   sent:int,
@@ -113,6 +111,7 @@ class MarketingDirectMessagingService
                 : $this->resolveEmailRecipient($recipient, $tenantId);
             if (! $resolved['sendable']) {
                 $summary['skipped']++;
+
                 continue;
             }
 
@@ -126,6 +125,7 @@ class MarketingDirectMessagingService
                 || ($channel === 'email' && ! (bool) $profile->accepts_email_marketing)
             )) {
                 $summary['skipped']++;
+
                 continue;
             }
 
@@ -181,6 +181,11 @@ class MarketingDirectMessagingService
                 ])->save();
 
                 $sendResult = $this->twilioSmsService->sendSms($toPhone, $resolvedMessage, [
+                    'tenant_id' => (int) $delivery->tenant_id,
+                    'delivery_id' => $delivery->id,
+                    'idempotency_key' => 'marketing-message-delivery:'.$delivery->id,
+                    'ledger_source_type' => 'marketing_message_delivery',
+                    'source_id' => $delivery->id,
                     'dry_run' => $dryRun,
                     'sender_key' => $senderKey,
                     'status_callback_url' => $this->statusCallbackUrl(),
@@ -241,6 +246,7 @@ class MarketingDirectMessagingService
                 if ((bool) ($sendResult['dry_run'] ?? false)) {
                     $summary['dry_run']++;
                 }
+
                 continue;
             }
 
@@ -330,6 +336,10 @@ class MarketingDirectMessagingService
             $sendResult = $this->sendGridEmailService->sendEmail($toEmail, (string) $subject, $resolvedMessage, [
                 'dry_run' => $dryRun,
                 'tenant_id' => $resolvedTenantId,
+                'delivery_id' => $delivery->id,
+                'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+                'ledger_source_type' => 'marketing_email_delivery',
+                'source_id' => $delivery->id,
                 'campaign_type' => 'direct_message',
                 'template_key' => 'direct_message',
                 'customer_id' => (int) $profile->id,
@@ -511,8 +521,8 @@ class MarketingDirectMessagingService
 
                     return [
                         'profile_id' => $profileId,
-                        'name' => trim((string) ($profile->first_name . ' ' . $profile->last_name)) !== ''
-                            ? trim((string) ($profile->first_name . ' ' . $profile->last_name))
+                        'name' => trim((string) ($profile->first_name.' '.$profile->last_name)) !== ''
+                            ? trim((string) ($profile->first_name.' '.$profile->last_name))
                             : null,
                         'email' => $this->nullableString($profile->email),
                         'phone' => $this->nullableString($profile->phone ?: $profile->normalized_phone),
@@ -541,8 +551,8 @@ class MarketingDirectMessagingService
                     if ($profile instanceof MarketingProfile) {
                         return [
                             'profile_id' => $profileId,
-                            'name' => trim((string) ($profile->first_name . ' ' . $profile->last_name)) !== ''
-                                ? trim((string) ($profile->first_name . ' ' . $profile->last_name))
+                            'name' => trim((string) ($profile->first_name.' '.$profile->last_name)) !== ''
+                                ? trim((string) ($profile->first_name.' '.$profile->last_name))
                                 : null,
                             'email' => $this->nullableString($profile->email),
                             'phone' => $this->nullableString($profile->phone ?: $profile->normalized_phone),
@@ -569,17 +579,17 @@ class MarketingDirectMessagingService
             ->unique(function (array $member): string {
                 $profileId = isset($member['profile_id']) ? (int) $member['profile_id'] : 0;
                 if ($profileId > 0) {
-                    return 'profile:' . $profileId;
+                    return 'profile:'.$profileId;
                 }
 
                 $normalizedPhone = trim((string) ($member['normalized_phone'] ?? ''));
                 if ($normalizedPhone !== '') {
-                    return 'phone:' . $normalizedPhone;
+                    return 'phone:'.$normalizedPhone;
                 }
 
                 $email = strtolower(trim((string) ($member['email'] ?? '')));
 
-                return 'email:' . $email;
+                return 'email:'.$email;
             })
             ->values();
 

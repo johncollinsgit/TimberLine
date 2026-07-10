@@ -274,12 +274,12 @@ return [
             'module_key' => 'subscriptions',
         ],
         'subscriptions.candle_club' => [
-            'display_name' => 'Candle Club',
-            'description' => 'Configure Candle Club commitments, pauses, gifts, swaps, cancellations, and rewards.',
+            'display_name' => 'Subscription plan rules',
+            'description' => 'Configure subscription commitments, pauses, gifts, swaps, cancellations, and rewards.',
             'module_key' => 'subscriptions',
         ],
         'subscriptions.voting' => [
-            'display_name' => 'Candle Club voting',
+            'display_name' => 'Subscription voting',
             'description' => 'Operate one-vote-per-active-contract polls across app, storefront, and verified public links.',
             'module_key' => 'subscriptions',
         ],
@@ -308,7 +308,7 @@ return [
             'market_state' => 'INTERNAL_ONLY',
             'channels' => ['shopify'],
             'classification' => 'shopify-only',
-            'included_in_plans' => ['starter', 'growth', 'pro'],
+            'included_in_plans' => ['base', 'starter', 'growth', 'pro'],
             'default_enabled' => true,
             'default_setup_status' => 'configured',
             'dependencies' => [],
@@ -353,6 +353,22 @@ return [
             'setup_effort' => 'light',
             'required_integrations' => [],
             'mobile_relevance' => 'mobile_ready',
+            'buyer_setup' => [
+                'outcome' => 'Keep service jobs, customers, materials, photos, and vehicles in one shared workspace.',
+                'best_for' => 'Service businesses that need a simple operating hub without depending on Shopify.',
+                'what_you_need' => [
+                    'A list of the jobs, addresses, or service requests you want to track first.',
+                    'A team owner who can confirm job statuses and daily follow-up habits.',
+                ],
+                'next_step' => 'Start by adding the first active jobs and assigning who owns each next step.',
+                'setup_steps' => [
+                    'Confirm the customer records you want to manage.',
+                    'Add or import the first jobs and addresses.',
+                    'Review materials, photos, and vehicle tracking with the people doing the work.',
+                ],
+                'primary_action' => 'Open field service',
+                'help_text' => 'This module can be used as a standalone workspace for service teams.',
+            ],
             'capabilities' => [
                 'field_service.workspace',
                 'field_service.jobs',
@@ -406,6 +422,22 @@ return [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'upgrade_plan',
+            'buyer_setup' => [
+                'outcome' => 'Give customers a clear loyalty program and keep reward rules in one place.',
+                'best_for' => 'Stores that want repeat customers to earn, redeem, and understand rewards without manual tracking.',
+                'what_you_need' => [
+                    'A decision on how customers earn points or credit.',
+                    'A decision on the reward values customers can redeem.',
+                ],
+                'next_step' => 'Review the reward rules you want customers to see, then enable the module on an eligible plan.',
+                'setup_steps' => [
+                    'Confirm earn and redeem rules.',
+                    'Review customer-facing reward language.',
+                    'Test one customer journey before announcing the program.',
+                ],
+                'primary_action' => 'Review rewards',
+                'help_text' => 'Rewards setup should be simple enough for a business owner to approve before launch.',
+            ],
             'capabilities' => ['rewards.program'],
         ],
         'birthdays' => [
@@ -422,6 +454,22 @@ return [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'upgrade_plan',
+            'buyer_setup' => [
+                'outcome' => 'Turn birthdays and lifecycle moments into timely customer follow-up.',
+                'best_for' => 'Teams that want automatic birthday or lifecycle nudges tied to customer records and rewards.',
+                'what_you_need' => [
+                    'Customer birthday or lifecycle data where available.',
+                    'A decision on the offer or message customers should receive.',
+                ],
+                'next_step' => 'Confirm the lifecycle moment you want to start with and connect it to the right customer message.',
+                'setup_steps' => [
+                    'Review the customer date fields available in the workspace.',
+                    'Choose the birthday or lifecycle message.',
+                    'Test the workflow with a small customer sample.',
+                ],
+                'primary_action' => 'Plan lifecycle setup',
+                'help_text' => 'Start with one simple lifecycle moment before adding more automation.',
+            ],
             'capabilities' => ['birthdays.lifecycle'],
         ],
         'reviews' => [
@@ -470,6 +518,22 @@ return [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'upgrade_plan',
+            'buyer_setup' => [
+                'outcome' => 'See what customers save for later and turn that interest into follow-up.',
+                'best_for' => 'Stores that want a practical way to recover saved-product interest without guessing.',
+                'what_you_need' => [
+                    'Wishlist or saved-item data from your storefront or import path.',
+                    'A simple outreach plan for products customers saved.',
+                ],
+                'next_step' => 'Review saved-item activity, then decide which customers should receive the first follow-up.',
+                'setup_steps' => [
+                    'Confirm wishlist data is flowing or imported.',
+                    'Review the most saved products and customer candidates.',
+                    'Prepare one small outreach batch before scaling up.',
+                ],
+                'primary_action' => 'Review wishlist',
+                'help_text' => 'Wishlist follow-up works best when the first campaign is small and easy to verify.',
+            ],
             'capabilities' => ['wishlist.manage'],
         ],
         'referrals' => [
@@ -534,6 +598,22 @@ return [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'upgrade_plan',
+            'buyer_setup' => [
+                'outcome' => 'Build focused customer campaigns from the audiences already in the workspace.',
+                'best_for' => 'Teams that want planned customer outreach without juggling lists across multiple tools.',
+                'what_you_need' => [
+                    'A customer segment or audience idea.',
+                    'A message goal, such as winback, launch, review request, or lifecycle follow-up.',
+                ],
+                'next_step' => 'Choose the first audience and draft the campaign goal before sending anything.',
+                'setup_steps' => [
+                    'Pick the customer audience.',
+                    'Draft the message and call to action.',
+                    'Review send readiness and approval rules.',
+                ],
+                'primary_action' => 'Plan campaign',
+                'help_text' => 'Campaigns should stay human-reviewed until the buyer is confident in the workflow.',
+            ],
             'capabilities' => ['campaigns.orchestration'],
         ],
         'reporting' => [
@@ -566,6 +646,22 @@ return [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'upgrade_plan',
+            'buyer_setup' => [
+                'outcome' => 'Give operators deeper troubleshooting and export tools when something needs investigation.',
+                'best_for' => 'Teams that need clearer answers around data quality, sync health, or support questions.',
+                'what_you_need' => [
+                    'A workspace owner who can review diagnostics.',
+                    'A clear question or issue you want to investigate first.',
+                ],
+                'next_step' => 'Use diagnostics when the team needs proof, exports, or a clear support handoff.',
+                'setup_steps' => [
+                    'Confirm who is allowed to review diagnostic data.',
+                    'Open the first report or export needed for the issue.',
+                    'Document the result before making operational changes.',
+                ],
+                'primary_action' => 'Review diagnostics',
+                'help_text' => 'This module is for support clarity and operational confidence, not daily customer work.',
+            ],
             'capabilities' => ['diagnostics.advanced'],
         ],
         'integrations' => [
@@ -738,10 +834,26 @@ return [
             'included_in_plans' => [],
             'default_enabled' => false,
             'default_setup_status' => 'configured',
-            'dependencies' => ['integrations', 'customers'],
+            'dependencies' => ['integrations', 'customers', 'messaging'],
             'billing_mode' => 'add_on',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'add_module',
+            'buyer_setup' => [
+                'outcome' => 'Send customer text messages through a tenant-controlled SMS provider setup.',
+                'best_for' => 'Teams that need timely customer reminders, lifecycle nudges, or operational messages by text.',
+                'what_you_need' => [
+                    'A sending provider or approval to use the configured provider.',
+                    'A clear opt-in and compliance process for customer phone numbers.',
+                ],
+                'next_step' => 'Confirm SMS readiness and decide which message type should be enabled first.',
+                'setup_steps' => [
+                    'Review provider and sender readiness.',
+                    'Confirm opt-in rules and customer phone data.',
+                    'Test one internal or low-risk message before expanding.',
+                ],
+                'primary_action' => 'Configure SMS',
+                'help_text' => 'SMS should be enabled carefully because customer consent and sender setup matter.',
+            ],
             'capabilities' => ['sms.channel'],
         ],
         'mobile_connection' => [
@@ -774,6 +886,22 @@ return [
             'billing_mode' => 'included',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'upgrade_plan',
+            'buyer_setup' => [
+                'outcome' => 'Use AI to surface opportunities and prepare review-ready campaign drafts.',
+                'best_for' => 'Business owners who want help spotting useful next steps without giving up approval control.',
+                'what_you_need' => [
+                    'Customer and activity data in the workspace.',
+                    'A human reviewer who approves recommendations before action.',
+                ],
+                'next_step' => 'Start with opportunities, then review any draft before it becomes customer-facing.',
+                'setup_steps' => [
+                    'Confirm the workspace has enough customer context.',
+                    'Review top opportunities for accuracy.',
+                    'Approve, edit, or reject draft campaign ideas before use.',
+                ],
+                'primary_action' => 'Review AI Assistant',
+                'help_text' => 'AI suggestions are advisory and should stay human-reviewed.',
+            ],
             'capabilities' => [
                 'ai.assistant',
                 'ai.start_here',
@@ -793,10 +921,26 @@ return [
             'included_in_plans' => [],
             'default_enabled' => false,
             'default_setup_status' => 'not_started',
-            'dependencies' => ['email', 'campaigns'],
+            'dependencies' => ['email', 'campaigns', 'messaging'],
             'billing_mode' => 'add_on',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'add_module',
+            'buyer_setup' => [
+                'outcome' => 'Prepare higher-volume marketing email while keeping send controls clear.',
+                'best_for' => 'Teams that are ready to move from occasional messages into planned marketing email.',
+                'what_you_need' => [
+                    'A ready email provider or sending plan.',
+                    'Audience rules and approval for marketing sends.',
+                ],
+                'next_step' => 'Confirm email readiness and choose the first campaign type before enabling volume sends.',
+                'setup_steps' => [
+                    'Review provider, sender, and audience readiness.',
+                    'Define who approves marketing email.',
+                    'Send a small, reviewed campaign before scaling volume.',
+                ],
+                'primary_action' => 'Plan email setup',
+                'help_text' => 'Bulk email should stay controlled until sender reputation and audience rules are clear.',
+            ],
             'capabilities' => ['bulk_email.campaigns'],
         ],
         'messaging' => [
@@ -804,7 +948,7 @@ return [
             'description' => 'Operational workspace for direct customer and group messaging.',
             'status' => 'beta',
             'market_state' => 'SAFE_TO_MARKET',
-            'channels' => ['shopify'],
+            'channels' => ['both'],
             'classification' => 'add-on',
             'included_in_plans' => [],
             'default_enabled' => false,
@@ -813,11 +957,27 @@ return [
             'billing_mode' => 'add_on',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'add_module',
+            'buyer_setup' => [
+                'outcome' => 'Keep direct customer and group conversations connected to the workspace.',
+                'best_for' => 'Teams that want customer communication history and follow-up in one place.',
+                'what_you_need' => [
+                    'A communication owner or team inbox process.',
+                    'A decision on which customers or groups should be messaged first.',
+                ],
+                'next_step' => 'Set up the first messaging workflow and confirm who responds to incoming replies.',
+                'setup_steps' => [
+                    'Confirm the team owner for messages.',
+                    'Review the first audience or group.',
+                    'Send a small test message and verify the response path.',
+                ],
+                'primary_action' => 'Set up messaging',
+                'help_text' => 'Messaging works best when ownership is clear before customers start replying.',
+            ],
             'capabilities' => ['messaging.workspace', 'messaging.analytics'],
         ],
         'subscriptions' => [
             'display_name' => 'Subscriptions',
-            'description' => 'Shopify-native recurring subscriptions with Recharge migration, billing operations, Candle Club rules, and verified voting.',
+            'description' => 'Shopify-native recurring subscriptions with migration, billing operations, plan rules, and verified voting.',
             'status' => 'beta',
             'market_state' => 'SAFE_TO_MARKET',
             'channels' => ['shopify'],
@@ -829,6 +989,22 @@ return [
             'billing_mode' => 'add_on',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'add_module',
+            'buyer_setup' => [
+                'outcome' => 'Run recurring subscriptions with migration support, billing operations, customer actions, and voting when needed.',
+                'best_for' => 'Shopify businesses that need recurring orders without leaving subscription operations scattered across tools.',
+                'what_you_need' => [
+                    'Shopify access for the store that will own subscription contracts.',
+                    'A plan for migration, billing rules, and customer-facing subscription policies.',
+                ],
+                'next_step' => 'Review the subscription rules and migration plan before enabling customer-facing workflows.',
+                'setup_steps' => [
+                    'Confirm Shopify subscription prerequisites.',
+                    'Review migration and billing operation needs.',
+                    'Test plan rules, customer actions, and voting before launch.',
+                ],
+                'primary_action' => 'Plan subscriptions',
+                'help_text' => 'Tenant-specific subscription names and examples can be configured without changing the generic module.',
+            ],
             'capabilities' => [
                 'subscriptions.manage',
                 'subscriptions.migration',
@@ -850,6 +1026,22 @@ return [
             'billing_mode' => 'add_on',
             'visibility' => ['public_site' => true, 'app_store' => true],
             'cta_routing' => 'add_module',
+            'buyer_setup' => [
+                'outcome' => 'Add another store, sales channel, or operating channel without forking the workspace.',
+                'best_for' => 'Businesses expanding beyond the first connected storefront or operating channel.',
+                'what_you_need' => [
+                    'The channel you want to add and who owns it.',
+                    'A decision on whether data should be synced, imported, or managed manually first.',
+                ],
+                'next_step' => 'Confirm the channel and owner, then decide whether setup starts with sync or manual intake.',
+                'setup_steps' => [
+                    'Identify the new channel and access owner.',
+                    'Confirm what customer or order data should be shared.',
+                    'Start with the safest import or sync path for that channel.',
+                ],
+                'primary_action' => 'Add channel',
+                'help_text' => 'Additional channels should expand the same workspace instead of creating a separate operating island.',
+            ],
             'capabilities' => ['channels.additional'],
         ],
         'future_niche_modules' => [
@@ -1005,8 +1197,8 @@ return [
         'sms' => [
             'display_name' => 'SMS',
             'label' => 'SMS',
-            'modules' => ['sms'],
-            'legacy_grants' => ['sms'],
+            'modules' => ['messaging', 'sms'],
+            'legacy_grants' => ['messaging', 'sms'],
             'billing_mode' => 'add_on',
         ],
         'messaging' => [
@@ -1026,8 +1218,8 @@ return [
         'bulk_email_marketing' => [
             'display_name' => 'Bulk Email Marketing',
             'label' => 'Bulk Marketing Email',
-            'modules' => ['bulk_email_marketing'],
-            'legacy_grants' => ['email'],
+            'modules' => ['messaging', 'email', 'campaigns', 'bulk_email_marketing'],
+            'legacy_grants' => ['messaging', 'email'],
             'billing_mode' => 'add_on',
         ],
         'subscriptions' => [

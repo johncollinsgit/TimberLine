@@ -153,6 +153,28 @@ return [
     ],
 
     'messaging' => [
+        'platform' => [
+            'legacy_tenant_ids' => array_values(array_filter(array_map(
+                static fn (string $value): int => (int) trim($value),
+                explode(',', (string) env('MARKETING_MESSAGING_LEGACY_TENANT_IDS', '1'))
+            ), static fn (int $value): bool => $value > 0)),
+            'default_email_provider' => strtolower(trim((string) env('MARKETING_MESSAGING_DEFAULT_EMAIL_PROVIDER', 'ses_tenant'))),
+            'pricing_version' => (string) env('MARKETING_MESSAGING_PRICING_VERSION', '2026-07-10-v1'),
+            'credit_packs_cents' => [2500, 5000, 10000],
+            'packages' => [
+                'messaging' => ['monthly_cents' => 1999, 'included_email_messages' => 5000],
+                'sms' => ['monthly_cents' => 9900, 'setup_cents' => 9900, 'included_sms_segments' => 1000],
+                'bulk_email_marketing' => ['monthly_cents' => 12900, 'included_email_messages' => 50000],
+            ],
+            'buyer_rates_micros' => ['email' => 1500, 'sms' => 25000, 'mms' => 60000],
+            'provider_cost_micros' => [
+                'ses_tenant' => ['email' => 175],
+                'sendgrid_subuser' => ['email' => 1100],
+                'sendgrid' => ['email' => 1100],
+                'twilio' => ['sms' => 13300, 'mms' => 32000],
+            ],
+            'provider_cost_ceiling_micros' => ['email' => 1200, 'sms' => 15000, 'mms' => 40000],
+        ],
         'queue' => (string) env('MARKETING_MESSAGING_QUEUE', (string) env('DB_QUEUE', (string) env('REDIS_QUEUE', 'default'))),
         'dispatch_batch_size' => max(25, (int) env('MARKETING_MESSAGING_DISPATCH_BATCH_SIZE', 250)),
         'dispatch_interval_seconds' => max(1, (int) env('MARKETING_MESSAGING_DISPATCH_INTERVAL_SECONDS', 2)),
@@ -186,6 +208,9 @@ return [
             'allow_start_resubscribe' => (bool) env('MARKETING_MESSAGING_RESPONSES_ALLOW_START_RESUBSCRIBE', false),
             'email_inbound_domain' => env('MARKETING_MESSAGING_RESPONSES_EMAIL_INBOUND_DOMAIN'),
             'sendgrid_inbound_token' => env('MARKETING_MESSAGING_RESPONSES_SENDGRID_INBOUND_TOKEN'),
+            'verify_sendgrid_event_signature' => (bool) env('SENDGRID_VERIFY_EVENT_WEBHOOK_SIGNATURE', false),
+            'sendgrid_event_public_key' => env('SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY'),
+            'verify_ses_sns_signature' => (bool) env('SES_VERIFY_SNS_SIGNATURE', false),
         ],
     ],
 

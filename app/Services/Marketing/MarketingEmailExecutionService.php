@@ -16,11 +16,10 @@ class MarketingEmailExecutionService
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingEmailReadiness $emailReadiness,
         protected MarketingTenantOwnershipService $ownershipService
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,int>
      */
     public function sendApprovedForCampaign(MarketingCampaign $campaign, array $options = []): array
@@ -111,7 +110,7 @@ class MarketingEmailExecutionService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function retryRecipient(MarketingCampaignRecipient $recipient, array $options = []): array
@@ -123,7 +122,7 @@ class MarketingEmailExecutionService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function sendRecipient(MarketingCampaignRecipient $recipient, array $options = []): array
@@ -283,6 +282,10 @@ class MarketingEmailExecutionService
         $send = $this->sendGridEmailService->sendEmail($email, $subject, $rendered, [
             'dry_run' => $dryRun,
             'tenant_id' => $dispatchTenantId,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_email_delivery',
+            'source_id' => $delivery->id,
             'store_context' => $storeContext,
             'store_key' => $storeKey,
             'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
@@ -300,7 +303,7 @@ class MarketingEmailExecutionService
             ],
             'categories' => [
                 'marketing-campaign',
-                'campaign-' . $campaign->id,
+                'campaign-'.$campaign->id,
             ],
             'custom_args' => [
                 'marketing_email_delivery_id' => (string) $delivery->id,

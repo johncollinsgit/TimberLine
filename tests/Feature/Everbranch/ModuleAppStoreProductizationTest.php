@@ -59,7 +59,45 @@ test('tenant module store payload exposes product grade metadata for visible mod
         ->and($sms['pricing_impact_label'])->toContain('checkout is not active here')
         ->and($sms['entitlement_requirement_label'])->toContain('Requires add-on access')
         ->and($sms['tenant_visibility_label'])->toBe('Visible in tenant App Store')
-        ->and($sms['mobile_relevance_label'])->toBe('Not mobile-specific');
+        ->and($sms['mobile_relevance_label'])->toBe('Not mobile-specific')
+        ->and($sms['buyer_setup'])->toMatchArray([
+            'outcome' => 'Send customer text messages through a tenant-controlled SMS provider setup.',
+            'primary_action' => 'Configure SMS',
+        ])
+        ->and($sms['buyer_setup']['what_you_need'] ?? [])->not->toBeEmpty()
+        ->and($sms['buyer_setup']['setup_steps'] ?? [])->not->toBeEmpty();
+});
+
+test('app store visible safe to market modules define buyer setup copy in config', function (): void {
+    $requiredKeys = ['outcome', 'best_for', 'what_you_need', 'next_step', 'setup_steps', 'primary_action', 'help_text'];
+
+    foreach ((array) config('module_catalog.modules', []) as $moduleKey => $definition) {
+        if (! is_array($definition)) {
+            continue;
+        }
+
+        $isAppStoreVisible = (bool) data_get($definition, 'visibility.app_store', false);
+        $isSafeToMarket = strtoupper(trim((string) ($definition['market_state'] ?? ''))) === 'SAFE_TO_MARKET';
+        $isLiveOrBeta = in_array(strtolower(trim((string) ($definition['status'] ?? ''))), ['live', 'beta'], true);
+
+        if (! ($isAppStoreVisible && $isSafeToMarket && $isLiveOrBeta)) {
+            continue;
+        }
+
+        $buyerSetup = is_array($definition['buyer_setup'] ?? null) ? (array) $definition['buyer_setup'] : [];
+
+        foreach ($requiredKeys as $key) {
+            expect($buyerSetup, "Missing buyer_setup.{$key} for {$moduleKey}")->toHaveKey($key);
+        }
+
+        expect(trim((string) ($buyerSetup['outcome'] ?? '')), "Empty buyer_setup.outcome for {$moduleKey}")->not->toBe('')
+            ->and(trim((string) ($buyerSetup['best_for'] ?? '')), "Empty buyer_setup.best_for for {$moduleKey}")->not->toBe('')
+            ->and(trim((string) ($buyerSetup['next_step'] ?? '')), "Empty buyer_setup.next_step for {$moduleKey}")->not->toBe('')
+            ->and(trim((string) ($buyerSetup['primary_action'] ?? '')), "Empty buyer_setup.primary_action for {$moduleKey}")->not->toBe('')
+            ->and(trim((string) ($buyerSetup['help_text'] ?? '')), "Empty buyer_setup.help_text for {$moduleKey}")->not->toBe('')
+            ->and((array) ($buyerSetup['what_you_need'] ?? []), "Empty buyer_setup.what_you_need for {$moduleKey}")->not->toBeEmpty()
+            ->and((array) ($buyerSetup['setup_steps'] ?? []), "Empty buyer_setup.setup_steps for {$moduleKey}")->not->toBeEmpty();
+    }
 });
 
 test('tenant app store hides draft internal unsafe and deprecated modules', function (): void {
@@ -117,13 +155,18 @@ test('tenant module store renders metadata as guidance without billing checkout 
         ->get(route('marketing.modules'))
         ->assertOk()
         ->assertSeeText('Workspace feature catalog')
-        ->assertSeeText('setup effort')
-        ->assertSeeText('Everbranch-assisted setup')
+        ->assertSeeText('What this does')
+        ->assertSeeText('Best next step')
+        ->assertSeeText('What you need before setup')
+        ->assertSeeText('Setup steps')
+        ->assertSeeText('Send customer text messages through a tenant-controlled SMS provider setup.')
+        ->assertSeeText('Plan and setup details')
         ->assertSeeText('Pricing: Add-on pricing label only; checkout is not active here')
-        ->assertSeeText('Access: Requires add-on access or a request')
-        ->assertSeeText('Mobile: Not mobile-specific')
         ->assertDontSeeText('Checkout')
-        ->assertDontSeeText('Pay now');
+        ->assertDontSeeText('Pay now')
+        ->assertDontSeeText('Candle Club')
+        ->assertDontSeeText('Candle Cash')
+        ->assertDontSeeText('Modern Forestry');
 });
 
 test('module interests remain separate from installed or entitled modules', function (): void {
@@ -156,11 +199,16 @@ test('shopify embedded app store renders safe metadata and keeps billing languag
     $this->get(route('shopify.app.store', retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSeeText('Checkout not active here')
-        ->assertSeeText('Everbranch-assisted setup')
+        ->assertSeeText('What this does')
+        ->assertSeeText('Best next step')
+        ->assertSeeText('What you need before setup')
+        ->assertSeeText('Send customer text messages through a tenant-controlled SMS provider setup.')
         ->assertSeeText('Pricing: Add-on pricing label only; checkout is not active here')
-        ->assertSeeText('Mobile: Not mobile-specific')
         ->assertSeeText('SMS')
-        ->assertDontSeeText('Future Niche Modules');
+        ->assertDontSeeText('Future Niche Modules')
+        ->assertDontSeeText('Candle Club')
+        ->assertDontSeeText('Candle Cash')
+        ->assertDontSeeText('Modern Forestry');
 });
 
 test('landlord commercial module table shows internal visibility context read only', function (): void {

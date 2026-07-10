@@ -12,8 +12,7 @@ class MarketingWishlistOutreachService
     public function __construct(
         protected MarketingWishlistDiscountService $discountService,
         protected TwilioSmsService $twilioSmsService
-    ) {
-    }
+    ) {}
 
     public function prepare(MarketingProfileWishlistItem $item, array $payload, ?int $actorId = null): MarketingWishlistOutreachQueue
     {
@@ -39,7 +38,7 @@ class MarketingWishlistOutreachService
             ->first();
 
         $offerCode = $this->offerCode($item, $offerType, $existing?->offer_code);
-        $queue = $existing ?: new MarketingWishlistOutreachQueue();
+        $queue = $existing ?: new MarketingWishlistOutreachQueue;
         $queue->fill([
             'tenant_id' => $item->tenant_id,
             'marketing_profile_id' => $item->marketing_profile_id,
@@ -72,7 +71,7 @@ class MarketingWishlistOutreachService
     }
 
     /**
-     * @param array<string,mixed> $overrides
+     * @param  array<string,mixed>  $overrides
      * @return array{ok:bool,queue:MarketingWishlistOutreachQueue,error:?string}
      */
     public function send(MarketingWishlistOutreachQueue $queue, array $overrides = [], ?int $actorId = null): array
@@ -138,6 +137,10 @@ class MarketingWishlistOutreachService
         }
 
         $result = $this->twilioSmsService->sendSms($phone, $messageBody, [
+            'tenant_id' => (int) $queue->tenant_id,
+            'idempotency_key' => 'wishlist-outreach:'.$queue->id,
+            'ledger_source_type' => 'marketing_wishlist_outreach_queue',
+            'source_id' => $queue->id,
             'status_callback_url' => $this->statusCallbackUrl(),
         ]);
 
@@ -173,7 +176,7 @@ class MarketingWishlistOutreachService
 
         $prefix = $offerType === 'percent_off' ? 'WLPCT' : 'WLOFF';
 
-        return $prefix . '-' . $item->id . '-' . Str::upper(Str::random(6));
+        return $prefix.'-'.$item->id.'-'.Str::upper(Str::random(6));
     }
 
     protected function defaultMessage(
@@ -189,9 +192,9 @@ class MarketingWishlistOutreachService
         $code = trim((string) ($offerCode ?? ''));
 
         return trim(implode(' ', array_filter([
-            'Modern Forestry noticed you saved ' . $productTitle . '.',
-            'Here is ' . $offerLabel . ' just for you.',
-            $code !== '' ? 'Use code ' . $code . ' at checkout.' : null,
+            'Modern Forestry noticed you saved '.$productTitle.'.',
+            'Here is '.$offerLabel.' just for you.',
+            $code !== '' ? 'Use code '.$code.' at checkout.' : null,
             $productUrl !== '' ? $productUrl : null,
         ])));
     }
@@ -199,8 +202,8 @@ class MarketingWishlistOutreachService
     protected function offerLabel(string $offerType, float $offerValue): string
     {
         return $offerType === 'percent_off'
-            ? rtrim(rtrim(number_format($offerValue, 2, '.', ''), '0'), '.') . '% off'
-            : '$' . number_format($offerValue, 2) . ' off';
+            ? rtrim(rtrim(number_format($offerValue, 2, '.', ''), '0'), '.').'% off'
+            : '$'.number_format($offerValue, 2).' off';
     }
 
     protected function statusCallbackUrl(): string
