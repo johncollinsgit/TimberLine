@@ -18,6 +18,8 @@ Tenant support is a core mobile service, not a paid Branch. `/workspaces/{tenant
 
 This folder now owns two deliberately separate surfaces. The `ModernForestryMobile*` services feed the Modern Forestry customer shopping app. `TenantMobileModuleRegistry` feeds the cross-tenant Everbranch work app at `../everbranch-mobile`; do not reuse customer commerce session assumptions for tenant users.
 
+The cross-tenant client is published privately at `johncollinsgit/everbranch-mobile`. This backend remains authoritative for authentication, membership and landlord authorization, branding, dashboard/reporting aggregates, support tickets, Branch manifests, and entitlements.
+
 Everbranch mobile entries fail closed. A module must be enabled by `TenantModuleAccessResolver` and declare `mobile.status` as `ready` or `beta` in `config/module_catalog.php`. Its declaration includes renderer, entry screen, contract version, minimum app version, navigation placement/icon, supported actions, and a stable purchase key when billable. Branches additionally requires `visibility.mobile_store=true`.
 
 The registry accepts finite, versioned primitives only: dashboard, metrics, list/search, detail, form, action sheet, tabs, notice, empty, and error states. Providers may supply data/layout, never executable JavaScript or arbitrary remote UI. Existing renderer contracts can publish newly entitled modules without a binary release; new primitives require a client release and higher `min_app_version`.

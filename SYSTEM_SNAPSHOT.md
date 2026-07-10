@@ -1037,7 +1037,7 @@ Scope guard:
 - Shopify remains an important arm, not the only future arm.
 ## Everbranch Mobile Platform Foundation (2026-07-10)
 
-- A separate bundled Capacitor app now exists at `../everbranch-mobile` for iOS and Android under `com.everbranch.app`; the Modern Forestry consumer SwiftUI app remains unchanged.
+- A separate bundled Capacitor app now exists at `../everbranch-mobile` for iOS and Android under `com.everbranch.app`, with canonical private source at `johncollinsgit/everbranch-mobile`; the Modern Forestry consumer SwiftUI app remains unchanged.
 - `/api/mobile/v1` provides membership-scoped workspace bootstrap, module screens/actions, global search, Branches, device sessions, and guarded hosted-billing handoff. Browser Fortify login exchanges a replay-protected, five-minute S256 PKCE code for an expiring/revocable Sanctum device token.
 - `TenantMobileModuleRegistry` exposes only finite contract-v1 primitives and only catalog entries marked mobile ready/beta that are enabled by the canonical resolver. Customers, Field Service, Messaging, and Reporting form the pilot; Field Service camera photos are live, tenant-scoped uploads.
 - Branches uses canonical module-store services. Canonical plans/add-ons now carry stable purchase keys, pricing, and Stripe lookup metadata; the Stripe webhook also normalizes verified subscription lifecycle events into tenant-scoped purchase rows while retaining existing fulfillment/audit behavior.
