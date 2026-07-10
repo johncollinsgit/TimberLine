@@ -3,12 +3,15 @@
 use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobPhoto;
+use App\Models\LandlordOperatorAction;
 use App\Models\MarketingProfile;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
 use App\Models\MobileAuthorizationCode;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantBillingSubscription;
+use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -389,6 +392,62 @@ test('mobile customer work and preferences endpoints stay membership scoped', fu
     ])->assertCreated();
     expect(EverbranchMobilePushDevice::query()->where('user_id', $user->id)->count())->toBe(1)
         ->and(EverbranchMobilePushDevice::query()->first()?->device_token)->toBe('operator-apns-token');
+});
+
+test('mobile branding is displayed for the tenant and only workspace admins can update it', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Branded Workspace', 'slug' => 'branded-workspace']);
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    TenantDiscoveryProfile::query()->create(['tenant_id' => $tenant->id, 'primary_brand_name' => 'Branded Co', 'primary_logo_url' => 'https://cdn.example.com/brand.png', 'is_active' => true]);
+    $manager = User::factory()->create(['role' => 'manager', 'is_active' => true, 'email_verified_at' => now()]);
+    $manager->tenants()->attach($tenant->id, ['role' => 'manager']);
+    Sanctum::actingAs($manager, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/branded-workspace/bootstrap')
+        ->assertOk()
+        ->assertJsonPath('branding.display_name', 'Branded Co')
+        ->assertJsonPath('branding.logo_url', 'https://cdn.example.com/brand.png')
+        ->assertJsonPath('branding.can_manage', false)
+        ->assertJsonStructure(['workspace_insights' => ['users', 'active_users_30d', 'active_branches', 'work_activity_30d']]);
+    $this->patchJson('/api/mobile/v1/workspaces/branded-workspace/branding', ['display_name' => 'Nope', 'logo_url' => null])->assertForbidden();
+
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'owner']);
+    Sanctum::actingAs($admin, ['mobile:read', 'mobile:write']);
+    $this->patchJson('/api/mobile/v1/workspaces/branded-workspace/branding', ['display_name' => 'New Brand', 'logo_url' => null])
+        ->assertOk()->assertJsonPath('branding.display_name', 'New Brand')->assertJsonPath('branding.can_manage', true);
+
+    expect(TenantDiscoveryProfile::withoutGlobalScopes()->where('tenant_id', $tenant->id)->value('primary_brand_name'))->toBe('New Brand')
+        ->and(LandlordOperatorAction::query()->where('tenant_id', $tenant->id)->where('action_type', 'tenant.mobile_branding.updated')->exists())->toBeTrue();
+});
+
+test('authorized landlord home reports revenue tenant mix growth and tenant operations', function (): void {
+    config()->set('tenancy.landlord.operator_roles', ['platform_admin']);
+    config()->set('tenancy.landlord.operator_emails', []);
+    $retail = Tenant::query()->create(['name' => 'Retail Tenant', 'slug' => 'retail-tenant']);
+    $trade = Tenant::query()->create(['name' => 'Trade Tenant', 'slug' => 'trade-tenant']);
+    TenantAccessProfile::query()->create(['tenant_id' => $retail->id, 'plan_key' => 'base', 'operating_mode' => 'shopify', 'source' => 'test']);
+    TenantAccessProfile::query()->create(['tenant_id' => $trade->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    TenantBillingSubscription::query()->create([
+        'tenant_id' => $retail->id,
+        'provider' => 'stripe',
+        'provider_subscription_reference' => 'sub_mobile_landlord',
+        'purchase_key' => (string) data_get(config('module_catalog.plans.base'), 'purchase_key', 'plan.base'),
+        'status' => 'active',
+    ]);
+    $operator = User::factory()->create(['role' => 'platform_admin', 'is_active' => true, 'email_verified_at' => now()]);
+    Sanctum::actingAs($operator, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/landlord/bootstrap')
+        ->assertOk()
+        ->assertJsonPath('metrics.1.label', 'Tenants')
+        ->assertJsonPath('metrics.1.value', 2)
+        ->assertJsonStructure(['metrics', 'tenant_types', 'tenant_growth', 'activity', 'recent_tenants', 'recent_activity']);
+    $this->getJson('/api/mobile/v1/landlord/tenants?q=Retail')
+        ->assertOk()->assertJsonPath('tenants.0.name', 'Retail Tenant')
+        ->assertJsonStructure(['tenants' => [['users_count', 'active', 'activity_30d']]]);
+    $this->getJson('/api/mobile/v1/landlord/tenants/'.$retail->id)
+        ->assertOk()->assertJsonPath('tenant.name', 'Retail Tenant')
+        ->assertJsonStructure(['metrics', 'users', 'branches', 'recent_actions']);
 });
 
 test('mobile messaging aggregates entitled conversations and scopes thread actions', function (): void {
