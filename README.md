@@ -1,5 +1,14 @@
 # Modern Forestry Backstage
 
+## Everbranch Mobile Platform (2026-07-10)
+
+- The separate tenant app lives at `../everbranch-mobile`. It is a React/TypeScript + Capacitor project for iOS and Android with bundle/package ID `com.everbranch.app`; the Modern Forestry SwiftUI customer app remains separate and unchanged.
+- Laravel exposes `/api/mobile/v1` for PKCE/Sanctum device sessions, membership discovery, tenant bootstrap, module screens/actions, search, Branches, account devices, and guarded Stripe browser handoff.
+- Continue with Google and Sign in with email share a public authorization broker that preserves one PKCE attempt through Socialite or Fortify password, verification, and 2FA before returning to the app.
+- Mobile tenant slugs are resolved only through the authenticated user's memberships. Module payloads use the canonical catalog and entitlement resolver and fail closed for unsafe or non-ready modules.
+- `config/module_catalog.php` is the source for web and mobile plan/module/add-on access, mobile manifests, Branches visibility, purchase keys, prices, and Stripe lookup metadata. Checkout and entitlement lifecycle flags remain disabled until their evidence gates pass.
+- See `docs/architecture/everbranch-mobile-platform.md` and `app/Services/Mobile/README.md` before extending the contract.
+
 ## Modern Forestry App Request Board Deployment Notes (2026-07-09)
 
 - The Modern Forestry app feedback tracker is now localized inside the existing client project request system, not a standalone Shopify/Remix app.

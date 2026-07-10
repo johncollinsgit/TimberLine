@@ -1,6 +1,6 @@
 <?php
 
-return [
+$catalog = [
     'defaults' => [
         'plan' => env('TENANT_ENTITLEMENTS_DEFAULT_PLAN', 'starter'),
         'operating_mode' => env('TENANT_ENTITLEMENTS_DEFAULT_MODE', 'shopify'),
@@ -316,6 +316,15 @@ return [
             'visibility' => ['public_site' => false, 'app_store' => false],
             'cta_routing' => 'none',
             'capabilities' => ['dashboard.overview'],
+            'mobile' => [
+                'status' => 'ready',
+                'renderer' => 'dashboard',
+                'entry_screen' => 'home',
+                'contract_version' => 1,
+                'min_app_version' => '1.0.0',
+                'navigation' => ['group' => 'home', 'icon' => 'house', 'position' => 0],
+                'actions' => ['view'],
+            ],
         ],
         'customers' => [
             'display_name' => 'Customers',
@@ -332,6 +341,15 @@ return [
             'visibility' => ['public_site' => true, 'app_store' => false],
             'cta_routing' => 'none',
             'capabilities' => ['customers.manage'],
+            'mobile' => [
+                'status' => 'ready',
+                'renderer' => 'list',
+                'entry_screen' => 'customers.index',
+                'contract_version' => 1,
+                'min_app_version' => '1.0.0',
+                'navigation' => ['group' => 'work', 'icon' => 'users-round', 'position' => 10],
+                'actions' => ['view', 'search'],
+            ],
         ],
         'field_service' => [
             'display_name' => 'Field Service',
@@ -345,7 +363,7 @@ return [
             'default_setup_status' => 'configured',
             'dependencies' => ['customers'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'none',
             'short_description' => 'Run service work without Shopify.',
             'long_description' => 'A simple field-service workspace for customers, job addresses, work orders, materials, tasks, photos, and vehicles.',
@@ -374,6 +392,15 @@ return [
                 'field_service.jobs',
                 'field_service.materials',
                 'field_service.vehicles',
+            ],
+            'mobile' => [
+                'status' => 'ready',
+                'renderer' => 'list',
+                'entry_screen' => 'field-service.index',
+                'contract_version' => 1,
+                'min_app_version' => '1.0.0',
+                'navigation' => ['group' => 'work', 'icon' => 'briefcase-business', 'position' => 20],
+                'actions' => ['view', 'create_job', 'capture_photo'],
             ],
         ],
         'activity' => [
@@ -420,7 +447,7 @@ return [
             'default_setup_status' => 'configured',
             'dependencies' => ['customers'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'upgrade_plan',
             'buyer_setup' => [
                 'outcome' => 'Give customers a clear loyalty program and keep reward rules in one place.',
@@ -452,7 +479,7 @@ return [
             'default_setup_status' => 'configured',
             'dependencies' => ['customers', 'rewards'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'upgrade_plan',
             'buyer_setup' => [
                 'outcome' => 'Turn birthdays and lifecycle moments into timely customer follow-up.',
@@ -516,7 +543,7 @@ return [
             'default_setup_status' => 'configured',
             'dependencies' => ['customers'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'upgrade_plan',
             'buyer_setup' => [
                 'outcome' => 'See what customers save for later and turn that interest into follow-up.',
@@ -596,7 +623,7 @@ return [
             'default_setup_status' => 'not_started',
             'dependencies' => ['customers'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'upgrade_plan',
             'buyer_setup' => [
                 'outcome' => 'Build focused customer campaigns from the audiences already in the workspace.',
@@ -631,6 +658,15 @@ return [
             'visibility' => ['public_site' => true, 'app_store' => false],
             'cta_routing' => 'none',
             'capabilities' => ['reporting.analytics'],
+            'mobile' => [
+                'status' => 'ready',
+                'renderer' => 'dashboard',
+                'entry_screen' => 'reporting.overview',
+                'contract_version' => 1,
+                'min_app_version' => '1.0.0',
+                'navigation' => ['group' => 'work', 'icon' => 'chart-no-axes-combined', 'position' => 40],
+                'actions' => ['view'],
+            ],
         ],
         'diagnostics_advanced' => [
             'display_name' => 'Advanced Diagnostics',
@@ -644,7 +680,7 @@ return [
             'default_setup_status' => 'not_started',
             'dependencies' => ['reporting'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'upgrade_plan',
             'buyer_setup' => [
                 'outcome' => 'Give operators deeper troubleshooting and export tools when something needs investigation.',
@@ -836,7 +872,7 @@ return [
             'default_setup_status' => 'configured',
             'dependencies' => ['integrations', 'customers', 'messaging'],
             'billing_mode' => 'add_on',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'add_module',
             'buyer_setup' => [
                 'outcome' => 'Send customer text messages through a tenant-controlled SMS provider setup.',
@@ -884,7 +920,7 @@ return [
             'default_setup_status' => 'not_started',
             'dependencies' => ['customers'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'upgrade_plan',
             'buyer_setup' => [
                 'outcome' => 'Use AI to surface opportunities and prepare review-ready campaign drafts.',
@@ -923,7 +959,7 @@ return [
             'default_setup_status' => 'not_started',
             'dependencies' => ['email', 'campaigns', 'messaging'],
             'billing_mode' => 'add_on',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'add_module',
             'buyer_setup' => [
                 'outcome' => 'Prepare higher-volume marketing email while keeping send controls clear.',
@@ -955,7 +991,7 @@ return [
             'default_setup_status' => 'configured',
             'dependencies' => ['customers'],
             'billing_mode' => 'add_on',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'add_module',
             'buyer_setup' => [
                 'outcome' => 'Keep direct customer and group conversations connected to the workspace.',
@@ -974,6 +1010,16 @@ return [
                 'help_text' => 'Messaging works best when ownership is clear before customers start replying.',
             ],
             'capabilities' => ['messaging.workspace', 'messaging.analytics'],
+            'mobile' => [
+                'status' => 'ready',
+                'renderer' => 'list',
+                'entry_screen' => 'messaging.inbox',
+                'contract_version' => 1,
+                'min_app_version' => '1.0.0',
+                'purchase_key' => 'addon.messaging',
+                'navigation' => ['group' => 'work', 'icon' => 'messages-square', 'position' => 30],
+                'actions' => ['view'],
+            ],
         ],
         'subscriptions' => [
             'display_name' => 'Subscriptions',
@@ -987,7 +1033,7 @@ return [
             'default_setup_status' => 'not_started',
             'dependencies' => ['customers', 'shopify'],
             'billing_mode' => 'add_on',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'add_module',
             'buyer_setup' => [
                 'outcome' => 'Run recurring subscriptions with migration support, billing operations, customer actions, and voting when needed.',
@@ -1024,7 +1070,7 @@ return [
             'default_setup_status' => 'configured',
             'dependencies' => ['shopify'],
             'billing_mode' => 'add_on',
-            'visibility' => ['public_site' => true, 'app_store' => true],
+            'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'add_module',
             'buyer_setup' => [
                 'outcome' => 'Add another store, sales channel, or operating channel without forking the workspace.',
@@ -1066,9 +1112,16 @@ return [
         'base' => [
             'display_name' => 'Base Workspace',
             'label' => 'Base Workspace',
+            'purchase_key' => 'plan.base',
             'track' => 'direct',
             'is_public' => true,
             'position' => 5,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 9900, 'setup_price_cents' => 2900],
+            'stripe' => [
+                'product_lookup_key' => 'tier_base',
+                'recurring_price_lookup_key' => 'tier_base_monthly',
+                'setup_price_lookup_key' => 'tier_base_setup',
+            ],
             'included_modules' => [
                 'customers',
                 'field_service',
@@ -1088,9 +1141,16 @@ return [
         'starter' => [
             'display_name' => 'Starter',
             'label' => 'Starter',
+            'purchase_key' => 'plan.starter',
             'track' => 'shopify',
             'is_public' => true,
             'position' => 10,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 14900, 'setup_price_cents' => 4900],
+            'stripe' => [
+                'product_lookup_key' => 'tier_starter',
+                'recurring_price_lookup_key' => 'tier_starter_monthly',
+                'setup_price_lookup_key' => 'tier_starter_setup',
+            ],
             'included_modules' => [
                 'dashboard',
                 'customers',
@@ -1117,9 +1177,16 @@ return [
         'growth' => [
             'display_name' => 'Growth',
             'label' => 'Growth',
+            'purchase_key' => 'plan.growth',
             'track' => 'shopify',
             'is_public' => true,
             'position' => 20,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 29900, 'setup_price_cents' => 7900],
+            'stripe' => [
+                'product_lookup_key' => 'tier_growth',
+                'recurring_price_lookup_key' => 'tier_growth_monthly',
+                'setup_price_lookup_key' => 'tier_growth_setup',
+            ],
             'included_modules' => [
                 'dashboard',
                 'customers',
@@ -1151,9 +1218,16 @@ return [
         'pro' => [
             'display_name' => 'Pro',
             'label' => 'Pro',
+            'purchase_key' => 'plan.pro',
             'track' => 'shopify',
             'is_public' => true,
             'position' => 30,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 39900, 'setup_price_cents' => 9900],
+            'stripe' => [
+                'product_lookup_key' => 'tier_pro',
+                'recurring_price_lookup_key' => 'tier_pro_monthly',
+                'setup_price_lookup_key' => 'tier_pro_setup',
+            ],
             'included_modules' => [
                 'dashboard',
                 'customers',
@@ -1190,6 +1264,9 @@ return [
         'referrals' => [
             'display_name' => 'Referrals',
             'label' => 'Referrals',
+            'purchase_key' => 'addon.referrals',
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 7900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_referrals', 'recurring_price_lookup_key' => 'addon_referrals_monthly'],
             'modules' => ['referrals'],
             'legacy_grants' => ['referrals'],
             'billing_mode' => 'add_on',
@@ -1197,6 +1274,9 @@ return [
         'sms' => [
             'display_name' => 'SMS',
             'label' => 'SMS',
+            'purchase_key' => 'addon.sms',
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 9900, 'setup_price_cents' => 9900],
+            'stripe' => ['product_lookup_key' => 'addon_sms', 'recurring_price_lookup_key' => 'addon_sms_monthly'],
             'modules' => ['messaging', 'sms'],
             'legacy_grants' => ['messaging', 'sms'],
             'billing_mode' => 'add_on',
@@ -1204,6 +1284,9 @@ return [
         'messaging' => [
             'display_name' => 'Messaging',
             'label' => 'Messaging',
+            'purchase_key' => 'addon.messaging',
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 1999, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_messaging', 'recurring_price_lookup_key' => 'addon_messaging_monthly'],
             'modules' => ['messaging'],
             'legacy_grants' => ['messaging'],
             'billing_mode' => 'add_on',
@@ -1211,6 +1294,9 @@ return [
         'additional_channels' => [
             'display_name' => 'Additional Channels',
             'label' => 'Additional Stores/Channels',
+            'purchase_key' => 'addon.additional_channels',
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 5900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_additional_channels', 'recurring_price_lookup_key' => 'addon_additional_channels_monthly'],
             'modules' => ['additional_channels'],
             'legacy_grants' => ['shopify'],
             'billing_mode' => 'add_on',
@@ -1218,6 +1304,9 @@ return [
         'bulk_email_marketing' => [
             'display_name' => 'Bulk Email Marketing',
             'label' => 'Bulk Marketing Email',
+            'purchase_key' => 'addon.bulk_email_marketing',
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 12900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_bulk_email_marketing', 'recurring_price_lookup_key' => 'addon_bulk_email_marketing_monthly'],
             'modules' => ['messaging', 'email', 'campaigns', 'bulk_email_marketing'],
             'legacy_grants' => ['messaging', 'email'],
             'billing_mode' => 'add_on',
@@ -1225,6 +1314,7 @@ return [
         'subscriptions' => [
             'display_name' => 'Subscriptions',
             'label' => 'Subscriptions',
+            'purchase_key' => 'addon.subscriptions',
             'modules' => ['subscriptions'],
             'legacy_grants' => ['subscriptions'],
             'billing_mode' => 'add_on',
@@ -1232,6 +1322,9 @@ return [
         'future_niche_modules' => [
             'display_name' => 'Future Niche Modules',
             'label' => 'Future Niche Modules',
+            'purchase_key' => 'addon.future_niche_modules',
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 0, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_future_niche_modules', 'recurring_price_lookup_key' => 'addon_future_niche_modules_monthly'],
             'modules' => ['future_niche_modules'],
             'legacy_grants' => ['ai'],
             'billing_mode' => 'custom',
@@ -1239,6 +1332,7 @@ return [
         'advanced_reporting' => [
             'display_name' => 'Advanced Reporting (Legacy Alias)',
             'label' => 'Advanced Reporting (Legacy Alias)',
+            'purchase_key' => 'addon.advanced_reporting',
             'modules' => ['diagnostics_advanced'],
             'legacy_grants' => ['diagnostics_advanced', 'reporting'],
             'billing_mode' => 'add_on',
@@ -1246,6 +1340,7 @@ return [
         'vip_pack' => [
             'display_name' => 'VIP (Legacy Alias)',
             'label' => 'VIP (Legacy Alias)',
+            'purchase_key' => 'addon.vip_pack',
             'modules' => ['vip'],
             'legacy_grants' => ['vip', 'notifications'],
             'billing_mode' => 'custom',
@@ -1253,9 +1348,35 @@ return [
         'integrations_pack' => [
             'display_name' => 'Integrations (Legacy Alias)',
             'label' => 'Integrations (Legacy Alias)',
+            'purchase_key' => 'addon.integrations_pack',
             'modules' => ['integrations'],
             'legacy_grants' => ['integrations', 'quickbooks', 'wix', 'mobile_connection'],
             'billing_mode' => 'custom',
         ],
     ],
 ];
+
+$mobileDefaults = [
+    'status' => 'hidden',
+    'renderer' => 'none',
+    'entry_screen' => null,
+    'contract_version' => 1,
+    'min_app_version' => '1.0.0',
+    'purchase_key' => null,
+    'navigation' => ['group' => 'work', 'icon' => 'grid-2x2', 'position' => 999],
+    'actions' => [],
+];
+
+foreach ($catalog['modules'] as &$module) {
+    $module['visibility'] = array_replace(
+        ['mobile_store' => false],
+        is_array($module['visibility'] ?? null) ? $module['visibility'] : []
+    );
+    $module['mobile'] = array_replace_recursive(
+        $mobileDefaults,
+        is_array($module['mobile'] ?? null) ? $module['mobile'] : []
+    );
+}
+unset($module);
+
+return $catalog;

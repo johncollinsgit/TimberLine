@@ -26,7 +26,7 @@
 - PR 4 added the provisioning bridge from public access requests into `tenant_setup_statuses`; access request approval or matching landlord tenant creation now carries import path, mobile interest, safe module interests, and source notes forward without overwriting existing setup edits.
 - PR 5 added the landlord-only intake queue at `/landlord/onboarding/intake` with filters for review status, Shopify connection follow-up, Square/CSV/manual/undecided import paths, mobile interest, and reviewed statuses.
 - PR 6 polished tenant-facing `/start` setup guidance so Shopify, Square, CSV/manual, module interests, mobile interest, Everbranch review, next action, and inactive billing/automation/mobile boundaries are clear without adding new workflows.
-- PR 7 productized Module Store display metadata across tenant, Shopify embedded, and landlord commercial module surfaces. Module pricing/mobile/setup labels are display-only; no modules, entitlements, checkout, billing, or generic mobile APIs were activated.
+- PR 7 originally productized display metadata only. The 2026-07-10 mobile foundation now consumes canonical mobile declarations and pricing metadata, but discovery still never activates modules and checkout/lifecycle flags remain guarded off.
 - PR 8 added tenant custom module request intake and landlord triage. Requests are discovery/status records only; they do not create modules, install modules, change entitlements, generate quotes/invoices, activate billing, or implement mobile/job/photo/messaging capabilities.
 - PR 9 added Shopify App Store readiness evidence in `docs/operations/everbranch-shopify-readiness-audit.md` plus `ShopifyAppStoreReadinessTest`. Canonical Shopify URLs are verified locally; Partner Dashboard values, privacy webhooks, live install/reinstall evidence, and broad scope review remain blockers before App Store review.
 - PR 10 added billing/Stripe discovery evidence in `docs/operations/everbranch-billing-readiness-audit.md` plus `BillingStripeDiscoverySafetyTest`. Stripe HTTP integration, hosted checkout/portal routes, webhook ingestion, and fulfillment code exist, but checkout/lifecycle defaults remain disabled. Shopify App Store merchant billing should use Shopify App Pricing/Billing later; Stripe remains a separate direct/custom/non-Shopify lane.
@@ -54,7 +54,7 @@
 - Modern Forestry mobile checkout/performance pass (2026-06-29): signed-in checkout now omits non-E.164 buyer phone values before Shopify Storefront Cart buyer identity, product detail is short-cached per handle, and the mobile Home endpoint now serves a local shell or stale cached payload while deferring full Shopify-backed refresh. Home cold-load UX is still a priority until iOS bootstrap fully tolerates stale-while-revalidate behavior and keeps bag/product/shop navigation unblocked.
 - Agents must update the relevant README, this snapshot, readiness doc, runbook, or changelog after meaningful work so future agents can trust the current state.
 - Shopify remains the flagship integration path, but customer setup must also account for Square, CSV import, manual import, and future connector paths.
-- Android and iOS mobile app readiness are product requirements. The current mobile API surface is explicitly Modern-Forestry-specific product catalog support and is not yet generic Everbranch mobile infrastructure.
+- Android and iOS mobile app readiness are product requirements. Modern Forestry customer catalog APIs remain product-specific; generic Everbranch tenant infrastructure now exists under `/api/mobile/v1` and remains in pilot/release-gated status.
 - Checkout and broad billing lifecycle automation remain disabled until readiness gates pass and activation is explicitly requested.
 - Grovebud Cloudflare/TLS failures are an external edge/DNS launch blocker and should not be treated as a Laravel runtime behavior fix in readiness PR 1.
 
@@ -1031,3 +1031,10 @@ Scope guard:
   - installed plants/materials
 - Laravel backend remains the canonical system of truth across verticals.
 - Shopify remains an important arm, not the only future arm.
+## Everbranch Mobile Platform Foundation (2026-07-10)
+
+- A separate bundled Capacitor app now exists at `../everbranch-mobile` for iOS and Android under `com.everbranch.app`; the Modern Forestry consumer SwiftUI app remains unchanged.
+- `/api/mobile/v1` provides membership-scoped workspace bootstrap, module screens/actions, global search, Branches, device sessions, and guarded hosted-billing handoff. Browser Fortify login exchanges a replay-protected, five-minute S256 PKCE code for an expiring/revocable Sanctum device token.
+- `TenantMobileModuleRegistry` exposes only finite contract-v1 primitives and only catalog entries marked mobile ready/beta that are enabled by the canonical resolver. Customers, Field Service, Messaging, and Reporting form the pilot; Field Service camera photos are live, tenant-scoped uploads.
+- Branches uses canonical module-store services. Canonical plans/add-ons now carry stable purchase keys, pricing, and Stripe lookup metadata; the Stripe webhook also normalizes verified subscription lifecycle events into tenant-scoped purchase rows while retaining existing fulfillment/audit behavior.
+- Hosted checkout and lifecycle activation remain guarded off pending payment-reversal evidence, current store-rule review, storefront-region detection, biometric re-entry, push registration, accessibility/device runs, privacy declarations, and pilot approval. This is a testable platform foundation, not an App Store production approval claim.

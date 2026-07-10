@@ -24,7 +24,12 @@ class TenantModuleCatalogService
      */
     public function tenantStorePayload(?int $tenantId, string $surface = 'shopify'): array
     {
-        $moduleDefinitions = $this->storeVisibleModuleDefinitions($surface === 'public_site' ? 'public_site' : 'app_store');
+        $visibilityKey = match (strtolower(trim($surface))) {
+            'public_site' => 'public_site',
+            'mobile' => 'mobile_store',
+            default => 'app_store',
+        };
+        $moduleDefinitions = $this->storeVisibleModuleDefinitions($visibilityKey);
         $moduleKeys = array_keys($moduleDefinitions);
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
         $moduleStates = $this->applyDisplayLabels(
@@ -1039,7 +1044,7 @@ class TenantModuleCatalogService
     protected function routeOptionsForSurface(string $surface): array
     {
         return match (strtolower(trim($surface))) {
-            'marketing', 'direct' => [
+            'marketing', 'direct', 'mobile' => [
                 'store_route' => 'marketing.modules',
                 'plans_route' => 'marketing.modules',
                 'contact_route' => 'platform.contact',

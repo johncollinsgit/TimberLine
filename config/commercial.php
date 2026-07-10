@@ -15,6 +15,8 @@ foreach ((array) ($catalog['plans'] ?? []) as $planKey => $definition) {
         'name' => (string) ($definition['display_name'] ?? $planKey),
         'position' => (int) ($definition['position'] ?? 100),
         'is_public' => (bool) ($definition['is_public'] ?? true),
+        'pricing' => is_array($definition['pricing'] ?? null) ? (array) $definition['pricing'] : [],
+        'stripe' => is_array($definition['stripe'] ?? null) ? (array) $definition['stripe'] : [],
     ];
 }
 
@@ -28,6 +30,8 @@ foreach ((array) ($catalog['addons'] ?? []) as $addonKey => $definition) {
         'modules' => array_values(array_map('strval', (array) ($definition['modules'] ?? []))),
         'legacy_grants' => array_values(array_map('strval', (array) ($definition['legacy_grants'] ?? []))),
         'name' => (string) ($definition['label'] ?? $definition['display_name'] ?? $addonKey),
+        'pricing' => is_array($definition['pricing'] ?? null) ? (array) $definition['pricing'] : [],
+        'stripe' => is_array($definition['stripe'] ?? null) ? (array) $definition['stripe'] : [],
     ];
 }
 
@@ -98,9 +102,9 @@ return [
             'is_public' => (bool) ($canonicalPlans['base']['is_public'] ?? true),
             'is_highest_standard' => false,
             'position' => (int) ($canonicalPlans['base']['position'] ?? 5),
-            'currency' => 'USD',
-            'recurring_price_cents' => 9900,
-            'setup_price_cents' => 2900,
+            'currency' => (string) data_get($canonicalPlans, 'base.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalPlans, 'base.pricing.recurring_price_cents', 9900),
+            'setup_price_cents' => (int) data_get($canonicalPlans, 'base.pricing.setup_price_cents', 2900),
             'included_usage' => [
                 'store_channels' => 0,
                 'contact_count' => 2000,
@@ -114,9 +118,9 @@ return [
             'is_public' => (bool) ($canonicalPlans['starter']['is_public'] ?? true),
             'is_highest_standard' => false,
             'position' => (int) ($canonicalPlans['starter']['position'] ?? 10),
-            'currency' => 'USD',
-            'recurring_price_cents' => 14900,
-            'setup_price_cents' => 4900,
+            'currency' => (string) data_get($canonicalPlans, 'starter.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalPlans, 'starter.pricing.recurring_price_cents', 14900),
+            'setup_price_cents' => (int) data_get($canonicalPlans, 'starter.pricing.setup_price_cents', 4900),
             'included_usage' => [
                 'store_channels' => 1,
                 'contact_count' => 2000,
@@ -130,9 +134,9 @@ return [
             'is_public' => (bool) ($canonicalPlans['growth']['is_public'] ?? true),
             'is_highest_standard' => false,
             'position' => (int) ($canonicalPlans['growth']['position'] ?? 20),
-            'currency' => 'USD',
-            'recurring_price_cents' => 29900,
-            'setup_price_cents' => 7900,
+            'currency' => (string) data_get($canonicalPlans, 'growth.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalPlans, 'growth.pricing.recurring_price_cents', 29900),
+            'setup_price_cents' => (int) data_get($canonicalPlans, 'growth.pricing.setup_price_cents', 7900),
             'included_usage' => [
                 'store_channels' => 1,
                 'contact_count' => 10000,
@@ -146,9 +150,9 @@ return [
             'is_public' => (bool) ($canonicalPlans['pro']['is_public'] ?? true),
             'is_highest_standard' => true,
             'position' => (int) ($canonicalPlans['pro']['position'] ?? 30),
-            'currency' => 'USD',
-            'recurring_price_cents' => 39900,
-            'setup_price_cents' => 9900,
+            'currency' => (string) data_get($canonicalPlans, 'pro.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalPlans, 'pro.pricing.recurring_price_cents', 39900),
+            'setup_price_cents' => (int) data_get($canonicalPlans, 'pro.pricing.setup_price_cents', 9900),
             'included_usage' => [
                 'store_channels' => 1,
                 'contact_count' => 25000,
@@ -162,44 +166,44 @@ return [
         'referrals' => [
             'name' => (string) ($canonicalAddons['referrals']['name'] ?? 'Referrals'),
             'position' => 10,
-            'currency' => 'USD',
-            'recurring_price_cents' => 7900,
-            'setup_price_cents' => 0,
+            'currency' => (string) data_get($canonicalAddons, 'referrals.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalAddons, 'referrals.pricing.recurring_price_cents', 7900),
+            'setup_price_cents' => (int) data_get($canonicalAddons, 'referrals.pricing.setup_price_cents', 0),
             'modules' => (array) ($canonicalAddons['referrals']['modules'] ?? ['referrals']),
         ],
         'sms' => [
             'name' => (string) ($canonicalAddons['sms']['name'] ?? 'SMS'),
             'position' => 20,
-            'currency' => 'USD',
-            'recurring_price_cents' => 9900,
-            'setup_price_cents' => 9900,
+            'currency' => (string) data_get($canonicalAddons, 'sms.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalAddons, 'sms.pricing.recurring_price_cents', 9900),
+            'setup_price_cents' => (int) data_get($canonicalAddons, 'sms.pricing.setup_price_cents', 9900),
             'included_usage' => ['sms_usage' => 1000, 'email_usage' => 5000],
             'modules' => (array) ($canonicalAddons['sms']['modules'] ?? ['messaging', 'email', 'sms']),
         ],
         'messaging' => [
             'name' => (string) ($canonicalAddons['messaging']['name'] ?? 'Messaging'),
             'position' => 30,
-            'currency' => 'USD',
-            'recurring_price_cents' => 1999,
-            'setup_price_cents' => 0,
+            'currency' => (string) data_get($canonicalAddons, 'messaging.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalAddons, 'messaging.pricing.recurring_price_cents', 1999),
+            'setup_price_cents' => (int) data_get($canonicalAddons, 'messaging.pricing.setup_price_cents', 0),
             'included_usage' => ['email_usage' => 5000],
             'modules' => (array) ($canonicalAddons['messaging']['modules'] ?? ['messaging', 'email']),
         ],
         'additional_channels' => [
             'name' => (string) ($canonicalAddons['additional_channels']['name'] ?? 'Additional Stores/Channels'),
             'position' => 40,
-            'currency' => 'USD',
-            'recurring_price_cents' => 5900,
-            'setup_price_cents' => 0,
+            'currency' => (string) data_get($canonicalAddons, 'additional_channels.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalAddons, 'additional_channels.pricing.recurring_price_cents', 5900),
+            'setup_price_cents' => (int) data_get($canonicalAddons, 'additional_channels.pricing.setup_price_cents', 0),
             'modules' => (array) ($canonicalAddons['additional_channels']['modules'] ?? ['additional_channels']),
             'legacy_grants' => (array) ($canonicalAddons['additional_channels']['legacy_grants'] ?? ['shopify']),
         ],
         'bulk_email_marketing' => [
             'name' => (string) ($canonicalAddons['bulk_email_marketing']['name'] ?? 'Bulk Marketing Email'),
             'position' => 50,
-            'currency' => 'USD',
-            'recurring_price_cents' => 12900,
-            'setup_price_cents' => 0,
+            'currency' => (string) data_get($canonicalAddons, 'bulk_email_marketing.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalAddons, 'bulk_email_marketing.pricing.recurring_price_cents', 12900),
+            'setup_price_cents' => (int) data_get($canonicalAddons, 'bulk_email_marketing.pricing.setup_price_cents', 0),
             'included_usage' => ['email_usage' => 50000],
             'modules' => (array) ($canonicalAddons['bulk_email_marketing']['modules'] ?? ['messaging', 'email', 'campaigns', 'bulk_email_marketing']),
             'legacy_grants' => (array) ($canonicalAddons['bulk_email_marketing']['legacy_grants'] ?? ['email']),
@@ -207,9 +211,9 @@ return [
         'future_niche_modules' => [
             'name' => (string) ($canonicalAddons['future_niche_modules']['name'] ?? 'Future Niche Modules'),
             'position' => 90,
-            'currency' => 'USD',
-            'recurring_price_cents' => 0,
-            'setup_price_cents' => 0,
+            'currency' => (string) data_get($canonicalAddons, 'future_niche_modules.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalAddons, 'future_niche_modules.pricing.recurring_price_cents', 0),
+            'setup_price_cents' => (int) data_get($canonicalAddons, 'future_niche_modules.pricing.setup_price_cents', 0),
             'modules' => (array) ($canonicalAddons['future_niche_modules']['modules'] ?? ['future_niche_modules']),
             'legacy_grants' => (array) ($canonicalAddons['future_niche_modules']['legacy_grants'] ?? ['ai']),
         ],
@@ -463,49 +467,14 @@ return [
     'stripe_mapping' => [
         'status' => 'configuration_only',
         'currency' => 'USD',
-        'tiers' => [
-            'starter' => [
-                'product_lookup_key' => 'tier_starter',
-                'recurring_price_lookup_key' => 'tier_starter_monthly',
-                'setup_price_lookup_key' => 'tier_starter_setup',
-            ],
-            'growth' => [
-                'product_lookup_key' => 'tier_growth',
-                'recurring_price_lookup_key' => 'tier_growth_monthly',
-                'setup_price_lookup_key' => 'tier_growth_setup',
-            ],
-            'pro' => [
-                'product_lookup_key' => 'tier_pro',
-                'recurring_price_lookup_key' => 'tier_pro_monthly',
-                'setup_price_lookup_key' => 'tier_pro_setup',
-            ],
-        ],
-        'addons' => [
-            'referrals' => [
-                'product_lookup_key' => 'addon_referrals',
-                'recurring_price_lookup_key' => 'addon_referrals_monthly',
-            ],
-            'sms' => [
-                'product_lookup_key' => 'addon_sms',
-                'recurring_price_lookup_key' => 'addon_sms_monthly',
-            ],
-            'messaging' => [
-                'product_lookup_key' => 'addon_messaging',
-                'recurring_price_lookup_key' => 'addon_messaging_monthly',
-            ],
-            'additional_channels' => [
-                'product_lookup_key' => 'addon_additional_channels',
-                'recurring_price_lookup_key' => 'addon_additional_channels_monthly',
-            ],
-            'bulk_email_marketing' => [
-                'product_lookup_key' => 'addon_bulk_email_marketing',
-                'recurring_price_lookup_key' => 'addon_bulk_email_marketing_monthly',
-            ],
-            'future_niche_modules' => [
-                'product_lookup_key' => 'addon_future_niche_modules',
-                'recurring_price_lookup_key' => 'addon_future_niche_modules_monthly',
-            ],
-        ],
+        'tiers' => array_filter(array_map(
+            static fn (array $plan): array => (array) ($plan['stripe'] ?? []),
+            $canonicalPlans
+        )),
+        'addons' => array_filter(array_map(
+            static fn (array $addon): array => (array) ($addon['stripe'] ?? []),
+            $canonicalAddons
+        )),
         'setup_packages' => [
             'guided_launch' => [
                 'price_lookup_key' => 'setup_guided_launch',
