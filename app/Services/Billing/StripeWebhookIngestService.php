@@ -19,6 +19,7 @@ class StripeWebhookIngestService
         protected LandlordOperatorActionAuditService $auditService,
         protected StripeCommercialFulfillmentService $fulfillmentService,
         protected TenantMessagingUsageService $messagingUsage,
+        protected TenantBillingSubscriptionLedger $subscriptionLedger,
     ) {}
 
     /**
@@ -225,6 +226,16 @@ class StripeWebhookIngestService
             if ($changed || ! $override->exists) {
                 $override->save();
             }
+
+            $this->subscriptionLedger->recordStripeEvent(
+                tenantId: $tenantId,
+                eventId: $eventId,
+                eventType: $eventType,
+                object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
+                metadata: $metadata,
+                customerReference: $stripeCustomer,
+                subscriptionReference: $stripeSubscription,
+            );
 
             $after = $this->snapshotOverride($override);
 

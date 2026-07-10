@@ -91,8 +91,8 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - Route/page ownership for brand and navigation work is tracked in `docs/operations/everbranch-route-page-ownership-inventory.md`.
 - Agents must update the relevant README, `SYSTEM_SNAPSHOT.md`, readiness doc, runbook, or changelog after meaningful work. UI-affecting work must also update `docs/ui/UI_CHANGELOG.md`.
 - Shopify is the flagship integration path, but Everbranch must not require Shopify for every customer. Setup/readiness work should account for Shopify, Square, CSV import, manual import, and future connector paths.
-- Android and iOS mobile app readiness are product requirements. The current mobile API surface is Modern-Forestry-specific catalog support and is not yet a generic Everbranch mobile platform.
-- Module App Store work must use `config/module_catalog.php`, `TenantModuleCatalogService`, and `TenantModuleAccessResolver`. Module pricing, setup, mobile relevance, and entitlement labels are display-only until the matching activation work is explicitly approved and tested.
+- Android and iOS mobile app readiness are product requirements. Modern Forestry customer catalog APIs remain product-specific; the separate cross-tenant Everbranch contract lives under `/api/mobile/v1` and follows the Everbranch tenant mobile rule below.
+- Module store work must use `config/module_catalog.php`, `TenantModuleCatalogService`, and `TenantModuleAccessResolver`. Discovery never activates access; only verified, audited commercial fulfillment may change paid entitlements while lifecycle flags are enabled.
 - Custom module requests are intake/triage records only. Do not convert them into modules, entitlements, quotes, invoices, billing, or mobile/job/photo/messaging implementations without a separate approved PR.
 - Plan selection is commercial intent only until a future approved billing activation PR. Do not turn plan interest or billing lane interest into checkout, subscriptions, quotes, invoices, payment links, module installs, or entitlements.
 - The landlord commercial intent gate is decision support only. Do not add charge, checkout, subscription, invoice, module install, or entitlement activation actions to it without a separate approved billing activation PR.
@@ -697,3 +697,12 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - `ModernForestryMobileCustomerSessionService` now caches resolved customer identity by token hash for a short TTL clamped to JWT expiry. Preserve that behavior unless you are intentionally changing the auth trust model.
 - Signed-in mobile flows should continue omitting buyer phone in checkout identity and should continue treating Laravel as the canonical profile store after identity resolution.
 - On the client side, the app now kicks Account and Rewards refreshes together. Do not reintroduce a single serialized dashboard bootstrap path unless you also accept slower Rewards first paint.
+## Everbranch Tenant Mobile Rule (2026-07-10)
+
+- `../everbranch-mobile` is the cross-tenant Everbranch app (`com.everbranch.app`). Do not merge its concerns into the Modern Forestry SwiftUI customer app or its product-catalog APIs.
+- Mobile APIs live under `/api/mobile/v1`. Use browser Fortify + one-time S256 PKCE exchange and Sanctum device tokens; never accept password credentials in the app or persist tokens outside Keychain/Android Keystore.
+- Resolve `{tenant}` only through authenticated memberships with `EnsureMobileTenantAccess`, then use `TenantContext`, canonical roles, and `TenantModuleAccessResolver`. Scope every referenced job, customer, store, channel, module, and billing record again on the server.
+- A module is absent unless its canonical `mobile.status` is `ready` or `beta`, its contract version is supported, and the tenant is entitled. Payloads may use only the finite primitives in `TenantMobileModuleRegistry`; they may not send JavaScript or arbitrary remote UI.
+- Branches is the mobile name for the module store. Its discovery and gates must continue through `TenantModuleCatalogService` and `TenantModuleAccessResolver`. A client assertion never grants access.
+- Mobile billing is a US-only, system-browser Stripe handoff behind existing checkout and lifecycle flags. Keep non-US purchase CTAs closed, maintain idempotent webhook/audit behavior, and recheck Apple/Google rules immediately before submission.
+- New-module work is incomplete until the catalog declaration, tenant scoping, entitlement checks, provider/schema, supported actions, backend/client tests, phone screenshots, and relevant READMEs are updated. The exact checklist is in `docs/architecture/everbranch-mobile-platform.md`.

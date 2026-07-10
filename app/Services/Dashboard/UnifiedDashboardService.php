@@ -2,17 +2,18 @@
 
 namespace App\Services\Dashboard;
 
+use App\Models\FieldServiceJob;
+use App\Models\FieldServiceMaterial;
+use App\Models\FieldServiceVehicle;
 use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\Order;
-use App\Models\FieldServiceJob;
-use App\Models\FieldServiceMaterial;
-use App\Models\FieldServiceVehicle;
+use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleCatalogService;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -22,8 +23,7 @@ class UnifiedDashboardService
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
         protected TenantExperienceProfileService $experienceProfileService,
         protected TenantModuleCatalogService $moduleCatalogService
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -31,7 +31,10 @@ class UnifiedDashboardService
     public function forRequest(Request $request, ?User $user = null): array
     {
         $user ??= $request->user();
-        $tenant = $user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null;
+        $attributeTenant = $request->attributes->get('current_tenant');
+        $tenant = $attributeTenant instanceof Tenant
+            ? $attributeTenant
+            : ($user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null);
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
         $canAccessMarketing = $user?->canAccessMarketing() ?? false;
@@ -215,8 +218,7 @@ class UnifiedDashboardService
         array $catalog,
         bool $canAccessMarketing,
         bool $canAccessOps
-    ): array
-    {
+    ): array {
         $actions = [
             [
                 'label' => 'Search everything',

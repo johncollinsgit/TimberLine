@@ -90,3 +90,22 @@ Steps 1–2 alone close the two loudest gaps (gating + isolation) with minimal r
 ## Non-negotiable constraint (owner directive, 2026-07-07)
 
 Do **not** open the candle-ops modules (Orders/Shipping/Pouring/Retail/Markets/Events/Inventory) to other tenants yet — they are unfinished/untested and would each need a generic (non-scent/size/wick/box) redesign + per-tenant config. Enforced isolation (step 2) makes them **safe as tenant-1-only**; entitlement gating (step 1) makes them **invisible/inaccessible to tenants that don't have the candle entitlement**. That combination is the professional posture: keep the vertical flagship modules flagship-only, gated and isolated, while the tenant-neutral core (auth, tenancy, module framework, customers, marketing identity, integrations) generalizes.
+## Mobile Readiness Addendum (2026-07-10)
+
+`mobile_relevance` is descriptive only. Actual Everbranch phone exposure now requires a fail-closed `mobile` contract in the canonical module entry plus an enabled decision from `TenantModuleAccessResolver`. The minimum declaration is:
+
+```php
+'visibility' => ['mobile_store' => true], // discovery only; omit unless safe
+'mobile' => [
+    'status' => 'ready',
+    'renderer' => 'list',
+    'entry_screen' => 'module.index',
+    'contract_version' => 1,
+    'min_app_version' => '1.0.0',
+    'purchase_key' => 'addon.module', // billable modules only
+    'navigation' => ['group' => 'work', 'icon' => 'grid-2x2', 'position' => 50],
+    'actions' => ['view'],
+],
+```
+
+The entry is not ready until its provider returns supported primitives, every referenced resource is tenant-scoped, at least one meaningful phone workflow works, and backend/client/device evidence exists. Placeholder, roadmap, internal-unsafe, unscoped, and web-link-only modules remain hidden. See `docs/architecture/everbranch-mobile-platform.md` for the exact checklist.

@@ -1,5 +1,17 @@
 # Mobile Catalog Services
 
+## Everbranch Tenant App Contract (2026-07-10)
+
+This folder now owns two deliberately separate surfaces. The `ModernForestryMobile*` services feed the Modern Forestry customer shopping app. `TenantMobileModuleRegistry` feeds the cross-tenant Everbranch work app at `../everbranch-mobile`; do not reuse customer commerce session assumptions for tenant users.
+
+Everbranch mobile entries fail closed. A module must be enabled by `TenantModuleAccessResolver` and declare `mobile.status` as `ready` or `beta` in `config/module_catalog.php`. Its declaration includes renderer, entry screen, contract version, minimum app version, navigation placement/icon, supported actions, and a stable purchase key when billable. Branches additionally requires `visibility.mobile_store=true`.
+
+The registry accepts finite, versioned primitives only: dashboard, metrics, list/search, detail, form, action sheet, tabs, notice, empty, and error states. Providers may supply data/layout, never executable JavaScript or arbitrary remote UI. Existing renderer contracts can publish newly entitled modules without a binary release; new primitives require a client release and higher `min_app_version`.
+
+Every action must validate that its action key is declared, resolve all resource IDs inside the current tenant, enforce the module entitlement and role, require a live connection, and return an explicit success/error. Never silently queue operational, customer, or billing writes.
+
+The full addition and release checklist is in `docs/architecture/everbranch-mobile-platform.md` and the client `../everbranch-mobile/README.md`.
+
 ## Mobile Checkout + Home Bootstrap Performance (2026-06-29)
 
 - Modern Forestry mobile checkout uses Shopify Storefront Cart API when the storefront access token is configured. The checkout service validates bag lines against Laravel product detail, creates a Shopify cart, applies buyer identity, attaches delivery address data when available, and returns Shopify `checkoutUrl`.

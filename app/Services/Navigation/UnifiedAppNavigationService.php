@@ -9,9 +9,9 @@ use App\Models\User;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
-use App\Support\Tenancy\TenantHostBuilder;
 use App\Support\Birthdays\BirthdaySectionRegistry;
 use App\Support\Marketing\MarketingSectionRegistry;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
@@ -24,8 +24,7 @@ class UnifiedAppNavigationService
         protected TenantExperienceProfileService $experienceProfileService,
         protected TenantModuleAccessResolver $moduleAccessResolver,
         protected TenantHostBuilder $tenantHostBuilder
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -38,7 +37,10 @@ class UnifiedAppNavigationService
             return $this->buildLandlordShell($request, $user);
         }
 
-        $tenant = $user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null;
+        $attributeTenant = $request->attributes->get('current_tenant');
+        $tenant = $attributeTenant instanceof Tenant
+            ? $attributeTenant
+            : ($user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null);
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
 
@@ -105,12 +107,12 @@ class UnifiedAppNavigationService
 
             if ($isFlagshipTenant) {
                 $productionChildren = [
-                ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => route('retail.plan'), 'label' => 'Pour Lists', 'current' => request()->routeIs('retail.plan')],
-                ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => request()->routeIs('events.*')],
-                ['key' => 'shipping', 'icon' => 'truck', 'href' => route('shipping.orders'), 'label' => 'Shipping', 'current' => request()->routeIs('shipping.*')],
-                ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')],
-                ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => request()->routeIs('markets.browser.*')],
-                ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => request()->routeIs('inventory.*')],
+                    ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => route('retail.plan'), 'label' => 'Pour Lists', 'current' => request()->routeIs('retail.plan')],
+                    ['key' => 'events', 'icon' => 'calendar-days', 'href' => route('events.index'), 'label' => 'Events', 'current' => request()->routeIs('events.*')],
+                    ['key' => 'shipping', 'icon' => 'truck', 'href' => route('shipping.orders'), 'label' => 'Shipping', 'current' => request()->routeIs('shipping.*')],
+                    ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')],
+                    ['key' => 'markets', 'icon' => 'shopping-bag', 'href' => route('markets.browser.index'), 'label' => 'Markets', 'current' => request()->routeIs('markets.browser.*')],
+                    ['key' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.index'), 'label' => 'Inventory', 'current' => request()->routeIs('inventory.*')],
                 ];
                 $productionCurrent = collect($productionChildren)->contains(
                     fn (array $child): bool => (bool) ($child['current'] ?? false)

@@ -5,6 +5,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantBillingFulfillment;
+use App\Models\TenantBillingSubscription;
 use App\Models\TenantCommercialOverride;
 use App\Models\User;
 use App\Services\Tenancy\TenantCommercialExperienceService;
@@ -102,6 +103,14 @@ test('checkout completion webhook can fulfill local plan and addons idempotently
 
     expect(TenantBillingFulfillment::query()->where('tenant_id', (int) $tenant->id)->count())->toBe(1);
 
+    expect(TenantBillingSubscription::withoutGlobalScopes()
+        ->where('tenant_id', (int) $tenant->id)
+        ->where('provider_subscription_reference', 'sub_fulfill_1')
+        ->pluck('purchase_key')
+        ->sort()
+        ->values()
+        ->all())->toBe(['addon.sms', 'plan.growth']);
+
     $override = TenantCommercialOverride::query()->where('tenant_id', (int) $tenant->id)->first();
     expect($override)->not->toBeNull()
         ->and((string) data_get($override?->billing_mapping ?? [], 'stripe.fulfillment.status'))->toBeIn(['fulfilled', 'noop']);
@@ -116,6 +125,9 @@ test('checkout completion webhook can fulfill local plan and addons idempotently
     ], $payload)->assertOk();
 
     expect(TenantBillingFulfillment::query()->where('tenant_id', (int) $tenant->id)->count())->toBe(1);
+    expect(TenantBillingSubscription::withoutGlobalScopes()
+        ->where('provider_subscription_reference', 'sub_fulfill_1')
+        ->count())->toBe(2);
 });
 
 test('landlord reconcile endpoint is gated and replays fulfillment safely', function (): void {
@@ -247,6 +259,13 @@ test('subscription deleted webhook downgrades stripe-fulfilled access and keeps 
         ->where('tenant_id', (int) $tenant->id)
         ->where('addon_key', 'sms')
         ->value('enabled'))->toBeFalse();
+
+    expect(TenantBillingSubscription::withoutGlobalScopes()
+        ->where('provider_subscription_reference', 'sub_cancel_1')
+        ->pluck('status')
+        ->unique()
+        ->values()
+        ->all())->toBe(['canceled']);
 
     $journey = app(TenantCommercialExperienceService::class)->merchantJourneyPayload((int) $tenant->id);
     expect((string) data_get($journey, 'commercial_summary.lifecycle_state'))->toBe('action_required')

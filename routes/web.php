@@ -508,6 +508,9 @@ Route::post('/api/mobile/v1/modern-forestry/product-reviews/submit', [ModernFore
 Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProductCatalogController::class, 'sessionStatus'])
     ->middleware('throttle:60,1')
     ->name('mobile.modern-forestry.session-status');
+Route::get('/mobile/authorize', \App\Http\Controllers\Mobile\EverbranchMobileAuthorizationController::class)
+    ->middleware('throttle:20,1')
+    ->name('mobile.everbranch.authorize');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
 Route::middleware(['auth', 'verified'])->group(function () {
