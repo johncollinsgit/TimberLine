@@ -6,6 +6,8 @@
 
 New mobile work uses Branch in presentation copy while retaining canonical module keys. A catalog entry is visible only when entitled and `mobile.status=ready|beta`; summary-only, placeholder, roadmap, unsafe, or unscoped entries fail closed. Contract v2 returns `branches` and temporarily retains the v1 `modules` alias.
 
+Trade-profile Home metrics resolve from the tenant blueprint and tenant-scoped field jobs: jobs with `status=in_progress`, gross/contract value in job metadata, distinct assigned crew keys or users, and potential/estimate/quoted pipeline stages. The mobile Branches catalog supplies a purpose-specific icon for every visible entry, counts every non-active growth path, and exposes product/setup language for owned as well as available Branches.
+
 ## Everbranch Tenant App Contract (2026-07-10)
 
 This folder now owns two deliberately separate surfaces. The `ModernForestryMobile*` services feed the Modern Forestry customer shopping app. `TenantMobileModuleRegistry` feeds the cross-tenant Everbranch work app at `../everbranch-mobile`; do not reuse customer commerce session assumptions for tenant users.

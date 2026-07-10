@@ -295,8 +295,59 @@ test('mobile workspace bootstrap is membership scoped and entitlement driven', f
     expect($keys)->toContain('customers', 'field_service', 'work_core')
         ->and($keys)->not->toContain('messaging');
     expect($response->json('branches'))->toBe($response->json('modules'));
+    expect((int) $response->json('branches_summary.available'))->toBeGreaterThan(0);
 
     $this->getJson('/api/mobile/v1/workspaces/'.$other->slug.'/bootstrap')->assertNotFound();
+});
+
+test('trade workspace home reports active jobs revenue crews and potential jobs', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Trade Metrics', 'slug' => 'trade-metrics']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => [
+            'tenant_blueprint' => [
+                'business_template' => 'electrician',
+                'starter_modules' => ['customers', 'jobs'],
+            ],
+        ],
+    ]);
+    $user = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $crewMember = User::factory()->create(['role' => 'manager', 'is_active' => true, 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+    $crewMember->tenants()->attach($tenant->id, ['role' => 'manager']);
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $user->id,
+        'title' => 'Panel upgrade',
+        'status' => 'in_progress',
+        'metadata' => ['gross_revenue' => 8200, 'crew_key' => 'crew-a'],
+    ]);
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $crewMember->id,
+        'title' => 'Commercial rough-in',
+        'status' => 'in_progress',
+        'metadata' => ['contract_value' => 11800, 'crew_key' => 'crew-b'],
+    ]);
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Generator estimate',
+        'status' => 'potential',
+        'metadata' => ['quoted_total' => 4500],
+    ]);
+    Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/trade-metrics/bootstrap')
+        ->assertOk()
+        ->assertJsonPath('dashboard.hero.label', 'Jobs in progress')
+        ->assertJsonPath('dashboard.hero.value', '2')
+        ->assertJsonPath('dashboard.summary_cards.0.label', 'Total gross revenue')
+        ->assertJsonPath('dashboard.summary_cards.0.value', '$20,000.00')
+        ->assertJsonPath('dashboard.summary_cards.1.value', '2')
+        ->assertJsonPath('dashboard.summary_cards.2.value', '1');
 });
 
 test('mobile customer work and preferences endpoints stay membership scoped', function (): void {
@@ -459,6 +510,8 @@ test('branches uses the fail closed mobile store surface and keeps checkout disa
     $keys = collect($response->json('modules'))->pluck('module_key');
     expect($keys)->toContain('field_service', 'messaging')
         ->and($keys)->not->toContain('dashboard', 'uploads', 'mobile_connection');
+    expect(collect($response->json('modules'))->every(fn (array $module): bool => trim((string) ($module['icon'] ?? '')) !== ''))->toBeTrue()
+        ->and(collect($response->json('modules'))->every(fn (array $module): bool => str_ends_with((string) $module['display_name'], ' Branch')))->toBeTrue();
 
     $this->postJson('/api/mobile/v1/workspaces/branches-workspace/branches/messaging/billing-handoff', [
         'platform' => 'ios',

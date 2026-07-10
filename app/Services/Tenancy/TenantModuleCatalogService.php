@@ -57,7 +57,8 @@ class TenantModuleCatalogService
 
             $modules[] = [
                 'module_key' => $moduleKey,
-                'display_name' => (string) ($moduleState['label'] ?? $definition['display_name'] ?? Str::headline($moduleKey)),
+                'icon' => $this->mobileStoreIcon($moduleKey, $definition),
+                'display_name' => $this->storeDisplayName($surface, (string) ($moduleState['label'] ?? $definition['display_name'] ?? Str::headline($moduleKey))),
                 'description' => (string) ($definition['description'] ?? ''),
                 'short_description' => (string) ($productMetadata['short_description'] ?? ''),
                 'long_description' => (string) ($productMetadata['long_description'] ?? ''),
@@ -147,6 +148,44 @@ class TenantModuleCatalogService
                 'request' => array_values(array_filter($modules, static fn (array $row): bool => ($row['state_bucket'] ?? '') === 'request')),
             ],
         ];
+    }
+
+    protected function mobileStoreIcon(string $moduleKey, array $definition): string
+    {
+        $declared = strtolower(trim((string) data_get($definition, 'mobile.navigation.icon', '')));
+        if ($declared !== '' && $declared !== 'grid-2x2') {
+            return $declared;
+        }
+
+        return match ($moduleKey) {
+            'field_service', 'work_core' => 'briefcase-business',
+            'messaging' => 'messages-square',
+            'sms' => 'message-square-text',
+            'email', 'bulk_email_marketing' => 'mail',
+            'campaigns' => 'megaphone',
+            'reviews' => 'star',
+            'rewards' => 'gift',
+            'birthdays' => 'cake',
+            'wishlist' => 'heart',
+            'referrals' => 'user-plus',
+            'subscriptions' => 'repeat-2',
+            'reporting', 'diagnostics_advanced' => 'chart-no-axes-combined',
+            'ai' => 'sparkles',
+            'integrations', 'additional_channels' => 'plug',
+            'uploads' => 'cloud-upload',
+            'settings' => 'settings',
+            default => 'blocks',
+        };
+    }
+
+    protected function storeDisplayName(string $surface, string $displayName): string
+    {
+        $displayName = trim($displayName);
+        if (strtolower(trim($surface)) !== 'mobile' || Str::endsWith(strtolower($displayName), ' branch')) {
+            return $displayName;
+        }
+
+        return $displayName.' Branch';
     }
 
     /**
