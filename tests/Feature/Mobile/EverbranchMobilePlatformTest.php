@@ -13,6 +13,7 @@ use App\Models\TenantAccessProfile;
 use App\Models\TenantBillingSubscription;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantModuleEntitlement;
+use App\Models\TenantSupportTicket;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -448,6 +449,39 @@ test('authorized landlord home reports revenue tenant mix growth and tenant oper
     $this->getJson('/api/mobile/v1/landlord/tenants/'.$retail->id)
         ->assertOk()->assertJsonPath('tenant.name', 'Retail Tenant')
         ->assertJsonStructure(['metrics', 'users', 'branches', 'recent_actions']);
+});
+
+test('tenant support tickets stay scoped and authorized landlords can reply and resolve them', function (): void {
+    config()->set('tenancy.landlord.operator_roles', ['platform_admin']);
+    config()->set('tenancy.landlord.operator_emails', []);
+    $tenant = Tenant::query()->create(['name' => 'Needs Help', 'slug' => 'needs-help']);
+    $other = Tenant::query()->create(['name' => 'Other Support', 'slug' => 'other-support']);
+    $member = User::factory()->create(['role' => 'manager', 'is_active' => true, 'email_verified_at' => now()]);
+    $member->tenants()->attach($tenant->id, ['role' => 'manager']);
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+
+    $created = $this->postJson('/api/mobile/v1/workspaces/needs-help/support-tickets', [
+        'subject' => 'Cannot invite a crew member',
+        'body' => 'The invite action is unavailable.',
+        'category' => 'account',
+        'priority' => 'high',
+    ])->assertCreated()->assertJsonPath('ticket.status', 'open')->assertJsonPath('messages.0.author_context', 'tenant');
+    $ticketId = (int) $created->json('ticket.id');
+    $privateTicket = TenantSupportTicket::withoutGlobalScopes()->create(['tenant_id' => $other->id, 'created_by_user_id' => $member->id, 'subject' => 'Private', 'status' => 'open', 'last_activity_at' => now()]);
+
+    $this->getJson('/api/mobile/v1/workspaces/needs-help/support-tickets')->assertOk()->assertJsonCount(1, 'tickets');
+    $this->getJson('/api/mobile/v1/workspaces/needs-help/support-tickets/'.$privateTicket->id)->assertNotFound();
+    $this->postJson('/api/mobile/v1/workspaces/needs-help/support-tickets/'.$ticketId.'/reply', ['body' => 'This is still blocking us.'])->assertOk()->assertJsonCount(2, 'messages');
+
+    $operator = User::factory()->create(['role' => 'platform_admin', 'is_active' => true, 'email_verified_at' => now()]);
+    Sanctum::actingAs($operator, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/landlord/tickets')->assertOk()->assertJsonFragment(['subject' => 'Cannot invite a crew member']);
+    $this->postJson('/api/mobile/v1/landlord/tickets/'.$ticketId.'/reply', ['body' => 'We are looking into this.'])->assertOk()->assertJsonPath('ticket.status', 'in_progress')->assertJsonPath('messages.2.author_context', 'landlord');
+    $this->patchJson('/api/mobile/v1/landlord/tickets/'.$ticketId, ['assign_to_me' => true, 'status' => 'resolved'])
+        ->assertOk()->assertJsonPath('ticket.status', 'resolved')->assertJsonPath('ticket.assignee', $operator->name);
+
+    expect(LandlordOperatorAction::query()->where('action_type', 'tenant.support_ticket.created')->exists())->toBeTrue()
+        ->and(LandlordOperatorAction::query()->where('action_type', 'tenant.support_ticket.triaged')->exists())->toBeTrue();
 });
 
 test('mobile messaging aggregates entitled conversations and scopes thread actions', function (): void {

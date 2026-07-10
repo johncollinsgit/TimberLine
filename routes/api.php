@@ -31,6 +31,10 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
             Route::get('/tenants/{tenant}', [EverbranchMobileLandlordController::class, 'tenant'])->middleware('abilities:mobile:read')->whereNumber('tenant')->name('landlord.tenants.show');
             Route::patch('/access-requests/{accessRequest}', [EverbranchMobileLandlordController::class, 'decideAccess'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->whereNumber('accessRequest')->name('landlord.access.decide');
             Route::patch('/support/{inquiry}', [EverbranchMobileLandlordController::class, 'updateInquiry'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('inquiry')->name('landlord.support.update');
+            Route::get('/tickets', [EverbranchMobileLandlordController::class, 'tickets'])->middleware('abilities:mobile:read')->name('landlord.tickets');
+            Route::get('/tickets/{ticket}', [EverbranchMobileLandlordController::class, 'ticket'])->middleware('abilities:mobile:read')->whereNumber('ticket')->name('landlord.tickets.show');
+            Route::patch('/tickets/{ticket}', [EverbranchMobileLandlordController::class, 'triageTicket'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('ticket')->name('landlord.tickets.triage');
+            Route::post('/tickets/{ticket}/reply', [EverbranchMobileLandlordController::class, 'replyTicket'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('ticket')->name('landlord.tickets.reply');
         });
 
         Route::prefix('/workspaces/{tenant}')
@@ -38,6 +42,10 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
             ->group(function (): void {
                 Route::get('/bootstrap', [EverbranchMobileController::class, 'bootstrap'])->middleware('abilities:mobile:read')->name('workspace.bootstrap');
                 Route::patch('/branding', [EverbranchMobileController::class, 'updateBranding'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.branding.update');
+                Route::get('/support-tickets', [EverbranchMobileController::class, 'supportTickets'])->middleware('abilities:mobile:read')->name('workspace.support.index');
+                Route::post('/support-tickets', [EverbranchMobileController::class, 'createSupportTicket'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.support.create');
+                Route::get('/support-tickets/{ticket}', [EverbranchMobileController::class, 'supportTicket'])->middleware('abilities:mobile:read')->whereNumber('ticket')->name('workspace.support.show');
+                Route::post('/support-tickets/{ticket}/reply', [EverbranchMobileController::class, 'replySupportTicket'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('ticket')->name('workspace.support.reply');
                 Route::get('/search', [EverbranchMobileController::class, 'search'])->middleware('abilities:mobile:read')->name('workspace.search');
                 Route::get('/customers', [EverbranchMobileController::class, 'customers'])->middleware('abilities:mobile:read')->name('workspace.customers');
                 Route::get('/customers/{customer}', [EverbranchMobileController::class, 'customer'])->middleware('abilities:mobile:read')->whereNumber('customer')->name('workspace.customers.show');

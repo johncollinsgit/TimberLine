@@ -12,6 +12,8 @@ Tenant bootstrap also returns a tenant-scoped `branding` block and `workspace_in
 
 Landlord mode remains a distinct authorization context rather than a tenant membership. An authenticated authorized operator may switch between tenant and landlord payloads without exchanging a second token. Landlord bootstrap includes catalog-derived MRR, tenant/user/activity counts, tenant-type distribution, 12-month cumulative tenant growth, recent audited activity, access/support queues, and tenant drill-down with users and Branch readiness. The configured Everbranch support operator email is the fail-safe operator-email default when `TENANCY_LANDLORD_OPERATOR_EMAILS` is blank; role authorization still applies.
 
+Tenant support is a core mobile service, not a paid Branch. `/workspaces/{tenant}/support-tickets` lets authenticated members create, list, open, and reply to tenant-scoped threads. `/landlord/tickets` is separately landlord-authorized and supports queue filters, assignment, replies, waiting/resolved states, and audited triage. Landlord mobile navigation is Home, Tenants, Tickets, Reports, and Account; tenant Branches and Work controls must never leak into it.
+
 ## Everbranch Tenant App Contract (2026-07-10)
 
 This folder now owns two deliberately separate surfaces. The `ModernForestryMobile*` services feed the Modern Forestry customer shopping app. `TenantMobileModuleRegistry` feeds the cross-tenant Everbranch work app at `../everbranch-mobile`; do not reuse customer commerce session assumptions for tenant users.
