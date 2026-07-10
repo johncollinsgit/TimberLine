@@ -700,6 +700,7 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 ## Everbranch Tenant Mobile Rule (2026-07-10)
 
 - `../everbranch-mobile` is the cross-tenant Everbranch app (`com.everbranch.app`) and its canonical remote is the private `johncollinsgit/everbranch-mobile` repository. Do not merge its concerns into the Modern Forestry SwiftUI customer app or its product-catalog APIs.
+- Tenant `1` remains John's owned Modern Forestry workspace. Everbranch modules/elements are allowed in this app when intentional: Rewards, Birthdays/Lifecycle, Branches, messaging, account settings, and similar product surfaces may be tenant `1` features or guarded shared-capable contracts. Do not remove or block them just because they say Everbranch, and do not let other tenants inherit Modern Forestry-specific mobile, Candle Cash, Candle Club, production, or Shopify behavior by accident.
 - Everbranch app 1.1.0 consumes mobile contract v2. Say Branch in tenant-facing copy, keep canonical `module_key` identifiers internally, return `branches`, and preserve `modules` plus `/modules/...` only as temporary compatibility aliases.
 - Operational Branches must provide a meaningful native workflow. Do not restore generic Share controls or expose summary-only/placeholder catalog entries.
 - Work Branch uses canonical `work_core`; resolve orders/jobs/clients from tenant blueprint and experience signals. Never accept a client-selected vertical.

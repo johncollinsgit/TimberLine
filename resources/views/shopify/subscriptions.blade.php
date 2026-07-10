@@ -164,6 +164,18 @@
             font-weight: 650;
         }
 
+        .eg-subscriptions-action-label {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid rgba(15, 23, 42, 0.14);
+            border-radius: 6px;
+            background: rgba(15, 23, 42, 0.03);
+            color: rgba(15, 23, 42, 0.66);
+            padding: 7px 10px;
+            font-size: 12px;
+            font-weight: 650;
+        }
+
         @media (max-width: 900px) {
             .eg-subscriptions-grid,
             .eg-subscriptions-band,
@@ -245,11 +257,11 @@
                                 <td>{{ $latest['event_type'] ?? 'None yet' }}</td>
                                 <td>
                                     <div class="eg-subscriptions-actions">
-                                        <button type="button">Pause</button>
-                                        <button type="button">Swap</button>
-                                        <button type="button">Address</button>
-                                        <button type="button">Payment email</button>
-                                        <button type="button">Cancel</button>
+                                        <span class="eg-subscriptions-action-label">Pause intent</span>
+                                        <span class="eg-subscriptions-action-label">Swap intent</span>
+                                        <span class="eg-subscriptions-action-label">Address intent</span>
+                                        <span class="eg-subscriptions-action-label">Payment email intent</span>
+                                        <span class="eg-subscriptions-action-label">Cancel intent</span>
                                     </div>
                                 </td>
                             </tr>
@@ -282,9 +294,9 @@
                             </p>
                             <p><span class="eg-subscriptions-pill">{{ $scent['product_status'] ?? 'draft' }}</span></p>
                             <div class="eg-subscriptions-actions">
-                                <button type="button">View scent</button>
-                                <button type="button">Export reviews</button>
-                                <button type="button">Publish product</button>
+                                <span class="eg-subscriptions-action-label">View scent pending</span>
+                                <span class="eg-subscriptions-action-label">Export reviews via API</span>
+                                <span class="eg-subscriptions-action-label">Publish product pending</span>
                             </div>
                         </section>
                     @empty

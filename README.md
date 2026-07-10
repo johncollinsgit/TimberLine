@@ -1,5 +1,13 @@
 # Modern Forestry Backstage
 
+## Modern Forestry / Tenant #1 Mobile Guard (2026-07-10)
+
+- This repo is still the custom Laravel app for Modern Forestry first. Tenant `1` is John's owned Modern Forestry workspace and must stay stable; do not treat work here as a broad tenant rollout just because the architecture is tenant-aware.
+- Everbranch-branded pieces such as Rewards, Birthdays/Lifecycle, Branches, messaging, and account configuration are allowed inside the Modern Forestry-owned app when they are deliberate tenant `1` features or guarded shared-capable contracts. The guard is against accidental broad rollout, not against using Everbranch product language in John's app.
+- The existing Modern Forestry customer app endpoints remain `/api/mobile/v1/modern-forestry/*`. Keep storefront, Candle Cash, Candle Club, Shopify checkout, and customer account/rewards data flows isolated to Modern Forestry unless a separate tested generalization is requested.
+- `/api/mobile/v1` is shared-capable infrastructure for the Everbranch app, but tenant slugs, Branches, account configuration, billing handoff, and messaging must remain membership-scoped and entitlement-gated. Do not infer that non-Modern-Forestry tenants receive Modern Forestry-specific behavior by default.
+- Commercial catalog fields such as purchase keys, pricing, Stripe lookup metadata, and `tenant_billing_subscriptions` may be committed as dormant bookkeeping. They must not activate checkout, create subscriptions, change entitlements, install modules, or expose paid actions unless the existing billing/lifecycle flags are explicitly enabled and tested.
+
 ## Everbranch Mobile Platform (2026-07-10)
 
 - Contract v2 / app 1.1.0 replaces generic module summaries with operational Branches: Messaging, Customers, tenant-aware Work, Reporting, typed Search, interactive Account, and authorized landlord triage.

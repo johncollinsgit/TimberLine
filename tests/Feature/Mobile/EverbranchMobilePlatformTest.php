@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantBillingSubscription;
 use App\Models\TenantDiscoveryProfile;
+use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSupportTicket;
 use App\Models\User;
@@ -609,5 +610,64 @@ test('branches uses the fail closed mobile store surface and keeps checkout disa
     $this->postJson('/api/mobile/v1/workspaces/branches-workspace/branches/messaging/billing-handoff', [
         'platform' => 'ios',
         'storefront_country' => 'CAN',
+    ])->assertForbidden();
+});
+
+test('mobile account can read and update birthday configuration for tenant managers', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Birthday Workspace', 'slug' => 'birthday-workspace']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'admin']);
+    Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/birthday-workspace/account/birthday-config')
+        ->assertOk()
+        ->assertJsonPath('reward.reward_type', 'candle_cash')
+        ->assertJsonPath('can_save', true);
+
+    $this->patchJson('/api/mobile/v1/workspaces/birthday-workspace/account/birthday-config', [
+        'reward' => [
+            'enabled' => false,
+            'reward_name' => 'Modern Forestry Birthday Credit',
+            'candle_cash_amount' => 75,
+            'claim_window_days_after' => 21,
+        ],
+        'campaign' => [
+            'sms_enabled' => true,
+            'birthday_sms_body' => 'Happy birthday from Modern Forestry. Your Everbranch reward is ready.',
+        ],
+        'capture' => [
+            'year_optional' => false,
+            'required_fields' => 'email,first_name,last_name,birthday',
+        ],
+    ])
+        ->assertOk()
+        ->assertJsonPath('reward.enabled', false)
+        ->assertJsonPath('reward.reward_name', 'Modern Forestry Birthday Credit')
+        ->assertJsonPath('reward.candle_cash_amount', 75)
+        ->assertJsonPath('campaign.sms_enabled', true)
+        ->assertJsonPath('capture.year_optional', false);
+
+    expect(TenantMarketingSetting::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('key', 'birthday_reward_config')
+        ->first()?->value['candle_cash_amount'])->toBe(75);
+});
+
+test('mobile birthday configuration is not writable by member role', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Member Birthday Workspace', 'slug' => 'member-birthday-workspace']);
+    $user = User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'member']);
+    Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/member-birthday-workspace/account/birthday-config')
+        ->assertForbidden();
+    $this->patchJson('/api/mobile/v1/workspaces/member-birthday-workspace/account/birthday-config', [
+        'reward' => ['enabled' => false],
     ])->assertForbidden();
 });

@@ -76,6 +76,12 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/branches/{moduleKey}/billing-handoff', [EverbranchMobileController::class, 'billingHandoff'])
                     ->middleware(['abilities:mobile:write', 'throttle:10,1'])
                     ->name('workspace.branches.billing');
+                Route::get('/account/birthday-config', [EverbranchMobileController::class, 'birthdayConfig'])
+                    ->middleware('abilities:mobile:read')
+                    ->name('workspace.account.birthday-config');
+                Route::patch('/account/birthday-config', [EverbranchMobileController::class, 'saveBirthdayConfig'])
+                    ->middleware(['abilities:mobile:write', 'throttle:20,1'])
+                    ->name('workspace.account.birthday-config.save');
             });
     });
 });

@@ -1,5 +1,11 @@
 # Mobile Catalog Services
 
+## Modern Forestry / Tenant #1 Mobile Guard (2026-07-10)
+
+This folder owns deliberately separate surfaces. The `ModernForestryMobile*` services feed the Modern Forestry customer shopping app and remain product-specific to tenant `1`; the `TenantMobile*` services feed the Everbranch work app through guarded, membership-scoped contracts.
+
+Everbranch elements such as Rewards, Birthdays/Lifecycle, Branches, messaging, and account configuration are valid in the Modern Forestry-owned app when deliberately scoped. Do not move Modern Forestry-specific Candle Cash, Candle Club, Shopify checkout, catalog, or customer-account data flows into shared-capable services unless a human explicitly asks for that product generalization and tests prove tenant isolation.
+
 ## Everbranch Contract v2
 
 `TenantMobileMessagingService` owns tenant-wide conversation discovery and delegates delivery, consent, suppression, metering, and App-thread behavior to the established messaging services. `TenantMobileResourceService` owns customer details and server-resolved order/job/client Work payloads. `TenantMobileLandlordService` is guarded by `MobileLandlordAccessService` and exposes audited, non-destructive triage only.

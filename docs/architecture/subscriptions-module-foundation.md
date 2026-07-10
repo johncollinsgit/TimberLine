@@ -20,6 +20,8 @@ Shopify remains the source of truth for checkout, selling plans, subscription co
 - Votes are unique by tenant, poll, and Shopify subscription contract GID.
 - Recharge migration runs are dry-run first and cutover approval requires explicit Recharge billing pause confirmation.
 - Admin actions are recorded as lifecycle intents until live Shopify mutations are enabled after cutover.
+- Customer-facing Candle Club management actions are also intent-only until Shopify draft/commit, payment update email, and billing-attempt services are implemented.
+- Current readiness and replacement-plan details are tracked in `docs/operations/modern-forestry-candle-club-readiness.md`.
 
 ## Secrets
 

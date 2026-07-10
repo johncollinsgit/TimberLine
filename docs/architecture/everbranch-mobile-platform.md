@@ -12,6 +12,8 @@
 
 The tenant app is a separate repository at `../everbranch-mobile`, bundled with React/TypeScript and Capacitor for `com.everbranch.app` on iOS and Android. It does not wrap the production web app and does not replace or modify the Modern Forestry SwiftUI customer app. The initial lane is a US B2B pilot.
 
+Modern Forestry / The Forestry Studio remains tenant `1` and John's owned flagship workspace. Everbranch product elements such as Rewards, Birthdays/Lifecycle, Branches, messaging, and account configuration are allowed in the Modern Forestry-owned app when they are intentionally tenant-scoped or guarded shared-capable contracts. Modern Forestry-specific Candle Cash, Candle Club, Shopify checkout, customer account data flows, and product catalog behavior stay product-specific unless a separate product generalization is explicitly requested and tested.
+
 ## Trust and Session Contract
 
 1. The app opens `/mobile/authorize` in the system browser. Existing Fortify login, email verification, and 2FA remain authoritative.

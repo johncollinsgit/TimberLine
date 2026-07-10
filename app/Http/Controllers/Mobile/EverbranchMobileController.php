@@ -10,6 +10,7 @@ use App\Models\FieldServiceJobPhoto;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantDiscoveryProfile;
+use App\Models\TenantMarketingSetting;
 use App\Models\User;
 use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Dashboard\UnifiedDashboardService;
@@ -21,10 +22,12 @@ use App\Services\Mobile\TenantMobileSupportService;
 use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\TenantExperienceProfileService;
+use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class EverbranchMobileController extends Controller
@@ -449,6 +452,84 @@ class EverbranchMobileController extends Controller
         ], ($result['ok'] ?? false) ? 200 : 409);
     }
 
+    public function birthdayConfig(Request $request, TenantMarketingSettingsResolver $settings): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($this->canManageMarketing($user, $tenant), 403);
+
+        return response()->json([
+            'reward' => $this->birthdayRewardConfig((int) $tenant->id, $settings),
+            'campaign' => $this->birthdayCampaignConfig((int) $tenant->id, $settings),
+            'capture' => $this->birthdayCaptureConfig((int) $tenant->id, $settings),
+            'can_save' => Schema::hasTable('tenant_marketing_settings'),
+        ]);
+    }
+
+    public function saveBirthdayConfig(Request $request, TenantMarketingSettingsResolver $settings): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($this->canManageMarketing($user, $tenant), 403);
+        abort_unless(Schema::hasTable('tenant_marketing_settings'), 503, 'Birthday settings are not available yet.');
+
+        $validated = $request->validate([
+            'reward.enabled' => ['sometimes', 'boolean'],
+            'reward.reward_type' => ['sometimes', 'in:candle_cash,discount_code,free_shipping'],
+            'reward.reward_name' => ['sometimes', 'string', 'max:160'],
+            'reward.reward_value' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'reward.candle_cash_amount' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'reward.claim_window_days_before' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:365'],
+            'reward.claim_window_days_after' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:365'],
+            'campaign.email_enabled' => ['sometimes', 'boolean'],
+            'campaign.sms_enabled' => ['sometimes', 'boolean'],
+            'campaign.birthday_send_offset' => ['sometimes', 'nullable', 'integer', 'min:-30', 'max:30'],
+            'campaign.followup_send_offset' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:30'],
+            'campaign.birthday_email_subject' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'campaign.birthday_sms_body' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'capture.year_optional' => ['sometimes', 'boolean'],
+            'capture.required_fields' => ['sometimes', 'nullable', 'string', 'max:500'],
+        ]);
+
+        $tenantId = (int) $tenant->id;
+        $reward = array_replace($this->birthdayRewardConfig($tenantId, $settings), (array) ($validated['reward'] ?? []));
+        $campaign = array_replace($this->birthdayCampaignConfig($tenantId, $settings), (array) ($validated['campaign'] ?? []));
+        $capture = array_replace($this->birthdayCaptureConfig($tenantId, $settings), (array) ($validated['capture'] ?? []));
+
+        $this->saveTenantMarketingSetting($tenantId, 'birthday_reward_config', [
+            'enabled' => (bool) ($reward['enabled'] ?? false),
+            'reward_type' => (string) ($reward['reward_type'] ?? 'candle_cash'),
+            'reward_name' => trim((string) ($reward['reward_name'] ?? 'Birthday Reward Credit')) ?: 'Birthday Reward Credit',
+            'reward_value' => isset($reward['reward_value']) ? (float) $reward['reward_value'] : null,
+            'candle_cash_amount' => isset($reward['candle_cash_amount']) ? (int) $reward['candle_cash_amount'] : 0,
+            'discount_code_prefix' => trim((string) ($reward['discount_code_prefix'] ?? 'BDAY')) ?: 'BDAY',
+            'free_shipping_code_prefix' => trim((string) ($reward['free_shipping_code_prefix'] ?? 'BDAYSHIP')) ?: 'BDAYSHIP',
+            'claim_window_days_before' => isset($reward['claim_window_days_before']) ? (int) $reward['claim_window_days_before'] : 0,
+            'claim_window_days_after' => isset($reward['claim_window_days_after']) ? (int) $reward['claim_window_days_after'] : 14,
+        ]);
+        $this->saveTenantMarketingSetting($tenantId, 'birthday_campaign_config', [
+            'email_enabled' => (bool) ($campaign['email_enabled'] ?? true),
+            'sms_enabled' => (bool) ($campaign['sms_enabled'] ?? false),
+            'birthday_send_offset' => isset($campaign['birthday_send_offset']) ? (int) $campaign['birthday_send_offset'] : 0,
+            'followup_send_offset' => isset($campaign['followup_send_offset']) ? (int) $campaign['followup_send_offset'] : 3,
+            'birthday_email_subject' => trim((string) ($campaign['birthday_email_subject'] ?? 'Happy Birthday from The Forestry Studio')),
+            'birthday_email_body' => trim((string) ($campaign['birthday_email_body'] ?? 'Activate your birthday reward and use it on your next order.')),
+            'birthday_sms_body' => trim((string) ($campaign['birthday_sms_body'] ?? 'Happy Birthday. Your reward is ready.')),
+            'followup_email_subject' => trim((string) ($campaign['followup_email_subject'] ?? 'Your birthday reward is still waiting')),
+            'followup_email_body' => trim((string) ($campaign['followup_email_body'] ?? 'Your birthday reward is still available if you want to use it.')),
+            'followup_sms_body' => trim((string) ($campaign['followup_sms_body'] ?? 'Your birthday reward is still waiting for you.')),
+        ]);
+        $this->saveTenantMarketingSetting($tenantId, 'birthday_capture_config', [
+            'year_optional' => (bool) ($capture['year_optional'] ?? true),
+            'match_priority' => trim((string) ($capture['match_priority'] ?? 'shopify_customer_id,email,phone,first_name+last_name+birthday')),
+            'required_fields' => trim((string) ($capture['required_fields'] ?? 'email,first_name,last_name,birthday')),
+        ]);
+
+        $settings->flushArrayCache();
+
+        return $this->birthdayConfig($request, $settings);
+    }
+
     protected function user(Request $request): User
     {
         $user = $request->user();
@@ -491,6 +572,64 @@ class EverbranchMobileController extends Controller
     {
         return $this->tenantRole($user, $tenant) === 'admin'
             || strtolower(trim((string) $user->role)) === 'platform_admin';
+    }
+
+    protected function canManageMarketing(User $user, Tenant $tenant): bool
+    {
+        return in_array($this->tenantRole($user, $tenant), ['admin', 'manager', 'marketing_manager'], true)
+            || strtolower(trim((string) $user->role)) === 'platform_admin';
+    }
+
+    /** @return array<string,mixed> */
+    protected function birthdayRewardConfig(int $tenantId, TenantMarketingSettingsResolver $settings): array
+    {
+        return array_merge([
+            'enabled' => true,
+            'reward_type' => 'candle_cash',
+            'reward_name' => 'Birthday Reward Credit',
+            'reward_value' => 10.00,
+            'candle_cash_amount' => 50,
+            'discount_code_prefix' => 'BDAY',
+            'free_shipping_code_prefix' => 'BDAYSHIP',
+            'claim_window_days_before' => 0,
+            'claim_window_days_after' => 14,
+        ], $settings->array('birthday_reward_config', $tenantId, []));
+    }
+
+    /** @return array<string,mixed> */
+    protected function birthdayCampaignConfig(int $tenantId, TenantMarketingSettingsResolver $settings): array
+    {
+        return array_merge([
+            'email_enabled' => true,
+            'sms_enabled' => false,
+            'birthday_send_offset' => 0,
+            'followup_send_offset' => 3,
+            'birthday_email_subject' => 'Happy Birthday from The Forestry Studio',
+            'birthday_email_body' => 'Activate your birthday reward and use it on your next order.',
+            'birthday_sms_body' => 'Happy Birthday. Your reward is ready.',
+            'followup_email_subject' => 'Your birthday reward is still waiting',
+            'followup_email_body' => 'Your birthday reward is still available if you want to use it.',
+            'followup_sms_body' => 'Your birthday reward is still waiting for you.',
+        ], $settings->array('birthday_campaign_config', $tenantId, []));
+    }
+
+    /** @return array<string,mixed> */
+    protected function birthdayCaptureConfig(int $tenantId, TenantMarketingSettingsResolver $settings): array
+    {
+        return array_merge([
+            'year_optional' => true,
+            'match_priority' => 'shopify_customer_id,email,phone,first_name+last_name+birthday',
+            'required_fields' => 'email,first_name,last_name,birthday',
+        ], $settings->array('birthday_capture_config', $tenantId, []));
+    }
+
+    /** @param array<string,mixed> $value */
+    protected function saveTenantMarketingSetting(int $tenantId, string $key, array $value): void
+    {
+        TenantMarketingSetting::query()->updateOrCreate(
+            ['tenant_id' => $tenantId, 'key' => $key],
+            ['value' => $value]
+        );
     }
 
     /** @return array<string,mixed> */
