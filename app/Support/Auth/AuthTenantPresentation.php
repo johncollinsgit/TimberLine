@@ -20,12 +20,27 @@ class AuthTenantPresentation
      */
     public static function fromContext(AuthTenantContext $context): array
     {
+        $portalName = (string) config('tenancy.auth.portal_name', config('everbranch.product_name', 'Everbranch'));
+
+        if ($context->classification === AuthTenantContext::NONE) {
+            return [
+                'variant' => AuthTenantContext::NONE,
+                'app_name' => $portalName,
+                'tenant_label' => $portalName,
+                'portal_name' => $portalName,
+                'hero_title' => 'Run operations, shipping, and fulfillment in one place.',
+                'hero_subtitle' => 'Track orders, inventory, fulfillment, and customer growth from one place built for real operations.',
+                'hero_tagline' => $portalName,
+                'login_eyebrow' => 'Sign in',
+                'login_title' => 'Welcome back',
+                'login_subtitle' => 'Sign in to continue to your '.$portalName.' workspace.',
+            ];
+        }
+
         $tenantName = trim((string) ($context->tenant?->name ?? ''));
         $resolvedTenantName = $tenantName !== ''
             ? $tenantName
             : (string) config('tenancy.auth.fallback_tenant_label', config('everbranch.flagship_tenant_name', 'Modern Forestry'));
-
-        $portalName = (string) config('tenancy.auth.portal_name', config('everbranch.product_name', 'Everbranch'));
 
         if ($context->classification === AuthTenantContext::GENERIC) {
             return [

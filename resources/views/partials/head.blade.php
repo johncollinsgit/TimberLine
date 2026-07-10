@@ -9,7 +9,7 @@
     $brandAssets = (array) ($brand_assets ?? config('everbranch.brand_assets', []));
     $mfAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
     $mfPageTitle = ($resolvedTitle !== '' && mb_strtolower($resolvedTitle) !== mb_strtolower($appMetaName))
-        ? $resolvedTitle.' · '.$appMetaName
+        ? $resolvedTitle.' - '.$appMetaName
         : $appMetaName;
     $mfDescription = trim((string) ($description ?? config('product_surfaces.promo.summary', 'Everbranch unifies production, shipping, and customer growth in one place.')));
     $mfOgImage = asset((string) ($brandAssets['og_image'] ?? 'og-image.png')).'?v='.$mfAssetVersion;

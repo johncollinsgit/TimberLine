@@ -71,6 +71,28 @@ test('non flagship tenant gets safe generic auth presentation', function (): voi
     $response->assertSee('Tenant Console', false);
 });
 
+test('landlord host login uses Everbranch platform branding instead of flagship tenant branding', function (): void {
+    Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+
+    $response = $this->get('http://app.theeverbranch.com/login');
+
+    $response->assertOk();
+    $response->assertViewHas('authTenantContext', function (array $context): bool {
+        return ! (bool) ($context['resolved'] ?? false)
+            && ($context['classification'] ?? null) === 'none';
+    });
+    $response->assertViewHas('authTenantPresentation', function (array $presentation): bool {
+        return ($presentation['variant'] ?? null) === 'none'
+            && ($presentation['app_name'] ?? null) === 'Everbranch'
+            && ($presentation['tenant_label'] ?? null) === 'Everbranch';
+    });
+    $response->assertSee('<title>Everbranch</title>', false);
+    $response->assertDontSee('Modern Forestry Everbranch', false);
+});
+
 test('login submit path is rejected when host is not canonical', function (): void {
     $this->post('http://unknown.local/login', [
             'email' => 'nobody@example.com',

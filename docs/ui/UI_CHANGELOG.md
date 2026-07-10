@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-07-09 - Everbranch Auth Branding Cleanup
+
+### What changed
+- Updated landlord-host auth presentation so `app.theeverbranch.com/login` brands itself as Everbranch instead of falling back to the Modern Forestry flagship tenant label.
+- Cleaned the shared auth-shell fallback labels to use Everbranch product naming instead of `config('app.name')`.
+- Fixed the shared page-title separator in `resources/views/partials/head.blade.php` so auth and shared pages render a clean ASCII separator.
+
+### What did not change
+- Tenant-branded login on tenant hosts still preserves the actual tenant label, including Modern Forestry on flagship tenant surfaces.
+- No host routing, login flow, Google auth behavior, post-login redirects, or tenant access rules changed.
+
 ## 2026-07-06 — Landlord Developer Control Center
 
 ### What changed
