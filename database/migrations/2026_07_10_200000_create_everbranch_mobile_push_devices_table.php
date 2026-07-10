@@ -8,6 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // MySQL can retain the table when a later index DDL statement fails.
+        // Treat that state as complete so production deploys converge safely.
+        if (Schema::hasTable('everbranch_mobile_push_devices')) {
+            return;
+        }
+
         Schema::create('everbranch_mobile_push_devices', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
@@ -19,7 +25,7 @@ return new class extends Migration
             $table->boolean('notifications_enabled')->default(true);
             $table->timestamp('last_seen_at')->nullable();
             $table->timestamps();
-            $table->index(['user_id', 'notifications_enabled']);
+            $table->index(['user_id', 'notifications_enabled'], 'eb_push_user_enabled_idx');
         });
     }
 
