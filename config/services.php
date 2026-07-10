@@ -55,15 +55,16 @@ return [
     ],
 
     'ses' => [
-        'key'    => env('AWS_ACCESS_KEY_ID'),
+        'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+        'account_id' => env('AWS_ACCOUNT_ID'),
     ],
 
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel'              => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
 
@@ -129,6 +130,8 @@ return [
 
     'sendgrid' => [
         'api_key' => env('SENDGRID_API_KEY'),
+        'subuser_ips' => env('SENDGRID_SUBUSER_IPS'),
+        'subuser_region' => env('SENDGRID_SUBUSER_REGION', 'global'),
     ],
 
     'modern_forestry_apns' => [
@@ -195,22 +198,22 @@ return [
         'stores' => [
 
             'retail' => [
-                'shop'                   => env('SHOPIFY_RETAIL_SHOP'),
-                'access_token'           => env('SHOPIFY_RETAIL_ACCESS_TOKEN'),
+                'shop' => env('SHOPIFY_RETAIL_SHOP'),
+                'access_token' => env('SHOPIFY_RETAIL_ACCESS_TOKEN'),
                 'storefront_access_token' => env('SHOPIFY_RETAIL_STOREFRONT_ACCESS_TOKEN'),
-                'client_id'              => env('SHOPIFY_RETAIL_CLIENT_ID'),
-                'client_secret'          => env('SHOPIFY_RETAIL_CLIENT_SECRET'),
-                'timezone'               => env('SHOPIFY_RETAIL_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
+                'client_id' => env('SHOPIFY_RETAIL_CLIENT_ID'),
+                'client_secret' => env('SHOPIFY_RETAIL_CLIENT_SECRET'),
+                'timezone' => env('SHOPIFY_RETAIL_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
             ],
 
             'wholesale' => [
-                'shop'          => env('SHOPIFY_WHOLESALE_SHOP'),
-                'access_token'  => env('SHOPIFY_WHOLESALE_ACCESS_TOKEN'),
-                'client_id'     => env('SHOPIFY_WHOLESALE_CLIENT_ID'),
+                'shop' => env('SHOPIFY_WHOLESALE_SHOP'),
+                'access_token' => env('SHOPIFY_WHOLESALE_ACCESS_TOKEN'),
+                'client_id' => env('SHOPIFY_WHOLESALE_CLIENT_ID'),
                 'client_secret' => env('SHOPIFY_WHOLESALE_CLIENT_SECRET'),
                 'embedded_client_id' => env('SHOPIFY_WHOLESALE_EMBEDDED_CLIENT_ID'),
                 'embedded_client_secret' => env('SHOPIFY_WHOLESALE_EMBEDDED_CLIENT_SECRET'),
-                'timezone'      => env('SHOPIFY_WHOLESALE_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
+                'timezone' => env('SHOPIFY_WHOLESALE_TIMEZONE', env('SHOPIFY_REPORTING_TIMEZONE', 'America/New_York')),
             ],
 
         ],

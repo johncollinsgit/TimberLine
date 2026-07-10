@@ -29,11 +29,10 @@ class MessagingResponseInboxService
         protected ModernForestryApnsService $apnsService,
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected TenantHostBuilder $hostBuilder,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $filters
+     * @param  array<string,mixed>  $filters
      * @return array{summary:array<string,int>,conversations:array<int,array<string,mixed>>}
      */
     public function index(int $tenantId, ?string $storeKey, array $filters = []): array
@@ -66,15 +65,15 @@ class MessagingResponseInboxService
 
         if ($search !== '') {
             $query->where(function (Builder $builder) use ($search): void {
-                $builder->where('phone', 'like', '%' . $search . '%')
-                    ->orWhere('email', 'like', '%' . strtolower($search) . '%')
-                    ->orWhere('subject', 'like', '%' . $search . '%')
-                    ->orWhere('last_message_preview', 'like', '%' . $search . '%')
+                $builder->where('phone', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.strtolower($search).'%')
+                    ->orWhere('subject', 'like', '%'.$search.'%')
+                    ->orWhere('last_message_preview', 'like', '%'.$search.'%')
                     ->orWhereHas('profile', function (Builder $profileQuery) use ($search): void {
-                        $profileQuery->where('first_name', 'like', '%' . $search . '%')
-                            ->orWhere('last_name', 'like', '%' . $search . '%')
-                            ->orWhere('email', 'like', '%' . strtolower($search) . '%')
-                            ->orWhere('phone', 'like', '%' . $search . '%');
+                        $profileQuery->where('first_name', 'like', '%'.$search.'%')
+                            ->orWhere('last_name', 'like', '%'.$search.'%')
+                            ->orWhere('email', 'like', '%'.strtolower($search).'%')
+                            ->orWhere('phone', 'like', '%'.$search.'%');
                     });
             });
         }
@@ -117,7 +116,7 @@ class MessagingResponseInboxService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     public function updateConversation(int $tenantId, ?string $storeKey, int $conversationId, array $payload, ?User $actor = null): array
     {
@@ -156,7 +155,7 @@ class MessagingResponseInboxService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      * @return array<string,mixed>
      */
     public function reply(int $tenantId, ?string $storeKey, int $conversationId, array $payload, ?User $actor = null): array
@@ -265,6 +264,11 @@ class MessagingResponseInboxService
         ]);
 
         $result = $this->twilioSmsService->sendSms((string) $conversation->phone, $body, [
+            'tenant_id' => (int) $conversation->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-message-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_message_delivery',
+            'source_id' => $delivery->id,
             'sender_key' => $this->nullableString(data_get($conversation->source_context, 'sender_key')),
             'status_callback_url' => $this->statusCallbackUrl(),
         ]);
@@ -364,6 +368,10 @@ class MessagingResponseInboxService
 
         $result = $this->sendGridEmailService->sendEmail((string) $conversation->email, $resolvedSubject, $body, [
             'tenant_id' => (int) $conversation->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_email_delivery',
+            'source_id' => $delivery->id,
             'campaign_type' => 'responses_inbox_reply',
             'template_key' => 'responses_inbox_reply',
             'customer_id' => (int) ($conversation->marketing_profile_id ?? 0),
@@ -552,7 +560,7 @@ class MessagingResponseInboxService
             return $subject;
         }
 
-        return 'Re: ' . $subject;
+        return 'Re: '.$subject;
     }
 
     protected function isMobileAppConversation(MessagingConversation $conversation): bool

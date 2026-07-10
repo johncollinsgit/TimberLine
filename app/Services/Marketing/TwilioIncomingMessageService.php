@@ -4,7 +4,6 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
-use App\Models\MessagingConversation;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
@@ -12,22 +11,24 @@ use Illuminate\Support\Facades\Log;
 class TwilioIncomingMessageService
 {
     protected const STOP_KEYWORDS = ['STOP', 'STOPALL'];
+
     protected const UNSUBSCRIBE_KEYWORDS = ['UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT'];
+
     protected const HELP_KEYWORDS = ['HELP'];
+
     protected const START_KEYWORDS = ['START', 'UNSTOP'];
 
     public function __construct(
         protected MessagingConversationService $conversationService,
         protected MessagingContactChannelStateService $channelStateService,
         protected MarketingIdentityNormalizer $identityNormalizer
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      * @return array{ok:bool,matched:bool,status:string,tenant_id:?int,conversation_id:?int,message_type:?string}
      */
-    public function handleInbound(array $payload): array
+    public function handleInbound(array $payload, ?int $expectedTenantId = null): array
     {
         $fromPhone = $this->identityNormalizer->toE164($payload['From'] ?? null);
         $toPhone = $this->identityNormalizer->toE164($payload['To'] ?? null);
@@ -35,7 +36,7 @@ class TwilioIncomingMessageService
         $providerMessageId = $this->nullableString($payload['MessageSid'] ?? $payload['SmsSid'] ?? null);
         $occurredAt = $this->occurredAt($payload);
         $classification = $this->classify($body);
-        $matchedDelivery = $this->resolveDelivery($payload, $fromPhone, $toPhone);
+        $matchedDelivery = $this->resolveDelivery($payload, $fromPhone, $toPhone, $expectedTenantId);
         $profile = null;
         $tenantId = null;
         $storeKey = null;
@@ -57,7 +58,7 @@ class TwilioIncomingMessageService
                 ],
             ];
         } else {
-            $profile = $this->resolveUniqueProfile($fromPhone);
+            $profile = $this->resolveUniqueProfile($fromPhone, $expectedTenantId);
             if ($profile instanceof MarketingProfile) {
                 $tenantId = (int) $profile->tenant_id;
             }
@@ -139,7 +140,7 @@ class TwilioIncomingMessageService
                         'event' => 'sms_opt_out',
                         'provider_message_id' => $providerMessageId,
                     ],
-                    'system-optout-' . ($providerMessageId ?? sha1($fromPhone . $occurredAt->toIso8601String()))
+                    'system-optout-'.($providerMessageId ?? sha1($fromPhone.$occurredAt->toIso8601String()))
                 );
                 $status = 'opted_out';
             } elseif ($classification['keyword'] === 'help') {
@@ -171,7 +172,7 @@ class TwilioIncomingMessageService
                         'event' => 'sms_resubscribe',
                         'provider_message_id' => $providerMessageId,
                     ],
-                    'system-resubscribe-' . ($providerMessageId ?? sha1($fromPhone . $occurredAt->toIso8601String()))
+                    'system-resubscribe-'.($providerMessageId ?? sha1($fromPhone.$occurredAt->toIso8601String()))
                 );
                 $status = 'resubscribed';
             } elseif (! in_array((string) $conversation->status, ['opted_out', 'archived'], true)) {
@@ -193,12 +194,13 @@ class TwilioIncomingMessageService
         ];
     }
 
-    protected function resolveDelivery(array $payload, ?string $fromPhone, ?string $toPhone): ?MarketingMessageDelivery
+    protected function resolveDelivery(array $payload, ?string $fromPhone, ?string $toPhone, ?int $tenantId = null): ?MarketingMessageDelivery
     {
         $replyToMessageId = $this->nullableString($payload['OriginalRepliedMessageSid'] ?? null);
         if ($replyToMessageId !== null) {
             $delivery = MarketingMessageDelivery::query()
                 ->where('provider_message_id', $replyToMessageId)
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->latest('id')
                 ->first();
             if ($delivery instanceof MarketingMessageDelivery) {
@@ -216,6 +218,7 @@ class TwilioIncomingMessageService
             $matched = MarketingMessageDelivery::query()
                 ->whereIn('to_phone', $fromCandidates)
                 ->whereIn('from_identifier', $toCandidates)
+                ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->orderByDesc('sent_at')
                 ->orderByDesc('id')
                 ->first();
@@ -226,12 +229,13 @@ class TwilioIncomingMessageService
 
         return MarketingMessageDelivery::query()
             ->whereIn('to_phone', $fromCandidates)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->orderByDesc('sent_at')
             ->orderByDesc('id')
             ->first();
     }
 
-    protected function resolveUniqueProfile(?string $phone): ?MarketingProfile
+    protected function resolveUniqueProfile(?string $phone, ?int $tenantId = null): ?MarketingProfile
     {
         $phoneCandidates = $this->identityNormalizer->phoneMatchCandidates($phone);
         if ($phoneCandidates === []) {
@@ -243,6 +247,7 @@ class TwilioIncomingMessageService
                 fn (string $value): string => preg_replace('/\D+/', '', $value) ?? $value,
                 $phoneCandidates
             ))
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->limit(2)
             ->get();
 

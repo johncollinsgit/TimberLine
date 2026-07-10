@@ -27,7 +27,7 @@
  <div>
  <div class="fb-eyebrow">Module Store</div>
  <h2 class="mt-2 text-xl font-semibold text-[var(--fb-text-primary)] sm:text-2xl">Workspace feature catalog</h2>
- <p class="mt-2 max-w-4xl text-sm text-[var(--fb-text-secondary)]">This page shows the features available for this workspace, with setup effort, pricing guidance, and access context. Viewing a card does not change billing or feature access.</p>
+ <p class="mt-2 max-w-4xl text-sm text-[var(--fb-text-secondary)]">Pick the next useful module, see what it does in plain language, and follow the setup steps when you are ready. Viewing a card does not change billing or feature access.</p>
  <div class="mt-4 flex flex-wrap gap-2">
  <a href="{{ route('custom-module-requests.create') }}" class="fb-btn-soft fb-link-soft">Request something custom</a>
  <a href="{{ route('custom-module-requests.index') }}" class="fb-btn-soft fb-link-soft">View custom requests</a>
@@ -43,7 +43,7 @@
  <section class="fb-panel" data-blueprint-module-recommendations="true">
  <div class="fb-panel-head">
  <div>
- <div class="fb-eyebrow">Setup Guidance</div>
+ <div class="fb-eyebrow">Setup guidance</div>
  <h2 class="mt-2 text-lg font-semibold text-[var(--fb-text-primary)]">Recommended for your setup</h2>
  <p class="mt-2 max-w-3xl text-sm text-[var(--fb-text-secondary)]">
  {{ $blueprintContext['business_template_label'] ?? 'Workspace' }} profile · {{ $blueprintContext['operating_mode_label'] ?? 'Not sure yet' }} setup. Recommendations are planning guidance only and do not install features, change access, start billing, run imports, or activate future workflows.
@@ -65,7 +65,7 @@
  <div class="fb-panel-body">
  <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
  @foreach(array_slice($blueprintRows, 0, 12) as $row)
- <article class="rounded-2xl border border-zinc-200 bg-white p-4">
+ <article class="rounded-lg border border-zinc-200 bg-white p-4">
  <div class="flex items-start justify-between gap-3">
  <div>
  <h3 class="text-sm font-semibold text-[var(--fb-text-primary)]">{{ $row['label'] ?? Str::headline((string) ($row['key'] ?? 'module')) }}</h3>
@@ -111,36 +111,11 @@
  $isFocused = $focusModule !== '' && $focusModule === $moduleKey;
  $ctaHref = trim((string) ($moduleState['cta_href'] ?? ''));
  @endphp
- <article class="fb-state {{ $isFocused ? 'is-focused' : '' }}">
- <div class="flex items-start justify-between gap-3">
- <div>
- <h3 class="text-base font-semibold text-[var(--fb-text-primary)]">{{ $module['display_name'] ?? $moduleKey }}</h3>
- <p class="mt-2 text-sm leading-6 text-[var(--fb-text-secondary)]">{{ $module['description'] ?? '' }}</p>
- </div>
- <x-tenancy.module-state-badge :module-state="$moduleState" size="sm" />
- </div>
-
- <div class="mt-3 flex flex-wrap gap-2 text-xs">
- <span class="fb-module-pill">{{ $module['blueprint_display_state_label'] ?? 'Catalog' }}</span>
- <span class="fb-module-pill">{{ $module['category_label'] ?? 'Customer operations' }}</span>
- <span class="fb-module-pill">{{ $module['lifecycle_label'] ?? 'Catalog' }}</span>
- <span class="fb-module-pill">{{ $module['setup_effort_label'] ?? 'Standard setup' }}</span>
- <span class="fb-module-pill">{{ $module['required_integrations_label'] ?? 'No required integration' }}</span>
- <span class="fb-module-pill">{{ strtoupper(str_replace('_', ' ', (string) ($module['billing_mode'] ?? 'unavailable'))) }}</span>
- @foreach((array) ($module['included_in_plans'] ?? []) as $planKey)
- <span class="fb-module-pill">{{ strtoupper((string) $planKey) }}</span>
- @endforeach
- </div>
-
- <div class="mt-3 space-y-1 text-sm leading-6 text-[var(--fb-text-secondary)]">
- <p>{{ $module['product_summary'] ?? $moduleState['reason_description'] ?? $moduleState['description'] ?? '' }}</p>
- <p>Setup guidance: {{ $module['blueprint_recommendation_reason'] ?? 'Catalog display state only.' }}</p>
-<p>Pricing: {{ $module['pricing_impact_label'] ?? 'Pricing impact not configured' }}</p>
- <p>Access: {{ $module['entitlement_requirement_label'] ?? 'Access review required' }}</p>
- <p>Mobile: {{ $module['mobile_relevance_label'] ?? 'Not mobile-specific' }}</p>
- </div>
-
- <div class="mt-4 flex flex-wrap gap-2">
+ <x-tenancy.module-next-step-card
+ :module="$module"
+ :module-state="$moduleState"
+ :focused="$isFocused"
+ >
  @if($cta === 'add')
  <form method="POST" action="{{ route('marketing.modules.activate', ['moduleKey' => $moduleKey]) }}">
  @csrf
@@ -157,8 +132,7 @@
  <a href="{{ $ctaHref }}" class="fb-btn-soft fb-link-soft">{{ $moduleState['cta_label'] ?? 'Learn more' }}</a>
  @endif
  <a href="{{ route('custom-module-requests.create', ['related_module_key' => $moduleKey]) }}" class="fb-btn-soft fb-link-soft">Request customization</a>
- </div>
- </article>
+ </x-tenancy.module-next-step-card>
  @endforeach
  </div>
  </div>

@@ -158,6 +158,10 @@ class CandleCashEarnedReminderService
                 [
                     'dry_run' => $effectiveDryRun,
                     'tenant_id' => $tenantId,
+                    'delivery_id' => $delivery->id,
+                    'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+                    'ledger_source_type' => 'marketing_email_delivery',
+                    'source_id' => $delivery->id,
                     'campaign_type' => 'candle_cash_reminder',
                     'template_key' => 'candle_cash_unredeemed_earned',
                     'customer_id' => $profileId,

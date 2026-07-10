@@ -17,11 +17,10 @@ class MarketingEmailDeliveryTrackingService
     public function __construct(
         protected MessageOrderAttributionService $messageOrderAttributionService,
         protected MessagingContactChannelStateService $channelStateService
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<int,array<string,mixed>> $events
+     * @param  array<int,array<string,mixed>>  $events
      * @return array{processed:int,matched:int,updated:int,duplicates:int,unmatched:int}
      */
     public function handleSendGridEvents(array $events): array
@@ -44,6 +43,7 @@ class MarketingEmailDeliveryTrackingService
             if (! $delivery) {
                 $summary['unmatched']++;
                 Log::warning('marketing sendgrid callback unmatched', ['event' => $event]);
+
                 continue;
             }
 
@@ -59,6 +59,7 @@ class MarketingEmailDeliveryTrackingService
 
             if (in_array($hash, $receivedHashes, true)) {
                 $summary['duplicates']++;
+
                 continue;
             }
 
@@ -99,7 +100,9 @@ class MarketingEmailDeliveryTrackingService
 
             $delivery->forceFill([
                 'provider_message_id' => $delivery->provider_message_id ?: $normalizedProviderMessageId,
-                'sendgrid_message_id' => $delivery->sendgrid_message_id ?: $normalizedProviderMessageId,
+                'sendgrid_message_id' => str_contains(strtolower((string) $delivery->provider), 'sendgrid')
+                    ? ($delivery->sendgrid_message_id ?: $normalizedProviderMessageId)
+                    : $delivery->sendgrid_message_id,
                 'status' => $shouldApplyState ? ((string) ($mapped['delivery_status'] ?? $delivery->status)) : $delivery->status,
                 'delivered_at' => $shouldApplyState && ($mapped['set_delivered_at'] ?? false) && ! $delivery->delivered_at
                     ? $occurredAt
@@ -146,14 +149,17 @@ class MarketingEmailDeliveryTrackingService
     }
 
     /**
-     * @param array<string,mixed> $event
+     * @param  array<string,mixed>  $event
      */
     protected function resolveDelivery(array $event): ?MarketingEmailDelivery
     {
         $customArgs = (array) ($event['custom_args'] ?? []);
+        $tenantId = (int) ($customArgs['tenant_id'] ?? $event['tenant_id'] ?? 0);
         $deliveryId = (int) ($customArgs['marketing_email_delivery_id'] ?? 0);
         if ($deliveryId > 0) {
-            $delivery = MarketingEmailDelivery::query()->find($deliveryId);
+            $delivery = MarketingEmailDelivery::query()
+                ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+                ->find($deliveryId);
             if ($delivery) {
                 return $delivery;
             }
@@ -162,10 +168,13 @@ class MarketingEmailDeliveryTrackingService
         $messageId = $this->normalizedMessageId((string) ($event['sg_message_id'] ?? ''));
         if ($messageId !== null) {
             $delivery = MarketingEmailDelivery::query()
-                ->where('provider_message_id', $messageId)
-                ->orWhere('provider_message_id', (string) ($event['sg_message_id'] ?? ''))
-                ->orWhere('sendgrid_message_id', $messageId)
-                ->orWhere('sendgrid_message_id', (string) ($event['sg_message_id'] ?? ''))
+                ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+                ->where(function ($query) use ($messageId, $event): void {
+                    $query->where('provider_message_id', $messageId)
+                        ->orWhere('provider_message_id', (string) ($event['sg_message_id'] ?? ''))
+                        ->orWhere('sendgrid_message_id', $messageId)
+                        ->orWhere('sendgrid_message_id', (string) ($event['sg_message_id'] ?? ''));
+                })
                 ->first();
             if ($delivery) {
                 return $delivery;
@@ -175,6 +184,7 @@ class MarketingEmailDeliveryTrackingService
         $email = trim((string) ($event['email'] ?? ''));
         if ($email !== '' && $messageId !== null) {
             return MarketingEmailDelivery::query()
+                ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->where('email', $email)
                 ->where(function ($query) use ($messageId): void {
                     $query->where('provider_message_id', $messageId)
@@ -190,7 +200,7 @@ class MarketingEmailDeliveryTrackingService
     }
 
     /**
-     * @param array<string,mixed> $event
+     * @param  array<string,mixed>  $event
      */
     protected function eventHash(array $event): string
     {
@@ -303,7 +313,7 @@ class MarketingEmailDeliveryTrackingService
     }
 
     /**
-     * @param array<string,mixed> $event
+     * @param  array<string,mixed>  $event
      */
     protected function syncChannelStateFromEvent(
         MarketingEmailDelivery $delivery,
@@ -572,7 +582,7 @@ class MarketingEmailDeliveryTrackingService
         $scheme = strtolower(trim((string) ($parts['scheme'] ?? 'https')));
         $path = trim((string) ($parts['path'] ?? ''));
         $path = $path !== '' ? $path : '/';
-        $path = '/' . ltrim($path, '/');
+        $path = '/'.ltrim($path, '/');
 
         $queryString = trim((string) ($parts['query'] ?? ''));
         if ($queryString === '') {
@@ -662,7 +672,7 @@ class MarketingEmailDeliveryTrackingService
     }
 
     /**
-     * @param array<string,mixed> $event
+     * @param  array<string,mixed>  $event
      */
     protected function occurredAtForEvent(array $event): ?CarbonImmutable
     {

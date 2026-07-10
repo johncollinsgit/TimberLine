@@ -120,7 +120,7 @@
     <section class="module-store-shell" data-module-store="shopify">
         <article class="module-store-summary">
             <h2 class="plans-title">Module Catalog</h2>
-            <p class="plans-copy">Plan {{ $currentPlan['label'] ?? 'Unknown' }} · {{ strtoupper((string) ($currentPlan['operating_mode'] ?? 'shopify')) }} workspace. This page shows modules available for this store, with setup and access guidance only.</p>
+            <p class="plans-copy">Plan {{ $currentPlan['label'] ?? 'Unknown' }} · {{ strtoupper((string) ($currentPlan['operating_mode'] ?? 'shopify')) }} workspace. Use this page to choose the next useful module and follow the setup steps. No checkout runs from this page.</p>
             <div class="module-store-meta">
                 <span class="module-store-pill">Active {{ count((array) ($sections['active'] ?? [])) }}</span>
                 <span class="module-store-pill">Available {{ count((array) ($sections['available'] ?? [])) }}</span>
@@ -150,34 +150,11 @@
                             $isFocused = $focusModule !== '' && $focusModule === $moduleKey;
                             $ctaHref = trim((string) ($moduleState['cta_href'] ?? ''));
                         @endphp
-                        <article class="module-store-card" data-module-key="{{ $moduleKey }}" data-focused="{{ $isFocused ? 'true' : 'false' }}">
-                            <header class="tenant-module-state-card__head">
-                                <div>
-                                    <h3 class="tenant-module-state-card__title">{{ $module['display_name'] ?? $moduleKey }}</h3>
-                                    <p class="module-store-copy">{{ $module['description'] ?? '' }}</p>
-                                </div>
-                                <x-tenancy.module-state-badge :module-state="$moduleState" size="sm" />
-                            </header>
-
-                            <div class="module-store-meta">
-                                <span class="module-store-pill">{{ $module['category_label'] ?? 'Customer operations' }}</span>
-                                <span class="module-store-pill">{{ $module['lifecycle_label'] ?? 'Catalog' }}</span>
-                                <span class="module-store-pill">{{ $module['setup_effort_label'] ?? 'Standard setup' }}</span>
-                                <span class="module-store-pill">{{ $module['required_integrations_label'] ?? 'No required integration' }}</span>
-                                <span class="module-store-pill">{{ strtoupper(str_replace('_', ' ', (string) ($module['billing_mode'] ?? 'unavailable'))) }}</span>
-                                @foreach((array) ($module['included_in_plans'] ?? []) as $planKey)
-                                    <span class="module-store-pill">{{ strtoupper((string) $planKey) }}</span>
-                                @endforeach
-                            </div>
-
-                            <div>
-                                <p class="module-store-copy">{{ $module['product_summary'] ?? $moduleState['reason_description'] ?? $moduleState['description'] ?? '' }}</p>
-                                <p class="module-store-copy">Pricing: {{ $module['pricing_impact_label'] ?? 'Pricing impact not configured' }}</p>
-                                <p class="module-store-copy">Access: {{ $module['entitlement_requirement_label'] ?? 'Access review required' }}</p>
-                                <p class="module-store-copy">Mobile: {{ $module['mobile_relevance_label'] ?? 'Not mobile-specific' }}</p>
-                            </div>
-
-                            <div class="module-store-actions">
+                        <x-tenancy.module-next-step-card
+                            :module="$module"
+                            :module-state="$moduleState"
+                            :focused="$isFocused"
+                        >
                                 @if($cta === 'add')
                                     <form method="POST" action="{{ $embeddedUrl(route('shopify.app.store.activate', ['moduleKey' => $moduleKey], false)) }}">
                                         @csrf
@@ -199,8 +176,7 @@
                                 @elseif($ctaHref !== '')
                                     <a class="module-store-link" href="{{ $embeddedUrl($ctaHref) }}">{{ $moduleState['cta_label'] ?? 'Open module catalog' }}</a>
                                 @endif
-                            </div>
-                        </article>
+                        </x-tenancy.module-next-step-card>
                     @endforeach
                 </div>
             </article>

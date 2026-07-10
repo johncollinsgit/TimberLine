@@ -17,11 +17,9 @@ use App\Services\Marketing\Sms\SmsLinkShorteningService;
 use App\Services\Shopify\ShopifyEmbeddedEmailComposerService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -40,8 +38,7 @@ class EmbeddedMessagingCampaignDispatchService
         protected ShopifyEmbeddedEmailComposerService $emailComposerService,
         protected SmsMessageSafetyService $smsMessageSafetyService,
         protected MessagingEmailReplyAddressService $emailReplyAddressService
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<int,array{profile_id:?int,name:?string,email:?string,phone:?string,normalized_phone:?string,source_type:string}>  $recipients
@@ -273,6 +270,7 @@ class EmbeddedMessagingCampaignDispatchService
             $profile = $profilesById->get($profileId);
             if (! $profile instanceof MarketingProfile) {
                 $summary['skipped']++;
+
                 continue;
             }
 
@@ -286,7 +284,7 @@ class EmbeddedMessagingCampaignDispatchService
             $reasonCodes = [];
             if (! $forceSend && ! $consented) {
                 $status = 'skipped';
-                $reasonCodes[] = $resolvedChannel . '_not_consented';
+                $reasonCodes[] = $resolvedChannel.'_not_consented';
             }
 
             if ($sendable === null) {
@@ -325,6 +323,7 @@ class EmbeddedMessagingCampaignDispatchService
 
             if ($status !== 'scheduled') {
                 $summary['skipped']++;
+
                 continue;
             }
 
@@ -494,6 +493,7 @@ class EmbeddedMessagingCampaignDispatchService
 
             if (in_array($normalized, ['queued', 'retryable', 'dispatching', 'sending'], true)) {
                 $activeJobCount += (int) $count;
+
                 continue;
             }
         }
@@ -532,7 +532,7 @@ class EmbeddedMessagingCampaignDispatchService
      */
     public function dispatchPendingJobs(int $campaignId, bool $inlineProcessing = false): array
     {
-        $lockKey = 'embedded_messaging:campaign_dispatch:' . $campaignId;
+        $lockKey = 'embedded_messaging:campaign_dispatch:'.$campaignId;
         if (! Cache::add($lockKey, now()->toIso8601String(), 45)) {
             return ['dispatched' => 0, 'status' => 'locked'];
         }
@@ -925,6 +925,11 @@ class EmbeddedMessagingCampaignDispatchService
         }
 
         $sendResult = $this->twilioSmsService->sendSms($toPhone, $resolvedMessage, [
+            'tenant_id' => (int) $campaign->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-message-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_message_delivery',
+            'source_id' => $delivery->id,
             'sender_key' => $senderKey,
             'status_callback_url' => $this->statusCallbackUrl(),
             'shorten_urls' => (bool) ($linkPrepared['twilio_shorten_urls'] ?? false),
@@ -1185,6 +1190,10 @@ class EmbeddedMessagingCampaignDispatchService
 
         $sendResult = $this->sendGridEmailService->sendEmail($toEmail, $subject, $resolvedBody, [
             'tenant_id' => $campaign->tenant_id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_email_delivery',
+            'source_id' => $delivery->id,
             'campaign_type' => 'direct_message',
             'template_key' => 'embedded_messaging',
             'customer_id' => (int) $profile->id,

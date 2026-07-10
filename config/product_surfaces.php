@@ -270,8 +270,13 @@ return [
             ],
             'sms' => [
                 'name' => 'SMS',
-                'price_display' => '+$99/mo',
-                'summary' => 'Tenant-scoped SMS channel package with Twilio readiness and diagnostics context.',
+                'price_display' => '+$99/mo + $99 setup',
+                'summary' => 'A private business number, shared messaging workspace, and 1,000 monthly SMS segments. Additional segments are $0.025 each.',
+            ],
+            'messaging' => [
+                'name' => 'Messaging',
+                'price_display' => '+$19.99/mo',
+                'summary' => 'A shared customer inbox with 5,000 monthly emails. Additional email is $1.50 per 1,000.',
             ],
             'additional_channels' => [
                 'name' => 'Additional Stores/Channels',
@@ -281,7 +286,7 @@ return [
             'bulk_email_marketing' => [
                 'name' => 'Bulk Marketing Email',
                 'price_display' => '+$129/mo',
-                'summary' => 'Bulk/marketing email package remains separately controlled and is not auto-activated.',
+                'summary' => 'The messaging workspace plus 50,000 monthly marketing emails. Additional email is $1.50 per 1,000.',
             ],
             'future_niche_modules' => [
                 'name' => 'Future Niche Modules',
@@ -335,7 +340,7 @@ return [
             ],
             'features' => [
                 ['label' => 'Team members', 'starter' => 'Up to 3 users', 'growth' => 'Unlimited users'],
-                ['label' => 'Text messages', 'starter' => '500 texts/mo', 'growth' => '5,000 texts/mo'],
+                ['label' => 'Text messaging', 'starter' => 'Available as an add-on', 'growth' => 'Available as an add-on'],
                 ['label' => 'Email contacts', 'starter' => 'Up to 2,000 contacts', 'growth' => 'Up to 15,000 contacts'],
                 ['label' => 'Automation workflows', 'starter' => 'Basic automations', 'growth' => 'Advanced automations'],
                 ['label' => 'Custom branding', 'starter' => 'Basic branding (logo, colors)', 'growth' => 'Full custom branding'],

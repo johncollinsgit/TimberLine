@@ -36,13 +36,15 @@ use App\Http\Controllers\Marketing\MarketingPagesController;
 use App\Http\Controllers\Marketing\MarketingProvidersIntegrationsController;
 use App\Http\Controllers\Marketing\MarketingPublicEventController;
 use App\Http\Controllers\Marketing\MarketingRecommendationsController;
+use App\Http\Controllers\Marketing\MarketingResultsController;
 use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
-use App\Http\Controllers\Marketing\ModernForestryAppFeedbackController;
 use App\Http\Controllers\Marketing\MarketingWishlistController;
+use App\Http\Controllers\Marketing\ModernForestryAppFeedbackController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
+use App\Http\Controllers\Marketing\SesWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
 use App\Http\Controllers\Onboarding\CustomerStartHereController;
@@ -583,6 +585,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('checkout');
             Route::post('/portal', [\App\Http\Controllers\Billing\HostedBillingController::class, 'portal'])
                 ->name('portal');
+            Route::post('/messaging-credit', [\App\Http\Controllers\Billing\MessagingCreditController::class, 'checkout'])
+                ->name('messaging-credit.checkout');
         });
 
     /*
@@ -757,6 +761,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('marketing.')
         ->group(function () {
             Route::middleware(['tenant.access'])->group(function (): void {
+                Route::get('/results', [MarketingResultsController::class, 'show'])
+                    ->middleware('module:reporting')
+                    ->name('results');
                 Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
                 Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
                 Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
@@ -1172,6 +1179,10 @@ Route::prefix('webhooks/sendgrid')->group(function () {
         ->name('marketing.webhooks.sendgrid-inbound');
 });
 
+Route::post('/webhooks/ses/events', [SesWebhookController::class, 'events'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('marketing.webhooks.ses-events');
+
 Route::prefix('webhooks/stripe')->group(function () {
     Route::post('/events', [\App\Http\Controllers\Billing\StripeWebhookController::class, 'events'])
         ->withoutMiddleware([VerifyCsrfToken::class])
@@ -1479,6 +1490,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/messaging', [ShopifyEmbeddedMessagingController::class, 'show'])->name('shopify.app.messaging');
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
+    Route::get('/app/reporting/marketing-results', [ShopifyEmbeddedMessagingController::class, 'marketingResults'])->name('shopify.app.reporting.marketing-results');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
     Route::get('/app/messaging/app-messages', [ShopifyEmbeddedMessagingController::class, 'appMessages'])->name('shopify.app.messaging.app-messages');
     Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
@@ -1615,6 +1627,15 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/messaging/setup/support-alert', [ShopifyEmbeddedMessagingController::class, 'updateSupportAlertPhone'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.setup.support-alert.update');
+        Route::post('/messaging/setup/sender-profile', [ShopifyEmbeddedMessagingController::class, 'saveSenderProfile'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.setup.sender-profile');
+        Route::post('/messaging/setup/sender-test', [ShopifyEmbeddedMessagingController::class, 'testSenderProfile'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.setup.sender-test');
+        Route::post('/messaging/setup/verification-refresh', [ShopifyEmbeddedMessagingController::class, 'refreshMessagingVerification'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.setup.verification-refresh');
         Route::get('/messaging/storefront-tracking/status', [ShopifyEmbeddedMessagingController::class, 'storefrontTrackingStatus'])
             ->name('messaging.storefront-tracking.status');
         Route::post('/messaging/storefront-tracking/connect-pixel', [ShopifyEmbeddedMessagingController::class, 'connectStorefrontPixel'])

@@ -2,13 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MarketingMessageMediaAsset;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
+use App\Models\MarketingMessageMediaAsset;
+use App\Models\TenantMessagingAccount;
+use App\Models\TenantMessagingSenderProfile;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
-use App\Services\Marketing\MessagingResponseInboxService;
+use App\Services\Marketing\MarketingResultsService;
 use App\Services\Marketing\MessageAnalyticsService;
+use App\Services\Marketing\Messaging\TenantMessagingGateway;
+use App\Services\Marketing\Messaging\TenantMessagingProvisioningService;
+use App\Services\Marketing\Messaging\TenantMessagingUsageService;
+use App\Services\Marketing\MessagingResponseInboxService;
 use App\Services\Mobile\ModernForestryMobileSupportSettingsService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
@@ -21,15 +27,47 @@ use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Throwable;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ShopifyEmbeddedMessagingController extends Controller
 {
     use HandlesShopifyEmbeddedNavigation;
+
+    public function marketingResults(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        MarketingResultsService $resultsService,
+    ): Response {
+        $context = $contextService->resolvePageContext($request);
+        $status = (string) ($context['status'] ?? 'invalid_request');
+        $authorized = (bool) ($context['ok'] ?? false);
+        $store = (array) ($context['store'] ?? []);
+        $tenantId = $authorized ? $tenantResolver->resolveTenantIdForStoreContext($store) : null;
+        $reporting = $tenantId !== null ? $moduleAccessResolver->module($tenantId, 'reporting') : [];
+        $reportingEnabled = (bool) ($reporting['has_access'] ?? false);
+        $storeKey = $this->nullableString(data_get($store, 'key'));
+        $results = $authorized && $tenantId !== null && $reportingEnabled
+            ? $resultsService->report($tenantId, $storeKey, $request->query('date_from'), $request->query('date_to'))
+            : [];
+
+        return $this->embeddedResponse(response()->view('shopify.marketing-results', [
+            'authorized' => $authorized,
+            'status' => $status,
+            'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+            'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
+            'host' => $context['host'] ?? null,
+            'appNavigation' => $this->embeddedAppNavigation('reporting', null, $tenantId),
+            'reportingEnabled' => $reportingEnabled,
+            'marketingResults' => $results,
+        ]), $this->pageStatusCode($authorized, $status, $tenantId, $reportingEnabled));
+    }
 
     public function show(
         Request $request,
@@ -83,7 +121,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
                 'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
                 'storeLabel' => $authorized
-                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status),
                 'subheadline' => $this->subheadlineForStatus($status),
@@ -112,13 +150,13 @@ class ShopifyEmbeddedMessagingController extends Controller
                     'endpoints' => [
                         'bootstrap' => route('shopify.app.api.messaging.bootstrap', [], false),
                         'audience_summary' => route('shopify.app.api.messaging.audience.summary', [], false),
-                    'search_customers' => route('shopify.app.api.messaging.customers.search', [], false),
-                    'search_products' => route('shopify.app.api.messaging.products.search', [], false),
-                    'media_list' => route('shopify.app.api.messaging.media.index', [], false),
-                    'media_upload' => route('shopify.app.api.messaging.media.store', [], false),
-                    'groups' => route('shopify.app.api.messaging.groups', [], false),
-                    'group_detail_base' => route('shopify.app.api.messaging.groups.detail', ['group' => '__GROUP__'], false),
-                    'create_group' => route('shopify.app.api.messaging.groups.create', [], false),
+                        'search_customers' => route('shopify.app.api.messaging.customers.search', [], false),
+                        'search_products' => route('shopify.app.api.messaging.products.search', [], false),
+                        'media_list' => route('shopify.app.api.messaging.media.index', [], false),
+                        'media_upload' => route('shopify.app.api.messaging.media.store', [], false),
+                        'groups' => route('shopify.app.api.messaging.groups', [], false),
+                        'group_detail_base' => route('shopify.app.api.messaging.groups.detail', ['group' => '__GROUP__'], false),
+                        'create_group' => route('shopify.app.api.messaging.groups.create', [], false),
                         'update_group_base' => route('shopify.app.api.messaging.groups.update', ['group' => '__GROUP__'], false),
                         'preview_group' => route('shopify.app.api.messaging.preview.group', [], false),
                         'send_individual' => route('shopify.app.api.messaging.send.individual', [], false),
@@ -234,7 +272,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
                 'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
                 'storeLabel' => $authorized
-                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, $headline),
                 'subheadline' => $this->subheadlineForStatus($status, $subheadline),
@@ -368,7 +406,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
                 'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
                 'storeLabel' => $authorized
-                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Message Analytics'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Track opens, clicks, URLs, and attributed orders from message sends.'),
@@ -422,6 +460,7 @@ class ShopifyEmbeddedMessagingController extends Controller
         TenantEmailSettingsService $tenantEmailSettingsService,
         ShopifyStorefrontTrackingSetupService $storefrontTrackingSetupService,
         ModernForestryMobileSupportSettingsService $supportSettingsService,
+        TenantMessagingUsageService $messagingUsageService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -466,6 +505,27 @@ class ShopifyEmbeddedMessagingController extends Controller
             messagesSent: $messagesSent,
             storefrontTracking: $storefrontTracking
         );
+        $platformAccounts = ($tenantId !== null && Schema::hasTable('tenant_messaging_accounts'))
+            ? TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $tenantId)->get()->keyBy('channel')
+            : collect();
+        $senderProfiles = ($tenantId !== null && Schema::hasTable('tenant_messaging_sender_profiles'))
+            ? TenantMessagingSenderProfile::query()->forAllTenants()->where('tenant_id', $tenantId)->orderByDesc('is_default')->get()
+            : collect();
+        $platformSetup = [
+            'enabled' => (bool) config('features.tenant_messaging_platform'),
+            'email_account' => $platformAccounts->get('email')?->only(['provider', 'status', 'authenticated_domain', 'dns_records', 'verified_at']),
+            'sms_account' => $platformAccounts->get('sms')?->only(['provider', 'status', 'sender_identifier', 'registration', 'verified_at']),
+            'sender_profiles' => $senderProfiles->map->only(['id', 'label', 'display_name', 'from_email', 'reply_to_email', 'reply_mode', 'verification_status', 'is_default'])->values()->all(),
+            'email_usage' => $tenantId !== null && Schema::hasTable('tenant_messaging_usage_periods') ? $messagingUsageService->summary($tenantId, 'email') : [],
+            'sms_usage' => $tenantId !== null && Schema::hasTable('tenant_messaging_usage_periods') ? $messagingUsageService->summary($tenantId, 'sms') : [],
+            'credit_checkout_enabled' => (bool) config('features.tenant_messaging_credit_checkout'),
+            'credit_checkout_endpoint' => route('billing.messaging-credit.checkout', [], false),
+            'credit_packs_cents' => array_map('intval', (array) config('marketing.messaging.platform.credit_packs_cents', [])),
+            'sender_save_endpoint' => route('shopify.app.api.messaging.setup.sender-profile', [], false),
+            'sender_test_endpoint' => route('shopify.app.api.messaging.setup.sender-test', [], false),
+            'verification_refresh_enabled' => (bool) config('features.tenant_messaging_provisioning'),
+            'verification_refresh_endpoint' => route('shopify.app.api.messaging.setup.verification-refresh', [], false),
+        ];
 
         $appNavigation = $probe->time('shell_payload', fn (): array => $this->embeddedAppNavigation('messaging', 'setup', $tenantId));
         $pageSubnav = $probe->time('shell_payload', fn (): array => $this->embeddedMessagingSubnav('setup', $tenantId));
@@ -478,7 +538,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
                 'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
                 'storeLabel' => $authorized
-                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $this->headlineForStatus($status, 'Messaging Setup'),
                 'subheadline' => $this->subheadlineForStatus($status, 'Finish module setup and storefront tracking before running campaigns.'),
@@ -488,6 +548,7 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'messagingModuleState' => $messagingModule,
                 'messagingAccess' => $this->messagingAccessPayload($tenantId, $hasMessagingAccess, 'setup'),
                 'messagingSetupGuide' => $setupGuide,
+                'messagingPlatformSetup' => $platformSetup,
                 'messagingSupportAlerts' => [
                     'support_alert_phone' => $supportAlerts['support_alert_phone'] ?? null,
                     'save_endpoint' => route('shopify.app.api.messaging.setup.support-alert.update', [], false),
@@ -550,6 +611,141 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'setup_status' => (string) $state->setup_status,
                 'setup_completed_at' => optional($state->setup_completed_at)->toIso8601String(),
             ],
+        ]);
+    }
+
+    public function saveSenderProfile(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+        $data = validator($request->all(), [
+            'label' => ['required', 'string', 'max:120'],
+            'display_name' => ['required', 'string', 'max:160'],
+            'from_email' => ['required', 'email:rfc', 'max:255'],
+            'reply_to_email' => ['nullable', 'email:rfc', 'max:255'],
+            'reply_mode' => ['required', 'in:direct_inbox,everbranch_inbox'],
+            'is_default' => ['nullable', 'boolean'],
+        ])->validate();
+        $tenantId = (int) $access['tenant_id'];
+        $account = TenantMessagingAccount::query()->forAllTenants()
+            ->where('tenant_id', $tenantId)->where('channel', 'email')->first();
+        if (! $account) {
+            return response()->json(['ok' => false, 'message' => 'Start email provider setup before adding a sender.'], 422);
+        }
+        $domain = strtolower(trim((string) $account->authenticated_domain));
+        $fromEmail = strtolower(trim((string) $data['from_email']));
+        if ($domain === '' || ! str_ends_with($fromEmail, '@'.$domain)) {
+            return response()->json(['ok' => false, 'message' => 'The From address must use the authenticated company domain.'], 422);
+        }
+        if ($data['reply_mode'] === 'direct_inbox' && blank($data['reply_to_email'] ?? null)) {
+            return response()->json(['ok' => false, 'message' => 'Choose the mailbox that should receive replies.'], 422);
+        }
+
+        $profile = DB::transaction(function () use ($tenantId, $account, $data, $domain, $fromEmail): TenantMessagingSenderProfile {
+            if ((bool) ($data['is_default'] ?? false)) {
+                TenantMessagingSenderProfile::query()->forAllTenants()->where('tenant_id', $tenantId)->where('channel', 'email')->update(['is_default' => false]);
+            }
+
+            return TenantMessagingSenderProfile::query()->forAllTenants()->updateOrCreate(
+                ['tenant_id' => $tenantId, 'store_key' => null, 'from_email' => $fromEmail],
+                [
+                    'tenant_messaging_account_id' => $account->id,
+                    'channel' => 'email',
+                    'label' => $data['label'],
+                    'display_name' => $data['display_name'],
+                    'reply_to_email' => $data['reply_to_email'] ?? null,
+                    'authenticated_domain' => $domain,
+                    'reply_mode' => $data['reply_mode'],
+                    'verification_status' => $account->isReady() ? 'verified' : 'pending',
+                    'is_default' => (bool) ($data['is_default'] ?? false),
+                ],
+            );
+        });
+
+        return response()->json(['ok' => true, 'message' => $profile->verification_status === 'verified' ? 'Sender saved and ready.' : 'Sender saved. It will unlock after domain verification.']);
+    }
+
+    public function testSenderProfile(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantMessagingGateway $gateway,
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+        $data = validator($request->all(), [
+            'sender_profile_id' => ['required', 'integer'],
+            'to_email' => ['required', 'email:rfc', 'max:255'],
+        ])->validate();
+        $tenantId = (int) $access['tenant_id'];
+        $profile = TenantMessagingSenderProfile::query()->forAllTenants()
+            ->where('tenant_id', $tenantId)->whereKey((int) $data['sender_profile_id'])->first();
+        if (! $profile || $profile->verification_status !== 'verified') {
+            return response()->json(['ok' => false, 'message' => 'Choose a verified sender profile.'], 422);
+        }
+        $delivery = MarketingEmailDelivery::query()->create([
+            'tenant_id' => $tenantId,
+            'provider' => 'tenant_gateway',
+            'campaign_type' => 'sender_test',
+            'template_key' => 'sender_test',
+            'email' => strtolower((string) $data['to_email']),
+            'status' => 'sending',
+            'metadata' => ['sender_profile_id' => $profile->id],
+        ]);
+        $result = $gateway->sendEmail($tenantId, (string) $data['to_email'], 'Everbranch sender test', 'Your verified sender and reply routing are working.', [
+            'sender_profile_id' => $profile->id,
+            'delivery_id' => $delivery->id,
+            'idempotency_key' => 'marketing-email-delivery:'.$delivery->id,
+            'ledger_source_type' => 'marketing_email_delivery',
+            'source_id' => $delivery->id,
+            'campaign_type' => 'sender_test',
+        ]);
+        $success = (bool) ($result['success'] ?? false);
+        $delivery->update([
+            'provider' => $result['provider'] ?? 'tenant_gateway',
+            'provider_message_id' => $result['message_id'] ?? null,
+            'status' => $success ? 'sent' : 'failed',
+            'sent_at' => $success ? now() : null,
+            'failed_at' => $success ? null : now(),
+            'raw_payload' => $result,
+        ]);
+
+        return response()->json(['ok' => $success, 'message' => $success ? 'Test email sent. Check the recipient inbox and reply path.' : ($result['error_message'] ?? 'Test email failed.')], $success ? 200 : 422);
+    }
+
+    public function refreshMessagingVerification(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantMessagingProvisioningService $provisioningService,
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        try {
+            $account = $provisioningService->refreshEmailVerification((int) $access['tenant_id']);
+        } catch (Throwable $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => $account->isReady()
+                ? 'Your sending domain is verified. Sender profiles are ready to use.'
+                : 'DNS is not verified yet. Check the records below, then try again.',
+            'data' => ['status' => $account->status, 'verified' => $account->isReady()],
         ]);
     }
 
@@ -1818,7 +2014,7 @@ class ShopifyEmbeddedMessagingController extends Controller
         $response->setStatusCode($status);
         $response->headers->set(
             'Content-Security-Policy',
-            "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;"
+            'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;'
         );
         $response->headers->remove('X-Frame-Options');
 

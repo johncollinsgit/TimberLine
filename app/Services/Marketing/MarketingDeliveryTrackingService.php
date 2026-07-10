@@ -14,7 +14,7 @@ class MarketingDeliveryTrackingService
      * @param  array<string,mixed>  $payload
      * @return array{matched:bool,delivery_id:?int,status:string,event_id:?int}
      */
-    public function handleTwilioCallback(array $payload): array
+    public function handleTwilioCallback(array $payload, ?int $tenantId = null): array
     {
         $providerMessageId = $this->nullableString($payload['MessageSid'] ?? $payload['SmsSid'] ?? null);
         $status = $this->mapProviderStatus($payload['MessageStatus'] ?? $payload['SmsStatus'] ?? null);
@@ -44,6 +44,7 @@ class MarketingDeliveryTrackingService
         $delivery = MarketingMessageDelivery::query()
             ->where('provider', 'twilio')
             ->where('provider_message_id', $providerMessageId)
+            ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->first();
 
         $received = $this->appendEvent(

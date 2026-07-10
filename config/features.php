@@ -14,4 +14,10 @@ return [
     // default — arm only once every BelongsToTenant model's table is fully
     // backfilled with tenant_id, so no flagship row can silently vanish.
     'enforced_tenant_scope' => (bool) env('FEATURE_ENFORCED_TENANT_SCOPE', false),
+
+    // Platform messaging rolls out independently from the flagship legacy
+    // provider path. Provisioning and paid overages remain separately gated.
+    'tenant_messaging_platform' => (bool) env('FEATURE_TENANT_MESSAGING_PLATFORM', false),
+    'tenant_messaging_provisioning' => (bool) env('FEATURE_TENANT_MESSAGING_PROVISIONING', false),
+    'tenant_messaging_credit_checkout' => (bool) env('FEATURE_TENANT_MESSAGING_CREDIT_CHECKOUT', false),
 ];

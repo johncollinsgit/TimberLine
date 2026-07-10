@@ -6,6 +6,7 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageEngagementEvent;
 use App\Models\MarketingMessageOrderAttribution;
 use App\Models\Order;
+use App\Models\TenantMessagingLedgerEntry;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -94,6 +95,7 @@ class MessageOrderAttributionService
                 $summary['attributed']++;
                 $summary['created'] += (int) $result['created'];
                 $summary['updated'] += (int) $result['updated'];
+
                 continue;
             }
 
@@ -173,6 +175,7 @@ class MessageOrderAttributionService
                     $summary['attributed']++;
                     $summary['created'] += (int) $result['created'];
                     $summary['updated'] += (int) $result['updated'];
+
                     continue;
                 }
 
@@ -333,6 +336,14 @@ class MessageOrderAttributionService
             'click_occurred_at' => $click->occurred_at,
             'order_occurred_at' => $orderAt,
             'revenue_cents' => $this->orderRevenueCents($order),
+            ...$this->financialPayload(
+                $order,
+                'direct',
+                $this->sourceModuleForClick($click),
+                $this->positiveInt($click->marketing_email_delivery_id) !== null ? 'marketing_email_delivery' : 'marketing_message_delivery',
+                $this->positiveInt($click->marketing_email_delivery_id) ?: $this->positiveInt($click->marketing_message_delivery_id),
+                100,
+            ),
             'metadata' => [
                 'attribution_rule' => 'last_click_within_window',
                 'order_number' => $this->nullableString((string) ($order->order_number ?? null)),
@@ -381,6 +392,14 @@ class MessageOrderAttributionService
             'click_occurred_at' => $inferred['click_occurred_at'] ?? null,
             'order_occurred_at' => $orderAt,
             'revenue_cents' => $this->orderRevenueCents($order),
+            ...$this->financialPayload(
+                $order,
+                'assisted',
+                $this->sourceModuleForMessageDelivery((int) ($inferred['marketing_message_delivery_id'] ?? 0)),
+                'marketing_message_delivery',
+                (int) ($inferred['marketing_message_delivery_id'] ?? 0),
+                75,
+            ),
             'metadata' => [
                 'attribution_rule' => 'coupon_signal_message_match_without_click',
                 'inferred' => true,
@@ -425,6 +444,14 @@ class MessageOrderAttributionService
             'click_occurred_at' => $inferred['click_occurred_at'] ?? null,
             'order_occurred_at' => $orderAt,
             'revenue_cents' => $this->orderRevenueCents($order),
+            ...$this->financialPayload(
+                $order,
+                'assisted',
+                $this->sourceModuleForMessageDelivery((int) ($inferred['marketing_message_delivery_id'] ?? 0)),
+                'marketing_message_delivery',
+                (int) ($inferred['marketing_message_delivery_id'] ?? 0),
+                60,
+            ),
             'metadata' => [
                 'attribution_rule' => 'landing_signal_message_url_match_without_click',
                 'inferred' => true,
@@ -729,6 +756,110 @@ class MessageOrderAttributionService
             ->where('order_id', $orderId)
             ->where('attribution_model', self::ATTRIBUTION_MODEL)
             ->delete();
+    }
+
+    /** @return array<string,int|string|null> */
+    protected function financialPayload(
+        Order $order,
+        string $type,
+        string $sourceModule,
+        string $sourceType,
+        ?int $sourceId,
+        int $confidence,
+    ): array {
+        $gross = $this->orderRevenueCents($order);
+        $refund = max(0, (int) round(((float) ($order->refund_total ?? 0)) * 100));
+        $providerCost = 0;
+        $buyerSpend = 0;
+        $campaign = $this->campaignForSource($sourceType, $sourceId);
+        if ($sourceId !== null && $sourceId > 0 && Schema::hasTable('tenant_messaging_ledger_entries')) {
+            $ledger = TenantMessagingLedgerEntry::query()->forAllTenants()
+                ->where('tenant_id', (int) $order->tenant_id)
+                ->where('entry_type', 'usage_settlement')
+                ->where('source_type', $sourceType)
+                ->where('source_id', $sourceId)
+                ->get();
+            $providerCost = (int) $ledger->sum('provider_cost_micros');
+            $buyerSpend = (int) $ledger->sum('amount_micros');
+        }
+
+        return [
+            'source_module_key' => $sourceModule,
+            'source_campaign_id' => $campaign['id'],
+            'source_campaign_label' => $campaign['label'],
+            'attribution_type' => $type,
+            'confidence_percent' => max(0, min(100, $confidence)),
+            'currency_code' => strtoupper(trim((string) ($order->currency_code ?? 'USD'))) ?: 'USD',
+            'gross_revenue_cents' => $gross,
+            'refund_cents' => min($gross, $refund),
+            'net_revenue_cents' => max(0, $gross - $refund),
+            'provider_cost_micros' => $providerCost,
+            'buyer_spend_micros' => $buyerSpend,
+        ];
+    }
+
+    /** @return array{id:?int,label:?string} */
+    protected function campaignForSource(string $sourceType, ?int $sourceId): array
+    {
+        if ($sourceId === null || $sourceId <= 0) {
+            return ['id' => null, 'label' => null];
+        }
+
+        if ($sourceType === 'marketing_message_delivery') {
+            $delivery = MarketingMessageDelivery::query()->with('campaign:id,name')->find($sourceId);
+
+            return [
+                'id' => $this->positiveInt($delivery?->campaign_id),
+                'label' => $this->nullableString($delivery?->campaign?->name)
+                    ?? $this->nullableString($delivery?->source_label),
+            ];
+        }
+
+        $delivery = \App\Models\MarketingEmailDelivery::query()
+            ->with('recipient.campaign:id,name')
+            ->find($sourceId);
+
+        return [
+            'id' => $this->positiveInt($delivery?->recipient?->campaign_id),
+            'label' => $this->nullableString($delivery?->recipient?->campaign?->name)
+                ?? $this->nullableString($delivery?->campaign_type)
+                ?? $this->nullableString($delivery?->source_label),
+        ];
+    }
+
+    protected function sourceModuleForClick(MarketingMessageEngagementEvent $click): string
+    {
+        if ($click->marketing_email_delivery_id) {
+            $delivery = $click->emailDelivery()->first();
+
+            return $this->moduleFromLabels($delivery?->campaign_type, $delivery?->source_label, $delivery?->template_key);
+        }
+        if ($click->marketing_message_delivery_id) {
+            return $this->sourceModuleForMessageDelivery((int) $click->marketing_message_delivery_id);
+        }
+
+        return 'messaging';
+    }
+
+    protected function sourceModuleForMessageDelivery(int $deliveryId): string
+    {
+        $delivery = $deliveryId > 0 ? MarketingMessageDelivery::query()->find($deliveryId) : null;
+
+        return $this->moduleFromLabels($delivery?->source_label, data_get($delivery?->provider_payload, 'campaign_type'));
+    }
+
+    protected function moduleFromLabels(mixed ...$labels): string
+    {
+        $value = strtolower(implode(' ', array_map(fn (mixed $label): string => (string) $label, $labels)));
+
+        return match (true) {
+            str_contains($value, 'birthday'), str_contains($value, 'lifecycle') => 'birthdays',
+            str_contains($value, 'wishlist') => 'wishlist',
+            str_contains($value, 'reward'), str_contains($value, 'candle_cash') => 'rewards',
+            str_contains($value, 'referral') => 'referrals',
+            str_contains($value, 'campaign'), str_contains($value, 'bulk') => 'campaigns',
+            default => 'messaging',
+        };
     }
 
     /**

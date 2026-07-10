@@ -11,7 +11,9 @@ class MessagingEmailReplyAddressService
             return null;
         }
 
-        return sprintf('reply+t%dd%d@%s', $tenantId, $deliveryId, $domain);
+        $signature = $this->signature($tenantId, $deliveryId);
+
+        return sprintf('reply+t%dd%ds%s@%s', $tenantId, $deliveryId, $signature, $domain);
     }
 
     /**
@@ -24,13 +26,23 @@ class MessagingEmailReplyAddressService
             return null;
         }
 
-        if (! preg_match('/reply\+t(?P<tenant>\d+)d(?P<delivery>\d+)@/i', $address, $matches)) {
+        if (! preg_match('/reply\+t(?P<tenant>\d+)d(?P<delivery>\d+)(?:s(?P<signature>[a-f0-9]{20}))?@/i', $address, $matches)) {
             return null;
         }
 
         $tenantId = (int) ($matches['tenant'] ?? 0);
         $deliveryId = (int) ($matches['delivery'] ?? 0);
         if ($tenantId <= 0 || $deliveryId <= 0) {
+            return null;
+        }
+
+        $signature = strtolower(trim((string) ($matches['signature'] ?? '')));
+        if ($signature === '') {
+            $legacyTenantIds = array_map('intval', (array) config('marketing.messaging.platform.legacy_tenant_ids', [1]));
+            if (! in_array($tenantId, $legacyTenantIds, true)) {
+                return null;
+            }
+        } elseif (! hash_equals($this->signature($tenantId, $deliveryId), $signature)) {
             return null;
         }
 
@@ -45,5 +57,15 @@ class MessagingEmailReplyAddressService
         $domain = strtolower(trim((string) config('marketing.messaging.responses.email_inbound_domain')));
 
         return $domain !== '' ? $domain : null;
+    }
+
+    protected function signature(int $tenantId, int $deliveryId): string
+    {
+        $key = (string) config('app.key');
+        if (str_starts_with($key, 'base64:')) {
+            $key = (string) base64_decode(substr($key, 7), true);
+        }
+
+        return substr(hash_hmac('sha256', "{$tenantId}:{$deliveryId}", $key), 0, 20);
     }
 }

@@ -19,7 +19,7 @@ test('canonical module catalog drives entitlements and commercial config for rec
 
     expect((array) data_get($commercialPlans, 'starter.modules', []))->toContain('square')
         ->and((array) data_get($commercialAddons, 'messaging.modules', []))->toBe(['messaging'])
-        ->and((array) data_get($commercialAddons, 'bulk_email_marketing.modules', []))->toBe(['bulk_email_marketing'])
+        ->and((array) data_get($commercialAddons, 'bulk_email_marketing.modules', []))->toBe(['messaging', 'email', 'campaigns', 'bulk_email_marketing'])
         ->and((array) data_get($commercialAddons, 'additional_channels.modules', []))->toBe(['additional_channels'])
         ->and((array) data_get($commercialAddons, 'future_niche_modules.modules', []))->toBe(['future_niche_modules']);
 });
