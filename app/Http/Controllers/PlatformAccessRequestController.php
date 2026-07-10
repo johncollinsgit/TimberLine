@@ -21,8 +21,7 @@ class PlatformAccessRequestController extends Controller
         CustomerAccessRequestService $service,
         WholesaleApplicationReviewInboxResolver $reviewInboxResolver,
         TenantCommercialExperienceService $experienceService
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $formOptions = $experienceService->publicAccessRequestOptions();
         $businessTypeKeys = array_keys((array) ($formOptions['business_types'] ?? []));
         $teamSizeKeys = array_keys((array) ($formOptions['team_sizes'] ?? []));

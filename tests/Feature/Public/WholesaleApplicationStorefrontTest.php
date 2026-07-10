@@ -89,30 +89,30 @@ test('storefront wholesale application stores the applicant and notifies the rev
     });
 
     $this->post(route('marketing.shopify.v1.wholesale.application'), [
-            'intent' => 'production',
-            'contact' => [
-                'name' => 'Ops Review',
-                'email' => 'ops-review@example.com',
-                'phone' => '+1 555 555 1212',
-                'company' => 'Review Shop',
-                'store_type' => 'Gift Shop',
-                'city' => 'Charleston',
-                'state' => 'SC',
-                'website' => 'https://review-shop.example.com',
-                'position' => 'Owner',
-                'referral' => 'Instagram',
-                'business_info' => 'We love candles and tiny shelves.',
-                'current_suppliers' => 'None',
-                'address' => '123 Main St',
-                'address2' => 'Suite 2',
-                'zip' => '29401',
-                'country' => 'United States',
-                'retail_license_number' => 'RL-12345',
-                'contact_preference' => 'Email',
-                'agreement' => '1',
-                'body' => "Wholesale Application\n---------------------\n\nContact\nName: Ops Review",
-            ],
-        ])
+        'intent' => 'production',
+        'contact' => [
+            'name' => 'Ops Review',
+            'email' => 'ops-review@example.com',
+            'phone' => '+1 555 555 1212',
+            'company' => 'Review Shop',
+            'store_type' => 'Gift Shop',
+            'city' => 'Charleston',
+            'state' => 'SC',
+            'website' => 'https://review-shop.example.com',
+            'position' => 'Owner',
+            'referral' => 'Instagram',
+            'business_info' => 'We love candles and tiny shelves.',
+            'current_suppliers' => 'None',
+            'address' => '123 Main St',
+            'address2' => 'Suite 2',
+            'zip' => '29401',
+            'country' => 'United States',
+            'retail_license_number' => 'RL-12345',
+            'contact_preference' => 'Email',
+            'agreement' => '1',
+            'body' => "Wholesale Application\n---------------------\n\nContact\nName: Ops Review",
+        ],
+    ])
         ->assertNoContent();
 
     $requestRecord = CustomerAccessRequest::query()->firstOrFail();
@@ -172,7 +172,7 @@ test('storefront wholesale notification points to the embedded wholesale review 
     ]);
 
     $notification = new WholesaleApplicationReviewNotification($requestRecord);
-    $mailMessage = $notification->toMail(new \Illuminate\Notifications\AnonymousNotifiable());
+    $mailMessage = $notification->toMail(new \Illuminate\Notifications\AnonymousNotifiable);
 
     expect((string) $mailMessage->actionUrl)
         ->toBe(app(WholesaleApplicationInboxUrl::class)->detailUrl($requestRecord));

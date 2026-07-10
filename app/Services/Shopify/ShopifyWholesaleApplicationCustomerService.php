@@ -94,7 +94,7 @@ GRAPHQL;
     protected function findExactMatchesByEmail(ShopifyGraphqlClient $client, string $normalizedEmail): array
     {
         $payload = $client->query(self::CUSTOMER_LOOKUP_QUERY, [
-            'query' => 'email:' . $normalizedEmail,
+            'query' => 'email:'.$normalizedEmail,
         ]);
 
         $edges = $payload['customers']['edges'] ?? null;
@@ -147,7 +147,7 @@ GRAPHQL;
 
         $userErrors = $result['userErrors'] ?? null;
         if (is_array($userErrors) && $userErrors !== []) {
-            throw new RuntimeException('Shopify customerSet failed: ' . $this->formatUserErrors($userErrors));
+            throw new RuntimeException('Shopify customerSet failed: '.$this->formatUserErrors($userErrors));
         }
 
         $customer = $result['customer'] ?? null;

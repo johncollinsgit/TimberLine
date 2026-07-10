@@ -82,7 +82,7 @@ test('admin can browse the wholesale application inbox', function (): void {
         'customer_access_request_id' => (int) $accessRequest->id,
         'status' => 'submitted',
         'source' => 'wholesale_storefront',
-        'source_key' => 'customer_access_request:' . (int) $accessRequest->id,
+        'source_key' => 'customer_access_request:'.(int) $accessRequest->id,
         'submitted_at' => now(),
         'submitter_name' => 'Jane Buyer',
         'submitter_email' => 'jane@example.com',

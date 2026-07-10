@@ -2,8 +2,8 @@
 
 use App\Livewire\Admin\Users\UsersIndex;
 use App\Models\CustomerAccessRequest;
-use App\Models\Tenant;
 use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
 use App\Services\Onboarding\CustomerAccessApprovalService;

@@ -9,9 +9,7 @@ class WholesaleApplicationInboxUrl
 {
     protected const WHOLESALE_STORE_KEY = 'wholesale';
 
-    public function __construct(protected TenantHostBuilder $hostBuilder)
-    {
-    }
+    public function __construct(protected TenantHostBuilder $hostBuilder) {}
 
     public function inboxUrl(?string $tenantSlug = null): string
     {

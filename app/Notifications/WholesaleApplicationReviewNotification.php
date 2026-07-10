@@ -12,9 +12,7 @@ class WholesaleApplicationReviewNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(protected CustomerAccessRequest $request)
-    {
-    }
+    public function __construct(protected CustomerAccessRequest $request) {}
 
     public function via(object $notifiable): array
     {

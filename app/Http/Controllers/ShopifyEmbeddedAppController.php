@@ -5,14 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\CustomerAccessRequest;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Marketing\CandleCashEarnedReminderService;
 use App\Services\Onboarding\CustomerAccessApprovalService;
+use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardConfig;
 use App\Services\Shopify\Dashboard\ShopifyEmbeddedDashboardDataService;
 use App\Services\Shopify\DashboardLite\ShopifyEmbeddedDashboardLiteDataService;
-use App\Services\Shopify\ShopifyEmbeddedAppCredentials;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedAppCredentials;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
 use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
 use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
@@ -371,7 +371,7 @@ class ShopifyEmbeddedAppController extends Controller
         $durationMs = round((microtime(true) - $startedAt) * 1000, 2);
         $timingValue = sprintf('dashboard-lite;dur=%s', number_format($durationMs, 2, '.', ''));
         $existingTiming = trim((string) $response->headers->get('Server-Timing', ''));
-        $response->headers->set('Server-Timing', $existingTiming !== '' ? ($existingTiming . ', ' . $timingValue) : $timingValue);
+        $response->headers->set('Server-Timing', $existingTiming !== '' ? ($existingTiming.', '.$timingValue) : $timingValue);
 
         // Light-weight signal for debugging in the browser network panel.
         $response->headers->set('X-Backstage-Dashboard-Lite-Range', strtolower(trim($range)));

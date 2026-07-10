@@ -6,8 +6,8 @@ use App\Models\CustomerAccessRequest;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
-use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Shopify\ShopifyWholesaleCustomerApprovalService;
+use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Support\Tenancy\TenantHostBuilder;
 use DomainException;
 use Illuminate\Support\Carbon;
@@ -23,8 +23,7 @@ class CustomerAccessApprovalService
         protected TenantHostBuilder $hostBuilder,
         protected TenantSetupStatusService $setupStatusService,
         protected ShopifyWholesaleCustomerApprovalService $shopifyWholesaleCustomerApprovalService,
-    ) {
-    }
+    ) {}
 
     public function approve(int $requestId, int $actorUserId, ?string $decisionNote = null): CustomerAccessRequest
     {
