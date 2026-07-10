@@ -11,6 +11,7 @@ use App\Models\ServiceInquiry;
 use App\Models\Tenant;
 use App\Models\TenantBillingSubscription;
 use App\Models\TenantOnboardingBlueprint;
+use App\Models\TenantSupportTicket;
 use App\Models\User;
 use App\Services\Onboarding\CustomerAccessApprovalService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
@@ -39,6 +40,7 @@ class TenantMobileLandlordService
                 ['label' => 'Tenants', 'value' => $tenants],
                 ['label' => 'Active tenants', 'value' => $activeTenants],
                 ['label' => 'Tenant users', 'value' => User::query()->whereHas('tenants')->count()],
+                ['label' => 'Open tickets', 'value' => Schema::hasTable('tenant_support_tickets') ? TenantSupportTicket::withoutGlobalScopes()->whereNotIn('status', ['resolved', 'closed'])->count() : 0],
                 ['label' => 'Pending access', 'value' => Schema::hasTable('customer_access_requests') ? CustomerAccessRequest::query()->whereNotIn('status', ['approved', 'rejected'])->count() : 0],
                 ['label' => 'New inquiries', 'value' => Schema::hasTable('service_inquiries') ? ServiceInquiry::query()->where('status', 'new')->count() : 0],
             ],

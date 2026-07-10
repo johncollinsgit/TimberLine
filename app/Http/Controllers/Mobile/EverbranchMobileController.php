@@ -17,6 +17,7 @@ use App\Services\Mobile\MobileLandlordAccessService;
 use App\Services\Mobile\TenantMobileMessagingService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
 use App\Services\Mobile\TenantMobileResourceService;
+use App\Services\Mobile\TenantMobileSupportService;
 use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -225,6 +226,30 @@ class EverbranchMobileController extends Controller
         $audit->record((int) $tenant->id, (int) $user->id, 'tenant.mobile_branding.updated', targetType: 'tenant_discovery_profile', targetId: $profile->id, context: ['surface' => 'everbranch_mobile'], beforeState: $before, afterState: $after);
 
         return response()->json(['ok' => true, 'branding' => $this->brandingPayload($tenant->fresh(), $role)]);
+    }
+
+    public function supportTickets(Request $request, TenantMobileSupportService $support): JsonResponse
+    {
+        return response()->json($support->index((int) $this->tenant($request)->id));
+    }
+
+    public function supportTicket(Request $request, string $tenant, int $ticket, TenantMobileSupportService $support): JsonResponse
+    {
+        return response()->json($support->show((int) $this->tenant($request)->id, $ticket));
+    }
+
+    public function createSupportTicket(Request $request, TenantMobileSupportService $support): JsonResponse
+    {
+        $validated = $request->validate(['subject' => ['required', 'string', 'max:180'], 'body' => ['required', 'string', 'max:10000'], 'category' => ['required', 'in:help,bug,billing,feature,account'], 'priority' => ['required', 'in:low,normal,high,urgent']]);
+
+        return response()->json($support->create($this->tenant($request), $this->user($request), $validated), 201);
+    }
+
+    public function replySupportTicket(Request $request, string $tenant, int $ticket, TenantMobileSupportService $support): JsonResponse
+    {
+        $validated = $request->validate(['body' => ['required', 'string', 'max:10000']]);
+
+        return response()->json($support->reply((int) $this->tenant($request)->id, $ticket, $this->user($request), $validated['body'], 'tenant'));
     }
 
     public function registerPushDevice(Request $request): JsonResponse
