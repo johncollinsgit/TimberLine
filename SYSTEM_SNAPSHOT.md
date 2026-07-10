@@ -55,6 +55,7 @@
 - Agents must update the relevant README, this snapshot, readiness doc, runbook, or changelog after meaningful work so future agents can trust the current state.
 - Shopify remains the flagship integration path, but customer setup must also account for Square, CSV import, manual import, and future connector paths.
 - Android and iOS mobile app readiness are product requirements. Modern Forestry customer catalog APIs remain product-specific; generic Everbranch tenant infrastructure now exists under `/api/mobile/v1` and remains in pilot/release-gated status.
+- Everbranch mobile contract v2 / app 1.1.0 adds operational Messaging, Customers, tenant-resolved Work, typed Search, Account preferences/device sessions, and authorized landlord triage. Bootstrap uses `branches` while retaining the v1 `modules` alias for one release; billing activation flags are unchanged.
 - Checkout and broad billing lifecycle automation remain disabled until readiness gates pass and activation is explicitly requested.
 - Grovebud Cloudflare/TLS failures are an external edge/DNS launch blocker and should not be treated as a Laravel runtime behavior fix in readiness PR 1.
 

@@ -2,9 +2,13 @@
 
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobPhoto;
+use App\Models\MarketingProfile;
+use App\Models\MessagingConversation;
+use App\Models\MessagingConversationMessage;
 use App\Models\MobileAuthorizationCode;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -284,13 +288,101 @@ test('mobile workspace bootstrap is membership scoped and entitlement driven', f
         ->assertOk()
         ->assertJsonPath('workspace.id', $tenant->id)
         ->assertJsonPath('permissions.manage_billing', true)
-        ->assertJsonPath('contract_version', 1);
+        ->assertJsonPath('contract_version', 2);
 
     $keys = collect($response->json('modules'))->pluck('module_key');
-    expect($keys)->toContain('customers', 'field_service')
+    expect($keys)->toContain('customers', 'field_service', 'work_core')
         ->and($keys)->not->toContain('messaging');
+    expect($response->json('branches'))->toBe($response->json('modules'));
 
     $this->getJson('/api/mobile/v1/workspaces/'.$other->slug.'/bootstrap')->assertNotFound();
+});
+
+test('mobile customer work and preferences endpoints stay membership scoped', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Mobile Resources', 'slug' => 'mobile-resources']);
+    $other = Tenant::query()->create(['name' => 'Private Resources', 'slug' => 'private-resources']);
+    foreach ([$tenant, $other] as $workspace) {
+        TenantAccessProfile::query()->create(['tenant_id' => $workspace->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    }
+    $customer = MarketingProfile::factory()->create(['tenant_id' => $tenant->id, 'first_name' => 'Ada', 'last_name' => 'Lovelace']);
+    $privateCustomer = MarketingProfile::factory()->create(['tenant_id' => $other->id]);
+    $user = User::factory()->create(['role' => 'manager', 'is_active' => true, 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'manager']);
+    Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/mobile-resources/customers?q=Ada')
+        ->assertOk()
+        ->assertJsonPath('customers.0.id', $customer->id);
+    $this->getJson('/api/mobile/v1/workspaces/mobile-resources/customers/'.$customer->id)
+        ->assertOk()
+        ->assertJsonPath('customer.name', 'Ada Lovelace');
+    $this->getJson('/api/mobile/v1/workspaces/mobile-resources/customers/'.$privateCustomer->id)->assertNotFound();
+    $this->getJson('/api/mobile/v1/workspaces/private-resources/customers')->assertNotFound();
+    $this->getJson('/api/mobile/v1/workspaces/mobile-resources/work')
+        ->assertOk()
+        ->assertJsonStructure(['kind', 'label', 'items']);
+
+    $this->patchJson('/api/mobile/v1/account/preferences', [
+        'appearance' => 'dark',
+        'biometric_reentry' => true,
+    ])->assertOk()->assertJsonPath('preferences.appearance', 'dark');
+    $this->getJson('/api/mobile/v1/account/preferences')
+        ->assertOk()
+        ->assertJsonPath('preferences.biometric_reentry', true);
+});
+
+test('mobile messaging aggregates entitled conversations and scopes thread actions', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Message Workspace', 'slug' => 'message-workspace']);
+    $other = Tenant::query()->create(['name' => 'Other Messages', 'slug' => 'other-messages']);
+    foreach ([$tenant, $other] as $workspace) {
+        TenantAccessProfile::query()->create(['tenant_id' => $workspace->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+        TenantModuleEntitlement::query()->create(['tenant_id' => $workspace->id, 'module_key' => 'messaging', 'availability_status' => 'available', 'enabled_status' => 'enabled', 'entitlement_source' => 'test']);
+    }
+    $customer = MarketingProfile::factory()->create(['tenant_id' => $tenant->id, 'first_name' => 'Grace', 'last_name' => 'Hopper']);
+    $conversation = MessagingConversation::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'channel' => 'email',
+        'marketing_profile_id' => $customer->id,
+        'email' => $customer->email,
+        'status' => 'open',
+        'unread_count' => 1,
+        'last_message_at' => now(),
+        'last_message_preview' => 'Can you help?',
+    ]);
+    MessagingConversationMessage::query()->create([
+        'conversation_id' => $conversation->id,
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'marketing_profile_id' => $customer->id,
+        'channel' => 'email',
+        'direction' => 'inbound',
+        'provider' => 'ses',
+        'dedupe_hash' => sha1('mobile-message-test'),
+        'body' => 'Can you help?',
+        'received_at' => now(),
+    ]);
+    $private = MessagingConversation::query()->create(['tenant_id' => $other->id, 'channel' => 'sms', 'phone' => '+15555550123', 'status' => 'open']);
+    $user = User::factory()->create(['role' => 'manager', 'is_active' => true, 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'manager']);
+    Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/message-workspace/messaging/conversations')
+        ->assertOk()
+        ->assertJsonPath('conversations.0.id', $conversation->id)
+        ->assertJsonMissing(['id' => $private->id]);
+    $this->getJson('/api/mobile/v1/workspaces/message-workspace/messaging/conversations/'.$conversation->id)
+        ->assertOk()
+        ->assertJsonPath('messages.0.body', 'Can you help?');
+    $this->patchJson('/api/mobile/v1/workspaces/message-workspace/messaging/conversations/'.$conversation->id, ['action' => 'mark_read'])
+        ->assertOk()
+        ->assertJsonPath('thread.conversation.unread_count', 0);
+    $this->getJson('/api/mobile/v1/workspaces/message-workspace/messaging/conversations/'.$private->id)->assertNotFound();
+    $this->postJson('/api/mobile/v1/workspaces/message-workspace/messaging/conversations', [
+        'customer_id' => $customer->id,
+        'channel' => 'email',
+        'body' => 'Hello',
+    ])->assertUnprocessable()->assertJsonPath('message', 'An Idempotency-Key header is required.');
 });
 
 test('mobile module screens cannot cross tenant boundaries', function (): void {

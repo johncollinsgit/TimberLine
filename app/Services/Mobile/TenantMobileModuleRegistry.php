@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 class TenantMobileModuleRegistry
 {
-    public const CONTRACT_VERSION = 1;
+    public const CONTRACT_VERSION = 2;
 
     public function __construct(
         protected TenantModuleAccessResolver $accessResolver
@@ -37,7 +37,7 @@ class TenantMobileModuleRegistry
 
                 return [
                     'module_key' => $moduleKey,
-                    'display_name' => (string) ($state['label'] ?? $definition['display_name'] ?? Str::headline($moduleKey)),
+                    'display_name' => (string) data_get($definition, 'mobile.display_name', ($state['label'] ?? $definition['display_name'] ?? Str::headline($moduleKey)).' Branch'),
                     'description' => (string) ($definition['description'] ?? ''),
                     'status' => (string) data_get($definition, 'mobile.status', 'hidden'),
                     'renderer' => (string) data_get($definition, 'mobile.renderer', 'list'),
@@ -68,6 +68,7 @@ class TenantMobileModuleRegistry
         $screen = match ($moduleKey) {
             'customers' => $this->customersScreen($tenantId),
             'field_service' => $this->fieldServiceScreen($tenantId),
+            'work_core' => $this->summaryScreen($module),
             'messaging' => $this->messagingScreen($tenantId),
             'reporting' => $this->reportingScreen($tenantId),
             default => $this->summaryScreen($module),
@@ -194,12 +195,12 @@ class TenantMobileModuleRegistry
         return [
             'id' => ($module['module_key'] ?? 'module').'.index',
             'kind' => 'summary',
-            'title' => (string) ($module['display_name'] ?? 'Module'),
+            'title' => (string) ($module['display_name'] ?? 'Branch'),
             'refreshable' => true,
             'sections' => [[
                 'type' => 'notice',
                 'tone' => 'neutral',
-                'title' => (string) ($module['display_name'] ?? 'Module'),
+                'title' => (string) ($module['display_name'] ?? 'Branch'),
                 'message' => (string) ($module['description'] ?? ''),
             ]],
         ];

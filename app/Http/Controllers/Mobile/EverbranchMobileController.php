@@ -9,7 +9,10 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Dashboard\UnifiedDashboardService;
+use App\Services\Mobile\MobileLandlordAccessService;
+use App\Services\Mobile\TenantMobileMessagingService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
+use App\Services\Mobile\TenantMobileResourceService;
 use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -20,7 +23,7 @@ use Illuminate\Support\Facades\Storage;
 
 class EverbranchMobileController extends Controller
 {
-    public function workspaces(Request $request): JsonResponse
+    public function workspaces(Request $request, MobileLandlordAccessService $landlordAccess): JsonResponse
     {
         $user = $this->user($request);
 
@@ -36,6 +39,7 @@ class EverbranchMobileController extends Controller
                     'role' => (string) ($tenant->pivot->role ?? $user->role ?? 'member'),
                 ])
                 ->values(),
+            'landlord_access' => $landlordAccess->allows($user),
         ]);
     }
 
@@ -61,6 +65,7 @@ class EverbranchMobileController extends Controller
             ],
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'dashboard' => $dashboard->forRequest($request, $user),
+            'branches' => $mobileModules->manifest((int) $tenant->id),
             'modules' => $mobileModules->manifest((int) $tenant->id),
             'branches_summary' => [
                 'active' => count((array) data_get($catalog->tenantStorePayload((int) $tenant->id, 'mobile'), 'sections.active', [])),
@@ -76,6 +81,109 @@ class EverbranchMobileController extends Controller
     public function moduleScreen(Request $request, string $tenant, string $moduleKey, TenantMobileModuleRegistry $registry): JsonResponse
     {
         return response()->json($registry->screen((int) $this->tenant($request)->id, $moduleKey));
+    }
+
+    public function customers(Request $request, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenant->id, 'customers');
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'cursor' => ['nullable', 'string', 'max:1000'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
+
+        return response()->json($resources->customers((int) $tenant->id, (string) ($validated['q'] ?? ''), $validated['cursor'] ?? null, (int) ($validated['limit'] ?? 25)));
+    }
+
+    public function customer(Request $request, string $tenant, int $customer, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenantModel->id, 'customers');
+
+        return response()->json($resources->customer((int) $tenantModel->id, $customer));
+    }
+
+    public function work(Request $request, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenant->id, 'work_core');
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
+
+        return response()->json($resources->work($tenant, $this->user($request), (string) ($validated['q'] ?? ''), (int) ($validated['limit'] ?? 30)));
+    }
+
+    public function workDetail(Request $request, string $tenant, string $kind, int $resource, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenantModel->id, 'work_core');
+
+        return response()->json($resources->workDetail($tenantModel, $this->user($request), $kind, $resource));
+    }
+
+    public function conversations(Request $request, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenant->id, 'messaging');
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'filter' => ['nullable', 'in:open,unread,all,closed,archived'], 'channel' => ['nullable', 'in:all,text,email,app'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
+
+        return response()->json($messaging->index((int) $tenant->id, ['search' => $validated['q'] ?? '', ...$validated]));
+    }
+
+    public function conversation(Request $request, string $tenant, int $conversation, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenantModel->id, 'messaging');
+
+        return response()->json($messaging->show((int) $tenantModel->id, $conversation));
+    }
+
+    public function messageCustomers(Request $request, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenant->id, 'messaging');
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:160']]);
+
+        return response()->json(['customers' => $messaging->searchCustomers((int) $tenant->id, (string) ($validated['q'] ?? ''))]);
+    }
+
+    public function composeMessage(Request $request, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenant->id, 'messaging');
+        $validated = $request->validate(['customer_id' => ['required', 'integer'], 'channel' => ['required', 'in:text,email,app'], 'body' => ['required', 'string', 'max:10000'], 'subject' => ['nullable', 'string', 'max:255']]);
+
+        return response()->json($messaging->compose((int) $tenant->id, $this->user($request), (int) $validated['customer_id'], $validated['channel'], $validated['body'], $validated['subject'] ?? null, $this->idempotencyKey($request)), 201);
+    }
+
+    public function replyMessage(Request $request, string $tenant, int $conversation, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenantModel->id, 'messaging');
+        $validated = $request->validate(['body' => ['required', 'string', 'max:10000'], 'subject' => ['nullable', 'string', 'max:255']]);
+
+        return response()->json($messaging->reply((int) $tenantModel->id, $this->user($request), $conversation, $validated['body'], $validated['subject'] ?? null, $this->idempotencyKey($request)));
+    }
+
+    public function conversationAction(Request $request, string $tenant, int $conversation, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenantModel->id, 'messaging');
+        $validated = $request->validate(['action' => ['required', 'in:mark_read,mark_unread,assign_to_me,unassign,close,reopen,archive']]);
+
+        return response()->json($messaging->action((int) $tenantModel->id, $this->user($request), $conversation, $validated['action']));
+    }
+
+    public function preferences(Request $request): JsonResponse
+    {
+        return response()->json(['preferences' => (array) data_get($this->user($request)->ui_preferences, 'mobile', [])]);
+    }
+
+    public function updatePreferences(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['appearance' => ['sometimes', 'in:system,light,dark'], 'notifications' => ['sometimes', 'boolean'], 'biometric_reentry' => ['sometimes', 'boolean']]);
+        $user = $this->user($request);
+        $preferences = (array) ($user->ui_preferences ?? []);
+        $preferences['mobile'] = [...(array) ($preferences['mobile'] ?? []), ...$validated];
+        $user->forceFill(['ui_preferences' => $preferences])->save();
+
+        return response()->json(['ok' => true, 'preferences' => $preferences['mobile']]);
     }
 
     public function moduleAction(Request $request, string $tenant, string $moduleKey, string $actionKey, TenantMobileModuleRegistry $registry): JsonResponse
@@ -115,20 +223,45 @@ class EverbranchMobileController extends Controller
         ], 201);
     }
 
-    public function search(Request $request, GlobalSearchCoordinator $search): JsonResponse
+    public function search(Request $request, GlobalSearchCoordinator $search, TenantMobileResourceService $resources): JsonResponse
     {
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:200'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
         ]);
 
-        return response()->json($search->search((string) ($validated['q'] ?? ''), [
-            'tenant_id' => (int) $this->tenant($request)->id,
+        $tenant = $this->tenant($request);
+        $query = (string) ($validated['q'] ?? '');
+        $payload = $search->search($query, [
+            'tenant_id' => (int) $tenant->id,
             'user' => $this->user($request),
             'request' => $request,
             'surface' => 'mobile',
             'limit' => (int) ($validated['limit'] ?? 10),
-        ]));
+        ]);
+        $results = collect((array) ($payload['results'] ?? []))->map(function (array $result): array {
+            $destination = match ((string) ($result['type'] ?? '')) {
+                'customer' => ['kind' => 'customer', 'id' => (int) data_get($result, 'meta.profile_id')],
+                'order' => ['kind' => 'orders', 'id' => (int) data_get($result, 'meta.order_id')],
+                default => null,
+            };
+
+            return $destination ? [...$result, 'mobile_destination' => $destination] : $result;
+        });
+        $work = $resources->work($tenant, $this->user($request), $query, 8);
+        if (($work['kind'] ?? null) !== 'orders') {
+            $results = $results->concat(collect((array) ($work['items'] ?? []))->map(fn (array $item): array => [
+                'type' => rtrim((string) $work['kind'], 's'),
+                'title' => $item['title'],
+                'subtitle' => $item['subtitle'] ?? '',
+                'badge' => $item['status'] ?? $work['label'],
+                'mobile_destination' => ['kind' => $work['kind'], 'id' => $item['id']],
+            ]));
+        }
+        $payload['results'] = $results->take((int) ($validated['limit'] ?? 20))->values()->all();
+        $payload['total'] = count($payload['results']);
+
+        return response()->json($payload);
     }
 
     public function branches(Request $request, TenantModuleCatalogService $catalog): JsonResponse
@@ -255,5 +388,18 @@ class EverbranchMobileController extends Controller
     {
         return $this->tenantRole($user, $tenant) === 'admin'
             || strtolower(trim((string) $user->role)) === 'platform_admin';
+    }
+
+    protected function requireBranch(TenantMobileModuleRegistry $registry, int $tenantId, string $moduleKey): void
+    {
+        abort_unless(collect($registry->manifest($tenantId))->contains('module_key', $moduleKey), 404);
+    }
+
+    protected function idempotencyKey(Request $request): string
+    {
+        $key = trim((string) $request->header('Idempotency-Key'));
+        abort_unless($key !== '' && mb_strlen($key) <= 200, 422, 'An Idempotency-Key header is required.');
+
+        return $key;
     }
 }

@@ -2,6 +2,9 @@
 
 ## Everbranch Mobile Platform (2026-07-10)
 
+- Contract v2 / app 1.1.0 replaces generic module summaries with operational Branches: Messaging, Customers, tenant-aware Work, Reporting, typed Search, interactive Account, and authorized landlord triage.
+- `work_core` is included in every plan and displayed as Work Branch. Laravel resolves orders, jobs, or client projects; the phone cannot choose a vertical or spoof a work kind.
+- Contract v2 returns `branches`; `modules` and `/modules/...` remain deprecated aliases for one app release. User-facing copy says Branch while internal `module_key` values remain stable.
 - The separate tenant app lives at `../everbranch-mobile`. It is a React/TypeScript + Capacitor project for iOS and Android with bundle/package ID `com.everbranch.app`; the Modern Forestry SwiftUI customer app remains separate and unchanged.
 - Laravel exposes `/api/mobile/v1` for PKCE/Sanctum device sessions, membership discovery, tenant bootstrap, module screens/actions, search, Branches, account devices, and guarded Stripe browser handoff.
 - Continue with Google and Sign in with email share a public authorization broker that preserves one PKCE attempt through Socialite or Fortify password, verification, and 2FA before returning to the app.

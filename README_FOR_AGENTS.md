@@ -700,6 +700,10 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 ## Everbranch Tenant Mobile Rule (2026-07-10)
 
 - `../everbranch-mobile` is the cross-tenant Everbranch app (`com.everbranch.app`). Do not merge its concerns into the Modern Forestry SwiftUI customer app or its product-catalog APIs.
+- Everbranch app 1.1.0 consumes mobile contract v2. Say Branch in tenant-facing copy, keep canonical `module_key` identifiers internally, return `branches`, and preserve `modules` plus `/modules/...` only as temporary compatibility aliases.
+- Operational Branches must provide a meaningful native workflow. Do not restore generic Share controls or expose summary-only/placeholder catalog entries.
+- Work Branch uses canonical `work_core`; resolve orders/jobs/clients from tenant blueprint and experience signals. Never accept a client-selected vertical.
+- Messaging Branch aggregates store keys server-side and reuses `MessagingResponseInboxService` plus channel readiness rules. Modern Forestry App threads are only `source_type=modern_forestry_app`, `store_key=retail`, tenant 1, and require an eligible authorized app device.
 - Mobile APIs live under `/api/mobile/v1`. Use browser Fortify + one-time S256 PKCE exchange and Sanctum device tokens; never accept password credentials in the app or persist tokens outside Keychain/Android Keystore.
 - Resolve `{tenant}` only through authenticated memberships with `EnsureMobileTenantAccess`, then use `TenantContext`, canonical roles, and `TenantModuleAccessResolver`. Scope every referenced job, customer, store, channel, module, and billing record again on the server.
 - A module is absent unless its canonical `mobile.status` is `ready` or `beta`, its contract version is supported, and the tenant is entitled. Payloads may use only the finite primitives in `TenantMobileModuleRegistry`; they may not send JavaScript or arbitrary remote UI.

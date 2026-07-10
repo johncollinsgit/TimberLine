@@ -1,5 +1,13 @@
 # Everbranch Mobile Platform and Branches
 
+## Contract v2 Operational Branches (2026-07-10)
+
+- App 1.1.0 uses tailored Messaging, Customers, Work, Reporting, Search, Account, and landlord surfaces. Generic Share and summary-only Branches are not valid mobile workflows.
+- `work_core` is canonical and included in every plan. Laravel resolves retail orders, field jobs, or client projects from tenant blueprint first and experience signals second.
+- Messaging reads across the authenticated tenant's server-owned store keys and supports Text, Email, and eligible Modern Forestry App threads. Every send requires `mobile:write`, entitlement, channel readiness, and `Idempotency-Key`.
+- Tenant-facing payloads and copy use Branches. Bootstrap returns `branches`; `modules` and `/modules/{key}` remain compatibility aliases through the next app release.
+- Landlord access is independent from workspace membership and exposes audited triage only. Destructive tenant/configuration and live billing changes remain web-only.
+
 ## Boundaries
 
 The tenant app is a separate repository at `../everbranch-mobile`, bundled with React/TypeScript and Capacitor for `com.everbranch.app` on iOS and Android. It does not wrap the production web app and does not replace or modify the Modern Forestry SwiftUI customer app. The initial lane is a US B2B pilot.
@@ -14,7 +22,7 @@ The tenant app is a separate repository at `../everbranch-mobile`, bundled with 
 
 ## Rendering Contract
 
-`TenantMobileModuleRegistry` is contract version 1. It filters the canonical catalog by mobile readiness and `TenantModuleAccessResolver`, then returns data/layout using finite primitives: dashboard, metrics, list/search, detail, form, action sheet, tabs, notice, empty, and error states. It never accepts executable JavaScript or arbitrary remote UI.
+`TenantMobileModuleRegistry` is contract version 2. It filters the canonical catalog by mobile readiness and `TenantModuleAccessResolver`, then returns data/layout using finite primitives: dashboard, metrics, list/search, detail, form, action sheet, tabs, notice, empty, and error states. It never accepts executable JavaScript or arbitrary remote UI.
 
 A declaration names its renderer, entry screen, contract version, minimum binary version, navigation position/icon, and supported primary actions. A new module can appear after payment/refresh without a binary release only when it uses an already supported renderer and action vocabulary. A new primitive requires an app release and higher `min_app_version`.
 

@@ -1,5 +1,11 @@
 # Mobile Catalog Services
 
+## Everbranch Contract v2
+
+`TenantMobileMessagingService` owns tenant-wide conversation discovery and delegates delivery, consent, suppression, metering, and App-thread behavior to the established messaging services. `TenantMobileResourceService` owns customer details and server-resolved order/job/client Work payloads. `TenantMobileLandlordService` is guarded by `MobileLandlordAccessService` and exposes audited, non-destructive triage only.
+
+New mobile work uses Branch in presentation copy while retaining canonical module keys. A catalog entry is visible only when entitled and `mobile.status=ready|beta`; summary-only, placeholder, roadmap, unsafe, or unscoped entries fail closed. Contract v2 returns `branches` and temporarily retains the v1 `modules` alias.
+
 ## Everbranch Tenant App Contract (2026-07-10)
 
 This folder now owns two deliberately separate surfaces. The `ModernForestryMobile*` services feed the Modern Forestry customer shopping app. `TenantMobileModuleRegistry` feeds the cross-tenant Everbranch work app at `../everbranch-mobile`; do not reuse customer commerce session assumptions for tenant users.
