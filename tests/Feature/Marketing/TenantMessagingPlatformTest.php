@@ -16,6 +16,7 @@ use App\Services\Marketing\MessagingEmailReplyAddressService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
@@ -23,6 +24,22 @@ beforeEach(function (): void {
     config()->set('features.tenant_messaging_platform', true);
     config()->set('marketing.messaging.platform.legacy_tenant_ids', [1]);
     config()->set('marketing.messaging.responses.email_inbound_domain', 'replies.example.test');
+});
+
+test('messaging migration resumes after a partial non transactional database failure', function () {
+    Schema::dropIfExists('tenant_messaging_ledger_entries');
+    Schema::dropIfExists('tenant_messaging_usage_periods');
+    Schema::dropIfExists('tenant_messaging_credit_accounts');
+    Schema::dropIfExists('tenant_messaging_sender_profiles');
+
+    $migration = require database_path('migrations/2026_07_10_140000_create_tenant_messaging_platform_tables.php');
+    $migration->up();
+
+    expect(Schema::hasTable('tenant_messaging_accounts'))->toBeTrue()
+        ->and(Schema::hasTable('tenant_messaging_sender_profiles'))->toBeTrue()
+        ->and(Schema::hasTable('tenant_messaging_credit_accounts'))->toBeTrue()
+        ->and(Schema::hasTable('tenant_messaging_usage_periods'))->toBeTrue()
+        ->and(Schema::hasTable('tenant_messaging_ledger_entries'))->toBeTrue();
 });
 
 test('new tenants fail closed while the explicit legacy tenant keeps its existing provider path', function () {
