@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobPhoto;
 use App\Models\MarketingProfile;
@@ -329,6 +330,14 @@ test('mobile customer work and preferences endpoints stay membership scoped', fu
     $this->getJson('/api/mobile/v1/account/preferences')
         ->assertOk()
         ->assertJsonPath('preferences.biometric_reentry', true);
+    $this->postJson('/api/mobile/v1/account/push-device', [
+        'platform' => 'ios',
+        'device_token' => 'operator-apns-token',
+        'app_version' => '1.1.0',
+        'device_name' => 'Test iPhone',
+    ])->assertCreated();
+    expect(EverbranchMobilePushDevice::query()->where('user_id', $user->id)->count())->toBe(1)
+        ->and(EverbranchMobilePushDevice::query()->first()?->device_token)->toBe('operator-apns-token');
 });
 
 test('mobile messaging aggregates entitled conversations and scopes thread actions', function (): void {

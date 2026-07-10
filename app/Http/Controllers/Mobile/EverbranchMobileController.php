@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobPhoto;
 use App\Models\Tenant;
@@ -184,6 +185,43 @@ class EverbranchMobileController extends Controller
         $user->forceFill(['ui_preferences' => $preferences])->save();
 
         return response()->json(['ok' => true, 'preferences' => $preferences['mobile']]);
+    }
+
+    public function registerPushDevice(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'platform' => ['required', 'in:ios,android'],
+            'device_token' => ['required', 'string', 'max:4096'],
+            'app_version' => ['nullable', 'string', 'max:40'],
+            'device_name' => ['nullable', 'string', 'max:160'],
+        ]);
+        $user = $this->user($request);
+        $hash = hash('sha256', $validated['device_token']);
+        $device = EverbranchMobilePushDevice::query()->updateOrCreate(
+            ['device_token_hash' => $hash],
+            [
+                'user_id' => (int) $user->id,
+                'platform' => $validated['platform'],
+                'device_token' => $validated['device_token'],
+                'app_version' => $validated['app_version'] ?? null,
+                'device_name' => $validated['device_name'] ?? null,
+                'notifications_enabled' => true,
+                'last_seen_at' => now(),
+            ]
+        );
+
+        return response()->json(['ok' => true, 'device_id' => (int) $device->id], 201);
+    }
+
+    public function unregisterPushDevice(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['device_token' => ['required', 'string', 'max:4096']]);
+        EverbranchMobilePushDevice::query()
+            ->where('user_id', $this->user($request)->id)
+            ->where('device_token_hash', hash('sha256', $validated['device_token']))
+            ->delete();
+
+        return response()->json(['ok' => true]);
     }
 
     public function moduleAction(Request $request, string $tenant, string $moduleKey, string $actionKey, TenantMobileModuleRegistry $registry): JsonResponse

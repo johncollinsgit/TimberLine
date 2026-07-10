@@ -22,6 +22,8 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
         Route::get('/workspaces', [EverbranchMobileController::class, 'workspaces'])->middleware('abilities:mobile:read')->name('workspaces');
         Route::get('/account/preferences', [EverbranchMobileController::class, 'preferences'])->middleware('abilities:mobile:read')->name('account.preferences');
         Route::patch('/account/preferences', [EverbranchMobileController::class, 'updatePreferences'])->middleware('abilities:mobile:write')->name('account.preferences.update');
+        Route::post('/account/push-device', [EverbranchMobileController::class, 'registerPushDevice'])->middleware('abilities:mobile:write')->name('account.push-device.register');
+        Route::delete('/account/push-device', [EverbranchMobileController::class, 'unregisterPushDevice'])->middleware('abilities:mobile:write')->name('account.push-device.unregister');
 
         Route::prefix('/landlord')->group(function (): void {
             Route::get('/bootstrap', [EverbranchMobileLandlordController::class, 'bootstrap'])->middleware('abilities:mobile:read')->name('landlord.bootstrap');
