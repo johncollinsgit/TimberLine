@@ -70,11 +70,13 @@
                 <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div class="max-w-3xl space-y-3">
                         <div class="inline-flex w-fit rounded-full border border-emerald-300/40 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-900">
-                            Native Zap Replacement
+                            Calendar Sync
                         </div>
                         <div>
                             <h2 class="text-xl font-semibold text-zinc-950">{{ $workflowSetup['title'] ?? 'Workflow Automations' }}</h2>
-                            <p class="mt-2 text-sm text-zinc-700">{{ $workflowSetup['description'] ?? 'Configure tenant-native workflow automations.' }}</p>
+                            <p class="mt-2 text-sm text-zinc-700">
+                                Keep a Google Calendar matched to one Asana project. New dated Asana tasks become calendar events, and later task edits update the same calendar event.
+                            </p>
                         </div>
                     </div>
                     <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
@@ -98,7 +100,7 @@
                     <div class="rounded-2xl border border-white/70 bg-white/80 p-4">
                         <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Tracked Links</div>
                         <div class="mt-2 text-lg font-semibold text-zinc-950">{{ number_format((int) ($workflowSetup['link_count'] ?? 0)) }}</div>
-                        <div class="mt-1 text-xs text-zinc-500">Stored Asana task to calendar event relationships.</div>
+                        <div class="mt-1 text-xs text-zinc-500">Asana tasks already paired with calendar events.</div>
                     </div>
                     <div class="rounded-2xl border border-white/70 bg-white/80 p-4">
                         <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Last Started</div>
@@ -144,8 +146,39 @@
                 @endif
 
                 <x-admin.help-hint title="How this setup works">
-                    Save Setup stores tenant-specific workflow settings. Connect Asana and Google to turn raw IDs into pickers. Dry Run fetches matching Asana tasks without writing Google events. Run Live writes the events immediately. Leaving credential fields blank keeps the current saved value.
+                    Connect Asana, connect Google Calendar, choose one Asana project and one destination calendar, then run a dry run before turning the sync on. A dry run previews changes without writing calendar events. Leaving credential fields blank keeps the current saved value.
                 </x-admin.help-hint>
+
+                <div class="grid gap-3 lg:grid-cols-5">
+                    @foreach([
+                        ['step' => '1', 'title' => 'Connect Asana', 'copy' => 'Use the Asana account that can see the project you want on the calendar.'],
+                        ['step' => '2', 'title' => 'Connect Google', 'copy' => 'Use the Google account that owns or can write to the destination calendar.'],
+                        ['step' => '3', 'title' => 'Choose Source', 'copy' => 'Pick the Asana project that holds the dated tasks.'],
+                        ['step' => '4', 'title' => 'Choose Calendar', 'copy' => 'Pick the Google Calendar where events should appear.'],
+                        ['step' => '5', 'title' => 'Dry Run First', 'copy' => 'Preview what will be created or updated, then enable the sync.'],
+                    ] as $setupStep)
+                        <div class="rounded-2xl border border-white/70 bg-white/85 p-4">
+                            <div class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-950">{{ $setupStep['step'] }}</div>
+                            <div class="mt-3 text-sm font-semibold text-zinc-950">{{ $setupStep['title'] }}</div>
+                            <p class="mt-1 text-xs leading-5 text-zinc-600">{{ $setupStep['copy'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-3">
+                    <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                        <div class="font-semibold">Runs automatically</div>
+                        <p class="mt-1 text-xs leading-5">The scheduler checks Asana every few minutes. Most edits appear on the calendar within the next poll.</p>
+                    </div>
+                    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                        <div class="font-semibold">Updates the same event</div>
+                        <p class="mt-1 text-xs leading-5">Once a task is linked, date, title, and note changes update that calendar event instead of creating duplicates.</p>
+                    </div>
+                    <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                        <div class="font-semibold">Only dated tasks sync</div>
+                        <p class="mt-1 text-xs leading-5">Tasks without a due date are skipped. Completed tasks are skipped when the setting below is checked.</p>
+                    </div>
+                </div>
 
                 @if(! $moduleEnabled)
                     <div class="rounded-2xl border border-rose-300/35 bg-rose-100 px-4 py-3 text-sm text-rose-900">
@@ -169,7 +202,7 @@
                                 <div class="flex items-start justify-between gap-3">
                                     <div>
                                         <h3 class="text-base font-semibold text-zinc-950">Workflow Settings</h3>
-                                        <p class="mt-1 text-sm text-zinc-600">Set the Asana source, Google Calendar target, and default event timing for this tenant.</p>
+                                        <p class="mt-1 text-sm text-zinc-600">Choose the project to watch, the calendar to write to, and the fallback time for all-day Asana tasks.</p>
                                     </div>
                                     <label class="inline-flex items-center gap-2 rounded-full border border-emerald-300/40 bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-950">
                                         <input type="checkbox" name="enabled" value="1" class="rounded border-emerald-400" @checked((bool) old('enabled', $workflowEnabled)) />
@@ -246,7 +279,7 @@
                             <div class="rounded-2xl border border-zinc-200/70 bg-white/80 p-4 space-y-4">
                                 <div>
                                     <h3 class="text-base font-semibold text-zinc-950">Polling Defaults</h3>
-                                    <p class="mt-1 text-sm text-zinc-600">These control how aggressively Everbranch scans Asana for changed tasks.</p>
+                                    <p class="mt-1 text-sm text-zinc-600">The defaults are safe for most customers. Change them only when support asks you to.</p>
                                 </div>
                                 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                     <div>
@@ -277,7 +310,7 @@
                             <div class="rounded-2xl border border-zinc-200/70 bg-white/80 p-4 space-y-4">
                                 <div>
                                     <h3 class="text-base font-semibold text-zinc-950">Credentials</h3>
-                                    <p class="mt-1 text-sm text-zinc-600">Credentials are encrypted at rest. Leave fields blank to keep the current saved value. Asana and Google can both be connected with OAuth once client credentials are available.</p>
+                                    <p class="mt-1 text-sm text-zinc-600">Connect each account with OAuth whenever possible. Credentials are encrypted at rest. Leave fields blank to keep the current saved value.</p>
                                 </div>
 
                                 <div>

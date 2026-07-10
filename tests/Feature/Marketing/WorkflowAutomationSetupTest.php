@@ -128,7 +128,7 @@ test('workflow automation setup saves encrypted tenant credentials and preserves
         ->get(route('marketing.providers-integrations'))
         ->assertOk()
         ->assertSeeText('Asana to Google Calendar')
-        ->assertSeeText('Native Zap Replacement')
+        ->assertSeeText('Calendar Sync')
         ->assertSeeText('Saved for this tenant')
         ->assertSeeText('asan********1234');
 });
@@ -343,10 +343,15 @@ test('workflow automation setup can launch google calendar oauth from the connec
 
     $redirect = $response->headers->get('Location');
 
+    parse_str((string) parse_url((string) $redirect, PHP_URL_QUERY), $query);
+    $scopes = explode(' ', (string) ($query['scope'] ?? ''));
+
     expect($redirect)->not->toBeNull()
         ->and($redirect)->toStartWith('https://accounts.google.com/o/oauth2/v2/auth?')
         ->and(urldecode((string) $redirect))->toContain((string) config('services.google_calendar.redirect_uri'))
-        ->and(urldecode((string) $redirect))->toContain('https://www.googleapis.com/auth/calendar');
+        ->and($scopes)->toContain('https://www.googleapis.com/auth/calendar.events')
+        ->and($scopes)->toContain('https://www.googleapis.com/auth/calendar.calendarlist.readonly')
+        ->and($scopes)->not->toContain('https://www.googleapis.com/auth/calendar');
 });
 
 test('asana oauth callback stores refresh token and auto-selects the only visible project', function (): void {
@@ -493,7 +498,7 @@ test('google calendar oauth callback stores refresh token and auto-selects the o
             'refresh_token' => 'connected-google-refresh-token',
             'expires_in' => 3600,
             'token_type' => 'Bearer',
-            'scope' => 'https://www.googleapis.com/auth/calendar',
+            'scope' => 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly',
         ], 200),
         'https://www.googleapis.com/calendar/v3/users/me/calendarList*' => Http::response([
             'items' => [

@@ -219,7 +219,7 @@ class GoogleCalendarWorkflowConnectionService
      */
     protected function scopes(): array
     {
-        $configured = explode(',', (string) config('services.google_calendar.oauth_scopes', 'https://www.googleapis.com/auth/calendar'));
+        $configured = explode(',', (string) config('services.google_calendar.oauth_scopes', 'https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/calendar.calendarlist.readonly'));
 
         return array_values(array_unique(array_filter(array_map(
             static fn (string $scope): string => trim($scope),
