@@ -53,6 +53,7 @@ class EverbranchMobileController extends Controller
     ): JsonResponse {
         $tenant = $this->tenant($request);
         $user = $this->user($request);
+        $storePayload = $catalog->tenantStorePayload((int) $tenant->id, 'mobile');
 
         return response()->json([
             'contract_version' => TenantMobileModuleRegistry::CONTRACT_VERSION,
@@ -69,8 +70,9 @@ class EverbranchMobileController extends Controller
             'branches' => $mobileModules->manifest((int) $tenant->id),
             'modules' => $mobileModules->manifest((int) $tenant->id),
             'branches_summary' => [
-                'active' => count((array) data_get($catalog->tenantStorePayload((int) $tenant->id, 'mobile'), 'sections.active', [])),
-                'available' => count((array) data_get($catalog->tenantStorePayload((int) $tenant->id, 'mobile'), 'sections.available', [])),
+                'active' => count((array) data_get($storePayload, 'sections.active', [])),
+                'available' => collect(['available', 'upgrade', 'request'])
+                    ->sum(fn (string $section): int => count((array) data_get($storePayload, 'sections.'.$section, []))),
             ],
             'permissions' => [
                 'manage_billing' => $this->canManageBilling($user, $tenant),

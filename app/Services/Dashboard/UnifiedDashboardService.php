@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
+use App\Services\Tenancy\TenantBlueprintProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\Request;
@@ -22,7 +23,8 @@ class UnifiedDashboardService
     public function __construct(
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
         protected TenantExperienceProfileService $experienceProfileService,
-        protected TenantModuleCatalogService $moduleCatalogService
+        protected TenantModuleCatalogService $moduleCatalogService,
+        protected TenantBlueprintProfileService $blueprintProfileService,
     ) {}
 
     /**
@@ -42,12 +44,13 @@ class UnifiedDashboardService
         $catalog = ($tenantId !== null && $canAccessMarketing)
             ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
             : ['sections' => []];
+        $tradeMetrics = $this->tradeMetrics($tenant, $profile);
 
         return [
             'tenant_id' => $tenantId,
             'experience_profile' => $profile,
-            'hero' => $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps),
-            'summary_cards' => $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing),
+            'hero' => $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $tradeMetrics),
+            'summary_cards' => $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $tradeMetrics),
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
@@ -56,10 +59,19 @@ class UnifiedDashboardService
     /**
      * @return array<string,mixed>
      */
-    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps): array
+    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, ?array $tradeMetrics = null): array
     {
         $channelType = (string) ($profile['channel_type'] ?? 'direct');
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
+
+        if ($canAccessOps && $tradeMetrics !== null) {
+            return [
+                'label' => 'Jobs in progress',
+                'value' => number_format((int) $tradeMetrics['jobs_in_progress']),
+                'supporting' => 'Active jobs currently underway',
+                'tone' => 'emerald',
+            ];
+        }
 
         if ($tenantId !== null && Schema::hasTable('orders') && in_array($channelType, ['shopify', 'hybrid'], true) && ($canAccessMarketing || $canAccessOps)) {
             $since = now()->subDays(30);
@@ -135,10 +147,30 @@ class UnifiedDashboardService
     /**
      * @return array<int,array<string,string|int>>
      */
-    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing): array
+    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing, ?array $tradeMetrics = null): array
     {
         $cards = [];
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
+
+        if ($tradeMetrics !== null) {
+            return [
+                [
+                    'label' => 'Total gross revenue',
+                    'value' => '$'.number_format((float) $tradeMetrics['gross_revenue'], 2),
+                    'detail' => 'Value of jobs currently in progress',
+                ],
+                [
+                    'label' => 'Crews working',
+                    'value' => number_format((int) $tradeMetrics['crews_working']),
+                    'detail' => 'Assigned crews on active jobs',
+                ],
+                [
+                    'label' => 'Potential jobs in progress',
+                    'value' => number_format((int) $tradeMetrics['potential_jobs']),
+                    'detail' => 'Estimates, quotes, and opportunities in progress',
+                ],
+            ];
+        }
 
         if ($tenantId !== null && $useCase === 'field_service') {
             if (Schema::hasTable('marketing_profiles')) {
@@ -207,6 +239,72 @@ class UnifiedDashboardService
         ];
 
         return array_slice($cards, 0, 4);
+    }
+
+    /**
+     * @return array{jobs_in_progress:int,gross_revenue:float,crews_working:int,potential_jobs:int}|null
+     */
+    protected function tradeMetrics(?Tenant $tenant, array $profile): ?array
+    {
+        if (! $tenant instanceof Tenant || ! Schema::hasTable('field_service_jobs')) {
+            return null;
+        }
+
+        $blueprint = $this->blueprintProfileService->payloadForTenant($tenant->loadMissing('accessProfile'));
+        $template = strtolower(trim((string) ($blueprint['business_template'] ?? '')));
+        if (! in_array($template, ['electrician', 'landscaping'], true)
+            && (string) ($profile['use_case_profile'] ?? '') !== 'field_service') {
+            return null;
+        }
+
+        $jobs = FieldServiceJob::query()
+            ->forTenantId((int) $tenant->id)
+            ->get(['id', 'assigned_user_id', 'status', 'metadata']);
+        $inProgress = $jobs->filter(fn (FieldServiceJob $job): bool => strtolower((string) $job->status) === 'in_progress');
+        $pipelineStages = ['potential', 'estimate', 'estimated', 'quote', 'quoted', 'proposal', 'opportunity'];
+
+        return [
+            'jobs_in_progress' => $inProgress->count(),
+            'gross_revenue' => $inProgress->sum(fn (FieldServiceJob $job): float => $this->jobGrossRevenue($job)),
+            'crews_working' => $inProgress
+                ->map(fn (FieldServiceJob $job): string => trim((string) (
+                    data_get($job->metadata, 'crew_id')
+                    ?? data_get($job->metadata, 'crew_key')
+                    ?? data_get($job->metadata, 'crew_name')
+                    ?? ($job->assigned_user_id ? 'user:'.$job->assigned_user_id : '')
+                )))
+                ->filter()
+                ->unique()
+                ->count(),
+            'potential_jobs' => $jobs->filter(function (FieldServiceJob $job) use ($pipelineStages): bool {
+                $status = strtolower(trim((string) $job->status));
+                $stage = strtolower(trim((string) (
+                    data_get($job->metadata, 'pipeline_stage')
+                    ?? data_get($job->metadata, 'job_stage')
+                    ?? data_get($job->metadata, 'stage')
+                    ?? ''
+                )));
+
+                return in_array($status, $pipelineStages, true) || in_array($stage, $pipelineStages, true);
+            })->count(),
+        ];
+    }
+
+    protected function jobGrossRevenue(FieldServiceJob $job): float
+    {
+        $cents = data_get($job->metadata, 'gross_revenue_cents');
+        if (is_numeric($cents)) {
+            return (float) $cents / 100;
+        }
+
+        foreach (['gross_revenue', 'contract_value', 'estimated_revenue', 'quoted_total'] as $key) {
+            $value = data_get($job->metadata, $key);
+            if (is_numeric($value)) {
+                return (float) $value;
+            }
+        }
+
+        return 0.0;
     }
 
     /**
