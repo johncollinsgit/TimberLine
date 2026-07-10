@@ -105,9 +105,13 @@ $landlordOperatorRoles = array_values(array_filter(array_map(
     static fn (string $role): string => strtolower(trim($role)),
     explode(',', (string) env('TENANCY_LANDLORD_OPERATOR_ROLES', 'platform_admin,admin'))
 )));
+$landlordOperatorEmailsRaw = trim((string) env('TENANCY_LANDLORD_OPERATOR_EMAILS', ''));
+if ($landlordOperatorEmailsRaw === '') {
+    $landlordOperatorEmailsRaw = trim((string) env('EVERBRANCH_BUD_SUPPORT_EMAIL', ''));
+}
 $landlordOperatorEmails = array_values(array_filter(array_map(
     static fn (string $email): string => strtolower(trim($email)),
-    explode(',', (string) env('TENANCY_LANDLORD_OPERATOR_EMAILS', ''))
+    explode(',', $landlordOperatorEmailsRaw)
 )));
 
 $legacyPublicRedirectEnabled = filter_var(

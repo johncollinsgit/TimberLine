@@ -37,6 +37,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
             ->middleware('mobile.tenant')
             ->group(function (): void {
                 Route::get('/bootstrap', [EverbranchMobileController::class, 'bootstrap'])->middleware('abilities:mobile:read')->name('workspace.bootstrap');
+                Route::patch('/branding', [EverbranchMobileController::class, 'updateBranding'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.branding.update');
                 Route::get('/search', [EverbranchMobileController::class, 'search'])->middleware('abilities:mobile:read')->name('workspace.search');
                 Route::get('/customers', [EverbranchMobileController::class, 'customers'])->middleware('abilities:mobile:read')->name('workspace.customers');
                 Route::get('/customers/{customer}', [EverbranchMobileController::class, 'customer'])->middleware('abilities:mobile:read')->whereNumber('customer')->name('workspace.customers.show');

@@ -8,6 +8,10 @@ New mobile work uses Branch in presentation copy while retaining canonical modul
 
 Trade-profile Home metrics resolve from the tenant blueprint and tenant-scoped field jobs: jobs with `status=in_progress`, gross/contract value in job metadata, distinct assigned crew keys or users, and potential/estimate/quoted pipeline stages. The mobile Branches catalog supplies a purpose-specific icon for every visible entry, counts every non-active growth path, and exposes product/setup language for owned as well as available Branches.
 
+Tenant bootstrap also returns a tenant-scoped `branding` block and `workspace_insights`. Branding resolves from `TenantDiscoveryProfile`, falls back to the tenant name, and uses the published Modern Forestry wordmark for tenant 1 until a profile logo is configured. Only the workspace `admin` role may update `/workspaces/{tenant}/branding`; updates are written to the discovery profile and audited. Normal tenant Home receives only its own users, active users, ready Branches, and 30-day work activity.
+
+Landlord mode remains a distinct authorization context rather than a tenant membership. An authenticated authorized operator may switch between tenant and landlord payloads without exchanging a second token. Landlord bootstrap includes catalog-derived MRR, tenant/user/activity counts, tenant-type distribution, 12-month cumulative tenant growth, recent audited activity, access/support queues, and tenant drill-down with users and Branch readiness. The configured Everbranch support operator email is the fail-safe operator-email default when `TENANCY_LANDLORD_OPERATOR_EMAILS` is blank; role authorization still applies.
+
 ## Everbranch Tenant App Contract (2026-07-10)
 
 This folder now owns two deliberately separate surfaces. The `ModernForestryMobile*` services feed the Modern Forestry customer shopping app. `TenantMobileModuleRegistry` feeds the cross-tenant Everbranch work app at `../everbranch-mobile`; do not reuse customer commerce session assumptions for tenant users.

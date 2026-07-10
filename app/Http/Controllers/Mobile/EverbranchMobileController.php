@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClientProject;
 use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobPhoto;
+use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
 use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Dashboard\UnifiedDashboardService;
@@ -15,6 +18,7 @@ use App\Services\Mobile\TenantMobileMessagingService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
 use App\Services\Mobile\TenantMobileResourceService;
 use App\Services\Search\GlobalSearchCoordinator;
+use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
@@ -54,6 +58,8 @@ class EverbranchMobileController extends Controller
         $tenant = $this->tenant($request);
         $user = $this->user($request);
         $storePayload = $catalog->tenantStorePayload((int) $tenant->id, 'mobile');
+        $manifest = $mobileModules->manifest((int) $tenant->id);
+        $role = $this->tenantRole($user, $tenant);
 
         return response()->json([
             'contract_version' => TenantMobileModuleRegistry::CONTRACT_VERSION,
@@ -63,12 +69,14 @@ class EverbranchMobileController extends Controller
                 'id' => (int) $tenant->id,
                 'name' => (string) $tenant->name,
                 'slug' => (string) $tenant->slug,
-                'role' => $this->tenantRole($user, $tenant),
+                'role' => $role,
             ],
+            'branding' => $this->brandingPayload($tenant, $role),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'dashboard' => $dashboard->forRequest($request, $user),
-            'branches' => $mobileModules->manifest((int) $tenant->id),
-            'modules' => $mobileModules->manifest((int) $tenant->id),
+            'workspace_insights' => $this->workspaceInsights($tenant, count($manifest)),
+            'branches' => $manifest,
+            'modules' => $manifest,
             'branches_summary' => [
                 'active' => count((array) data_get($storePayload, 'sections.active', [])),
                 'available' => collect(['available', 'upgrade', 'request'])
@@ -187,6 +195,36 @@ class EverbranchMobileController extends Controller
         $user->forceFill(['ui_preferences' => $preferences])->save();
 
         return response()->json(['ok' => true, 'preferences' => $preferences['mobile']]);
+    }
+
+    public function updateBranding(Request $request, LandlordOperatorActionAuditService $audit): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $user = $this->user($request);
+        $role = $this->tenantRole($user, $tenant);
+        abort_unless($role === 'admin', 403, 'Only a workspace admin can change mobile branding.');
+
+        $validated = $request->validate([
+            'display_name' => ['required', 'string', 'max:80'],
+            'logo_url' => ['nullable', 'url:http,https', 'max:2048'],
+        ]);
+        $profile = TenantDiscoveryProfile::withoutGlobalScopes()->firstOrNew(['tenant_id' => (int) $tenant->id]);
+        $before = [
+            'primary_brand_name' => $profile->primary_brand_name,
+            'primary_logo_url' => $profile->primary_logo_url,
+        ];
+        $profile->fill([
+            'primary_brand_name' => trim($validated['display_name']),
+            'primary_logo_url' => filled($validated['logo_url'] ?? null) ? trim((string) $validated['logo_url']) : null,
+            'is_active' => true,
+        ])->save();
+        $after = [
+            'primary_brand_name' => $profile->primary_brand_name,
+            'primary_logo_url' => $profile->primary_logo_url,
+        ];
+        $audit->record((int) $tenant->id, (int) $user->id, 'tenant.mobile_branding.updated', targetType: 'tenant_discovery_profile', targetId: $profile->id, context: ['surface' => 'everbranch_mobile'], beforeState: $before, afterState: $after);
+
+        return response()->json(['ok' => true, 'branding' => $this->brandingPayload($tenant->fresh(), $role)]);
     }
 
     public function registerPushDevice(Request $request): JsonResponse
@@ -428,6 +466,41 @@ class EverbranchMobileController extends Controller
     {
         return $this->tenantRole($user, $tenant) === 'admin'
             || strtolower(trim((string) $user->role)) === 'platform_admin';
+    }
+
+    /** @return array<string,mixed> */
+    protected function brandingPayload(Tenant $tenant, string $role): array
+    {
+        $profile = TenantDiscoveryProfile::withoutGlobalScopes()->where('tenant_id', $tenant->id)->first();
+        $name = trim((string) ($profile?->primary_brand_name ?: $tenant->name));
+        $logo = trim((string) ($profile?->primary_logo_url ?? ''));
+        if ($logo === '' && (int) $tenant->id === 1) {
+            $logo = url('/brand/modern-forestry-logo-white.png');
+        }
+
+        return [
+            'display_name' => $name !== '' ? $name : (string) $tenant->name,
+            'logo_url' => $logo !== '' ? $logo : null,
+            'logo_alt' => ($name !== '' ? $name : (string) $tenant->name).' logo',
+            'can_manage' => $role === 'admin',
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function workspaceInsights(Tenant $tenant, int $activeBranches): array
+    {
+        $since = now()->subDays(30);
+        $activity = Order::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('updated_at', '>=', $since)->count()
+            + FieldServiceJob::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('updated_at', '>=', $since)->count()
+            + ClientProject::query()->where('tenant_id', $tenant->id)->where('updated_at', '>=', $since)->count();
+        $activeUsers = $tenant->users()->whereHas('tokens', fn ($query) => $query->where('last_used_at', '>=', $since))->count();
+
+        return [
+            'users' => $tenant->users()->count(),
+            'active_users_30d' => $activeUsers,
+            'active_branches' => $activeBranches,
+            'work_activity_30d' => $activity,
+        ];
     }
 
     protected function requireBranch(TenantMobileModuleRegistry $registry, int $tenantId, string $moduleKey): void
