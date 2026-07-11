@@ -64,6 +64,7 @@ use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyEmbeddedSubscriptionsController;
+use App\Http\Controllers\ShopifyProductOptionsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\SubscriptionPublicController;
@@ -1277,6 +1278,7 @@ Route::prefix('shopify/marketing')
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
         Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
         Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::get('/product-options', [ShopifyProductOptionsController::class, 'storefront'])->name('product-options');
         Route::get('/feedback', [ModernForestryAppFeedbackController::class, 'index'])->name('feedback');
         Route::post('/feedback', [ModernForestryAppFeedbackController::class, 'store'])
             ->withoutMiddleware([VerifyCsrfToken::class])
@@ -1373,6 +1375,7 @@ Route::prefix('shopify/marketing/v1')
         Route::get('/rewards/history', [MarketingShopifyIntegrationController::class, 'rewardHistory'])->name('rewards.history');
         Route::get('/customer/status', [MarketingShopifyIntegrationController::class, 'customerStatus'])->name('customer.status');
         Route::get('/health', [MarketingShopifyIntegrationController::class, 'proxyHealth'])->name('health');
+        Route::get('/product-options', [ShopifyProductOptionsController::class, 'storefront'])->name('product-options');
         Route::get('/feedback', [ModernForestryAppFeedbackController::class, 'index'])->name('feedback');
         Route::post('/feedback', [ModernForestryAppFeedbackController::class, 'store'])
             ->withoutMiddleware([VerifyCsrfToken::class])
@@ -1464,6 +1467,7 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::post('/app/store/modules/{moduleKey}/activate', [ShopifyEmbeddedAppController::class, 'activateModule'])->name('shopify.app.store.activate');
     Route::post('/app/store/modules/{moduleKey}/request', [ShopifyEmbeddedAppController::class, 'requestModuleAccess'])->name('shopify.app.store.request');
     Route::get('/app/integrations', [ShopifyEmbeddedAppController::class, 'integrations'])->name('shopify.app.integrations');
+    Route::get('/app/product-options', [ShopifyProductOptionsController::class, 'show'])->name('shopify.app.product-options');
     Route::get('/app/subscriptions', [ShopifyEmbeddedSubscriptionsController::class, 'show'])->name('shopify.app.subscriptions');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
     Route::get('/app/rewards/earn', [ShopifyEmbeddedRewardsController::class, 'earn'])->name('shopify.app.rewards.earn');
@@ -1503,6 +1507,12 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
         Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
         Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');
+        Route::post('/product-options/rulesets', [ShopifyProductOptionsController::class, 'createRuleset'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('product-options.rulesets.create');
+        Route::patch('/product-options/rulesets/{ruleset}', [ShopifyProductOptionsController::class, 'updateRuleset'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('product-options.rulesets.update');
         Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('dashboard.candle-cash-reminders');

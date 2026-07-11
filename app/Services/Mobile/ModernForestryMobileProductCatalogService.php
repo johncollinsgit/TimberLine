@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Services\Shopify\ModernForestryVariantMediaClassifier;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyGraphqlClient;
+use App\Services\Shopify\ShopifyProductOptionsService;
 use App\Services\Shopify\ShopifyStores;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
@@ -1340,6 +1341,7 @@ GRAPHQL;
     {
         $normalized = strtolower(trim($title));
         $normalizedHandle = strtolower(trim($handle));
+        $ruleset = $this->productOptionsRuleset($normalizedHandle);
         $bundleConfig = config('shopify_bundles', []);
         $bundleDefinition = null;
 
@@ -1351,7 +1353,7 @@ GRAPHQL;
             }
         }
 
-        if ($bundleDefinition === null) {
+        if ($ruleset === null && $bundleDefinition === null) {
             $isBundle = str_contains($normalized, 'bundle')
                 || str_contains($normalizedHandle, 'bundle')
                 || collect($tags)->contains(fn ($tag): bool => str_contains(strtolower((string) $tag), 'bundle'));
@@ -1361,18 +1363,52 @@ GRAPHQL;
             }
         }
 
-        $requiredCount = (int) ($bundleDefinition['required_scent_count'] ?? max(1, $this->bundleCountFromTitle($normalized)));
+        $requiredCount = (int) ($ruleset['option_count'] ?? $bundleDefinition['required_scent_count'] ?? max(1, $this->bundleCountFromTitle($normalized)));
+        $availableScents = $this->availableScents();
+
+        if ($ruleset !== null) {
+            $allowed = collect((array) ($ruleset['allowed_values'] ?? []))
+                ->mapWithKeys(fn ($value): array => [strtolower(trim((string) $value)) => true]);
+
+            $availableScents = collect($availableScents)
+                ->filter(function (array $scent) use ($allowed): bool {
+                    $name = strtolower(trim((string) ($scent['name'] ?? '')));
+                    $displayName = strtolower(trim((string) ($scent['displayName'] ?? '')));
+
+                    return $allowed->has($name) || $allowed->has($displayName);
+                })
+                ->values()
+                ->all();
+        }
 
         return [
             'requiredScentCount' => $requiredCount,
             'qtyPerScent' => (int) ($bundleDefinition['qty_per_scent'] ?? 1),
             'sizeKey' => $bundleDefinition['size_key'] ?? null,
-            'availableScents' => $this->availableScents(),
+            'availableScents' => $availableScents,
+            'requireDistinctValues' => (bool) ($ruleset['require_distinct_values'] ?? false),
             'selectionLabels' => array_map(
                 static fn (int $index): string => 'Scent '.$index,
                 range(1, max(1, $requiredCount))
             ),
         ];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function productOptionsRuleset(string $handle): ?array
+    {
+        if ($handle === '' || ! Schema::hasTable('shopify_product_option_rulesets')) {
+            return null;
+        }
+
+        $tenantId = Tenant::query()->where('slug', self::TENANT_SLUG)->value('id');
+        if (! is_numeric($tenantId)) {
+            return null;
+        }
+
+        return app(ShopifyProductOptionsService::class)->storefrontRuleset((int) $tenantId, null, $handle);
     }
 
     protected function bundleCountFromTitle(string $title): int
