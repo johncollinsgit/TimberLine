@@ -66,7 +66,7 @@
             <div class="eg-phone-stage" data-depth="10" data-reveal>
                 <div class="eg-orbit-note eg-orbit-note--one">Estimate approved</div>
                 <div class="eg-orbit-note eg-orbit-note--two">Parts waiting</div>
-                <div class="eg-phone-shell" aria-label="Everbranch mobile app preview">
+                <div class="eg-phone-shell" data-public-phone-demo data-active-phone-tab="home" aria-label="Everbranch mobile app preview">
                     <div class="eg-phone-top">
                         <span>9:41</span>
                         <span></span>
@@ -83,95 +83,165 @@
                         </div>
 
                         <div class="eg-mobile-scroll">
-                            <div class="eg-mobile-heading">
-                                <div>
-                                    <p>Today</p>
-                                    <h2>Field work</h2>
+                            <section id="eg-phone-home" class="eg-mobile-panel is-active" data-phone-panel="home" role="tabpanel" aria-label="Everbranch home preview">
+                                <div class="eg-mobile-heading">
+                                    <div>
+                                        <p>Today</p>
+                                        <h2>Field work</h2>
+                                    </div>
+                                    <span>↻</span>
                                 </div>
-                                <span>↻</span>
-                            </div>
 
-                            <section class="eg-mobile-hero-metric">
-                                <strong>12</strong>
-                                <span>Jobs moving today</span>
+                                <section class="eg-mobile-hero-metric">
+                                    <strong>12</strong>
+                                    <span>Jobs moving today</span>
+                                </section>
+
+                                <section class="eg-mobile-metrics" aria-label="Everbranch mobile summary">
+                                    <div>
+                                        <span>Open quotes</span>
+                                        <strong>7</strong>
+                                        <small>3 need a call</small>
+                                    </div>
+                                    <div>
+                                        <span>Customers</span>
+                                        <strong>184</strong>
+                                        <small>12 active this month</small>
+                                    </div>
+                                    <div>
+                                        <span>Messages</span>
+                                        <strong>9</strong>
+                                        <small>2 unread</small>
+                                    </div>
+                                    <div>
+                                        <span>Updates</span>
+                                        <strong>31</strong>
+                                        <small>last 30 days</small>
+                                    </div>
+                                </section>
+
+                                <div class="eg-mobile-section-title">
+                                    <h3>Workspace pulse</h3>
+                                </div>
+                                <section class="eg-mobile-pulse">
+                                    <div><strong>6</strong><span>Team members</span></div>
+                                    <div><strong>4</strong><span>Active users</span></div>
+                                    <div><strong>5</strong><span>Active Branches</span></div>
+                                    <div><strong>31</strong><span>Work updates</span></div>
+                                </section>
                             </section>
 
-                            <section class="eg-mobile-metrics" aria-label="Everbranch mobile summary">
-                                <div>
-                                    <span>Open quotes</span>
-                                    <strong>7</strong>
-                                    <small>3 need a call</small>
+                            <section id="eg-phone-work" class="eg-mobile-panel" data-phone-panel="work" role="tabpanel" aria-label="Everbranch work preview" hidden>
+                                <div class="eg-mobile-heading">
+                                    <div>
+                                        <p>Work</p>
+                                        <h2>Job board</h2>
+                                    </div>
+                                    <span>✓</span>
                                 </div>
-                                <div>
-                                    <span>Customers</span>
-                                    <strong>184</strong>
-                                    <small>12 active this month</small>
+                                <div class="eg-mobile-work-card">
+                                    <span>In progress</span>
+                                    <strong>Panel upgrade</strong>
+                                    <p>Customer message sent. Photos attached. Invoice ready.</p>
                                 </div>
-                                <div>
-                                    <span>Messages</span>
-                                    <strong>9</strong>
-                                    <small>2 unread</small>
+                                <div class="eg-mobile-action-row">
+                                    <span>1</span>
+                                    <p>Message customer</p>
                                 </div>
-                                <div>
-                                    <span>Updates</span>
-                                    <strong>31</strong>
-                                    <small>last 30 days</small>
+                                <div class="eg-mobile-action-row">
+                                    <span>2</span>
+                                    <p>Mark job complete</p>
+                                </div>
+                                <div class="eg-mobile-complete">
+                                    <span>✓</span>
+                                    <strong>Job complete</strong>
                                 </div>
                             </section>
 
-                            <div class="eg-mobile-section-title">
-                                <h3>Workspace pulse</h3>
-                            </div>
-                            <section class="eg-mobile-pulse">
-                                <div><strong>6</strong><span>Team members</span></div>
-                                <div><strong>4</strong><span>Active users</span></div>
-                                <div><strong>5</strong><span>Active Branches</span></div>
-                                <div><strong>31</strong><span>Work updates</span></div>
+                            <section id="eg-phone-branches" class="eg-mobile-panel" data-phone-panel="branches" role="tabpanel" aria-label="Everbranch branches preview" hidden>
+                                <div class="eg-mobile-heading">
+                                    <div>
+                                        <p>Branches</p>
+                                        <h2>Growth tools</h2>
+                                    </div>
+                                    <span>✦</span>
+                                </div>
+                                <div class="eg-mobile-branch-grid">
+                                    <article>
+                                        <span>Rewards</span>
+                                        <strong>1,250</strong>
+                                        <p>points issued</p>
+                                    </article>
+                                    <article>
+                                        <span>Birthday</span>
+                                        <strong>24</strong>
+                                        <p>offers queued</p>
+                                    </article>
+                                    <article>
+                                        <span>Marketing</span>
+                                        <strong>$4.2k</strong>
+                                        <p>influenced</p>
+                                    </article>
+                                    <article>
+                                        <span>Reviews</span>
+                                        <strong>8</strong>
+                                        <p>asks ready</p>
+                                    </article>
+                                </div>
+                                <div class="eg-mobile-branches">
+                                    <span>✦</span>
+                                    <div>
+                                        <strong>Branches</strong>
+                                        <small>Close analogs of add-on growth surfaces</small>
+                                    </div>
+                                </div>
                             </section>
 
-                            <div class="eg-mobile-section-title">
-                                <h3>Your work</h3>
-                                <span>See all</span>
-                            </div>
-                            <div class="eg-mobile-module-list">
-                                <article>
-                                    <span>◌</span>
+                            <section id="eg-phone-account" class="eg-mobile-panel" data-phone-panel="account" role="tabpanel" aria-label="Everbranch account preview" hidden>
+                                <div class="eg-mobile-heading">
                                     <div>
-                                        <strong>Customers</strong>
-                                        <small>Contacts, notes, consent, and history</small>
+                                        <p>Account</p>
+                                        <h2>Apex Electrical</h2>
                                     </div>
-                                </article>
-                                <article>
-                                    <span>□</span>
-                                    <div>
-                                        <strong>Jobs</strong>
-                                        <small>Field work, tasks, materials, photos</small>
-                                    </div>
-                                </article>
-                                <article>
-                                    <span>✉</span>
-                                    <div>
-                                        <strong>Messages</strong>
-                                        <small>Text, email, and app conversations</small>
-                                    </div>
-                                </article>
-                            </div>
-
-                            <div class="eg-mobile-branches">
-                                <span>✦</span>
-                                <div>
-                                    <strong>Branches</strong>
-                                    <small>5 ways to grow this workspace</small>
+                                    <span>◎</span>
                                 </div>
-                            </div>
+                                <div class="eg-mobile-account-card">
+                                    <span>Plan</span>
+                                    <strong>Launch Partner</strong>
+                                    <p>Core app live. Rewards, birthday, and marketing branches ready.</p>
+                                </div>
+                                <div class="eg-mobile-setting-row">
+                                    <span>Job-complete text</span>
+                                    <strong>On</strong>
+                                </div>
+                                <div class="eg-mobile-setting-row">
+                                    <span>Birthday campaigns</span>
+                                    <strong>On</strong>
+                                </div>
+                                <div class="eg-mobile-setting-row">
+                                    <span>Team seats</span>
+                                    <strong>6</strong>
+                                </div>
+                            </section>
                         </div>
 
-                        <div class="eg-mobile-tabbar" aria-hidden="true">
-                            <span class="is-active">Home</span>
-                            <span>Work</span>
-                            <span>Branches</span>
-                            <span>Search</span>
-                            <span>Account</span>
+                        <div class="eg-mobile-tabbar" role="tablist" aria-label="Everbranch phone preview tabs">
+                            <button type="button" class="is-active" data-phone-tab="home" role="tab" aria-selected="true" aria-controls="eg-phone-home">
+                                <span aria-hidden="true">⌂</span>
+                                Home
+                            </button>
+                            <button type="button" data-phone-tab="work" role="tab" aria-selected="false" aria-controls="eg-phone-work" tabindex="-1">
+                                <span aria-hidden="true">▤</span>
+                                Work
+                            </button>
+                            <button type="button" data-phone-tab="branches" role="tab" aria-selected="false" aria-controls="eg-phone-branches" tabindex="-1">
+                                <span aria-hidden="true">✦</span>
+                                Branches
+                            </button>
+                            <button type="button" data-phone-tab="account" role="tab" aria-selected="false" aria-controls="eg-phone-account" tabindex="-1">
+                                <span aria-hidden="true">◎</span>
+                                Account
+                            </button>
                         </div>
                     </div>
                 </div>

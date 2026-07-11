@@ -40,6 +40,12 @@ const contextualModules = [
     mountExport: "mountPublicProductDemoNow",
   },
   {
+    key: "publicPhoneDemo",
+    selectors: ["[data-public-phone-demo]"],
+    load: () => import("./public-phone-demo"),
+    mountExport: "mountPublicPhoneDemoNow",
+  },
+  {
     key: "publicBud",
     selectors: ["[data-public-bud]"],
     load: () => import("./public-bud"),
