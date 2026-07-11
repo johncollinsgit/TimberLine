@@ -63,6 +63,390 @@
   min-height: calc(100svh - 5rem);
 }
 
+.fb-product-hero {
+  align-items: center;
+  gap: clamp(2rem, 6vw, 5rem);
+  grid-template-columns: minmax(0, 1fr) minmax(23rem, 0.82fr);
+  min-height: calc(100svh - 5rem);
+  padding-inline: clamp(1rem, 4vw, 4rem);
+  place-items: stretch;
+}
+
+.fb-product-hero::before,
+.fb-product-hero::after {
+  display: none;
+}
+
+.fb-product-hero__copy {
+  align-content: center;
+  display: grid;
+  gap: 1.1rem;
+  justify-items: start;
+  max-width: 760px;
+  position: relative;
+  z-index: 2;
+}
+
+.fb-product-hero__copy h1 {
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  font-size: clamp(3.4rem, 7vw, 7rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 0.96;
+  margin: 0;
+  max-width: 12ch;
+}
+
+.fb-product-hero__copy p:not(.fb-section-kicker) {
+  color: var(--fb-text-secondary);
+  font-size: clamp(1rem, 1.5vw, 1.22rem);
+  line-height: 1.65;
+  margin: 0;
+  max-width: 58ch;
+}
+
+.fb-product-hero__visual {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 42rem;
+  position: relative;
+}
+
+.fb-product-hero__visual::before {
+  background:
+    radial-gradient(circle at 45% 35%, rgba(76, 132, 114, 0.18), transparent 36%),
+    radial-gradient(circle at 70% 70%, rgba(176, 255, 99, 0.14), transparent 32%);
+  border-radius: 999px;
+  content: "";
+  filter: blur(12px);
+  inset: 5% -8% 0 0;
+  position: absolute;
+}
+
+.fb-iphone-demo {
+  background: #050807;
+  border-radius: 3.4rem;
+  box-shadow:
+    0 34px 80px -42px rgba(8, 24, 27, 0.82),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  max-width: 390px;
+  padding: 0.72rem;
+  position: relative;
+  width: min(100%, 390px);
+  z-index: 1;
+}
+
+.fb-iphone-demo__top {
+  align-items: center;
+  color: #ffffff;
+  display: grid;
+  font-size: 0.84rem;
+  font-weight: 850;
+  grid-template-columns: 1fr auto 1fr;
+  padding: 0.74rem 1.05rem 0.62rem;
+}
+
+.fb-iphone-demo__top span:nth-child(2) {
+  background: #000000;
+  border-radius: 999px;
+  display: block;
+  height: 1.55rem;
+  width: 5.7rem;
+}
+
+.fb-iphone-demo__top span:last-child {
+  text-align: right;
+}
+
+.fb-iphone-demo__screen {
+  background: #f5f9f7;
+  border-radius: 2.55rem;
+  color: var(--fb-text-primary);
+  display: grid;
+  gap: 0.8rem;
+  min-height: 660px;
+  overflow: hidden;
+  padding: 1rem;
+  position: relative;
+}
+
+.fb-iphone-demo__brand {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 2rem 1fr 2.55rem;
+  min-height: 3rem;
+}
+
+.fb-iphone-demo__brand img {
+  justify-self: center;
+  max-width: 120px;
+}
+
+.fb-iphone-demo__menu,
+.fb-iphone-demo__avatar {
+  align-items: center;
+  display: inline-flex;
+  font-weight: 900;
+  justify-content: center;
+}
+
+.fb-iphone-demo__avatar {
+  background: #135d51;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.8rem;
+  height: 2.55rem;
+  width: 2.55rem;
+}
+
+.fb-iphone-demo__metric,
+.fb-iphone-demo__message,
+.fb-iphone-demo__job,
+.fb-iphone-demo__complete {
+  background: #ffffff;
+  border: 1px solid rgba(18, 60, 67, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 12px 34px -30px rgba(8, 24, 27, 0.42);
+}
+
+.fb-iphone-demo__metric {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.95rem;
+}
+
+.fb-iphone-demo__metric span,
+.fb-iphone-demo__message span,
+.fb-iphone-demo__job span {
+  color: #387365;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.fb-iphone-demo__metric strong {
+  color: #102820;
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+.fb-iphone-demo__metric p,
+.fb-iphone-demo__message p,
+.fb-iphone-demo__job small {
+  color: var(--fb-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.fb-iphone-demo__metric--marketing {
+  background:
+    linear-gradient(135deg, rgba(201, 255, 119, 0.2), rgba(255, 255, 255, 0.96));
+}
+
+.fb-iphone-demo__metric--jobs {
+  background:
+    linear-gradient(135deg, rgba(31, 93, 81, 0.1), rgba(255, 255, 255, 0.96));
+}
+
+.fb-iphone-demo__workflow {
+  display: grid;
+  gap: 0.7rem;
+  min-height: 15.8rem;
+  position: relative;
+}
+
+.fb-iphone-demo__message,
+.fb-iphone-demo__job,
+.fb-iphone-demo__complete {
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.82rem;
+}
+
+.fb-iphone-demo__message {
+  animation: fbIphoneMessage 7.2s ease-in-out infinite;
+}
+
+.fb-iphone-demo__job {
+  animation: fbIphoneJob 7.2s ease-in-out infinite;
+}
+
+.fb-iphone-demo__job strong {
+  font-size: 1rem;
+}
+
+.fb-iphone-demo__complete {
+  align-items: center;
+  animation: fbIphoneComplete 7.2s ease-in-out infinite;
+  background: #0f6b4e;
+  color: #ffffff;
+  gap: 0.6rem;
+  grid-template-columns: auto 1fr;
+}
+
+.fb-iphone-demo__complete span {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 1.1rem;
+  font-weight: 950;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
+.fb-iphone-demo__tabs {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.88);
+  border-top: 1px solid rgba(18, 60, 67, 0.08);
+  bottom: 0;
+  display: grid;
+  font-size: 0.62rem;
+  font-weight: 850;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  left: 0;
+  min-height: 3.2rem;
+  padding: 0 0.9rem;
+  position: absolute;
+  right: 0;
+  text-align: center;
+}
+
+.fb-iphone-demo__tabs .is-active {
+  color: #0f6b4e;
+}
+
+.fb-home-tiers {
+  display: grid;
+  gap: 1rem;
+  padding: 0 clamp(1rem, 4vw, 4rem) clamp(3rem, 7vw, 5rem);
+}
+
+.fb-home-tiers__head {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 760px;
+}
+
+.fb-home-tiers__head h2 {
+  color: var(--fb-text-primary);
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+  font-size: clamp(2rem, 4vw, 4rem);
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1;
+  margin: 0;
+}
+
+.fb-home-tiers__grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fb-home-tier-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(18, 60, 67, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px -36px rgba(8, 24, 27, 0.34);
+  display: grid;
+  gap: 0.82rem;
+  min-height: 285px;
+  padding: 1.15rem;
+}
+
+.fb-home-tier-card.is-recommended {
+  background:
+    linear-gradient(180deg, rgba(237, 255, 206, 0.68), rgba(255, 255, 255, 0.94));
+  border-color: rgba(19, 93, 81, 0.32);
+}
+
+.fb-home-tier-card__badge {
+  background: #ff7a1a;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 900;
+  justify-self: start;
+  padding: 0.34rem 0.62rem;
+  text-transform: uppercase;
+}
+
+.fb-home-tier-card h3,
+.fb-home-tier-card strong,
+.fb-home-tier-card p {
+  margin: 0;
+}
+
+.fb-home-tier-card h3 {
+  color: var(--fb-text-primary);
+  font-size: 1.25rem;
+}
+
+.fb-home-tier-card > strong {
+  color: #0d322b;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.fb-home-tier-card p,
+.fb-home-tier-card li {
+  color: var(--fb-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.fb-home-tier-card ul {
+  border-top: 1px solid rgba(18, 60, 67, 0.08);
+  display: grid;
+  gap: 0.42rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.82rem 0 0;
+}
+
+.fb-home-tier-card li::before {
+  color: #0f6b4e;
+  content: "✓ ";
+  font-weight: 900;
+}
+
+@keyframes fbIphoneMessage {
+  0%, 12% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  20%, 100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fbIphoneJob {
+  0%, 34% {
+    opacity: 0.36;
+    transform: translateY(8px);
+  }
+  44%, 100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fbIphoneComplete {
+  0%, 58% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  70%, 100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .fb-hero-cta--centered {
   justify-content: center;
 }
@@ -522,6 +906,19 @@
     left: 0;
     right: 0;
     width: auto;
+  }
+
+  .fb-public-body--splash .fb-bud {
+    bottom: auto;
+    left: auto;
+    margin: 0.5rem 0.75rem 1.25rem;
+    position: relative;
+    right: auto;
+  }
+
+  .fb-public-body--splash .fb-bud__panel {
+    bottom: calc(100% + 0.8rem);
+    position: absolute;
   }
 }
 
@@ -8936,6 +9333,97 @@ body.eg-public-body--launch[data-premium-motion="public"] .eg-partner-note {
   }
   50% {
     transform: translateY(-8px);
+  }
+}
+
+.fb-product-hero .fb-product-hero__copy h1 {
+  font-size: clamp(3.4rem, 7vw, 7rem);
+  line-height: 0.96;
+  margin: 0;
+  max-width: 12ch;
+}
+
+.fb-product-hero .fb-product-hero__copy p:not(.fb-section-kicker) {
+  font-size: clamp(1rem, 1.5vw, 1.22rem);
+  line-height: 1.65;
+  margin: 0;
+  max-width: 58ch;
+}
+
+.fb-product-hero .fb-iphone-demo p,
+.fb-product-hero .fb-iphone-demo h2,
+.fb-product-hero .fb-iphone-demo h3,
+.fb-product-hero .fb-iphone-demo h4 {
+  margin: 0;
+  max-width: none;
+}
+
+.fb-product-hero .fb-iphone-demo p {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb-product-hero [data-reveal],
+body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb-home-tiers[data-reveal] {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+@media (max-width: 980px) {
+  .fb-product-hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .fb-product-hero__visual {
+    min-height: auto;
+  }
+
+  .fb-home-tiers__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .fb-product-hero {
+    gap: 1.5rem;
+    padding-top: 2rem;
+  }
+
+  .fb-product-hero__copy h1 {
+    font-size: 3rem;
+  }
+
+  .fb-product-hero__visual {
+    justify-content: flex-start;
+  }
+
+  .fb-iphone-demo {
+    border-radius: 2.7rem;
+    max-width: 340px;
+  }
+
+  .fb-iphone-demo__screen {
+    border-radius: 2rem;
+    min-height: 610px;
+  }
+
+  .fb-iphone-demo__metric strong {
+    font-size: 1.9rem;
+  }
+
+  .fb-home-tier-card {
+    min-height: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fb-iphone-demo__message,
+  .fb-iphone-demo__job,
+  .fb-iphone-demo__complete {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 

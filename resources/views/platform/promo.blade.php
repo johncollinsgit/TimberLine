@@ -17,6 +17,17 @@
             'href' => route('platform.start'),
             'label' => 'Request access',
         ];
+    $planConfig = (array) config('product_surfaces.plans', []);
+    $planCards = is_array($planConfig['cards'] ?? null) ? $planConfig['cards'] : [];
+    $planOrder = array_values(array_filter((array) ($planConfig['plan_order'] ?? ['starter', 'launch_partner', 'growth']), fn ($planKey) => in_array($planKey, ['starter', 'launch_partner', 'growth'], true)));
+    $recommendedPlanKey = (string) ($planConfig['recommended_plan_key'] ?? 'launch_partner');
+    $homepagePlanHighlights = [
+        'growth' => [
+            'Rewards, loyalty, and birthday reminders',
+            'Campaign and email-readiness expansion',
+            'More room as you grow',
+        ],
+    ];
     $industryCards = [
         [
             'title' => 'Retail & product brands',
@@ -105,37 +116,98 @@
             <section class="fb-public-tabs" aria-label="Everbranch overview tabs" data-public-tabs data-reveal>
                 <div class="fb-public-tabs__panels">
                     <article id="panel-product" class="fb-public-tab-panel is-active" role="tabpanel" aria-labelledby="tab-product" data-public-tab-panel="product">
-                        <header id="splash" class="fb-splash fb-splash--intro-only" aria-label="Everbranch entry">
-                            <div class="fb-splash__field" data-problem-garden aria-label="Scattered work examples">
-                                <button type="button" class="fb-problem-chip fb-problem-chip--one">Invoice draft in email</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--two">Notebook: call back Friday</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--three">Spreadsheet row missing owner</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--four">Photo note from the field</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--five">Text thread: pricing?</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--six">Missed follow-up</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--seven">File in the wrong folder</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--eight">Customer asked twice</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--nine">Task has no owner</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--ten">Crew note in memory</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--eleven">Employees need address</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--twelve">Customer changed order</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--thirteen">How much should I order?</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--fourteen">Crew needs latest notes</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--fifteen">Which invoice got paid?</button>
-                                <button type="button" class="fb-problem-chip fb-problem-chip--sixteen">Appointment moved again</button>
-                            </div>
-
-                            <div class="fb-splash__content" data-reveal>
+                        <header id="splash" class="fb-splash fb-splash--intro-only fb-product-hero" aria-label="Everbranch entry">
+                            <div class="fb-product-hero__copy" data-reveal>
                                 <p class="fb-section-kicker">Small-business work, finally in one place</p>
                                 <h1>{{ $headline }}</h1>
                                 <p>{{ $summary }}</p>
-                                <div class="fb-hero-cta fb-hero-cta--centered">
+                                <div class="fb-hero-cta">
                                     <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Become a launch partner with Everbranch</a>
                                     <a href="#everbranch-public" class="fb-btn fb-btn-secondary" data-public-tab-jump="workflows">See Everbranch in action</a>
                                     <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
                                 </div>
                             </div>
+
+                            <div class="fb-product-hero__visual" data-depth="12" data-reveal>
+                                <div class="fb-iphone-demo" aria-label="Everbranch mobile app preview">
+                                    <div class="fb-iphone-demo__top">
+                                        <span>9:41</span>
+                                        <span></span>
+                                        <span>5G</span>
+                                    </div>
+                                    <div class="fb-iphone-demo__screen">
+                                        <div class="fb-iphone-demo__brand">
+                                            <span class="fb-iphone-demo__menu">≡</span>
+                                            <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
+                                            <span class="fb-iphone-demo__avatar">JC</span>
+                                        </div>
+
+                                        <section class="fb-iphone-demo__metric fb-iphone-demo__metric--marketing">
+                                            <span>Marketing lift</span>
+                                            <strong>$4,280</strong>
+                                            <p>made from Everbranch marketing this month</p>
+                                        </section>
+
+                                        <section class="fb-iphone-demo__metric fb-iphone-demo__metric--jobs">
+                                            <span>Completed work</span>
+                                            <strong>$18,640</strong>
+                                            <p>jobs completed in the last 30 days</p>
+                                        </section>
+
+                                        <section class="fb-iphone-demo__workflow" aria-label="Everbranch job completion workflow">
+                                            <div class="fb-iphone-demo__message">
+                                                <span>Message customer</span>
+                                                <p>Hi Maya, your panel upgrade is wrapped up. Invoice and photos are in your portal.</p>
+                                            </div>
+                                            <div class="fb-iphone-demo__job">
+                                                <span>Job</span>
+                                                <strong>Monroe Ave Service Call</strong>
+                                                <small>Ready to complete</small>
+                                            </div>
+                                            <div class="fb-iphone-demo__complete" aria-label="Job complete">
+                                                <span>✓</span>
+                                                <strong>Job complete</strong>
+                                            </div>
+                                        </section>
+
+                                        <div class="fb-iphone-demo__tabs" aria-hidden="true">
+                                            <span class="is-active">Home</span>
+                                            <span>Work</span>
+                                            <span>Branches</span>
+                                            <span>Account</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </header>
+
+                        <section class="fb-home-tiers" aria-label="Everbranch launch tiers" data-reveal>
+                            <div class="fb-home-tiers__head">
+                                <p class="fb-section-kicker">New launch tiers</p>
+                                <h2>Start lean. Grow when the system proves itself.</h2>
+                            </div>
+                            <div class="fb-home-tiers__grid">
+                                @foreach($planOrder as $planKey)
+                                    @php($plan = is_array($planCards[$planKey] ?? null) ? $planCards[$planKey] : null)
+                                    @continue(!$plan)
+                                    <article class="fb-home-tier-card {{ $planKey === $recommendedPlanKey ? 'is-recommended' : '' }}">
+                                        @if($planKey === $recommendedPlanKey)
+                                            <span class="fb-home-tier-card__badge">Limited to 10</span>
+                                        @endif
+                                        <h3>{{ $plan['name'] ?? ucfirst((string) $planKey) }}</h3>
+                                        <strong>{{ $plan['price_display'] ?? '' }}</strong>
+                                        <p>{{ $plan['summary'] ?? '' }}</p>
+                                        @if(!empty($plan['highlights']) && is_array($plan['highlights']))
+                                            <ul>
+                                                @foreach(array_slice($homepagePlanHighlights[$planKey] ?? $plan['highlights'], 0, 3) as $highlight)
+                                                    <li>{{ $highlight }}</li>
+                                                @endforeach
+                                            </ul>
+                                        @endif
+                                    </article>
+                                @endforeach
+                            </div>
+                        </section>
                     </article>
 
                     <article id="panel-workflows" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-workflows" data-public-tab-panel="workflows" hidden>
