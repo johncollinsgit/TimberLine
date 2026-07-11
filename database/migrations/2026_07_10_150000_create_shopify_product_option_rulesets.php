@@ -166,12 +166,12 @@ return new class extends Migration
 
         $rulesets = [
             ['name' => 'Room Spray Bundle', 'count' => 3, 'handle' => 'three-room-sprays-for-30', 'distinct' => true],
-            ['name' => 'Buy 2 Get 1 Free', 'count' => 3, 'handle' => null, 'distinct' => true],
-            ['name' => 'Teacher Candles', 'count' => 2, 'handle' => null, 'distinct' => false],
+            ['name' => 'Buy 2 Get 1 Free', 'count' => 3, 'handle' => '8oz-3-soy-candle-bundle-save-on-three-soy-candle-by-modern-forestry', 'distinct' => true],
+            ['name' => 'Teacher Candles', 'count' => 2, 'handle' => 'teacher-candles', 'distinct' => false],
             ['name' => 'Build Your Own Flight', 'count' => 6, 'handle' => null, 'distinct' => true],
             ['name' => 'Bulk Discount Bundles - 12 options', 'count' => 12, 'handle' => null, 'distinct' => false],
-            ['name' => 'Wax Melt Bundle - 5 options', 'count' => 5, 'handle' => null, 'distinct' => true],
-            ['name' => 'Bundles with 3 options', 'count' => 3, 'handle' => '4oz-3-soy-candle-bundle', 'distinct' => true],
+            ['name' => 'Wax Melt Bundle - 5 options', 'count' => 5, 'handle' => '5-wax-melts-bundle', 'distinct' => true],
+            ['name' => 'Bundles with 3 options', 'count' => 3, 'handle' => '4oz-3-soy-candle-bundle-save-on-three-soy-candle-by-modern-forestry', 'distinct' => true],
         ];
 
         if (Schema::hasTable('scents')) {
