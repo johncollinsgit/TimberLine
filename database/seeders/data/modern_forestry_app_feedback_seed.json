@@ -1,6 +1,6 @@
 {
   "board": "Modern Forestry — App Feedback & Bug Tracker",
-  "generated": "2026-07-08",
+  "generated": "2026-07-10",
   "source": "Candle Club beta feedback (Facebook / iMessage / texts), reporters anonymized to User N",
   "permissions": {
     "admin": "info@theforestrystudio.com — full CRUD (edit, status, delete, merge)",
@@ -14,12 +14,13 @@
     "under-consideration": "Logged, decision pending"
   },
   "backendState": {
-    "asOf": "2026-07-08",
+    "asOf": "2026-07-10",
     "authConfig": "configured=true (SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID/_SECRET set in Forge prod)",
     "redirectUri": "https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback",
     "callbackScheme": "shop.20812479.modernforestry",
     "note": "Shopify rejects the raw native scheme ('Invalid redirect_uri scheme'). Shopify now redirects to the HTTPS Laravel callback, which bridges back to the native scheme. The iOS app reads all of this from /auth/config at runtime, so no client change was needed.",
-    "socialSignIn": "Facebook verified On; Google enabled — pending confirmation it renders beside Facebook on the live hosted sheet."
+    "socialSignIn": "Facebook verified On; Google enabled and confirmed on the live hosted sheet.",
+    "iosRelease": "Modern Forestry iOS 1.0.2 build 14 uploaded to App Store Connect, submitted for App Review with automatic release after approval, distributed to internal TestFlight testers, and submitted for external TestFlight Beta Review. Public TestFlight link is enabled but gated by Apple's external beta approval: https://testflight.apple.com/join/DXeVGThS"
   },
   "tickets": [
     {
@@ -156,6 +157,15 @@
       "reporters": ["Modern Forestry (internal)"],
       "status": "under-consideration",
       "resolution": "VERIFIED (Shopify docs + community): Shopify keys customers by EMAIL, not by login method; social sign-in syncs only the email. Same email across Google/Facebook/email-code = same account (Shopify enforces unique emails and matches). Different email = new account. This is not app-fixable — account resolution is entirely Shopify-side by email. Levers: (1) Shopify's unique-email rule prevents same-email dupes; (2) Shopify admin customer MERGE tool cleans up duplicates (info@); (3) sign-in copy nudging customers to use their order email. CONFIRMED IN EVERBRANCH CODE 2026-07-08: the rewards chain is Shopify customer (per-email) -> MarketingProfile (resolved via shopify_customer_id / external_customer_id in ModernForestryMobileCustomerSessionService) -> CandleCashBalance (belongsTo marketing_profile_id). So a different-email duplicate gets a different MarketingProfile and therefore a SEPARATE / zero Candle Cash balance; same email stays unified. A duplicate loses rewards visibility, confirmed. MERGE PATH ANSWERED 2026-07-09 (Everbranch code read): a Shopify customer-merge does NOT reconcile the Everbranch profile or Candle Cash. (a) profileForIdentity resolves the MarketingProfile via MarketingProfileLink.source_id = Shopify customer ID, never by email. (b) Everbranch handles only customers/create, customers/update, customers/redact webhooks — NO customers/merge and NO customers/delete — so on a Shopify merge the survivor gets a customers/update (updates only its own profile) while the losing customer's MarketingProfileLink + Candle Cash are orphaned; nothing moves the balance to the survivor. (c) There is NO transfer/reassign-balance-between-profiles capability anywhere; the admin 'duplicate' flow in MarketingCustomersController only prevents a NEW duplicate at manual-create time (attach to an existing profile), it does not combine two existing profiles' balances. Cleanup today is therefore manual and lossy (operator hand-keys the orphaned balance onto the survivor via a Candle Cash adjustment). RECOMMENDED BACKEND FIX (not iOS): subscribe to Shopify's customers/merge webhook and reconcile — re-point the MarketingProfileLink to the surviving customer and move the CandleCashTransactions / credit the net balance. GOTCHA: Sign in with Apple 'Hide My Email' relay addresses (@privaterelay.appleid.com) are per-app-unique and will ALWAYS produce a duplicate; factor into ticket 14."
+    },
+    {
+      "id": 16,
+      "type": "task",
+      "title": "Release notes: Modern Forestry iOS 1.0.2 build 14",
+      "detail": "The 1.0.2 build packages the recent beta fixes and release automation:\n\n- Sign-in no longer times out while the customer leaves the app to retrieve an email one-time code.\n- Sign-in uses an isolated web session so it does not pre-fill a stale Safari/Shopify email identity.\n- Rewards proactively refreshes the customer token before authenticated loads, preventing a second login prompt mid-session.\n- Wishlist add/remove treats successful 2xx saves as successful even if the response shape changes, removing false \"wishlist unavailable\" errors.\n- Shop now has a dedicated Sale shelf at the top, backed by the live sale-items collection.\n- Customer Account OAuth client ID and redirect URI are fetched from /auth/config at runtime instead of being hardcoded in the app binary.\n- Facebook Post sharing opens the system browser so the user's Facebook session and composer are available, and copies the share link as a fallback.\n- Facebook Story sharing lets FBSDK choose the best composer surface instead of forcing native-only mode.\n- Instagram Story sharing sends the required Meta source_application value so Instagram accepts the pasteboard story image.\n- If Instagram is not installed, the app shows the iOS share sheet with the rendered scent card instead of dumping the user into a dead browser path.\n- Fastlane release automation now builds, uploads, distributes TestFlight, submits App Review, and records the Modern Forestry reviewer login without committing secrets.",
+      "reporters": ["Modern Forestry (internal)"],
+      "status": "needs-qa",
+      "resolution": "App Store Connect status as of 2026-07-10: version 1.0.2 build 14 uploaded, processed, submitted for App Review, and configured for automatic live release after Apple approval. Internal TestFlight distribution is active. Public TestFlight group 'Public TestFlight' is attached to build 14 and the public link is enabled at https://testflight.apple.com/join/DXeVGThS, but random testers remain gated until Apple approves external Beta Review."
     }
   ]
 }
