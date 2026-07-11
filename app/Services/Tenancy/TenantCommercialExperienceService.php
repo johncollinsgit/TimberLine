@@ -167,7 +167,7 @@ class TenantCommercialExperienceService
             'content' => $content,
             'plan_cards' => $planCards,
             'addon_cards' => $addonCards,
-            'recommended_plan_key' => 'growth',
+            'recommended_plan_key' => (string) ($content['recommended_plan_key'] ?? 'growth'),
             'catalog' => $catalog,
             'module_showcase' => $moduleShowcase,
         ];

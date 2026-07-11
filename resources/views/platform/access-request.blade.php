@@ -91,6 +91,9 @@
                                                 <span class="fb-plan-compare__badge">{{ $plan['badge'] }}</span>
                                             @endif
                                             <span class="fb-plan-compare__plan-name">{{ $plan['label'] ?? $planKey }}</span>
+                                            @if(filled($plan['descriptor'] ?? null))
+                                                <span class="fb-plan-compare__descriptor">{{ $plan['descriptor'] }}</span>
+                                            @endif
                                             <span class="fb-plan-compare__price">{{ $plan['price'] ?? '' }}<span class="fb-plan-compare__cadence">{{ $plan['cadence'] ?? '' }}</span></span>
                                         </span>
                                     @endforeach

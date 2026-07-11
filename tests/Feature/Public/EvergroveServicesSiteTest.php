@@ -15,21 +15,22 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('Evergrove')
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
         ->assertSeeText('Sign Up')
-        ->assertSeeText('We build the software small businesses wish already existed.')
-        ->assertSeeText('Become a launch partner with Everbranch')
-        ->assertSeeText('Start with a workflow audit')
-        ->assertSeeText('Problem')
-        ->assertSeeText('What We Build')
-        ->assertSeeText('How It Works')
-        ->assertSeeText('Examples')
+        ->assertSeeText('The app that keeps the job moving.')
+        ->assertSeeText('Get a workflow audit')
+        ->assertSeeText('See Everbranch')
+        ->assertSeeText('What Changes')
+        ->assertSeeText('Less hunting. More doing.')
+        ->assertSeeText('A small-business operating app, built by Evergrove.')
+        ->assertSeeText('Launch partner pricing')
+        ->assertSeeText('$59')
+        ->assertSeeText('Click the mess')
+        ->assertSeeText('Evergrove Studio')
         ->assertSeeText('Contact')
-        ->assertSeeText('Everbranch is one product created by Evergrove.')
-        ->assertSeeText('Software for owner-led businesses.')
+        ->assertSeeText('Product taste plus practical build work.')
         ->assertSee('data-clickable-details-card', false)
-        ->assertSeeText('Trades & field teams')
-        ->assertSeeText('Construction & project teams')
+        ->assertSeeText('Job notes live in texts')
+        ->assertSeeText('Quotes need babysitting')
         ->assertSeeText('Website and software project estimate')
-        ->assertSeeText('Modern Forestry')
         ->assertDontSeeText('Less Problems. More peace. The one place to run your business.');
 });
 
@@ -93,7 +94,7 @@ test('authenticated users still see evergrove surface on evergrove public host',
         ->get('http://evergrovesoftware.com/')
         ->assertOk()
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
-        ->assertSeeText('We build the software small businesses wish already existed.')
+        ->assertSeeText('The app that keeps the job moving.')
         ->assertDontSeeText('Less Problems. More peace. The one place to run your business.');
 });
 
