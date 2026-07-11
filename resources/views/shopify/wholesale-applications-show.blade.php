@@ -208,7 +208,7 @@
                         </div>
                     @else
                         <div class="mt-3 space-y-3 text-sm text-zinc-600">
-                            <p>Applications are viewable here, but approval actions stay locked until your Shopify admin email maps to a backstage operator account.</p>
+                            <p>Applications are viewable here, but approval actions stay locked until your Shopify admin email maps to an Everbranch operator account.</p>
                         </div>
                     @endif
                 </section>

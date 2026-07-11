@@ -15,14 +15,13 @@ class ProductReviewSubmittedMail extends Mailable
 
     public function __construct(
         public MarketingReviewHistory $review
-    ) {
-    }
+    ) {}
 
     public function build(): self
     {
         $productTitle = $this->review->product_title ?: 'Product';
-        $merchantName = trim((string) ($this->review->tenant?->name ?: config('app.name', 'Forestry Backstage')));
-        $subjectMerchant = $merchantName !== '' ? $merchantName : 'Forestry Backstage';
+        $merchantName = trim((string) ($this->review->tenant?->name ?: config('app.name', 'Everbranch')));
+        $subjectMerchant = $merchantName !== '' ? $merchantName : 'Everbranch';
         $adminPath = route('marketing.candle-cash.reviews', [
             'review' => $this->review->id,
         ], false);
@@ -31,7 +30,7 @@ class ProductReviewSubmittedMail extends Mailable
                 'review' => $this->review->id,
             ]);
 
-        return $this->subject('New review for ' . $subjectMerchant . ': ' . $productTitle)
+        return $this->subject('New review for '.$subjectMerchant.': '.$productTitle)
             ->view('emails.product-review-submitted')
             ->with([
                 'review' => $this->review,

@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-07-11 - Backstage Visual Brand Retirement
+
+### What Changed
+- Removed obsolete `public/brand/forestry-backstage-*` visual assets from the Laravel app.
+- Updated Everbranch fallback copy in account approval, review, Shopify embedded, and share-image surfaces so retired Backstage wording does not leak into user-facing UI.
+
+### What Did Not Change
+- Shopify remains the flagship integration path.
+- The active Modern Forestry Shopify app TOML/Partner identity was not renamed; it remains governed by the Shopify scope/branding decision record.
+- No billing, checkout, OAuth, Shopify scopes, app proxy, webhook, tenant access, or module behavior changed.
+
 ## 2026-07-11 - Collins Electric Guided Launch Setup
 
 ### What Changed

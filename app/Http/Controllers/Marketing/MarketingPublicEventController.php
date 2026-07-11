@@ -29,8 +29,8 @@ use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MessagingContactChannelStateService;
 use App\Services\Marketing\MessagingConversationService;
-use App\Services\Marketing\ModernForestryScentQuizRecommendationService;
 use App\Services\Marketing\ModernForestryScentQuizAnalyticsService;
+use App\Services\Marketing\ModernForestryScentQuizRecommendationService;
 use App\Services\Marketing\ModernForestrySocialShareRewardService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Mobile\ModernForestryMobileScentQuizService;
@@ -939,8 +939,7 @@ class MarketingPublicEventController extends Controller
         Request $request,
         ModernForestryMobileScentQuizService $scentQuizService,
         ModernForestryScentQuizRecommendationService $recommendations
-    ): View
-    {
+    ): View {
         $result = MarketingProfileScentQuizResult::query()
             ->where('public_share_token', $token)
             ->firstOrFail();
@@ -1264,7 +1263,7 @@ class MarketingPublicEventController extends Controller
             'headline' => $title.' | Modern Forestry',
             'title' => $title,
             'description' => $description,
-            'shareImageUrl' => $imageUrl !== '' ? $imageUrl : asset('brand/forestry-backstage-intro-tree.png'),
+            'shareImageUrl' => $imageUrl !== '' ? $imageUrl : asset((string) config('everbranch.brand_assets.og_image', 'og-image.png')),
             'productUrl' => $productUrl !== ''
                 ? $productUrl
                 : rtrim((string) config('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com'), '/')
@@ -1393,7 +1392,7 @@ class MarketingPublicEventController extends Controller
         imagerectangle($image, 690, 84, 1096, 546, $colors['mist']);
         $this->drawRadarChart($image, 893, 316, 165, $axes, $boldFont, $regularFont, $colors);
 
-        $treePath = public_path('brand/forestry-backstage-intro-tree.png');
+        $treePath = public_path((string) config('everbranch.brand_assets.mark', 'brand/everbranch-mark.png'));
         if (is_file($treePath)) {
             $logo = @imagecreatefrompng($treePath);
             if ($logo !== false) {
@@ -1460,6 +1459,7 @@ class MarketingPublicEventController extends Controller
                 }
 
                 $source[$key] = max(0, min(100, (int) data_get($axis, 'score', 0)));
+
                 continue;
             }
 
@@ -1695,7 +1695,7 @@ class MarketingPublicEventController extends Controller
             $remaining = trim(implode(' ', array_slice($words, 0)));
             if ($remaining !== '' && trim(implode(' ', $lines)) !== $remaining) {
                 $lastIndex = $maxLines - 1;
-                $trimmed = rtrim((string) ($lines[$lastIndex] ?? ''), " .");
+                $trimmed = rtrim((string) ($lines[$lastIndex] ?? ''), ' .');
                 while ($trimmed !== '' && $this->scentShareTextWidth($font, $size, $trimmed.'...') > $maxWidth) {
                     $trimmedLength = function_exists('mb_strlen') ? mb_strlen($trimmed) : strlen($trimmed);
                     $trimmed = function_exists('mb_substr')

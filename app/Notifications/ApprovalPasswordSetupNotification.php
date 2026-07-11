@@ -13,9 +13,7 @@ class ApprovalPasswordSetupNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(protected User $user, protected ?string $preferredHost = null)
-    {
-    }
+    public function __construct(protected User $user, protected ?string $preferredHost = null) {}
 
     public function via(object $notifiable): array
     {
@@ -29,9 +27,9 @@ class ApprovalPasswordSetupNotification extends Notification
         $loginUrl = $this->loginUrl();
 
         return (new MailMessage)
-            ->subject('Your Backstage account is approved')
+            ->subject('Your Everbranch account is approved')
             ->greeting('Good news, '.$this->user->name.'!')
-            ->line('Your Backstage account request has been approved.')
+            ->line('Your Everbranch account request has been approved.')
             ->line('Next step: set your password to finish activating your login.')
             ->action('Set Your Password', $resetUrl)
             ->line('After setting your password, sign in to access your workspace:')

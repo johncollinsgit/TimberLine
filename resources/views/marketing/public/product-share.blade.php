@@ -7,7 +7,7 @@
         $headline = trim((string) ($headline ?? 'Modern Forestry candle')) ?: 'Modern Forestry candle';
         $title = trim((string) ($title ?? 'Modern Forestry candle')) ?: 'Modern Forestry candle';
         $description = trim((string) ($description ?? 'A hand-poured candle from Modern Forestry.')) ?: 'A hand-poured candle from Modern Forestry.';
-        $shareImageUrl = trim((string) ($shareImageUrl ?? asset('brand/forestry-backstage-intro-tree.png')));
+        $shareImageUrl = trim((string) ($shareImageUrl ?? asset((string) config('everbranch.brand_assets.og_image', 'og-image.png'))));
         $productUrl = trim((string) ($productUrl ?? 'https://theforestrystudio.com/'));
         $product = is_array($product ?? null) ? $product : [];
         $price = trim((string) ($product['price'] ?? ''));

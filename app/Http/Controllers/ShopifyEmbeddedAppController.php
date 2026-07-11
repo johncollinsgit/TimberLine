@@ -703,7 +703,7 @@ class ShopifyEmbeddedAppController extends Controller
 
         $actor = $this->resolveWholesaleWorkspaceActor($context);
         if (! $actor instanceof User) {
-            $message = 'Approval actions require a backstage operator account that matches your Shopify admin email.';
+            $message = 'Approval actions require an Everbranch operator account that matches your Shopify admin email.';
             $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id], (string) ($context['host'] ?? null));
 
             if ($request->expectsJson()) {

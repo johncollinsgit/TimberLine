@@ -10,11 +10,10 @@ class DiscoveryDomainAuditService
     public function __construct(
         protected TenantDiscoveryProfileService $discoveryProfileService,
         protected DomainCanonicalResolver $domainCanonicalResolver,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function auditForTenant(?int $tenantId, array $options = []): array
@@ -107,7 +106,7 @@ class DiscoveryDomainAuditService
     }
 
     /**
-     * @param array<string,mixed> $domainMap
+     * @param  array<string,mixed>  $domainMap
      * @return array<string,string>
      */
     protected function domainsFromRelationships(array $domainMap): array
@@ -143,7 +142,7 @@ class DiscoveryDomainAuditService
     }
 
     /**
-     * @param array<string,mixed> $fetch
+     * @param  array<string,mixed>  $fetch
      * @return array<string,mixed>
      */
     protected function analyzeHtmlPage(string $domain, array $fetch): array
@@ -179,14 +178,14 @@ class DiscoveryDomainAuditService
     }
 
     /**
-     * @param array<string,mixed> $fetch
+     * @param  array<string,mixed>  $fetch
      * @return array<string,mixed>
      */
     protected function analyzeRobots(string $domain, array $fetch): array
     {
         $body = (string) ($fetch['body'] ?? '');
         $lower = strtolower($body);
-        $disallowAll = str_contains($lower, "disallow: /");
+        $disallowAll = str_contains($lower, 'disallow: /');
 
         return [
             'url' => 'https://'.$domain.'/robots.txt',
@@ -198,9 +197,9 @@ class DiscoveryDomainAuditService
     }
 
     /**
-     * @param array<string,mixed> $homepageAudit
-     * @param array<string,mixed> $robotsAudit
-     * @param array<int,array<string,mixed>> $pageAudits
+     * @param  array<string,mixed>  $homepageAudit
+     * @param  array<string,mixed>  $robotsAudit
+     * @param  array<int,array<string,mixed>>  $pageAudits
      * @return array<int,array<string,mixed>>
      */
     protected function issuesForDomain(
@@ -301,7 +300,7 @@ class DiscoveryDomainAuditService
             /** @var Response $response */
             $response = Http::timeout($timeout)
                 ->withHeaders([
-                    'User-Agent' => 'ForestryBackstageDomainAudit/1.0',
+                    'User-Agent' => 'EverbranchDomainAudit/1.0',
                 ])
                 ->get($url);
 
@@ -378,7 +377,7 @@ class DiscoveryDomainAuditService
     }
 
     /**
-     * @param array<int,string> $needles
+     * @param  array<int,string>  $needles
      */
     protected function containsAny(string $haystack, array $needles): bool
     {
@@ -393,7 +392,7 @@ class DiscoveryDomainAuditService
     }
 
     /**
-     * @param array<int,array<string,mixed>> $issues
+     * @param  array<int,array<string,mixed>>  $issues
      */
     protected function auditStatus(array $issues): string
     {

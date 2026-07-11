@@ -796,7 +796,7 @@
                 <article class="customers-detail-stat">
                     <p class="customers-detail-stat-label">Wholesale</p>
                     <p class="customers-detail-stat-value">{{ ! empty($summary['wholesale_eligible']) ? 'Eligible' : 'Standard' }}</p>
-                    <p class="customers-detail-stat-detail">Commercial purchasing flag used across backstage operations.</p>
+                    <p class="customers-detail-stat-detail">Commercial purchasing flag used across workspace operations.</p>
                 </article>
             </section>
 

@@ -26,6 +26,16 @@ test('Everbranch brand assets are configured and available', function (): void {
     ] as $path) {
         expect(file_exists(base_path($path)))->toBeTrue();
     }
+
+    foreach ([
+        'public/brand/forestry-backstage-mark.svg',
+        'public/brand/forestry-backstage-lockup.svg',
+        'public/brand/forestry-backstage-auth.svg',
+        'public/brand/forestry-backstage-favicon.svg',
+        'public/brand/forestry-backstage-intro-tree.png',
+    ] as $path) {
+        expect(file_exists(base_path($path)))->toBeFalse();
+    }
 });
 
 test('public and auth surfaces render Everbranch logo assets and refreshed metadata', function (): void {

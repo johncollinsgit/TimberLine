@@ -34,7 +34,7 @@ return [
         'support_email' => env('EVERBRANCH_BUD_SUPPORT_EMAIL', 'johncollinsemail@gmail.com'),
     ],
     'landlord_portal_name' => env('EVERBRANCH_LANDLORD_PORTAL_NAME', 'Everbranch Admin'),
-    'legacy_internal_name' => env('EVERBRANCH_LEGACY_INTERNAL_NAME', 'Forestry Backstage'),
+    'legacy_internal_name' => env('EVERBRANCH_LEGACY_INTERNAL_NAME', 'Everbranch'),
     'flagship_tenant_name' => env('EVERBRANCH_FLAGSHIP_TENANT_NAME', 'Modern Forestry'),
     'brand_assets' => [
         'cache_tag' => env('EVERBRANCH_BRAND_ASSET_VERSION', $defaultBrandAssetVersion),

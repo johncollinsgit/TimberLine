@@ -32,7 +32,7 @@ test('central product label configuration names Everbranch without erasing Moder
         ->and(config('everbranch.company_name'))->toBe('Evergrove')
         ->and(config('everbranch.ecosystem_name'))->toBe('Evergrove')
         ->and(config('everbranch.landlord_portal_name'))->toBe('Everbranch Admin')
-        ->and(config('everbranch.legacy_internal_name'))->toBe('Forestry Backstage')
+        ->and(config('everbranch.legacy_internal_name'))->toBe('Everbranch')
         ->and(config('everbranch.flagship_tenant_name'))->toBe('Modern Forestry')
         ->and(config('tenancy.auth.portal_name'))->toBe('Everbranch');
 });

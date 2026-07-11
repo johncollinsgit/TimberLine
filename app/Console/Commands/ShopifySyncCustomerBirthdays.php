@@ -19,7 +19,7 @@ class ShopifySyncCustomerBirthdays extends Command
         {--write-back : Write canonical birthday fields back to Shopify metafields}
         {--queue : Dispatch a queued job per store}';
 
-    protected $description = 'Sync customer birthday metafields from Shopify Admin GraphQL into Backstage birthday profiles.';
+    protected $description = 'Sync customer birthday metafields from Shopify Admin GraphQL into Everbranch birthday profiles.';
 
     public function handle(ShopifyCustomerBirthdaySyncService $syncService): int
     {
