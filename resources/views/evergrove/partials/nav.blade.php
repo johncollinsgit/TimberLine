@@ -14,10 +14,10 @@
         </a>
 
         <div class="eg-site-links eg-site-links--tabs" aria-label="Public sections">
-            <a href="/#problem">Problem</a>
-            <a href="/#services">What We Build</a>
-            <a href="/#how-it-works">How It Works</a>
-            <a href="/#examples">Examples</a>
+            <a href="/#services">What Changes</a>
+            <a href="/#everbranch">Everbranch</a>
+            <a href="/#examples">Fixes</a>
+            <a href="/#work">Studio</a>
             <a href="/#contact">Contact</a>
         </div>
 

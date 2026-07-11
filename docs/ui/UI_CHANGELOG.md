@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-07-10 - Evergrove Premium Product Homepage
+
+### What Changed
+- Rebuilt the Evergrove public homepage around a shorter premium product story: Everbranch phone preview, electrician/trades-friendly positioning, concise outcome cards, clickable workflow-problem cards, shared launch-partner pricing, and a streamlined workflow-audit form.
+- Updated the Evergrove navigation labels to match the simplified page structure.
+- Added the Launch Partner public pricing card and aligned the Everbranch/Evergrove public pricing story around regular Starter, Launch Partner, and Growth pricing.
+- Switched the public plans recommendation source from a hardcoded Growth value to config-driven recommendation.
+
+### What Did Not Change
+- No billing, checkout, Stripe, entitlement activation, module access, tenant provisioning, or Shopify app behavior changed.
+- The Evergrove contact form still posts through the existing service inquiry flow.
+
 ## 2026-07-09 - Everbranch Auth Branding Cleanup
 
 ### What changed
