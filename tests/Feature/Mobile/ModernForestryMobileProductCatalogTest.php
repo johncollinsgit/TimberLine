@@ -13,6 +13,7 @@ use App\Models\MobilePushDevice;
 use App\Models\Order;
 use App\Models\OrderLine;
 use App\Models\Scent;
+use App\Models\ShopifyProductOptionRuleset;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
@@ -1515,6 +1516,53 @@ test('mobile product detail exposes bundle scent requirements and active scent o
         ->and(data_get($payload, 'data.bundle.selectionLabels'))->toBe(['Scent 1', 'Scent 2', 'Scent 3'])
         ->and(collect(data_get($payload, 'data.bundle.availableScents', []))->pluck('displayName')->all())
         ->toContain('Forest Ember', 'Oakmoss Amber');
+});
+
+test('mobile product detail uses the assigned everbranch product options ruleset', function (): void {
+    $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
+    foreach (['Lavender', 'River Birch', 'Violet Spice'] as $index => $name) {
+        Scent::query()->updateOrCreate(
+            ['name' => $name],
+            [
+                'display_name' => $name,
+                'is_active' => true,
+                'sort_order' => $index + 1,
+            ]
+        );
+    }
+
+    $ruleset = ShopifyProductOptionRuleset::query()->create([
+        'tenant_id' => $tenant->id,
+        'name' => 'Mobile Three Candle Bundle',
+        'option_count' => 3,
+        'allowed_values' => ['Lavender', 'Violet Spice'],
+        'require_distinct_values' => true,
+        'enabled' => true,
+        'source' => 'test',
+    ]);
+    $ruleset->assignments()->create([
+        'tenant_id' => $tenant->id,
+        'product_handle' => '3-16oz-soy-candle-bundle',
+    ]);
+
+    $shopifyPayload = shopifyMobileProductDetailPayload();
+    $shopifyPayload['data']['products']['nodes'][0]['title'] = '3 16oz Soy Candle Bundle';
+    $shopifyPayload['data']['products']['nodes'][0]['handle'] = '3-16oz-soy-candle-bundle';
+    $shopifyPayload['data']['products']['nodes'][0]['productType'] = 'Bundle';
+    $shopifyPayload['data']['products']['nodes'][0]['tags'] = ['bundle'];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response($shopifyPayload, 200),
+    ]);
+
+    $payload = $this->getJson('/api/mobile/v1/modern-forestry/products/3-16oz-soy-candle-bundle')
+        ->assertOk()
+        ->json();
+
+    expect(data_get($payload, 'data.bundle.requiredScentCount'))->toBe(3)
+        ->and(data_get($payload, 'data.bundle.requireDistinctValues'))->toBeTrue()
+        ->and(collect(data_get($payload, 'data.bundle.availableScents', []))->pluck('displayName')->all())
+        ->toBe(['Lavender', 'Violet Spice']);
 });
 
 test('mobile product detail includes laravel-backed review summary and approved reviews', function (): void {
