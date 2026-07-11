@@ -6,6 +6,7 @@ use App\Models\MarketingReviewHistory;
 use App\Models\User;
 use App\Observers\MarketingReviewHistoryObserver;
 use App\Services\Integrations\ConnectionManager;
+use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use App\Services\Onboarding\Rails\DirectOnboardingRailAdapter;
 use App\Services\Onboarding\Rails\OnboardingRailAdapterRegistry;
 use App\Services\Onboarding\Rails\ShopifyOnboardingRailAdapter;
@@ -32,10 +33,11 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // The single registry for per-tenant external-provider connections.
-        // Connectors are registered here as each provider is migrated onto the
-        // integration_connections store (none wired yet — foundation only).
-        $this->app->singleton(ConnectionManager::class, function (): ConnectionManager {
-            return new ConnectionManager([]);
+        // QuickBooks is read/import-only for guided Collins Electric launch work.
+        $this->app->singleton(ConnectionManager::class, function ($app): ConnectionManager {
+            return new ConnectionManager([
+                $app->make(QuickBooksConnector::class),
+            ]);
         });
 
         // Holds the tenant the current request/job acts for, read by the enforced

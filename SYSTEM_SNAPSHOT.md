@@ -1043,3 +1043,11 @@ Scope guard:
 - `TenantMobileModuleRegistry` exposes only finite contract-v1 primitives and only catalog entries marked mobile ready/beta that are enabled by the canonical resolver. Customers, Field Service, Messaging, and Reporting form the pilot; Field Service camera photos are live, tenant-scoped uploads.
 - Branches uses canonical module-store services. Canonical plans/add-ons now carry stable purchase keys, pricing, and Stripe lookup metadata; the Stripe webhook also normalizes verified subscription lifecycle events into tenant-scoped purchase rows while retaining existing fulfillment/audit behavior.
 - Hosted checkout and lifecycle activation remain guarded off pending payment-reversal evidence, current store-rule review, storefront-region detection, biometric re-entry, push registration, accessibility/device runs, privacy declarations, and pilot approval. This is a testable platform foundation, not an App Store production approval claim.
+
+## Collins Electric QuickBooks Read/Import Path (2026-07-11)
+
+- QuickBooks Online is registered as the first real `integration_connections` provider via `QuickBooksConnector`; tenant tokens remain encrypted and tenant-scoped.
+- The live sync command is `php artisan field-service:sync-quickbooks --tenant=collins-electric`. It reads QuickBooks Customers, Invoices, Estimates, and Items, then imports them into the existing Collins field-service structure: `marketing_profiles`, `field_service_jobs`, and `field_service_materials`.
+- The concierge export path remains: `php artisan field-service:import-quickbooks FILE --tenant=collins-electric`. Both file import and API sync share `QuickBooksFieldServiceImportService` so mappings stay consistent.
+- This is read/import only. It does not write back to QuickBooks, enable billing, schedule recurring sync, or activate SMS/reminder sending.
+- Recommended electrician cards after QuickBooks import: Open job pipeline, Job status mix, Supplies used this month, Customer follow-ups, and QuickBooks sync health.

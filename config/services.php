@@ -37,6 +37,9 @@ $defaultGoogleCalendarRedirect = $canonicalLandlordHost !== null
 $defaultAsanaWorkflowRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/marketing/providers-integrations/workflow-automations/asana/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/marketing/providers-integrations/workflow-automations/asana/callback';
+$defaultQuickBooksRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/quickbooks/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/quickbooks/callback';
 
 return [
 
@@ -118,6 +121,19 @@ return [
         'base_url' => env('SQUARE_BASE_URL', 'https://connect.squareup.com'),
         'environment' => env('SQUARE_ENVIRONMENT', 'production'),
         'location_id' => env('SQUARE_LOCATION_ID'),
+    ],
+
+    'quickbooks' => [
+        'client_id' => env('QUICKBOOKS_CLIENT_ID'),
+        'client_secret' => env('QUICKBOOKS_CLIENT_SECRET'),
+        'redirect_uri' => env('QUICKBOOKS_REDIRECT_URI', $defaultQuickBooksRedirect),
+        'environment' => env('QUICKBOOKS_ENVIRONMENT', 'production'),
+        'api_base' => env('QUICKBOOKS_API_BASE', env('QUICKBOOKS_ENVIRONMENT', 'production') === 'sandbox'
+            ? 'https://sandbox-quickbooks.api.intuit.com'
+            : 'https://quickbooks.api.intuit.com'),
+        'scopes' => env('QUICKBOOKS_SCOPES', 'com.intuit.quickbooks.accounting'),
+        'minor_version' => (int) env('QUICKBOOKS_MINOR_VERSION', 75),
+        'oauth_state_cache_store' => env('QUICKBOOKS_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
     ],
 
     'twilio' => [

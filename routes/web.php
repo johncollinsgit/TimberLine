@@ -11,6 +11,7 @@ use App\Http\Controllers\EvergroveServicesController;
 use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Integrations\QuickBooksConnectionController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
@@ -528,6 +529,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
+
+    Route::middleware(['role:admin,manager,marketing_manager'])
+        ->prefix('workspaces/{tenant:slug}/integrations/quickbooks')
+        ->name('integrations.quickbooks.')
+        ->group(function (): void {
+            Route::get('/connect', [QuickBooksConnectionController::class, 'connect'])->name('connect');
+        });
+
+    Route::middleware(['role:admin,manager,marketing_manager'])
+        ->get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])
+        ->name('integrations.quickbooks.callback');
 
     Route::middleware(['role:admin', 'tenant.access'])
         ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])
