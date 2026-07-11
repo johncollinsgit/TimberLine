@@ -5,27 +5,28 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class FieldServiceJobPhoto extends Model
+class FieldServiceJobNote extends Model
 {
     use HasTenantScope;
 
     protected $fillable = [
         'tenant_id',
         'field_service_job_id',
-        'field_service_job_note_id',
-        'file_path',
-        'caption',
-        'uploaded_by_user_id',
-        'captured_at',
+        'created_by_user_id',
+        'body',
+        'status_update',
+        'noted_at',
+        'metadata',
     ];
 
     protected $casts = [
         'tenant_id' => 'integer',
         'field_service_job_id' => 'integer',
-        'field_service_job_note_id' => 'integer',
-        'uploaded_by_user_id' => 'integer',
-        'captured_at' => 'datetime',
+        'created_by_user_id' => 'integer',
+        'noted_at' => 'datetime',
+        'metadata' => 'array',
     ];
 
     public function job(): BelongsTo
@@ -33,13 +34,13 @@ class FieldServiceJobPhoto extends Model
         return $this->belongsTo(FieldServiceJob::class, 'field_service_job_id');
     }
 
-    public function uploadedBy(): BelongsTo
+    public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'uploaded_by_user_id');
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
-    public function note(): BelongsTo
+    public function photos(): HasMany
     {
-        return $this->belongsTo(FieldServiceJobNote::class, 'field_service_job_note_id');
+        return $this->hasMany(FieldServiceJobPhoto::class, 'field_service_job_note_id');
     }
 }

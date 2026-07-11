@@ -563,10 +563,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('field-service.')
         ->group(function (): void {
             Route::get('/', [FieldServiceController::class, 'index'])->name('index');
+            Route::get('/calendar', [FieldServiceController::class, 'calendar'])->name('calendar');
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
+            Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
+            Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
             Route::post('/jobs/{job}/tasks', [FieldServiceController::class, 'storeTask'])->name('tasks.store');
             Route::post('/jobs/{job}/photos', [FieldServiceController::class, 'storePhoto'])->name('photos.store');
             Route::post('/materials', [FieldServiceController::class, 'storeMaterial'])->name('materials.store');
+            Route::post('/reminders', [FieldServiceController::class, 'updateReminderSettings'])->name('reminders.update');
             Route::post('/vehicles', [FieldServiceController::class, 'storeVehicle'])->name('vehicles.store');
         });
 

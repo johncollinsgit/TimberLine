@@ -4,6 +4,7 @@
     $materials = collect($materials ?? []);
     $vehicles = collect($vehicles ?? []);
     $team = collect($team ?? []);
+    $reminderSetting = $reminderSetting ?? null;
     $openJobs = $jobs->whereNotIn('status', ['done'])->count();
     $scheduledJobs = $jobs->filter(fn ($job) => filled($job->scheduled_for))->count();
     $statusClass = function (?string $status): string {
@@ -25,6 +26,10 @@
                 <div class="fb-eyebrow">Field Service</div>
                 <h1 class="fb-title-xl">{{ $tenantName }} Work</h1>
                 <p class="fb-subtitle">Customers, service jobs, materials, tasks, photos, and work vans in one simple place.</p>
+                <div class="mt-4 flex flex-wrap gap-3">
+                    <a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-secondary">Open calendar</a>
+                    <a href="#reminders" class="fb-btn fb-btn-secondary">Reminder setup</a>
+                </div>
 
                 @if (session('status'))
                     <div class="fb-state fb-state-success mt-4">{{ session('status') }}</div>
@@ -74,6 +79,10 @@
                                     <label class="text-sm font-semibold text-zinc-800">Phone</label>
                                     <input name="customer_phone" value="{{ old('customer_phone') }}" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm" placeholder="555-123-4567">
                                 </div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-semibold text-zinc-800">Lock box / gate code</label>
+                                <input name="lock_box_code" value="{{ old('lock_box_code') }}" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm" placeholder="Shown prominently for employees">
                             </div>
                             <div>
                                 <label class="text-sm font-semibold text-zinc-800">Job title</label>
@@ -128,10 +137,12 @@
                             <article class="rounded-2xl border border-zinc-200 bg-white p-5">
                                 <div class="flex flex-wrap items-start justify-between gap-3">
                                     <div>
-                                        <h2 class="text-lg font-semibold text-zinc-950">{{ $job->title }}</h2>
+                                        <h2 class="text-lg font-semibold text-zinc-950">
+                                            <a href="{{ route('field-service.jobs.show', ['job' => $job]) }}" class="hover:underline">{{ $job->title }}</a>
+                                        </h2>
                                         <p class="mt-1 text-sm text-zinc-600">
                                             {{ $job->customer_name ?: trim(($job->customer?->first_name ?? '').' '.($job->customer?->last_name ?? '')) ?: 'Customer not named' }}
-                                            @if($job->customer_email) · {{ $job->customer_email }} @endif
+                                            @if($job->customer_phone) · {{ $job->customer_phone }} @elseif($job->customer_email) · {{ $job->customer_email }} @endif
                                         </p>
                                     </div>
                                     <span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $statusClass((string) $job->status) }}">
@@ -140,6 +151,12 @@
                                 </div>
 
                                 <div class="mt-4 grid gap-3 md:grid-cols-3">
+                                    @if($job->lock_box_code)
+                                        <div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                                            <div class="text-[11px] uppercase tracking-[0.16em] text-amber-700">Access code</div>
+                                            <div class="mt-1 text-base font-bold text-amber-950">{{ $job->lock_box_code }}</div>
+                                        </div>
+                                    @endif
                                     <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
                                         <div class="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Address</div>
                                         <div class="mt-1 text-sm font-semibold text-zinc-900">
@@ -164,6 +181,18 @@
                                 @endif
 
                                 <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                                    <form method="POST" action="{{ route('field-service.notes.store', ['job' => $job]) }}" class="rounded-xl border border-zinc-200 bg-white p-3">
+                                        @csrf
+                                        <label class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Add update</label>
+                                        <textarea name="body" required rows="2" class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Work done, issue found, customer note"></textarea>
+                                        <select name="status_update" class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
+                                            <option value="">No status change</option>
+                                            @foreach(['scheduled', 'in_progress', 'blocked', 'done'] as $status)
+                                                <option value="{{ $status }}">{{ $statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status)) }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button type="submit" class="fb-btn fb-btn-secondary mt-2 w-full justify-center">Add</button>
+                                    </form>
                                     <form method="POST" action="{{ route('field-service.tasks.store', ['job' => $job]) }}" class="rounded-xl border border-zinc-200 bg-white p-3">
                                         @csrf
                                         <label class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Add task</label>
@@ -188,8 +217,19 @@
                                 <div class="mt-4 grid gap-3 md:grid-cols-3">
                                     <div class="text-sm text-zinc-600"><span class="font-semibold text-zinc-950">{{ $job->tasks->count() }}</span> tasks</div>
                                     <div class="text-sm text-zinc-600"><span class="font-semibold text-zinc-950">{{ $job->materials->count() }}</span> materials</div>
-                                    <div class="text-sm text-zinc-600"><span class="font-semibold text-zinc-950">{{ $job->photos->count() }}</span> photo/file links</div>
+                                    <div class="text-sm text-zinc-600"><span class="font-semibold text-zinc-950">{{ $job->notes->count() }}</span> updates · <span class="font-semibold text-zinc-950">{{ $job->photos->count() }}</span> photo/file links</div>
                                 </div>
+
+                                @if($job->notes->isNotEmpty())
+                                    <div class="mt-4 space-y-2">
+                                        @foreach($job->notes->sortByDesc('noted_at')->take(2) as $note)
+                                            <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                                                <div class="font-semibold text-zinc-950">{{ $note->createdBy?->name ?? 'Team update' }} @if($note->status_update) · {{ $statusLabels[$note->status_update] ?? $note->status_update }} @endif</div>
+                                                <div class="mt-1">{{ $note->body }}</div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </article>
                         @empty
                             <div class="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-8 text-center">
@@ -202,6 +242,42 @@
             </div>
 
             <div class="mt-6 grid gap-6 lg:grid-cols-2">
+                <section id="reminders" class="fb-panel">
+                    <div class="fb-panel-head">
+                        <div>
+                            <div class="fb-panel-title">Reminder setup</div>
+                            <div class="fb-panel-copy">Captured for guided setup. SMS delivery stays off until Everbranch verifies the provider and consent state.</div>
+                        </div>
+                    </div>
+                    <div class="fb-panel-body">
+                        <form method="POST" action="{{ route('field-service.reminders.update') }}" class="grid gap-3">
+                            @csrf
+                            <label class="flex items-center gap-2 text-sm font-semibold text-zinc-800">
+                                <input type="checkbox" name="enabled" value="1" @checked((bool) ($reminderSetting?->enabled ?? false))>
+                                Request recurring reminders
+                            </label>
+                            <div class="grid gap-3 md:grid-cols-3">
+                                <select name="channel" class="rounded-xl border border-zinc-300 px-3 py-2 text-sm">
+                                    <option value="sms" @selected(($reminderSetting?->channel ?? 'sms') === 'sms')>SMS</option>
+                                    <option value="email" @selected(($reminderSetting?->channel ?? '') === 'email')>Email</option>
+                                </select>
+                                <select name="cadence" class="rounded-xl border border-zinc-300 px-3 py-2 text-sm">
+                                    @foreach(['daily' => 'Daily', 'weekly' => 'Weekly', 'monthly' => 'Monthly'] as $value => $label)
+                                        <option value="{{ $value }}" @selected(($reminderSetting?->cadence ?? 'daily') === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                <input name="send_time" type="time" value="{{ $reminderSetting?->send_time }}" class="rounded-xl border border-zinc-300 px-3 py-2 text-sm">
+                            </div>
+                            <textarea name="customer_copy" rows="2" class="rounded-xl border border-zinc-300 px-3 py-2 text-sm" placeholder="Customer reminder wording">{{ $reminderSetting?->customer_copy }}</textarea>
+                            <textarea name="internal_notes" rows="2" class="rounded-xl border border-zinc-300 px-3 py-2 text-sm" placeholder="Internal setup notes">{{ $reminderSetting?->internal_notes }}</textarea>
+                            <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                                Provider status: {{ ucfirst(str_replace('_', ' ', (string) ($reminderSetting?->provider_status ?? 'not_verified'))) }}
+                            </div>
+                            <button type="submit" class="fb-btn fb-btn-secondary justify-center">Save reminder setup</button>
+                        </form>
+                    </div>
+                </section>
+
                 <section id="materials" class="fb-panel">
                     <div class="fb-panel-head">
                         <div>

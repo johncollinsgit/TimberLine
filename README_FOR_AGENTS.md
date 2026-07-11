@@ -32,6 +32,14 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - Landlord/internal electrician setup remains intact. Do not delete the `electrician` template key, blueprint metadata, or landlord onboarding lane just because the customer-facing tutorial is hidden.
 - To restore it later, turn `FEATURE_CUSTOMER_ELECTRICIAN_TUTORIAL=true` back on and keep the current filtering/redirect guards in place rather than re-adding hardcoded customer-facing electrician copy by hand.
 
+## Collins Electric Guided Launch Rule (2026-07-11)
+
+- Collins Electric (`collins-electric`) is the first guided electrician launch-partner workspace. It is not a 3-day trial, public self-service tenant, or billing/subscription activation.
+- Use `php artisan everbranch:prepare-collins-electric --seed-demo-job` to create or refresh the tenant, apply the `electrician` blueprint, attach `johncollinsemail@gmail.com` as active verified admin, and keep SMS provider status `not_verified`.
+- Setup interests may include `billing`, `uploads`, and `quickbooks`, but final blueprint modules must remain limited to safe workspace modules (`customers`, `field_service`, `messaging`, `reporting`) unless a future approved PR adds real fulfillment.
+- QuickBooks support is concierge CSV/XLSX import with `php artisan field-service:import-quickbooks`; do not describe or implement it as live OAuth sync. Apple Photos are manual job photo/file import for now.
+- SMS/reminder configuration is admin-guided setup intent only. Do not enable real customer sends for Collins Electric until provider readiness, consent state, and delivery logs have passed a smoke test.
+
 ## Modern Forestry Facebook Scent-Share Preview Refresh Rule (2026-06-30)
 
 - Modern Forestry scent-personality sharing is intentionally **latest-only** per account. Retakes should update the current public share target instead of creating immutable historical share snapshots.

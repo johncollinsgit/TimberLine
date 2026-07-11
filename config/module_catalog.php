@@ -450,7 +450,7 @@ $catalog = [
                 'contract_version' => 1,
                 'min_app_version' => '1.0.0',
                 'navigation' => ['group' => 'work', 'icon' => 'briefcase-business', 'position' => 20],
-                'actions' => ['view', 'create_job', 'capture_photo'],
+                'actions' => ['view', 'create_job', 'capture_photo', 'add_note'],
             ],
         ],
         'activity' => [

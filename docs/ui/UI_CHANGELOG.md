@@ -1,5 +1,15 @@
 # UI Changelog
 
+## 2026-07-11 - Collins Electric Guided Launch Setup
+
+### What Changed
+- Enabled the first-login setup shell by default and polished it with a guided-launch frame, blur-in motion, no-surprise-billing language, field-ready setup cards, and guided setup as the default path.
+- Expanded the Field Service workspace UI with prominent lock box/access code display, job update capture, recent update previews, calendar navigation, job detail with back-to-calendar behavior, and reminder setup capture.
+
+### What Did Not Change
+- Setup tool choices are saved as interests, not billing, checkout, module installs, or automatic activation.
+- QuickBooks remains concierge CSV/XLSX import, Apple Photos remain manual job uploads/import, and SMS reminders remain blocked until provider readiness and consent are verified.
+
 ## 2026-07-10 - Evergrove Premium Product Homepage
 
 ### What Changed

@@ -9,21 +9,110 @@
 @endphp
 
 <x-layouts::auth.simple :title="__('Create your workspace')">
-    <div class="min-h-[80vh] w-full bg-[radial-gradient(120%_120%_at_50%_-10%,#eef4f2_0%,#f8fafa_55%,#ffffff_100%)] px-3 py-8">
+    <style>
+        [data-flw-shell] {
+            background:
+                linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 246, 0.74)),
+                radial-gradient(120% 120% at 50% -8%, rgba(224, 241, 236, 0.9) 0%, rgba(248, 250, 250, 0.72) 48%, rgba(255, 255, 255, 1) 100%);
+        }
+
+        [data-flw] {
+            animation: flw-shell-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        [data-step]:not([hidden]) {
+            animation: flw-step-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .flw-card,
+        .flw-team,
+        .flw-focus,
+        .flw-tool,
+        .flw-help {
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+        }
+
+        .flw-card:hover,
+        .flw-team:hover,
+        .flw-focus:hover,
+        .flw-tool:hover,
+        .flw-help:hover {
+            transform: translateY(-1px);
+        }
+
+        @keyframes flw-shell-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px) scale(0.985);
+                filter: blur(14px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+                filter: blur(0);
+            }
+        }
+
+        @keyframes flw-step-in {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+                filter: blur(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+                filter: blur(0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            [data-flw],
+            [data-step]:not([hidden]) {
+                animation: none;
+            }
+
+            .flw-card:hover,
+            .flw-team:hover,
+            .flw-focus:hover,
+            .flw-tool:hover,
+            .flw-help:hover {
+                transform: none;
+            }
+        }
+    </style>
+
+    <div data-flw-shell class="min-h-[80vh] w-full px-3 py-8 sm:py-10">
         <div
             data-flw
             data-workspace-name="{{ $workspaceName }}"
             data-recommended='@json($recommendedTools)'
-            class="mx-auto w-full max-w-2xl rounded-3xl border border-zinc-200 bg-white/95 p-6 shadow-xl backdrop-blur sm:p-8"
+            class="mx-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/80 bg-white/80 p-6 shadow-[0_24px_80px_rgba(15,28,31,0.16)] backdrop-blur-2xl sm:p-8"
         >
             <div class="flex items-center justify-between gap-3">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Everbranch</p>
-                    <h1 class="mt-1 text-xl font-semibold text-zinc-950 sm:text-2xl">Let's build your workspace</h1>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Everbranch setup</p>
+                    <h1 class="mt-1 text-xl font-semibold text-zinc-950 sm:text-2xl">Set up your workspace</h1>
+                    <p class="mt-1 max-w-md text-sm text-zinc-500">Answer a few things and we will shape the first version around the work your team actually does.</p>
                 </div>
-                <span class="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500">
+                <span class="shrink-0 rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-medium text-zinc-500 shadow-sm">
                     Step <span data-step-num>1</span> of {{ count($steps) }}
                 </span>
+            </div>
+
+            <div class="mt-5 grid gap-2 rounded-2xl border border-zinc-200/80 bg-zinc-50/80 p-2 text-xs text-zinc-600 sm:grid-cols-3">
+                <div class="rounded-xl bg-white/80 px-3 py-2 shadow-sm">
+                    <span class="block font-semibold text-zinc-950">Guided launch</span>
+                    <span>We review before real use.</span>
+                </div>
+                <div class="rounded-xl bg-white/80 px-3 py-2 shadow-sm">
+                    <span class="block font-semibold text-zinc-950">No surprise billing</span>
+                    <span>Tools are recorded first.</span>
+                </div>
+                <div class="rounded-xl bg-white/80 px-3 py-2 shadow-sm">
+                    <span class="block font-semibold text-zinc-950">Field-ready base</span>
+                    <span>Jobs, customers, photos.</span>
+                </div>
             </div>
 
             {{-- Progress dots --}}
@@ -45,7 +134,7 @@
                 <input type="hidden" name="template_key" value="">
                 <input type="hidden" name="team_size" value="">
                 <input type="hidden" name="hardest_part" value="">
-                <input type="hidden" name="start_path" value="self">
+                <input type="hidden" name="start_path" value="guided">
                 <input type="hidden" name="appointment_name" value="">
                 <input type="hidden" name="appointment_email" value="">
                 <input type="hidden" name="appointment_phone" value="">
@@ -55,7 +144,7 @@
                 <section data-step="1" class="space-y-4">
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">What should we call it?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">This is your business's home base. You can change it later.</p>
+                        <p class="mt-1 text-sm text-zinc-500">This becomes the name your team sees in the app. You can change it later.</p>
                     </div>
                     <input
                         data-name-input type="text" value="{{ $workspaceName }}" maxlength="120"
@@ -68,7 +157,7 @@
                 <section data-step="2" class="space-y-4" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">What kind of work do you do?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We'll shape the workspace around it — the right words, the right tools.</p>
+                        <p class="mt-1 text-sm text-zinc-500">We will tune the labels, starter tools, and first dashboard around this.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         @foreach ($businessTypes as $type)
@@ -87,7 +176,7 @@
                 <section data-step="3" class="space-y-4" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">How big is your team right now?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">No wrong answer — it just helps us set things up sensibly.</p>
+                        <p class="mt-1 text-sm text-zinc-500">This helps us keep the first setup practical instead of overbuilt.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         @foreach ($teamSizes as $key => $label)
@@ -122,7 +211,7 @@
                 <section data-step="5" class="space-y-4" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">Pick the tools that sound useful</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We've pre-picked a few that fit your kind of business. Add or remove any — nothing's locked in.</p>
+                        <p class="mt-1 text-sm text-zinc-500">Recommended tools are a launch plan, not a checkout screen. We will activate what is ready.</p>
                     </div>
                     <div class="grid max-h-[42vh] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
                         @foreach ($toolOptions as $key => $tool)
@@ -148,19 +237,19 @@
                 <section data-step="6" class="space-y-4" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">Want a hand setting it up?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We're small business people too. Set it up yourself, or have a real person walk you through it.</p>
+                        <p class="mt-1 text-sm text-zinc-500">For early launch partners, guided setup is the default. Self-serve can come after the workflow is proven.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
-                        <button type="button" data-pick-help="self" class="flw-help rounded-xl border-2 border-emerald-500 bg-emerald-50 p-4 text-left">
-                            <span class="block text-sm font-semibold text-zinc-900">I've got it 👍</span>
-                            <span class="mt-1 block text-xs text-zinc-500">Jump straight into your workspace.</span>
+                        <button type="button" data-pick-help="guided" class="flw-help rounded-xl border-2 border-emerald-500 bg-emerald-50 p-4 text-left transition">
+                            <span class="block text-sm font-semibold text-zinc-900">Set this up with me</span>
+                            <span class="mt-1 block text-xs text-zinc-500">We will help import data, enable messaging, and shape the first dashboard.</span>
                         </button>
-                        <button type="button" data-pick-help="guided" class="flw-help rounded-xl border-2 border-zinc-200 bg-white p-4 text-left">
-                            <span class="block text-sm font-semibold text-zinc-900">I'd like a hand 🤝</span>
-                            <span class="mt-1 block text-xs text-zinc-500">We'll reach out to help you get going.</span>
+                        <button type="button" data-pick-help="self" class="flw-help rounded-xl border-2 border-zinc-200 bg-white p-4 text-left transition">
+                            <span class="block text-sm font-semibold text-zinc-900">Let me explore first</span>
+                            <span class="mt-1 block text-xs text-zinc-500">Open the workspace now and finish setup later.</span>
                         </button>
                     </div>
-                    <div data-help-contact hidden class="space-y-2.5 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                    <div data-help-contact class="space-y-2.5 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                         <p class="text-xs font-medium text-zinc-600">Where can we reach you? (optional)</p>
                         <input data-help-name type="text" placeholder="Your name" maxlength="120" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
                         <input data-help-email type="email" placeholder="Email" maxlength="255" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
@@ -171,8 +260,8 @@
                 {{-- Step 7: review --}}
                 <section data-step="7" class="space-y-4" hidden>
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">You're all set 🎉</h2>
-                        <p class="mt-1 text-sm text-zinc-500">Here's your workspace. Create it and you're in.</p>
+                        <h2 class="text-lg font-semibold text-zinc-900">Ready to create the workspace</h2>
+                        <p class="mt-1 text-sm text-zinc-500">We will open the first version now and keep the launch items queued for review.</p>
                     </div>
                     <dl class="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm">
                         <div class="flex justify-between gap-4"><dt class="text-zinc-500">Workspace</dt><dd data-review-name class="font-medium text-zinc-900"></dd></div>
@@ -180,15 +269,15 @@
                         <div class="flex justify-between gap-4"><dt class="text-zinc-500">Team</dt><dd data-review-team class="font-medium text-zinc-900"></dd></div>
                         <div class="flex justify-between gap-4"><dt class="text-zinc-500">Tools</dt><dd data-review-tools class="text-right font-medium text-zinc-900"></dd></div>
                     </dl>
-                    <p class="text-xs text-zinc-400">Your tool picks are saved as recommendations — we won't turn on anything (or charge you) without you asking.</p>
+                    <p class="text-xs text-zinc-400">Your tool picks are saved as recommendations. This does not start billing, send messages, or invite anyone.</p>
                 </section>
 
                 {{-- Nav --}}
                 <div class="mt-7 flex items-center justify-between gap-3">
-                    <button type="button" data-back class="rounded-full px-4 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-800" hidden>← Back</button>
+                    <button type="button" data-back class="rounded-full px-4 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-800" hidden>Back</button>
                     <span class="flex-1"></span>
-                    <button type="button" data-next class="rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">Continue</button>
-                    <button type="submit" data-submit class="rounded-full bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700" hidden>Create my workspace</button>
+                    <button type="button" data-next class="rounded-full bg-zinc-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40">Continue</button>
+                    <button type="submit" data-submit class="rounded-full bg-zinc-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800" hidden>Create workspace</button>
                 </div>
             </form>
         </div>
@@ -211,7 +300,7 @@
                 team_size: '', team_label: '',
                 hardest_part: '',
                 module_choices: [],
-                start_path: 'self',
+                start_path: 'guided',
             };
 
             var $ = function (sel) { return root.querySelector(sel); };

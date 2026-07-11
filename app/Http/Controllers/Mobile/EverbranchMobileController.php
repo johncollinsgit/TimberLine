@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ClientProject;
 use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobPhoto;
 use App\Models\Order;
 use App\Models\Tenant;
@@ -296,10 +297,49 @@ class EverbranchMobileController extends Controller
             ->firstWhere('module_key', strtolower(trim($moduleKey)));
         abort_unless(is_array($manifest) && in_array($actionKey, (array) ($manifest['actions'] ?? []), true), 404);
 
-        abort_unless($moduleKey === 'field_service' && $actionKey === 'capture_photo', 422, 'This mobile action is not supported by the current contract.');
+        abort_unless($moduleKey === 'field_service' && in_array($actionKey, ['capture_photo', 'add_note'], true), 422, 'This mobile action is not supported by the current contract.');
+
+        if ($actionKey === 'add_note') {
+            $validated = $request->validate([
+                'job_id' => ['required', 'integer'],
+                'body' => ['required', 'string', 'max:5000'],
+                'status_update' => ['nullable', 'string', 'in:open,scheduled,in_progress,blocked,done'],
+                'noted_at' => ['nullable', 'date'],
+            ]);
+
+            $job = FieldServiceJob::query()
+                ->forTenantId((int) $tenantModel->id)
+                ->findOrFail((int) $validated['job_id']);
+
+            $note = FieldServiceJobNote::query()->create([
+                'tenant_id' => (int) $tenantModel->id,
+                'field_service_job_id' => (int) $job->id,
+                'created_by_user_id' => $this->user($request)->id,
+                'body' => (string) $validated['body'],
+                'status_update' => $validated['status_update'] ?? null,
+                'noted_at' => $validated['noted_at'] ?? now(),
+                'metadata' => ['source' => 'everbranch_mobile'],
+            ]);
+
+            if (filled($validated['status_update'] ?? null)) {
+                $job->forceFill([
+                    'status' => (string) $validated['status_update'],
+                    'completed_at' => (string) $validated['status_update'] === 'done' ? ($job->completed_at ?? now()) : $job->completed_at,
+                ])->save();
+            }
+
+            return response()->json([
+                'ok' => true,
+                'action' => 'add_note',
+                'resource_id' => (int) $note->id,
+                'message' => 'Update added to '.$job->title.'.',
+            ], 201);
+        }
+
         $validated = $request->validate([
             'job_id' => ['required', 'integer'],
             'photo' => ['required', 'image', 'max:10240'],
+            'field_service_job_note_id' => ['nullable', 'integer'],
             'caption' => ['nullable', 'string', 'max:255'],
             'captured_at' => ['nullable', 'date'],
         ]);
@@ -307,11 +347,22 @@ class EverbranchMobileController extends Controller
         $job = FieldServiceJob::query()
             ->forTenantId((int) $tenantModel->id)
             ->findOrFail((int) $validated['job_id']);
+        $noteId = null;
+        if (is_numeric($validated['field_service_job_note_id'] ?? null)) {
+            $noteId = FieldServiceJobNote::query()
+                ->forTenantId((int) $tenantModel->id)
+                ->where('field_service_job_id', (int) $job->id)
+                ->whereKey((int) $validated['field_service_job_note_id'])
+                ->value('id');
+            abort_unless(is_numeric($noteId), 404);
+            $noteId = (int) $noteId;
+        }
         $path = $request->file('photo')->store('field-service/'.$tenantModel->id.'/'.$job->id, 'public');
 
         $photo = FieldServiceJobPhoto::query()->create([
             'tenant_id' => (int) $tenantModel->id,
             'field_service_job_id' => (int) $job->id,
+            'field_service_job_note_id' => $noteId,
             'file_path' => Storage::disk('public')->url($path),
             'caption' => $validated['caption'] ?? null,
             'uploaded_by_user_id' => $this->user($request)->id,

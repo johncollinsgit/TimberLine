@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantBlueprintProfileService;
+use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -27,6 +28,7 @@ class FirstLoginWorkspaceProvisioner
         private readonly LandlordCommercialConfigService $commercialService,
         private readonly TenantSetupStatusService $setupStatusService,
         private readonly TenantOnboardingBlueprintStore $blueprintStore,
+        private readonly TenantModuleCatalogService $moduleCatalogService,
     ) {}
 
     /**
@@ -159,6 +161,7 @@ class FirstLoginWorkspaceProvisioner
             'square', 'workflow_automations', 'ai', 'notifications', 'campaigns',
             'settings', 'mobile_connection',
         ]));
+        $selectedModules = array_values(array_intersect($selectedModules, $this->safePublicModuleKeys()));
 
         return [
             'rail' => 'direct',
@@ -182,5 +185,24 @@ class FirstLoginWorkspaceProvisioner
             ],
             'first_login_guide' => $guideAnswers,
         ];
+    }
+
+    /**
+     * Final onboarding blueprints can only reference modules visible on the
+     * safe public catalog. Roadmap connector requests remain in the user's guide
+     * answers and setup interests for concierge follow-up.
+     *
+     * @return array<int,string>
+     */
+    protected function safePublicModuleKeys(): array
+    {
+        $payload = $this->moduleCatalogService->publicCatalogPayload();
+
+        return collect((array) ($payload['modules'] ?? []))
+            ->map(fn (mixed $module): string => is_array($module) ? strtolower(trim((string) ($module['key'] ?? ''))) : '')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 }

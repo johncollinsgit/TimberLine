@@ -161,6 +161,11 @@ class Tenant extends Model
         return $this->hasMany(FieldServiceMaterial::class);
     }
 
+    public function fieldServiceReminderSetting(): HasOne
+    {
+        return $this->hasOne(FieldServiceReminderSetting::class);
+    }
+
     public function fieldServiceVehicles(): HasMany
     {
         return $this->hasMany(FieldServiceVehicle::class);

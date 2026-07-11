@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobPhoto;
 use App\Models\FieldServiceMaterial;
+use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceVehicle;
 use App\Models\MarketingProfile;
@@ -31,7 +33,7 @@ class FieldServiceController extends Controller
 
         $jobs = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
-            ->with(['customer', 'assignedUser', 'tasks.assignedUser', 'materials', 'photos'])
+            ->with(['customer', 'assignedUser', 'tasks.assignedUser', 'materials', 'photos', 'notes.createdBy'])
             ->latest('updated_at')
             ->latest('id')
             ->limit(25)
@@ -54,6 +56,11 @@ class FieldServiceController extends Controller
             ->orderBy('name')
             ->get(['users.id', 'users.name', 'users.email']);
 
+        $reminderSetting = FieldServiceReminderSetting::query()->firstOrCreate(
+            ['tenant_id' => (int) $tenant->id],
+            ['provider_status' => 'not_verified', 'enabled' => false]
+        );
+
         return view('field-service.index', [
             'tenant' => $tenant,
             'jobs' => $jobs,
@@ -61,6 +68,52 @@ class FieldServiceController extends Controller
             'vehicles' => $vehicles,
             'team' => $team,
             'statusLabels' => $this->statusLabels(),
+            'reminderSetting' => $reminderSetting,
+        ]);
+    }
+
+    public function calendar(Request $request): View
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+
+        $start = now()->startOfDay();
+        $end = now()->addDays(45)->endOfDay();
+
+        $jobs = FieldServiceJob::query()
+            ->forTenantId((int) $tenant->id)
+            ->with(['assignedUser:id,name', 'notes'])
+            ->whereNotNull('scheduled_for')
+            ->whereBetween('scheduled_for', [$start, $end])
+            ->orderBy('scheduled_for')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (FieldServiceJob $job): string => $job->scheduled_for?->toDateString() ?? 'unscheduled');
+
+        return view('field-service.calendar', [
+            'tenant' => $tenant,
+            'jobsByDay' => $jobs,
+            'statusLabels' => $this->statusLabels(),
+        ]);
+    }
+
+    public function showJob(Request $request, FieldServiceJob $job): View
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessTenantJob($tenant, $job);
+
+        $job->load(['customer', 'assignedUser', 'tasks.assignedUser', 'materials', 'photos.uploadedBy', 'notes.createdBy', 'notes.photos']);
+        $team = $tenant->users()
+            ->orderBy('name')
+            ->get(['users.id', 'users.name', 'users.email']);
+
+        return view('field-service.show', [
+            'tenant' => $tenant,
+            'job' => $job,
+            'team' => $team,
+            'statusLabels' => $this->statusLabels(),
+            'back' => $request->query('back') === 'calendar' ? 'calendar' : 'index',
         ]);
     }
 
@@ -73,6 +126,7 @@ class FieldServiceController extends Controller
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_email' => ['nullable', 'email', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:80'],
+            'lock_box_code' => ['nullable', 'string', 'max:120'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'service_address_line_1' => ['nullable', 'string', 'max:255'],
@@ -101,6 +155,7 @@ class FieldServiceController extends Controller
                 'customer_name' => (string) $validated['customer_name'],
                 'customer_email' => $validated['customer_email'] ?? null,
                 'customer_phone' => $validated['customer_phone'] ?? null,
+                'lock_box_code' => $validated['lock_box_code'] ?? null,
                 'service_address_line_1' => $validated['service_address_line_1'] ?? null,
                 'service_address_line_2' => $validated['service_address_line_2'] ?? null,
                 'service_city' => $validated['service_city'] ?? null,
@@ -159,6 +214,55 @@ class FieldServiceController extends Controller
         ]);
 
         return back()->with('status', 'Task added.');
+    }
+
+    public function storeNote(Request $request, FieldServiceJob $job): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessTenantJob($tenant, $job);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:5000'],
+            'status_update' => ['nullable', 'string', 'in:open,scheduled,in_progress,blocked,done'],
+            'noted_at' => ['nullable', 'date'],
+            'photo_file_path' => ['nullable', 'string', 'max:2048'],
+            'photo_caption' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        DB::transaction(function () use ($request, $tenant, $job, $validated): void {
+            $note = FieldServiceJobNote::query()->create([
+                'tenant_id' => (int) $tenant->id,
+                'field_service_job_id' => (int) $job->id,
+                'created_by_user_id' => $request->user()?->id,
+                'body' => (string) $validated['body'],
+                'status_update' => $validated['status_update'] ?? null,
+                'noted_at' => $validated['noted_at'] ?? now(),
+            ]);
+
+            $status = trim((string) ($validated['status_update'] ?? ''));
+            if ($status !== '') {
+                $job->forceFill([
+                    'status' => $status,
+                    'completed_at' => $status === 'done' ? ($job->completed_at ?? now()) : $job->completed_at,
+                ])->save();
+            }
+
+            $photoPath = trim((string) ($validated['photo_file_path'] ?? ''));
+            if ($photoPath !== '') {
+                FieldServiceJobPhoto::query()->create([
+                    'tenant_id' => (int) $tenant->id,
+                    'field_service_job_id' => (int) $job->id,
+                    'field_service_job_note_id' => (int) $note->id,
+                    'file_path' => $photoPath,
+                    'caption' => $validated['photo_caption'] ?? null,
+                    'uploaded_by_user_id' => $request->user()?->id,
+                    'captured_at' => $validated['noted_at'] ?? now(),
+                ]);
+            }
+        });
+
+        return back()->with('status', 'Job update added.');
     }
 
     public function storeMaterial(Request $request): RedirectResponse
@@ -221,13 +325,17 @@ class FieldServiceController extends Controller
 
         $validated = $request->validate([
             'file_path' => ['required', 'string', 'max:2048'],
+            'field_service_job_note_id' => ['nullable', 'integer'],
             'caption' => ['nullable', 'string', 'max:255'],
             'captured_at' => ['nullable', 'date'],
         ]);
 
+        $noteId = $this->validatedTenantJobNoteId($tenant, $job, $validated['field_service_job_note_id'] ?? null);
+
         FieldServiceJobPhoto::query()->create([
             'tenant_id' => (int) $tenant->id,
             'field_service_job_id' => (int) $job->id,
+            'field_service_job_note_id' => $noteId,
             'file_path' => (string) $validated['file_path'],
             'caption' => $validated['caption'] ?? null,
             'uploaded_by_user_id' => $request->user()?->id,
@@ -235,6 +343,38 @@ class FieldServiceController extends Controller
         ]);
 
         return back()->with('status', 'Photo or file link added.');
+    }
+
+    public function updateReminderSettings(Request $request): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+
+        $validated = $request->validate([
+            'enabled' => ['nullable', 'boolean'],
+            'channel' => ['required', 'string', 'in:sms,email'],
+            'cadence' => ['required', 'string', 'in:daily,weekly,monthly'],
+            'send_time' => ['nullable', 'date_format:H:i'],
+            'timezone' => ['nullable', 'string', 'max:80'],
+            'customer_copy' => ['nullable', 'string', 'max:2000'],
+            'internal_notes' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        FieldServiceReminderSetting::query()->updateOrCreate(
+            ['tenant_id' => (int) $tenant->id],
+            [
+                'enabled' => (bool) ($validated['enabled'] ?? false),
+                'channel' => (string) $validated['channel'],
+                'cadence' => (string) $validated['cadence'],
+                'send_time' => $validated['send_time'] ?? null,
+                'timezone' => $validated['timezone'] ?? 'America/New_York',
+                'provider_status' => 'not_verified',
+                'customer_copy' => $validated['customer_copy'] ?? null,
+                'internal_notes' => $validated['internal_notes'] ?? null,
+            ]
+        );
+
+        return back()->with('status', 'Reminder setup saved for Everbranch review. SMS stays off until delivery is verified.');
     }
 
     protected function tenant(Request $request): Tenant
@@ -327,6 +467,23 @@ class FieldServiceController extends Controller
 
         return FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
+            ->whereKey($id)
+            ->exists()
+            ? $id
+            : null;
+    }
+
+    protected function validatedTenantJobNoteId(Tenant $tenant, FieldServiceJob $job, mixed $noteId): ?int
+    {
+        if (! is_numeric($noteId)) {
+            return null;
+        }
+
+        $id = (int) $noteId;
+
+        return FieldServiceJobNote::query()
+            ->forTenantId((int) $tenant->id)
+            ->where('field_service_job_id', (int) $job->id)
             ->whereKey($id)
             ->exists()
             ? $id

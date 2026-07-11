@@ -17,7 +17,8 @@ test('the popup workspace flow renders for a memberless user when the flag is on
     $this->actingAs($user)
         ->get(route('workspace.first-login'))
         ->assertOk()
-        ->assertSeeText('build your workspace')
+        ->assertSeeText('Set up your workspace')
+        ->assertSeeText('Guided launch')
         ->assertSeeText('What kind of work do you do?')
         ->assertSeeText('Pick the tools that sound useful')
         ->assertSeeText('Want a hand setting it up?');

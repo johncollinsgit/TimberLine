@@ -4,6 +4,7 @@ namespace App\Services\Mobile;
 
 use App\Models\ClientProject;
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceJobNote;
 use App\Models\MarketingProfile;
 use App\Models\MessagingConversation;
 use App\Models\Order;
@@ -117,11 +118,15 @@ class TenantMobileResourceService
                         ->orWhere('customer_name', 'like', $like)->orWhere('shopify_name', 'like', $like);
                 }))->latest('ordered_at')->limit($limit)->get()->map(fn (Order $order): array => $this->orderSummary($order)),
             'jobs' => FieldServiceJob::query()->forTenantId((int) $tenant->id)
-                ->withCount(['tasks', 'materials', 'photos'])
+                ->withCount(['tasks', 'materials', 'photos', 'notes'])
                 ->when($search !== '', fn (Builder $query) => $query->where(function (Builder $builder) use ($search): void {
                     $like = '%'.$search.'%';
                     $builder->where('title', 'like', $like)->orWhere('customer_name', 'like', $like)
-                        ->orWhere('service_city', 'like', $like)->orWhere('service_address_line_1', 'like', $like);
+                        ->orWhere('customer_phone', 'like', $like)
+                        ->orWhere('lock_box_code', 'like', $like)
+                        ->orWhere('description', 'like', $like)
+                        ->orWhere('service_city', 'like', $like)->orWhere('service_address_line_1', 'like', $like)
+                        ->orWhereHas('notes', fn (Builder $notes) => $notes->where('body', 'like', $like));
                 }))->latest('updated_at')->limit($limit)->get()->map(fn (FieldServiceJob $job): array => $this->jobSummary($job)),
             default => ClientProject::query()->forTenantId((int) $tenant->id)
                 ->withCount(['milestones', 'tickets'])
@@ -186,9 +191,38 @@ class TenantMobileResourceService
     /** @return array<string,mixed> */
     protected function jobDetail(int $tenantId, int $id): array
     {
-        $job = FieldServiceJob::query()->forTenantId($tenantId)->with(['tasks', 'materials', 'photos', 'assignedUser:id,name'])->findOrFail($id);
+        $job = FieldServiceJob::query()->forTenantId($tenantId)->with(['tasks.assignedUser:id,name', 'materials', 'photos', 'notes.createdBy:id,name', 'notes.photos', 'assignedUser:id,name'])->findOrFail($id);
 
-        return ['kind' => 'jobs', 'item' => [...$this->jobSummary($job), 'description' => $job->description, 'scheduled_for' => optional($job->scheduled_for)->toIso8601String(), 'address' => array_filter([$job->service_address_line_1, $job->service_address_line_2, $job->service_city, $job->service_state, $job->service_postal_code]), 'assigned_to' => $job->assignedUser?->name, 'tasks' => $job->tasks, 'materials' => $job->materials, 'photos' => $job->photos]];
+        return ['kind' => 'jobs', 'item' => [
+            ...$this->jobSummary($job),
+            'description' => $job->description,
+            'customer_phone' => $job->customer_phone,
+            'lock_box_code' => $job->lock_box_code,
+            'scheduled_for' => optional($job->scheduled_for)->toIso8601String(),
+            'address' => array_filter([$job->service_address_line_1, $job->service_address_line_2, $job->service_city, $job->service_state, $job->service_postal_code]),
+            'assigned_to' => $job->assignedUser?->name,
+            'tasks' => $job->tasks->map(fn ($task): array => [
+                'id' => (int) $task->id,
+                'title' => (string) $task->title,
+                'status' => (string) $task->status,
+                'due_at' => optional($task->due_at)->toIso8601String(),
+                'assigned_to' => $task->assignedUser?->name,
+            ])->values(),
+            'materials' => $job->materials,
+            'photos' => $job->photos,
+            'notes' => $job->notes->sortByDesc('noted_at')->map(fn (FieldServiceJobNote $note): array => [
+                'id' => (int) $note->id,
+                'body' => (string) $note->body,
+                'status_update' => $note->status_update,
+                'noted_at' => optional($note->noted_at)->toIso8601String(),
+                'created_by' => $note->createdBy?->name,
+                'photos' => $note->photos->map(fn ($photo): array => [
+                    'id' => (int) $photo->id,
+                    'file_path' => (string) $photo->file_path,
+                    'caption' => $photo->caption,
+                ])->values(),
+            ])->values(),
+        ]];
     }
 
     /** @return array<string,mixed> */
@@ -216,7 +250,22 @@ class TenantMobileResourceService
     /** @return array<string,mixed> */
     protected function jobSummary(FieldServiceJob $job): array
     {
-        return ['id' => (int) $job->id, 'kind' => 'jobs', 'title' => (string) $job->title, 'subtitle' => (string) ($job->customer_name ?: $job->service_city ?: 'Service job'), 'status' => Str::headline((string) $job->status), 'meta' => ['tasks' => (int) ($job->tasks_count ?? 0), 'materials' => (int) ($job->materials_count ?? 0), 'photos' => (int) ($job->photos_count ?? 0)]];
+        return [
+            'id' => (int) $job->id,
+            'kind' => 'jobs',
+            'title' => (string) $job->title,
+            'subtitle' => (string) ($job->customer_name ?: $job->service_city ?: 'Service job'),
+            'status' => Str::headline((string) $job->status),
+            'customer_phone' => $job->customer_phone,
+            'scheduled_for' => optional($job->scheduled_for)->toIso8601String(),
+            'has_lock_box_code' => filled($job->lock_box_code),
+            'meta' => [
+                'tasks' => (int) ($job->tasks_count ?? $job->tasks()->count()),
+                'materials' => (int) ($job->materials_count ?? $job->materials()->count()),
+                'photos' => (int) ($job->photos_count ?? $job->photos()->count()),
+                'notes' => (int) ($job->notes_count ?? $job->notes()->count()),
+            ],
+        ];
     }
 
     /** @return array<string,mixed> */

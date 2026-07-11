@@ -1,5 +1,13 @@
 # Modern Forestry Backstage
 
+## Collins Electric Guided Launch Workspace (2026-07-11)
+
+- Collins Electric is a guided launch-partner workspace, not a 3-day trial or self-serve billing flow. Prepare or refresh it with `php artisan everbranch:prepare-collins-electric --seed-demo-job`.
+- The command creates/updates tenant `collins-electric`, applies the `electrician` blueprint on the direct `base` plan, records setup interests for customers, field service, billing, messaging, reporting, uploads, and QuickBooks, and only finalizes safe modules: customers, field service, messaging, and reporting.
+- `johncollinsemail@gmail.com` is attached as an active, verified tenant admin without removing any existing tenant memberships, so the Everbranch mobile app can discover Collins Electric through `/mobile/authorize` and `/api/mobile/v1/workspaces`.
+- Field service now supports electrician MVP data: customer phone, service address, lock box/access code, assigned jobs/tasks, employee job updates, job-linked photos/files, calendar view, tenant-scoped search, and mobile work detail/actions.
+- QuickBooks import is concierge CSV/XLSX only through `php artisan field-service:import-quickbooks`; it is not a live QuickBooks OAuth connector. Apple Photos remain manual job photo/file upload/import. SMS reminders remain disabled/not verified until provider readiness, consent, and delivery logs pass a smoke test.
+
 ## Shopify-only Product Options (2026-07-10)
 
 - Everbranch Product Options replaces Infinite Options for Modern Forestry bundle scent selection and is intentionally labeled `Shopify only` in the embedded Shopify Admin navigation.

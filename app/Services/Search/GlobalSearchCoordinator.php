@@ -5,6 +5,7 @@ namespace App\Services\Search;
 use App\Services\Search\Providers\ActionsSearchProvider;
 use App\Services\Search\Providers\CustomersSearchProvider;
 use App\Services\Search\Providers\EventsSearchProvider;
+use App\Services\Search\Providers\FieldServiceSearchProvider;
 use App\Services\Search\Providers\ImportsSearchProvider;
 use App\Services\Search\Providers\ModulesSearchProvider;
 use App\Services\Search\Providers\NavigationSearchProvider;
@@ -23,12 +24,13 @@ class GlobalSearchCoordinator
         CustomersSearchProvider $customers,
         OrdersSearchProvider $orders,
         EventsSearchProvider $events,
+        FieldServiceSearchProvider $fieldService,
         ImportsSearchProvider $imports,
         ModulesSearchProvider $modules,
         NavigationSearchProvider $navigation,
         ActionsSearchProvider $actions
     ) {
-        $this->providers = [$customers, $orders, $events, $imports, $modules, $navigation, $actions];
+        $this->providers = [$customers, $orders, $events, $fieldService, $imports, $modules, $navigation, $actions];
     }
 
     /**

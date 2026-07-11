@@ -20,6 +20,7 @@ class FieldServiceJob extends Model
         'customer_name',
         'customer_email',
         'customer_phone',
+        'lock_box_code',
         'service_address_line_1',
         'service_address_line_2',
         'service_city',
@@ -29,6 +30,8 @@ class FieldServiceJob extends Model
         'description',
         'scheduled_for',
         'completed_at',
+        'external_source',
+        'external_id',
         'metadata',
     ];
 
@@ -69,5 +72,10 @@ class FieldServiceJob extends Model
     public function photos(): HasMany
     {
         return $this->hasMany(FieldServiceJobPhoto::class);
+    }
+
+    public function notes(): HasMany
+    {
+        return $this->hasMany(FieldServiceJobNote::class);
     }
 }

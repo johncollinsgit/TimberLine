@@ -18,6 +18,8 @@ class FieldServiceMaterial extends Model
         'unit',
         'unit_cost',
         'status',
+        'external_source',
+        'external_id',
         'notes',
     ];
 
