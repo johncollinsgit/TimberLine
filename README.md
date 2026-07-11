@@ -1,5 +1,15 @@
 # Modern Forestry Backstage
 
+## Shopify-only Product Options (2026-07-10)
+
+- Everbranch Product Options replaces Infinite Options for Modern Forestry bundle scent selection and is intentionally labeled `Shopify only` in the embedded Shopify Admin navigation.
+- The embedded admin at `/shopify/app/product-options` supports full ruleset CRUD. Product assignment CRUD is managed in each ruleset: add a product handle or URL, view current assignments, edit the list, or remove a line to unassign the product.
+- Deleting a ruleset also deletes its product assignments. Assignment lookup supports Shopify product handles and product IDs, while storefront selectors persist choices as `Scent 1`, `Scent 2`, and so on in Shopify line-item properties.
+- The theme app block is `Everbranch scent options`; it calls the signed app proxy at `/apps/forestry/product-options` and renders the exact number of required scent selectors.
+- The same rules feed the Modern Forestry mobile product-detail API, including option count, allowed scents, and whether selections must be distinct.
+- Initial Infinite Options shapes and captured scents are seeded for Modern Forestry. Current public bundle handles are matched idempotently by `2026_07_10_230000_match_shopify_product_option_storefront_handles.php`.
+- Architecture and operating details live in `docs/architecture/shopify-product-options-branch.md`.
+
 ## Everbranch Mobile Platform (2026-07-10)
 
 - Contract v2 / app 1.1.0 replaces generic module summaries with operational Branches: Messaging, Customers, tenant-aware Work, Reporting, typed Search, interactive Account, and authorized landlord triage.

@@ -64,8 +64,8 @@ use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyEmbeddedSubscriptionsController;
-use App\Http\Controllers\ShopifyProductOptionsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
+use App\Http\Controllers\ShopifyProductOptionsController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\SubscriptionPublicController;
 use App\Http\Controllers\SubscriptionStorefrontController;
@@ -1513,6 +1513,9 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::patch('/product-options/rulesets/{ruleset}', [ShopifyProductOptionsController::class, 'updateRuleset'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('product-options.rulesets.update');
+        Route::delete('/product-options/rulesets/{ruleset}', [ShopifyProductOptionsController::class, 'deleteRuleset'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('product-options.rulesets.delete');
         Route::post('/dashboard/candle-cash-reminders', [ShopifyEmbeddedAppController::class, 'sendCandleCashEarnedReminders'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('dashboard.candle-cash-reminders');

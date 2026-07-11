@@ -101,6 +101,27 @@ class ShopifyProductOptionsController extends Controller
         ]);
     }
 
+    public function deleteRuleset(
+        Request $request,
+        ShopifyProductOptionRuleset $ruleset,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        ShopifyProductOptionsService $productOptions
+    ): JsonResponse {
+        $tenantId = $this->authorizedTenantId($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($tenantId === null || (int) $ruleset->tenant_id !== $tenantId) {
+            return response()->json(['ok' => false, 'message' => 'Product Options access could not be verified.'], 403);
+        }
+
+        $productOptions->deleteRuleset($ruleset, $tenantId);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Ruleset and its product assignments deleted.',
+        ]);
+    }
+
     public function storefront(Request $request, ShopifyProductOptionsService $productOptions): JsonResponse
     {
         $shop = strtolower(trim((string) $request->query('shop', '')));

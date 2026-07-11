@@ -41,6 +41,7 @@
         .po-check { display: inline-flex; align-items: center; gap: 7px; color: #334155; font-size: 12px; font-weight: 650; }
         .po-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; grid-column: 1 / -1; }
         .po-button { appearance: none; border: 1px solid #0f766e; border-radius: 10px; background: #0f766e; color: #fff; min-height: 36px; padding: 0 14px; font-size: 12px; font-weight: 750; cursor: pointer; }
+        .po-button--danger { border-color: #fecaca; background: #fff; color: #b91c1c; }
         .po-button:disabled { cursor: wait; opacity: .58; }
         .po-status { color: #64748b; font-size: 12px; }
         .po-status[data-tone="error"] { color: #b91c1c; }
@@ -100,7 +101,7 @@
                         <div class="po-field po-field--full">
                             <label class="po-label">Shopify product handles or product URLs</label>
                             <textarea class="po-textarea" name="product_handles" placeholder="three-room-sprays-for-30">{{ $handles }}</textarea>
-                            <span class="po-help">One per line. You can paste a full Shopify product URL; Everbranch keeps the handle.</span>
+                            <span class="po-help">One per line. Add a handle to assign this option set; remove a line and save to unassign it. Full Shopify product URLs are accepted.</span>
                         </div>
                         <div class="po-field po-field--full">
                             <label class="po-label">Available scents</label>
@@ -113,6 +114,7 @@
                         </div>
                         <div class="po-actions">
                             <span class="po-status" data-form-status></span>
+                            <button class="po-button po-button--danger" type="button" data-delete-ruleset>Delete ruleset</button>
                             <button class="po-button" type="submit">Save ruleset</button>
                         </div>
                     </form>
@@ -198,6 +200,31 @@
                 form.addEventListener('submit', (event) => {
                     event.preventDefault();
                     submit(form);
+                });
+            });
+
+            root.querySelectorAll('[data-delete-ruleset]').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const card = button.closest('[data-ruleset-card]');
+                    const form = button.closest('form');
+                    const status = form.querySelector('[data-form-status]');
+                    const name = form.elements.name.value.trim() || 'this ruleset';
+                    if (!window.confirm(`Delete ${name} and unassign all of its products?`)) return;
+
+                    button.disabled = true;
+                    status.dataset.tone = '';
+                    status.textContent = 'Deleting…';
+                    try {
+                        const headers = await window.ForestryEmbeddedApp.resolveEmbeddedAuthHeaders();
+                        const response = await fetch(root.dataset.updateBase + '/' + card.dataset.rulesetId, { method: 'DELETE', headers });
+                        const json = await response.json();
+                        if (!response.ok || !json.ok) throw new Error(json.message || 'Ruleset could not be deleted.');
+                        card.remove();
+                    } catch (error) {
+                        status.dataset.tone = 'error';
+                        status.textContent = error && error.message ? error.message : 'Ruleset could not be deleted.';
+                        button.disabled = false;
+                    }
                 });
             });
         })();
