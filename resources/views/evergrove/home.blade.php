@@ -139,10 +139,27 @@
                                     </div>
                                     <span>✓</span>
                                 </div>
-                                <div class="eg-mobile-work-card">
-                                    <span>In progress</span>
-                                    <strong>Panel upgrade</strong>
-                                    <p>Customer message sent. Photos attached. Invoice ready.</p>
+                                <div class="eg-mobile-job-grid">
+                                    <article class="eg-mobile-work-card">
+                                        <span>In process</span>
+                                        <strong>Panel upgrade</strong>
+                                        <p>$6,840 scheduled today</p>
+                                    </article>
+                                    <article class="eg-mobile-work-card">
+                                        <span>Quoting</span>
+                                        <strong>Lighting package</strong>
+                                        <p>$4,200 waiting on approval</p>
+                                    </article>
+                                    <article class="eg-mobile-work-card">
+                                        <span>Contract signed</span>
+                                        <strong>Maintenance plan</strong>
+                                        <p>$9,600 monthly service</p>
+                                    </article>
+                                    <article class="eg-mobile-work-card">
+                                        <span>Finished</span>
+                                        <strong>Breaker replacement</strong>
+                                        <p>$1,180 invoice ready</p>
+                                    </article>
                                 </div>
                                 <div class="eg-mobile-action-row">
                                     <span>1</span>
@@ -164,7 +181,19 @@
                                         <p>Branches</p>
                                         <h2>Growth tools</h2>
                                     </div>
-                                    <span>✦</span>
+                                    <span class="phone-tree-icon" aria-hidden="true"></span>
+                                </div>
+                                <div class="eg-mobile-finance-grid">
+                                    <article>
+                                        <span>Supplies used this month</span>
+                                        <strong>$3,842.19</strong>
+                                        <p>tracked from completed work</p>
+                                    </article>
+                                    <article>
+                                        <span>Employee spend</span>
+                                        <strong>$12,960.00</strong>
+                                        <p>28% of gross revenue</p>
+                                    </article>
                                 </div>
                                 <div class="eg-mobile-branch-grid">
                                     <article>
@@ -187,9 +216,29 @@
                                         <strong>8</strong>
                                         <p>asks ready</p>
                                     </article>
+                                    <article>
+                                        <span>Supplies</span>
+                                        <strong>42</strong>
+                                        <p>items logged</p>
+                                    </article>
+                                    <article>
+                                        <span>Employees</span>
+                                        <strong>28%</strong>
+                                        <p>labor ratio</p>
+                                    </article>
+                                    <article>
+                                        <span>Invoices</span>
+                                        <strong>$7.8k</strong>
+                                        <p>ready to send</p>
+                                    </article>
+                                    <article>
+                                        <span>Follow-ups</span>
+                                        <strong>13</strong>
+                                        <p>next best calls</p>
+                                    </article>
                                 </div>
                                 <div class="eg-mobile-branches">
-                                    <span>✦</span>
+                                    <span class="phone-tree-icon phone-tree-icon--inverted" aria-hidden="true"></span>
                                     <div>
                                         <strong>Branches</strong>
                                         <small>Close analogs of add-on growth surfaces</small>
@@ -222,6 +271,14 @@
                                     <span>Team seats</span>
                                     <strong>6</strong>
                                 </div>
+                                <div class="eg-mobile-setting-row">
+                                    <span>Supplies tracking</span>
+                                    <strong>On</strong>
+                                </div>
+                                <div class="eg-mobile-setting-row">
+                                    <span>Review requests</span>
+                                    <strong>Auto</strong>
+                                </div>
                             </section>
                         </div>
 
@@ -235,7 +292,7 @@
                                 Work
                             </button>
                             <button type="button" data-phone-tab="branches" role="tab" aria-selected="false" aria-controls="eg-phone-branches" tabindex="-1">
-                                <span aria-hidden="true">✦</span>
+                                <span class="phone-tree-icon" aria-hidden="true"></span>
                                 Branches
                             </button>
                             <button type="button" data-phone-tab="account" role="tab" aria-selected="false" aria-controls="eg-phone-account" tabindex="-1">

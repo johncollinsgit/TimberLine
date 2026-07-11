@@ -178,10 +178,27 @@
                                                     <span>Work</span>
                                                     <strong>Today on the board</strong>
                                                 </div>
-                                                <div class="fb-iphone-demo__work-card fb-iphone-demo__work-card--live">
-                                                    <span>In progress</span>
-                                                    <strong>Monroe Ave panel upgrade</strong>
-                                                    <p>Message sent, photos attached, invoice ready.</p>
+                                                <div class="fb-iphone-demo__job-grid">
+                                                    <article class="fb-iphone-demo__work-card fb-iphone-demo__work-card--live">
+                                                        <span>In process</span>
+                                                        <strong>Monroe Ave panel upgrade</strong>
+                                                        <p>$6,840 scheduled today</p>
+                                                    </article>
+                                                    <article class="fb-iphone-demo__work-card">
+                                                        <span>Quoting</span>
+                                                        <strong>Kitchen lighting package</strong>
+                                                        <p>$4,200 waiting on approval</p>
+                                                    </article>
+                                                    <article class="fb-iphone-demo__work-card">
+                                                        <span>Contract signed</span>
+                                                        <strong>Retail maintenance plan</strong>
+                                                        <p>$9,600 monthly service</p>
+                                                    </article>
+                                                    <article class="fb-iphone-demo__work-card">
+                                                        <span>Finished</span>
+                                                        <strong>Breaker replacement</strong>
+                                                        <p>$1,180 invoice ready</p>
+                                                    </article>
                                                 </div>
                                                 <div class="fb-iphone-demo__check-row">
                                                     <span>1</span>
@@ -201,6 +218,18 @@
                                                 <div class="fb-iphone-demo__section-head">
                                                     <span>Branches</span>
                                                     <strong>Ways this workspace grows</strong>
+                                                </div>
+                                                <div class="fb-iphone-demo__finance-grid">
+                                                    <article>
+                                                        <span>Supplies used this month</span>
+                                                        <strong>$3,842.19</strong>
+                                                        <p>tracked from completed work</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Employee spend</span>
+                                                        <strong>$12,960.00</strong>
+                                                        <p>28% of gross revenue</p>
+                                                    </article>
                                                 </div>
                                                 <div class="fb-iphone-demo__branch-grid">
                                                     <article>
@@ -222,6 +251,26 @@
                                                         <span>Follow-ups</span>
                                                         <strong>8</strong>
                                                         <p>need a nudge</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Supplies</span>
+                                                        <strong>42</strong>
+                                                        <p>items logged</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Employees</span>
+                                                        <strong>28%</strong>
+                                                        <p>labor ratio</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Reviews</span>
+                                                        <strong>11</strong>
+                                                        <p>asks ready</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Invoices</span>
+                                                        <strong>$7.8k</strong>
+                                                        <p>ready to send</p>
                                                     </article>
                                                 </div>
                                             </section>
@@ -248,6 +297,14 @@
                                                     <span>Team access</span>
                                                     <strong>6 users</strong>
                                                 </div>
+                                                <div class="fb-iphone-demo__setting-row">
+                                                    <span>Supplies tracking</span>
+                                                    <strong>On</strong>
+                                                </div>
+                                                <div class="fb-iphone-demo__setting-row">
+                                                    <span>Review requests</span>
+                                                    <strong>Auto</strong>
+                                                </div>
                                             </section>
                                         </div>
 
@@ -261,7 +318,7 @@
                                                 Work
                                             </button>
                                             <button type="button" data-phone-tab="branches" role="tab" aria-selected="false" aria-controls="fb-phone-branches" tabindex="-1">
-                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">✦</span>
+                                                <span class="phone-tree-icon" aria-hidden="true"></span>
                                                 Branches
                                             </button>
                                             <button type="button" data-phone-tab="account" role="tab" aria-selected="false" aria-controls="fb-phone-account" tabindex="-1">
@@ -376,12 +433,17 @@
                                                 <p>We are small business owners too. Ten apps, ten billings, ten logins, and somehow the one thing you need is still hiding.</p>
                                             </div>
                                             <div class="fb-product-demo__story-picture fb-product-demo__story-picture--apps" aria-hidden="true">
-                                                <span>Shopify</span>
-                                                <span>Gmail</span>
-                                                <span>QuickBooks</span>
-                                                <span>Instagram</span>
-                                                <span>Calendar</span>
-                                                <span>Phone</span>
+                                                <div class="fb-story-app-stack">
+                                                    <article><span>Shopify</span><strong>Order #1842</strong><small>Needs install date</small></article>
+                                                    <article><span>Gmail</span><strong>4 customer replies</strong><small>Scattered inbox</small></article>
+                                                    <article><span>QuickBooks</span><strong>$7,840 open</strong><small>Invoices pending</small></article>
+                                                    <article><span>Calendar</span><strong>3 job windows</strong><small>No notes attached</small></article>
+                                                </div>
+                                                <div class="fb-story-command-card">
+                                                    <span>What Everbranch gathers</span>
+                                                    <strong>Customer, job, money, message</strong>
+                                                    <p>One clean view for the next decision.</p>
+                                                </div>
                                             </div>
                                         </article>
                                         <article class="fb-product-demo__story-slide" data-demo-story-slide="1" hidden>
@@ -391,9 +453,28 @@
                                                 <p>Not by forcing you into another generic tool. Everbranch custom makes the workspace around how your business actually runs.</p>
                                             </div>
                                             <div class="fb-product-demo__story-picture fb-product-demo__story-picture--build" aria-hidden="true">
-                                                <span>Messy</span>
-                                                <span>Custom fit</span>
-                                                <span>Simple</span>
+                                                <div class="fb-story-build-flow">
+                                                    <article>
+                                                        <span>Input</span>
+                                                        <strong>Real workflow notes</strong>
+                                                        <p>Calls, quotes, supplies, crew handoffs.</p>
+                                                    </article>
+                                                    <div class="fb-story-build-map">
+                                                        <span>Custom workspace</span>
+                                                        <strong>Apex Electrical</strong>
+                                                        <div>
+                                                            <small>Jobs</small>
+                                                            <small>Customers</small>
+                                                            <small>Materials</small>
+                                                            <small>Team</small>
+                                                        </div>
+                                                    </div>
+                                                    <article>
+                                                        <span>Output</span>
+                                                        <strong>Simple daily board</strong>
+                                                        <p>What to quote, finish, collect, and follow up.</p>
+                                                    </article>
+                                                </div>
                                             </div>
                                         </article>
                                         <article class="fb-product-demo__story-slide" data-demo-story-slide="2" hidden>
@@ -403,13 +484,16 @@
                                                 <p>Invoicing, supplies, customers, employees, and messaging live together so your next move is easier to see.</p>
                                             </div>
                                             <div class="fb-product-demo__story-picture fb-product-demo__story-picture--branches" aria-hidden="true">
-                                                <span>Invoicing</span>
-                                                <span>Supplies</span>
-                                                <span>Customers</span>
-                                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                                <span>Employees</span>
-                                                <span>Messaging</span>
-                                                <span>Files</span>
+                                                <div class="fb-story-branch-board">
+                                                    <div class="fb-story-branch-brand">
+                                                        <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
+                                                        <strong>Branch board</strong>
+                                                    </div>
+                                                    <article><span>Revenue</span><strong>$18,640</strong><small>last 30 days</small></article>
+                                                    <article><span>Supplies</span><strong>$3,842.19</strong><small>used this month</small></article>
+                                                    <article><span>Employees</span><strong>28%</strong><small>of gross revenue</small></article>
+                                                    <article><span>Reviews</span><strong>11</strong><small>asks ready</small></article>
+                                                </div>
                                             </div>
                                         </article>
                                         <article class="fb-product-demo__story-slide" data-demo-story-slide="3" hidden>
@@ -419,9 +503,22 @@
                                                 <p>Do not be another lost business owner hopping from subscription to subscription. Let us design the system around you.</p>
                                             </div>
                                             <div class="fb-product-demo__story-picture fb-product-demo__story-picture--fit" aria-hidden="true">
-                                                <span>Generic app</span>
-                                                <span>Wrong fit</span>
-                                                <strong>Everbranch fit</strong>
+                                                <div class="fb-story-fit-board">
+                                                    <article>
+                                                        <span>Generic app</span>
+                                                        <strong>Work squeezed into someone else's labels</strong>
+                                                        <small>Tasks without job value</small>
+                                                        <small>Customers without context</small>
+                                                        <small>Reports nobody opens</small>
+                                                    </article>
+                                                    <article>
+                                                        <span>Everbranch fit</span>
+                                                        <strong>Built around how the shop runs</strong>
+                                                        <small>Quote value beside status</small>
+                                                        <small>Materials tied to jobs</small>
+                                                        <small>Follow-ups ready after work</small>
+                                                    </article>
+                                                </div>
                                             </div>
                                         </article>
                                         <article class="fb-product-demo__story-slide" data-demo-story-slide="4" hidden>
@@ -431,8 +528,23 @@
                                                 <p>Use the dashboard at your desk, then keep the same customers, jobs, notes, and next steps in your pocket.</p>
                                             </div>
                                             <div class="fb-product-demo__story-picture fb-product-demo__story-picture--devices" aria-hidden="true">
-                                                <span>Desktop</span>
-                                                <span>Phone</span>
+                                                <div class="fb-story-device-desktop">
+                                                    <div class="fb-story-window-bar"><span></span><span></span><span></span></div>
+                                                    <strong>Dashboard</strong>
+                                                    <div class="fb-story-device-grid">
+                                                        <span>Jobs $18.6k</span>
+                                                        <span>Quotes 7</span>
+                                                        <span>Supplies $3.8k</span>
+                                                        <span>Messages 9</span>
+                                                    </div>
+                                                </div>
+                                                <div class="fb-story-device-phone">
+                                                    <span></span>
+                                                    <strong>Today</strong>
+                                                    <small>Panel upgrade</small>
+                                                    <small>Customer messaged</small>
+                                                    <small>Invoice ready</small>
+                                                </div>
                                             </div>
                                         </article>
                                         <article class="fb-product-demo__story-slide" data-demo-story-slide="5" hidden>
@@ -442,14 +554,14 @@
                                                 <p>Website, app, sales conversations, billing, customers, jobs, files, employees, and more can all become part of one Everbranch home.</p>
                                             </div>
                                             <div class="fb-product-demo__story-picture fb-product-demo__story-picture--modules" aria-hidden="true">
-                                                <span>Website</span>
-                                                <span>App</span>
-                                                <span>Sales</span>
-                                                <span>Billing</span>
-                                                <span>Customers</span>
-                                                <span>Jobs</span>
-                                                <span>Files</span>
-                                                <span>Team</span>
+                                                <article><span>Website</span><strong>Lead capture</strong></article>
+                                                <article><span>App</span><strong>Customer view</strong></article>
+                                                <article><span>Sales</span><strong>Quote follow-up</strong></article>
+                                                <article><span>Billing</span><strong>Invoice queue</strong></article>
+                                                <article><span>Customers</span><strong>History</strong></article>
+                                                <article><span>Jobs</span><strong>Status board</strong></article>
+                                                <article><span>Files</span><strong>Photos and docs</strong></article>
+                                                <article><span>Team</span><strong>Assignments</strong></article>
                                             </div>
                                         </article>
                                     </div>
@@ -557,21 +669,158 @@
                                         </section>
                                     </div>
                                         </div>
-                                        <aside class="fb-product-demo__phone" aria-label="Everbranch mobile app preview">
-                                            <div class="fb-product-demo__phone-top">
-                                                <span></span>
-                                            </div>
-                                            <div class="fb-product-demo__phone-app">
-                                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                                <strong>{{ $productName }}</strong>
-                                            </div>
-                                            <div class="fb-product-demo__phone-screen">
-                                                <p data-product-demo-mobile-line="0">Retail dashboard</p>
-                                                <h4 data-product-demo-mobile-line="1">6 follow-ups due</h4>
-                                                <ul>
-                                                    <li data-product-demo-mobile-line="2">Wholesale request ready</li>
-                                                    <li data-product-demo-mobile-line="3">Inventory question flagged</li>
-                                                </ul>
+                                        <aside class="fb-product-demo__solution-phone-stage" aria-label="Everbranch mobile app preview">
+                                            <div class="fb-iphone-demo" data-public-phone-demo data-active-phone-tab="home" aria-label="Everbranch mobile app preview">
+                                                <div class="fb-iphone-demo__top">
+                                                    <span>9:41</span>
+                                                    <span></span>
+                                                    <span>5G</span>
+                                                </div>
+                                                <div class="fb-iphone-demo__screen">
+                                                    <div class="fb-iphone-demo__brand">
+                                                        <span class="fb-iphone-demo__menu">≡</span>
+                                                        <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
+                                                        <span class="fb-iphone-demo__avatar">JC</span>
+                                                    </div>
+
+                                                    <div class="fb-iphone-demo__panels">
+                                                        <section id="solution-phone-home" class="fb-iphone-demo__panel is-active" data-phone-panel="home" role="tabpanel" aria-label="Everbranch home preview">
+                                                            <section class="fb-iphone-demo__metric fb-iphone-demo__metric--marketing">
+                                                                <span>Marketing lift</span>
+                                                                <strong>$4,280</strong>
+                                                                <p>made from Everbranch marketing this month</p>
+                                                            </section>
+
+                                                            <section class="fb-iphone-demo__metric fb-iphone-demo__metric--jobs">
+                                                                <span>Completed work</span>
+                                                                <strong>$18,640</strong>
+                                                                <p>jobs completed in the last 30 days</p>
+                                                            </section>
+
+                                                            <section class="fb-iphone-demo__workflow" aria-label="Everbranch job completion workflow">
+                                                                <div class="fb-iphone-demo__message">
+                                                                    <span>Message customer</span>
+                                                                    <p>Hi Maya, your panel upgrade is wrapped up. Invoice and photos are in your portal.</p>
+                                                                </div>
+                                                                <div class="fb-iphone-demo__job">
+                                                                    <span>Job</span>
+                                                                    <strong>Monroe Ave Service Call</strong>
+                                                                    <small>Ready to complete</small>
+                                                                </div>
+                                                                <div class="fb-iphone-demo__complete" aria-label="Job complete">
+                                                                    <span>✓</span>
+                                                                    <strong>Job complete</strong>
+                                                                </div>
+                                                            </section>
+                                                        </section>
+
+                                                        <section id="solution-phone-work" class="fb-iphone-demo__panel" data-phone-panel="work" role="tabpanel" aria-label="Everbranch work preview" hidden>
+                                                            <div class="fb-iphone-demo__section-head">
+                                                                <span>Work</span>
+                                                                <strong>Today on the board</strong>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__job-grid">
+                                                                <article class="fb-iphone-demo__work-card fb-iphone-demo__work-card--live">
+                                                                    <span>In process</span>
+                                                                    <strong>Monroe Ave panel upgrade</strong>
+                                                                    <p>$6,840 scheduled today</p>
+                                                                </article>
+                                                                <article class="fb-iphone-demo__work-card">
+                                                                    <span>Quoting</span>
+                                                                    <strong>Kitchen lighting package</strong>
+                                                                    <p>$4,200 waiting on approval</p>
+                                                                </article>
+                                                                <article class="fb-iphone-demo__work-card">
+                                                                    <span>Contract signed</span>
+                                                                    <strong>Retail maintenance plan</strong>
+                                                                    <p>$9,600 monthly service</p>
+                                                                </article>
+                                                                <article class="fb-iphone-demo__work-card">
+                                                                    <span>Finished</span>
+                                                                    <strong>Breaker replacement</strong>
+                                                                    <p>$1,180 invoice ready</p>
+                                                                </article>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__check-row">
+                                                                <span>1</span>
+                                                                <p>Customer update delivered</p>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__check-row">
+                                                                <span>2</span>
+                                                                <p>Job marked complete</p>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__complete fb-iphone-demo__complete--panel">
+                                                                <span>✓</span>
+                                                                <strong>Green check, done</strong>
+                                                            </div>
+                                                        </section>
+
+                                                        <section id="solution-phone-branches" class="fb-iphone-demo__panel" data-phone-panel="branches" role="tabpanel" aria-label="Everbranch branches preview" hidden>
+                                                            <div class="fb-iphone-demo__section-head">
+                                                                <span>Branches</span>
+                                                                <strong>Ways this workspace grows</strong>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__finance-grid">
+                                                                <article>
+                                                                    <span>Supplies used this month</span>
+                                                                    <strong>$3,842.19</strong>
+                                                                    <p>tracked from completed work</p>
+                                                                </article>
+                                                                <article>
+                                                                    <span>Employee spend</span>
+                                                                    <strong>$12,960.00</strong>
+                                                                    <p>28% of gross revenue</p>
+                                                                </article>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__branch-grid">
+                                                                <article><span>Rewards</span><strong>1,250 pts</strong><p>loyalty ready</p></article>
+                                                                <article><span>Birthday</span><strong>24</strong><p>offers queued</p></article>
+                                                                <article><span>Marketing</span><strong>3</strong><p>campaign ideas</p></article>
+                                                                <article><span>Follow-ups</span><strong>8</strong><p>need a nudge</p></article>
+                                                                <article><span>Supplies</span><strong>42</strong><p>items logged</p></article>
+                                                                <article><span>Employees</span><strong>28%</strong><p>labor ratio</p></article>
+                                                                <article><span>Reviews</span><strong>11</strong><p>asks ready</p></article>
+                                                                <article><span>Invoices</span><strong>$7.8k</strong><p>ready to send</p></article>
+                                                            </div>
+                                                        </section>
+
+                                                        <section id="solution-phone-account" class="fb-iphone-demo__panel" data-phone-panel="account" role="tabpanel" aria-label="Everbranch account preview" hidden>
+                                                            <div class="fb-iphone-demo__section-head">
+                                                                <span>Account</span>
+                                                                <strong>Apex Electrical</strong>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__account-card">
+                                                                <span>Plan</span>
+                                                                <strong>Launch Partner</strong>
+                                                                <p>Starter tools live, growth features ready when you are.</p>
+                                                            </div>
+                                                            <div class="fb-iphone-demo__setting-row"><span>Birthday rewards</span><strong>On</strong></div>
+                                                            <div class="fb-iphone-demo__setting-row"><span>Job-complete messages</span><strong>On</strong></div>
+                                                            <div class="fb-iphone-demo__setting-row"><span>Team access</span><strong>6 users</strong></div>
+                                                            <div class="fb-iphone-demo__setting-row"><span>Supplies tracking</span><strong>On</strong></div>
+                                                            <div class="fb-iphone-demo__setting-row"><span>Review requests</span><strong>Auto</strong></div>
+                                                        </section>
+                                                    </div>
+
+                                                    <div class="fb-iphone-demo__tabs" role="tablist" aria-label="Everbranch phone preview tabs">
+                                                        <button type="button" class="is-active" data-phone-tab="home" role="tab" aria-selected="true" aria-controls="solution-phone-home">
+                                                            <span class="fb-iphone-demo__tab-icon" aria-hidden="true">⌂</span>
+                                                            Home
+                                                        </button>
+                                                        <button type="button" data-phone-tab="work" role="tab" aria-selected="false" aria-controls="solution-phone-work" tabindex="-1">
+                                                            <span class="fb-iphone-demo__tab-icon" aria-hidden="true">▤</span>
+                                                            Work
+                                                        </button>
+                                                        <button type="button" data-phone-tab="branches" role="tab" aria-selected="false" aria-controls="solution-phone-branches" tabindex="-1">
+                                                            <span class="phone-tree-icon" aria-hidden="true"></span>
+                                                            Branches
+                                                        </button>
+                                                        <button type="button" data-phone-tab="account" role="tab" aria-selected="false" aria-controls="solution-phone-account" tabindex="-1">
+                                                            <span class="fb-iphone-demo__tab-icon" aria-hidden="true">◎</span>
+                                                            Account
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </aside>
                                     </div>
