@@ -129,7 +129,7 @@
                             </div>
 
                             <div class="fb-product-hero__visual" data-depth="12" data-reveal>
-                                <div class="fb-iphone-demo" aria-label="Everbranch mobile app preview">
+                                <div class="fb-iphone-demo" data-public-phone-demo data-active-phone-tab="home" aria-label="Everbranch mobile app preview">
                                     <div class="fb-iphone-demo__top">
                                         <span>9:41</span>
                                         <span></span>
@@ -142,39 +142,132 @@
                                             <span class="fb-iphone-demo__avatar">JC</span>
                                         </div>
 
-                                        <section class="fb-iphone-demo__metric fb-iphone-demo__metric--marketing">
-                                            <span>Marketing lift</span>
-                                            <strong>$4,280</strong>
-                                            <p>made from Everbranch marketing this month</p>
-                                        </section>
+                                        <div class="fb-iphone-demo__panels">
+                                            <section id="fb-phone-home" class="fb-iphone-demo__panel is-active" data-phone-panel="home" role="tabpanel" aria-label="Everbranch home preview">
+                                                <section class="fb-iphone-demo__metric fb-iphone-demo__metric--marketing">
+                                                    <span>Marketing lift</span>
+                                                    <strong>$4,280</strong>
+                                                    <p>made from Everbranch marketing this month</p>
+                                                </section>
 
-                                        <section class="fb-iphone-demo__metric fb-iphone-demo__metric--jobs">
-                                            <span>Completed work</span>
-                                            <strong>$18,640</strong>
-                                            <p>jobs completed in the last 30 days</p>
-                                        </section>
+                                                <section class="fb-iphone-demo__metric fb-iphone-demo__metric--jobs">
+                                                    <span>Completed work</span>
+                                                    <strong>$18,640</strong>
+                                                    <p>jobs completed in the last 30 days</p>
+                                                </section>
 
-                                        <section class="fb-iphone-demo__workflow" aria-label="Everbranch job completion workflow">
-                                            <div class="fb-iphone-demo__message">
-                                                <span>Message customer</span>
-                                                <p>Hi Maya, your panel upgrade is wrapped up. Invoice and photos are in your portal.</p>
-                                            </div>
-                                            <div class="fb-iphone-demo__job">
-                                                <span>Job</span>
-                                                <strong>Monroe Ave Service Call</strong>
-                                                <small>Ready to complete</small>
-                                            </div>
-                                            <div class="fb-iphone-demo__complete" aria-label="Job complete">
-                                                <span>✓</span>
-                                                <strong>Job complete</strong>
-                                            </div>
-                                        </section>
+                                                <section class="fb-iphone-demo__workflow" aria-label="Everbranch job completion workflow">
+                                                    <div class="fb-iphone-demo__message">
+                                                        <span>Message customer</span>
+                                                        <p>Hi Maya, your panel upgrade is wrapped up. Invoice and photos are in your portal.</p>
+                                                    </div>
+                                                    <div class="fb-iphone-demo__job">
+                                                        <span>Job</span>
+                                                        <strong>Monroe Ave Service Call</strong>
+                                                        <small>Ready to complete</small>
+                                                    </div>
+                                                    <div class="fb-iphone-demo__complete" aria-label="Job complete">
+                                                        <span>✓</span>
+                                                        <strong>Job complete</strong>
+                                                    </div>
+                                                </section>
+                                            </section>
 
-                                        <div class="fb-iphone-demo__tabs" aria-hidden="true">
-                                            <span class="is-active">Home</span>
-                                            <span>Work</span>
-                                            <span>Branches</span>
-                                            <span>Account</span>
+                                            <section id="fb-phone-work" class="fb-iphone-demo__panel" data-phone-panel="work" role="tabpanel" aria-label="Everbranch work preview" hidden>
+                                                <div class="fb-iphone-demo__section-head">
+                                                    <span>Work</span>
+                                                    <strong>Today on the board</strong>
+                                                </div>
+                                                <div class="fb-iphone-demo__work-card fb-iphone-demo__work-card--live">
+                                                    <span>In progress</span>
+                                                    <strong>Monroe Ave panel upgrade</strong>
+                                                    <p>Message sent, photos attached, invoice ready.</p>
+                                                </div>
+                                                <div class="fb-iphone-demo__check-row">
+                                                    <span>1</span>
+                                                    <p>Customer update delivered</p>
+                                                </div>
+                                                <div class="fb-iphone-demo__check-row">
+                                                    <span>2</span>
+                                                    <p>Job marked complete</p>
+                                                </div>
+                                                <div class="fb-iphone-demo__complete fb-iphone-demo__complete--panel">
+                                                    <span>✓</span>
+                                                    <strong>Green check, done</strong>
+                                                </div>
+                                            </section>
+
+                                            <section id="fb-phone-branches" class="fb-iphone-demo__panel" data-phone-panel="branches" role="tabpanel" aria-label="Everbranch branches preview" hidden>
+                                                <div class="fb-iphone-demo__section-head">
+                                                    <span>Branches</span>
+                                                    <strong>Ways this workspace grows</strong>
+                                                </div>
+                                                <div class="fb-iphone-demo__branch-grid">
+                                                    <article>
+                                                        <span>Rewards</span>
+                                                        <strong>1,250 pts</strong>
+                                                        <p>loyalty ready</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Birthday</span>
+                                                        <strong>24</strong>
+                                                        <p>offers queued</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Marketing</span>
+                                                        <strong>3</strong>
+                                                        <p>campaign ideas</p>
+                                                    </article>
+                                                    <article>
+                                                        <span>Follow-ups</span>
+                                                        <strong>8</strong>
+                                                        <p>need a nudge</p>
+                                                    </article>
+                                                </div>
+                                            </section>
+
+                                            <section id="fb-phone-account" class="fb-iphone-demo__panel" data-phone-panel="account" role="tabpanel" aria-label="Everbranch account preview" hidden>
+                                                <div class="fb-iphone-demo__section-head">
+                                                    <span>Account</span>
+                                                    <strong>Apex Electrical</strong>
+                                                </div>
+                                                <div class="fb-iphone-demo__account-card">
+                                                    <span>Plan</span>
+                                                    <strong>Launch Partner</strong>
+                                                    <p>Starter tools live, growth features ready when you are.</p>
+                                                </div>
+                                                <div class="fb-iphone-demo__setting-row">
+                                                    <span>Birthday rewards</span>
+                                                    <strong>On</strong>
+                                                </div>
+                                                <div class="fb-iphone-demo__setting-row">
+                                                    <span>Job-complete messages</span>
+                                                    <strong>On</strong>
+                                                </div>
+                                                <div class="fb-iphone-demo__setting-row">
+                                                    <span>Team access</span>
+                                                    <strong>6 users</strong>
+                                                </div>
+                                            </section>
+                                        </div>
+
+                                        <div class="fb-iphone-demo__tabs" role="tablist" aria-label="Everbranch phone preview tabs">
+                                            <button type="button" class="is-active" data-phone-tab="home" role="tab" aria-selected="true" aria-controls="fb-phone-home">
+                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">⌂</span>
+                                                Home
+                                            </button>
+                                            <button type="button" data-phone-tab="work" role="tab" aria-selected="false" aria-controls="fb-phone-work" tabindex="-1">
+                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">▤</span>
+                                                Work
+                                            </button>
+                                            <button type="button" data-phone-tab="branches" role="tab" aria-selected="false" aria-controls="fb-phone-branches" tabindex="-1">
+                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">✦</span>
+                                                Branches
+                                            </button>
+                                            <button type="button" data-phone-tab="account" role="tab" aria-selected="false" aria-controls="fb-phone-account" tabindex="-1">
+                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">◎</span>
+                                                Account
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
