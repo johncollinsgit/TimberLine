@@ -199,7 +199,7 @@ test('modern forestry app feedback seed localizes tickets to the client project 
         ->where('title', 'Modern Forestry App Request Board')
         ->firstOrFail();
 
-    expect(ClientProjectTicket::query()->where('client_project_id', $project->id)->count())->toBe(15)
+    expect(ClientProjectTicket::query()->where('client_project_id', $project->id)->count())->toBe(16)
         ->and(ClientProjectTicket::query()
             ->where('client_project_id', $project->id)
             ->where('title', 'QA: confirm Google appears beside Facebook on the live sign-in sheet')
