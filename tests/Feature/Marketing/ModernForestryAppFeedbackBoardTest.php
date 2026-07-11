@@ -69,7 +69,7 @@ test('modern forestry app feedback board accepts add only storefront submissions
     expect($ticket->status)->toBe('new')
         ->and($ticket->customer_visible)->toBeTrue()
         ->and($ticket->metadata['source'] ?? null)->toBe('modern_forestry_public_feedback_board')
-        ->and(ClientProjectTicket::query()->where('client_project_id', $project->id)->count())->toBe(16);
+        ->and(ClientProjectTicket::query()->where('client_project_id', $project->id)->count())->toBe(17);
 });
 
 test('modern forestry app feedback tickets are clickable and accept anonymous votes and comments', function (): void {

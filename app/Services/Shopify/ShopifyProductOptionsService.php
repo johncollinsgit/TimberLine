@@ -92,6 +92,16 @@ class ShopifyProductOptionsService
         });
     }
 
+    public function deleteRuleset(ShopifyProductOptionRuleset $ruleset, int $tenantId): void
+    {
+        abort_unless((int) $ruleset->tenant_id === $tenantId, 404);
+
+        DB::transaction(function () use ($ruleset): void {
+            $ruleset->assignments()->delete();
+            $ruleset->delete();
+        });
+    }
+
     /**
      * @return array<string,mixed>|null
      */

@@ -78,6 +78,37 @@ test('shopify product options updates product urls and scent values into normali
         ->and($payload['assignments'][0]['product_handle'])->toBe('three-room-sprays-for-30');
 });
 
+test('shopify product options can unassign products and delete their option set', function () {
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    $service = app(ShopifyProductOptionsService::class);
+    $created = $service->createRuleset((int) $tenant->id, [
+        'name' => 'Temporary Bundle',
+        'option_count' => 2,
+        'allowed_values' => ['Lavender'],
+        'product_handles' => ['first-bundle', 'second-bundle'],
+        'require_distinct_values' => false,
+        'enabled' => true,
+    ]);
+
+    $ruleset = ShopifyProductOptionRuleset::query()->findOrFail($created['id']);
+    $updated = $service->updateRuleset($ruleset, (int) $tenant->id, [
+        'name' => 'Temporary Bundle',
+        'option_count' => 2,
+        'allowed_values' => ['Lavender'],
+        'product_handles' => ['second-bundle'],
+        'require_distinct_values' => false,
+        'enabled' => true,
+    ]);
+
+    expect($updated['assignments'])->toHaveCount(1)
+        ->and($updated['assignments'][0]['product_handle'])->toBe('second-bundle');
+
+    $service->deleteRuleset($ruleset->fresh(), (int) $tenant->id);
+
+    $this->assertDatabaseMissing('shopify_product_option_rulesets', ['id' => $created['id']]);
+    $this->assertDatabaseMissing('shopify_product_option_assignments', ['ruleset_id' => $created['id']]);
+});
+
 test('product options is visible as a shopify only embedded module when enabled', function () {
     $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
     grantProductOptionsEntitlement($tenant);
