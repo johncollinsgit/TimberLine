@@ -45,20 +45,22 @@ test('quickbooks oauth connect and callback store tenant connection', function (
         ], 200),
     ]);
 
-    $this->actingAs($user)
+    $callback = $this->actingAs($user)
         ->get(route('integrations.quickbooks.callback', [
             'state' => $state,
             'code' => 'oauth-code',
             'realmId' => '1234567890',
-        ]))
-        ->assertRedirect(route('field-service.index', ['tenant' => $tenant->slug]));
+        ]));
+    $callback->assertRedirect(route('field-service.index', ['tenant' => $tenant->slug]));
 
     $connection = IntegrationConnection::query()
         ->forTenantId($tenant->id)
         ->where('provider', 'quickbooks')
         ->firstOrFail();
 
-    expect($connection->external_account_id)->toBe('1234567890')
+    expect($connection->external_account_id)->not->toBe('1234567890')
+        ->and($connection->external_account_secret)->toBe('1234567890')
+        ->and(data_get($connection->metadata, 'realm_id'))->toBeNull()
         ->and($connection->access_token)->toBe('qbo-access-token')
         ->and((int) $connection->connected_by_user_id)->toBe((int) $user->id);
 });
@@ -68,13 +70,14 @@ test('quickbooks api sync imports collins electric customers jobs items and reco
     IntegrationConnection::query()->create([
         'tenant_id' => $tenant->id,
         'provider' => 'quickbooks',
-        'external_account_id' => '1234567890',
+        'external_account_id' => hash_hmac('sha256', '1234567890', (string) config('app.key')),
+        'external_account_secret' => '1234567890',
         'external_account_label' => 'Collins Upstate Electric QBO',
         'status' => IntegrationConnection::STATUS_CONNECTED,
         'access_token' => 'qbo-access-token',
         'refresh_token' => 'qbo-refresh-token',
         'expires_at' => now()->addHour(),
-        'metadata' => ['realm_id' => '1234567890'],
+        'metadata' => ['source' => 'quickbooks_oauth'],
     ]);
 
     Http::fake(function (Request $request) {
@@ -152,12 +155,13 @@ test('quickbooks api sync dry run does not write imported records', function ():
     IntegrationConnection::query()->create([
         'tenant_id' => $tenant->id,
         'provider' => 'quickbooks',
-        'external_account_id' => '1234567890',
+        'external_account_id' => hash_hmac('sha256', '1234567890', (string) config('app.key')),
+        'external_account_secret' => '1234567890',
         'status' => IntegrationConnection::STATUS_CONNECTED,
         'access_token' => 'qbo-access-token',
         'refresh_token' => 'qbo-refresh-token',
         'expires_at' => now()->addHour(),
-        'metadata' => ['realm_id' => '1234567890'],
+        'metadata' => ['source' => 'quickbooks_oauth'],
     ]);
 
     Http::fake(['https://sandbox-quickbooks.api.intuit.com/*' => Http::response([

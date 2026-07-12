@@ -66,9 +66,13 @@ class QuickBooksConnectionController extends Controller
         $connection = $connector->handleCallback($tenant, $request);
         $connection->forceFill(['connected_by_user_id' => (int) $request->user()->id])->save();
 
-        return redirect()
+        $response = redirect()
             ->route('field-service.index', ['tenant' => $tenant->slug])
             ->with('status', 'QuickBooks connected. Run the guided import when you are ready.');
+
+        $response->setContent('');
+
+        return $response;
     }
 
     protected function authorizeTenantMember(Request $request, Tenant $tenant): void

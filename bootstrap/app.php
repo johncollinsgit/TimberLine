@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         // Runs after the response (terminate), throttled — detects a stopped scheduler cron.
         $middleware->web(append: [
+            \App\Http\Middleware\PreventSensitiveResponseCaching::class,
             \App\Http\Middleware\EvaluateSchedulerHeartbeat::class,
         ]);
         $middleware->validateCsrfTokens(except: [

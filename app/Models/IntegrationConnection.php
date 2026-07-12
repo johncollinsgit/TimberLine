@@ -31,6 +31,7 @@ class IntegrationConnection extends Model
         'tenant_id',
         'provider',
         'external_account_id',
+        'external_account_secret',
         'external_account_label',
         'status',
         'access_token',
@@ -51,6 +52,7 @@ class IntegrationConnection extends Model
         'tenant_id' => 'integer',
         'access_token' => 'encrypted',
         'refresh_token' => 'encrypted',
+        'external_account_secret' => 'encrypted',
         'scopes' => 'array',
         'metadata' => 'array',
         'expires_at' => 'datetime',
@@ -62,6 +64,7 @@ class IntegrationConnection extends Model
     protected $hidden = [
         'access_token',
         'refresh_token',
+        'external_account_secret',
     ];
 
     public function tenant(): BelongsTo

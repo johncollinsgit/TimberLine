@@ -52,7 +52,8 @@ class QuickBooksOnlineClient
 
     public function realmId(): string
     {
-        $realmId = trim((string) data_get($this->connection->metadata, 'realm_id', $this->connection->external_account_id));
+        $realmId = trim((string) ($this->connection->external_account_secret
+            ?: data_get($this->connection->metadata, 'realm_id', $this->connection->external_account_id)));
         abort_if($realmId === '', 422, 'QuickBooks connection is missing a realm/company id.');
 
         return $realmId;

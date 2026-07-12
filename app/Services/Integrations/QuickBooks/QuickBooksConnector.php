@@ -93,21 +93,24 @@ class QuickBooksConnector implements ProviderConnector
     /** @param array<string,mixed> $tokens */
     protected function persistConnection(Tenant $tenant, string $realmId, array $tokens): IntegrationConnection
     {
+        $realmFingerprint = hash_hmac('sha256', $realmId, (string) config('app.key'));
+
         return IntegrationConnection::query()->updateOrCreate(
             [
                 'tenant_id' => (int) $tenant->id,
                 'provider' => $this->key(),
-                'external_account_id' => $realmId,
+                'external_account_id' => $realmFingerprint,
             ],
             [
-                'external_account_label' => 'QuickBooks company '.$realmId,
+                'external_account_secret' => $realmId,
+                'external_account_label' => 'QuickBooks company',
                 'status' => IntegrationConnection::STATUS_CONNECTED,
                 'access_token' => (string) ($tokens['access_token'] ?? ''),
                 'refresh_token' => (string) ($tokens['refresh_token'] ?? ''),
                 'token_type' => (string) ($tokens['token_type'] ?? 'bearer'),
                 'expires_at' => Carbon::now()->addSeconds((int) ($tokens['expires_in'] ?? 3600)),
                 'scopes' => array_values(array_filter(explode(' ', (string) config('services.quickbooks.scopes')))),
-                'metadata' => ['realm_id' => $realmId, 'source' => 'quickbooks_oauth'],
+                'metadata' => ['source' => 'quickbooks_oauth'],
                 'connected_at' => now(),
                 'last_error_code' => null,
                 'last_error_message' => null,
