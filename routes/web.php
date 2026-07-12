@@ -56,6 +56,7 @@ use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
 use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\PublicBudConversationController;
+use App\Http\Controllers\PublicLegalController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
@@ -179,6 +180,9 @@ Route::get('/', function (
 
     return $platformPagesController->promo($experienceService);
 })->name('home');
+
+Route::get('/privacy', [PublicLegalController::class, 'privacy'])->name('legal.privacy');
+Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms');
 
 $landlordHosts = collect((array) config('tenancy.landlord.hosts', []))
     ->map(static fn (mixed $host): ?string => $normalizeHost($host))
