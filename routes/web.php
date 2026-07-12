@@ -183,6 +183,8 @@ Route::get('/', function (
 
 Route::get('/privacy', [PublicLegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms');
+Route::get('/integrations/quickbooks/disconnected', [QuickBooksConnectionController::class, 'disconnected'])
+    ->name('integrations.quickbooks.disconnected');
 
 $landlordHosts = collect((array) config('tenancy.landlord.hosts', []))
     ->map(static fn (mixed $host): ?string => $normalizeHost($host))
@@ -533,6 +535,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
+
+    Route::middleware(['role:admin,manager,marketing_manager'])
+        ->get('/integrations/quickbooks', [QuickBooksConnectionController::class, 'index'])
+        ->name('integrations.quickbooks.index');
 
     Route::middleware(['role:admin,manager,marketing_manager'])
         ->prefix('workspaces/{tenant:slug}/integrations/quickbooks')

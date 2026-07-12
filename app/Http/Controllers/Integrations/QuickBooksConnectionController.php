@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Integrations;
 
 use App\Http\Controllers\Controller;
+use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -12,6 +14,31 @@ use Illuminate\Support\Str;
 
 class QuickBooksConnectionController extends Controller
 {
+    public function index(Request $request): View
+    {
+        $tenants = $request->user()
+            ->tenants()
+            ->orderBy('name')
+            ->get();
+        $connectedTenantIds = IntegrationConnection::query()
+            ->where('provider', 'quickbooks')
+            ->where('status', 'connected')
+            ->whereIn('tenant_id', $tenants->modelKeys())
+            ->pluck('tenant_id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        return view('integrations.quickbooks.index', [
+            'tenants' => $tenants,
+            'connectedTenantIds' => $connectedTenantIds,
+        ]);
+    }
+
+    public function disconnected(): View
+    {
+        return view('integrations.quickbooks.disconnected');
+    }
+
     public function connect(Request $request, Tenant $tenant, QuickBooksConnector $connector): RedirectResponse
     {
         $this->authorizeTenantMember($request, $tenant);

@@ -8814,6 +8814,43 @@ body.eg-public-body--launch[data-premium-motion="public"].has-premium-motion [da
   justify-content: flex-start;
 }
 
+.eg-integration-main {
+  max-width: 960px;
+}
+
+.eg-integration-list {
+  display: grid;
+  gap: 0;
+}
+
+.eg-integration-row {
+  align-items: center;
+  border-bottom: 1px solid rgba(16, 18, 17, 0.12);
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 1.6rem 0;
+}
+
+.eg-integration-row:first-child {
+  border-top: 1px solid rgba(16, 18, 17, 0.12);
+}
+
+.eg-integration-row span {
+  color: #2f6657;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.eg-integration-row h2 {
+  margin: 0.35rem 0;
+}
+
+.eg-integration-row p {
+  margin: 0;
+}
+
 @media (max-width: 640px) {
   .eg-legal-header {
     align-items: flex-start;
@@ -8822,6 +8859,11 @@ body.eg-public-body--launch[data-premium-motion="public"].has-premium-motion [da
 
   .eg-legal-main {
     padding-top: 3rem;
+  }
+
+  .eg-integration-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
   }
 }
 
