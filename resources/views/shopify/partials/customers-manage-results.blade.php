@@ -95,7 +95,7 @@
                     @forelse($customers as $row)
                         @php($detailUrl = $detailUrlFor((int) $row['id']))
                         @php($detailSectionsUrl = $detailSectionsUrlFor((int) $row['id']))
-                        @php($status = is_array($row['status'] ?? null) ? $row['status'] : ['key' => 'standard', 'label' => 'Standard'])
+                        @php($status = is_array($row['status'] ?? null) ? $row['status'] : ['key' => 'ready', 'label' => 'Ready'])
                         <tr
                             class="customers-row--clickable"
                             tabindex="0"
@@ -113,10 +113,11 @@
                                 <a class="customers-name-link" href="{{ $detailUrl }}" data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}" data-customer-prefetch-profile-id="{{ (int) $row['id'] }}">{{ $row['name'] }}</a>
                                 <div class="customers-subtext">{{ $row['email'] }}</div>
                                 <div class="customers-subtext">{{ $row['phone'] }}</div>
+                                <div class="customers-subtext">Source: {{ $row['source_label'] ?? 'Everbranch' }}</div>
                             </td>
                             <td>{{ number_format((int) ($row['orders_count'] ?? 0)) }}</td>
                             <td>{{ number_format((int) $row['candle_cash_balance']) }}</td>
-                            <td>{{ $row['vip_tier'] ?? 'Standard' }}</td>
+                            <td>{{ $row['vip_tier'] ?? 'No tier' }}</td>
                             <td>{{ $row['last_activity_display'] }}</td>
                             <td>
                                 <span class="customers-status customers-status--{{ $status['key'] }}">{{ $status['label'] }}</span>

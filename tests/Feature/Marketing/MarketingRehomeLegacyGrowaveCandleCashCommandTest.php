@@ -69,6 +69,26 @@ test('preview reports deterministic eligible mapping without mutating rows', fun
         ->and(CandleCashBalance::query()->where('marketing_profile_id', $targetProfile->id)->exists())->toBeTrue();
 });
 
+test('preview still finds a legacy rewards profile after the flagship tenant backfill', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    [$oldProfile] = seedLegacyTargetPair($tenant->id, 'retail:faith-backfilled', 'faith-backfilled');
+    $oldProfile->forceFill(['tenant_id' => $tenant->id])->save();
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $oldProfile->id,
+        'type' => 'earn',
+        'candle_cash_delta' => 24,
+        'legacy_points_origin' => true,
+        'legacy_points_value' => 80,
+        'source' => 'growave_activity',
+        'source_id' => 'legacy:faith:1',
+    ]);
+
+    $this->artisan('marketing:rehome-legacy-growave-candle-cash', [
+        '--tenant-id' => $tenant->id,
+        '--store' => 'retail',
+    ])->expectsOutput('eligible_pairs=1')->assertExitCode(0);
+});
+
 test('apply moves candle cash rows onto canonical tenant profile and recomputes balances', function (): void {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',

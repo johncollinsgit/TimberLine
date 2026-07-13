@@ -260,7 +260,7 @@ class LegacyGrowaveCandleCashRehomeService
                 ];
             })
             ->filter(fn (array $row): bool => ($row['old_profile_id'] ?? 0) > 0 && ($row['target_profile_id'] ?? 0) > 0)
-            ->groupBy(fn (array $row): string => $row['old_profile_id'] . ':' . $row['target_profile_id'])
+            ->groupBy(fn (array $row): string => $row['old_profile_id'].':'.$row['target_profile_id'])
             ->map(function (Collection $rows): array {
                 $sourceIds = $rows
                     ->pluck('source_id')
@@ -466,7 +466,7 @@ class LegacyGrowaveCandleCashRehomeService
 
     protected function rawMappingRows(int $tenantId, string $store, ?int $profileId = null): Collection
     {
-        $storePattern = $store . ':%';
+        $storePattern = $store.':%';
 
         return DB::table('marketing_profile_links as old_link')
             ->join('marketing_profiles as old_profile', 'old_profile.id', '=', 'old_link.marketing_profile_id')
@@ -476,7 +476,14 @@ class LegacyGrowaveCandleCashRehomeService
                     ->where('target_link.source_type', 'shopify_customer')
                     ->where('target_link.tenant_id', $tenantId);
             })
-            ->whereNull('old_profile.tenant_id')
+            // July 2026 backfilled legacy profiles to the flagship tenant, but
+            // intentionally left their legacy source links unscoped. The null
+            // link plus legacy ledger provenance is the durable legacy marker.
+            ->where(function ($profiles) use ($tenantId): void {
+                $profiles->whereNull('old_profile.tenant_id')
+                    ->orWhere('old_profile.tenant_id', $tenantId);
+            })
+            ->whereColumn('old_profile.id', '!=', 'target_link.marketing_profile_id')
             ->where('old_link.source_type', 'shopify_customer')
             ->whereNull('old_link.tenant_id')
             ->where('old_link.source_id', 'like', $storePattern)

@@ -109,6 +109,7 @@ class CustomerMergeService
 
             $this->applySelectedFields($survivor, $profiles, (array) data_get($locked->field_choices, 'sources', []));
             $conflicts = $this->moveConflictReferences($donors, $survivor, (int) $locked->tenant_id);
+            $conflicts = array_merge($conflicts, $this->mergeBirthdayProfiles($donors, $survivor, (int) $locked->tenant_id));
             $this->moveDirectReferences($donors, $survivor, (int) $locked->tenant_id);
             $conflicts = array_merge($conflicts, $this->mergeCandleCash($locked, $donors, $survivor, (array) $locked->reward_resolution));
             $this->reassignShopifyOrders($locked, $keptShopifyGid, $deletedShopifyGid);
@@ -213,6 +214,9 @@ class CustomerMergeService
     {
         $resolutions = [];
         foreach ($this->registry->conflictReferences() as $table => $policy) {
+            if ($table === 'customer_birthday_profiles') {
+                continue;
+            }
             if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $policy['column'])) {
                 continue;
             }
@@ -225,6 +229,26 @@ class CustomerMergeService
                     }
                     $existingRow = $existing->first();
                     if ($existingRow) {
+                        if ($table === 'marketing_profile_links') {
+                            $updates = ['tenant_id' => $tenantId];
+                            if (Schema::hasColumn($table, 'source_meta')) {
+                                $updates['source_meta'] = json_encode(array_merge(
+                                    $this->jsonMap($row->source_meta ?? null),
+                                    $this->jsonMap($existingRow->source_meta ?? null)
+                                ));
+                            }
+                            if (Schema::hasColumn($table, 'confidence')) {
+                                $updates['confidence'] = max((float) ($existingRow->confidence ?? 0), (float) ($row->confidence ?? 0));
+                            }
+                            if (Schema::hasColumn($table, 'updated_at')) {
+                                $updates['updated_at'] = now();
+                            }
+                            DB::table($table)->where('id', $existingRow->id)->update($updates);
+                            DB::table($table)->where('id', $row->id)->delete();
+                            $resolutions[] = ['table' => $table, 'row_id' => $row->id, 'action' => 'deduplicated_and_merged_metadata', 'donor_profile_id' => $donor->id];
+
+                            continue;
+                        }
                         if ($this->completenessScore($row, $policy['column']) > $this->completenessScore($existingRow, $policy['column'])) {
                             DB::table($table)->where('id', $existingRow->id)->delete();
                             $resolutions[] = ['table' => $table, 'row_id' => $existingRow->id, 'action' => 'replaced_with_more_complete_donor', 'donor_profile_id' => $donor->id];
@@ -242,6 +266,94 @@ class CustomerMergeService
                     DB::table($table)->where('id', $row->id)->update($updates);
                 }
             }
+        }
+
+        return $resolutions;
+    }
+
+    /** @return array<string,mixed> */
+    private function jsonMap(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function mergeBirthdayProfiles(EloquentCollection $donors, MarketingProfile $survivor, int $tenantId): array
+    {
+        if (! Schema::hasTable('customer_birthday_profiles')) {
+            return [];
+        }
+
+        $profileIds = $donors->pluck('id')->push($survivor->id);
+        $rows = DB::table('customer_birthday_profiles')
+            ->whereIn('marketing_profile_id', $profileIds)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->get();
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $survivorRow = $rows->firstWhere('marketing_profile_id', $survivor->id);
+        $best = $rows->sortByDesc(fn (object $row): int => $this->completenessScore($row, 'marketing_profile_id'))->first();
+        $resolutions = [];
+
+        if ($survivorRow) {
+            if ((int) $best->id !== (int) $survivorRow->id) {
+                $updates = collect((array) $best)
+                    ->except(['id', 'marketing_profile_id', 'tenant_id', 'created_at', 'updated_at'])
+                    ->all();
+                if (Schema::hasColumn('customer_birthday_profiles', 'tenant_id')) {
+                    $updates['tenant_id'] = $tenantId;
+                }
+                $updates['updated_at'] = now();
+                DB::table('customer_birthday_profiles')->where('id', $survivorRow->id)->update($updates);
+                $resolutions[] = [
+                    'table' => 'customer_birthday_profiles',
+                    'row_id' => (int) $survivorRow->id,
+                    'action' => 'kept_more_complete_birthday_data',
+                    'donor_profile_id' => (int) $best->marketing_profile_id,
+                ];
+            }
+            $canonicalBirthdayId = (int) $survivorRow->id;
+        } else {
+            $canonicalBirthdayId = (int) $best->id;
+            $updates = ['marketing_profile_id' => $survivor->id, 'updated_at' => now()];
+            if (Schema::hasColumn('customer_birthday_profiles', 'tenant_id')) {
+                $updates['tenant_id'] = $tenantId;
+            }
+            DB::table('customer_birthday_profiles')->where('id', $canonicalBirthdayId)->update($updates);
+            $resolutions[] = [
+                'table' => 'customer_birthday_profiles',
+                'row_id' => $canonicalBirthdayId,
+                'action' => 'moved_to_survivor',
+                'donor_profile_id' => (int) $best->marketing_profile_id,
+            ];
+        }
+
+        foreach ($rows->where('id', '!=', $canonicalBirthdayId) as $row) {
+            foreach (['customer_birthday_audits', 'birthday_reward_issuances', 'birthday_message_events'] as $childTable) {
+                if (Schema::hasTable($childTable) && Schema::hasColumn($childTable, 'customer_birthday_profile_id')) {
+                    DB::table($childTable)
+                        ->where('customer_birthday_profile_id', $row->id)
+                        ->update(['customer_birthday_profile_id' => $canonicalBirthdayId]);
+                }
+            }
+            DB::table('customer_birthday_profiles')->where('id', $row->id)->delete();
+            $resolutions[] = [
+                'table' => 'customer_birthday_profiles',
+                'row_id' => (int) $row->id,
+                'action' => 'deduplicated_without_losing_history',
+                'donor_profile_id' => (int) $row->marketing_profile_id,
+            ];
         }
 
         return $resolutions;
@@ -391,6 +503,7 @@ class CustomerMergeService
         return [
             'profiles' => $profiles->map(fn (MarketingProfile $profile): array => $this->profileSnapshot($profile))->all(),
             'store_key' => $storeKey,
+            'billing_impact' => 'none',
             'captured_at' => now()->toIso8601String(),
         ];
     }

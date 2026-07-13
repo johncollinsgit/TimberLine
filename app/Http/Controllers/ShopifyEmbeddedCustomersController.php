@@ -6,6 +6,7 @@ use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\CanonicalMarketingProfileResolver;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\ModernForestryScentAudienceActivationService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
@@ -261,6 +262,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         ShopifyEmbeddedCustomerDetailService $detailService,
         ShopifyEmbeddedCustomerActionUrlGenerator $actionUrlGenerator,
         TenantResolver $tenantResolver,
+        CanonicalMarketingProfileResolver $canonicalProfiles,
         MarketingProfile $marketingProfile
     ): Response {
         $probe = $this->embeddedProbe($request);
@@ -273,8 +275,8 @@ class ShopifyEmbeddedCustomersController extends Controller
         $probe->forTenant($tenantId);
 
         if ($authorized && $marketingProfile->merged_at && $marketingProfile->merged_into_profile_id) {
-            $survivor = $marketingProfile->mergedInto()->first();
-            abort_unless($survivor && (int) $survivor->tenant_id === (int) $tenantId, 404);
+            $survivor = $canonicalProfiles->canonical($marketingProfile, (int) $tenantId);
+            abort_unless($survivor, 404);
 
             return redirect()->to($actionUrlGenerator->url('customers.detail', ['marketingProfile' => $survivor->id], $request));
         }

@@ -5,6 +5,8 @@ namespace App\Services\Marketing;
 use App\Models\CustomerMergeOperation;
 use App\Services\Shopify\ShopifyCustomerMergeApi;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class CustomerMergeCoordinator
 {
@@ -106,6 +108,24 @@ class CustomerMergeCoordinator
             $fresh->forceFill([
                 'status' => $completed ? 'partial_failure' : 'blocked',
                 'errors' => [['code' => $exception->publicCode(), 'message' => $exception->getMessage()]],
+            ])->save();
+
+            return $fresh->fresh();
+        } catch (Throwable $exception) {
+            Log::error('Everbranch customer merge reconciliation failed.', [
+                'operation_id' => (int) $operation->id,
+                'tenant_id' => (int) $operation->tenant_id,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            $fresh = $operation->fresh();
+            $fresh->forceFill([
+                'status' => 'reconciliation_required',
+                'errors' => [[
+                    'code' => 'everbranch_reconciliation_failed',
+                    'message' => 'Shopify may have completed this merge, but Everbranch still needs to reconcile the customer records. It is safe to retry this operation.',
+                ]],
             ])->save();
 
             return $fresh->fresh();

@@ -59,6 +59,7 @@ GRAPHQL, [
     /** @return array<string,mixed> */
     public function jobStatus(array $store, string $jobId): array
     {
+        $this->requireScope($store, 'read_customer_merge');
         $data = $this->query($store, <<<'GRAPHQL'
 query CustomerMergeJobStatus($jobId: ID!) {
   customerMergeJobStatus(jobId: $jobId) {

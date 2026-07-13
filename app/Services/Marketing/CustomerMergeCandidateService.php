@@ -17,24 +17,6 @@ class CustomerMergeCandidateService
             return [];
         }
 
-        $tenantProfiles = MarketingProfile::query()
-            ->where('tenant_id', $tenantId)
-            ->whereNull('merged_at')
-            ->limit(500)
-            ->get();
-        $safeLegacyIds = $this->safeLegacyIds($tenantProfiles);
-        $profiles = MarketingProfile::query()
-            ->whereNull('merged_at')
-            ->where(function ($builder) use ($tenantId, $safeLegacyIds): void {
-                $builder->where('tenant_id', $tenantId);
-                if ($safeLegacyIds->isNotEmpty()) {
-                    $builder->orWhere(fn ($legacy) => $legacy->whereNull('tenant_id')->whereIn('id', $safeLegacyIds));
-                }
-            })
-            ->limit(750)
-            ->get();
-
-        $shopifyIds = $this->shopifyIds($profiles, $storeKey);
         $normalized = $this->normalize($query);
         $terms = collect(explode(' ', $normalized))->filter()->values();
         $email = str_contains($query, '@') ? strtolower($query) : null;
@@ -42,6 +24,58 @@ class CustomerMergeCandidateService
         $shopifyQueryId = (ctype_digit($query) || str_contains(strtolower($query), 'gid://shopify/customer/')) && preg_match('/(\d+)$/', $query, $shopifyMatch)
             ? $shopifyMatch[1]
             : null;
+
+        $profiles = MarketingProfile::query()
+            ->where('tenant_id', $tenantId)
+            ->whereNull('merged_at')
+            ->where(function ($matches) use ($email, $phone, $shopifyQueryId, $terms): void {
+                if ($email !== null) {
+                    $matches->orWhere('normalized_email', $email);
+                }
+                if ($phone !== null && strlen($phone) >= 7) {
+                    $matches->orWhere('normalized_phone', 'like', '%'.$phone);
+                }
+                if ($shopifyQueryId !== null) {
+                    $matches->orWhereExists(function ($external) use ($shopifyQueryId): void {
+                        $external->selectRaw('1')->from('customer_external_profiles as candidate_external')
+                            ->whereColumn('candidate_external.marketing_profile_id', 'marketing_profiles.id')
+                            ->where('candidate_external.provider', 'shopify')
+                            ->where(function ($id) use ($shopifyQueryId): void {
+                                $id->where('candidate_external.external_customer_id', $shopifyQueryId)
+                                    ->orWhere('candidate_external.external_customer_gid', 'like', '%/'.$shopifyQueryId);
+                            });
+                    })->orWhereExists(function ($links) use ($shopifyQueryId): void {
+                        $links->selectRaw('1')->from('marketing_profile_links as candidate_links')
+                            ->whereColumn('candidate_links.marketing_profile_id', 'marketing_profiles.id')
+                            ->where('candidate_links.source_type', 'shopify_customer')
+                            ->where(function ($id) use ($shopifyQueryId): void {
+                                $id->where('candidate_links.source_id', $shopifyQueryId)
+                                    ->orWhere('candidate_links.source_id', 'like', '%:'.$shopifyQueryId);
+                            });
+                    });
+                }
+                if ($terms->isNotEmpty()) {
+                    $matches->orWhere(function ($names) use ($terms): void {
+                        foreach ($terms as $term) {
+                            $phonetic = metaphone((string) $term);
+                            $fuzzyPrefix = substr((string) $term, 0, max(3, strlen((string) $term) - 2));
+                            $names->where(function ($part) use ($term, $phonetic, $fuzzyPrefix): void {
+                                $part->where('normalized_first_name', 'like', '%'.$term.'%')
+                                    ->orWhere('normalized_last_name', 'like', '%'.$term.'%')
+                                    ->orWhere('normalized_first_name', 'like', $fuzzyPrefix.'%')
+                                    ->orWhere('normalized_last_name', 'like', $fuzzyPrefix.'%');
+                                if ($phonetic !== '') {
+                                    $part->orWhere('first_name_phonetic', $phonetic)
+                                        ->orWhere('last_name_phonetic', $phonetic);
+                                }
+                            });
+                        }
+                    });
+                }
+            })
+            ->get();
+
+        $shopifyIds = $this->shopifyIds($profiles, $storeKey);
 
         $ranked = $profiles->map(function (MarketingProfile $profile) use ($normalized, $terms, $email, $phone, $shopifyIds, $tenantId, $storeKey, $shopifyQueryId): array {
             $name = $this->normalize(trim($profile->first_name.' '.$profile->last_name));
@@ -114,7 +148,11 @@ class CustomerMergeCandidateService
     public function selected(int $tenantId, array $profileIds, string $storeKey): array
     {
         $ids = collect($profileIds)->map('intval')->filter()->unique();
-        $profiles = MarketingProfile::query()->whereIn('id', $ids)->whereNull('merged_at')->get();
+        $profiles = MarketingProfile::query()
+            ->where('tenant_id', $tenantId)
+            ->whereIn('id', $ids)
+            ->whereNull('merged_at')
+            ->get();
         $shopifyIds = $this->shopifyIds($profiles, $storeKey);
 
         return $profiles->map(fn (MarketingProfile $profile): array => [
@@ -138,23 +176,6 @@ class CustomerMergeCandidateService
             'candle_cash_balance' => (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $profile->id)->value('balance'),
             'candle_cash_transactions' => DB::table('candle_cash_transactions')->where('marketing_profile_id', $profile->id)->count(),
         ])->values()->all();
-    }
-
-    private function safeLegacyIds(Collection $tenantProfiles): Collection
-    {
-        $emails = $tenantProfiles->pluck('normalized_email')->filter()->unique();
-        $phones = $tenantProfiles->pluck('normalized_phone')->filter()->unique();
-        $sourcePairs = DB::table('marketing_profile_links')->whereIn('marketing_profile_id', $tenantProfiles->pluck('id'))
-            ->whereIn('source_type', ['shopify_customer', 'growave_customer'])->get(['source_type', 'source_id']);
-
-        return MarketingProfile::query()->whereNull('tenant_id')->whereNull('merged_at')
-            ->where(function ($builder) use ($emails, $phones, $sourcePairs): void {
-                $builder->whereIn('normalized_email', $emails)->orWhereIn('normalized_phone', $phones);
-                foreach ($sourcePairs as $pair) {
-                    $builder->orWhereIn('id', DB::table('marketing_profile_links')->select('marketing_profile_id')
-                        ->where('source_type', $pair->source_type)->where('source_id', $pair->source_id));
-                }
-            })->pluck('id');
     }
 
     private function shopifyIds(Collection $profiles, string $storeKey): array

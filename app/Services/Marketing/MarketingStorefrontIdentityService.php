@@ -7,13 +7,13 @@ use App\Models\MarketingProfile;
 class MarketingStorefrontIdentityService
 {
     public function __construct(
-        protected MarketingProfileSyncService $profileSyncService
-    ) {
-    }
+        protected MarketingProfileSyncService $profileSyncService,
+        protected CanonicalMarketingProfileResolver $canonicalProfiles
+    ) {}
 
     /**
-     * @param array<string,mixed> $identity
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $identity
+     * @param  array<string,mixed>  $context
      * @return array{status:string,profile:?MarketingProfile,sync:array<string,mixed>}
      */
     public function resolve(array $identity, array $context = []): array
@@ -22,8 +22,8 @@ class MarketingStorefrontIdentityService
         $sourceId = trim((string) ($context['source_id'] ?? ''));
         $tenantId = $this->positiveInt($context['tenant_id'] ?? null);
         if ($sourceId === '') {
-            $seed = strtolower(trim((string) ($identity['email'] ?? ''))) . '|' . trim((string) ($identity['phone'] ?? ''));
-            $sourceId = $sourceType . ':' . sha1($seed);
+            $seed = strtolower(trim((string) ($identity['email'] ?? ''))).'|'.trim((string) ($identity['phone'] ?? ''));
+            $sourceId = $sourceType.':'.sha1($seed);
         }
 
         $sourceChannels = array_values(array_filter((array) ($context['source_channels'] ?? ['storefront'])));
@@ -56,7 +56,9 @@ class MarketingStorefrontIdentityService
 
         $profile = null;
         if ((int) ($sync['profile_id'] ?? 0) > 0) {
-            $profile = MarketingProfile::query()->find((int) $sync['profile_id']);
+            $profile = $tenantId !== null
+                ? $this->canonicalProfiles->byId($tenantId, (int) $sync['profile_id'])
+                : MarketingProfile::query()->find((int) $sync['profile_id']);
         }
 
         if (! $profile) {
@@ -78,7 +80,7 @@ class MarketingStorefrontIdentityService
             ...collect($extra)->map(fn ($value) => trim((string) $value))->all(),
         ];
 
-        return trim($prefix) . ':' . sha1(implode('|', $seed));
+        return trim($prefix).':'.sha1(implode('|', $seed));
     }
 
     protected function positiveInt(mixed $value): ?int
