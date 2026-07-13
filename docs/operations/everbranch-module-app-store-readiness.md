@@ -2,6 +2,14 @@
 
 Status: PR 25 blueprint-driven display alignment complete.
 
+## QuickBooks, Documents, And Estimator Readiness (2026-07-13)
+
+- `quickbooks` is a shared beta Branch. OAuth, reports, settings, manual refresh, encrypted run history, hourly opt-in synchronization, and weekly reconciliation are owner/admin-only and tenant-scoped. It is read-only; no payments, accounting writes, CDC, or webhooks are enabled.
+- `documents` is a shared beta Branch with private authenticated downloads, team/owner visibility, searchable tags and extracted text for text/CSV files, multi-job links, audit events, QuickBooks attachment copies, and an iOS multi-photo picker. Temporary Intuit URLs and iCloud shared albums are never canonical storage.
+- `estimator` is a default-disabled internal beta dependent on Field Service. Candidate generation requires repeated recent invoice descriptions and owner review. Approved items and draft line snapshots are persistent; QuickBooks write-back is absent.
+- Financial mobile sections are role-filtered server-side. Managers and team members can see operational Reporting and upcoming jobs but cannot receive receivables, P&L, labor, owner compensation, price-book administration, or owner-only files.
+- Collins is the first rollout tenant. Do not enable another tenant's QuickBooks schedule from onboarding interest, plan defaults, or a catalog request.
+
 ## Mission
 
 Make the module system understandable, safe, and productizable before adding new modules.

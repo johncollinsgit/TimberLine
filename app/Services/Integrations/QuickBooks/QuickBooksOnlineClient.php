@@ -3,6 +3,7 @@
 namespace App\Services\Integrations\QuickBooks;
 
 use App\Models\IntegrationConnection;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
@@ -17,11 +18,26 @@ class QuickBooksOnlineClient
     /** @return array<int,array<string,mixed>> */
     public function all(string $entity, int $pageSize = 100): array
     {
+        return $this->allMatching($entity, null, $pageSize);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function allSince(string $entity, CarbonInterface $since, int $pageSize = 100): array
+    {
+        $timestamp = $since->copy()->utc()->format('Y-m-d\TH:i:sP');
+
+        return $this->allMatching($entity, "MetaData.LastUpdatedTime > '{$timestamp}'", $pageSize);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    protected function allMatching(string $entity, ?string $where, int $pageSize): array
+    {
         $results = [];
         $start = 1;
+        $filter = $where ? ' where '.$where : '';
 
         do {
-            $page = $this->query(sprintf('select * from %s startposition %d maxresults %d', $entity, $start, $pageSize));
+            $page = $this->query(sprintf('select * from %s%s startposition %d maxresults %d', $entity, $filter, $start, $pageSize));
             $items = (array) data_get($page, 'QueryResponse.'.$entity, []);
 
             foreach ($items as $item) {
@@ -34,6 +50,18 @@ class QuickBooksOnlineClient
         } while (count($items) === $pageSize);
 
         return $results;
+    }
+
+    public function attachmentDownloadUrl(string $attachableId): string
+    {
+        $realmId = $this->realmId();
+
+        return trim((string) $this->request()
+            ->get("/v3/company/{$realmId}/download/".rawurlencode($attachableId), [
+                'minorversion' => $this->minorVersion,
+            ])
+            ->throw()
+            ->body(), "\" \n\r\t");
     }
 
     /** @return array<string,mixed> */

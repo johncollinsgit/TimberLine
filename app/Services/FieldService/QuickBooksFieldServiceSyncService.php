@@ -3,23 +3,39 @@
 namespace App\Services\FieldService;
 
 use App\Models\IntegrationConnection;
+use App\Models\MarketingProfileLink;
 use App\Models\Tenant;
 use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
+use Throwable;
 
 class QuickBooksFieldServiceSyncService
 {
     public function __construct(
-        protected QuickBooksFieldServiceImportService $importService
+        protected QuickBooksFieldServiceImportService $importService,
+        protected WorkspaceAssetService $assets,
     ) {}
 
     /** @param array<int,string> $entities */
-    public function sync(Tenant $tenant, QuickBooksOnlineClient $client, array $entities, bool $dryRun = false): array
-    {
+    public function sync(
+        Tenant $tenant,
+        QuickBooksOnlineClient $client,
+        array $entities,
+        bool $dryRun = false,
+        ?CarbonInterface $updatedSince = null
+    ): array {
         $summary = $this->importService->emptySummary()
-            + ['quickbooks_customers' => 0, 'quickbooks_invoices' => 0, 'quickbooks_estimates' => 0, 'quickbooks_items' => 0, 'quickbooks_attachments' => 0];
+            + [
+                'quickbooks_customers' => 0, 'quickbooks_invoices' => 0, 'quickbooks_estimates' => 0,
+                'quickbooks_payments' => 0, 'quickbooks_purchases' => 0, 'quickbooks_bills' => 0,
+                'quickbooks_items' => 0, 'quickbooks_attachments' => 0,
+            ];
 
-        $quickBooksCustomers = in_array('customers', $entities, true) ? $client->all('Customer') : [];
+        $fetch = fn (string $entity): array => $updatedSince
+            ? $client->allSince($entity, $updatedSince)
+            : $client->all($entity);
+        $quickBooksCustomers = in_array('customers', $entities, true) ? $fetch('Customer') : [];
         $knownJobCustomerIds = collect($quickBooksCustomers)
             ->filter(fn (array $customer): bool => (bool) ($customer['Job'] ?? false)
                 || filled($customer['ParentRef'] ?? null)
@@ -27,7 +43,13 @@ class QuickBooksFieldServiceSyncService
             ->pluck('Id')
             ->map(fn (mixed $id): string => trim((string) $id))
             ->filter()
-            ->values()
+            ->merge(MarketingProfileLink::query()->where('tenant_id', (int) $tenant->id)
+                ->where('source_type', 'quickbooks_customer')->get(['source_meta'])
+                ->filter(fn (MarketingProfileLink $link): bool => (bool) data_get($link->source_meta, 'is_job')
+                    || filled(data_get($link->source_meta, 'parent_id'))
+                    || str_contains((string) data_get($link->source_meta, 'fully_qualified_name', ''), ':'))
+                ->map(fn (MarketingProfileLink $link): string => trim((string) data_get($link->source_meta, 'customer_id'))))
+            ->filter()->unique()->values()
             ->all();
 
         if (in_array('customers', $entities, true)) {
@@ -37,7 +59,7 @@ class QuickBooksFieldServiceSyncService
         }
 
         if (in_array('estimates', $entities, true)) {
-            $rows = $client->all('Estimate');
+            $rows = $fetch('Estimate');
             foreach ($rows as $estimate) {
                 $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksTransaction($tenant, $estimate, 'estimate', $dryRun, $knownJobCustomerIds));
             }
@@ -45,15 +67,30 @@ class QuickBooksFieldServiceSyncService
         }
 
         if (in_array('invoices', $entities, true)) {
-            $rows = $client->all('Invoice');
+            $rows = $fetch('Invoice');
             foreach ($rows as $invoice) {
                 $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksTransaction($tenant, $invoice, 'invoice', $dryRun, $knownJobCustomerIds));
             }
             $summary['quickbooks_invoices'] = count($rows);
         }
 
+        foreach (['payments' => 'Payment', 'purchases' => 'Purchase', 'bills' => 'Bill'] as $key => $entity) {
+            if (! in_array($key, $entities, true)) {
+                continue;
+            }
+
+            $rows = $fetch($entity);
+            foreach ($rows as $row) {
+                $summary = $this->mergeSummary(
+                    $summary,
+                    $this->importService->importQuickBooksFinancialTransaction($tenant, $row, rtrim($key, 's'), $dryRun)
+                );
+            }
+            $summary['quickbooks_'.$key] = count($rows);
+        }
+
         if (in_array('items', $entities, true)) {
-            $rows = $client->all('Item');
+            $rows = $fetch('Item');
             foreach ($rows as $item) {
                 $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksItem($tenant, $item, $dryRun));
             }
@@ -61,8 +98,17 @@ class QuickBooksFieldServiceSyncService
         }
 
         if (in_array('attachments', $entities, true)) {
-            $rows = $client->all('Attachable');
+            $rows = $fetch('Attachable');
             $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksAttachments($tenant, $rows, $dryRun));
+            if (! $dryRun) {
+                foreach ($rows as $attachable) {
+                    try {
+                        $this->assets->importQuickBooksAttachable($tenant, $client, $attachable);
+                    } catch (Throwable) {
+                        $summary['skipped']++;
+                    }
+                }
+            }
             $summary['quickbooks_attachments'] = count($rows);
         }
 
@@ -74,7 +120,7 @@ class QuickBooksFieldServiceSyncService
     /** @return array<int,string> */
     public function defaultEntities(): array
     {
-        return ['customers', 'estimates', 'invoices', 'items', 'attachments'];
+        return ['customers', 'estimates', 'invoices', 'payments', 'purchases', 'bills', 'items', 'attachments'];
     }
 
     /** @return array<int,array<string,string>> */
@@ -122,6 +168,9 @@ class QuickBooksFieldServiceSyncService
             'city' => (string) ($billing['City'] ?? ''),
             'state' => (string) ($billing['CountrySubDivisionCode'] ?? ''),
             'postal_code' => (string) ($billing['PostalCode'] ?? ''),
+            'is_job' => (bool) ($customer['Job'] ?? false),
+            'parent_id' => (string) data_get($customer, 'ParentRef.value', ''),
+            'fully_qualified_name' => (string) ($customer['FullyQualifiedName'] ?? ''),
         ];
     }
 

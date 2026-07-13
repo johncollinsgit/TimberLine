@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FieldServiceJob extends Model
@@ -82,5 +83,12 @@ class FieldServiceJob extends Model
     public function financialDocuments(): HasMany
     {
         return $this->hasMany(FieldServiceFinancialDocument::class);
+    }
+
+    public function assets(): BelongsToMany
+    {
+        return $this->belongsToMany(WorkspaceAsset::class, 'field_service_job_workspace_asset')
+            ->withPivot(['tenant_id', 'linked_by_user_id'])
+            ->withTimestamps();
     }
 }

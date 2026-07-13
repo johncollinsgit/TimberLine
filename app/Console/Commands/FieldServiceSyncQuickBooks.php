@@ -15,7 +15,7 @@ class FieldServiceSyncQuickBooks extends Command
         {--tenant-id= : Tenant ID to import into}
         {--tenant= : Tenant slug to import into}
         {--connection-id= : Specific integration_connections id}
-        {--entities=customers,estimates,invoices,items,attachments : Comma-separated customers,estimates,invoices,items,attachments}
+        {--entities=customers,estimates,invoices,payments,purchases,bills,items,attachments : Comma-separated import entities}
         {--dry-run : Fetch and summarize without writing}';
 
     protected $description = 'Fetch QuickBooks Online data for a tenant and import it into field-service customers, jobs, and materials.';
@@ -67,7 +67,8 @@ class FieldServiceSyncQuickBooks extends Command
         $this->line('tenant='.$tenant->slug);
         $this->line('connection='.$syncService->connectionLabel($connection));
         foreach ([
-            'quickbooks_customers', 'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_items', 'quickbooks_attachments',
+            'quickbooks_customers', 'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_payments',
+            'quickbooks_purchases', 'quickbooks_bills', 'quickbooks_items', 'quickbooks_attachments',
             'customers', 'jobs', 'jobs_created', 'jobs_updated', 'items', 'documents', 'documents_created',
             'documents_updated', 'documents_linked', 'documents_needing_review', 'lines', 'attachments', 'skipped',
         ] as $key) {

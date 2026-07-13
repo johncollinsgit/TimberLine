@@ -104,6 +104,13 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 - It does not own the native app shell, but it now serves native account, rewards, and support payloads for the phone app.
 - It does not implement the Shopify storefront theme or Infinite Options settings that actually render bundle selectors on the website.
 
+## Everbranch Operator Contract (2026-07-13)
+
+- Reporting accepts `range=1d|1w|1m|30d|ytd` and defaults to the current month. Team members receive completed/upcoming job operations only; tenant owners/admins may additionally receive QuickBooks financial cards.
+- Documents is a tenant-entitled Branch. The mobile action `upload_assets` accepts up to 20 private file copies, optional job links, and team/owner visibility. The iOS client uses the system multi-photo picker so iCloud originals remain untouched.
+- Owner-only documents and financial cards are removed server-side. Client rendering is not an authorization boundary.
+- Mobile document uploads, reporting screens, search, and job references are resolved against the workspace in the URL and the authenticated membership on every request.
+
 ## Current mobile-pass notes
 
 - The latest pass tightened image fallback so phone shelves stay polished even when Shopify collection art is missing.
