@@ -135,3 +135,24 @@ test('audit fails closed when two duplicate profiles contain conflicting birthda
         ->and($cluster['review_reasons'])->toContain('conflicting_birthday_values')
         ->and($profiles)->toHaveCount(2);
 });
+
+test('audit bulk loads related facts instead of issuing queries per duplicate profile', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    MarketingProfile::factory()->count(60)->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Shared',
+        'last_name' => 'Customer',
+        'email' => 'shared@example.com',
+        'normalized_email' => 'shared@example.com',
+    ]);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    $payload = app(CustomerIdentityAuditService::class)->audit($tenant->id, $tenant->slug, 'retail');
+    $queryCount = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    expect($payload['clusters'])->toBe(1)
+        ->and($payload['results'][0]['profile_ids'])->toHaveCount(60)
+        ->and($queryCount)->toBeLessThan(400);
+});
