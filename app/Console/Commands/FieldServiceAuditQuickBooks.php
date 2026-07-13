@@ -67,6 +67,8 @@ class FieldServiceAuditQuickBooks extends Command
         $this->line('note_coverage='.json_encode($summary['note_coverage'], JSON_THROW_ON_ERROR));
         $this->line('financials='.json_encode($summary['financials'], JSON_THROW_ON_ERROR));
         $this->line('customer_completeness='.json_encode($summary['customer_completeness'], JSON_THROW_ON_ERROR));
+        $this->line('customer_structure='.json_encode($summary['customer_structure'], JSON_THROW_ON_ERROR));
+        $this->line('job_evidence='.json_encode($summary['job_evidence'], JSON_THROW_ON_ERROR));
         $this->line('labor_signals='.json_encode($summary['labor_signals'], JSON_THROW_ON_ERROR));
         $this->line('repeated_price_patterns='.count($summary['price_patterns']));
         $this->line('recommendations=');

@@ -546,6 +546,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('integrations.quickbooks.')
         ->group(function (): void {
             Route::get('/connect', [QuickBooksConnectionController::class, 'connect'])->name('connect');
+            Route::get('/documents/{document}', [QuickBooksConnectionController::class, 'document'])->name('documents.show');
         });
 
     Route::get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])

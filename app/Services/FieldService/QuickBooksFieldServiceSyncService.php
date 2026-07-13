@@ -19,8 +19,19 @@ class QuickBooksFieldServiceSyncService
         $summary = $this->importService->emptySummary()
             + ['quickbooks_customers' => 0, 'quickbooks_invoices' => 0, 'quickbooks_estimates' => 0, 'quickbooks_items' => 0, 'quickbooks_attachments' => 0];
 
+        $quickBooksCustomers = in_array('customers', $entities, true) ? $client->all('Customer') : [];
+        $knownJobCustomerIds = collect($quickBooksCustomers)
+            ->filter(fn (array $customer): bool => (bool) ($customer['Job'] ?? false)
+                || filled($customer['ParentRef'] ?? null)
+                || str_contains((string) ($customer['FullyQualifiedName'] ?? ''), ':'))
+            ->pluck('Id')
+            ->map(fn (mixed $id): string => trim((string) $id))
+            ->filter()
+            ->values()
+            ->all();
+
         if (in_array('customers', $entities, true)) {
-            $rows = array_map(fn (array $customer): array => $this->customerRow($customer), $client->all('Customer'));
+            $rows = array_map(fn (array $customer): array => $this->customerRow($customer), $quickBooksCustomers);
             $summary = $this->mergeSummary($summary, $this->importService->importRows($tenant, $rows, 'customers', $dryRun));
             $summary['quickbooks_customers'] = count($rows);
         }
@@ -28,7 +39,7 @@ class QuickBooksFieldServiceSyncService
         if (in_array('estimates', $entities, true)) {
             $rows = $client->all('Estimate');
             foreach ($rows as $estimate) {
-                $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksTransaction($tenant, $estimate, 'estimate', $dryRun));
+                $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksTransaction($tenant, $estimate, 'estimate', $dryRun, $knownJobCustomerIds));
             }
             $summary['quickbooks_estimates'] = count($rows);
         }
@@ -36,7 +47,7 @@ class QuickBooksFieldServiceSyncService
         if (in_array('invoices', $entities, true)) {
             $rows = $client->all('Invoice');
             foreach ($rows as $invoice) {
-                $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksTransaction($tenant, $invoice, 'invoice', $dryRun));
+                $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksTransaction($tenant, $invoice, 'invoice', $dryRun, $knownJobCustomerIds));
             }
             $summary['quickbooks_invoices'] = count($rows);
         }
@@ -159,7 +170,7 @@ class QuickBooksFieldServiceSyncService
     /** @param array<string,int|array<int,array<string,string>>> $left */
     protected function mergeSummary(array $left, array $right): array
     {
-        foreach (['customers', 'jobs', 'items', 'documents', 'lines', 'attachments', 'skipped'] as $key) {
+        foreach (array_keys($this->importService->emptySummary()) as $key) {
             $left[$key] = (int) ($left[$key] ?? 0) + (int) ($right[$key] ?? 0);
         }
 

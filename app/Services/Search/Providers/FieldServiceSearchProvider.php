@@ -2,6 +2,7 @@
 
 namespace App\Services\Search\Providers;
 
+use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Services\Search\Concerns\BuildsSearchResults;
 use App\Services\Search\GlobalSearchProvider;
@@ -63,7 +64,7 @@ class FieldServiceSearchProvider implements GlobalSearchProvider
             ->limit(6)
             ->get();
 
-        return $rows->map(function (FieldServiceJob $job) use ($normalized, $includeFinancial): array {
+        $results = $rows->map(function (FieldServiceJob $job) use ($normalized, $includeFinancial): array {
             $address = trim(implode(', ', array_filter([
                 $job->service_address_line_1,
                 $job->service_city,
@@ -108,7 +109,70 @@ class FieldServiceSearchProvider implements GlobalSearchProvider
                     'kind' => 'jobs',
                 ],
             ]);
-        })->all();
+        });
+
+        if ($includeFinancial && Schema::hasTable('field_service_financial_documents')) {
+            $documents = FieldServiceFinancialDocument::query()
+                ->forTenantId($tenantId)
+                ->whereNull('field_service_job_id')
+                ->with(['customer', 'lines'])
+                ->when($normalized !== '', function (Builder $builder) use ($normalized): void {
+                    $like = '%'.$normalized.'%';
+                    $builder->where(function (Builder $query) use ($like): void {
+                        $query->where('document_number', 'like', $like)
+                            ->orWhere('private_note', 'like', $like)
+                            ->orWhere('customer_memo', 'like', $like)
+                            ->orWhereHas('customer', fn (Builder $customer) => $customer
+                                ->where('first_name', 'like', $like)
+                                ->orWhere('last_name', 'like', $like)
+                                ->orWhere('email', 'like', $like))
+                            ->orWhereHas('lines', fn (Builder $lines) => $lines
+                                ->where('item_name', 'like', $like)
+                                ->orWhere('description', 'like', $like));
+                    });
+                })
+                ->latest('transaction_date')
+                ->limit(6)
+                ->get();
+
+            $tenantSlug = (string) $membership?->slug;
+            $results = $results->concat($documents->map(function (FieldServiceFinancialDocument $document) use ($normalized, $tenantSlug): array {
+                $customerName = trim((string) ($document->customer?->first_name.' '.$document->customer?->last_name));
+                $matchedContext = collect([
+                    $document->customer_memo,
+                    $document->private_note,
+                    ...$document->lines->pluck('description')->all(),
+                    ...$document->lines->pluck('item_name')->all(),
+                ])->filter()->first(fn (mixed $value): bool => $normalized !== ''
+                    && str_contains(strtolower((string) $value), strtolower($normalized)));
+
+                return $this->result([
+                    'type' => 'accounting',
+                    'subtype' => 'quickbooks_document',
+                    'title' => ucfirst((string) $document->document_type).' '.($document->document_number ?: $document->external_id),
+                    'subtitle' => trim(implode(' • ', array_filter([
+                        $customerName ?: 'QuickBooks customer',
+                        optional($document->transaction_date)->format('M j, Y'),
+                        $matchedContext ? str((string) $matchedContext)->limit(90)->toString() : null,
+                    ]))),
+                    'url' => route('integrations.quickbooks.documents.show', ['tenant' => $tenantSlug, 'document' => $document->id]),
+                    'badge' => 'QuickBooks',
+                    'score' => $this->matchScore($normalized, [
+                        $document->document_number,
+                        $customerName,
+                        $matchedContext,
+                    ], 260),
+                    'icon' => 'file-text',
+                    'meta' => [
+                        'document_id' => (int) $document->id,
+                        'destination' => 'quickbooks',
+                        'kind' => 'financial_document',
+                    ],
+                ]);
+            }));
+        }
+
+        return $results->sortByDesc('score')->take(8)->values()->all();
     }
 
     protected function visibleNotes(mixed $query, bool $includeOwner): mixed

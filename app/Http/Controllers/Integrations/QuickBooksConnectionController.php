@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Integrations;
 
 use App\Http\Controllers\Controller;
+use App\Models\FieldServiceFinancialDocument;
 use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
@@ -39,6 +40,19 @@ class QuickBooksConnectionController extends Controller
     public function disconnected(): View
     {
         return view('integrations.quickbooks.disconnected');
+    }
+
+    public function document(Request $request, Tenant $tenant, FieldServiceFinancialDocument $document): View
+    {
+        $this->authorizeTenantAdmin($request, $tenant);
+        abort_unless((int) $document->tenant_id === (int) $tenant->id, 404);
+
+        $document->load(['customer', 'job', 'lines', 'attachments']);
+
+        return view('integrations.quickbooks.document', [
+            'tenant' => $tenant,
+            'document' => $document,
+        ]);
     }
 
     public function connect(

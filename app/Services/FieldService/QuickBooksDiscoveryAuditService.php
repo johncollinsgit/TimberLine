@@ -14,6 +14,10 @@ use Throwable;
 
 class QuickBooksDiscoveryAuditService
 {
+    public function __construct(
+        protected QuickBooksJobEvidenceClassifier $jobEvidenceClassifier
+    ) {}
+
     /** @var array<int,string> */
     public const CORE_ENTITIES = ['Customer', 'Invoice', 'Estimate', 'Item'];
 
@@ -44,12 +48,16 @@ class QuickBooksDiscoveryAuditService
 
         $summary = $this->emptySummary($full, $dryRun);
         $lineStats = [];
+        $knownJobCustomerIds = [];
 
         foreach ($full ? self::FULL_ENTITIES : self::CORE_ENTITIES as $entity) {
             try {
                 $rows = $client->all($entity);
                 $summary['entity_counts'][$entity] = count($rows);
-                $this->profileRows($summary, $lineStats, $entity, $rows);
+                if ($entity === 'Customer') {
+                    $knownJobCustomerIds = $this->jobCustomerIds($rows);
+                }
+                $this->profileRows($summary, $lineStats, $entity, $rows, $knownJobCustomerIds);
 
                 if (! $dryRun) {
                     $this->storeSourceRows($tenant, $connection, $entity, $rows);
@@ -109,6 +117,15 @@ class QuickBooksDiscoveryAuditService
                 'with_phone' => 0,
                 'with_address' => 0,
             ],
+            'customer_structure' => [
+                'job_or_subcustomers' => 0,
+            ],
+            'job_evidence' => [
+                'invoice_candidates' => 0,
+                'invoice_review' => 0,
+                'estimate_candidates' => 0,
+                'estimate_review' => 0,
+            ],
             'linked_transactions' => 0,
             'attachment_links' => 0,
             'price_patterns' => [],
@@ -130,11 +147,18 @@ class QuickBooksDiscoveryAuditService
     /** @param array<string,mixed> $summary
      * @param  array<string,array{count:int,total:float,min:float,max:float,name:string}>  $lineStats
      * @param  array<int,array<string,mixed>>  $rows
+     * @param  array<int,string>  $knownJobCustomerIds
      */
-    protected function profileRows(array &$summary, array &$lineStats, string $entity, array $rows): void
-    {
+    protected function profileRows(
+        array &$summary,
+        array &$lineStats,
+        string $entity,
+        array $rows,
+        array $knownJobCustomerIds = []
+    ): void {
         if ($entity === 'Customer') {
             $summary['customer_completeness']['total'] = count($rows);
+            $summary['customer_structure']['job_or_subcustomers'] = count($knownJobCustomerIds);
             foreach ($rows as $row) {
                 $summary['customer_completeness']['with_email'] += filled(data_get($row, 'PrimaryEmailAddr.Address')) ? 1 : 0;
                 $summary['customer_completeness']['with_phone'] += filled(data_get($row, 'PrimaryPhone.FreeFormNumber')) ? 1 : 0;
@@ -152,6 +176,9 @@ class QuickBooksDiscoveryAuditService
                 $summary['note_coverage'][$prefix.'_with_line_descriptions'] += $hasDescriptions ? 1 : 0;
                 $summary['linked_transactions'] += count((array) ($row['LinkedTxn'] ?? []));
                 $this->profileTransactionLines($lineStats, (array) ($row['Line'] ?? []));
+                $evidence = $this->jobEvidenceClassifier->classify($row, $knownJobCustomerIds);
+                $jobEvidenceKey = strtolower($entity).'_'.($evidence['qualifies'] ? 'candidates' : 'review');
+                $summary['job_evidence'][$jobEvidenceKey]++;
             }
         }
 
@@ -172,6 +199,22 @@ class QuickBooksDiscoveryAuditService
         if ($entity === 'Attachable') {
             $summary['attachment_links'] = collect($rows)->sum(fn (array $row): int => count((array) ($row['AttachableRef'] ?? [])));
         }
+    }
+
+    /** @param array<int,array<string,mixed>> $customers
+     * @return array<int,string>
+     */
+    protected function jobCustomerIds(array $customers): array
+    {
+        return collect($customers)
+            ->filter(fn (array $customer): bool => (bool) ($customer['Job'] ?? false)
+                || filled($customer['ParentRef'] ?? null)
+                || str_contains((string) ($customer['FullyQualifiedName'] ?? ''), ':'))
+            ->pluck('Id')
+            ->map(fn (mixed $id): string => trim((string) $id))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /** @param array<string,array{count:int,total:float,min:float,max:float,name:string}> $lineStats
