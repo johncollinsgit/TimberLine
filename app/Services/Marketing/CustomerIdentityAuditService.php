@@ -22,7 +22,17 @@ class CustomerIdentityAuditService
         $profiles = DB::table('marketing_profiles as profiles')
             ->where('profiles.tenant_id', $tenantId)
             ->whereNull('profiles.merged_at')
-            ->get();
+            ->get([
+                'profiles.id',
+                'profiles.first_name',
+                'profiles.last_name',
+                'profiles.normalized_first_name',
+                'profiles.normalized_last_name',
+                'profiles.email',
+                'profiles.normalized_email',
+                'profiles.phone',
+                'profiles.normalized_phone',
+            ]);
 
         if ($filter !== '') {
             $profiles = $profiles->filter(function (object $profile) use ($filter): bool {
@@ -38,8 +48,8 @@ class CustomerIdentityAuditService
         }
 
         $clusters = collect($this->connectedDuplicateClusters($profiles))
-            ->map(function (array $cluster) use ($profiles, $tenantId, $storeKey): array {
-                $members = $profiles->whereIn('id', $cluster['profile_ids'])->values();
+            ->map(function (array $cluster) use ($tenantId, $storeKey): array {
+                $members = $this->loadFullProfiles($cluster['profile_ids']);
                 $facts = $members->map(fn (object $profile): array => $this->profileFacts($profile, $tenantId, $storeKey));
                 $recommendation = $this->recommendation($facts);
 
@@ -92,30 +102,34 @@ class CustomerIdentityAuditService
             }
         }
 
-        $profileIds = $profiles->pluck('id')->map('intval');
+        $profileIds = $profiles->pluck('id')->map('intval')->values();
         if ($profileIds->isNotEmpty() && Schema::hasTable('customer_external_profiles')) {
-            DB::table('customer_external_profiles')
-                ->whereIn('marketing_profile_id', $profileIds)
-                ->where('provider', 'shopify')
-                ->get(['marketing_profile_id', 'external_customer_id', 'external_customer_gid'])
-                ->each(function (object $row) use (&$identityMembers): void {
-                    $identity = $this->normalizedShopifyId($row->external_customer_gid ?: $row->external_customer_id);
-                    if ($identity !== '') {
-                        $identityMembers['shopify:'.$identity][] = (int) $row->marketing_profile_id;
-                    }
-                });
+            $profileIds->chunk(5000)->each(function (Collection $chunk) use (&$identityMembers): void {
+                DB::table('customer_external_profiles')
+                    ->whereIn('marketing_profile_id', $chunk->all())
+                    ->where('provider', 'shopify')
+                    ->get(['marketing_profile_id', 'external_customer_id', 'external_customer_gid'])
+                    ->each(function (object $row) use (&$identityMembers): void {
+                        $identity = $this->normalizedShopifyId($row->external_customer_gid ?: $row->external_customer_id);
+                        if ($identity !== '') {
+                            $identityMembers['shopify:'.$identity][] = (int) $row->marketing_profile_id;
+                        }
+                    });
+            });
         }
         if ($profileIds->isNotEmpty() && Schema::hasTable('marketing_profile_links')) {
-            DB::table('marketing_profile_links')
-                ->whereIn('marketing_profile_id', $profileIds)
-                ->whereIn('source_type', ['shopify_customer', 'growave_customer'])
-                ->get(['marketing_profile_id', 'source_type', 'source_id'])
-                ->each(function (object $row) use (&$identityMembers): void {
-                    $identity = $this->normalizedShopifyId($row->source_id);
-                    if ($identity !== '') {
-                        $identityMembers['source:'.$row->source_type.':'.$identity][] = (int) $row->marketing_profile_id;
-                    }
-                });
+            $profileIds->chunk(5000)->each(function (Collection $chunk) use (&$identityMembers): void {
+                DB::table('marketing_profile_links')
+                    ->whereIn('marketing_profile_id', $chunk->all())
+                    ->whereIn('source_type', ['shopify_customer', 'growave_customer'])
+                    ->get(['marketing_profile_id', 'source_type', 'source_id'])
+                    ->each(function (object $row) use (&$identityMembers): void {
+                        $identity = $this->normalizedShopifyId($row->source_id);
+                        if ($identity !== '') {
+                            $identityMembers['source:'.$row->source_type.':'.$identity][] = (int) $row->marketing_profile_id;
+                        }
+                    });
+            });
         }
 
         $groups = collect($identityMembers)
@@ -147,6 +161,20 @@ class CustomerIdentityAuditService
         }
 
         return $components;
+    }
+
+    /** @param array<int,int> $profileIds */
+    private function loadFullProfiles(array $profileIds): Collection
+    {
+        return collect($profileIds)
+            ->map('intval')
+            ->filter()
+            ->chunk(1000)
+            ->flatMap(fn (Collection $chunk): Collection => DB::table('marketing_profiles')
+                ->whereIn('id', $chunk->all())
+                ->whereNull('merged_at')
+                ->get())
+            ->values();
     }
 
     /** @return array<string,mixed> */
