@@ -141,3 +141,15 @@ Schedule::command('automation:run')
     ->everyTenMinutes()
     ->withoutOverlapping(15)
     ->runInBackground();
+
+// QuickBooks remains read-only. Only tenant connections explicitly enabled by
+// their owner are included, and each connection also has its own cache lock.
+Schedule::command('quickbooks:sync-enabled')
+    ->hourlyAt(35)
+    ->withoutOverlapping(55)
+    ->runInBackground();
+
+Schedule::command('quickbooks:sync-enabled', ['--full' => true])
+    ->weeklyOn(0, '02:50')
+    ->withoutOverlapping(240)
+    ->runInBackground();

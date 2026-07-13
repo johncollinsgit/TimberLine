@@ -5,7 +5,11 @@ namespace App\Services\Mobile;
 use App\Models\FieldServiceJob;
 use App\Models\MarketingProfile;
 use App\Models\MessagingConversation;
-use App\Models\Order;
+use App\Models\Tenant;
+use App\Models\User;
+use App\Models\WorkspaceAsset;
+use App\Services\FieldService\QuickBooksOwnerReportingService;
+use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -15,7 +19,9 @@ class TenantMobileModuleRegistry
     public const CONTRACT_VERSION = 2;
 
     public function __construct(
-        protected TenantModuleAccessResolver $accessResolver
+        protected TenantModuleAccessResolver $accessResolver,
+        protected TenantFinancialAccess $financialAccess,
+        protected QuickBooksOwnerReportingService $ownerReports,
     ) {}
 
     /** @return array<int,array<string,mixed>> */
@@ -59,7 +65,7 @@ class TenantMobileModuleRegistry
     }
 
     /** @return array<string,mixed> */
-    public function screen(int $tenantId, string $moduleKey): array
+    public function screen(int $tenantId, string $moduleKey, ?User $user = null, ?string $rangeKey = null): array
     {
         $moduleKey = strtolower(trim($moduleKey));
         $module = collect($this->manifest($tenantId))->firstWhere('module_key', $moduleKey);
@@ -70,7 +76,8 @@ class TenantMobileModuleRegistry
             'field_service' => $this->fieldServiceScreen($tenantId),
             'work_core' => $this->summaryScreen($module),
             'messaging' => $this->messagingScreen($tenantId),
-            'reporting' => $this->reportingScreen($tenantId),
+            'reporting' => $this->reportingScreen($tenantId, $user, $rangeKey),
+            'documents' => $this->documentsScreen($tenantId, $user),
             default => $this->summaryScreen($module),
         };
 
@@ -167,24 +174,84 @@ class TenantMobileModuleRegistry
     }
 
     /** @return array<string,mixed> */
-    protected function reportingScreen(int $tenantId): array
+    protected function reportingScreen(int $tenantId, ?User $user, ?string $rangeKey): array
     {
-        $customerCount = Schema::hasTable('marketing_profiles') ? MarketingProfile::query()->forTenantId($tenantId)->count() : 0;
-        $orderCount = Schema::hasTable('orders') ? Order::query()->forTenantId($tenantId)->count() : 0;
-        $revenue = Schema::hasTable('orders') ? (float) Order::query()->forTenantId($tenantId)->where('ordered_at', '>=', now()->subDays(30))->sum('total_price') : 0.0;
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $range = app(\App\Services\Dashboard\DashboardDateRange::class)->resolve($rangeKey);
+        $completed = Schema::hasTable('field_service_jobs')
+            ? FieldServiceJob::query()->forTenantId($tenantId)->whereNotNull('completed_at')->whereBetween('completed_at', [$range['starts_at'], $range['ends_at']])->count()
+            : 0;
+        $upcoming = Schema::hasTable('field_service_jobs')
+            ? FieldServiceJob::query()->forTenantId($tenantId)->whereNotNull('scheduled_for')->where('scheduled_for', '>=', now())
+                ->where('status', '!=', 'done')->with('assignedUser:id,name')->orderBy('scheduled_for')->limit(5)->get()
+            : collect();
+        $owner = $user instanceof User && $this->financialAccess->allows($user, $tenant);
+        $report = $owner ? $this->ownerReports->report($tenant, $range['key'], false) : null;
+        $metrics = [
+            ['label' => 'Jobs completed', 'value' => number_format($completed), 'tone' => 'teal'],
+            ['label' => 'Upcoming jobs', 'value' => number_format($upcoming->count()), 'tone' => 'blue'],
+        ];
+        if (is_array($report)) {
+            $metrics[] = ['label' => 'Work billed', 'value' => '$'.number_format((float) data_get($report, 'cards.work_billed.amount', 0), 2), 'tone' => 'green'];
+            $metrics[] = ['label' => 'Unpaid invoices', 'value' => '$'.number_format((float) data_get($report, 'cards.unpaid_invoices.amount', 0), 2), 'tone' => 'amber'];
+            $metrics[] = ['label' => 'Contract labor', 'value' => data_get($report, 'cards.contract_labor.amount') === null ? 'Mapping needed' : '$'.number_format((float) data_get($report, 'cards.contract_labor.amount'), 2), 'tone' => 'neutral'];
+        }
 
         return [
             'id' => 'reporting.overview',
             'kind' => 'dashboard',
-            'title' => 'Reporting',
+            'title' => 'Reporting · '.$range['short_label'],
             'refreshable' => true,
+            'range' => ['key' => $range['key'], 'options' => $range['options']],
+            'sections' => [
+                ['type' => 'metrics', 'items' => $metrics],
+                ['type' => 'list', 'items' => $upcoming->map(fn (FieldServiceJob $job): array => [
+                    'id' => (string) $job->id,
+                    'title' => (string) $job->title,
+                    'subtitle' => trim(implode(' | ', array_filter([
+                        $job->scheduled_for?->format('M j, g:i A'),
+                        trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_city]))),
+                        $job->assignedUser?->name,
+                    ]))),
+                    'badge' => 'Upcoming',
+                    'icon' => 'calendar-days',
+                ])->values(), 'empty' => ['title' => 'No upcoming jobs', 'message' => 'Scheduled jobs will appear here.']],
+            ],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function documentsScreen(int $tenantId, ?User $user): array
+    {
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $owner = $user instanceof User && $this->financialAccess->allows($user, $tenant);
+        $assets = Schema::hasTable('workspace_assets')
+            ? WorkspaceAsset::query()->forTenantId($tenantId)->with('jobs:id,title')
+                ->when(! $owner, fn ($query) => $query->where('visibility', 'team'))
+                ->latest()->limit(30)->get()
+            : collect();
+
+        return [
+            'id' => 'documents.overview',
+            'kind' => 'list',
+            'title' => 'Documents',
+            'refreshable' => true,
+            'primary_action' => ['id' => 'upload_assets', 'label' => 'Add photos or files', 'icon' => 'upload'],
+            'job_options' => FieldServiceJob::query()->forTenantId($tenantId)->latest('updated_at')->limit(100)->get(['id', 'title'])
+                ->map(fn (FieldServiceJob $job): array => ['id' => (string) $job->id, 'title' => (string) $job->title])->values(),
             'sections' => [[
-                'type' => 'metrics',
-                'items' => [
-                    ['label' => 'Customers', 'value' => number_format($customerCount), 'tone' => 'teal'],
-                    ['label' => 'Orders', 'value' => number_format($orderCount), 'tone' => 'blue'],
-                    ['label' => 'Revenue (30D)', 'value' => '$'.number_format($revenue, 2), 'tone' => 'green'],
-                ],
+                'type' => 'list',
+                'items' => $assets->map(fn (WorkspaceAsset $asset): array => [
+                    'id' => (string) $asset->id,
+                    'title' => (string) $asset->file_name,
+                    'subtitle' => trim(implode(' | ', array_filter([
+                        $asset->caption,
+                        $asset->jobs->pluck('title')->take(2)->implode(', '),
+                    ]))),
+                    'badge' => $asset->visibility === 'owner' ? 'Owner only' : 'Team',
+                    'icon' => str_starts_with((string) $asset->mime_type, 'image/') ? 'image' : 'file-text',
+                ])->values(),
+                'empty' => ['title' => 'No documents yet', 'message' => 'Choose photos from iCloud or upload files and link them to jobs.'],
             ]],
         ];
     }

@@ -4,6 +4,7 @@ namespace App\Services\Search\Providers;
 
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
+use App\Models\WorkspaceAsset;
 use App\Services\Search\Concerns\BuildsSearchResults;
 use App\Services\Search\GlobalSearchProvider;
 use Illuminate\Database\Eloquent\Builder;
@@ -168,6 +169,38 @@ class FieldServiceSearchProvider implements GlobalSearchProvider
                         'destination' => 'quickbooks',
                         'kind' => 'financial_document',
                     ],
+                ]);
+            }));
+        }
+
+        if (Schema::hasTable('workspace_assets')) {
+            $tenantSlug = (string) $membership?->slug;
+            $assets = WorkspaceAsset::query()->forTenantId($tenantId)
+                ->with('jobs:id,title')
+                ->when(! $includeFinancial, fn (Builder $builder) => $builder->where('visibility', 'team'))
+                ->when($normalized !== '', function (Builder $builder) use ($normalized): void {
+                    $like = '%'.$normalized.'%';
+                    $builder->where(function (Builder $search) use ($like): void {
+                        $search->where('file_name', 'like', $like)
+                            ->orWhere('caption', 'like', $like)
+                            ->orWhere('search_text', 'like', $like)
+                            ->orWhereHas('jobs', fn (Builder $jobs) => $jobs->where('title', 'like', $like));
+                    });
+                })
+                ->latest()->limit(6)->get();
+            $results = $results->concat($assets->map(function (WorkspaceAsset $asset) use ($normalized, $tenantSlug): array {
+                $jobs = $asset->jobs->pluck('title')->take(2)->implode(', ');
+
+                return $this->result([
+                    'type' => 'document',
+                    'subtype' => 'workspace_asset',
+                    'title' => (string) $asset->file_name,
+                    'subtitle' => trim(implode(' • ', array_filter([$asset->caption, $jobs]))),
+                    'url' => route('documents.download', ['tenant' => $tenantSlug, 'asset' => $asset->id]),
+                    'badge' => $asset->visibility === 'owner' ? 'Owner document' : 'Document',
+                    'score' => $this->matchScore($normalized, [$asset->file_name, $asset->caption, $asset->search_text, $jobs], 240),
+                    'icon' => str_starts_with((string) $asset->mime_type, 'image/') ? 'image' : 'file-text',
+                    'meta' => ['asset_id' => (int) $asset->id, 'destination' => 'documents', 'kind' => 'workspace_asset'],
                 ]);
             }));
         }

@@ -377,6 +377,105 @@ class QuickBooksFieldServiceImportService
         return $summary;
     }
 
+    /** @param array<string,mixed> $transaction */
+    public function importQuickBooksFinancialTransaction(
+        Tenant $tenant,
+        array $transaction,
+        string $type,
+        bool $dryRun = false
+    ): array {
+        $summary = $this->emptySummary();
+        $externalId = trim((string) ($transaction['Id'] ?? ''));
+        if ($externalId === '') {
+            $summary['skipped']++;
+
+            return $summary;
+        }
+
+        $summary['documents']++;
+        $summary['lines'] += count((array) ($transaction['Line'] ?? []));
+        if ($dryRun) {
+            return $summary;
+        }
+
+        $existing = FieldServiceFinancialDocument::query()
+            ->forTenantId((int) $tenant->id)
+            ->where('source', 'quickbooks')
+            ->where('document_type', $type)
+            ->where('external_id', $externalId)
+            ->first();
+        $summary[$existing ? 'documents_updated' : 'documents_created']++;
+
+        $document = DB::transaction(function () use ($tenant, $transaction, $type, $externalId): FieldServiceFinancialDocument {
+            $document = FieldServiceFinancialDocument::query()->updateOrCreate(
+                [
+                    'tenant_id' => (int) $tenant->id,
+                    'source' => 'quickbooks',
+                    'document_type' => $type,
+                    'external_id' => $externalId,
+                ],
+                [
+                    'document_number' => trim((string) ($transaction['DocNumber'] ?? '')) ?: null,
+                    'status' => strtolower(trim((string) ($transaction['TxnStatus'] ?? ''))) ?: null,
+                    'transaction_date' => $transaction['TxnDate'] ?? null,
+                    'due_date' => $transaction['DueDate'] ?? null,
+                    'total_amount' => is_numeric($transaction['TotalAmt'] ?? null) ? (float) $transaction['TotalAmt'] : null,
+                    'balance' => is_numeric($transaction['Balance'] ?? null) ? (float) $transaction['Balance'] : null,
+                    'currency' => trim((string) data_get($transaction, 'CurrencyRef.value', '')) ?: null,
+                    'private_note' => trim((string) ($transaction['PrivateNote'] ?? '')) ?: null,
+                    'customer_memo' => trim((string) data_get($transaction, 'CustomerMemo.value', '')) ?: null,
+                    'linked_transactions' => array_values((array) ($transaction['LinkedTxn'] ?? [])),
+                    'metadata' => [
+                        'quickbooks' => [
+                            'sync_token' => (string) ($transaction['SyncToken'] ?? ''),
+                            'account' => data_get($transaction, 'AccountRef.name'),
+                            'account_id' => data_get($transaction, 'AccountRef.value'),
+                            'vendor' => data_get($transaction, 'VendorRef.name') ?: data_get($transaction, 'EntityRef.name'),
+                            'payment_type' => $transaction['PaymentType'] ?? null,
+                            'job_link_status' => 'accounting_only',
+                        ],
+                    ],
+                ]
+            );
+
+            FieldServiceFinancialDocumentLine::query()
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('field_service_financial_document_id', (int) $document->id)
+                ->delete();
+            foreach ((array) ($transaction['Line'] ?? []) as $index => $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+
+                $itemDetail = (array) ($line['ItemBasedExpenseLineDetail'] ?? $line['SalesItemLineDetail'] ?? []);
+                $accountDetail = (array) ($line['AccountBasedExpenseLineDetail'] ?? []);
+                FieldServiceFinancialDocumentLine::query()->create([
+                    'tenant_id' => (int) $tenant->id,
+                    'field_service_financial_document_id' => (int) $document->id,
+                    'source_line_id' => trim((string) ($line['Id'] ?? '')) ?: null,
+                    'sort_order' => (int) $index,
+                    'detail_type' => trim((string) ($line['DetailType'] ?? '')) ?: null,
+                    'item_external_id' => trim((string) data_get($itemDetail, 'ItemRef.value', '')) ?: null,
+                    'item_name' => trim((string) (data_get($itemDetail, 'ItemRef.name') ?: data_get($accountDetail, 'AccountRef.name', ''))) ?: null,
+                    'description' => trim((string) ($line['Description'] ?? '')) ?: null,
+                    'quantity' => is_numeric($itemDetail['Qty'] ?? null) ? (float) $itemDetail['Qty'] : null,
+                    'unit_price' => is_numeric($itemDetail['UnitPrice'] ?? null) ? (float) $itemDetail['UnitPrice'] : null,
+                    'amount' => is_numeric($line['Amount'] ?? null) ? (float) $line['Amount'] : null,
+                    'metadata' => [
+                        'account_id' => data_get($accountDetail, 'AccountRef.value'),
+                        'account_name' => data_get($accountDetail, 'AccountRef.name'),
+                        'customer_id' => data_get($accountDetail, 'CustomerRef.value') ?: data_get($itemDetail, 'CustomerRef.value'),
+                        'customer_name' => data_get($accountDetail, 'CustomerRef.name') ?: data_get($itemDetail, 'CustomerRef.name'),
+                    ],
+                ]);
+            }
+
+            return $document;
+        });
+
+        return $summary;
+    }
+
     /** @param array<int,array<string,mixed>> $attachables
      * @return array{customers:int,jobs:int,items:int,documents:int,lines:int,attachments:int,skipped:int}
      */
@@ -388,7 +487,7 @@ class QuickBooksFieldServiceImportService
             foreach ((array) ($attachable['AttachableRef'] ?? []) as $reference) {
                 $type = strtolower(trim((string) data_get($reference, 'EntityRef.type', '')));
                 $externalId = trim((string) data_get($reference, 'EntityRef.value', ''));
-                if ($attachmentId === '' || $externalId === '' || ! in_array($type, ['invoice', 'estimate'], true)) {
+                if ($attachmentId === '' || $externalId === '' || ! in_array($type, ['invoice', 'estimate', 'purchase', 'bill', 'payment'], true)) {
                     $summary['skipped']++;
 
                     continue;

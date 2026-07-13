@@ -14,6 +14,7 @@ use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
 use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Dashboard\UnifiedDashboardService;
+use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\MobileLandlordAccessService;
 use App\Services\Mobile\TenantMobileMessagingService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
@@ -61,10 +62,7 @@ class EverbranchMobileController extends Controller
         $user = $this->user($request);
         $storePayload = $catalog->tenantStorePayload((int) $tenant->id, 'mobile');
         $role = $this->tenantRole($user, $tenant);
-        $manifest = collect($mobileModules->manifest((int) $tenant->id))
-            ->when(! $this->canViewFinancials($user, $tenant), fn ($modules) => $modules->reject(fn (array $module): bool => ($module['module_key'] ?? null) === 'reporting'))
-            ->values()
-            ->all();
+        $manifest = collect($mobileModules->manifest((int) $tenant->id))->values()->all();
 
         return response()->json([
             'contract_version' => TenantMobileModuleRegistry::CONTRACT_VERSION,
@@ -97,11 +95,9 @@ class EverbranchMobileController extends Controller
     public function moduleScreen(Request $request, string $tenant, string $moduleKey, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
-        if (strtolower(trim($moduleKey)) === 'reporting') {
-            abort_unless($this->canViewFinancials($this->user($request), $tenantModel), 403);
-        }
+        $range = $request->validate(['range' => ['nullable', 'in:1d,1w,1m,30d,ytd']])['range'] ?? null;
 
-        return response()->json($registry->screen((int) $tenantModel->id, $moduleKey));
+        return response()->json($registry->screen((int) $tenantModel->id, $moduleKey, $this->user($request), $range));
     }
 
     public function customers(Request $request, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
@@ -298,12 +294,38 @@ class EverbranchMobileController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function moduleAction(Request $request, string $tenant, string $moduleKey, string $actionKey, TenantMobileModuleRegistry $registry): JsonResponse
+    public function moduleAction(Request $request, string $tenant, string $moduleKey, string $actionKey, TenantMobileModuleRegistry $registry, WorkspaceAssetService $assets): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $manifest = collect($registry->manifest((int) $tenantModel->id))
             ->firstWhere('module_key', strtolower(trim($moduleKey)));
         abort_unless(is_array($manifest) && in_array($actionKey, (array) ($manifest['actions'] ?? []), true), 404);
+
+        if ($moduleKey === 'documents' && $actionKey === 'upload_assets') {
+            $validated = $request->validate([
+                'files' => ['required', 'array', 'min:1', 'max:20'],
+                'files.*' => ['required', 'file', 'max:25600'],
+                'job_ids' => ['nullable', 'array'],
+                'job_ids.*' => ['integer'],
+                'caption' => ['nullable', 'string', 'max:255'],
+                'visibility' => ['nullable', 'in:team,owner'],
+            ]);
+            $visibility = (string) ($validated['visibility'] ?? 'team');
+            if ($visibility === 'owner') {
+                abort_unless($this->canViewFinancials($this->user($request), $tenantModel), 403);
+            }
+            $created = [];
+            foreach ($request->file('files', []) as $file) {
+                $created[] = $assets->storeUpload($tenantModel, $this->user($request), $file, (array) ($validated['job_ids'] ?? []), $visibility, $validated['caption'] ?? null);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'action' => 'upload_assets',
+                'resource_ids' => collect($created)->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+                'message' => count($created).' document'.(count($created) === 1 ? '' : 's').' added.',
+            ], 201);
+        }
 
         abort_unless($moduleKey === 'field_service' && in_array($actionKey, ['capture_photo', 'add_note'], true), 422, 'This mobile action is not supported by the current contract.');
 
@@ -554,7 +576,7 @@ class EverbranchMobileController extends Controller
 
     protected function canViewFinancials(User $user, Tenant $tenant): bool
     {
-        return in_array($this->tenantRole($user, $tenant), ['admin', 'manager', 'marketing_manager'], true)
+        return in_array($this->tenantRole($user, $tenant), ['admin', 'owner', 'tenant_owner'], true)
             || strtolower(trim((string) $user->role)) === 'platform_admin';
     }
 

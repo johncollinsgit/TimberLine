@@ -12,6 +12,9 @@ use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
+use App\Http\Controllers\QuickBooksReportsController;
+use App\Http\Controllers\WorkspaceDocumentsController;
+use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
@@ -551,6 +554,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])
         ->name('integrations.quickbooks.callback');
+
+    Route::middleware(['tenant.access', 'module:quickbooks'])
+        ->prefix('workspaces/{tenant:slug}/reports')
+        ->name('quickbooks.reports.')
+        ->group(function (): void {
+            Route::get('/', [QuickBooksReportsController::class, 'index'])->name('index');
+            Route::put('/settings', [QuickBooksReportsController::class, 'updateSettings'])->name('settings');
+            Route::post('/refresh', [QuickBooksReportsController::class, 'refresh'])->name('refresh');
+        });
+
+    Route::middleware(['tenant.access', 'module:documents'])
+        ->prefix('workspaces/{tenant:slug}/documents')
+        ->name('documents.')
+        ->group(function (): void {
+            Route::get('/', [WorkspaceDocumentsController::class, 'index'])->name('index');
+            Route::post('/', [WorkspaceDocumentsController::class, 'store'])->name('store');
+            Route::get('/{asset}/download', [WorkspaceDocumentsController::class, 'download'])->name('download');
+            Route::put('/{asset}/jobs', [WorkspaceDocumentsController::class, 'updateLinks'])->name('links');
+            Route::delete('/{asset}', [WorkspaceDocumentsController::class, 'destroy'])->name('destroy');
+        });
+
+    Route::middleware(['tenant.access', 'module:estimator'])
+        ->prefix('workspaces/{tenant:slug}/estimator')
+        ->name('estimator.')
+        ->group(function (): void {
+            Route::get('/', [FieldServiceEstimatorController::class, 'index'])->name('index');
+            Route::post('/candidates/rebuild', [FieldServiceEstimatorController::class, 'rebuild'])->name('candidates.rebuild');
+            Route::post('/candidates/{candidate}/approve', [FieldServiceEstimatorController::class, 'approve'])->name('candidates.approve');
+            Route::post('/candidates/{candidate}/archive', [FieldServiceEstimatorController::class, 'archiveCandidate'])->name('candidates.archive');
+            Route::post('/price-book', [FieldServiceEstimatorController::class, 'storeItem'])->name('items.store');
+            Route::put('/price-book/{item}', [FieldServiceEstimatorController::class, 'updateItem'])->name('items.update');
+            Route::post('/estimates', [FieldServiceEstimatorController::class, 'store'])->name('store');
+            Route::get('/estimates/{estimate}', [FieldServiceEstimatorController::class, 'show'])->name('show');
+            Route::put('/estimates/{estimate}', [FieldServiceEstimatorController::class, 'update'])->name('update');
+            Route::post('/estimates/{estimate}/duplicate', [FieldServiceEstimatorController::class, 'duplicate'])->name('duplicate');
+        });
 
     Route::middleware(['role:admin', 'tenant.access'])
         ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])

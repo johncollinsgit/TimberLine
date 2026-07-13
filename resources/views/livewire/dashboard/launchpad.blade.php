@@ -7,6 +7,8 @@
     $pinnedModules = is_array($dashboard['pinned_modules'] ?? null) ? $dashboard['pinned_modules'] : [];
     $dateRange = is_array($dashboard['date_range'] ?? null) ? $dashboard['date_range'] : [];
     $rangeOptions = is_array($dateRange['options'] ?? null) ? $dateRange['options'] : [];
+    $upcomingJobs = is_array($dashboard['upcoming_jobs'] ?? null) ? $dashboard['upcoming_jobs'] : [];
+    $ownerReporting = is_array($dashboard['owner_reporting'] ?? null) ? $dashboard['owner_reporting'] : null;
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 min-w-0">
@@ -83,6 +85,34 @@
                 </div>
             @endif
         </section>
+
+        @if($upcomingJobs !== [] || $ownerReporting)
+            <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                <section class="mf-app-card rounded-3xl p-5 sm:p-6">
+                    <div class="flex items-center justify-between gap-3">
+                        <div><h2 class="text-lg font-semibold text-[var(--fb-text)]">Next jobs</h2><p class="mt-1 text-sm text-[var(--fb-muted)]">Upcoming incomplete work, address, and assignment.</p></div>
+                        <a href="{{ route('field-service.calendar') }}" class="text-sm font-semibold text-[var(--fb-brand)]">Open calendar</a>
+                    </div>
+                    <div class="mt-4 divide-y divide-[var(--fb-border)]">
+                        @forelse($upcomingJobs as $job)
+                            <a href="{{ $job['href'] ?? route('field-service.jobs.show', ['job' => $job['id']]) }}" class="flex items-center justify-between gap-4 py-3">
+                                <div class="min-w-0"><div class="truncate text-sm font-semibold text-[var(--fb-text)]">{{ $job['title'] }}</div><div class="mt-1 truncate text-xs text-[var(--fb-muted)]">{{ $job['address'] ?: 'Address not set' }} · {{ $job['assigned_to'] ?: 'Unassigned' }}</div></div>
+                                <time class="shrink-0 text-xs font-semibold text-[var(--fb-muted)]">{{ filled($job['scheduled_for'] ?? null) ? \Illuminate\Support\Carbon::parse($job['scheduled_for'])->format('M j, g:i A') : 'Unscheduled' }}</time>
+                            </a>
+                        @empty
+                            <div class="py-6 text-sm text-[var(--fb-muted)]">No upcoming jobs are scheduled.</div>
+                        @endforelse
+                    </div>
+                </section>
+                @if($ownerReporting)
+                    <section class="mf-app-card rounded-3xl p-5 sm:p-6">
+                        <h2 class="text-lg font-semibold text-[var(--fb-text)]">Owner reporting</h2>
+                        <p class="mt-1 text-sm text-[var(--fb-muted)]">Detailed labor, supplies, receivables, comparisons, and sync health.</p>
+                        <a href="{{ route('quickbooks.reports.index', ['tenant' => $dashboard['tenant_slug'], 'range' => $dateRange['key'] ?? '1m']) }}" class="mt-5 inline-flex rounded-lg border border-[var(--fb-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--fb-brand)]">Open financial reporting</a>
+                    </section>
+                @endif
+            </div>
+        @endif
 
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <section class="mf-app-card rounded-3xl p-5 sm:p-6">

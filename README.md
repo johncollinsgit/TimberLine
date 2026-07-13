@@ -1844,6 +1844,14 @@ This update removes the temporary beta redemption rollout gate and keeps Candle 
   - duplicate/idempotent task protections
   - Shopify discount-sync fail-safe with automatic balance restoration
 
+## Shared Field Operations Branches (2026-07-13)
+
+- QuickBooks is a reusable, default-disabled, read-only Branch. Tenant OAuth, audit/import, owner reporting, encrypted snapshots, manual refresh, and per-connection scheduled sync must remain tenant-scoped. Financial cards are owner/admin-only; operational Reporting remains available to team members.
+- Documents is a reusable, default-disabled Branch for private files and selected iCloud photos. Files use authenticated downloads, team/owner visibility, searchable text/tags, multi-job links, and an audit history.
+- Estimator is a reusable, default-disabled Branch dependent on Field Service. It uses owner-reviewed historical pricing to create Everbranch-only drafts and performs no QuickBooks write-back.
+- Global dashboard/report ranges are `1d`, `1w`, `1m`, `30d`, and `ytd`, with current calendar month as the default. Accounting invoices are `work billed`; only jobs with `completed_at` are `jobs completed`.
+- See `docs/collins-electric-access-and-quickbooks.md` for the first-tenant rollout and access guardrails.
+
 ## Future Purchasable Add-Ons (Tenant-Scoped)
 - Build future apps/modules as tenant-scoped add-ons attached to the shared platform shell.
 - Reuse canonical identity and marketing architecture:

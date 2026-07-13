@@ -11,9 +11,12 @@ use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\FieldService\QuickBooksOwnerReportingService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBlueprintProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
+use App\Services\Tenancy\TenantFinancialAccess;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -26,6 +29,9 @@ class UnifiedDashboardService
         protected TenantModuleCatalogService $moduleCatalogService,
         protected TenantBlueprintProfileService $blueprintProfileService,
         protected DashboardDateRange $dateRanges,
+        protected TenantFinancialAccess $financialAccess,
+        protected TenantModuleAccessResolver $moduleAccess,
+        protected QuickBooksOwnerReportingService $ownerReports,
     ) {}
 
     /**
@@ -47,9 +53,14 @@ class UnifiedDashboardService
             : ['sections' => []];
         $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
         $tradeMetrics = $this->tradeMetrics($tenant, $profile, $range);
+        $ownerReport = $this->ownerReport($tenant, $user, $range['key']);
+        $summaryCards = $ownerReport
+            ? $this->financialSummaryCards($ownerReport)
+            : $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics);
 
         return [
             'tenant_id' => $tenantId,
+            'tenant_slug' => $tenant?->slug,
             'date_range' => [
                 'key' => $range['key'],
                 'label' => $range['label'],
@@ -60,10 +71,61 @@ class UnifiedDashboardService
             ],
             'experience_profile' => $profile,
             'hero' => $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics),
-            'summary_cards' => $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics),
+            'summary_cards' => $summaryCards,
+            'upcoming_jobs' => $ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant),
+            'owner_reporting' => $ownerReport,
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function ownerReport(?Tenant $tenant, ?User $user, string $rangeKey): ?array
+    {
+        if (! $tenant || ! $user
+            || ! Schema::hasTable('quickbooks_reporting_settings')
+            || ! $this->financialAccess->allows($user, $tenant)
+            || ! $this->moduleAccess->canAccess((int) $tenant->id, 'quickbooks')) {
+            return null;
+        }
+
+        return $this->ownerReports->report($tenant, $rangeKey, false);
+    }
+
+    /** @param array<string,mixed> $report @return array<int,array<string,string>> */
+    protected function financialSummaryCards(array $report): array
+    {
+        $unpaid = (array) data_get($report, 'cards.unpaid_invoices', []);
+        $work = (array) data_get($report, 'cards.work_billed', []);
+        $contract = (array) data_get($report, 'cards.contract_labor', []);
+        $sync = (array) ($report['sync_health'] ?? []);
+
+        return [
+            ['label' => 'Unpaid invoices', 'value' => '$'.number_format((float) ($unpaid['amount'] ?? 0), 2), 'detail' => number_format((int) ($unpaid['count'] ?? 0)).' open · $'.number_format((float) ($unpaid['overdue_amount'] ?? 0), 2).' overdue'],
+            ['label' => 'Work billed', 'value' => '$'.number_format((float) ($work['amount'] ?? 0), 2), 'detail' => number_format((int) ($work['count'] ?? 0)).' invoices in this time window'],
+            ['label' => 'Contract labor', 'value' => ($contract['amount'] ?? null) === null ? 'Mapping needed' : '$'.number_format((float) $contract['amount'], 2), 'detail' => ($contract['percent'] ?? null) === null ? 'Owner must approve the P&L account mapping' : number_format((float) $contract['percent'], 1).'% of P&L income'],
+            ['label' => 'QuickBooks review', 'value' => number_format((int) ($sync['review_count'] ?? 0)), 'detail' => ($sync['connected'] ?? false) ? 'Connected · last successful import is tracked' : 'QuickBooks is not connected'],
+        ];
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    protected function upcomingJobs(?Tenant $tenant): array
+    {
+        if (! $tenant || ! Schema::hasTable('field_service_jobs')) {
+            return [];
+        }
+
+        return FieldServiceJob::query()->forTenantId((int) $tenant->id)
+            ->whereNotNull('scheduled_for')->where('scheduled_for', '>=', now())->where('status', '!=', 'done')
+            ->with('assignedUser:id,name')->orderBy('scheduled_for')->limit(5)->get()
+            ->map(fn (FieldServiceJob $job): array => [
+                'id' => (int) $job->id,
+                'title' => (string) $job->title,
+                'scheduled_for' => $job->scheduled_for?->toIso8601String(),
+                'address' => trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_city, $job->service_state]))),
+                'assigned_to' => $job->assignedUser?->name,
+                'href' => route('field-service.jobs.show', ['job' => $job->id]),
+            ])->all();
     }
 
     /**

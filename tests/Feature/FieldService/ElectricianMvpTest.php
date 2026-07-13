@@ -139,7 +139,7 @@ test('mobile field service exposes lock box notes and tenant scoped note action'
     ])->assertNotFound();
 });
 
-test('collins team members can use operations but cannot open mobile financial reporting', function (): void {
+test('collins team members can use operational reporting without mobile financial cards', function (): void {
     [$tenant, $admin] = electricianTenantAndUser();
     $member = User::factory()->create([
         'role' => 'member',
@@ -165,10 +165,13 @@ test('collins team members can use operations but cannot open mobile financial r
 
     Sanctum::actingAs($member, ['mobile:read']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/modules/reporting')
-        ->assertForbidden();
+        ->assertOk()
+        ->assertJsonFragment(['label' => 'Upcoming jobs'])
+        ->assertJsonMissing(['label' => 'Unpaid invoices'])
+        ->assertJsonMissing(['label' => 'Contract labor']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/bootstrap')
         ->assertOk()
-        ->assertJsonMissing(['module_key' => 'reporting']);
+        ->assertJsonFragment(['module_key' => 'reporting']);
 
     expect($admin->id)->not->toBe($member->id);
 });
