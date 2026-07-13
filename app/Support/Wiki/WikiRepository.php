@@ -2,6 +2,8 @@
 
 namespace App\Support\Wiki;
 
+use App\Models\Tenant;
+use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
@@ -9,14 +11,19 @@ use Illuminate\Support\Str;
 
 class WikiRepository
 {
-    public function __construct(private readonly WikiStore $store)
-    {
-    }
+    private ?array $resolvedContext = null;
+
+    public function __construct(
+        private readonly WikiStore $store,
+        private readonly TenantContext $tenantContext
+    ) {}
 
     public function categories(): Collection
     {
-        $base = collect(config('wiki.categories', []))->keyBy('slug');
-        $stored = $this->store->load();
+        $base = collect($this->context()['tenant_guide'] ? config('workspace_guide.categories', []) : config('wiki.categories', []))
+            ->map(fn (array $category): array => $this->interpolate($category))
+            ->keyBy('slug');
+        $stored = $this->store->load($this->storageTenantId());
         $overrides = collect($stored['categories'] ?? [])->mapWithKeys(
             fn (array $category, string $slug): array => [$slug => array_merge(['slug' => $slug], $category)]
         );
@@ -42,8 +49,10 @@ class WikiRepository
     public function articles(): Collection
     {
         $categories = $this->categories();
-        $base = collect(config('wiki.articles', []))->keyBy('slug');
-        $stored = $this->store->load();
+        $base = collect($this->context()['tenant_guide'] ? config('workspace_guide.articles', []) : config('wiki.articles', []))
+            ->map(fn (array $article): array => $this->interpolate($article))
+            ->keyBy('slug');
+        $stored = $this->store->load($this->storageTenantId());
         $overrides = collect($stored['articles'] ?? [])->mapWithKeys(
             fn (array $article, string $slug): array => [$slug => array_merge(['slug' => $slug], $article)]
         );
@@ -94,7 +103,7 @@ class WikiRepository
     public function popular(int $limit = 6): Collection
     {
         $articles = $this->publishedArticles();
-        $hasViews = $articles->contains(fn (array $article): bool => !is_null($article['views']));
+        $hasViews = $articles->contains(fn (array $article): bool => ! is_null($article['views']));
 
         if ($hasViews) {
             return $articles->sortByDesc(fn (array $article): int => (int) $article['views'])->take($limit)->values();
@@ -183,7 +192,7 @@ class WikiRepository
             $label = trim($matches[2] ?? '');
             $article = $this->article($slug);
 
-            if (!$article) {
+            if (! $article) {
                 return e($label !== '' ? $label : $slug);
             }
 
@@ -197,21 +206,74 @@ class WikiRepository
 
     public function upsertArticle(string $slug, array $data): void
     {
-        $this->store->upsertArticle($slug, $data);
+        $this->store->upsertArticle($slug, $data, $this->storageTenantId());
     }
 
     public function deleteArticle(string $slug): void
     {
-        $this->store->deleteArticle($slug);
+        $this->store->deleteArticle($slug, $this->storageTenantId());
     }
 
     public function upsertCategory(string $slug, array $data): void
     {
-        $this->store->upsertCategory($slug, $data);
+        $this->store->upsertCategory($slug, $data, $this->storageTenantId());
     }
 
     public function deleteCategory(string $slug): void
     {
-        $this->store->deleteCategory($slug);
+        $this->store->deleteCategory($slug, $this->storageTenantId());
+    }
+
+    public function isTenantGuide(): bool
+    {
+        return (bool) $this->context()['tenant_guide'];
+    }
+
+    public function workspaceName(): string
+    {
+        return (string) $this->context()['tenant_name'];
+    }
+
+    /** @return array{tenant_id:?int,tenant_name:string,tenant_guide:bool} */
+    private function context(): array
+    {
+        $tenantId = $this->tenantContext->id();
+        if ($this->resolvedContext !== null && $this->resolvedContext['tenant_id'] === $tenantId) {
+            return $this->resolvedContext;
+        }
+
+        $tenant = $tenantId !== null ? Tenant::query()->find($tenantId) : null;
+        $flagshipName = strtolower(trim((string) config('everbranch.flagship_tenant_name', 'Modern Forestry')));
+        $tenantName = trim((string) ($tenant?->name ?? 'Everbranch'));
+        $tenantSlug = strtolower(trim((string) ($tenant?->slug ?? '')));
+        $isFlagship = $tenant === null
+            || strtolower($tenantName) === $flagshipName
+            || in_array($tenantSlug, ['modern-forestry', 'modern-forestry-wholesale'], true);
+
+        return $this->resolvedContext = [
+            'tenant_id' => $tenantId,
+            'tenant_name' => $tenantName !== '' ? $tenantName : 'Everbranch',
+            'tenant_guide' => ! $isFlagship,
+        ];
+    }
+
+    private function storageTenantId(): ?int
+    {
+        return $this->isTenantGuide() ? $this->context()['tenant_id'] : null;
+    }
+
+    private function interpolate(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            return collect($value)
+                ->map(fn (mixed $item): mixed => $this->interpolate($item))
+                ->all();
+        }
+
+        if (is_string($value)) {
+            return str_replace('{{tenant_name}}', $this->workspaceName(), $value);
+        }
+
+        return $value;
     }
 }

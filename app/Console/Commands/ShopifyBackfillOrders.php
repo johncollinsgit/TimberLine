@@ -184,7 +184,8 @@ class ShopifyBackfillOrders extends Command
                                     $orderData['line_items'] ?? [],
                                     $note,
                                     $orderData,
-                                    $store['key'] ?? null
+                                    $store['key'] ?? null,
+                                    isset($store['tenant_id']) ? (int) $store['tenant_id'] : null
                                 );
                                 $summary['merged_lines_count'] += max(0, count($orderData['line_items'] ?? []) - count($mergedLines));
                                 $summary['lines_count'] += count($mergedLines);
@@ -319,12 +320,12 @@ class ShopifyBackfillOrders extends Command
                 return self::FAILURE;
             }
 
-            $this->line('store=' . (string) ($store['key'] ?? ''));
+            $this->line('store='.(string) ($store['key'] ?? ''));
             foreach (['processed_orders', 'created', 'updated', 'lines_count', 'merged_lines_count', 'mapping_exceptions_count', 'profiles_created', 'profiles_updated', 'links_created', 'links_reused', 'reviews_created', 'records_skipped', 'errors'] as $key) {
-                $this->line($key . '=' . (int) ($summary[$key] ?? 0));
+                $this->line($key.'='.(int) ($summary[$key] ?? 0));
             }
-            $this->line('run_id=' . (string) $run->id);
-            $this->line('status=' . (string) $run->status);
+            $this->line('run_id='.(string) $run->id);
+            $this->line('status='.(string) $run->status);
         }
 
         return self::SUCCESS;
@@ -446,7 +447,7 @@ class ShopifyBackfillOrders extends Command
     }
 
     /**
-     * @param array<string,mixed> $summary
+     * @param  array<string,mixed>  $summary
      */
     protected function persistCheckpoint(MarketingImportRun $run, array $summary): void
     {
@@ -475,7 +476,7 @@ class ShopifyBackfillOrders extends Command
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      */
     protected function scopeErrorForOrderImport(array $store): ?string
     {
@@ -530,7 +531,7 @@ class ShopifyBackfillOrders extends Command
     }
 
     /**
-     * @param array<string,mixed> $orderData
+     * @param  array<string,mixed>  $orderData
      */
     protected function buildOrderNote(array $orderData): ?string
     {

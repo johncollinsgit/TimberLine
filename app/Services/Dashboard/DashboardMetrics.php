@@ -8,6 +8,7 @@ use App\Models\OrderLine;
 use App\Models\ShopifyImportException;
 use App\Models\ShopifyImportRun;
 use App\Services\Shipping\BusinessDayCalculator;
+use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -19,8 +20,9 @@ class DashboardMetrics
     {
         $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
         $channel = $this->normalizeChannel($channel);
+        $tenantId = app(TenantContext::class)->id();
 
-        $cacheKey = sprintf('dashboard:metrics:v2:range:%d:channel:%s', $rangeDays, $channel);
+        $cacheKey = sprintf('dashboard:metrics:v3:tenant:%s:range:%d:channel:%s', $tenantId ?? 'none', $rangeDays, $channel);
 
         return Cache::remember($cacheKey, now()->addSeconds(90), function () use ($rangeDays, $channel): array {
             return $this->buildSnapshot($rangeDays, $channel);
@@ -152,7 +154,10 @@ class DashboardMetrics
             ->whereNotIn('status', $openOrderStatuses)
             ->count();
 
-        $mappingExceptionsOpen = MappingException::query()->whereNull('resolved_at')->count();
+        $mappingExceptionsOpen = MappingException::query()
+            ->forTenantId(app(TenantContext::class)->id())
+            ->whereNull('resolved_at')
+            ->count();
 
         return [
             'statusCounts' => $statusCounts,
@@ -233,7 +238,7 @@ class DashboardMetrics
 
     private function ordersBase(string $channel = 'all'): Builder
     {
-        $query = Order::query();
+        $query = Order::query()->forTenantId(app(TenantContext::class)->id());
 
         if ($channel !== 'all') {
             $query->where('order_type', $channel);
@@ -393,7 +398,7 @@ class DashboardMetrics
             'rangeStart' => $rangeStart->toDateString(),
             'rangeEnd' => $rangeEnd->toDateString(),
             'byChannel' => $byChannel,
-            'available' => !empty($byChannel),
+            'available' => ! empty($byChannel),
         ];
     }
 
@@ -436,7 +441,7 @@ class DashboardMetrics
             ],
         ])->all();
 
-        $configured = !empty($byChannel);
+        $configured = ! empty($byChannel);
 
         return [
             'available' => $configured,
@@ -448,7 +453,8 @@ class DashboardMetrics
 
     private function importHealth(string $channel, CarbonImmutable $now): array
     {
-        $runQuery = ShopifyImportRun::query();
+        $tenantId = app(TenantContext::class)->id();
+        $runQuery = ShopifyImportRun::query()->forTenantId($tenantId);
         if ($channel !== 'all') {
             $runQuery->where('store_key', $channel);
         }
@@ -463,7 +469,7 @@ class DashboardMetrics
             ->selectRaw('SUM(COALESCE(imported_count,0) + COALESCE(updated_count,0)) as c')
             ->value('c');
 
-        $importExceptionsQuery = ShopifyImportException::query();
+        $importExceptionsQuery = ShopifyImportException::query()->forTenantId($tenantId);
         if ($channel !== 'all') {
             // No explicit channel field on exceptions. Keep global and disclose in UI.
         }
@@ -473,6 +479,7 @@ class DashboardMetrics
             ->count();
 
         $mappingExceptionsOpen = MappingException::query()
+            ->forTenantId($tenantId)
             ->whereNull('resolved_at')
             ->count();
 

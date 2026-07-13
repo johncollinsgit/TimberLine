@@ -1,5 +1,12 @@
 # Modern Forestry Backstage
 
+## Tenant-Scoped Imports + Workspace Guides (2026-07-13)
+
+- Import ownership follows the active tenant, never a user's email address. Shopify import runs, mapping exceptions, bundle import exceptions, and normalization records carry `tenant_id`; tenant-facing banners, run history, exception tools, dashboard metrics, and global search must query that tenant explicitly.
+- Existing Modern Forestry importer history is backfilled from the related order first and the installed Shopify store second. New importer code must pass `tenant_id` from the resolved OAuth/store context when it creates records.
+- `/wiki` is the active tenant's Workspace Guide. Modern Forestry retains its production/wholesale operating wiki. Other tenants receive the reusable Everbranch guide baseline plus tenant-specific content stored under that tenant's own guide namespace.
+- A multi-workspace user may switch tenants without signing in again, but every import and guide query must switch with the selected workspace. Never use `johncollinsemail@gmail.com`, another email, or shared authentication as a data-ownership shortcut.
+
 ## Collins Electric Guided Launch + QuickBooks Discovery (2026-07-13)
 
 - Collins Electric is a guided launch-partner workspace, not a 3-day trial or self-serve billing flow. Prepare or refresh it with `php artisan everbranch:prepare-collins-electric --seed-demo-job`.

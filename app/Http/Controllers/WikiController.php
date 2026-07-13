@@ -9,9 +9,7 @@ use Illuminate\View\View;
 
 class WikiController extends Controller
 {
-    public function __construct(private readonly WikiRepository $wiki)
-    {
-    }
+    public function __construct(private readonly WikiRepository $wiki) {}
 
     public function index(Request $request): View
     {
@@ -27,6 +25,8 @@ class WikiController extends Controller
             'popular' => $this->wiki->popular(6),
             'randomArticle' => $this->wiki->randomArticle(),
             'searchResults' => $results,
+            'tenantGuide' => $this->wiki->isTenantGuide(),
+            'workspaceName' => $this->wiki->workspaceName(),
         ]);
     }
 
@@ -41,7 +41,7 @@ class WikiController extends Controller
     public function category(string $slug): View
     {
         $category = $this->wiki->category($slug);
-        abort_if(!$category, 404);
+        abort_if(! $category, 404);
 
         $subcategories = collect($category['subcategories'] ?? [])
             ->map(fn (string $childSlug): ?array => $this->wiki->category($childSlug))
@@ -58,7 +58,7 @@ class WikiController extends Controller
     public function article(string $slug): View
     {
         $article = $this->wiki->article($slug);
-        abort_if(!$article, 404);
+        abort_if(! $article, 404);
         $isWholesaleArticle = str_starts_with($article['slug'], 'wholesale-');
         $breadcrumbCategory = $isWholesaleArticle
             ? $this->wiki->category('wholesale-processes')

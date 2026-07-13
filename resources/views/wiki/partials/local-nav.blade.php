@@ -1,5 +1,10 @@
+@php
+    $workspaceWiki = app(\App\Support\Wiki\WikiRepository::class);
+    $tenantGuide = $workspaceWiki->isTenantGuide();
+    $guideArticles = $tenantGuide ? $workspaceWiki->publishedArticles()->take(5) : collect();
+@endphp
 <nav class="rounded-2xl border border-zinc-200 bg-white p-4 text-sm">
-    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-400">Wiki</div>
+    <div class="text-[11px] uppercase tracking-[0.24em] text-zinc-400">{{ $tenantGuide ? 'Workspace Guide' : 'Wiki' }}</div>
     <ul class="mt-3 space-y-1">
         <li>
             <a href="{{ route('wiki.index') }}" class="block rounded-lg px-3 py-2 {{ request()->routeIs('wiki.index') ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' }}">Home</a>
@@ -7,12 +12,20 @@
         <li>
             <a href="{{ route('wiki.categories') }}" class="block rounded-lg px-3 py-2 {{ request()->routeIs('wiki.categories') || request()->routeIs('wiki.category') ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' }}">Categories</a>
         </li>
-        <li>
-            <a href="{{ route('wiki.wholesale-processes') }}" class="block rounded-lg px-3 py-2 {{ request()->routeIs('wiki.wholesale-processes') ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' }}">Wholesale Processes</a>
-        </li>
-        <li>
-            <a href="{{ route('wiki.article', ['slug' => 'market-room']) }}" class="block rounded-lg px-3 py-2 {{ request()->routeIs('wiki.article') && request()->route('slug') === 'market-room' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' }}">Market Room Process</a>
-        </li>
+        @if($tenantGuide)
+            @foreach($guideArticles as $guideArticle)
+                <li>
+                    <a href="{{ $guideArticle['url'] }}" class="block rounded-lg px-3 py-2 {{ request()->routeIs('wiki.article') && request()->route('slug') === $guideArticle['slug'] ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' }}">{{ $guideArticle['title'] }}</a>
+                </li>
+            @endforeach
+        @else
+            <li>
+                <a href="{{ route('wiki.wholesale-processes') }}" class="block rounded-lg px-3 py-2 {{ request()->routeIs('wiki.wholesale-processes') ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' }}">Wholesale Processes</a>
+            </li>
+            <li>
+                <a href="{{ route('wiki.article', ['slug' => 'market-room']) }}" class="block rounded-lg px-3 py-2 {{ request()->routeIs('wiki.article') && request()->route('slug') === 'market-room' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900' }}">Market Room Process</a>
+            </li>
+        @endif
         <li>
             <a href="{{ route('wiki.random') }}" class="block rounded-lg px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900">Random Article</a>
         </li>

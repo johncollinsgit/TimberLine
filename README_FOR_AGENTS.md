@@ -37,8 +37,15 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - Collins Electric (`collins-electric`) is the first guided electrician launch-partner workspace. It is not a 3-day trial, public self-service tenant, or billing/subscription activation.
 - Use `php artisan everbranch:prepare-collins-electric --seed-demo-job` to create or refresh the tenant, apply the `electrician` blueprint, attach `johncollinsemail@gmail.com` as active verified admin, and keep SMS provider status `not_verified`.
 - Setup interests may include `billing`, `uploads`, and `quickbooks`, but final blueprint modules must remain limited to safe workspace modules (`customers`, `field_service`, `messaging`, `reporting`) unless a future approved PR adds real fulfillment.
-- QuickBooks support is concierge CSV/XLSX import with `php artisan field-service:import-quickbooks`; do not describe or implement it as live OAuth sync. Apple Photos are manual job photo/file import for now.
+- QuickBooks is now a reusable opt-in beta Branch with tenant-scoped OAuth plus read-only audit/sync commands. CSV/XLSX remains the concierge fallback through `php artisan field-service:import-quickbooks`. Do not enable payments, write-back, webhooks, CDC, recurring sync, Estimator, or payroll automatically. Apple Photos remain manual job photo/file import for now.
 - SMS/reminder configuration is admin-guided setup intent only. Do not enable real customer sends for Collins Electric until provider readiness, consent state, and delivery logs have passed a smoke test.
+
+## Tenant Import + Workspace Guide Isolation Rule (2026-07-13)
+
+- Import ownership is tenant-based, never email-based. Every OAuth callback, importer command, run, exception, normalization, banner, search result, and admin action must carry or resolve `tenant_id` and fail closed when an active tenant cannot be established.
+- `store_key` is source context, not a sufficient authorization boundary. Legacy rows may be backfilled through their order or installed store, but new writes must stamp `tenant_id` directly.
+- `/wiki` is protected by `tenant.access`. Modern Forestry uses the legacy production wiki; every non-flagship workspace uses the shared Everbranch guide baseline and its own tenant-specific override file. Direct links to another tenant's wiki articles must resolve as unavailable.
+- Multi-membership users are expected. Switching the active workspace must switch import alerts, import history, exception queues, search, dashboards, OAuth connections, and guide content within the same session.
 
 ## Modern Forestry Facebook Scent-Share Preview Refresh Rule (2026-06-30)
 

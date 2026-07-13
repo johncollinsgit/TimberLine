@@ -156,9 +156,9 @@ class UnifiedAppNavigationService
             'admin_sub_items' => $adminSubItems,
             'marketing_sub_groups' => $marketingSubGroups,
             'birthday_sub_groups' => $birthdaySubGroups,
-            'wiki_sections' => $this->wikiSections(),
+            'wiki_sections' => $this->wikiSections($tenant),
             'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId, $fieldServiceEnabled),
-            'ops_attention' => $canAccessOps ? $this->opsAttention() : ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'ops_attention' => $canAccessOps ? $this->opsAttention($tenantId) : ['unresolved_exceptions' => 0, 'latest_run' => null],
             'current_console' => $this->currentConsolePayload($tenant, $profile),
             'console_switches' => $this->consoleSwitches($user, $tenant, false),
             'shell_context' => 'tenant',
@@ -581,8 +581,25 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array<string,mixed>>
      */
-    protected function wikiSections(): array
+    protected function wikiSections(?Tenant $tenant): array
     {
+        if (! $this->isFlagshipTenant($tenant)) {
+            return [
+                [
+                    'key' => 'workspace-overview',
+                    'label' => 'Workspace Overview',
+                    'href' => route('wiki.article', ['slug' => 'workspace-overview']),
+                    'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'workspace-overview',
+                ],
+                [
+                    'key' => 'customers-and-jobs',
+                    'label' => 'Customers & Jobs',
+                    'href' => route('wiki.article', ['slug' => 'customers-and-jobs']),
+                    'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'customers-and-jobs',
+                ],
+            ];
+        }
+
         return [
             [
                 'key' => 'wholesale-processes',
@@ -678,20 +695,29 @@ class UnifiedAppNavigationService
     /**
      * @return array<string,mixed>
      */
-    protected function opsAttention(): array
+    protected function opsAttention(?int $tenantId): array
     {
         $unresolvedExceptions = 0;
         $latestRun = null;
 
+        if ($tenantId === null) {
+            return [
+                'unresolved_exceptions' => 0,
+                'latest_run' => null,
+            ];
+        }
+
         try {
-            if (Schema::hasTable('mapping_exceptions')) {
+            if (Schema::hasTable('mapping_exceptions') && Schema::hasColumn('mapping_exceptions', 'tenant_id')) {
                 $unresolvedExceptions = MappingException::query()
+                    ->forTenantId($tenantId)
                     ->whereNull('resolved_at')
                     ->count();
             }
 
-            if (Schema::hasTable('shopify_import_runs')) {
+            if (Schema::hasTable('shopify_import_runs') && Schema::hasColumn('shopify_import_runs', 'tenant_id')) {
                 $latestRun = ShopifyImportRun::query()
+                    ->forTenantId($tenantId)
                     ->orderByDesc('id')
                     ->first();
             }
