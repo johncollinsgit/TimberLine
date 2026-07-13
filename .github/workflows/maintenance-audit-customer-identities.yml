@@ -52,6 +52,7 @@ jobs:
           ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
       - name: Audit Modern Forestry customer identities on production
+        id: audit
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -72,5 +73,17 @@ jobs:
               exit 1
               ;;
           esac
+          audit_file="$RUNNER_TEMP/customer-identity-audit.json"
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan marketing:audit-customer-identities --tenant=modern-forestry --store=retail --json$audit_query"
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan marketing:audit-customer-identities --tenant=modern-forestry --store=retail --json$audit_query" \
+            > "$audit_file"
+          jq -e . "$audit_file" > /dev/null
+          jq '{tenant_id, tenant_slug, store_key, clusters, deterministic_clusters, needs_review_clusters, shopify_merge_clusters, birthday_data_clusters}' "$audit_file"
+
+      - name: Retain detailed audit briefly for reviewed reconciliation
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-identity-audit-${{ inputs.target }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/customer-identity-audit.json
+          if-no-files-found: error
+          retention-days: 1

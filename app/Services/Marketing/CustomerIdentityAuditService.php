@@ -47,10 +47,12 @@ class CustomerIdentityAuditService
             })->values();
         }
 
-        $clusters = collect($this->connectedDuplicateClusters($profiles))
-            ->map(function (array $cluster) use ($tenantId, $storeKey): array {
-                $members = $this->loadFullProfiles($cluster['profile_ids']);
-                $facts = $members->map(fn (object $profile): array => $this->profileFacts($profile, $tenantId, $storeKey));
+        $clusterDefinitions = collect($this->connectedDuplicateClusters($profiles));
+        $members = $this->loadFullProfiles($clusterDefinitions->pluck('profile_ids')->flatten()->map('intval')->unique()->values()->all());
+        $factsByProfile = $this->profileFactsForProfiles($members, $tenantId, $storeKey)->keyBy('id');
+        $clusters = $clusterDefinitions
+            ->map(function (array $cluster) use ($factsByProfile): array {
+                $facts = collect($cluster['profile_ids'])->map(fn (int $profileId): array => $factsByProfile->get($profileId));
                 $recommendation = $this->recommendation($facts);
 
                 return [
@@ -177,92 +179,129 @@ class CustomerIdentityAuditService
             ->values();
     }
 
-    /** @return array<string,mixed> */
-    private function profileFacts(object $profile, int $tenantId, string $storeKey): array
+    private function profileFactsForProfiles(Collection $profiles, int $tenantId, string $storeKey): Collection
     {
-        $profileId = (int) $profile->id;
-        $transactions = DB::table('candle_cash_transactions')->where('marketing_profile_id', $profileId);
-        $balance = (float) DB::table('candle_cash_balances')->where('marketing_profile_id', $profileId)->value('balance');
-        $ledgerNet = (float) (clone $transactions)->sum('candle_cash_delta');
-        $transactionCount = (clone $transactions)->count();
-        $externalProfiles = Schema::hasTable('customer_external_profiles')
-            ? DB::table('customer_external_profiles')->where('marketing_profile_id', $profileId)->get()->map(fn (object $row): array => [
-                'id' => (int) $row->id,
-                'provider' => (string) $row->provider,
-                'integration' => (string) $row->integration,
-                'store_key' => $row->store_key,
-                'external_customer_id' => (string) $row->external_customer_id,
-                'external_customer_gid' => $row->external_customer_gid,
-                'email' => $row->email,
-                'phone' => $row->phone,
-                'points_balance' => $row->points_balance,
-                'vip_tier' => $row->vip_tier,
-            ])->all()
-            : [];
-        $links = Schema::hasTable('marketing_profile_links')
-            ? DB::table('marketing_profile_links')->where('marketing_profile_id', $profileId)->get()->map(fn (object $row): array => [
-                'id' => (int) $row->id,
-                'tenant_id' => $row->tenant_id,
-                'source_type' => (string) $row->source_type,
-                'source_id' => (string) $row->source_id,
-                'confidence' => $row->confidence ?? null,
-            ])->all()
-            : [];
-        $shopifyIds = collect($externalProfiles)
-            ->filter(fn (array $row): bool => $row['provider'] === 'shopify' && ($row['store_key'] === null || $row['store_key'] === $storeKey))
-            ->map(fn (array $row): string => $this->normalizedShopifyId($row['external_customer_gid'] ?: $row['external_customer_id']))
-            ->merge(collect($links)
-                ->whereIn('source_type', ['shopify_customer', 'growave_customer'])
-                ->pluck('source_id')
-                ->map(fn ($value): string => $this->normalizedShopifyId($value)))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        return [
-            'id' => $profileId,
-            'tenant_id' => (int) ($profile->tenant_id ?? 0),
-            'name' => trim((string) (($profile->first_name ?? '').' '.($profile->last_name ?? ''))),
-            'fields' => collect(self::MERGE_FIELDS)->mapWithKeys(fn (string $field): array => [$field => $profile->{$field} ?? null])->all(),
-            'balance' => $balance,
-            'ledger_net' => $ledgerNet,
-            'transaction_count' => $transactionCount,
-            'balance_matches_ledger' => abs($balance - $ledgerNet) < 0.005,
-            'balance_without_ledger' => abs($balance) >= 0.005 && $transactionCount === 0,
-            'shopify_ids' => $shopifyIds,
-            'external_profiles' => $externalProfiles,
-            'source_links' => $links,
-            'birthdays' => $this->birthdayRows($profileId),
-            'owned_record_counts' => $this->ownedRecordCounts($profileId, $tenantId),
-            'open_merge_operations' => $this->openMergeOperations($profileId),
-        ];
-    }
-
-    /** @return array<int,array<string,mixed>> */
-    private function birthdayRows(int $profileId): array
-    {
-        if (! Schema::hasTable('customer_birthday_profiles')) {
-            return [];
+        $profileIds = $profiles->pluck('id')->map('intval')->unique()->values();
+        if ($profileIds->isEmpty()) {
+            return collect();
         }
 
-        $columns = array_values(array_intersect(Schema::getColumnListing('customer_birthday_profiles'), [
-            'id', 'marketing_profile_id', 'birth_month', 'birth_day', 'birth_year', 'birthday_full_date',
-            'source', 'signup_source', 'capture_date', 'email_subscribed', 'sms_subscribed', 'unsubscribed',
-            'source_file', 'reward_last_issued_at', 'reward_last_issued_year', 'metadata', 'updated_at',
-        ]));
+        $balances = collect();
+        $transactionStats = collect();
+        $externalProfiles = collect();
+        $links = collect();
+        $birthdays = collect();
+        $openMergeOperations = collect();
 
-        return DB::table('customer_birthday_profiles')
-            ->where('marketing_profile_id', $profileId)
-            ->get($columns)
-            ->map(fn (object $row): array => (array) $row)
-            ->all();
+        $profileIds->chunk(5000)->each(function (Collection $chunk) use ($balances, $transactionStats, $externalProfiles, $links, $birthdays, $openMergeOperations): void {
+            DB::table('candle_cash_balances')->whereIn('marketing_profile_id', $chunk->all())
+                ->get(['marketing_profile_id', 'balance'])
+                ->each(fn (object $row) => $balances->put((int) $row->marketing_profile_id, (float) $row->balance));
+            DB::table('candle_cash_transactions')->whereIn('marketing_profile_id', $chunk->all())
+                ->select('marketing_profile_id')
+                ->selectRaw('COUNT(*) as transaction_count, COALESCE(SUM(candle_cash_delta), 0) as ledger_net')
+                ->groupBy('marketing_profile_id')
+                ->get()
+                ->each(fn (object $row) => $transactionStats->put((int) $row->marketing_profile_id, [
+                    'transaction_count' => (int) $row->transaction_count,
+                    'ledger_net' => (float) $row->ledger_net,
+                ]));
+
+            if (Schema::hasTable('customer_external_profiles')) {
+                DB::table('customer_external_profiles')->whereIn('marketing_profile_id', $chunk->all())->get()
+                    ->each(fn (object $row) => $externalProfiles->push([
+                        'marketing_profile_id' => (int) $row->marketing_profile_id,
+                        'id' => (int) $row->id,
+                        'provider' => (string) $row->provider,
+                        'integration' => (string) $row->integration,
+                        'store_key' => $row->store_key,
+                        'external_customer_id' => (string) $row->external_customer_id,
+                        'external_customer_gid' => $row->external_customer_gid,
+                        'email' => $row->email,
+                        'phone' => $row->phone,
+                        'points_balance' => $row->points_balance,
+                        'vip_tier' => $row->vip_tier,
+                    ]));
+            }
+            if (Schema::hasTable('marketing_profile_links')) {
+                DB::table('marketing_profile_links')->whereIn('marketing_profile_id', $chunk->all())->get()
+                    ->each(fn (object $row) => $links->push([
+                        'marketing_profile_id' => (int) $row->marketing_profile_id,
+                        'id' => (int) $row->id,
+                        'tenant_id' => $row->tenant_id,
+                        'source_type' => (string) $row->source_type,
+                        'source_id' => (string) $row->source_id,
+                        'confidence' => $row->confidence ?? null,
+                    ]));
+            }
+            if (Schema::hasTable('customer_birthday_profiles')) {
+                $columns = array_values(array_intersect(Schema::getColumnListing('customer_birthday_profiles'), [
+                    'id', 'marketing_profile_id', 'birth_month', 'birth_day', 'birth_year', 'birthday_full_date',
+                    'source', 'signup_source', 'capture_date', 'email_subscribed', 'sms_subscribed', 'unsubscribed',
+                    'source_file', 'reward_last_issued_at', 'reward_last_issued_year', 'metadata', 'updated_at',
+                ]));
+                DB::table('customer_birthday_profiles')->whereIn('marketing_profile_id', $chunk->all())->get($columns)
+                    ->each(fn (object $row) => $birthdays->push((array) $row));
+            }
+            if (Schema::hasTable('customer_merge_members') && Schema::hasTable('customer_merge_operations')) {
+                DB::table('customer_merge_members as members')
+                    ->join('customer_merge_operations as operations', 'operations.id', '=', 'members.customer_merge_operation_id')
+                    ->whereIn('members.marketing_profile_id', $chunk->all())
+                    ->whereNotIn('operations.status', ['completed', 'cancelled'])
+                    ->get(['members.marketing_profile_id', 'operations.id', 'operations.status', 'operations.shopify_job_id', 'operations.updated_at'])
+                    ->each(fn (object $row) => $openMergeOperations->push((array) $row));
+            }
+        });
+
+        $externalByProfile = $externalProfiles->groupBy('marketing_profile_id');
+        $linksByProfile = $links->groupBy('marketing_profile_id');
+        $birthdaysByProfile = $birthdays->groupBy('marketing_profile_id');
+        $operationsByProfile = $openMergeOperations->groupBy('marketing_profile_id');
+        $ownedRecordCounts = $this->ownedRecordCountsForProfiles($profileIds, $tenantId);
+
+        return $profiles->map(function (object $profile) use ($balances, $transactionStats, $externalByProfile, $linksByProfile, $birthdaysByProfile, $operationsByProfile, $ownedRecordCounts, $storeKey): array {
+            $profileId = (int) $profile->id;
+            $balance = (float) $balances->get($profileId, 0);
+            $ledgerNet = (float) data_get($transactionStats->get($profileId, []), 'ledger_net', 0);
+            $transactionCount = (int) data_get($transactionStats->get($profileId, []), 'transaction_count', 0);
+            $profileExternal = collect($externalByProfile->get($profileId, []))->map(fn (array $row): array => collect($row)->except('marketing_profile_id')->all())->values();
+            $profileLinks = collect($linksByProfile->get($profileId, []))->map(fn (array $row): array => collect($row)->except('marketing_profile_id')->all())->values();
+            $shopifyIds = $profileExternal
+                ->filter(fn (array $row): bool => $row['provider'] === 'shopify' && ($row['store_key'] === null || $row['store_key'] === $storeKey))
+                ->map(fn (array $row): string => $this->normalizedShopifyId($row['external_customer_gid'] ?: $row['external_customer_id']))
+                ->merge($profileLinks
+                    ->whereIn('source_type', ['shopify_customer', 'growave_customer'])
+                    ->pluck('source_id')
+                    ->map(fn ($value): string => $this->normalizedShopifyId($value)))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            return [
+                'id' => $profileId,
+                'tenant_id' => (int) ($profile->tenant_id ?? 0),
+                'name' => trim((string) (($profile->first_name ?? '').' '.($profile->last_name ?? ''))),
+                'fields' => collect(self::MERGE_FIELDS)->mapWithKeys(fn (string $field): array => [$field => $profile->{$field} ?? null])->all(),
+                'balance' => $balance,
+                'ledger_net' => $ledgerNet,
+                'transaction_count' => $transactionCount,
+                'balance_matches_ledger' => abs($balance - $ledgerNet) < 0.005,
+                'balance_without_ledger' => abs($balance) >= 0.005 && $transactionCount === 0,
+                'shopify_ids' => $shopifyIds,
+                'external_profiles' => $profileExternal->all(),
+                'source_links' => $profileLinks->all(),
+                'birthdays' => collect($birthdaysByProfile->get($profileId, []))->values()->all(),
+                'owned_record_counts' => (array) $ownedRecordCounts->get($profileId, []),
+                'open_merge_operations' => collect($operationsByProfile->get($profileId, []))
+                    ->map(fn (array $row): array => collect($row)->except('marketing_profile_id')->all())->values()->all(),
+            ];
+        });
     }
 
-    /** @return array<string,int> */
-    private function ownedRecordCounts(int $profileId, int $tenantId): array
+    private function ownedRecordCountsForProfiles(Collection $profileIds, int $tenantId): Collection
     {
-        $counts = [];
+        $counts = collect();
         $references = array_merge(
             $this->registry->directReferences(),
             collect($this->registry->conflictReferences())->map(fn (array $policy): array => [$policy['column']])->all(),
@@ -276,34 +315,27 @@ class CustomerIdentityAuditService
                 if (! Schema::hasColumn($table, $column)) {
                     continue;
                 }
-                $query = DB::table($table)->where($column, $profileId);
-                if (Schema::hasColumn($table, 'tenant_id')) {
-                    $query->where(fn ($nested) => $nested->where('tenant_id', $tenantId)->orWhereNull('tenant_id'));
-                }
-                $count = $query->count();
-                if ($count > 0) {
-                    $counts[$table.'.'.$column] = $count;
-                }
+                $hasTenantId = Schema::hasColumn($table, 'tenant_id');
+                $profileIds->chunk(5000)->each(function (Collection $chunk) use ($counts, $table, $column, $hasTenantId, $tenantId): void {
+                    $query = DB::table($table)->whereIn($column, $chunk->all());
+                    if ($hasTenantId) {
+                        $query->where(fn ($nested) => $nested->where('tenant_id', $tenantId)->orWhereNull('tenant_id'));
+                    }
+                    $query->select($column)
+                        ->selectRaw('COUNT(*) as aggregate')
+                        ->groupBy($column)
+                        ->get()
+                        ->each(function (object $row) use ($counts, $table, $column): void {
+                            $profileId = (int) $row->{$column};
+                            $profileCounts = (array) $counts->get($profileId, []);
+                            $profileCounts[$table.'.'.$column] = (int) $row->aggregate;
+                            $counts->put($profileId, $profileCounts);
+                        });
+                });
             }
         }
 
         return $counts;
-    }
-
-    /** @return array<int,array<string,mixed>> */
-    private function openMergeOperations(int $profileId): array
-    {
-        if (! Schema::hasTable('customer_merge_members') || ! Schema::hasTable('customer_merge_operations')) {
-            return [];
-        }
-
-        return DB::table('customer_merge_members as members')
-            ->join('customer_merge_operations as operations', 'operations.id', '=', 'members.customer_merge_operation_id')
-            ->where('members.marketing_profile_id', $profileId)
-            ->whereNotIn('operations.status', ['completed', 'cancelled'])
-            ->get(['operations.id', 'operations.status', 'operations.shopify_job_id', 'operations.updated_at'])
-            ->map(fn (object $row): array => (array) $row)
-            ->all();
     }
 
     /** @return array<string,mixed> */
