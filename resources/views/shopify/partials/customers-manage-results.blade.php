@@ -49,6 +49,7 @@
             <table>
                 <thead>
                     <tr>
+                        @if($customerMergeEnabled ?? false)<th class="customers-merge-check" aria-label="Select customers to merge"></th>@endif
                         <th>
                             <a
                                 class="customers-sort-link"
@@ -103,6 +104,11 @@
                             onclick="if (!event.target.closest('a,button,input,select,label')) { window.location.href='{{ $detailUrl }}'; }"
                             onkeydown="if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('a,button,input,select,label')) { event.preventDefault(); window.location.href='{{ $detailUrl }}'; }"
                         >
+                            @if($customerMergeEnabled ?? false)
+                                <td class="customers-merge-check">
+                                    <input type="checkbox" data-customer-merge-select value="{{ (int) $row['id'] }}" data-name="{{ $row['name'] }}" data-email="{{ $row['email'] }}" aria-label="Select {{ $row['name'] }} for merge" />
+                                </td>
+                            @endif
                             <td class="customers-name-cell">
                                 <a class="customers-name-link" href="{{ $detailUrl }}" data-customer-prefetch-endpoint="{{ $detailSectionsUrl }}" data-customer-prefetch-profile-id="{{ (int) $row['id'] }}">{{ $row['name'] }}</a>
                                 <div class="customers-subtext">{{ $row['email'] }}</div>
@@ -121,7 +127,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="customers-empty">
+                            <td colspan="{{ ($customerMergeEnabled ?? false) ? 8 : 7 }}" class="customers-empty">
                                 No customers matched your search or filters.
                             </td>
                         </tr>

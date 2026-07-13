@@ -4,29 +4,30 @@ namespace App\Http\Controllers;
 
 use App\Models\CandleCashTransaction;
 use App\Models\MarketingProfile;
+use App\Models\Tenant;
 use App\Services\Marketing\CandleCashService;
+use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\ModernForestryScentAudienceActivationService;
-use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedCustomerActionUrlGenerator;
-use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
-use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
-use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Shopify\ShopifyEmbeddedCustomerCandleCashAdjustmentService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerDetailService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerMessagingService;
 use App\Services\Shopify\ShopifyEmbeddedCustomerSendCandleCashService;
 use App\Services\Shopify\ShopifyEmbeddedCustomersGridService;
+use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
+use App\Services\Shopify\ShopifyEmbeddedShellPayloadBuilder;
+use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantResolver;
-use App\Services\Marketing\MarketingConsentService;
+use App\Support\Diagnostics\ShopifyEmbeddedCsrfDiagnostics;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class ShopifyEmbeddedCustomersController extends Controller
 {
@@ -82,7 +83,7 @@ class ShopifyEmbeddedCustomersController extends Controller
 
             return response()->json([
                 'ok' => true,
-                'data' => $this->customersManagePayload($grid, $displayLabels, $resultsDeferred),
+                'data' => $this->customersManagePayload($grid, $displayLabels, $resultsDeferred, $this->customerMergeEnabledForTenant($tenantId)),
             ]);
         }
 
@@ -120,6 +121,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'activeFilterCount' => $grid['active_filter_count'],
                 'customersManageEndpoint' => $request->url(),
                 'customersResultsDeferred' => $resultsDeferred,
+                'customerMergeEnabled' => $this->customerMergeEnabledForTenant($tenantId),
             ],
             resolvedContext: $context,
             resolvedTenantId: $tenantId,
@@ -270,6 +272,13 @@ class ShopifyEmbeddedCustomersController extends Controller
             : null;
         $probe->forTenant($tenantId);
 
+        if ($authorized && $marketingProfile->merged_at && $marketingProfile->merged_into_profile_id) {
+            $survivor = $marketingProfile->mergedInto()->first();
+            abort_unless($survivor && (int) $survivor->tenant_id === (int) $tenantId, 404);
+
+            return redirect()->to($actionUrlGenerator->url('customers.detail', ['marketingProfile' => $survivor->id], $request));
+        }
+
         if ($authorized) {
             abort_unless(
                 $this->customerBelongsToEmbeddedContext($marketingProfile, $context, $tenantResolver),
@@ -339,7 +348,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             defaultHeadline: 'Customer Detail',
             defaultSubheadline: 'View identity, {{rewards_balance_label_lc}}, and recent customer activity.',
             extraViewData: [
-                'marketingProfile' => $authorized ? $marketingProfile : new MarketingProfile(),
+                'marketingProfile' => $authorized ? $marketingProfile : new MarketingProfile,
                 'customerDisplayName' => $displayName,
                 'detail' => $detail,
                 'pageActions' => $authorized ? [
@@ -798,7 +807,7 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
                 'host' => $authorized ? (string) ($context['host'] ?? '') : ($context['host'] ?? null),
                 'storeLabel' => $authorized
-                    ? ucfirst((string) ($store['key'] ?? 'store')) . ' Store'
+                    ? ucfirst((string) ($store['key'] ?? 'store')).' Store'
                     : 'Shopify Admin',
                 'headline' => $resolvedHeadline,
                 'subheadline' => $resolvedSubheadline,
@@ -825,7 +834,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         $response->setStatusCode($status);
         $response->headers->set(
             'Content-Security-Policy',
-            "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;"
+            'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;'
         );
         $response->headers->remove('X-Frame-Options');
 
@@ -851,7 +860,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         return collect($payload)
             ->map(fn ($value) => is_string($value)
                 ? mb_strlen($value) > 220
-                    ? mb_substr($value, 0, 220) . '…'
+                    ? mb_substr($value, 0, 220).'…'
                     : trim($value)
                 : $value)
             ->all();
@@ -874,7 +883,7 @@ class ShopifyEmbeddedCustomersController extends Controller
     }
 
     /**
-     * @param array{first_name:?string,last_name:?string,email:?string,phone:?string} $data
+     * @param  array{first_name:?string,last_name:?string,email:?string,phone:?string}  $data
      */
     protected function applyIdentityUpdate(
         MarketingProfile $marketingProfile,
@@ -1012,7 +1021,7 @@ class ShopifyEmbeddedCustomersController extends Controller
     }
 
     /**
-     * @param array{direction:string,amount:int,reason:string} $data
+     * @param  array{direction:string,amount:int,reason:string}  $data
      * @return array{
      *   balance:int,
      *   balance_display:string,
@@ -1043,7 +1052,7 @@ class ShopifyEmbeddedCustomersController extends Controller
         $balance = (int) ($result['balance'] ?? 0);
         $balanceDisplay = $candleCashService->formatRewardCurrency($candleCashService->amountFromPoints($balance));
         $noticeStyle = 'success';
-        $noticeMessage = 'Balance adjusted. New balance: ' . $balanceDisplay . '.';
+        $noticeMessage = 'Balance adjusted. New balance: '.$balanceDisplay.'.';
 
         Log::info('Shopify embedded Candle Cash adjustment applied', [
             'profile_id' => $profile->id,
@@ -1063,7 +1072,7 @@ class ShopifyEmbeddedCustomersController extends Controller
 
             if (! $smsResult['ok']) {
                 $noticeStyle = 'warning';
-                $noticeMessage .= ' (Program message not sent: ' . $smsResult['message'] . ')';
+                $noticeMessage .= ' (Program message not sent: '.$smsResult['message'].')';
 
                 Log::warning('Shopify embedded Candle Cash adjustment reward notification failed', [
                     'profile_id' => $profile->id,
@@ -1121,8 +1130,8 @@ class ShopifyEmbeddedCustomersController extends Controller
             'reason' => ['required', 'string', 'max:500'],
             'message' => ['nullable', 'string', 'max:1000'],
             'sender_key' => ['nullable', 'string', 'max:80'],
-            'gift_intent' => ['nullable', 'string', 'in:' . $intentValues],
-            'gift_origin' => ['nullable', 'string', 'in:' . $originValues],
+            'gift_intent' => ['nullable', 'string', 'in:'.$intentValues],
+            'gift_origin' => ['nullable', 'string', 'in:'.$originValues],
             'campaign_key' => ['nullable', 'string', 'max:100'],
         ])->validate();
 
@@ -1190,7 +1199,7 @@ class ShopifyEmbeddedCustomersController extends Controller
 
         $balance = round((float) ($result['balance'] ?? 0), 3);
         $balanceDisplay = $candleCashService->formatRewardCurrency($candleCashService->amountFromPoints($balance));
-        $noticeMessage = 'Credit sent. New balance: ' . $balanceDisplay . '.';
+        $noticeMessage = 'Credit sent. New balance: '.$balanceDisplay.'.';
         $noticeStyle = 'success';
         $transactionId = isset($result['transaction_id']) ? (int) $result['transaction_id'] : null;
 
@@ -1207,7 +1216,7 @@ class ShopifyEmbeddedCustomersController extends Controller
             }
             if (! $smsResult['ok']) {
                 $noticeStyle = 'warning';
-                $noticeMessage .= ' (Message not sent: ' . $smsResult['message'] . ')';
+                $noticeMessage .= ' (Message not sent: '.$smsResult['message'].')';
                 Log::warning('Shopify embedded Candle Cash notification failed', [
                     'profile_id' => $profile->id,
                     'transaction_id' => $transactionId,
@@ -1298,13 +1307,13 @@ class ShopifyEmbeddedCustomersController extends Controller
 
     protected function customerDisplayName(MarketingProfile $marketingProfile): string
     {
-        $displayName = trim((string) ($marketingProfile->first_name . ' ' . $marketingProfile->last_name));
+        $displayName = trim((string) ($marketingProfile->first_name.' '.$marketingProfile->last_name));
 
         if ($displayName !== '') {
             return $displayName;
         }
 
-        return $marketingProfile->email ?: ($marketingProfile->phone ?: 'Customer #' . $marketingProfile->id);
+        return $marketingProfile->email ?: ($marketingProfile->phone ?: 'Customer #'.$marketingProfile->id);
     }
 
     protected function invalidApiContextResponse(array $context): JsonResponse
@@ -1354,7 +1363,7 @@ class ShopifyEmbeddedCustomersController extends Controller
      * @param  array<string,string>  $displayLabels
      * @return array{results_html:string,summary_label:string,page_label:string}
      */
-    protected function customersManagePayload(array $grid, array $displayLabels = [], bool $resultsDeferred = false): array
+    protected function customersManagePayload(array $grid, array $displayLabels = [], bool $resultsDeferred = false, bool $customerMergeEnabled = false): array
     {
         $customers = $grid['paginator'];
         $filters = $grid['filters'];
@@ -1367,10 +1376,23 @@ class ShopifyEmbeddedCustomersController extends Controller
                 'direction' => (string) ($filters['direction'] ?? 'desc'),
                 'displayLabels' => $displayLabels,
                 'resultsDeferred' => $resultsDeferred,
+                'customerMergeEnabled' => $customerMergeEnabled,
             ])->render(),
             'summary_label' => $this->customersSummaryLabel($customers, $resultsDeferred),
             'page_label' => $this->customersPageLabel($customers, $resultsDeferred),
         ];
+    }
+
+    protected function customerMergeEnabledForTenant(?int $tenantId): bool
+    {
+        if ($tenantId === null || ! (bool) config('customer_merge.enabled')) {
+            return false;
+        }
+
+        $allowedSlugs = (array) config('customer_merge.tenant_slugs', []);
+
+        return $allowedSlugs === []
+            || in_array((string) Tenant::query()->whereKey($tenantId)->value('slug'), $allowedSlugs, true);
     }
 
     protected function customersSummaryLabel(mixed $customers, bool $resultsDeferred = false): string

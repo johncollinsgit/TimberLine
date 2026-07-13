@@ -794,6 +794,10 @@
         data-default-filters='@json($defaultGridFilters)'
         data-filter-count="{{ (int) ($activeFilterCount ?? 0) }}"
         data-results-deferred="{{ $resultsDeferred ? 'true' : 'false' }}"
+        @if($customerMergeEnabled ?? false)
+            data-merge-candidates-endpoint="{{ route('shopify.app.api.customers.merge.candidates', [], false) }}"
+            data-merge-preview-endpoint="{{ route('shopify.app.api.customers.merge.preview', [], false) }}"
+        @endif
     >
         <div class="customers-summary-strip" aria-label="Customer summary">
             <article class="customers-summary-card">
@@ -840,7 +844,12 @@
                     <h2>All customers</h2>
                     <p>Search customers first, then use filters to narrow the matching list.</p>
                 </div>
-                <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
+                <div class="customers-filter-actions-buttons">
+                    @if($customerMergeEnabled ?? false)
+                        <button type="button" class="customers-button is-primary" data-launch-customer-merge>Merge duplicate customers</button>
+                    @endif
+                    <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
+                </div>
             </div>
 
             <div class="customers-toolbar-row">
@@ -1009,6 +1018,36 @@
                 'resultsDeferred' => true,
             ])
         </template>
+
+        @if($customerMergeEnabled ?? false)
+            <div class="customers-merge-bar" data-merge-bar hidden>
+                <span><strong data-merge-count>0</strong> customers selected</span>
+                <button type="button" class="customers-button is-primary" data-open-merge>Merge selected</button>
+                <button type="button" class="customers-button" data-find-duplicates>Find possible duplicates</button>
+            </div>
+            <dialog class="customers-merge-dialog" data-merge-dialog>
+                <form method="dialog" class="customers-merge-dialog__panel">
+                    <div class="customers-merge-dialog__head">
+                        <div><small>Customer identity &amp; rewards</small><h2>Merge customers</h2></div>
+                        <button type="submit" class="customers-button" aria-label="Close merge wizard">Close</button>
+                    </div>
+                    <div class="customers-merge-steps" aria-label="Merge steps">
+                        <span>1 Review</span><span>2 Correct fields</span><span>3 Owned records</span><span>4 Shopify preview</span><span>5 Confirm</span>
+                    </div>
+                    <div data-merge-content></div>
+                    <p class="customers-results-status" data-merge-status aria-live="polite"></p>
+                    <div class="customers-merge-actions">
+                        <button type="button" class="customers-button is-primary" data-merge-preview>Preview merge</button>
+                        <button type="button" class="customers-button is-primary" data-merge-approve hidden>Confirm irreversible merge</button>
+                    </div>
+                </form>
+            </dialog>
+            <style>
+                .customers-merge-check{width:42px;text-align:center}.customers-merge-bar{position:sticky;bottom:16px;z-index:20;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 16px;border:1px solid rgba(15,143,97,.24);border-radius:14px;background:#fff;box-shadow:0 18px 45px rgba(15,23,42,.16)}
+                .customers-merge-bar[hidden]{display:none}.customers-merge-dialog{width:min(860px,calc(100vw - 32px));max-height:90vh;border:0;border-radius:18px;padding:0;box-shadow:0 28px 80px rgba(15,23,42,.28)}.customers-merge-dialog::backdrop{background:rgba(15,23,42,.5)}
+                .customers-merge-dialog__panel{display:grid;gap:16px;padding:20px}.customers-merge-dialog__head,.customers-merge-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}.customers-merge-dialog__head h2{margin:3px 0 0}.customers-merge-dialog__head small{color:#64748b}.customers-merge-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.customers-merge-steps span{padding:8px;border-radius:8px;background:#f1f5f9;font-size:11px;text-align:center}.customers-merge-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.customers-merge-card{display:grid;gap:6px;padding:12px;border:1px solid #e2e8f0;border-radius:12px}.customers-merge-card label{display:flex;gap:8px;align-items:flex-start}.customers-merge-field{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:center;margin:7px 0}.customers-merge-field select,.customers-merge-field input{min-height:38px;border:1px solid #cbd5e1;border-radius:9px;padding:7px 10px}.customers-merge-warning{padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412}.customers-merge-success{padding:12px;border-radius:10px;background:#ecfdf5;color:#065f46}@media(max-width:700px){.customers-merge-grid{grid-template-columns:1fr}.customers-merge-steps{grid-template-columns:1fr}.customers-merge-field{grid-template-columns:1fr}}
+            </style>
+        @endif
     </section>
 
     <script>
@@ -1551,6 +1590,118 @@
                     void prefetchCustomerDetail(target);
                 }, { passive: true });
             });
+
+            const mergeDialog = root.querySelector('[data-merge-dialog]');
+            if (mergeDialog) {
+                const mergeBar = root.querySelector('[data-merge-bar]');
+                const mergeCount = root.querySelector('[data-merge-count]');
+                const mergeContent = root.querySelector('[data-merge-content]');
+                const mergeStatus = root.querySelector('[data-merge-status]');
+                const previewButton = root.querySelector('[data-merge-preview]');
+                const approveButton = root.querySelector('[data-merge-approve]');
+                const selected = new Map();
+                let mergeProfiles = [];
+                let mergeOperation = null;
+
+                const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+                const syncMergeBar = () => {
+                    mergeCount.textContent = String(selected.size);
+                    mergeBar.hidden = selected.size < 2 && !cleanValue(searchInput?.value);
+                    root.querySelector('[data-open-merge]').disabled = selected.size < 2;
+                };
+                const profileOptions = (field) => mergeProfiles.map((profile) => `<option value="${profile.id}">${escapeHtml(profile.name)} — ${escapeHtml(profile[field] || 'blank')}</option>`).join('');
+                const renderMergeReview = () => {
+                    const cards = mergeProfiles.map((profile) => `<article class="customers-merge-card"><label><input type="checkbox" data-wizard-profile value="${profile.id}" checked><span><strong>${escapeHtml(profile.name)}</strong><br><small>${escapeHtml(profile.email || 'No email')} · ${escapeHtml(profile.phone || 'No phone')}</small><br><small>${escapeHtml((profile.evidence || []).join(', '))}</small></span></label><label><input type="radio" name="merge_survivor" value="${profile.id}" ${profile.id === mergeProfiles[0]?.id ? 'checked' : ''}> Keep as Everbranch profile</label><small>${Number(profile.orders_count || 0)} orders · ${Number(profile.candle_cash_balance || 0)} Candle Cash · ${escapeHtml(profile.shopify_customer_gid || 'No Shopify ID')}</small>${Number(profile.candle_cash_balance || 0) !== 0 && Number(profile.candle_cash_transactions || 0) === 0 ? `<label>Unproven opening balance<select data-reward-resolution="${profile.id}"><option value="">Choose…</option><option value="include_as_opening">Proven distinct — retain it</option><option value="discard_duplicate">Duplicate import — discard it</option></select></label>` : ''}</article>`).join('');
+                    const fields = ['first_name','last_name','email','phone','address_line_1','notes','tags'].map((field) => `<label class="customers-merge-field"><span>Correct ${field.replaceAll('_',' ')}</span><select data-merge-field="${field}">${profileOptions(field)}</select></label>`).join('');
+                    mergeContent.innerHTML = `<h3>Step 1: Review records and duplicate evidence</h3><div class="customers-merge-grid">${cards}</div><h3>Step 2: Choose the correct fields</h3>${fields}<h3>Step 3: Review owned records</h3><p>Orders, Candle Cash ledger entries, birthdays, wishlists, groups, reviews, messages, devices, and other profile-owned records will be re-homed using their registered conflict policy. Repeated imported opening balances are deduplicated; unsupported balances block the merge.</p>`;
+                    previewButton.hidden = false;
+                    approveButton.hidden = true;
+                    mergeStatus.textContent = '';
+                };
+                const requestMerge = async (url, options = {}) => {
+                    const headers = await resolveAuthHeaders();
+                    const response = await fetch(url, {credentials:'same-origin', ...options, headers:{...headers, ...(options.headers || {})}});
+                    const payload = await response.json().catch(() => ({ok:false,message:'Unexpected response from Everbranch.'}));
+                    if (!response.ok && response.status !== 202) throw new Error(payload.message || 'The merge request failed.');
+                    if (!payload.ok) throw new Error(payload.message || 'The merge request failed.');
+                    return payload;
+                };
+                const openProfiles = (profiles) => {
+                    mergeProfiles = profiles;
+                    if (mergeProfiles.length < 2) throw new Error('Select at least two customer records.');
+                    renderMergeReview();
+                    mergeDialog.showModal();
+                };
+
+                resultsNode.addEventListener('change', (event) => {
+                    const checkbox = event.target.closest('[data-customer-merge-select]');
+                    if (!checkbox) return;
+                    const profile = {id:Number(checkbox.value),name:checkbox.dataset.name,email:checkbox.dataset.email};
+                    checkbox.checked ? selected.set(profile.id, profile) : selected.delete(profile.id);
+                    syncMergeBar();
+                });
+                root.querySelector('[data-open-merge]')?.addEventListener('click', async () => {
+                    try {
+                        const selectedIds = Array.from(selected.keys());
+                        const url = new URL(root.dataset.mergeCandidatesEndpoint, window.location.origin);
+                        url.searchParams.set('q', cleanValue(searchInput?.value));
+                        const payload = await requestMerge(url.toString());
+                        const enriched = (payload.data || []).filter((profile) => selectedIds.includes(Number(profile.id)));
+                        openProfiles(enriched.length === selectedIds.length ? enriched : Array.from(selected.values()));
+                    } catch (error) { mergeStatus.textContent = error.message; if (!mergeDialog.open) mergeDialog.showModal(); }
+                });
+                root.querySelector('[data-find-duplicates]')?.addEventListener('click', async () => {
+                    try {
+                        mergeStatus.textContent = 'Checking exact identifiers and safe misspelling matches…';
+                        const url = new URL(root.dataset.mergeCandidatesEndpoint, window.location.origin);
+                        url.searchParams.set('q', cleanValue(searchInput?.value));
+                        const payload = await requestMerge(url.toString());
+                        openProfiles(payload.data || []);
+                    } catch (error) { mergeStatus.textContent = error.message; if (!mergeDialog.open) mergeDialog.showModal(); }
+                });
+                root.querySelector('[data-launch-customer-merge]')?.addEventListener('click', () => {
+                    if (!cleanValue(searchInput?.value)) {
+                        searchInput?.focus();
+                        if (liveNoteNode) liveNoteNode.textContent = 'Search a customer name, email, phone, or Shopify customer ID to find merge candidates.';
+                        return;
+                    }
+                    root.querySelector('[data-find-duplicates]')?.click();
+                });
+                previewButton?.addEventListener('click', async () => {
+                    try {
+                        const ids = Array.from(mergeContent.querySelectorAll('[data-wizard-profile]:checked')).map((node) => Number(node.value));
+                        const survivor = Number(mergeContent.querySelector('[name="merge_survivor"]:checked')?.value || 0);
+                        const fieldSources = {};
+                        mergeContent.querySelectorAll('[data-merge-field]').forEach((select) => { fieldSources[select.dataset.mergeField] = Number(select.value); });
+                        const ambiguousBalances = {};
+                        mergeContent.querySelectorAll('[data-reward-resolution]').forEach((select) => { if (select.value) ambiguousBalances[select.dataset.rewardResolution] = select.value; });
+                        mergeStatus.textContent = 'Requesting Shopify merge preview…';
+                        const payload = await requestMerge(root.dataset.mergePreviewEndpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile_ids:ids,survivor_profile_id:survivor,field_sources:fieldSources,reward_resolution:{ambiguous_balances:ambiguousBalances},idempotency_key:crypto.randomUUID()})});
+                        mergeOperation = payload.data.operation;
+                        const blockers = payload.data.blockers || [];
+                        const selectedRows = payload.data.selected || [];
+                        const rewards = selectedRows.map((profile) => `${escapeHtml(profile.name)}: ${Number(profile.candle_cash_balance || 0)} (${Number(profile.candle_cash_transactions || 0)} ledger entries)`).join('<br>');
+                        const previews = mergeOperation.preview?.previews || [];
+                        const resulting = previews.at(-1)?.resultingCustomerId || 'Everbranch-only consolidation';
+                        mergeContent.insertAdjacentHTML('beforeend', `<h3>Step 4: Shopify preview</h3><div class="${blockers.length ? 'customers-merge-warning' : 'customers-merge-success'}"><strong>${blockers.length ? 'Merge blocked' : 'Preview ready'}</strong><br>Resulting Shopify customer: ${escapeHtml(resulting)}<br>Consent result: controlled by Shopify.<br>${blockers.map((blocker) => escapeHtml(blocker.message || 'Shopify blocker')).join('<br>')}</div><h3>Step 5: Confirm</h3><p>${rewards}</p><label class="customers-merge-field"><span>Surviving email or name</span><input data-merge-confirmation autocomplete="off" placeholder="Type it exactly"></label>`);
+                        previewButton.hidden = true;
+                        approveButton.hidden = blockers.length > 0;
+                        mergeStatus.textContent = blockers.length ? 'Resolve every Shopify blocker before execution.' : 'Review the preview, then enter the confirmation text.';
+                    } catch (error) { mergeStatus.textContent = error.message; }
+                });
+                approveButton?.addEventListener('click', async () => {
+                    try {
+                        approveButton.disabled = true;
+                        mergeStatus.textContent = 'Submitting the irreversible merge…';
+                        const endpoint = root.dataset.mergePreviewEndpoint.replace(/\/preview$/, `/${mergeOperation.id}/approve`);
+                        const payload = await requestMerge(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:cleanValue(mergeContent.querySelector('[data-merge-confirmation]')?.value)})});
+                        mergeOperation = payload.data;
+                        mergeStatus.textContent = mergeOperation.status === 'completed' ? 'Merge completed. Archived aliases now redirect to the survivor.' : `Merge status: ${mergeOperation.status}. Everbranch will resume safely from this operation.`;
+                        if (mergeOperation.status === 'completed') approveButton.hidden = true;
+                    } catch (error) { mergeStatus.textContent = error.message; } finally { approveButton.disabled = false; }
+                });
+                syncMergeBar();
+            }
         })();
     </script>
 </x-shopify.customers-layout>

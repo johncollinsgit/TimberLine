@@ -60,6 +60,7 @@ use App\Http\Controllers\PublicLegalController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
+use App\Http\Controllers\ShopifyEmbeddedCustomerMergeController;
 use App\Http\Controllers\ShopifyEmbeddedCustomersController;
 use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
@@ -1147,6 +1148,9 @@ Route::prefix('webhooks/shopify')->group(function () {
     Route::post('/customers/update', [ShopifyWebhookController::class, 'customersUpdated'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.webhooks.customers.update');
+    Route::post('/customers/merge', [ShopifyWebhookController::class, 'customersMerge'])
+        ->withoutMiddleware([VerifyCsrfToken::class])
+        ->name('shopify.webhooks.customers.merge');
     Route::post('/subscription-contracts/create', [ShopifyWebhookController::class, 'subscriptionContractsCreate'])
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('shopify.webhooks.subscription-contracts.create');
@@ -1612,6 +1616,16 @@ Route::prefix('shopify')->middleware('web')->group(function () {
         Route::post('/customers/manage/{marketingProfile}/candle-cash/send', [ShopifyEmbeddedCustomersController::class, 'sendCandleCashJson'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('customers.candle-cash.send');
+        Route::get('/customers/merge/candidates', [ShopifyEmbeddedCustomerMergeController::class, 'candidates'])
+            ->name('customers.merge.candidates');
+        Route::post('/customers/merge/preview', [ShopifyEmbeddedCustomerMergeController::class, 'preview'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('customers.merge.preview');
+        Route::post('/customers/merge/{operation}/approve', [ShopifyEmbeddedCustomerMergeController::class, 'approve'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('customers.merge.approve');
+        Route::get('/customers/merge/{operation}/status', [ShopifyEmbeddedCustomerMergeController::class, 'status'])
+            ->name('customers.merge.status');
         Route::get('/messaging/bootstrap', [ShopifyEmbeddedMessagingController::class, 'bootstrap'])
             ->name('messaging.bootstrap');
         Route::get('/messaging/audience-summary', [ShopifyEmbeddedMessagingController::class, 'audienceSummary'])

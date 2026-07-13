@@ -17,6 +17,7 @@ return [
         'refunds/create' => 'shopify.webhooks.refunds.create',
         'customers/create' => 'shopify.webhooks.customers.create',
         'customers/update' => 'shopify.webhooks.customers.update',
+        'customers/merge' => 'shopify.webhooks.customers.merge',
         'subscription_contracts/create' => 'shopify.webhooks.subscription-contracts.create',
         'subscription_contracts/update' => 'shopify.webhooks.subscription-contracts.update',
         'subscription_billing_attempts/success' => 'shopify.webhooks.subscription-billing-attempts.success',

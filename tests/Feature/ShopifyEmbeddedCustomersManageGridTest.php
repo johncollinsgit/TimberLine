@@ -278,6 +278,31 @@ function seedLinkedOrderForProfile(MarketingProfile $profile, array $attributes 
     return $orderId;
 }
 
+test('Modern Forestry Backstage exposes the customer merge wizard entry point', function () {
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    configureEmbeddedRetailStore($tenant->id);
+    config()->set('customer_merge.enabled', true);
+    config()->set('customer_merge.tenant_slugs', ['modern-forestry']);
+
+    $this->get(shopifyAppCustomersManageUrl())
+        ->assertOk()
+        ->assertSeeText('Merge duplicate customers')
+        ->assertSee('data-merge-candidates-endpoint', false)
+        ->assertSee('data-merge-preview-endpoint', false);
+});
+
+test('customer merge entry point remains hidden outside the tenant allowlist', function () {
+    $tenant = Tenant::query()->create(['name' => 'Another Store', 'slug' => 'another-store']);
+    configureEmbeddedRetailStore($tenant->id);
+    config()->set('customer_merge.enabled', true);
+    config()->set('customer_merge.tenant_slugs', ['modern-forestry']);
+
+    $this->get(shopifyAppCustomersManageUrl())
+        ->assertOk()
+        ->assertDontSeeText('Merge duplicate customers')
+        ->assertDontSee('data-merge-candidates-endpoint', false);
+});
+
 function seedShopifyCustomerFallbackOrder(string $customerId, array $attributes = []): int
 {
     $payload = [

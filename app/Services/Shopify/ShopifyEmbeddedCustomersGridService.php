@@ -2,21 +2,21 @@
 
 namespace App\Services\Shopify;
 
-use App\Support\Schema\SchemaCapabilityMap;
 use App\Support\Diagnostics\ShopifyEmbeddedDeepProfile;
+use App\Support\Schema\SchemaCapabilityMap;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\Paginator as PaginatorContract;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ShopifyEmbeddedCustomersGridService
 {
     public function __construct(
         protected SchemaCapabilityMap $schemaCapabilities
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{
@@ -165,9 +165,9 @@ class ShopifyEmbeddedCustomersGridService
             ->get());
 
         return $rows->map(function (object $row): array {
-            $displayName = trim((string) (($row->first_name ?? '') . ' ' . ($row->last_name ?? '')));
+            $displayName = trim((string) (($row->first_name ?? '').' '.($row->last_name ?? '')));
             if ($displayName === '') {
-                $displayName = (string) ($row->email ?: ($row->phone ?: ('Customer #' . (int) $row->id)));
+                $displayName = (string) ($row->email ?: ($row->phone ?: ('Customer #'.(int) $row->id)));
             }
 
             return [
@@ -228,9 +228,6 @@ class ShopifyEmbeddedCustomersGridService
         return in_array($value, ['all', 'yes', 'no'], true) ? $value : 'all';
     }
 
-    /**
-     * @return Builder
-     */
     protected function baseQuery(?int $tenantId = null, array $searchContext = [], ?string $storeKey = null): Builder
     {
         $scopedProfileIds = isset($searchContext['scoped_profile_ids']) && is_array($searchContext['scoped_profile_ids'])
@@ -297,18 +294,21 @@ class ShopifyEmbeddedCustomersGridService
             ->selectRaw("coalesce(nullif(trim(external_stats.vip_tier), ''), case when ".$this->candleClubExpression()." = 1 then 'Candle Club' else 'Standard' end) as vip_tier")
             ->selectRaw('coalesce(balance_stats.candle_cash_balance, 0) as candle_cash_balance')
             ->selectRaw('coalesce(task_stats.rewards_actions_count, 0) as rewards_actions_count')
-            ->selectRaw($this->candleClubExpression() . ' as candle_club_active')
-            ->selectRaw($this->referralExpression() . ' as referral_completed')
-            ->selectRaw($this->reviewExpression() . ' as review_completed')
-            ->selectRaw($this->birthdayExpression() . ' as birthday_completed')
-            ->selectRaw($this->wholesaleExpression() . ' as wholesale_eligible')
-            ->selectRaw($lastActivityExpression . ' as last_activity_at');
+            ->selectRaw($this->candleClubExpression().' as candle_club_active')
+            ->selectRaw($this->referralExpression().' as referral_completed')
+            ->selectRaw($this->reviewExpression().' as review_completed')
+            ->selectRaw($this->birthdayExpression().' as birthday_completed')
+            ->selectRaw($this->wholesaleExpression().' as wholesale_eligible')
+            ->selectRaw($lastActivityExpression.' as last_activity_at');
     }
 
     protected function seedQuery(?int $tenantId = null, ?array $scopedProfileIds = null): Builder
     {
         $query = DB::table('marketing_profiles as mp');
         $query = $this->applyTenantScope($query, 'marketing_profiles', 'mp', $tenantId);
+        if ($this->hasColumn('marketing_profiles', 'merged_at')) {
+            $query->whereNull('mp.merged_at');
+        }
 
         if ($scopedProfileIds !== null) {
             $query->whereIn('mp.id', $scopedProfileIds ?: [0]);
@@ -339,8 +339,8 @@ class ShopifyEmbeddedCustomersGridService
         }
 
         $mode = (string) ($searchContext['mode'] ?? 'text');
-        $searchLike = (string) ($searchContext['search_like'] ?? ('%' . $search . '%'));
-        $prefixLike = (string) ($searchContext['prefix_like'] ?? ($search . '%'));
+        $searchLike = (string) ($searchContext['search_like'] ?? ('%'.$search.'%'));
+        $prefixLike = (string) ($searchContext['prefix_like'] ?? ($search.'%'));
         $phonePrefixLike = (string) ($searchContext['phone_prefix_like'] ?? '');
         $normalizedPhoneWithCountryCode = $searchContext['normalized_phone_with_country_code'] ?? null;
         $numericId = $searchContext['numeric_id'] ?? null;
@@ -368,7 +368,7 @@ class ShopifyEmbeddedCustomersGridService
                 $phoneQuery->where('mp.normalized_phone', 'like', $phonePrefixLike);
 
                 if ($normalizedPhoneWithCountryCode !== null) {
-                    $phoneQuery->orWhere('mp.normalized_phone', 'like', $normalizedPhoneWithCountryCode . '%');
+                    $phoneQuery->orWhere('mp.normalized_phone', 'like', $normalizedPhoneWithCountryCode.'%');
                 }
 
                 $phoneQuery->orWhere('mp.phone', 'like', $searchLike);
@@ -390,21 +390,21 @@ class ShopifyEmbeddedCustomersGridService
 
                 $nested->orWhere(function ($nameQuery) use ($first, $last): void {
                     $nameQuery
-                        ->where('mp.first_name', 'like', $first . '%')
-                        ->where('mp.last_name', 'like', $last . '%');
+                        ->where('mp.first_name', 'like', $first.'%')
+                        ->where('mp.last_name', 'like', $last.'%');
                 });
 
                 $nested->orWhere(function ($nameQuery) use ($first, $last): void {
                     $nameQuery
-                        ->where('mp.first_name', 'like', $last . '%')
-                        ->where('mp.last_name', 'like', $first . '%');
+                        ->where('mp.first_name', 'like', $last.'%')
+                        ->where('mp.last_name', 'like', $first.'%');
                 });
             }
         });
     }
 
     /**
-     * @param array<string,string|int> $filters
+     * @param  array<string,string|int>  $filters
      */
     protected function applyFilters(Builder $query, array $filters): void
     {
@@ -478,47 +478,47 @@ class ShopifyEmbeddedCustomersGridService
     protected function applyTriStateFilter(Builder $query, string $value, string $expression): void
     {
         if ($value === 'yes') {
-            $query->whereRaw($expression . ' = 1');
+            $query->whereRaw($expression.' = 1');
         }
 
         if ($value === 'no') {
-            $query->whereRaw($expression . ' = 0');
+            $query->whereRaw($expression.' = 0');
         }
     }
 
     protected function applySort(Builder $query, string $sort, string $direction): void
     {
         if ($sort === 'name') {
-            $query->orderByRaw("coalesce(mp.last_name, '') " . $direction)
-                ->orderByRaw("coalesce(mp.first_name, '') " . $direction)
+            $query->orderByRaw("coalesce(mp.last_name, '') ".$direction)
+                ->orderByRaw("coalesce(mp.first_name, '') ".$direction)
                 ->orderBy('mp.id', 'asc');
 
             return;
         }
 
         if ($sort === 'email') {
-            $query->orderByRaw("coalesce(mp.normalized_email, mp.email, '') " . $direction)
+            $query->orderByRaw("coalesce(mp.normalized_email, mp.email, '') ".$direction)
                 ->orderBy('mp.id', 'asc');
 
             return;
         }
 
         if ($sort === 'candle_cash') {
-            $query->orderByRaw('coalesce(balance_stats.candle_cash_balance, 0) ' . $direction)
+            $query->orderByRaw('coalesce(balance_stats.candle_cash_balance, 0) '.$direction)
                 ->orderBy('mp.id', 'asc');
 
             return;
         }
 
         if ($sort === 'rewards_actions') {
-            $query->orderByRaw('coalesce(task_stats.rewards_actions_count, 0) ' . $direction)
+            $query->orderByRaw('coalesce(task_stats.rewards_actions_count, 0) '.$direction)
                 ->orderBy('mp.id', 'asc');
 
             return;
         }
 
         if ($sort === 'orders') {
-            $query->orderByRaw('coalesce(external_stats.shopify_orders_count, order_stats.orders_count, 0) ' . $direction)
+            $query->orderByRaw('coalesce(external_stats.shopify_orders_count, order_stats.orders_count, 0) '.$direction)
                 ->orderBy('mp.id', 'asc');
 
             return;
@@ -531,9 +531,9 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function mapRow(object $row): array
     {
-        $displayName = trim((string) (($row->first_name ?? '') . ' ' . ($row->last_name ?? '')));
+        $displayName = trim((string) (($row->first_name ?? '').' '.($row->last_name ?? '')));
         if ($displayName === '') {
-            $displayName = (string) ($row->email ?: ('Customer #' . $row->id));
+            $displayName = (string) ($row->email ?: ('Customer #'.$row->id));
         }
 
         return [
@@ -604,11 +604,11 @@ class ShopifyEmbeddedCustomersGridService
     protected function resolveSearchContext(string $search, ?int $tenantId = null): array
     {
         $search = trim($search);
-        $searchLike = $search !== '' ? '%' . $search . '%' : null;
-        $prefixLike = $search !== '' ? $search . '%' : null;
+        $searchLike = $search !== '' ? '%'.$search.'%' : null;
+        $prefixLike = $search !== '' ? $search.'%' : null;
         $normalizedPhone = $search !== '' ? (preg_replace('/\D+/', '', $search) ?? '') : '';
-        $phonePrefixLike = $normalizedPhone !== '' ? $normalizedPhone . '%' : null;
-        $normalizedPhoneWithCountryCode = strlen($normalizedPhone) === 10 ? '1' . $normalizedPhone : null;
+        $phonePrefixLike = $normalizedPhone !== '' ? $normalizedPhone.'%' : null;
+        $normalizedPhoneWithCountryCode = strlen($normalizedPhone) === 10 ? '1'.$normalizedPhone : null;
         $terms = collect(preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY))
             ->map(fn (string $term): string => trim($term))
             ->filter()
@@ -695,6 +695,10 @@ class ShopifyEmbeddedCustomersGridService
             ->all();
 
         if ($ids === []) {
+            $ids = $this->fuzzyNameProfileIds((string) ($searchContext['raw'] ?? ''), $tenantId);
+        }
+
+        if ($ids === []) {
             return [
                 'ids' => [0],
                 'search_already_scoped' => true,
@@ -714,6 +718,31 @@ class ShopifyEmbeddedCustomersGridService
         ];
     }
 
+    /** Name typos only produce bounded review suggestions; they never merge records. */
+    protected function fuzzyNameProfileIds(string $search, ?int $tenantId): array
+    {
+        $normalized = trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(Str::ascii($search))) ?? '');
+        $parts = collect(explode(' ', $normalized))->filter()->values();
+        if ($tenantId === null || $parts->count() < 2 || strlen($normalized) > 120) {
+            return [];
+        }
+
+        $rows = DB::table('marketing_profiles as mp')->where('mp.tenant_id', $tenantId)
+            ->when($this->hasColumn('marketing_profiles', 'merged_at'), fn (Builder $query) => $query->whereNull('mp.merged_at'))
+            ->select(['mp.id', 'mp.first_name', 'mp.last_name'])
+            ->limit(500)->get();
+        $threshold = max(2, min(4, (int) floor(strlen($normalized) * .18)));
+
+        return $rows->filter(function (object $row) use ($normalized, $parts, $threshold): bool {
+            $name = trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(Str::ascii(trim($row->first_name.' '.$row->last_name)))) ?? '');
+            $reverse = trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(Str::ascii(trim($row->last_name.' '.$row->first_name)))) ?? '');
+            $phonetic = metaphone((string) $parts->first()) === metaphone((string) $row->first_name)
+                && metaphone((string) $parts->last()) === metaphone((string) $row->last_name);
+
+            return $phonetic || min(levenshtein($normalized, $name), levenshtein($normalized, $reverse)) <= $threshold;
+        })->pluck('id')->map('intval')->take(30)->values()->all();
+    }
+
     /**
      * @return array<int,array{value:string,label:string}>
      */
@@ -730,7 +759,7 @@ class ShopifyEmbeddedCustomersGridService
     }
 
     /**
-     * @param array<string,string|int> $filters
+     * @param  array<string,string|int>  $filters
      */
     protected function activeFilterCount(array $filters): int
     {
@@ -754,31 +783,31 @@ class ShopifyEmbeddedCustomersGridService
 
     protected function candleClubExpression(): string
     {
-        return "case
+        return 'case
             when coalesce(task_stats.candle_club_completed, 0) = 1
               or coalesce(group_stats.candle_club_member, 0) = 1
-            then 1 else 0 end";
+            then 1 else 0 end';
     }
 
     protected function referralExpression(): string
     {
-        return "case
+        return 'case
             when coalesce(task_stats.referral_completed, 0) = 1
               or coalesce(referral_stats.referral_completed, 0) = 1
-            then 1 else 0 end";
+            then 1 else 0 end';
     }
 
     protected function reviewExpression(): string
     {
-        return "case
+        return 'case
             when coalesce(task_stats.review_completed, 0) = 1
               or coalesce(review_stats.review_completed, 0) = 1
-            then 1 else 0 end";
+            then 1 else 0 end';
     }
 
     protected function birthdayExpression(): string
     {
-        return "case
+        return 'case
             when coalesce(task_stats.birthday_completed, 0) = 1
               or coalesce(birthday_issuance_stats.birthday_completed, 0) = 1
               or (
@@ -786,15 +815,15 @@ class ShopifyEmbeddedCustomersGridService
                 and birthday_profiles.birth_day is not null
                 and birthday_profiles.reward_last_issued_at is not null
               )
-            then 1 else 0 end";
+            then 1 else 0 end';
     }
 
     protected function wholesaleExpression(): string
     {
-        return "case
+        return 'case
             when coalesce(external_stats.wholesale_eligible, 0) = 1
               or coalesce(wholesale_link_stats.wholesale_eligible, 0) = 1
-            then 1 else 0 end";
+            then 1 else 0 end';
     }
 
     protected function lastActivityExpression(): string
@@ -812,10 +841,10 @@ class ShopifyEmbeddedCustomersGridService
 
         $driver = DB::connection()->getDriverName();
         if (in_array($driver, ['mysql', 'mariadb', 'pgsql'], true)) {
-            return 'greatest(' . implode(', ', $columns) . ')';
+            return 'greatest('.implode(', ', $columns).')';
         }
 
-        return 'max(' . implode(', ', $columns) . ')';
+        return 'max('.implode(', ', $columns).')';
     }
 
     protected function balanceSubquery(?int $tenantId = null, ?array $profileIds = null): Builder
@@ -909,7 +938,7 @@ class ShopifyEmbeddedCustomersGridService
 
         $query = DB::table('marketing_review_summaries')
             ->selectRaw('marketing_profile_id')
-            ->selectRaw("max(case when review_count > 0 then 1 else 0 end) as review_completed")
+            ->selectRaw('max(case when review_count > 0 then 1 else 0 end) as review_completed')
             ->selectRaw('max(coalesce(last_reviewed_at, source_synced_at, updated_at, created_at)) as last_review_activity_at')
             ->whereNotNull('marketing_profile_id')
             ->groupBy('marketing_profile_id');
@@ -937,7 +966,7 @@ class ShopifyEmbeddedCustomersGridService
 
         $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
         $storeMatchExpression = $normalizedStoreKey !== null
-            ? "lower(coalesce(store_key, '')) = '" . $this->quoteSqlLiteral($normalizedStoreKey) . "'"
+            ? "lower(coalesce(store_key, '')) = '".$this->quoteSqlLiteral($normalizedStoreKey)."'"
             : '1 = 1';
         $hasTotalSpentColumn = $this->hasColumn('customer_external_profiles', 'total_spent');
 
@@ -1104,7 +1133,7 @@ class ShopifyEmbeddedCustomersGridService
     }
 
     /**
-     * @param array<int,string> $columns
+     * @param  array<int,string>  $columns
      */
     protected function emptySubquery(array $columns): Builder
     {
@@ -1132,7 +1161,7 @@ class ShopifyEmbeddedCustomersGridService
             return $query;
         }
 
-        $column = $alias !== '' ? $alias . '.tenant_id' : 'tenant_id';
+        $column = $alias !== '' ? $alias.'.tenant_id' : 'tenant_id';
 
         if ($tenantId === null) {
             return $query->whereNull($column);
@@ -1147,7 +1176,7 @@ class ShopifyEmbeddedCustomersGridService
             return $query;
         }
 
-        $column = $alias !== '' ? $alias . '.tenant_id' : 'tenant_id';
+        $column = $alias !== '' ? $alias.'.tenant_id' : 'tenant_id';
 
         if ($tenantId === null) {
             return $query->whereNull($column);
@@ -1177,10 +1206,10 @@ class ShopifyEmbeddedCustomersGridService
             return "''";
         }
 
-        return 'lower(trim(coalesce(' . implode(', ', array_map(
+        return 'lower(trim(coalesce('.implode(', ', array_map(
             static fn (string $column): string => "nullif(trim({$column}), '')",
             $columns
-        )) . ", '')))";
+        )).", '')))";
     }
 
     protected function normalizeStoreKey(?string $storeKey): ?string

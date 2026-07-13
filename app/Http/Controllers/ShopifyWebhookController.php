@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessShopifyCustomerMergeWebhook;
 use App\Jobs\ShopifySyncCustomerFromWebhook;
 use App\Jobs\ShopifyUpsertOrder;
 use App\Services\Marketing\IntegrationHealthEventRecorder;
@@ -52,6 +53,22 @@ class ShopifyWebhookController extends Controller
             app(TenantResolver::class),
             app(IntegrationHealthEventRecorder::class)
         );
+    }
+
+    public function customersMerge(Request $request): Response
+    {
+        $resolved = $this->resolveVerifiedWebhookRequest($request);
+        if ($resolved['status'] !== 'ok') {
+            return response((string) ($resolved['message'] ?? 'Invalid request.'), (int) ($resolved['code'] ?? 422));
+        }
+        $store = (array) $resolved['store'];
+        $tenantId = app(TenantResolver::class)->resolveTenantIdForStoreContext($store);
+        if ($tenantId === null) {
+            return response('Tenant context unresolved.', 202);
+        }
+        ProcessShopifyCustomerMergeWebhook::dispatch((int) $tenantId, (string) ($store['key'] ?? ''), (array) $resolved['data']);
+
+        return response('ok', 200);
     }
 
     public function subscriptionContractsCreate(Request $request): Response
@@ -109,8 +126,7 @@ class ShopifyWebhookController extends Controller
         string $topic,
         TenantResolver $tenantResolver,
         IntegrationHealthEventRecorder $healthEventRecorder
-    ): Response
-    {
+    ): Response {
         $resolved = $this->resolveVerifiedWebhookRequest($request);
         if ($resolved['status'] !== 'ok') {
             return response((string) ($resolved['message'] ?? 'Invalid request.'), (int) ($resolved['code'] ?? 422));
@@ -222,6 +238,7 @@ class ShopifyWebhookController extends Controller
         }
 
         $calculated = base64_encode(hash_hmac('sha256', $payload, $secret, true));
+
         return hash_equals($calculated, $hmacHeader);
     }
 }

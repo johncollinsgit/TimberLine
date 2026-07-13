@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Concerns\HasTenantScope;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class MarketingProfile extends Model
 {
@@ -19,6 +20,10 @@ class MarketingProfile extends Model
         'tenant_id',
         'first_name',
         'last_name',
+        'normalized_first_name',
+        'normalized_last_name',
+        'first_name_phonetic',
+        'last_name_phonetic',
         'email',
         'normalized_email',
         'phone',
@@ -37,6 +42,10 @@ class MarketingProfile extends Model
         'marketing_score',
         'last_marketing_score_at',
         'notes',
+        'tags',
+        'merged_into_profile_id',
+        'merge_operation_id',
+        'merged_at',
         'mobile_avatar_path',
         'mobile_avatar_uploaded_at',
     ];
@@ -51,11 +60,35 @@ class MarketingProfile extends Model
         'marketing_score' => 'decimal:2',
         'last_marketing_score_at' => 'datetime',
         'mobile_avatar_uploaded_at' => 'datetime',
+        'merged_into_profile_id' => 'integer',
+        'merge_operation_id' => 'integer',
+        'tags' => 'array',
+        'merged_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (MarketingProfile $profile): void {
+            foreach (['first', 'last'] as $part) {
+                $value = trim(preg_replace(
+                    '/[^a-z0-9]+/',
+                    ' ',
+                    strtolower(Str::ascii((string) $profile->getAttribute($part.'_name')))
+                ) ?? '');
+                $profile->setAttribute('normalized_'.$part.'_name', $value !== '' ? $value : null);
+                $profile->setAttribute($part.'_name_phonetic', $value !== '' ? metaphone($value) : null);
+            }
+        });
+    }
 
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function mergedInto(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'merged_into_profile_id');
     }
 
     public function links(): HasMany
