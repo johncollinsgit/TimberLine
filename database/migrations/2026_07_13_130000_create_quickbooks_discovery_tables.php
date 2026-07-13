@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('quickbooks_source_records', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('integration_connection_id')->constrained('integration_connections')->cascadeOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('integration_connection_id');
             $table->string('entity_type', 80);
             $table->string('external_id', 180);
             $table->longText('payload');
@@ -24,12 +24,14 @@ return new class extends Migration
                 'qbo_source_tenant_connection_entity_external_unique'
             );
             $table->index(['tenant_id', 'entity_type'], 'qbo_source_tenant_entity_idx');
+            $table->foreign('tenant_id', 'qbo_source_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('integration_connection_id', 'qbo_source_connection_fk')->references('id')->on('integration_connections')->cascadeOnDelete();
         });
 
         Schema::create('quickbooks_audit_runs', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('integration_connection_id')->constrained('integration_connections')->cascadeOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('integration_connection_id');
             $table->string('status', 40)->default('running')->index();
             $table->boolean('dry_run')->default(true);
             $table->longText('summary')->nullable();
@@ -39,13 +41,15 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['tenant_id', 'started_at'], 'qbo_audit_tenant_started_idx');
+            $table->foreign('tenant_id', 'qbo_audit_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('integration_connection_id', 'qbo_audit_connection_fk')->references('id')->on('integration_connections')->cascadeOnDelete();
         });
 
         Schema::create('field_service_financial_documents', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('marketing_profile_id')->nullable()->constrained('marketing_profiles')->nullOnDelete();
-            $table->foreignId('field_service_job_id')->nullable()->constrained('field_service_jobs')->nullOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('marketing_profile_id')->nullable();
+            $table->foreignId('field_service_job_id')->nullable();
             $table->string('source', 40)->default('quickbooks');
             $table->string('document_type', 40);
             $table->string('external_id', 180);
@@ -68,14 +72,15 @@ return new class extends Migration
             );
             $table->index(['tenant_id', 'document_type', 'transaction_date'], 'fs_fin_docs_tenant_type_date_idx');
             $table->index(['tenant_id', 'field_service_job_id'], 'fs_fin_docs_tenant_job_idx');
+            $table->foreign('tenant_id', 'fs_fin_docs_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('marketing_profile_id', 'fs_fin_docs_profile_fk')->references('id')->on('marketing_profiles')->nullOnDelete();
+            $table->foreign('field_service_job_id', 'fs_fin_docs_job_fk')->references('id')->on('field_service_jobs')->nullOnDelete();
         });
 
         Schema::create('field_service_financial_document_lines', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('field_service_financial_document_id')
-                ->constrained('field_service_financial_documents')
-                ->cascadeOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('field_service_financial_document_id');
             $table->string('source_line_id', 180)->nullable();
             $table->unsignedInteger('sort_order')->default(0);
             $table->string('detail_type', 80)->nullable();
@@ -90,14 +95,14 @@ return new class extends Migration
 
             $table->index(['tenant_id', 'item_external_id'], 'fs_fin_lines_tenant_item_idx');
             $table->index(['field_service_financial_document_id', 'sort_order'], 'fs_fin_lines_document_sort_idx');
+            $table->foreign('tenant_id', 'fs_fin_lines_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('field_service_financial_document_id', 'fs_fin_lines_document_fk')->references('id')->on('field_service_financial_documents')->cascadeOnDelete();
         });
 
         Schema::create('field_service_financial_document_attachments', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('field_service_financial_document_id')
-                ->constrained('field_service_financial_documents')
-                ->cascadeOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('field_service_financial_document_id');
             $table->string('external_id', 180);
             $table->string('file_name')->nullable();
             $table->string('content_type', 160)->nullable();
@@ -110,11 +115,13 @@ return new class extends Migration
                 ['field_service_financial_document_id', 'external_id'],
                 'fs_fin_attachments_document_external_unique'
             );
+            $table->foreign('tenant_id', 'fs_fin_attachments_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('field_service_financial_document_id', 'fs_fin_attachments_document_fk')->references('id')->on('field_service_financial_documents')->cascadeOnDelete();
         });
 
         Schema::create('field_service_price_book_items', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
+            $table->foreignId('tenant_id');
             $table->string('source', 40)->default('quickbooks');
             $table->string('external_id', 180);
             $table->string('name');
@@ -130,6 +137,7 @@ return new class extends Migration
 
             $table->unique(['tenant_id', 'source', 'external_id'], 'fs_price_book_tenant_source_external_unique');
             $table->index(['tenant_id', 'item_type', 'active'], 'fs_price_book_tenant_type_active_idx');
+            $table->foreign('tenant_id', 'fs_price_book_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
         });
     }
 
