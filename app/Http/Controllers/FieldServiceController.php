@@ -23,17 +23,25 @@ class FieldServiceController extends Controller
 {
     public function __construct(
         protected TenantModuleAccessResolver $moduleAccessResolver
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
+        $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
         $jobs = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
-            ->with(['customer', 'assignedUser', 'tasks.assignedUser', 'materials', 'photos', 'notes.createdBy'])
+            ->with([
+                'customer',
+                'assignedUser',
+                'tasks.assignedUser',
+                'materials',
+                'photos',
+                'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
+                'notes.createdBy',
+            ])
             ->latest('updated_at')
             ->latest('id')
             ->limit(25)
@@ -76,13 +84,17 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
+        $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
         $start = now()->startOfDay();
         $end = now()->addDays(45)->endOfDay();
 
         $jobs = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
-            ->with(['assignedUser:id,name', 'notes'])
+            ->with([
+                'assignedUser:id,name',
+                'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
+            ])
             ->whereNotNull('scheduled_for')
             ->whereBetween('scheduled_for', [$start, $end])
             ->orderBy('scheduled_for')
@@ -102,8 +114,18 @@ class FieldServiceController extends Controller
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         $this->abortUnlessTenantJob($tenant, $job);
+        $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
-        $job->load(['customer', 'assignedUser', 'tasks.assignedUser', 'materials', 'photos.uploadedBy', 'notes.createdBy', 'notes.photos']);
+        $job->load([
+            'customer',
+            'assignedUser',
+            'tasks.assignedUser',
+            'materials',
+            'photos.uploadedBy',
+            'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
+            'notes.createdBy',
+            'notes.photos',
+        ]);
         $team = $tenant->users()
             ->orderBy('name')
             ->get(['users.id', 'users.name', 'users.email']);
@@ -493,6 +515,26 @@ class FieldServiceController extends Controller
     protected function abortUnlessTenantJob(Tenant $tenant, FieldServiceJob $job): void
     {
         abort_unless((int) $job->tenant_id === (int) $tenant->id, 404);
+    }
+
+    protected function canViewOwnerNotes(Request $request, Tenant $tenant): bool
+    {
+        $membership = $request->user()?->tenants()->whereKey((int) $tenant->id)->first();
+        $role = strtolower(trim((string) ($membership?->pivot->role ?? '')));
+
+        return in_array($role, ['admin', 'owner', 'tenant_owner'], true);
+    }
+
+    protected function visibleNotes(mixed $query, bool $includeOwner): mixed
+    {
+        if ($includeOwner) {
+            return $query;
+        }
+
+        return $query->where(function ($visibility): void {
+            $visibility->whereNull('metadata->visibility')
+                ->orWhere('metadata->visibility', '!=', 'owner');
+        });
     }
 
     /**

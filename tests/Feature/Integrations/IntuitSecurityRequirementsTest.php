@@ -2,6 +2,7 @@
 
 use App\Models\IntegrationConnection;
 use App\Models\Tenant;
+use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -22,6 +23,15 @@ test('quickbooks callback stores realm id and oauth tokens encrypted at rest and
     config()->set('services.quickbooks.client_secret', 'client-secret');
     config()->set('services.quickbooks.redirect_uri', 'https://app.theeverbranch.com/integrations/quickbooks/callback');
     $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'quickbooks',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'included_in_plan',
+        'entitlement_source' => 'test',
+        'price_source' => 'catalog',
+    ]);
     $user = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
     $user->tenants()->attach($tenant->id, ['role' => 'admin']);
 

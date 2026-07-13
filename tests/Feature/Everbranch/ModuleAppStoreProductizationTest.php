@@ -68,6 +68,36 @@ test('tenant module store payload exposes product grade metadata for visible mod
         ->and($sms['buyer_setup']['setup_steps'] ?? [])->not->toBeEmpty();
 });
 
+test('quickbooks is an opt-in reusable branch with guided owner setup', function (): void {
+    $tenant = moduleStoreTenant('quickbooks-branch-tenant');
+    $user = moduleStoreUser($tenant);
+
+    $payload = app(TenantModuleCatalogService::class)->tenantStorePayload($tenant->id, 'marketing');
+    $quickBooks = collect((array) ($payload['modules'] ?? []))
+        ->firstWhere('module_key', 'quickbooks');
+
+    expect($quickBooks)->toBeArray()
+        ->and($quickBooks['status'])->toBe('beta')
+        ->and($quickBooks['module_state']['enabled'] ?? true)->toBeFalse()
+        ->and($quickBooks['module_state']['cta'] ?? null)->toBe('add')
+        ->and($quickBooks['buyer_setup']['primary_action'] ?? null)->toBe('Connect QuickBooks')
+        ->and(data_get($quickBooks, 'visibility.mobile_store'))->toBeFalse();
+
+    $result = app(TenantModuleCatalogService::class)->activateModuleForTenant(
+        tenantId: (int) $tenant->id,
+        moduleKey: 'quickbooks',
+        actorId: (int) $user->id,
+        source: 'test'
+    );
+
+    expect($result['ok'] ?? false)->toBeTrue()
+        ->and(TenantModuleEntitlement::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('module_key', 'quickbooks')
+            ->where('enabled_status', 'enabled')
+            ->exists())->toBeTrue();
+});
+
 test('app store visible safe to market modules define buyer setup copy in config', function (): void {
     $requiredKeys = ['outcome', 'best_for', 'what_you_need', 'next_step', 'setup_steps', 'primary_action', 'help_text'];
 

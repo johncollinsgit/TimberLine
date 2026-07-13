@@ -164,7 +164,7 @@ test('embedded app store activation writes tenant module entitlements', function
 
     configureEmbeddedRetailStore($tenant->id);
 
-    $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']) . '?' . http_build_query(retailEmbeddedSignedQuery()), [
+    $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']).'?'.http_build_query(retailEmbeddedSignedQuery()), [
         'context_token' => retailEmbeddedContextToken(),
     ])
         ->assertRedirect();
@@ -190,7 +190,7 @@ test('embedded app store request path records a pending access request lifecycle
 
     configureEmbeddedRetailStore($tenant->id);
 
-    $this->post(route('shopify.app.store.request', ['moduleKey' => 'diagnostics_advanced']) . '?' . http_build_query(retailEmbeddedSignedQuery()), [
+    $this->post(route('shopify.app.store.request', ['moduleKey' => 'diagnostics_advanced']).'?'.http_build_query(retailEmbeddedSignedQuery()), [
         'context_token' => retailEmbeddedContextToken(),
     ])
         ->assertRedirect();
@@ -258,7 +258,7 @@ test('embedded app store activation rejects direct signed-query posts without a 
 
     configureEmbeddedRetailStore($tenant->id);
 
-    $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']) . '?' . http_build_query(retailEmbeddedSignedQuery()))
+    $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']).'?'.http_build_query(retailEmbeddedSignedQuery()))
         ->assertStatus(401)
         ->assertJsonPath('status', 'missing_context_token');
 });
@@ -280,7 +280,7 @@ test('embedded app store blocks shopify only activation for direct mode tenants'
 
     configureEmbeddedRetailStore($tenant->id);
 
-    $response = $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']) . '?' . http_build_query(retailEmbeddedSignedQuery()), [
+    $response = $this->post(route('shopify.app.store.activate', ['moduleKey' => 'sms']).'?'.http_build_query(retailEmbeddedSignedQuery()), [
         'context_token' => retailEmbeddedContextToken(),
     ]);
 
@@ -487,7 +487,7 @@ test('embedded integrations page renders placeholder-first cards and categories'
         });
 });
 
-test('embedded integrations page derives locked and coming soon states from entitlement context', function () {
+test('embedded integrations page derives locked states from entitlement context', function () {
     $tenant = Tenant::query()->create([
         'name' => 'No Shopify Direct Tenant',
         'slug' => 'no-shopify-direct-tenant',
@@ -512,7 +512,7 @@ test('embedded integrations page derives locked and coming soon states from enti
         ], false)
         ->assertSeeInOrder([
             'data-integration-key="quickbooks"',
-            'data-integration-state="coming_soon"',
+            'data-integration-state="locked"',
         ], false)
         ->assertSee('href="/shopify/app/plans?', false)
         ->assertSee('data-integration-cta-state="locked"', false)
@@ -521,12 +521,11 @@ test('embedded integrations page derives locked and coming soon states from enti
         ->assertSee('data-integration-card-status="sms_gateway"', false)
         ->assertSee('data-integration-card-source="sms_gateway"', false)
         ->assertSeeText('Data path: Plan access')
-        ->assertSee('data-integration-cta-state="coming_soon"', false)
-        ->assertSeeText('Coming soon')
-        ->assertSeeText('QuickBooks is currently a roadmap-visible placeholder.')
+        ->assertSeeText('Ask an owner to enable')
+        ->assertSeeText('The beta connection is read-only, tenant-scoped, and on demand.')
         ->assertSee('data-integration-card-status="quickbooks"', false)
         ->assertSee('data-integration-drawer-status="quickbooks"', false)
-        ->assertSeeText('Data path: Roadmap placeholder');
+        ->assertSeeText('Data path: Plan access');
 });
 
 test('dashboard now exposes overview start-here and plans subnav links', function () {

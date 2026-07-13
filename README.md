@@ -1,12 +1,21 @@
 # Modern Forestry Backstage
 
-## Collins Electric Guided Launch Workspace (2026-07-11)
+## Collins Electric Guided Launch + QuickBooks Discovery (2026-07-13)
 
 - Collins Electric is a guided launch-partner workspace, not a 3-day trial or self-serve billing flow. Prepare or refresh it with `php artisan everbranch:prepare-collins-electric --seed-demo-job`.
 - The command creates/updates tenant `collins-electric`, applies the `electrician` blueprint on the direct `base` plan, records setup interests for customers, field service, billing, messaging, reporting, uploads, and QuickBooks, and only finalizes safe modules: customers, field service, messaging, and reporting.
 - `johncollinsemail@gmail.com` is attached as an active, verified tenant admin without removing any existing tenant memberships, so the Everbranch mobile app can discover Collins Electric through `/mobile/authorize` and `/api/mobile/v1/workspaces`.
 - Field service now supports electrician MVP data: customer phone, service address, lock box/access code, assigned jobs/tasks, employee job updates, job-linked photos/files, calendar view, tenant-scoped search, and mobile work detail/actions.
-- QuickBooks import is concierge CSV/XLSX only through `php artisan field-service:import-quickbooks`; it is not a live QuickBooks OAuth connector. Apple Photos remain manual job photo/file upload/import. SMS reminders remain disabled/not verified until provider readiness, consent, and delivery logs pass a smoke test.
+- QuickBooks is now a reusable, opt-in beta Branch (`module_key=quickbooks`) for direct or Shopify-connected tenants. Interest captured during onboarding never enables it; an owner/admin must add the Branch, authorize the tenant's QuickBooks Online company, and approve a dry run.
+- The read-only discovery path inventories accounting entities, estimates, invoices, notes, line items, attachments, receivables, and supported reports without printing raw business records. Encrypted source snapshots and audit summaries are tenant-scoped. The import preserves financial documents/lines separately, links jobs only when operational evidence exists, builds a service-item price book, and is idempotent.
+- QuickBooks private invoice notes are owner/admin-only. Operational customer memos and work-line descriptions may support team job context; team members remain blocked from financial reports, amounts, receivables, P&L wages, contract labor, price-book costs, billing, and integration controls.
+- Collins-specific ownership and execution rules live in `docs/collins-electric-access-and-quickbooks.md`. Apple Photos remain manual job photo/file upload/import. SMS reminders remain disabled/not verified until provider readiness, consent, quiet hours, opt-out, and delivery logs pass a smoke test.
+
+## Shared Dashboard Time Windows (2026-07-13)
+
+- Everbranch dashboard statistics use one server-owned range contract: `1d`, `1w`, `1m`, `30d`, and `ytd`.
+- The default is `1m`, meaning the current calendar month through now. The top-right dashboard selector updates tenant-scoped customer, order, revenue, field-service, materials, vehicle, import, and trade metrics without changing authorization.
+- Mobile bootstrap receives the same resolved range and options. QuickBooks P&L discovery remains explicitly year-to-date and must not be relabeled as a shorter dashboard window.
 
 ## Shopify-only Product Options (2026-07-10)
 

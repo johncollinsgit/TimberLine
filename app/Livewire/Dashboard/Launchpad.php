@@ -5,11 +5,22 @@ namespace App\Livewire\Dashboard;
 use App\Services\Dashboard\UnifiedDashboardService;
 use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Launchpad extends Component
 {
     public string $search = '';
+
+    #[Url(as: 'range', except: '1m')]
+    public string $range = '1m';
+
+    public function updatedRange(): void
+    {
+        if (! array_key_exists($this->range, app(\App\Services\Dashboard\DashboardDateRange::class)->options())) {
+            $this->range = '1m';
+        }
+    }
 
     public function submitSearch()
     {
@@ -35,7 +46,7 @@ class Launchpad extends Component
 
     public function render()
     {
-        $dashboard = app(UnifiedDashboardService::class)->forRequest(request(), auth()->user());
+        $dashboard = app(UnifiedDashboardService::class)->forRequest(request(), auth()->user(), $this->range);
 
         return view('livewire.dashboard.launchpad', [
             'dashboard' => $dashboard,

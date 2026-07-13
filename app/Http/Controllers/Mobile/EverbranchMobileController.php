@@ -60,8 +60,11 @@ class EverbranchMobileController extends Controller
         $tenant = $this->tenant($request);
         $user = $this->user($request);
         $storePayload = $catalog->tenantStorePayload((int) $tenant->id, 'mobile');
-        $manifest = $mobileModules->manifest((int) $tenant->id);
         $role = $this->tenantRole($user, $tenant);
+        $manifest = collect($mobileModules->manifest((int) $tenant->id))
+            ->when(! $this->canViewFinancials($user, $tenant), fn ($modules) => $modules->reject(fn (array $module): bool => ($module['module_key'] ?? null) === 'reporting'))
+            ->values()
+            ->all();
 
         return response()->json([
             'contract_version' => TenantMobileModuleRegistry::CONTRACT_VERSION,
@@ -93,7 +96,12 @@ class EverbranchMobileController extends Controller
 
     public function moduleScreen(Request $request, string $tenant, string $moduleKey, TenantMobileModuleRegistry $registry): JsonResponse
     {
-        return response()->json($registry->screen((int) $this->tenant($request)->id, $moduleKey));
+        $tenantModel = $this->tenant($request);
+        if (strtolower(trim($moduleKey)) === 'reporting') {
+            abort_unless($this->canViewFinancials($this->user($request), $tenantModel), 403);
+        }
+
+        return response()->json($registry->screen((int) $tenantModel->id, $moduleKey));
     }
 
     public function customers(Request $request, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
@@ -541,6 +549,12 @@ class EverbranchMobileController extends Controller
     protected function canManageBilling(User $user, Tenant $tenant): bool
     {
         return $this->tenantRole($user, $tenant) === 'admin'
+            || strtolower(trim((string) $user->role)) === 'platform_admin';
+    }
+
+    protected function canViewFinancials(User $user, Tenant $tenant): bool
+    {
+        return in_array($this->tenantRole($user, $tenant), ['admin', 'manager', 'marketing_manager'], true)
             || strtolower(trim((string) $user->role)) === 'platform_admin';
     }
 

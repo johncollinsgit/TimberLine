@@ -162,6 +162,7 @@ class FirstLoginWorkspaceProvisioner
             'settings', 'mobile_connection',
         ]));
         $selectedModules = array_values(array_intersect($selectedModules, $this->safePublicModuleKeys()));
+        $selectedModules = array_values(array_diff($selectedModules, $this->setupInterestOnlyModuleKeys()));
 
         return [
             'rail' => 'direct',
@@ -204,5 +205,16 @@ class FirstLoginWorkspaceProvisioner
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * Connector choices collect setup intent but require a separate owner/admin
+     * entitlement and provider authorization after the workspace exists.
+     *
+     * @return array<int,string>
+     */
+    protected function setupInterestOnlyModuleKeys(): array
+    {
+        return ['quickbooks'];
     }
 }
