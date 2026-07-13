@@ -844,7 +844,12 @@
                     <h2>All customers</h2>
                     <p>Search customers first, then use filters to narrow the matching list.</p>
                 </div>
-                <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
+                <div class="customers-filter-actions-buttons">
+                    @if($customerMergeEnabled ?? false)
+                        <button type="button" class="customers-button is-primary" data-launch-customer-merge>Merge duplicate customers</button>
+                    @endif
+                    <div class="customers-toolbar-summary" data-customers-summary>{{ $summaryLabel }}</div>
+                </div>
             </div>
 
             <div class="customers-toolbar-row">
@@ -1653,6 +1658,14 @@
                         const payload = await requestMerge(url.toString());
                         openProfiles(payload.data || []);
                     } catch (error) { mergeStatus.textContent = error.message; if (!mergeDialog.open) mergeDialog.showModal(); }
+                });
+                root.querySelector('[data-launch-customer-merge]')?.addEventListener('click', () => {
+                    if (!cleanValue(searchInput?.value)) {
+                        searchInput?.focus();
+                        if (liveNoteNode) liveNoteNode.textContent = 'Search a customer name, email, phone, or Shopify customer ID to find merge candidates.';
+                        return;
+                    }
+                    root.querySelector('[data-find-duplicates]')?.click();
                 });
                 previewButton?.addEventListener('click', async () => {
                     try {

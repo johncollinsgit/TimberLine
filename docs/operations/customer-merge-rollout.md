@@ -1,13 +1,13 @@
 # Customer merge rollout
 
-Customer merge execution is fail-closed behind `CUSTOMER_MERGE_ENABLED` and `CUSTOMER_MERGE_TENANT_SLUGS`. The initial tenant allowlist is `modern-forestry`.
+Customer merge discovery is visible by default only for tenants in `CUSTOMER_MERGE_TENANT_SLUGS`. The initial tenant allowlist is `modern-forestry`. Preview and execution remain fail-closed when the verified Shopify merge scopes are missing, and execution additionally requires an authenticated tenant owner/admin.
 
 ## Deployment order
 
-1. Deploy the customer merge migration with execution disabled. Confirm the normalized-name backfill completed and archive columns are present.
+1. Deploy the customer merge migration with the tenant allowlist restricted to `modern-forestry`. Confirm the normalized-name backfill completed and archive columns are present.
 2. Release `shopify.app.toml`. Reauthorize the retail store and retain evidence that both `read_customer_merge` and `write_customer_merge` appear in the stored Shopify scopes. The API rejects preview or execution while either required scope is absent.
 3. Verify the `customers/merge` subscription points to `https://app.theeverbranch.com/webhooks/shopify/customers/merge` and run `php artisan shopify:webhooks:verify --required-only`. Retain its output with the release evidence.
-4. Set `CUSTOMER_MERGE_ENABLED=true` with `CUSTOMER_MERGE_TENANT_SLUGS=modern-forestry`. Keep execution limited to authenticated tenant owners/admins.
+4. Confirm `CUSTOMER_MERGE_ENABLED=true` with `CUSTOMER_MERGE_TENANT_SLUGS=modern-forestry`. Keep execution limited to authenticated tenant owners/admins.
 5. Run preview-only checks for Megan Lawther and several known duplicates before approving any operation.
 
 ## Megan acceptance evidence
