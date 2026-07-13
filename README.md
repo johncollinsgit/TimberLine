@@ -587,7 +587,7 @@ php artisan queue:restart
 
 Modern Forestry operators can open the embedded Shopify app, go to `Customers`, and choose `Merge duplicate customers`. Search by name, email, phone, or Shopify customer ID before launching the duplicate review. Misspelled names are suggestions only and never merge automatically.
 
-The surface is restricted by `CUSTOMER_MERGE_TENANT_SLUGS` (initially `modern-forestry`). Shopify preview and execution require the installed retail store token to contain `read_customer_merge` and `write_customer_merge`; execution also requires an authenticated Everbranch tenant owner/admin. Other staff may prepare a request for approval.
+The surface is restricted by `CUSTOMER_MERGE_TENANT_SLUGS` (initially `modern-forestry`). Shopify preview and execution require the installed retail store token to contain `read_customer_merge` and `write_customer_merge` plus a verified `customers/merge` webhook. Execution requires an active Everbranch tenant owner/admin whose email matches the verified Shopify admin session; unmatched staff fail closed with an actionable sign-in message.
 
 Release order matters:
 

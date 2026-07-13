@@ -6,11 +6,13 @@ use App\Models\Order;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Marketing\CanonicalMarketingProfileResolver;
 use App\Services\Marketing\CustomerMergeCandidateService;
 use App\Services\Marketing\CustomerMergeCoordinator;
 use App\Services\Marketing\CustomerMergeException;
 use App\Services\Marketing\CustomerMergeService;
 use App\Services\Marketing\MarketingProfileMergeReferenceRegistry;
+use App\Services\Mobile\ModernForestryMobileCustomerSessionService;
 use App\Services\Shopify\ShopifyCustomerMergeApi;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -132,6 +134,72 @@ test('misspelled names are suggestions and tenant records remain isolated', func
     expect(collect($results)->pluck('id')->all())->toContain($megan->id)
         ->and(collect($results)->pluck('tenant_id')->unique()->all())->toBe([1])
         ->and(collect($results)->firstWhere('id', $megan->id)['evidence'])->toContain('probable misspelling');
+});
+
+test('candidate search finds a customer beyond the former in-memory caps', function (): void {
+    MarketingProfile::factory()->count(760)->create(['tenant_id' => 1]);
+    $faith = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'first_name' => 'Faith',
+        'last_name' => 'Crocker',
+        'email' => 'faith@example.com',
+        'normalized_email' => 'faith@example.com',
+    ]);
+
+    $results = app(CustomerMergeCandidateService::class)->search(1, 'Faith Crocker', 'retail');
+
+    expect(collect($results)->pluck('id'))->toContain($faith->id);
+});
+
+test('canonical profile resolution follows aliases and fails closed on ambiguous email', function (): void {
+    $survivor = MarketingProfile::factory()->create(['tenant_id' => 1, 'email' => 'faith@example.com', 'normalized_email' => 'faith@example.com']);
+    $alias = MarketingProfile::factory()->create([
+        'tenant_id' => 1,
+        'email' => 'faith@example.com',
+        'normalized_email' => 'faith@example.com',
+        'merged_into_profile_id' => $survivor->id,
+        'merged_at' => now(),
+    ]);
+    $resolver = app(CanonicalMarketingProfileResolver::class);
+
+    expect($resolver->byId(1, $alias->id)?->id)->toBe($survivor->id)
+        ->and($resolver->byEmail(1, 'faith@example.com')?->id)->toBe($survivor->id)
+        ->and(app(ModernForestryMobileCustomerSessionService::class)->resolveToken('mf-test-profile:'.$alias->id)?->profile->id)->toBe($survivor->id);
+
+    MarketingProfile::factory()->create(['tenant_id' => 1, 'email' => 'faith@example.com', 'normalized_email' => 'faith@example.com']);
+    expect($resolver->byEmail(1, 'faith@example.com'))->toBeNull()
+        ->and(app(ModernForestryMobileCustomerSessionService::class)->resolveToken('mf-test-email:faith@example.com'))->toBeNull();
+});
+
+test('backfilled legacy links and birthday history merge without unique collisions or data loss', function (): void {
+    $fixture = require base_path('tests/Fixtures/Marketing/mysql_backfilled_legacy_customer.php');
+    $survivor = MarketingProfile::factory()->create(['tenant_id' => 1, ...$fixture['identity']]);
+    $donor = MarketingProfile::factory()->create(['tenant_id' => 1, ...$fixture['identity']]);
+    DB::table('marketing_profile_links')->insert([
+        ['tenant_id' => 1, 'marketing_profile_id' => $survivor->id, 'source_type' => $fixture['shopify_link']['source_type'], 'source_id' => $fixture['shopify_link']['source_id'], 'source_meta' => json_encode($fixture['shopify_link']['canonical_meta']), 'created_at' => now(), 'updated_at' => now()],
+        ['tenant_id' => null, 'marketing_profile_id' => $donor->id, 'source_type' => $fixture['shopify_link']['source_type'], 'source_id' => $fixture['shopify_link']['source_id'], 'source_meta' => json_encode($fixture['shopify_link']['legacy_meta']), 'created_at' => now(), 'updated_at' => now()],
+    ]);
+    $survivorBirthday = DB::table('customer_birthday_profiles')->insertGetId([
+        'marketing_profile_id' => $survivor->id, ...$fixture['canonical_birthday'], 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $donorBirthday = DB::table('customer_birthday_profiles')->insertGetId([
+        'marketing_profile_id' => $donor->id, ...$fixture['legacy_birthday'], 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('customer_birthday_audits')->insert([
+        ['customer_birthday_profile_id' => $survivorBirthday, 'marketing_profile_id' => $survivor->id, 'action' => 'created', 'created_at' => now(), 'updated_at' => now()],
+        ['customer_birthday_profile_id' => $donorBirthday, 'marketing_profile_id' => $donor->id, 'action' => 'imported', 'created_at' => now(), 'updated_at' => now()],
+    ]);
+
+    $service = app(CustomerMergeService::class);
+    $operation = $service->createOperation(1, [$survivor->id, $donor->id], $survivor->id, 'retail', 'faith-backfilled-collision');
+    $completed = $service->apply($operation);
+
+    expect($completed->status)->toBe('completed')
+        ->and(DB::table('marketing_profile_links')->where('tenant_id', 1)->where('source_type', $fixture['shopify_link']['source_type'])->where('source_id', $fixture['shopify_link']['source_id'])->count())->toBe(1)
+        ->and(json_decode((string) DB::table('marketing_profile_links')->where('tenant_id', 1)->where('source_id', $fixture['shopify_link']['source_id'])->value('source_meta'), true))->toMatchArray(['canonical' => true, 'legacy' => true])
+        ->and(DB::table('customer_birthday_profiles')->where('marketing_profile_id', $survivor->id)->count())->toBe(1)
+        ->and(DB::table('customer_birthday_audits')->where('marketing_profile_id', $survivor->id)->count())->toBe(2)
+        ->and(DB::table('customer_birthday_audits')->where('customer_birthday_profile_id', $survivorBirthday)->count())->toBe(2);
 });
 
 test('every profile-owned foreign key has an explicit merge policy', function (): void {

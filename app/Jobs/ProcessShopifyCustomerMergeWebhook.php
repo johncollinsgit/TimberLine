@@ -4,7 +4,9 @@ namespace App\Jobs;
 
 use App\Models\CustomerMergeOperation;
 use App\Models\MarketingProfile;
+use App\Services\Marketing\CustomerMergeCoordinator;
 use App\Services\Marketing\CustomerMergeService;
+use App\Services\Shopify\ShopifyStores;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -18,7 +20,7 @@ class ProcessShopifyCustomerMergeWebhook implements ShouldQueue
 
     public function __construct(public int $tenantId, public string $storeKey, public array $payload) {}
 
-    public function handle(CustomerMergeService $mergeService): void
+    public function handle(CustomerMergeService $mergeService, CustomerMergeCoordinator $coordinator): void
     {
         $kept = trim((string) ($this->payload['admin_graphql_api_customer_kept_id'] ?? ''));
         $deleted = trim((string) ($this->payload['admin_graphql_api_customer_deleted_id'] ?? ''));
@@ -40,6 +42,18 @@ class ProcessShopifyCustomerMergeWebhook implements ShouldQueue
                 'status' => $failed ? 'partial_failure' : $existing->status,
                 'errors' => $failed ? (array) ($this->payload['errors'] ?? []) : $existing->errors,
             ])->save();
+
+            if (! $failed) {
+                $store = ShopifyStores::find($this->storeKey);
+                if (is_array($store) && (int) ($store['tenant_id'] ?? 0) === $this->tenantId) {
+                    $coordinator->advance($existing->fresh(), $store);
+                } else {
+                    $existing->forceFill([
+                        'status' => 'reconciliation_required',
+                        'errors' => [['code' => 'store_context_missing', 'message' => 'Shopify completed a merge, but Everbranch could not resolve the tenant store context.']],
+                    ])->save();
+                }
+            }
 
             return;
         }

@@ -42,6 +42,13 @@ Schedule::command('queue:work database --queue=default --stop-when-empty --tries
     ->withoutOverlapping(10)
     ->runInBackground();
 
+// Polling is the fallback for delayed/missed customers/merge webhooks. The
+// coordinator is idempotent, so a webhook and this poller may safely overlap.
+Schedule::command('marketing:reconcile-pending-customer-merges', ['--limit' => 25])
+    ->everyMinute()
+    ->withoutOverlapping(10)
+    ->runInBackground();
+
 // Liveness heartbeat: proves the scheduler cron itself is running. Web requests check
 // its freshness (see EvaluateSchedulerHeartbeat) so a stopped cron becomes detectable.
 Schedule::command('scheduler:heartbeat')

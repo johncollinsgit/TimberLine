@@ -18,7 +18,6 @@ class MarketingProfileMergeReferenceRegistry
             'marketing_campaign_conversions' => ['marketing_profile_id'],
             'marketing_group_import_rows' => ['marketing_profile_id'],
             'candle_cash_redemptions' => ['marketing_profile_id'],
-            'customer_birthday_profiles' => ['marketing_profile_id'],
             'customer_birthday_audits' => ['marketing_profile_id'],
             'marketing_message_group_members' => ['marketing_profile_id'],
             'marketing_review_summaries' => ['marketing_profile_id'],
@@ -27,7 +26,6 @@ class MarketingProfileMergeReferenceRegistry
             'candle_cash_referrals' => ['referrer_marketing_profile_id', 'referred_marketing_profile_id'],
             'candle_cash_task_events' => ['marketing_profile_id'],
             'google_business_profile_reviews' => ['marketing_profile_id'],
-            'marketing_profile_links' => ['marketing_profile_id'],
             'marketing_consent_requests' => ['marketing_profile_id'],
             'marketing_consent_events' => ['marketing_profile_id'],
             'customer_external_profiles' => ['marketing_profile_id'],
@@ -65,6 +63,8 @@ class MarketingProfileMergeReferenceRegistry
     {
         return [
             'marketing_external_campaign_stats' => ['column' => 'marketing_profile_id', 'keys' => ['source_type', 'external_contact_id']],
+            'marketing_profile_links' => ['column' => 'marketing_profile_id', 'keys' => ['source_type', 'source_id']],
+            'customer_birthday_profiles' => ['column' => 'marketing_profile_id', 'keys' => []],
             'marketing_campaign_recipients' => ['column' => 'marketing_profile_id', 'keys' => ['campaign_id']],
             'marketing_group_members' => ['column' => 'marketing_profile_id', 'keys' => ['marketing_group_id']],
             'birthday_reward_issuances' => ['column' => 'marketing_profile_id', 'keys' => ['cycle_year', 'reward_type']],
@@ -80,7 +80,7 @@ class MarketingProfileMergeReferenceRegistry
         return array_values(array_unique(array_merge(
             array_keys($this->directReferences()),
             array_keys($this->conflictReferences()),
-            ['candle_cash_transactions', 'candle_cash_balances']
+            ['candle_cash_transactions', 'candle_cash_balances', 'customer_birthday_profiles']
         )));
     }
 }

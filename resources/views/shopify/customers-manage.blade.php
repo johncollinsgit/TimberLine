@@ -621,20 +621,20 @@
         }
 
         .customers-status.is-yes,
-        .customers-status--active {
+        .customers-status--ready {
             border-color: rgba(15, 143, 97, 0.28);
             background: rgba(15, 143, 97, 0.1);
             color: #0d6f4d;
         }
 
         .customers-status.is-no,
-        .customers-status--standard {
+        .customers-status--needs_review {
             border-color: rgba(148, 163, 184, 0.24);
-            background: rgba(148, 163, 184, 0.08);
-            color: #475569;
+            background: rgba(245, 158, 11, 0.1);
+            color: #92400e;
         }
 
-        .customers-status--needs_contact {
+        .customers-status--contact_needed {
             border-color: rgba(202, 138, 4, 0.26);
             background: rgba(245, 158, 11, 0.1);
             color: #92400e;
@@ -1626,6 +1626,18 @@
                     if (!payload.ok) throw new Error(payload.message || 'The merge request failed.');
                     return payload;
                 };
+                const pollMergeStatus = async (operation) => {
+                    const terminal = new Set(['completed', 'blocked', 'partial_failure', 'reconciliation_required']);
+                    let current = operation;
+                    for (let attempt = 0; attempt < 30 && !terminal.has(current.status); attempt += 1) {
+                        mergeStatus.textContent = 'Shopify is merging the customers. Everbranch is waiting for confirmation…';
+                        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+                        const endpoint = root.dataset.mergePreviewEndpoint.replace(/\/preview$/, `/${current.id}/status`);
+                        const payload = await requestMerge(endpoint);
+                        current = payload.data;
+                    }
+                    return current;
+                };
                 const openProfiles = (profiles) => {
                     mergeProfiles = profiles;
                     if (mergeProfiles.length < 2) throw new Error('Select at least two customer records.');
@@ -1679,14 +1691,19 @@
                         const payload = await requestMerge(root.dataset.mergePreviewEndpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile_ids:ids,survivor_profile_id:survivor,field_sources:fieldSources,reward_resolution:{ambiguous_balances:ambiguousBalances},idempotency_key:crypto.randomUUID()})});
                         mergeOperation = payload.data.operation;
                         const blockers = payload.data.blockers || [];
+                        const canExecute = Boolean(payload.data.can_execute);
                         const selectedRows = payload.data.selected || [];
                         const rewards = selectedRows.map((profile) => `${escapeHtml(profile.name)}: ${Number(profile.candle_cash_balance || 0)} (${Number(profile.candle_cash_transactions || 0)} ledger entries)`).join('<br>');
                         const previews = mergeOperation.preview?.previews || [];
                         const resulting = previews.at(-1)?.resultingCustomerId || 'Everbranch-only consolidation';
                         mergeContent.insertAdjacentHTML('beforeend', `<h3>Step 4: Shopify preview</h3><div class="${blockers.length ? 'customers-merge-warning' : 'customers-merge-success'}"><strong>${blockers.length ? 'Merge blocked' : 'Preview ready'}</strong><br>Resulting Shopify customer: ${escapeHtml(resulting)}<br>Consent result: controlled by Shopify.<br>${blockers.map((blocker) => escapeHtml(blocker.message || 'Shopify blocker')).join('<br>')}</div><h3>Step 5: Confirm</h3><p>${rewards}</p><label class="customers-merge-field"><span>Surviving email or name</span><input data-merge-confirmation autocomplete="off" placeholder="Type it exactly"></label>`);
                         previewButton.hidden = true;
-                        approveButton.hidden = blockers.length > 0;
-                        mergeStatus.textContent = blockers.length ? 'Resolve every Shopify blocker before execution.' : 'Review the preview, then enter the confirmation text.';
+                        approveButton.hidden = blockers.length > 0 || !canExecute;
+                        mergeStatus.textContent = blockers.length
+                            ? 'Resolve every Shopify blocker before execution.'
+                            : !canExecute
+                                ? 'Preview ready. Sign in to Everbranch with the active tenant owner/admin account matching your Shopify admin email to approve it.'
+                                : 'Review the preview, then enter the confirmation text.';
                     } catch (error) { mergeStatus.textContent = error.message; }
                 });
                 approveButton?.addEventListener('click', async () => {
@@ -1695,8 +1712,12 @@
                         mergeStatus.textContent = 'Submitting the irreversible merge…';
                         const endpoint = root.dataset.mergePreviewEndpoint.replace(/\/preview$/, `/${mergeOperation.id}/approve`);
                         const payload = await requestMerge(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:cleanValue(mergeContent.querySelector('[data-merge-confirmation]')?.value)})});
-                        mergeOperation = payload.data;
-                        mergeStatus.textContent = mergeOperation.status === 'completed' ? 'Merge completed. Archived aliases now redirect to the survivor.' : `Merge status: ${mergeOperation.status}. Everbranch will resume safely from this operation.`;
+                        mergeOperation = await pollMergeStatus(payload.data);
+                        mergeStatus.textContent = mergeOperation.status === 'completed'
+                            ? 'Merge completed. Archived aliases now redirect to the survivor.'
+                            : mergeOperation.status === 'reconciliation_required'
+                                ? 'Shopify may have completed the merge, but Everbranch reconciliation needs attention. This operation is safe to retry.'
+                                : `Merge status: ${mergeOperation.status}. Everbranch will resume safely from this operation.`;
                         if (mergeOperation.status === 'completed') approveButton.hidden = true;
                     } catch (error) { mergeStatus.textContent = error.message; } finally { approveButton.disabled = false; }
                 });

@@ -9,12 +9,15 @@ use App\Models\User;
 use App\Services\Marketing\CustomerMergeCandidateService;
 use App\Services\Marketing\CustomerMergeCoordinator;
 use App\Services\Marketing\CustomerMergeException;
+use App\Services\Marketing\CustomerMergeReadinessService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class ShopifyEmbeddedCustomerMergeController extends Controller
 {
@@ -31,7 +34,8 @@ class ShopifyEmbeddedCustomerMergeController extends Controller
         ShopifyEmbeddedAppContext $contexts,
         TenantResolver $tenants,
         CustomerMergeCandidateService $candidates,
-        CustomerMergeCoordinator $coordinator
+        CustomerMergeCoordinator $coordinator,
+        CustomerMergeReadinessService $readiness
     ): JsonResponse {
         [$tenantId, $storeKey, $context] = $this->context($request, $contexts, $tenants);
         $data = $request->validate([
@@ -53,8 +57,10 @@ class ShopifyEmbeddedCustomerMergeController extends Controller
         $fieldSources = (array) ($data['field_sources'] ?? []);
         $overrides = $this->shopifyOverrides($fieldSources, $gids->all(), $data, $selected);
         $store = $this->store($storeKey, $tenantId);
+        $actor = $this->resolveActor($request->user(), $context, $tenantId);
 
         try {
+            $readiness->assertReady($store);
             $result = $coordinator->prepare(
                 $tenantId,
                 $storeKey,
@@ -65,13 +71,26 @@ class ShopifyEmbeddedCustomerMergeController extends Controller
                 $overrides,
                 trim((string) ($data['idempotency_key'] ?? '')) ?: (string) Str::uuid(),
                 [
-                    'initiated_by' => $request->user()?->id,
+                    'initiated_by' => $actor?->id,
                     'shopify_admin_user_id' => data_get($context, 'shopify_admin_user_id'),
                 ],
                 (array) ($data['reward_resolution'] ?? [])
             );
         } catch (CustomerMergeException $exception) {
             return $this->mergeError($exception);
+        } catch (Throwable $exception) {
+            Log::error('Customer merge preview failed unexpectedly.', [
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'status' => 'customer_merge_preview_failed',
+                'message' => 'Everbranch could not prepare this merge. No customer records were changed; review the operation logs and try again.',
+            ], 500);
         }
 
         return response()->json([
@@ -81,14 +100,14 @@ class ShopifyEmbeddedCustomerMergeController extends Controller
                 'selected' => $selected,
                 'blockers' => $result['blockers'],
                 'everbranch_only' => $result['everbranch_only'],
-                'can_execute' => $this->canApprove($request->user(), $tenantId),
+                'can_execute' => $this->canApprove($actor, $tenantId),
             ],
         ]);
     }
 
-    public function approve(Request $request, CustomerMergeOperation $operation, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants, CustomerMergeCoordinator $coordinator): JsonResponse
+    public function approve(Request $request, CustomerMergeOperation $operation, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants, CustomerMergeCoordinator $coordinator, CustomerMergeReadinessService $readiness): JsonResponse
     {
-        [$tenantId, $storeKey] = $this->context($request, $contexts, $tenants);
+        [$tenantId, $storeKey, $context] = $this->context($request, $contexts, $tenants);
         abort_unless((int) $operation->tenant_id === $tenantId && (string) $operation->store_key === $storeKey, 404);
         $confirmation = trim((string) $request->validate(['confirmation' => ['required', 'string', 'max:190']])['confirmation']);
         $survivor = MarketingProfile::query()->where('tenant_id', $tenantId)->findOrFail($operation->survivor_profile_id);
@@ -96,17 +115,35 @@ class ShopifyEmbeddedCustomerMergeController extends Controller
         if (! in_array(strtolower($confirmation), $validConfirmations, true)) {
             return response()->json(['ok' => false, 'message' => 'Enter the surviving email or customer name exactly.'], 422);
         }
-        $actor = $request->user();
+        $actor = $this->resolveActor($request->user(), $context, $tenantId);
         if (! $this->canApprove($actor, $tenantId)) {
-            $operation->forceFill(['status' => 'awaiting_approval'])->save();
-
-            return response()->json(['ok' => true, 'message' => 'Merge request submitted for owner/admin approval.', 'data' => $this->operationPayload($operation->fresh())], 202);
+            return response()->json([
+                'ok' => false,
+                'status' => 'admin_approval_required',
+                'message' => 'Sign in to Everbranch with an active tenant owner/admin account matching your Shopify admin email before approving this merge.',
+            ], 403);
         }
 
         try {
-            $operation = $coordinator->execute($operation, $this->store($storeKey, $tenantId), (int) $actor->id);
+            $store = $this->store($storeKey, $tenantId);
+            $readiness->assertReady($store);
+            $operation = $coordinator->execute($operation, $store, (int) $actor->id);
         } catch (CustomerMergeException $exception) {
             return $this->mergeError($exception);
+        } catch (Throwable $exception) {
+            Log::error('Customer merge approval failed unexpectedly.', [
+                'operation_id' => (int) $operation->id,
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'status' => 'customer_merge_execution_failed',
+                'message' => 'Everbranch could not safely continue this merge. Check the operation status before retrying.',
+            ], 500);
         }
 
         return response()->json(['ok' => true, 'data' => $this->operationPayload($operation)]);
@@ -150,8 +187,28 @@ class ShopifyEmbeddedCustomerMergeController extends Controller
     private function canApprove(?User $user, int $tenantId): bool
     {
         return $user instanceof User
+            && (bool) $user->is_active
             && ($user->isAdmin() || $user->role === 'platform_admin')
             && ($user->role === 'platform_admin' || in_array($tenantId, $user->accessibleTenantIds(), true));
+    }
+
+    private function resolveActor(?User $sessionUser, array $context, int $tenantId): ?User
+    {
+        if ($this->canApprove($sessionUser, $tenantId)) {
+            return $sessionUser;
+        }
+
+        $email = strtolower(trim((string) ($context['shopify_admin_email'] ?? '')));
+        if ($email === '') {
+            return null;
+        }
+
+        $candidate = User::query()
+            ->where('is_active', true)
+            ->whereRaw('lower(email) = ?', [$email])
+            ->first();
+
+        return $this->canApprove($candidate, $tenantId) ? $candidate : null;
     }
 
     private function shopifyOverrides(array $sources, array $gids, array $data, array $selectedProfiles): array

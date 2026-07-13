@@ -5,8 +5,9 @@ namespace App\Services\Mobile;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
-use App\Services\Marketing\ShopifyCustomerAddressSyncService;
+use App\Services\Marketing\CanonicalMarketingProfileResolver;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
+use App\Services\Marketing\ShopifyCustomerAddressSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +24,9 @@ class ModernForestryMobileCustomerSessionService
 
     public function __construct(
         protected MarketingStorefrontIdentityService $identityService,
-        protected ShopifyCustomerAddressSyncService $shopifyCustomerAddressSync
-    ) {
-    }
+        protected ShopifyCustomerAddressSyncService $shopifyCustomerAddressSync,
+        protected CanonicalMarketingProfileResolver $canonicalProfiles
+    ) {}
 
     public function resolveFromRequest(Request $request, bool $allowCreate = false): ?ModernForestryMobileCustomerSession
     {
@@ -484,11 +485,7 @@ class ModernForestryMobileCustomerSessionService
 
     protected function ensureAppReviewDemoProfile(string $email): MarketingProfile
     {
-        $profile = MarketingProfile::query()
-            ->where('tenant_id', ModernForestryMobileCheckoutService::TENANT_ID)
-            ->where('normalized_email', $email)
-            ->latest('id')
-            ->first();
+        $profile = $this->canonicalProfiles->byEmail(ModernForestryMobileCheckoutService::TENANT_ID, $email);
 
         if ($profile instanceof MarketingProfile) {
             return $profile;
@@ -636,10 +633,10 @@ class ModernForestryMobileCustomerSessionService
         $startedAt = hrtime(true);
 
         $response = Http::withHeaders([
-                'Authorization' => $token,
-                'Origin' => $this->customerAccountDiscoveryBaseUrl() ?? 'https://theforestrystudio.com',
-                'User-Agent' => 'Modern Forestry iOS / Everbranch Mobile Customer Account',
-            ])
+            'Authorization' => $token,
+            'Origin' => $this->customerAccountDiscoveryBaseUrl() ?? 'https://theforestrystudio.com',
+            'User-Agent' => 'Modern Forestry iOS / Everbranch Mobile Customer Account',
+        ])
             ->acceptJson()
             ->asJson()
             ->timeout(8)
@@ -675,6 +672,7 @@ GRAPHQL,
                     ->values()
                     ->all(),
             ]);
+
             return null;
         }
 
@@ -702,6 +700,7 @@ GRAPHQL,
                 'duration_ms' => $durationMs,
                 'has_graphql_errors' => $graphqlErrors !== [],
             ]);
+
             return null;
         }
 
@@ -710,6 +709,7 @@ GRAPHQL,
 
         if ($email === null && $shopifyCustomerId === null) {
             Cache::forget($cacheKey);
+
             return null;
         }
 
@@ -811,10 +811,7 @@ GRAPHQL,
         $tenantId = ModernForestryMobileCheckoutService::TENANT_ID;
         $profileId = (int) ($identity['profile_id'] ?? 0);
         if ($profileId > 0) {
-            return MarketingProfile::query()
-                ->where('tenant_id', $tenantId)
-                ->whereKey($profileId)
-                ->first();
+            return $this->canonicalProfiles->byId($tenantId, $profileId);
         }
 
         $shopifyCustomerId = $this->nullableString($identity['shopify_customer_id'] ?? $identity['source_id'] ?? null);
@@ -827,11 +824,7 @@ GRAPHQL,
 
         $email = $this->nullableString($identity['email'] ?? null);
         if ($email !== null) {
-            $profile = MarketingProfile::query()
-                ->where('tenant_id', $tenantId)
-                ->where('normalized_email', Str::lower($email))
-                ->latest('id')
-                ->first();
+            $profile = $this->canonicalProfiles->byEmail($tenantId, $email);
 
             if ($profile instanceof MarketingProfile) {
                 return $profile;
@@ -880,20 +873,22 @@ GRAPHQL,
             'shopify:'.$normalized,
         ])));
 
-        $profileId = MarketingProfileLink::query()
+        $profileIds = MarketingProfileLink::query()
             ->where('tenant_id', $tenantId)
             ->where('source_type', 'shopify_customer')
             ->whereIn('source_id', $possibleSourceIds)
-            ->latest('id')
-            ->value('marketing_profile_id');
+            ->pluck('marketing_profile_id')
+            ->map('intval')
+            ->unique();
 
-        if (is_numeric($profileId) && (int) $profileId > 0) {
-            return MarketingProfile::query()
-                ->where('tenant_id', $tenantId)
-                ->find((int) $profileId);
+        if ($profileIds->isNotEmpty()) {
+            return $this->canonicalProfiles->oneCanonical(
+                MarketingProfile::query()->where('tenant_id', $tenantId)->whereIn('id', $profileIds)->get(),
+                $tenantId
+            );
         }
 
-        $externalProfile = CustomerExternalProfile::query()
+        $externalProfileIds = CustomerExternalProfile::query()
             ->where('tenant_id', $tenantId)
             ->where(function ($query) use ($possibleSourceIds): void {
                 foreach ($possibleSourceIds as $value) {
@@ -901,11 +896,16 @@ GRAPHQL,
                         ->orWhere('external_customer_gid', $value);
                 }
             })
-            ->latest('id')
-            ->first();
+            ->pluck('marketing_profile_id')
+            ->map('intval')
+            ->filter()
+            ->unique();
 
-        return $externalProfile instanceof CustomerExternalProfile
-            ? $externalProfile->marketingProfile()->where('tenant_id', $tenantId)->first()
+        return $externalProfileIds->isNotEmpty()
+            ? $this->canonicalProfiles->oneCanonical(
+                MarketingProfile::query()->where('tenant_id', $tenantId)->whereIn('id', $externalProfileIds)->get(),
+                $tenantId
+            )
             : null;
     }
 

@@ -620,10 +620,38 @@ test('customers grid resolves missing contact data and vip tier fallbacks', func
 
     expect($aliceRow['orders_count'] ?? 0)->toBe(2)
         ->and($aliceRow['vip_tier'] ?? null)->toBe('Candle Club')
-        ->and($bobRow['vip_tier'] ?? null)->toBe('Standard')
-        ->and($claraRow['vip_tier'] ?? null)->toBe(Schema::hasColumn('customer_external_profiles', 'vip_tier') ? 'Gold' : 'Standard')
+        ->and($bobRow['vip_tier'] ?? null)->toBe('No tier')
+        ->and($claraRow['vip_tier'] ?? null)->toBe(Schema::hasColumn('customer_external_profiles', 'vip_tier') ? 'Gold' : 'No tier')
         ->and($needsContactRow['id'] ?? null)->toBe($missingContact->id)
-        ->and($needsContactRow['status']['key'] ?? null)->toBe('needs_contact');
+        ->and($needsContactRow['status']['key'] ?? null)->toBe('contact_needed')
+        ->and($needsContactRow['status']['label'] ?? null)->toBe('Contact info needed');
+});
+
+test('customer status uses friendly identity health labels instead of candle cash balance', function () {
+    Tenant::query()->firstOrCreate(['id' => 1], ['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    $ready = MarketingProfile::query()->create([
+        'tenant_id' => 1, 'first_name' => 'Ready', 'last_name' => 'Customer',
+        'email' => 'ready@example.com', 'normalized_email' => 'ready@example.com',
+    ]);
+    $duplicate = MarketingProfile::query()->create([
+        'tenant_id' => 1, 'first_name' => 'Faith', 'last_name' => 'Crocker',
+        'email' => 'faith@example.com', 'normalized_email' => 'faith@example.com',
+    ]);
+    MarketingProfile::query()->create([
+        'tenant_id' => 1, 'first_name' => 'Faith', 'last_name' => 'Crocker',
+        'email' => 'faith@example.com', 'normalized_email' => 'faith@example.com',
+    ]);
+    DB::table('candle_cash_balances')->insert([
+        ['marketing_profile_id' => $ready->id, 'balance' => 100, 'created_at' => now(), 'updated_at' => now()],
+        ['marketing_profile_id' => $duplicate->id, 'balance' => 0, 'created_at' => now(), 'updated_at' => now()],
+    ]);
+
+    $service = app(ShopifyEmbeddedCustomersGridService::class);
+    $readyRow = collect($service->resolve(Request::create('/', 'GET', ['search' => 'ready@example.com']), 1, 'retail')['paginator']->items())->first();
+    $reviewRow = collect($service->resolve(Request::create('/', 'GET', ['search' => 'faith@example.com']), 1, 'retail')['paginator']->items())->first();
+
+    expect($readyRow['status'])->toBe(['key' => 'ready', 'label' => 'Ready'])
+        ->and($reviewRow['status'])->toBe(['key' => 'needs_review', 'label' => 'Needs review']);
 });
 
 test('customers grid counts canonical Shopify customer fallback orders when order emails changed', function () {
@@ -733,9 +761,9 @@ test('pagination preserves query params', function () {
     for ($i = 1; $i <= 30; $i++) {
         MarketingProfile::query()->create([
             'first_name' => 'Paginate',
-            'last_name' => 'User ' . $i,
-            'email' => 'paginate' . $i . '@example.com',
-            'normalized_email' => 'paginate' . $i . '@example.com',
+            'last_name' => 'User '.$i,
+            'email' => 'paginate'.$i.'@example.com',
+            'normalized_email' => 'paginate'.$i.'@example.com',
         ]);
     }
 
@@ -772,7 +800,7 @@ test('embedded manage page preserves full Shopify context on customer detail lin
 
     $response = $this
         ->withHeaders([
-            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Authorization' => 'Bearer '.retailShopifySessionToken(),
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ])
@@ -818,7 +846,7 @@ test('embedded manage filters and sort controls preserve full Shopify context', 
 
     $jsonResponse = $this
         ->withHeaders([
-            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Authorization' => 'Bearer '.retailShopifySessionToken(),
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ])
@@ -845,7 +873,7 @@ test('embedded manage returns json results for authenticated live search request
 
     $response = $this
         ->withHeaders([
-            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Authorization' => 'Bearer '.retailShopifySessionToken(),
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ])
@@ -868,7 +896,7 @@ test('embedded manage json stays deferred until a search query is present', func
 
     $response = $this
         ->withHeaders([
-            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Authorization' => 'Bearer '.retailShopifySessionToken(),
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ])
@@ -941,7 +969,7 @@ test('embedded manage page and json search are tenant scoped by store tenant', f
 
     $jsonResponse = $this
         ->withHeaders([
-            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Authorization' => 'Bearer '.retailShopifySessionToken(),
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ])
@@ -988,7 +1016,7 @@ test('embedded manage tenant scoping keeps empty state when no customers belong 
 
     $jsonResponse = $this
         ->withHeaders([
-            'Authorization' => 'Bearer ' . retailShopifySessionToken(),
+            'Authorization' => 'Bearer '.retailShopifySessionToken(),
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ])

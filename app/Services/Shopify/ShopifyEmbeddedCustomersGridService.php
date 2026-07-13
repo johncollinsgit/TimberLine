@@ -287,11 +287,44 @@ class ShopifyEmbeddedCustomersGridService
                 'mp.first_name',
                 'mp.last_name',
                 'mp.email',
+                'mp.normalized_email',
                 'mp.phone',
                 'mp.normalized_phone',
             ])
             ->selectRaw('coalesce(external_stats.shopify_orders_count, order_stats.orders_count, 0) as orders_count')
-            ->selectRaw("coalesce(nullif(trim(external_stats.vip_tier), ''), case when ".$this->candleClubExpression()." = 1 then 'Candle Club' else 'Standard' end) as vip_tier")
+            ->selectRaw("coalesce(nullif(trim(external_stats.vip_tier), ''), case when ".$this->candleClubExpression()." = 1 then 'Candle Club' else 'No tier' end) as vip_tier")
+            ->selectRaw('coalesce(external_stats.shopify_identity_count, 0) as shopify_identity_count')
+            ->selectSub(function ($duplicates): void {
+                $duplicates->from('marketing_profiles as possible_duplicates')
+                    ->selectRaw('count(*)')
+                    ->whereColumn('possible_duplicates.tenant_id', 'mp.tenant_id')
+                    ->whereColumn('possible_duplicates.id', '!=', 'mp.id')
+                    ->where(function ($identity): void {
+                        $identity->where(function ($email): void {
+                            $email->whereNotNull('mp.normalized_email')
+                                ->where('mp.normalized_email', '!=', '')
+                                ->whereColumn('possible_duplicates.normalized_email', 'mp.normalized_email');
+                        })->orWhere(function ($phone): void {
+                            $phone->whereNotNull('mp.normalized_phone')
+                                ->where('mp.normalized_phone', '!=', '')
+                                ->whereColumn('possible_duplicates.normalized_phone', 'mp.normalized_phone');
+                        });
+                    });
+                if ($this->hasColumn('marketing_profiles', 'merged_at')) {
+                    $duplicates->whereNull('possible_duplicates.merged_at');
+                }
+            }, 'possible_duplicate_count')
+            ->when(
+                $this->hasTable('customer_merge_operation_members') && $this->hasTable('customer_merge_operations'),
+                fn (Builder $builder): Builder => $builder->selectSub(function ($operations): void {
+                    $operations->from('customer_merge_operation_members as merge_members')
+                        ->join('customer_merge_operations as merge_operations', 'merge_operations.id', '=', 'merge_members.customer_merge_operation_id')
+                        ->selectRaw('count(*)')
+                        ->whereColumn('merge_members.marketing_profile_id', 'mp.id')
+                        ->whereIn('merge_operations.status', ['draft', 'previewed', 'processing', 'blocked', 'awaiting_approval', 'partial_failure', 'reconciliation_required']);
+                }, 'open_merge_count'),
+                fn (Builder $builder): Builder => $builder->selectRaw('0 as open_merge_count')
+            )
             ->selectRaw('coalesce(balance_stats.candle_cash_balance, 0) as candle_cash_balance')
             ->selectRaw('coalesce(task_stats.rewards_actions_count, 0) as rewards_actions_count')
             ->selectRaw($this->candleClubExpression().' as candle_club_active')
@@ -546,7 +579,8 @@ class ShopifyEmbeddedCustomersGridService
             'candle_club_active' => ((int) ($row->candle_club_active ?? 0)) === 1,
             'vip_tier' => trim((string) ($row->vip_tier ?? '')) !== ''
                 ? trim((string) $row->vip_tier)
-                : (((int) ($row->candle_club_active ?? 0)) === 1 ? 'Candle Club' : 'Standard'),
+                : (((int) ($row->candle_club_active ?? 0)) === 1 ? 'Candle Club' : 'No tier'),
+            'source_label' => ((int) ($row->shopify_identity_count ?? 0)) > 0 ? 'Shopify' : 'Everbranch',
             'referral_completed' => ((int) ($row->referral_completed ?? 0)) === 1,
             'review_completed' => ((int) ($row->review_completed ?? 0)) === 1,
             'birthday_completed' => ((int) ($row->birthday_completed ?? 0)) === 1,
@@ -556,33 +590,35 @@ class ShopifyEmbeddedCustomersGridService
             'status' => $this->customerStatus(
                 email: (string) ($row->email ?? ''),
                 normalizedPhone: (string) ($row->normalized_phone ?? ''),
-                pointsBalance: (int) ($row->candle_cash_balance ?? 0)
+                needsReview: ((int) ($row->possible_duplicate_count ?? 0)) > 0
+                    || ((int) ($row->shopify_identity_count ?? 0)) > 1
+                    || ((int) ($row->open_merge_count ?? 0)) > 0
             ),
         ];
     }
 
-    protected function customerStatus(string $email, string $normalizedPhone, int $pointsBalance): array
+    protected function customerStatus(string $email, string $normalizedPhone, bool $needsReview): array
     {
         $hasEmail = trim($email) !== '';
         $hasPhone = trim($normalizedPhone) !== '';
 
         if (! $hasEmail && ! $hasPhone) {
             return [
-                'key' => 'needs_contact',
-                'label' => 'Needs contact',
+                'key' => 'contact_needed',
+                'label' => 'Contact info needed',
             ];
         }
 
-        if ($pointsBalance > 0) {
+        if ($needsReview) {
             return [
-                'key' => 'active',
-                'label' => 'Active',
+                'key' => 'needs_review',
+                'label' => 'Needs review',
             ];
         }
 
         return [
-            'key' => 'standard',
-            'label' => 'Standard',
+            'key' => 'ready',
+            'label' => 'Ready',
         ];
     }
 
@@ -958,6 +994,7 @@ class ShopifyEmbeddedCustomersGridService
                 '0 as marketing_profile_id',
                 '0 as wholesale_eligible',
                 'null as vip_tier',
+                '0 as shopify_identity_count',
                 'null as shopify_orders_count',
                 'null as shopify_total_spent',
                 'null as last_external_activity_at',
@@ -974,6 +1011,7 @@ class ShopifyEmbeddedCustomersGridService
             ->selectRaw('marketing_profile_id')
             ->selectRaw("max(case when lower(coalesce(store_key, '')) = 'wholesale' or lower(coalesce(integration, '')) = 'wholesale' or lower(coalesce(provider, '')) = 'wholesale' then 1 else 0 end) as wholesale_eligible")
             ->selectRaw("max(nullif(trim(vip_tier), '')) as vip_tier")
+            ->selectRaw("count(distinct case when lower(coalesce(provider, '')) = 'shopify' and lower(coalesce(integration, '')) in ('shopify', 'shopify_customer') and {$storeMatchExpression} then external_customer_id else null end) as shopify_identity_count")
             ->selectRaw("max(case when lower(coalesce(provider, '')) = 'shopify' and lower(coalesce(integration, '')) = 'shopify_customer' and {$storeMatchExpression} then order_count else null end) as shopify_orders_count")
             ->selectRaw($hasTotalSpentColumn
                 ? "max(case when lower(coalesce(provider, '')) = 'shopify' and lower(coalesce(integration, '')) = 'shopify_customer' and {$storeMatchExpression} then total_spent else null end) as shopify_total_spent"
