@@ -25,6 +25,8 @@ Open `https://app.theeverbranch.com/shopify/reinstall/retail` and complete Shopi
 
 The webhook feature test must configure a shop domain, client ID, and client secret explicitly. CI intentionally leaves production Shopify credentials empty; omitting any resolver-required fixture value can produce an `Unknown shop` 404 even though the webhook route exists.
 
+The foundation migration uses an explicit MySQL-safe foreign-key name. If an earlier attempt stopped after creating the two foundation tables but before adding profile columns, a retry removes those tables only when both are empty. It aborts for operator review instead of deleting a partial table that contains any row.
+
 ## Megan acceptance evidence
 
 The preview must show four Everbranch profiles collapsed to two distinct Shopify customer IDs, 98 orders, and a unique-ledger Candle Cash result of exactly 332. Confirm the Shopify preview has no blockers and explicitly record Shopify's resulting customer ID and consent result. After approval, verify:
