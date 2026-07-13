@@ -66,7 +66,11 @@ class FieldServiceSyncQuickBooks extends Command
         $this->line((bool) $this->option('dry-run') ? 'mode=dry-run' : 'mode=live');
         $this->line('tenant='.$tenant->slug);
         $this->line('connection='.$syncService->connectionLabel($connection));
-        foreach (['quickbooks_customers', 'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_items', 'quickbooks_attachments', 'customers', 'jobs', 'items', 'documents', 'lines', 'attachments', 'skipped'] as $key) {
+        foreach ([
+            'quickbooks_customers', 'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_items', 'quickbooks_attachments',
+            'customers', 'jobs', 'jobs_created', 'jobs_updated', 'items', 'documents', 'documents_created',
+            'documents_updated', 'documents_linked', 'documents_needing_review', 'lines', 'attachments', 'skipped',
+        ] as $key) {
             $this->line($key.'='.(int) ($summary[$key] ?? 0));
         }
 

@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Services\FieldService\QuickBooksDiscoveryAuditService;
+use App\Services\FieldService\QuickBooksFieldServiceImportService;
 use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
 use App\Services\Search\Providers\FieldServiceSearchProvider;
 use Illuminate\Http\Client\Request;
@@ -270,6 +271,53 @@ test('quickbooks api sync dry run does not write imported records', function ():
     ])->assertSuccessful()->expectsOutputToContain('mode=dry-run');
 
     expect(MarketingProfile::query()->where('tenant_id', $tenant->id)->count())->toBe(0);
+});
+
+test('line descriptions stay searchable without manufacturing a field job', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Review Electric', 'slug' => 'review-electric']);
+    enableQuickBooksBranchForApiTest($tenant);
+    $owner = User::factory()->tenantAdmin()->create();
+    $member = User::factory()->create(['role' => 'member', 'email_verified_at' => now()]);
+    $owner->tenants()->attach($tenant->id, ['role' => 'admin']);
+    $member->tenants()->attach($tenant->id, ['role' => 'member']);
+
+    $summary = app(QuickBooksFieldServiceImportService::class)->importQuickBooksTransaction($tenant, [
+        'Id' => 'LINE-ONLY-1',
+        'DocNumber' => '2002',
+        'TxnDate' => '2026-07-01',
+        'CustomerRef' => ['value' => 'C-200', 'name' => 'Review Customer'],
+        'TotalAmt' => 475,
+        'Balance' => 0,
+        'Line' => [[
+            'Id' => '1',
+            'DetailType' => 'SalesItemLineDetail',
+            'Description' => 'Replace weathered exterior receptacle.',
+            'Amount' => 475,
+            'SalesItemLineDetail' => ['ItemRef' => ['value' => 'SVC-1', 'name' => 'Electrical service']],
+        ]],
+    ], 'invoice');
+
+    $document = FieldServiceFinancialDocument::query()->forTenantId($tenant->id)->sole();
+    expect($summary['documents_needing_review'])->toBe(1)
+        ->and($summary['jobs_created'])->toBe(0)
+        ->and(FieldServiceJob::query()->forTenantId($tenant->id)->count())->toBe(0)
+        ->and(data_get($document->metadata, 'quickbooks.job_link_status'))->toBe('needs_review')
+        ->and(data_get($document->metadata, 'quickbooks.job_link_reason'))->toBe('insufficient_operational_evidence');
+
+    $search = app(FieldServiceSearchProvider::class);
+    $ownerResults = $search->search('weathered exterior', ['tenant_id' => $tenant->id, 'user' => $owner]);
+    expect($ownerResults)->toHaveCount(1)
+        ->and($ownerResults[0]['subtype'])->toBe('quickbooks_document')
+        ->and($search->search('weathered exterior', ['tenant_id' => $tenant->id, 'user' => $member]))->toBeEmpty();
+
+    $this->actingAs($owner)
+        ->get(route('integrations.quickbooks.documents.show', ['tenant' => $tenant->slug, 'document' => $document]))
+        ->assertOk()
+        ->assertSee('Replace weathered exterior receptacle.');
+
+    $this->actingAs($member)
+        ->get(route('integrations.quickbooks.documents.show', ['tenant' => $tenant->slug, 'document' => $document]))
+        ->assertForbidden();
 });
 
 test('full quickbooks audit dry run reports aggregates without storing or printing private records', function (): void {
