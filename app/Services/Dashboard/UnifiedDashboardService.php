@@ -101,10 +101,10 @@ class UnifiedDashboardService
         $sync = (array) ($report['sync_health'] ?? []);
 
         return [
-            ['label' => 'Unpaid invoices', 'value' => '$'.number_format((float) ($unpaid['amount'] ?? 0), 2), 'detail' => number_format((int) ($unpaid['count'] ?? 0)).' open · $'.number_format((float) ($unpaid['overdue_amount'] ?? 0), 2).' overdue'],
-            ['label' => 'Work billed', 'value' => '$'.number_format((float) ($work['amount'] ?? 0), 2), 'detail' => number_format((int) ($work['count'] ?? 0)).' invoices in this time window'],
-            ['label' => 'Contract labor', 'value' => ($contract['amount'] ?? null) === null ? 'Mapping needed' : '$'.number_format((float) $contract['amount'], 2), 'detail' => ($contract['percent'] ?? null) === null ? 'Owner must approve the P&L account mapping' : number_format((float) $contract['percent'], 1).'% of P&L income'],
-            ['label' => 'QuickBooks review', 'value' => number_format((int) ($sync['review_count'] ?? 0)), 'detail' => ($sync['connected'] ?? false) ? 'Connected · last successful import is tracked' : 'QuickBooks is not connected'],
+            ['label' => 'Unpaid invoices', 'value' => '$'.number_format((float) ($unpaid['amount'] ?? 0), 2), 'detail' => number_format((int) ($unpaid['count'] ?? 0)).' open · $'.number_format((float) ($unpaid['overdue_amount'] ?? 0), 2).' overdue', 'destination' => ['kind' => 'reporting', 'section' => 'unpaid_invoices']],
+            ['label' => 'Work billed', 'value' => '$'.number_format((float) ($work['amount'] ?? 0), 2), 'detail' => number_format((int) ($work['count'] ?? 0)).' invoices', 'destination' => ['kind' => 'reporting', 'section' => 'work_billed']],
+            ['label' => 'Contract labor', 'value' => ($contract['amount'] ?? null) === null ? 'Mapping needed' : '$'.number_format((float) $contract['amount'], 2), 'detail' => ($contract['percent'] ?? null) === null ? 'Review account mapping' : number_format((float) $contract['percent'], 1).'% of income', 'destination' => ['kind' => 'reporting', 'section' => 'contract_labor']],
+            ['label' => 'QuickBooks review', 'value' => number_format((int) ($sync['review_count'] ?? 0)), 'detail' => ($sync['connected'] ?? false) ? 'Connected' : 'Not connected', 'destination' => ['kind' => 'reporting', 'section' => 'quickbooks']],
         ];
     }
 
@@ -138,10 +138,11 @@ class UnifiedDashboardService
 
         if ($canAccessOps && $tradeMetrics !== null) {
             return [
-                'label' => 'Jobs in progress',
+                'label' => 'Active jobs',
                 'value' => number_format((int) $tradeMetrics['jobs_in_progress']),
-                'supporting' => 'Active jobs currently underway',
+                'supporting' => 'Accepted work that still needs attention',
                 'tone' => 'emerald',
+                'destination' => ['kind' => 'field_service', 'view' => 'list', 'filter' => 'active'],
             ];
         }
 
@@ -229,17 +230,20 @@ class UnifiedDashboardService
                 [
                     'label' => 'Total gross revenue',
                     'value' => '$'.number_format((float) $tradeMetrics['gross_revenue'], 2),
-                    'detail' => 'Value of jobs in progress for '.$range['short_label'],
+                    'detail' => 'Active job value',
+                    'destination' => ['kind' => 'field_service', 'view' => 'list', 'filter' => 'active'],
                 ],
                 [
                     'label' => 'Crews working',
                     'value' => number_format((int) $tradeMetrics['crews_working']),
-                    'detail' => 'Assigned crews on active jobs',
+                    'detail' => 'Assigned active jobs',
+                    'destination' => ['kind' => 'field_service', 'view' => 'calendar', 'filter' => 'active'],
                 ],
                 [
                     'label' => 'Potential jobs in progress',
                     'value' => number_format((int) $tradeMetrics['potential_jobs']),
-                    'detail' => 'Estimates, quotes, and opportunities in progress',
+                    'detail' => 'Recent unaccepted quotes',
+                    'destination' => ['kind' => 'field_service', 'view' => 'list', 'filter' => 'quotes'],
                 ],
             ];
         }
@@ -331,15 +335,15 @@ class UnifiedDashboardService
 
         $jobs = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
-            ->where(function ($query) use ($range): void {
-                $query->whereBetween('scheduled_for', [$range['starts_at'], $range['ends_at']])
-                    ->orWhere(function ($fallback) use ($range): void {
-                        $fallback->whereNull('scheduled_for')
-                            ->whereBetween('created_at', [$range['starts_at'], $range['ends_at']]);
+            ->where(function ($query): void {
+                $query->whereIn('operational_status', ['active', 'needs_details', 'blocked'])
+                    ->orWhere(function ($legacy): void {
+                        $legacy->whereNull('operational_status')
+                            ->whereIn('status', ['open', 'scheduled', 'in_progress', 'blocked']);
                     });
             })
-            ->get(['id', 'assigned_user_id', 'status', 'metadata']);
-        $inProgress = $jobs->filter(fn (FieldServiceJob $job): bool => strtolower((string) $job->status) === 'in_progress');
+            ->get(['id', 'assigned_user_id', 'status', 'operational_status', 'metadata']);
+        $inProgress = $jobs;
         $pipelineStages = ['potential', 'estimate', 'estimated', 'quote', 'quoted', 'proposal', 'opportunity'];
 
         return [
@@ -355,17 +359,31 @@ class UnifiedDashboardService
                 ->filter()
                 ->unique()
                 ->count(),
-            'potential_jobs' => $jobs->filter(function (FieldServiceJob $job) use ($pipelineStages): bool {
-                $status = strtolower(trim((string) $job->status));
-                $stage = strtolower(trim((string) (
-                    data_get($job->metadata, 'pipeline_stage')
-                    ?? data_get($job->metadata, 'job_stage')
-                    ?? data_get($job->metadata, 'stage')
-                    ?? ''
-                )));
+            'potential_jobs' => FieldServiceJob::query()->forTenantId((int) $tenant->id)
+                ->where(function ($query) use ($pipelineStages): void {
+                    $query->where('operational_status', 'quote')
+                        ->orWhere(function ($legacy) use ($pipelineStages): void {
+                            $legacy->whereNull('operational_status')->whereIn('status', $pipelineStages);
+                        });
+                })
+                ->where(function ($query) use ($range): void {
+                    $query->whereBetween('last_financial_activity_at', [$range['starts_at'], $range['ends_at']])
+                        ->orWhere(function ($fallback) use ($range): void {
+                            $fallback->whereNull('last_financial_activity_at')
+                                ->whereBetween('created_at', [$range['starts_at'], $range['ends_at']]);
+                        });
+                })
+                ->get()->filter(function (FieldServiceJob $job) use ($pipelineStages): bool {
+                    $status = strtolower(trim((string) $job->status));
+                    $stage = strtolower(trim((string) (
+                        data_get($job->metadata, 'pipeline_stage')
+                        ?? data_get($job->metadata, 'job_stage')
+                        ?? data_get($job->metadata, 'stage')
+                        ?? ''
+                    )));
 
-                return in_array($status, $pipelineStages, true) || in_array($stage, $pipelineStages, true);
-            })->count(),
+                    return in_array($status, $pipelineStages, true) || in_array($stage, $pipelineStages, true);
+                })->count(),
         ];
     }
 

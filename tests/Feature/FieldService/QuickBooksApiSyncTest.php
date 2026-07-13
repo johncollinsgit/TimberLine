@@ -233,6 +233,11 @@ test('quickbooks api sync imports collins electric customers jobs items and reco
     $member = User::factory()->create(['role' => 'member', 'email_verified_at' => now()]);
     $owner->tenants()->attach($tenant->id, ['role' => 'admin']);
     $member->tenants()->attach($tenant->id, ['role' => 'member']);
+    $invoiceJob->participants()->attach($member->id, [
+        'tenant_id' => $tenant->id,
+        'role' => 'member',
+        'following' => true,
+    ]);
     $search = app(FieldServiceSearchProvider::class);
 
     expect(FieldServiceJobNote::query()

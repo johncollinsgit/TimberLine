@@ -387,7 +387,7 @@ $catalog = [
         ],
         'work_core' => [
             'display_name' => 'Work',
-            'description' => 'Tenant-aware orders, jobs, or client projects for daily work.',
+            'description' => 'Daily work for this team.',
             'status' => 'live',
             'market_state' => 'INTERNAL_ONLY',
             'channels' => ['both'],
@@ -455,12 +455,13 @@ $catalog = [
             ],
             'mobile' => [
                 'status' => 'ready',
-                'renderer' => 'list',
+                'display_name' => 'Field Service',
+                'renderer' => 'field_service',
                 'entry_screen' => 'field-service.index',
-                'contract_version' => 1,
-                'min_app_version' => '1.0.0',
-                'navigation' => ['group' => 'work', 'icon' => 'briefcase-business', 'position' => 20],
-                'actions' => ['view', 'create_job', 'capture_photo', 'add_note'],
+                'contract_version' => 3,
+                'min_app_version' => '1.3.0',
+                'navigation' => ['group' => 'work', 'icon' => 'calendar-days', 'position' => 5],
+                'actions' => ['view', 'create_job', 'capture_photo', 'add_note', 'assign', 'comment'],
             ],
         ],
         'activity' => [
@@ -920,7 +921,7 @@ $catalog = [
             'default_setup_status' => 'not_started',
             'dependencies' => ['field_service'],
             'billing_mode' => 'included',
-            'visibility' => ['public_site' => false, 'app_store' => true, 'mobile_store' => false],
+            'visibility' => ['public_site' => false, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'request_module',
             'buyer_setup' => [
                 'outcome' => 'Prepare consistent estimates from recent invoiced work without writing back to QuickBooks.',
@@ -932,6 +933,16 @@ $catalog = [
                 'help_text' => 'Estimator drafts stay in Everbranch and never create QuickBooks transactions.',
             ],
             'capabilities' => ['estimator.drafts'],
+            'mobile' => [
+                'status' => 'beta',
+                'display_name' => 'Estimator',
+                'renderer' => 'estimator',
+                'entry_screen' => 'estimator.index',
+                'contract_version' => 3,
+                'min_app_version' => '1.3.0',
+                'navigation' => ['group' => 'work', 'icon' => 'calculator', 'position' => 30],
+                'actions' => ['view', 'create_draft', 'edit_draft'],
+            ],
         ],
         'wix' => [
             'display_name' => 'Wix',

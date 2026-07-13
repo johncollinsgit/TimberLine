@@ -120,7 +120,7 @@ class EverbranchMobileController extends Controller
     public function work(Request $request, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenant = $this->tenant($request);
-        $this->requireBranch($registry, (int) $tenant->id, 'work_core');
+        $this->requireWorkBranch($registry, (int) $tenant->id);
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
 
         return response()->json($resources->work($tenant, $this->user($request), (string) ($validated['q'] ?? ''), (int) ($validated['limit'] ?? 30)));
@@ -129,7 +129,7 @@ class EverbranchMobileController extends Controller
     public function workDetail(Request $request, string $tenant, string $kind, int $resource, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
-        $this->requireBranch($registry, (int) $tenantModel->id, 'work_core');
+        $this->requireWorkBranch($registry, (int) $tenantModel->id);
 
         return response()->json($resources->workDetail($tenantModel, $this->user($request), $kind, $resource));
     }
@@ -424,9 +424,12 @@ class EverbranchMobileController extends Controller
             'limit' => (int) ($validated['limit'] ?? 10),
         ]);
         $results = collect((array) ($payload['results'] ?? []))->map(function (array $result): array {
-            $destination = match ((string) ($result['type'] ?? '')) {
+            $destination = match ((string) ($result['subtype'] ?? $result['type'] ?? '')) {
                 'customer' => ['kind' => 'customer', 'id' => (int) data_get($result, 'meta.profile_id')],
                 'order' => ['kind' => 'orders', 'id' => (int) data_get($result, 'meta.order_id')],
+                'field_service_job' => ['kind' => 'field_service_job', 'id' => (int) data_get($result, 'meta.job_id')],
+                'workspace_asset' => ['kind' => 'workspace_asset', 'id' => (int) data_get($result, 'meta.asset_id')],
+                'field_service_estimate' => ['kind' => 'estimator_draft', 'id' => (int) data_get($result, 'meta.estimate_id')],
                 default => null,
             };
 
@@ -618,6 +621,12 @@ class EverbranchMobileController extends Controller
     protected function requireBranch(TenantMobileModuleRegistry $registry, int $tenantId, string $moduleKey): void
     {
         abort_unless(collect($registry->manifest($tenantId))->contains('module_key', $moduleKey), 404);
+    }
+
+    protected function requireWorkBranch(TenantMobileModuleRegistry $registry, int $tenantId): void
+    {
+        $keys = collect($registry->manifest($tenantId))->pluck('module_key');
+        abort_unless($keys->contains('field_service') || $keys->contains('work_core'), 404);
     }
 
     protected function idempotencyKey(Request $request): string

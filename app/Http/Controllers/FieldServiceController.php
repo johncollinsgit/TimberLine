@@ -12,6 +12,7 @@ use App\Models\FieldServiceVehicle;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,8 @@ use Illuminate\Support\Str;
 class FieldServiceController extends Controller
 {
     public function __construct(
-        protected TenantModuleAccessResolver $moduleAccessResolver
+        protected TenantModuleAccessResolver $moduleAccessResolver,
+        protected FieldServiceAccessService $fieldServiceAccess,
     ) {}
 
     public function index(Request $request): View
@@ -31,7 +33,7 @@ class FieldServiceController extends Controller
         $this->authorizeFieldService($tenant);
         $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
-        $jobs = FieldServiceJob::query()
+        $jobQuery = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
             ->with([
                 'customer',
@@ -41,7 +43,9 @@ class FieldServiceController extends Controller
                 'photos',
                 'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
                 'notes.createdBy',
-            ])
+            ]);
+        $this->fieldServiceAccess->scopeVisibleJobs($jobQuery, $request->user(), $tenant);
+        $jobs = $jobQuery
             ->latest('updated_at')
             ->latest('id')
             ->limit(25)
@@ -89,12 +93,14 @@ class FieldServiceController extends Controller
         $start = now()->startOfDay();
         $end = now()->addDays(45)->endOfDay();
 
-        $jobs = FieldServiceJob::query()
+        $jobQuery = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
             ->with([
                 'assignedUser:id,name',
                 'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
-            ])
+            ]);
+        $this->fieldServiceAccess->scopeVisibleJobs($jobQuery, $request->user(), $tenant);
+        $jobs = $jobQuery
             ->whereNotNull('scheduled_for')
             ->whereBetween('scheduled_for', [$start, $end])
             ->orderBy('scheduled_for')
@@ -113,7 +119,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        $this->abortUnlessTenantJob($tenant, $job);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
         $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
         $job->load([
@@ -143,6 +149,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
 
         $validated = $request->validate([
             'customer_name' => ['required', 'string', 'max:255'],
@@ -218,7 +225,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        $this->abortUnlessTenantJob($tenant, $job);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -242,7 +249,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        $this->abortUnlessTenantJob($tenant, $job);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:5000'],
@@ -321,6 +328,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -343,7 +351,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        $this->abortUnlessTenantJob($tenant, $job);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
 
         $validated = $request->validate([
             'file_path' => ['required', 'string', 'max:2048'],
@@ -371,6 +379,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
 
         $validated = $request->validate([
             'enabled' => ['nullable', 'boolean'],
@@ -512,9 +521,9 @@ class FieldServiceController extends Controller
             : null;
     }
 
-    protected function abortUnlessTenantJob(Tenant $tenant, FieldServiceJob $job): void
+    protected function abortUnlessAccessibleJob(Request $request, Tenant $tenant, FieldServiceJob $job): void
     {
-        abort_unless((int) $job->tenant_id === (int) $tenant->id, 404);
+        abort_unless($this->fieldServiceAccess->canAccessJob($request->user(), $tenant, $job), 404);
     }
 
     protected function canViewOwnerNotes(Request $request, Tenant $tenant): bool

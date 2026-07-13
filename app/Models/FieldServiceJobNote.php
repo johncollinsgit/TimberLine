@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FieldServiceJobNote extends Model
@@ -42,5 +43,12 @@ class FieldServiceJobNote extends Model
     public function photos(): HasMany
     {
         return $this->hasMany(FieldServiceJobPhoto::class, 'field_service_job_note_id');
+    }
+
+    public function mentions(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'field_service_job_note_mentions')
+            ->withPivot('tenant_id')
+            ->withTimestamps();
     }
 }

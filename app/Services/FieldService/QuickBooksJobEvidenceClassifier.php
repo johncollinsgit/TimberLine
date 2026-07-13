@@ -2,6 +2,7 @@
 
 namespace App\Services\FieldService;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class QuickBooksJobEvidenceClassifier
@@ -39,6 +40,11 @@ class QuickBooksJobEvidenceClassifier
             fn (mixed $line): bool => filled(data_get($line, 'SalesItemLineDetail.ServiceDate'))
         )) {
             $reasons[] = 'service_date';
+        }
+        if ((float) ($transaction['Balance'] ?? 0) > 0
+            && filled($transaction['TxnDate'] ?? null)
+            && Carbon::parse((string) $transaction['TxnDate'])->gte(now()->subYear()->startOfDay())) {
+            $reasons[] = 'current_open_invoice';
         }
 
         $reasons = array_values(array_unique($reasons));

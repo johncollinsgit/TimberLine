@@ -109,3 +109,12 @@ Do **not** open the candle-ops modules (Orders/Shipping/Pouring/Retail/Markets/E
 ```
 
 The entry is not ready until its provider returns supported primitives, every referenced resource is tenant-scoped, at least one meaningful phone workflow works, and backend/client/device evidence exists. Placeholder, roadmap, internal-unsafe, unscoped, and web-link-only modules remain hidden. See `docs/architecture/everbranch-mobile-platform.md` for the exact checklist.
+
+## Field Service Contract Addendum (2026-07-13)
+
+- `field_service` is the canonical Work Branch for field-service tenants. When it is enabled, `work_core` must not appear as a second product or navigation destination; old URLs remain aliases only.
+- Mobile contract v3 owns Calendar/List, unscheduled work, relationship-scoped job lists, job detail, participants, tasks, comments/mentions, photos, and activity.
+- Operational lifecycle is derived as Quote, Active, Needs details, Complete, or History. Source integrations do not overwrite manual status, assignments, comments, or photos.
+- Team-member access requires an explicit job relationship. Owner/admin financial sections are separate server-authorized payloads and cannot be unlocked by client presentation state.
+- Workspace assets are canonical private records. Photo libraries and provider attachment URLs are import sources, never permanent public storage.
+- Estimator remains a shared Branch, default-disabled and owner/admin-only. Collins' entitlement enables draft preparation only; QuickBooks creation/write-back remains out of scope.

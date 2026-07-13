@@ -18,6 +18,8 @@ class FieldServiceJob extends Model
         'assigned_user_id',
         'title',
         'status',
+        'operational_status',
+        'status_source',
         'customer_name',
         'customer_email',
         'customer_phone',
@@ -31,6 +33,8 @@ class FieldServiceJob extends Model
         'description',
         'scheduled_for',
         'completed_at',
+        'last_financial_activity_at',
+        'archived_at',
         'external_source',
         'external_id',
         'metadata',
@@ -42,6 +46,8 @@ class FieldServiceJob extends Model
         'assigned_user_id' => 'integer',
         'scheduled_for' => 'datetime',
         'completed_at' => 'datetime',
+        'last_financial_activity_at' => 'datetime',
+        'archived_at' => 'datetime',
         'metadata' => 'array',
     ];
 
@@ -58,6 +64,13 @@ class FieldServiceJob extends Model
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function participants(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'field_service_job_participants')
+            ->withPivot(['tenant_id', 'role', 'following'])
+            ->withTimestamps();
     }
 
     public function tasks(): HasMany

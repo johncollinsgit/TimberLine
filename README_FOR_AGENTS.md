@@ -36,8 +36,12 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 - Collins Electric (`collins-electric`) is the first guided electrician launch-partner workspace. It is not a 3-day trial, public self-service tenant, or billing/subscription activation.
 - Use `php artisan everbranch:prepare-collins-electric --seed-demo-job` to create or refresh the tenant, apply the `electrician` blueprint, attach `johncollinsemail@gmail.com` as active verified admin, and keep SMS provider status `not_verified`.
+- `collinselectric91@gmail.com` is provisioned as Collins owner until Nathan supplies another verified identity. Do not remove John's other memberships or use either email as a tenant-scoping shortcut.
 - Setup interests may include `billing`, `uploads`, and `quickbooks`, but final blueprint modules must remain limited to safe workspace modules (`customers`, `field_service`, `messaging`, `reporting`) unless a future approved PR adds real fulfillment.
-- QuickBooks is now a reusable opt-in beta Branch with tenant-scoped OAuth plus read-only audit/sync commands. CSV/XLSX remains the concierge fallback through `php artisan field-service:import-quickbooks`. Do not enable payments, write-back, webhooks, CDC, recurring sync, Estimator, or payroll automatically. Apple Photos remain manual job photo/file import for now.
+- QuickBooks is a reusable opt-in beta Branch with tenant-scoped OAuth plus read-only audit/sync commands. CSV/XLSX remains the concierge fallback through `php artisan field-service:import-quickbooks`. Do not enable payments, write-back, webhooks, CDC, estimator write-back, or payroll automatically. Collins may use the shared Estimator in owner/admin draft-only mode.
+- Field-service tenants have one canonical Work surface: `field_service`. Hide duplicate `work_core` discovery and preserve old routes only as compatibility aliases. Member job visibility requires assignment, participation/following, a task assignment, or a mention; never rely on client filtering.
+- QuickBooks lifecycle reconciliation derives Quote, Active, Needs details, Complete, and History while preserving manual overrides. Records older than one year remain searchable/history-only and must not inflate current job or receivable counts.
+- Job photos selected through the iOS photo picker are private Everbranch copies. Do not crawl Apple Shared Albums or treat an iCloud URL as permanent storage.
 - SMS/reminder configuration is admin-guided setup intent only. Do not enable real customer sends for Collins Electric until provider readiness, consent state, and delivery logs have passed a smoke test.
 
 ## Tenant Import + Workspace Guide Isolation Rule (2026-07-13)
@@ -717,7 +721,8 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 ## Everbranch Tenant Mobile Rule (2026-07-10)
 
 - `../everbranch-mobile` is the cross-tenant Everbranch app (`com.everbranch.app`) and its canonical remote is the private `johncollinsgit/everbranch-mobile` repository. Do not merge its concerns into the Modern Forestry SwiftUI customer app or its product-catalog APIs.
-- Everbranch app 1.1.0 consumes mobile contract v2. Say Branch in tenant-facing copy, keep canonical `module_key` identifiers internally, return `branches`, and preserve `modules` plus `/modules/...` only as temporary compatibility aliases.
+- Everbranch app 1.3.0 consumes mobile contract v2 plus Field Service contract v3. Say Branch in tenant-facing copy, keep canonical `module_key` identifiers internally, return `branches`, and preserve `modules` plus `/modules/...` only as temporary compatibility aliases.
+- Tenant bottom navigation is `Home`, `Work`, `Search`, `Account`, `Branches`. Field-service Work opens Calendar first; Workspace Pulse belongs in Account. Do not restore duplicate Work/Field Service entries or technical implementation copy on Home.
 - Operational Branches must provide a meaningful native workflow. Do not restore generic Share controls or expose summary-only/placeholder catalog entries.
 - Work Branch uses canonical `work_core`; resolve orders/jobs/clients from tenant blueprint and experience signals. Never accept a client-selected vertical.
 - Messaging Branch aggregates store keys server-side and reuses `MessagingResponseInboxService` plus channel readiness rules. Modern Forestry App threads are only `source_type=modern_forestry_app`, `store_key=retail`, tenant 1, and require an eligible authorized app device.

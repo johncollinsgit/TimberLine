@@ -4,7 +4,9 @@ namespace App\Services\Search\Providers;
 
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
+use App\Models\Tenant;
 use App\Models\WorkspaceAsset;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\Search\Concerns\BuildsSearchResults;
 use App\Services\Search\GlobalSearchProvider;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,6 +15,8 @@ use Illuminate\Support\Facades\Schema;
 class FieldServiceSearchProvider implements GlobalSearchProvider
 {
     use BuildsSearchResults;
+
+    public function __construct(protected FieldServiceAccessService $fieldServiceAccess) {}
 
     public function search(string $query, array $context = []): array
     {
@@ -32,12 +36,15 @@ class FieldServiceSearchProvider implements GlobalSearchProvider
         $tenantRole = strtolower(trim((string) ($membership?->pivot->role ?? '')));
         $includeFinancial = in_array($tenantRole, ['admin', 'owner', 'tenant_owner'], true);
         $normalized = trim($query);
-        $rows = FieldServiceJob::query()
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $jobQuery = FieldServiceJob::query()
             ->forTenantId($tenantId)
             ->with([
                 'notes' => fn ($notes) => $this->visibleNotes($notes, $includeFinancial),
                 ...($includeFinancial ? ['financialDocuments.lines'] : []),
-            ])
+            ]);
+        $this->fieldServiceAccess->scopeVisibleJobs($jobQuery, $user, $tenant);
+        $rows = $jobQuery
             ->when($normalized !== '', function (Builder $builder) use ($normalized, $includeFinancial): void {
                 $like = '%'.$normalized.'%';
                 $builder->where(function (Builder $query) use ($like, $includeFinancial): void {
@@ -175,9 +182,17 @@ class FieldServiceSearchProvider implements GlobalSearchProvider
 
         if (Schema::hasTable('workspace_assets')) {
             $tenantSlug = (string) $membership?->slug;
+            $visibleJobIds = null;
+            if (! $includeFinancial) {
+                $visibleJobs = FieldServiceJob::query()->forTenantId($tenantId);
+                $this->fieldServiceAccess->scopeVisibleJobs($visibleJobs, $user, $tenant);
+                $visibleJobIds = $visibleJobs->pluck('id');
+            }
             $assets = WorkspaceAsset::query()->forTenantId($tenantId)
                 ->with('jobs:id,title')
                 ->when(! $includeFinancial, fn (Builder $builder) => $builder->where('visibility', 'team'))
+                ->when($visibleJobIds !== null, fn (Builder $builder) => $builder->where(fn (Builder $visible) => $visible
+                    ->whereDoesntHave('jobs')->orWhereHas('jobs', fn (Builder $jobs) => $jobs->whereIn('field_service_jobs.id', $visibleJobIds))))
                 ->when($normalized !== '', function (Builder $builder) use ($normalized): void {
                     $like = '%'.$normalized.'%';
                     $builder->where(function (Builder $search) use ($like): void {

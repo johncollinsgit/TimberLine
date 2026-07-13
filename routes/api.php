@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Mobile\EverbranchMobileAuthController;
 use App\Http\Controllers\Mobile\EverbranchMobileController;
+use App\Http\Controllers\Mobile\EverbranchMobileEstimatorController;
+use App\Http\Controllers\Mobile\EverbranchMobileFieldServiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileLandlordController;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +53,23 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/customers/{customer}', [EverbranchMobileController::class, 'customer'])->middleware('abilities:mobile:read')->whereNumber('customer')->name('workspace.customers.show');
                 Route::get('/work', [EverbranchMobileController::class, 'work'])->middleware('abilities:mobile:read')->name('workspace.work');
                 Route::get('/work/{kind}/{resource}', [EverbranchMobileController::class, 'workDetail'])->middleware('abilities:mobile:read')->whereIn('kind', ['orders', 'jobs', 'clients'])->whereNumber('resource')->name('workspace.work.show');
+                Route::get('/field-service', [EverbranchMobileFieldServiceController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.index');
+                Route::get('/field-service/team', [EverbranchMobileFieldServiceController::class, 'team'])->middleware('abilities:mobile:read')->name('workspace.field-service.team');
+                Route::get('/field-service/preferences', [EverbranchMobileFieldServiceController::class, 'preferences'])->middleware('abilities:mobile:read')->name('workspace.field-service.preferences');
+                Route::patch('/field-service/preferences', [EverbranchMobileFieldServiceController::class, 'updatePreferences'])->middleware('abilities:mobile:write')->name('workspace.field-service.preferences.update');
+                Route::get('/field-service/jobs/{job}', [EverbranchMobileFieldServiceController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('job')->name('workspace.field-service.jobs.show');
+                Route::patch('/field-service/jobs/{job}', [EverbranchMobileFieldServiceController::class, 'updateJob'])->middleware('abilities:mobile:write')->whereNumber('job')->name('workspace.field-service.jobs.update');
+                Route::post('/field-service/jobs/{job}/comments', [EverbranchMobileFieldServiceController::class, 'comment'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->name('workspace.field-service.jobs.comments');
+                Route::post('/field-service/jobs/{job}/photos', [EverbranchMobileFieldServiceController::class, 'uploadPhotos'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('job')->name('workspace.field-service.jobs.photos');
+                Route::post('/field-service/jobs/{job}/tasks', [EverbranchMobileFieldServiceController::class, 'storeTask'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->name('workspace.field-service.jobs.tasks');
+                Route::patch('/field-service/jobs/{job}/tasks/{task}', [EverbranchMobileFieldServiceController::class, 'updateTask'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('task')->name('workspace.field-service.jobs.tasks.update');
+                Route::get('/field-service/assets/{asset}', [EverbranchMobileFieldServiceController::class, 'downloadAsset'])->middleware('abilities:mobile:read')->whereNumber('asset')->name('workspace.field-service.assets.show');
+                Route::get('/estimator', [EverbranchMobileEstimatorController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.estimator.index');
+                Route::post('/estimator/drafts', [EverbranchMobileEstimatorController::class, 'store'])->middleware('abilities:mobile:write')->name('workspace.estimator.drafts.store');
+                Route::get('/estimator/drafts/{estimate}', [EverbranchMobileEstimatorController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('estimate')->name('workspace.estimator.drafts.show');
+                Route::patch('/estimator/drafts/{estimate}', [EverbranchMobileEstimatorController::class, 'update'])->middleware('abilities:mobile:write')->whereNumber('estimate')->name('workspace.estimator.drafts.update');
+                Route::post('/estimator/drafts/{estimate}/duplicate', [EverbranchMobileEstimatorController::class, 'duplicate'])->middleware('abilities:mobile:write')->whereNumber('estimate')->name('workspace.estimator.drafts.duplicate');
+                Route::post('/estimator/candidates/{candidate}/approve', [EverbranchMobileEstimatorController::class, 'approveCandidate'])->middleware('abilities:mobile:write')->whereNumber('candidate')->name('workspace.estimator.candidates.approve');
                 Route::get('/messaging/conversations', [EverbranchMobileController::class, 'conversations'])->middleware('abilities:mobile:read')->name('workspace.messaging.conversations');
                 Route::get('/messaging/conversations/{conversation}', [EverbranchMobileController::class, 'conversation'])->middleware('abilities:mobile:read')->whereNumber('conversation')->name('workspace.messaging.conversations.show');
                 Route::get('/messaging/customers', [EverbranchMobileController::class, 'messageCustomers'])->middleware('abilities:mobile:read')->name('workspace.messaging.customers');

@@ -9,6 +9,8 @@ use App\Models\MarketingProfile;
 use App\Models\MessagingConversation;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\User;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\Marketing\MessagingContactChannelStateService;
 use App\Services\Tenancy\TenantBlueprintProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -22,6 +24,7 @@ class TenantMobileResourceService
         protected MessagingContactChannelStateService $channelState,
         protected TenantBlueprintProfileService $blueprints,
         protected TenantExperienceProfileService $experienceProfiles,
+        protected FieldServiceAccessService $fieldServiceAccess,
     ) {}
 
     /** @return array<string,mixed> */
@@ -118,7 +121,11 @@ class TenantMobileResourceService
                     $builder->where('order_number', 'like', $like)->orWhere('order_label', 'like', $like)
                         ->orWhere('customer_name', 'like', $like)->orWhere('shopify_name', 'like', $like);
                 }))->latest('ordered_at')->limit($limit)->get()->map(fn (Order $order): array => $this->orderSummary($order)),
-            'jobs' => FieldServiceJob::query()->forTenantId((int) $tenant->id)
+            'jobs' => tap(FieldServiceJob::query()->forTenantId((int) $tenant->id), function (Builder $query) use ($tenant, $user): void {
+                if ($user instanceof User) {
+                    $this->fieldServiceAccess->scopeVisibleJobs($query, $user, $tenant);
+                }
+            })
                 ->withCount([
                     'tasks',
                     'materials',
@@ -154,7 +161,7 @@ class TenantMobileResourceService
 
         return match ($kind) {
             'orders' => $this->orderDetail((int) $tenant->id, $id),
-            'jobs' => $this->jobDetail((int) $tenant->id, $id, $this->canViewOwnerNotes($user, (int) $tenant->id)),
+            'jobs' => $this->jobDetail($tenant, $user, $id, $this->canViewOwnerNotes($user, (int) $tenant->id)),
             'clients' => $this->clientDetail((int) $tenant->id, $id),
             default => abort(404),
         };
@@ -195,9 +202,13 @@ class TenantMobileResourceService
     }
 
     /** @return array<string,mixed> */
-    protected function jobDetail(int $tenantId, int $id, bool $includeOwnerNotes): array
+    protected function jobDetail(Tenant $tenant, mixed $user, int $id, bool $includeOwnerNotes): array
     {
-        $job = FieldServiceJob::query()->forTenantId($tenantId)->with([
+        $query = FieldServiceJob::query()->forTenantId((int) $tenant->id);
+        if ($user instanceof User) {
+            $this->fieldServiceAccess->scopeVisibleJobs($query, $user, $tenant);
+        }
+        $job = $query->with([
             'tasks.assignedUser:id,name',
             'materials',
             'photos',
@@ -269,7 +280,7 @@ class TenantMobileResourceService
             'kind' => 'jobs',
             'title' => (string) $job->title,
             'subtitle' => (string) ($job->customer_name ?: $job->service_city ?: 'Service job'),
-            'status' => Str::headline((string) $job->status),
+            'status' => Str::headline((string) ($job->operational_status ?: $job->status)),
             'customer_phone' => $job->customer_phone,
             'scheduled_for' => optional($job->scheduled_for)->toIso8601String(),
             'has_lock_box_code' => filled($job->lock_box_code),

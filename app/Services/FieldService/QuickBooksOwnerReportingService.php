@@ -44,7 +44,8 @@ class QuickBooksOwnerReportingService
             ->whereNotNull('completed_at')->whereBetween('completed_at', [$range['starts_at'], $range['ends_at']]);
         $priorCompleted = FieldServiceJob::query()->forTenantId((int) $tenant->id)
             ->whereNotNull('completed_at')->whereBetween('completed_at', [$priorStart, $priorEnd]);
-        $unpaid = (clone $invoices)->where('balance', '>', 0);
+        $unpaid = (clone $invoices)->where('balance', '>', 0)
+            ->whereDate('transaction_date', '>=', now()->subYear()->toDateString());
         $nowDate = now()->toDateString();
         $financials = $this->financialMetrics($currentSnapshot, $settings, $range['starts_at'], $range['ends_at']);
         $priorFinancials = $this->financialMetrics($priorSnapshot, $settings, $priorStart, $priorEnd);

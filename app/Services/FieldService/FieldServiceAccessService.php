@@ -1,0 +1,52 @@
+<?php
+
+namespace App\Services\FieldService;
+
+use App\Models\FieldServiceJob;
+use App\Models\Tenant;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+
+class FieldServiceAccessService
+{
+    public function role(User $user, Tenant|int $tenant): string
+    {
+        $tenantId = $tenant instanceof Tenant ? (int) $tenant->id : $tenant;
+
+        return strtolower(trim((string) ($user->tenants()->whereKey($tenantId)->first()?->pivot?->role ?? '')));
+    }
+
+    public function canViewAllJobs(User $user, Tenant|int $tenant): bool
+    {
+        return in_array($this->role($user, $tenant), ['owner', 'tenant_owner', 'admin', 'manager'], true)
+            || $user->role === 'platform_admin';
+    }
+
+    public function canManageJobs(User $user, Tenant|int $tenant): bool
+    {
+        return $this->canViewAllJobs($user, $tenant);
+    }
+
+    public function scopeVisibleJobs(Builder $query, User $user, Tenant|int $tenant): Builder
+    {
+        if ($this->canViewAllJobs($user, $tenant)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $visible) use ($user): void {
+            $visible->where('assigned_user_id', (int) $user->id)
+                ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey((int) $user->id))
+                ->orWhereHas('tasks', fn (Builder $tasks) => $tasks->where('assigned_user_id', (int) $user->id))
+                ->orWhereHas('notes.mentions', fn (Builder $mentions) => $mentions->whereKey((int) $user->id));
+        });
+    }
+
+    public function canAccessJob(User $user, Tenant $tenant, FieldServiceJob $job): bool
+    {
+        if ((int) $job->tenant_id !== (int) $tenant->id) {
+            return false;
+        }
+
+        return $this->scopeVisibleJobs(FieldServiceJob::query()->whereKey($job->id), $user, $tenant)->exists();
+    }
+}

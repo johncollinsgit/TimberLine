@@ -8,6 +8,7 @@ use App\Models\MessagingConversation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkspaceAsset;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -22,6 +23,7 @@ class TenantMobileModuleRegistry
         protected TenantModuleAccessResolver $accessResolver,
         protected TenantFinancialAccess $financialAccess,
         protected QuickBooksOwnerReportingService $ownerReports,
+        protected FieldServiceAccessService $fieldServiceAccess,
     ) {}
 
     /** @return array<int,array<string,mixed>> */
@@ -38,6 +40,9 @@ class TenantMobileModuleRegistry
             ->map(function (array $definition, string $moduleKey) use ($states): ?array {
                 $state = is_array($states[$moduleKey] ?? null) ? (array) $states[$moduleKey] : [];
                 if (! ($state['enabled'] ?? false)) {
+                    return null;
+                }
+                if ($moduleKey === 'work_core' && (bool) data_get($states, 'field_service.enabled', false)) {
                     return null;
                 }
 
@@ -73,7 +78,8 @@ class TenantMobileModuleRegistry
 
         $screen = match ($moduleKey) {
             'customers' => $this->customersScreen($tenantId),
-            'field_service' => $this->fieldServiceScreen($tenantId),
+            'field_service' => $this->fieldServiceScreen($tenantId, $user),
+            'estimator' => $this->estimatorScreen($tenantId, $user),
             'work_core' => $this->summaryScreen($module),
             'messaging' => $this->messagingScreen($tenantId),
             'reporting' => $this->reportingScreen($tenantId, $user, $rangeKey),
@@ -116,18 +122,29 @@ class TenantMobileModuleRegistry
     }
 
     /** @return array<string,mixed> */
-    protected function fieldServiceScreen(int $tenantId): array
+    protected function fieldServiceScreen(int $tenantId, ?User $user): array
     {
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $jobQuery = FieldServiceJob::query()->forTenantId($tenantId);
+        if ($user instanceof User) {
+            $this->fieldServiceAccess->scopeVisibleJobs($jobQuery, $user, $tenant);
+        }
         $jobs = Schema::hasTable('field_service_jobs')
-            ? FieldServiceJob::query()->forTenantId($tenantId)
-                ->withCount(['tasks', 'materials', 'photos'])
-                ->latest('updated_at')->limit(30)->get()
+            ? $jobQuery
+                ->withCount(['tasks', 'materials', 'assets'])
+                ->where(function ($query): void {
+                    $query->whereIn('operational_status', ['active', 'needs_details', 'blocked'])
+                        ->orWhere(function ($legacy): void {
+                            $legacy->whereNull('operational_status')->whereIn('status', ['open', 'scheduled', 'in_progress', 'blocked']);
+                        });
+                })
+                ->orderByRaw('scheduled_for is null')->orderBy('scheduled_for')->orderByDesc('last_financial_activity_at')->limit(30)->get()
             : collect();
 
         return [
             'id' => 'field-service.index',
             'kind' => 'list',
-            'title' => 'Work',
+            'title' => 'Field Service',
             'refreshable' => true,
             'primary_action' => ['id' => 'create_job', 'label' => 'New job', 'icon' => 'plus'],
             'sections' => [[
@@ -136,11 +153,39 @@ class TenantMobileModuleRegistry
                     'id' => (string) $job->id,
                     'title' => (string) $job->title,
                     'subtitle' => trim(implode(' | ', array_filter([$job->customer_name, Str::headline((string) $job->status)]))),
-                    'badge' => Str::headline((string) $job->status),
-                    'meta' => ['tasks' => $job->tasks_count, 'materials' => $job->materials_count, 'photos' => $job->photos_count],
-                    'icon' => 'briefcase-business',
+                    'badge' => Str::headline((string) ($job->operational_status ?: $job->status)),
+                    'meta' => ['tasks' => $job->tasks_count, 'materials' => $job->materials_count, 'photos' => $job->assets_count],
+                    'destination' => ['kind' => 'field_service_job', 'id' => (int) $job->id],
                 ])->values(),
-                'empty' => ['title' => 'No active jobs', 'message' => 'Create the first job when work is ready to schedule.'],
+                'empty' => ['title' => 'No active jobs', 'message' => 'Accepted and scheduled work will appear here.'],
+            ]],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function estimatorScreen(int $tenantId, ?User $user): array
+    {
+        $tenant = \App\Models\Tenant::query()->findOrFail($tenantId);
+        abort_unless($user && $this->financialAccess->allows($user, $tenant), 403);
+        $drafts = \App\Models\FieldServiceEstimate::query()->forTenantId($tenantId)
+            ->withCount('lines')->latest()->limit(30)->get();
+
+        return [
+            'id' => 'estimator.index',
+            'kind' => 'list',
+            'title' => 'Estimator',
+            'refreshable' => true,
+            'primary_action' => ['id' => 'create_estimate', 'label' => 'New estimate', 'icon' => 'plus'],
+            'sections' => [[
+                'type' => 'list',
+                'items' => $drafts->map(fn ($draft): array => [
+                    'id' => (string) $draft->id,
+                    'title' => (string) ($draft->title ?: $draft->estimate_number),
+                    'subtitle' => $draft->lines_count.' items | $'.number_format((float) $draft->total_amount, 2),
+                    'badge' => Str::headline((string) $draft->status),
+                    'destination' => ['kind' => 'estimator_draft', 'id' => (int) $draft->id],
+                ])->values(),
+                'empty' => ['title' => 'No estimates yet', 'message' => 'Create a draft from approved price-book items or add a manual line.'],
             ]],
         ];
     }
@@ -181,9 +226,13 @@ class TenantMobileModuleRegistry
         $completed = Schema::hasTable('field_service_jobs')
             ? FieldServiceJob::query()->forTenantId($tenantId)->whereNotNull('completed_at')->whereBetween('completed_at', [$range['starts_at'], $range['ends_at']])->count()
             : 0;
+        $upcomingQuery = FieldServiceJob::query()->forTenantId($tenantId);
+        if ($user instanceof User) {
+            $this->fieldServiceAccess->scopeVisibleJobs($upcomingQuery, $user, $tenant);
+        }
         $upcoming = Schema::hasTable('field_service_jobs')
-            ? FieldServiceJob::query()->forTenantId($tenantId)->whereNotNull('scheduled_for')->where('scheduled_for', '>=', now())
-                ->where('status', '!=', 'done')->with('assignedUser:id,name')->orderBy('scheduled_for')->limit(5)->get()
+            ? $upcomingQuery->whereNotNull('scheduled_for')->where('scheduled_for', '>=', now())
+                ->whereNotIn('operational_status', ['complete', 'history'])->with('assignedUser:id,name')->orderBy('scheduled_for')->limit(5)->get()
             : collect();
         $owner = $user instanceof User && $this->financialAccess->allows($user, $tenant);
         $report = $owner ? $this->ownerReports->report($tenant, $range['key'], false) : null;
@@ -225,11 +274,23 @@ class TenantMobileModuleRegistry
     {
         $tenant = Tenant::query()->findOrFail($tenantId);
         $owner = $user instanceof User && $this->financialAccess->allows($user, $tenant);
+        $visibleJobIds = null;
+        if ($user instanceof User && ! $owner) {
+            $visibleJobs = FieldServiceJob::query()->forTenantId($tenantId);
+            $this->fieldServiceAccess->scopeVisibleJobs($visibleJobs, $user, $tenant);
+            $visibleJobIds = $visibleJobs->pluck('id');
+        }
         $assets = Schema::hasTable('workspace_assets')
             ? WorkspaceAsset::query()->forTenantId($tenantId)->with('jobs:id,title')
                 ->when(! $owner, fn ($query) => $query->where('visibility', 'team'))
+                ->when($visibleJobIds !== null, fn ($query) => $query->where(fn ($visible) => $visible
+                    ->whereDoesntHave('jobs')->orWhereHas('jobs', fn ($jobs) => $jobs->whereIn('field_service_jobs.id', $visibleJobIds))))
                 ->latest()->limit(30)->get()
             : collect();
+        $jobOptions = FieldServiceJob::query()->forTenantId($tenantId);
+        if ($user instanceof User) {
+            $this->fieldServiceAccess->scopeVisibleJobs($jobOptions, $user, $tenant);
+        }
 
         return [
             'id' => 'documents.overview',
@@ -237,7 +298,7 @@ class TenantMobileModuleRegistry
             'title' => 'Documents',
             'refreshable' => true,
             'primary_action' => ['id' => 'upload_assets', 'label' => 'Add photos or files', 'icon' => 'upload'],
-            'job_options' => FieldServiceJob::query()->forTenantId($tenantId)->latest('updated_at')->limit(100)->get(['id', 'title'])
+            'job_options' => $jobOptions->latest('updated_at')->limit(100)->get(['id', 'title'])
                 ->map(fn (FieldServiceJob $job): array => ['id' => (string) $job->id, 'title' => (string) $job->title])->values(),
             'sections' => [[
                 'type' => 'list',
@@ -250,8 +311,10 @@ class TenantMobileModuleRegistry
                     ]))),
                     'badge' => $asset->visibility === 'owner' ? 'Owner only' : 'Team',
                     'icon' => str_starts_with((string) $asset->mime_type, 'image/') ? 'image' : 'file-text',
+                    'meta' => ['mime_type' => (string) $asset->mime_type, 'captured_at' => $asset->captured_at?->toDateString() ?: $asset->created_at?->toDateString()],
+                    'destination' => ['kind' => 'workspace_asset', 'id' => (int) $asset->id],
                 ])->values(),
-                'empty' => ['title' => 'No documents yet', 'message' => 'Choose photos from iCloud or upload files and link them to jobs.'],
+                'empty' => ['title' => 'No job photos yet', 'message' => 'QuickBooks did not include attachments. Open a job and choose Add Photos to copy selected iCloud or shared-album photos into Everbranch.'],
             ]],
         ];
     }

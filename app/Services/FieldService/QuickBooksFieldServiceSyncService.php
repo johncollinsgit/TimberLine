@@ -15,6 +15,7 @@ class QuickBooksFieldServiceSyncService
     public function __construct(
         protected QuickBooksFieldServiceImportService $importService,
         protected WorkspaceAssetService $assets,
+        protected FieldServiceJobLifecycleService $lifecycle,
     ) {}
 
     /** @param array<int,string> $entities */
@@ -113,6 +114,9 @@ class QuickBooksFieldServiceSyncService
         }
 
         $summary['recommended_cards'] = $this->recommendedCards($summary);
+        $summary['lifecycle'] = $dryRun
+            ? $this->lifecycle->reconcileTenant($tenant, true)
+            : $this->lifecycle->reconcileTenant($tenant);
 
         return $summary;
     }

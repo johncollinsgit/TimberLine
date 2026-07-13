@@ -296,7 +296,8 @@ test('mobile workspace bootstrap is membership scoped and entitlement driven', f
         ->assertJsonPath('contract_version', 2);
 
     $keys = collect($response->json('modules'))->pluck('module_key');
-    expect($keys)->toContain('customers', 'field_service', 'work_core')
+    expect($keys)->toContain('customers', 'field_service')
+        ->and($keys)->not->toContain('work_core')
         ->and($keys)->not->toContain('messaging');
     expect($response->json('branches'))->toBe($response->json('modules'));
     expect((int) $response->json('branches_summary.available'))->toBeGreaterThan(0);
@@ -346,7 +347,7 @@ test('trade workspace home reports active jobs revenue crews and potential jobs'
 
     $this->getJson('/api/mobile/v1/workspaces/trade-metrics/bootstrap')
         ->assertOk()
-        ->assertJsonPath('dashboard.hero.label', 'Jobs in progress')
+        ->assertJsonPath('dashboard.hero.label', 'Active jobs')
         ->assertJsonPath('dashboard.hero.value', '2')
         ->assertJsonPath('dashboard.date_range.key', '1m')
         ->assertJsonPath('dashboard.date_range.options.30d', 'Last 30 days')

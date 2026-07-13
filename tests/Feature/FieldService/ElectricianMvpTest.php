@@ -149,6 +149,7 @@ test('collins team members can use operational reporting without mobile financia
     $member->tenants()->attach($tenant->id, ['role' => 'member']);
     FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
         'title' => 'Member-visible service call',
         'customer_name' => 'Field Customer',
         'scheduled_for' => now()->addDay(),
