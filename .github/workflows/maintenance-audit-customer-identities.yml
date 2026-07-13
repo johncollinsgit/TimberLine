@@ -2,6 +2,15 @@ name: Audit Everbranch Customer Identities
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Customer identity audit target
+        required: true
+        default: all-customers
+        type: choice
+        options:
+          - all-customers
+          - faith-crocker
 
 permissions:
   contents: read
@@ -48,7 +57,20 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          AUDIT_TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
+          case "$AUDIT_TARGET" in
+            all-customers)
+              audit_query=""
+              ;;
+            faith-crocker)
+              audit_query=" --query='Faith Crocker'"
+              ;;
+            *)
+              echo "::error::Unsupported audit target: $AUDIT_TARGET"
+              exit 1
+              ;;
+          esac
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan marketing:audit-customer-identities --tenant=modern-forestry --store=retail --json"
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan marketing:audit-customer-identities --tenant=modern-forestry --store=retail --json$audit_query"
