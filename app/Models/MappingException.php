@@ -2,16 +2,18 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MappingException extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenantScope;
 
     protected $fillable = [
+        'tenant_id',
         'store_key',
         'shopify_order_id',
         'account_name',
@@ -30,6 +32,7 @@ class MappingException extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
         'payload_json' => 'array',
         'resolved_at' => 'datetime',
     ];
@@ -37,6 +40,11 @@ class MappingException extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     public function orderLine(): BelongsTo

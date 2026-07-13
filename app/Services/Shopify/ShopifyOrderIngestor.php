@@ -22,13 +22,12 @@ class ShopifyOrderIngestor
         protected BusinessDayCalculator $calculator,
         protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
         protected StorefrontOrderLinkageService $storefrontOrderLinkageService
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array{key: string, source: string, tenant_id?:?int} $store
-     * @param array<string, mixed> $orderData
-     * @param array{tenant_id?:?int,dispatch_profile_sync?:bool} $options
+     * @param  array{key: string, source: string, tenant_id?:?int}  $store
+     * @param  array<string, mixed>  $orderData
+     * @param  array{tenant_id?:?int,dispatch_profile_sync?:bool}  $options
      * @return array{
      *   lines_count:int,
      *   merged_lines_count:int,
@@ -57,11 +56,17 @@ class ShopifyOrderIngestor
         ];
 
         $noteText = $this->buildOrderNote($orderData);
-        $mergedLines = $this->mergeLineItems($orderData['line_items'] ?? [], $noteText, $orderData, $store['key'] ?? null);
+        $mergedLines = $this->mergeLineItems(
+            $orderData['line_items'] ?? [],
+            $noteText,
+            $orderData,
+            $store['key'] ?? null,
+            $resolvedTenantId
+        );
         $summary['merged_lines_count'] = max(0, count($orderData['line_items'] ?? []) - count($mergedLines));
 
         $shopifyOrderId = isset($orderData['id']) ? (int) $orderData['id'] : null;
-        if (!$shopifyOrderId) {
+        if (! $shopifyOrderId) {
             return $summary;
         }
 
@@ -72,7 +77,7 @@ class ShopifyOrderIngestor
             $order = Order::query()
                 ->where('shopify_store_key', $store['key'])
                 ->where('shopify_order_id', $shopifyOrderId)
-                ->first() ?? new Order();
+                ->first() ?? new Order;
 
             $payloadAttributionMeta = $this->attributionSourceMetaBuilder->fromShopifyOrderPayload(
                 $orderData,
@@ -99,7 +104,7 @@ class ShopifyOrderIngestor
 
             $shipBy = null;
             $dueAt = null;
-            if (!empty($orderedAt)) {
+            if (! empty($orderedAt)) {
                 $start = CarbonImmutable::parse($orderedAt);
                 $daysToAdd = $store['key'] === 'wholesale' ? 10 : 3;
                 $shipBy = $this->calculator->addBusinessDays($start, $daysToAdd);
@@ -192,7 +197,7 @@ class ShopifyOrderIngestor
                 $missingSize = empty($lineModel->size_id);
                 if ($missingScent || $missingSize) {
                     $reason = $missingScent ? 'unmapped_scent' : 'unmapped_size';
-                    if (!empty($line['payload']['candle_club'])) {
+                    if (! empty($line['payload']['candle_club'])) {
                         $reason = 'candle_club';
                     }
                     if ($missingScent && ($order->order_type === 'wholesale' || $order->shopify_store_key === 'wholesale')) {
@@ -200,6 +205,7 @@ class ShopifyOrderIngestor
                     }
                     $mapping = MappingException::updateOrCreate(
                         [
+                            'tenant_id' => $resolvedTenantId,
                             'store_key' => $store['key'],
                             'order_line_id' => $lineModel->id,
                         ],
@@ -240,17 +246,22 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<int, array<string, mixed>> $lineItems
-     * @param array<string, mixed> $orderData
+     * @param  array<int, array<string, mixed>>  $lineItems
+     * @param  array<string, mixed>  $orderData
      * @return array<int, array{sku: ?string, title: ?string, variant: ?string, quantity: int, line_item_id: ?int, wick_type: string, image_url: ?string, raw_title: ?string, raw_variant: ?string, scent_id: ?int, size_id?: ?int, external_key?: ?string, shopify_product_id?: ?int, shopify_variant_id?: ?int, currency_code?: ?string, unit_price?: ?float, line_subtotal?: ?float, discount_total?: ?float, line_total?: ?float, payload: array<string, mixed>}>
      */
-    public function mergeLineItems(array $lineItems, ?string $orderNote = null, array $orderData = [], ?string $storeKey = null): array
-    {
+    public function mergeLineItems(
+        array $lineItems,
+        ?string $orderNote = null,
+        array $orderData = [],
+        ?string $storeKey = null,
+        ?int $tenantId = null
+    ): array {
         $merged = [];
         $orderNoteWick = $this->detectWickTypeFromText($orderNote) ?? 'cotton';
         $scentIndex = $this->scentIndex();
         $sizeIndex = $this->sizeIndex();
-        $parser = new InfiniteOptionsParser();
+        $parser = new InfiniteOptionsParser;
 
         foreach ($lineItems as $line) {
             if ($this->isNonPourLineItem($line)) {
@@ -258,7 +269,7 @@ class ShopifyOrderIngestor
             }
             $isCandleClub = $this->isCandleClubLineItem($line);
             if ($this->isBundleLineItem($line)) {
-                $bundleLines = $this->expandBundleLineItem($line, $parser, $scentIndex, $storeKey, $orderData);
+                $bundleLines = $this->expandBundleLineItem($line, $parser, $scentIndex, $storeKey, $orderData, $tenantId);
                 foreach ($bundleLines as $bundleLine) {
                     $key = implode('|', [
                         (string) ($bundleLine['sku'] ?? ''),
@@ -267,12 +278,13 @@ class ShopifyOrderIngestor
                         (string) ($bundleLine['wick_type'] ?? ''),
                         (string) ($bundleLine['external_key'] ?? ''),
                     ]);
-                    if (!isset($merged[$key])) {
+                    if (! isset($merged[$key])) {
                         $merged[$key] = $bundleLine;
                         $merged[$key]['quantity'] = 0;
                     }
                     $merged[$key]['quantity'] += (int) ($bundleLine['quantity'] ?? 0);
                 }
+
                 continue;
             }
 
@@ -288,10 +300,10 @@ class ShopifyOrderIngestor
             $titleForScent = $this->shouldPreferPropertyScent($titleRaw) ? $propertyScent : $titleRaw;
 
             $scentName = $this->normalizeScentName($titleForScent);
-            if (!$scentName && $propertyScent) {
+            if (! $scentName && $propertyScent) {
                 $scentName = $this->normalizeScentName($propertyScent);
             }
-            if (!$propertyScent && $this->shouldUseVariantAsScentSource($titleRaw)) {
+            if (! $propertyScent && $this->shouldUseVariantAsScentSource($titleRaw)) {
                 $variantScent = $this->normalizeScentName($variantRaw);
                 if ($variantScent) {
                     $scentName = $variantScent;
@@ -300,18 +312,18 @@ class ShopifyOrderIngestor
             $scentName = $this->bestGuessScent($scentName, $scentIndex);
 
             $rawScentName = $propertyScent ?: $titleRaw;
-            if (!$propertyScent && $this->shouldUseVariantAsScentSource($titleRaw)) {
+            if (! $propertyScent && $this->shouldUseVariantAsScentSource($titleRaw)) {
                 $variantScent = $this->normalizeScentName($variantRaw);
                 if ($variantScent) {
                     $rawScentName = $variantScent;
                 }
             }
-            if (!$rawScentName && $scentName) {
+            if (! $rawScentName && $scentName) {
                 $rawScentName = $scentName;
             }
             $rawScentNameClean = $this->normalizeScentName($rawScentName) ?? $rawScentName;
             if ($rawScentName && $rawScentNameClean && $rawScentNameClean !== $rawScentName) {
-                $this->recordNormalization($storeKey, $orderData, $line, 'scent', $rawScentName, $rawScentNameClean);
+                $this->recordNormalization($storeKey, $orderData, $line, 'scent', $rawScentName, $rawScentNameClean, $tenantId);
             }
 
             $resolved = $this->resolveScentForOrder($scentName, $scentIndex, $storeKey, $orderData, $rawScentNameClean);
@@ -345,35 +357,35 @@ class ShopifyOrderIngestor
                 (string) ($lineWick ?? ''),
             ]);
             $lineFinancials = $this->extractLineFinancials($line);
-            $isNew = !isset($merged[$key]);
+            $isNew = ! isset($merged[$key]);
 
             if ($isNew) {
                 $sizeId = null;
-                if (!empty($variantRaw)) {
+                if (! empty($variantRaw)) {
                     $normalizedVariant = $this->normalizeSize((string) $variantRaw);
                     $sizeId = $sizeIndex[$normalizedVariant] ?? null;
                 }
 
-                if (!$sizeId) {
+                if (! $sizeId) {
                     $baseSize = $this->detectSizeFromText((string) ($variantRaw ?? ''))
                         ?: $this->detectSizeFromText((string) ($titleRaw ?? ''));
                     if ($baseSize) {
                         // Non-wick sizes (wax melts / room sprays) should match directly.
                         $normalizedBase = $this->normalizeSize($baseSize);
-                        if (!empty($variantRaw) && $normalizedBase !== $this->normalizeSize((string) $variantRaw)) {
-                            $this->recordNormalization($storeKey, $orderData, $line, 'size', (string) $variantRaw, $baseSize);
-                        } elseif (!empty($titleRaw) && $normalizedBase !== $this->normalizeSize((string) $titleRaw)) {
-                            $this->recordNormalization($storeKey, $orderData, $line, 'size', (string) $titleRaw, $baseSize);
+                        if (! empty($variantRaw) && $normalizedBase !== $this->normalizeSize((string) $variantRaw)) {
+                            $this->recordNormalization($storeKey, $orderData, $line, 'size', (string) $variantRaw, $baseSize, $tenantId);
+                        } elseif (! empty($titleRaw) && $normalizedBase !== $this->normalizeSize((string) $titleRaw)) {
+                            $this->recordNormalization($storeKey, $orderData, $line, 'size', (string) $titleRaw, $baseSize, $tenantId);
                         }
                         $sizeId = $sizeIndex[$normalizedBase] ?? null;
                     }
-                    if (!$sizeId) {
+                    if (! $sizeId) {
                         $wick = $lineWick === 'wood' ? 'cedar' : $lineWick;
                         if ($baseSize && $wick) {
-                            $candidate = $baseSize . ' ' . $wick . ' wick';
+                            $candidate = $baseSize.' '.$wick.' wick';
                             $normalizedCandidate = $this->normalizeSize($candidate);
-                            if (!empty($variantRaw) && $normalizedCandidate !== $this->normalizeSize((string) $variantRaw)) {
-                                $this->recordNormalization($storeKey, $orderData, $line, 'size', (string) $variantRaw, $candidate);
+                            if (! empty($variantRaw) && $normalizedCandidate !== $this->normalizeSize((string) $variantRaw)) {
+                                $this->recordNormalization($storeKey, $orderData, $line, 'size', (string) $variantRaw, $candidate, $tenantId);
                             }
                             $sizeId = $sizeIndex[$normalizedCandidate] ?? null;
                         }
@@ -472,61 +484,72 @@ class ShopifyOrderIngestor
     /**
      * Skip non-pour add-ons (e.g., custom label fees).
      *
-     * @param array<string, mixed> $line
+     * @param  array<string, mixed>  $line
      */
     protected function isNonPourLineItem(array $line): bool
     {
         $title = strtolower((string) ($line['title'] ?? ''));
         $variant = strtolower((string) ($line['variant_title'] ?? ''));
         $productType = strtolower((string) ($line['product_type'] ?? ''));
-        $haystack = trim($title . ' ' . $variant . ' ' . $productType);
+        $haystack = trim($title.' '.$variant.' '.$productType);
 
         return str_contains($haystack, 'custom label');
     }
 
     /**
-     * @param array<string, mixed> $line
+     * @param  array<string, mixed>  $line
      */
     protected function isCandleClubLineItem(array $line): bool
     {
         $title = strtolower((string) ($line['title'] ?? ''));
         $productType = strtolower((string) ($line['product_type'] ?? ''));
+
         return str_contains($title, 'candle club') || str_contains($productType, 'candle club');
     }
 
     /**
-     * @param array<string, mixed> $line
+     * @param  array<string, mixed>  $line
      */
     protected function isBundleLineItem(array $line): bool
     {
         $title = strtolower((string) ($line['title'] ?? ''));
         $productType = strtolower((string) ($line['product_type'] ?? ''));
+
         return str_contains($title, 'bundle') || str_contains($productType, 'bundle');
     }
 
     /**
-     * @param array<string, mixed> $line
-     * @param array<string, int> $scentIndex
+     * @param  array<string, mixed>  $line
+     * @param  array<string, int>  $scentIndex
      * @return array<int, array<string, mixed>>
      */
-    protected function expandBundleLineItem(array $line, InfiniteOptionsParser $parser, array $scentIndex, ?string $storeKey, array $orderData): array
-    {
+    protected function expandBundleLineItem(
+        array $line,
+        InfiniteOptionsParser $parser,
+        array $scentIndex,
+        ?string $storeKey,
+        array $orderData,
+        ?int $tenantId = null
+    ): array {
         $config = $this->bundleConfigForLine($line);
-        if (!$config) {
-            $this->recordImportException($storeKey, $orderData, $line, 'bundle_mapping_missing');
+        if (! $config) {
+            $this->recordImportException($storeKey, $orderData, $line, 'bundle_mapping_missing', [], $tenantId);
+
             return [];
         }
 
         $sizeKey = $this->resolveBundleSizeKey($config['size_key'] ?? null, $line);
         $sizeId = $this->resolveSizeId($sizeKey);
-        if (!$sizeId) {
-            $this->recordImportException($storeKey, $orderData, $line, 'bundle_size_missing');
+        if (! $sizeId) {
+            $this->recordImportException($storeKey, $orderData, $line, 'bundle_size_missing', [], $tenantId);
+
             return [];
         }
 
         $selections = $parser->parseBundleSelections($line);
         if (empty($selections)) {
-            $this->recordImportException($storeKey, $orderData, $line, 'bundle_no_scent_selections');
+            $this->recordImportException($storeKey, $orderData, $line, 'bundle_no_scent_selections', [], $tenantId);
+
             return [];
         }
 
@@ -535,7 +558,7 @@ class ShopifyOrderIngestor
             $this->recordImportException($storeKey, $orderData, $line, 'bundle_scent_count_mismatch', [
                 'expected_scent_count' => $requiredSelectionCount,
                 'actual_scent_count' => count($selections),
-            ]);
+            ], $tenantId);
 
             return [];
         }
@@ -555,8 +578,9 @@ class ShopifyOrderIngestor
         $lines = [];
         foreach ($selections as $selection) {
             $name = $this->normalizeScentName($selection['scent_name'] ?? null);
-            if (!$name) {
-                $this->recordImportException($storeKey, $orderData, $line, 'bundle_blank_scent', $selection);
+            if (! $name) {
+                $this->recordImportException($storeKey, $orderData, $line, 'bundle_blank_scent', $selection, $tenantId);
+
                 continue;
             }
 
@@ -566,13 +590,14 @@ class ShopifyOrderIngestor
             $resolved = $this->resolveScentForOrder($resolvedName, $scentIndex, $storeKey, $orderData, $rawSelectionClean);
             $scentId = $resolved['scent_id'] ?? null;
             $resolvedName = $resolved['resolved_name'] ?? $resolvedName;
-            if (!$scentId) {
-                $this->recordImportException($storeKey, $orderData, $line, 'bundle_scent_not_found', $selection);
+            if (! $scentId) {
+                $this->recordImportException($storeKey, $orderData, $line, 'bundle_scent_not_found', $selection, $tenantId);
+
                 continue;
             }
 
             $slot = (int) ($selection['slot'] ?? 0);
-            $externalKey = $lineItemId ? $lineItemId . ':' . $slot : null;
+            $externalKey = $lineItemId ? $lineItemId.':'.$slot : null;
 
             $lines[] = [
                 'sku' => $line['sku'] ?? null,
@@ -606,7 +631,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<string, mixed> $line
+     * @param  array<string, mixed>  $line
      * @return array<string, mixed>|null
      */
     protected function bundleConfigForLine(array $line): ?array
@@ -615,13 +640,14 @@ class ShopifyOrderIngestor
         $title = strtolower((string) ($line['title'] ?? ''));
         $productType = strtolower((string) ($line['product_type'] ?? ''));
 
-        $haystack = $this->normalizeBundleKey($title . ' ' . $productType);
+        $haystack = $this->normalizeBundleKey($title.' '.$productType);
         foreach ($map as $key => $value) {
             $needle = $this->normalizeBundleKey((string) $key);
             if ($needle !== '' && str_contains($haystack, $needle)) {
                 return $value;
             }
         }
+
         return null;
     }
 
@@ -629,23 +655,25 @@ class ShopifyOrderIngestor
     {
         $lower = strtolower($value);
         $lower = preg_replace('/[^a-z0-9]+/i', ' ', $lower) ?? $lower;
+
         return trim(preg_replace('/\s+/', ' ', $lower) ?? $lower);
     }
 
     protected function resolveSizeId(?string $sizeKey): ?int
     {
-        if (!$sizeKey) {
+        if (! $sizeKey) {
             return null;
         }
         $size = \App\Models\Size::query()
             ->where('code', $sizeKey)
             ->orWhere('label', $sizeKey)
             ->first();
+
         return $size?->id;
     }
 
     /**
-     * @param array<string, mixed> $line
+     * @param  array<string, mixed>  $line
      */
     protected function resolveBundleSizeKey(?string $sizeKey, array $line): ?string
     {
@@ -669,7 +697,7 @@ class ShopifyOrderIngestor
         }
 
         if ($baseSize && $wick) {
-            return $baseSize . '-' . $wick;
+            return $baseSize.'-'.$wick;
         }
 
         if ($sizeKey && $wick) {
@@ -684,9 +712,16 @@ class ShopifyOrderIngestor
         return $sizeKey;
     }
 
-    protected function recordImportException(?string $storeKey, array $orderData, array $line, string $reason, array $extra = []): void
-    {
+    protected function recordImportException(
+        ?string $storeKey,
+        array $orderData,
+        array $line,
+        string $reason,
+        array $extra = [],
+        ?int $tenantId = null
+    ): void {
         ShopifyImportException::query()->create([
+            'tenant_id' => $tenantId,
             'shop' => $storeKey,
             'shopify_order_id' => $orderData['id'] ?? null,
             'shopify_line_item_id' => $line['id'] ?? null,
@@ -699,13 +734,21 @@ class ShopifyOrderIngestor
         ]);
     }
 
-    protected function recordNormalization(?string $storeKey, array $orderData, array $line, string $field, string $raw, string $normalized): void
-    {
+    protected function recordNormalization(
+        ?string $storeKey,
+        array $orderData,
+        array $line,
+        string $field,
+        string $raw,
+        string $normalized,
+        ?int $tenantId = null
+    ): void {
         if (trim($raw) === '' || trim($normalized) === '' || trim($raw) === trim($normalized)) {
             return;
         }
 
         \App\Models\ImportNormalization::query()->create([
+            'tenant_id' => $tenantId,
             'store_key' => $storeKey,
             'shopify_order_id' => $orderData['id'] ?? null,
             'shopify_line_item_id' => $line['id'] ?? null,
@@ -722,7 +765,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<string, int> $scentIndex
+     * @param  array<string, int>  $scentIndex
      * @return array{resolved_name:?string,scent_id:?int,account_name:?string,raw_scent_name:?string}
      */
     protected function resolveScentForOrder(?string $scentName, array $scentIndex, ?string $storeKey, array $orderData, ?string $rawScentName): array
@@ -741,7 +784,7 @@ class ShopifyOrderIngestor
         }
 
         $isWholesale = $storeKey === 'wholesale' || $this->isWholesaleOrder($orderData);
-        if (!$isWholesale) {
+        if (! $isWholesale) {
             return [
                 'resolved_name' => $resolvedName,
                 'scent_id' => null,
@@ -765,6 +808,7 @@ class ShopifyOrderIngestor
 
             if ($matched && $matched->canonical_scent_id) {
                 $resolvedName = $this->bestGuessScent($scentName, $scentIndex);
+
                 return [
                     'resolved_name' => $resolvedName,
                     'scent_id' => $matched->canonical_scent_id,
@@ -773,7 +817,7 @@ class ShopifyOrderIngestor
                 ];
             }
 
-            if (!$matched && $candidates->isNotEmpty()) {
+            if (! $matched && $candidates->isNotEmpty()) {
                 $best = null;
                 $bestScore = 0.0;
                 foreach ($candidates as $candidate) {
@@ -793,6 +837,7 @@ class ShopifyOrderIngestor
 
                 if ($best && $bestScore >= 0.86 && $best->canonical_scent_id) {
                     $resolvedName = $this->bestGuessScent($scentName, $scentIndex);
+
                     return [
                         'resolved_name' => $resolvedName,
                         'scent_id' => $best->canonical_scent_id,
@@ -834,8 +879,8 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<int, array<string, mixed>> $properties
-     * @param array<int, string> $keys
+     * @param  array<int, array<string, mixed>>  $properties
+     * @param  array<int, string>  $keys
      */
     protected function extractPropertyValue(array $properties, array $keys): ?string
     {
@@ -843,7 +888,7 @@ class ShopifyOrderIngestor
 
         foreach ($properties as $property) {
             $name = strtolower(trim((string) ($property['name'] ?? '')));
-            if (!$name || !in_array($name, $targets, true)) {
+            if (! $name || ! in_array($name, $targets, true)) {
                 continue;
             }
 
@@ -879,7 +924,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<string, mixed> $orderData
+     * @param  array<string, mixed>  $orderData
      */
     protected function buildOrderNote(array $orderData): ?string
     {
@@ -911,7 +956,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<int, array<string, mixed>> $properties
+     * @param  array<int, array<string, mixed>>  $properties
      */
     protected function extractWickTypeFromProperties(array $properties): ?string
     {
@@ -928,7 +973,7 @@ class ShopifyOrderIngestor
 
     protected function detectWickTypeFromText(?string $text): ?string
     {
-        if (!$text) {
+        if (! $text) {
             return null;
         }
 
@@ -946,7 +991,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<string, mixed> $orderData
+     * @param  array<string, mixed>  $orderData
      */
     protected function isWholesaleOrder(array $orderData): bool
     {
@@ -975,7 +1020,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array{sku: ?string, title: ?string, variant: ?string, quantity: int, line_item_id: ?int, wick_type?: string, image_url?: ?string, raw_title?: ?string, raw_variant?: ?string, scent_id?: ?int, size_id?: ?int, external_key?: ?string, shopify_product_id?: ?int, shopify_variant_id?: ?int, currency_code?: ?string, unit_price?: ?float, line_subtotal?: ?float, discount_total?: ?float, line_total?: ?float} $line
+     * @param  array{sku: ?string, title: ?string, variant: ?string, quantity: int, line_item_id: ?int, wick_type?: string, image_url?: ?string, raw_title?: ?string, raw_variant?: ?string, scent_id?: ?int, size_id?: ?int, external_key?: ?string, shopify_product_id?: ?int, shopify_variant_id?: ?int, currency_code?: ?string, unit_price?: ?float, line_subtotal?: ?float, discount_total?: ?float, line_total?: ?float}  $line
      */
     protected function upsertLine(int $orderId, array $line): OrderLine
     {
@@ -997,12 +1042,12 @@ class ShopifyOrderIngestor
             'external_key' => $line['external_key'] ?? null,
         ];
 
-        if (!empty($line['external_key'])) {
+        if (! empty($line['external_key'])) {
             $existing = OrderLine::query()
                 ->where('order_id', $orderId)
                 ->where('external_key', $line['external_key'])
                 ->first();
-        } elseif (!empty($line['line_item_id'])) {
+        } elseif (! empty($line['line_item_id'])) {
             $existing = OrderLine::query()
                 ->where('order_id', $orderId)
                 ->where('shopify_line_item_id', $line['line_item_id'])
@@ -1025,7 +1070,7 @@ class ShopifyOrderIngestor
                 ->first();
         }
 
-        if (!$existing && !empty($line['scent_id']) && !empty($line['size_id'])) {
+        if (! $existing && ! empty($line['scent_id']) && ! empty($line['size_id'])) {
             // Enforce unique (order_id, scent_id, size_id) by merging into existing row.
             $existing = OrderLine::query()
                 ->where('order_id', $orderId)
@@ -1036,16 +1081,17 @@ class ShopifyOrderIngestor
 
         if ($existing) {
             $existing->fill($updateAttributes);
-            if (empty($existing->scent_id) && !empty($line['scent_id'])) {
+            if (empty($existing->scent_id) && ! empty($line['scent_id'])) {
                 $existing->scent_id = $line['scent_id'];
             }
-            if (empty($existing->size_id) && !empty($line['size_id'])) {
+            if (empty($existing->size_id) && ! empty($line['size_id'])) {
                 $existing->size_id = $line['size_id'];
             }
             if ($existing->extra_qty === null) {
                 $existing->extra_qty = 0;
             }
             $existing->save();
+
             return $existing;
         }
 
@@ -1075,8 +1121,11 @@ class ShopifyOrderIngestor
 
     protected function shouldPreferPropertyScent(?string $title): bool
     {
-        if (!$title) return false;
+        if (! $title) {
+            return false;
+        }
         $value = strtolower($title);
+
         return str_contains($value, '3 for')
             || str_contains($value, '12 for')
             || str_contains($value, 'pick 5')
@@ -1118,6 +1167,7 @@ class ShopifyOrderIngestor
                 foreach ($names as $n) {
                     $keys[$this->normalizeScentName($n) ?? ''] = $scent->id;
                 }
+
                 return $keys;
             })
             ->filter(fn ($id, $key) => $key !== '')
@@ -1142,6 +1192,7 @@ class ShopifyOrderIngestor
                 if ($label !== '') {
                     $keys[$this->normalizeSize($label)] = $size->id;
                 }
+
                 return $keys;
             })
             ->all();
@@ -1160,6 +1211,7 @@ class ShopifyOrderIngestor
         if ($lower === 'roomspray') {
             $lower = 'roomsprays';
         }
+
         return $lower;
     }
 
@@ -1181,14 +1233,19 @@ class ShopifyOrderIngestor
         if (str_contains($lower, 'room spray')) {
             return 'room sprays';
         }
+
         return null;
     }
 
     protected function bestGuessScent(?string $value, array $index): ?string
     {
-        if (!$value) return null;
+        if (! $value) {
+            return null;
+        }
         $needle = $this->normalizeScentName($value);
-        if (!$needle) return null;
+        if (! $needle) {
+            return null;
+        }
 
         if (isset($index[$needle])) {
             return $needle;
@@ -1198,7 +1255,9 @@ class ShopifyOrderIngestor
         $bestScore = 0.0;
 
         foreach (array_keys($index) as $candidate) {
-            if ($candidate === '') continue;
+            if ($candidate === '') {
+                continue;
+            }
             $score = 0.0;
             $score = max($score, similar_text($needle, $candidate) / max(1, max(strlen($needle), strlen($candidate))));
             $score = max($score, 1 - (levenshtein($needle, $candidate) / max(1, max(strlen($needle), strlen($candidate)))));
@@ -1216,7 +1275,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<string,mixed> $orderData
+     * @param  array<string,mixed>  $orderData
      * @return array<string,mixed>
      */
     protected function buildMarketingIdentityContext(array $orderData, ?string $storeKey = null, ?int $tenantId = null): array
@@ -1275,7 +1334,7 @@ class ShopifyOrderIngestor
             'source_channels' => array_values(array_unique($channels)),
             'source_links' => $shopifyCustomerId !== '' ? [[
                 'source_type' => 'shopify_customer',
-                'source_id' => ($storeKey !== '' ? $storeKey . ':' : '') . $shopifyCustomerId,
+                'source_id' => ($storeKey !== '' ? $storeKey.':' : '').$shopifyCustomerId,
                 'source_meta' => [
                     'shopify_customer_id' => $shopifyCustomerId,
                     'shopify_store_key' => $storeKey !== '' ? $storeKey : null,
@@ -1301,7 +1360,7 @@ class ShopifyOrderIngestor
     }
 
     /**
-     * @param array<string,mixed> $orderData
+     * @param  array<string,mixed>  $orderData
      * @return array<int,string>
      */
     protected function extractCouponSignals(array $orderData): array

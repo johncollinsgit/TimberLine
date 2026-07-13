@@ -1,4 +1,4 @@
-<x-layouts::app :title="'Workspace Wiki'">
+<x-layouts::app :title="$workspaceName.' Guide'">
     <div class="mx-auto w-full max-w-[1320px] px-4 py-6 md:px-6">
         <div class="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_260px]">
             <aside class="hidden lg:block">
@@ -15,9 +15,13 @@
                             <a href="{{ route('wiki.admin.category.create') }}" class="rounded-full border border-sky-300/40 bg-sky-100 px-3 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100">New Category</a>
                         </div>
                     @endif
-                    <div class="text-xs uppercase tracking-[0.26em] text-zinc-400">Workspace Wiki</div>
-                    <h1 class="mt-2 text-3xl font-semibold text-zinc-950 md:text-4xl">Knowledge hub</h1>
-                    <p class="mt-2 max-w-3xl text-sm text-zinc-600">Find process docs, policy references, and operational guides across the organization.</p>
+                    <div class="text-xs uppercase tracking-[0.26em] text-zinc-400">{{ $tenantGuide ? 'Workspace Guide' : 'Workspace Wiki' }}</div>
+                    <h1 class="mt-2 text-3xl font-semibold text-zinc-950 md:text-4xl">{{ $workspaceName }}</h1>
+                    <p class="mt-2 max-w-3xl text-sm text-zinc-600">
+                        {{ $tenantGuide
+                            ? 'Find the setup, workflow, team, and integration guidance for this workspace.'
+                            : 'Find process docs, policy references, and operational guides across the organization.' }}
+                    </p>
 
                     <form action="{{ route('wiki.index') }}" method="GET" class="mt-5">
                         <label for="wiki-search" class="sr-only">Search wiki</label>
@@ -43,6 +47,7 @@
                     </div>
                 </section>
 
+                @if(! $tenantGuide)
                 <section id="operations-quicklinks" class="rounded-3xl border border-zinc-200 bg-white p-5">
                     <h2 class="text-lg font-semibold text-zinc-950">Operations Quicklinks</h2>
                     <div class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -58,6 +63,7 @@
                         </a>
                     </div>
                 </section>
+                @endif
 
                 @if($featured)
                     <section id="featured" class="rounded-3xl border border-zinc-200 bg-white p-5">
@@ -171,7 +177,9 @@
                     <ul class="mt-3 space-y-2 text-sm">
                         <li><a class="text-zinc-600 hover:text-zinc-950" href="#hero">Search</a></li>
                         <li><a class="text-zinc-600 hover:text-zinc-950" href="#categories">Categories</a></li>
-                        <li><a class="text-zinc-600 hover:text-zinc-950" href="#operations-quicklinks">Operations Quicklinks</a></li>
+                        @if(! $tenantGuide)
+                            <li><a class="text-zinc-600 hover:text-zinc-950" href="#operations-quicklinks">Operations Quicklinks</a></li>
+                        @endif
                         <li><a class="text-zinc-600 hover:text-zinc-950" href="#featured">Featured article</a></li>
                         <li><a class="text-zinc-600 hover:text-zinc-950" href="#from-wiki">From the wiki</a></li>
                         <li><a class="text-zinc-600 hover:text-zinc-950" href="#updates">Recently updated</a></li>

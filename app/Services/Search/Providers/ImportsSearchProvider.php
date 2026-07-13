@@ -54,8 +54,9 @@ class ImportsSearchProvider implements GlobalSearchProvider
             }
         }
 
-        if ($user instanceof User && ($user->isAdmin() || $user->isManager()) && Schema::hasTable('shopify_import_runs')) {
+        if ($tenantId !== null && $user instanceof User && ($user->isAdmin() || $user->isManager()) && Schema::hasTable('shopify_import_runs')) {
             $rows = ShopifyImportRun::query()
+                ->forTenantId($tenantId)
                 ->select(['id', 'store_key', 'source', 'mapping_exceptions_count'])
                 ->when($normalized !== '', function ($builder) use ($normalized): void {
                     $builder->where(function ($query) use ($normalized): void {

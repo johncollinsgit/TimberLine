@@ -1049,59 +1049,61 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/pouring/requests', PourRequests::class)->name('pouring.requests');
     });
 
-    // Wiki (read-only)
-    Route::get('/wiki', [WikiController::class, 'index'])->name('wiki.index');
-    Route::get('/wiki/categories', [WikiController::class, 'categories'])->name('wiki.categories');
-    Route::get('/wiki/category/{slug}', [WikiController::class, 'category'])->name('wiki.category');
-    Route::get('/wiki/wholesale-processes', [WikiController::class, 'wholesaleProcesses'])->name('wiki.wholesale-processes');
-    Route::get('/wiki/article/{slug}', [WikiController::class, 'article'])->name('wiki.article');
-    Route::get('/wiki/random', [WikiController::class, 'random'])->name('wiki.random');
-    Route::middleware(['role:admin'])->prefix('wiki/admin')->name('wiki.admin.')->group(function () {
-        Route::get('/article/create', [WikiAdminController::class, 'createArticle'])->name('article.create');
-        Route::post('/article', [WikiAdminController::class, 'storeArticle'])->name('article.store');
-        Route::get('/article/{slug}/edit', [WikiAdminController::class, 'editArticle'])->name('article.edit');
-        Route::put('/article/{slug}', [WikiAdminController::class, 'updateArticle'])->name('article.update');
-        Route::delete('/article/{slug}', [WikiAdminController::class, 'deleteArticle'])->name('article.delete');
+    // Workspace Guide / Wiki
+    Route::middleware(['tenant.access'])->group(function (): void {
+        Route::get('/wiki', [WikiController::class, 'index'])->name('wiki.index');
+        Route::get('/wiki/categories', [WikiController::class, 'categories'])->name('wiki.categories');
+        Route::get('/wiki/category/{slug}', [WikiController::class, 'category'])->name('wiki.category');
+        Route::get('/wiki/wholesale-processes', [WikiController::class, 'wholesaleProcesses'])->name('wiki.wholesale-processes');
+        Route::get('/wiki/article/{slug}', [WikiController::class, 'article'])->name('wiki.article');
+        Route::get('/wiki/random', [WikiController::class, 'random'])->name('wiki.random');
+        Route::middleware(['role:admin'])->prefix('wiki/admin')->name('wiki.admin.')->group(function () {
+            Route::get('/article/create', [WikiAdminController::class, 'createArticle'])->name('article.create');
+            Route::post('/article', [WikiAdminController::class, 'storeArticle'])->name('article.store');
+            Route::get('/article/{slug}/edit', [WikiAdminController::class, 'editArticle'])->name('article.edit');
+            Route::put('/article/{slug}', [WikiAdminController::class, 'updateArticle'])->name('article.update');
+            Route::delete('/article/{slug}', [WikiAdminController::class, 'deleteArticle'])->name('article.delete');
 
-        Route::get('/category/create', [WikiAdminController::class, 'createCategory'])->name('category.create');
-        Route::post('/category', [WikiAdminController::class, 'storeCategory'])->name('category.store');
-        Route::get('/category/{slug}/edit', [WikiAdminController::class, 'editCategory'])->name('category.edit');
-        Route::put('/category/{slug}', [WikiAdminController::class, 'updateCategory'])->name('category.update');
-        Route::delete('/category/{slug}', [WikiAdminController::class, 'deleteCategory'])->name('category.delete');
+            Route::get('/category/create', [WikiAdminController::class, 'createCategory'])->name('category.create');
+            Route::post('/category', [WikiAdminController::class, 'storeCategory'])->name('category.store');
+            Route::get('/category/{slug}/edit', [WikiAdminController::class, 'editCategory'])->name('category.edit');
+            Route::put('/category/{slug}', [WikiAdminController::class, 'updateCategory'])->name('category.update');
+            Route::delete('/category/{slug}', [WikiAdminController::class, 'deleteCategory'])->name('category.delete');
+        });
+
+        Route::get('/wiki/oil-blends', function () {
+            abort_if(! app(WikiRepository::class)->article('oil-blends'), 404);
+            $blends = Blend::query()
+                ->with(['components.baseOil'])
+                ->orderBy('name')
+                ->get();
+
+            return view('wiki.oil-blends', ['blends' => $blends]);
+        })->name('wiki.oil-blends');
+
+        Route::get('/wiki/wholesale-custom-scents', function () {
+            abort_if(! app(WikiRepository::class)->article('wholesale-custom-scents'), 404);
+            $records = WholesaleCustomScent::query()
+                ->with('canonicalScent')
+                ->orderBy('account_name')
+                ->orderBy('custom_scent_name')
+                ->get()
+                ->groupBy('account_name');
+
+            return view('wiki.wholesale-custom-scents', ['records' => $records]);
+        })->name('wiki.wholesale-custom-scents');
+
+        Route::get('/wiki/candle-club', function () {
+            abort_if(! app(WikiRepository::class)->article('candle-club'), 404);
+            $records = CandleClubScent::query()
+                ->with('scent')
+                ->orderByDesc('year')
+                ->orderByDesc('month')
+                ->get();
+
+            return view('wiki.candle-club', ['records' => $records]);
+        })->name('wiki.candle-club');
     });
-
-    Route::get('/wiki/oil-blends', function () {
-        abort_if(! app(WikiRepository::class)->article('oil-blends'), 404);
-        $blends = Blend::query()
-            ->with(['components.baseOil'])
-            ->orderBy('name')
-            ->get();
-
-        return view('wiki.oil-blends', ['blends' => $blends]);
-    })->name('wiki.oil-blends');
-
-    Route::get('/wiki/wholesale-custom-scents', function () {
-        abort_if(! app(WikiRepository::class)->article('wholesale-custom-scents'), 404);
-        $records = WholesaleCustomScent::query()
-            ->with('canonicalScent')
-            ->orderBy('account_name')
-            ->orderBy('custom_scent_name')
-            ->get()
-            ->groupBy('account_name');
-
-        return view('wiki.wholesale-custom-scents', ['records' => $records]);
-    })->name('wiki.wholesale-custom-scents');
-
-    Route::get('/wiki/candle-club', function () {
-        abort_if(! app(WikiRepository::class)->article('candle-club'), 404);
-        $records = CandleClubScent::query()
-            ->with('scent')
-            ->orderByDesc('year')
-            ->orderByDesc('month')
-            ->get();
-
-        return view('wiki.candle-club', ['records' => $records]);
-    })->name('wiki.candle-club');
 });
 
 if (app()->environment('local') && config('app.debug')) {

@@ -10,8 +10,10 @@ use App\Models\OrderLine;
 use App\Models\Scent;
 use App\Models\ShopifyImportRun;
 use App\Models\Size;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\ScentGovernance\ResolveScentMatchService;
+use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -27,17 +29,46 @@ class MappingExceptions extends Component
         'scentSelected' => 'handleScentSelected',
     ];
 
-    /**
-     * Order queries constrained to the tenants the acting user belongs to, so the
-     * order-modal / order-index reads cannot surface another tenant's orders.
-     * tenant.access does not wrap Livewire updates, so we scope by membership.
-     */
     protected function ownedOrders(): Builder
     {
-        $user = auth()->user();
-        $tenantIds = $user instanceof User ? $user->accessibleTenantIds() : [];
+        $tenantId = $this->activeTenantId();
+        $allowBootstrapGlobal = $tenantId === null && Tenant::query()->doesntExist();
 
-        return Order::query()->whereIn('tenant_id', $tenantIds);
+        return Order::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
+            ->when($tenantId === null && ! $allowBootstrapGlobal, fn (Builder $query) => $query->whereRaw('1 = 0'));
+    }
+
+    protected function activeTenantId(): ?int
+    {
+        $user = auth()->user();
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $tenant = app(AuthenticatedTenantContextResolver::class)->resolveForRequest(request(), $user);
+
+        return $tenant ? (int) $tenant->id : null;
+    }
+
+    protected function tenantMappingExceptions(): Builder
+    {
+        $tenantId = $this->activeTenantId();
+        $allowBootstrapGlobal = $tenantId === null && Tenant::query()->doesntExist();
+
+        return MappingException::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
+            ->when($tenantId === null && ! $allowBootstrapGlobal, fn (Builder $query) => $query->whereRaw('1 = 0'));
+    }
+
+    protected function tenantImportRuns(): Builder
+    {
+        $tenantId = $this->activeTenantId();
+        $allowBootstrapGlobal = $tenantId === null && Tenant::query()->doesntExist();
+
+        return ShopifyImportRun::query()
+            ->when($tenantId !== null, fn (Builder $query) => $query->forTenantId($tenantId))
+            ->when($tenantId === null && ! $allowBootstrapGlobal, fn (Builder $query) => $query->whereRaw('1 = 0'));
     }
 
     public int $page = 1;
@@ -221,7 +252,7 @@ class MappingExceptions extends Component
 
     public function openModalForLine(string $key, int $exceptionId): void
     {
-        $exception = MappingException::query()->find($exceptionId);
+        $exception = $this->tenantMappingExceptions()->find($exceptionId);
         if (! $exception) {
             return;
         }
@@ -251,7 +282,7 @@ class MappingExceptions extends Component
         $this->candleClubScentName = '';
         $this->candleClubOil = '';
         if (! empty($exceptionIds)) {
-            $sample = MappingException::query()->whereIn('id', $exceptionIds)->first();
+            $sample = $this->tenantMappingExceptions()->whereIn('id', $exceptionIds)->first();
             if ($sample?->order_line_id) {
                 $line = OrderLine::query()->find($sample->order_line_id);
                 if ($line) {
@@ -352,7 +383,7 @@ class MappingExceptions extends Component
         $scentId = $this->matchScentId ? (int) $this->matchScentId : null;
         $wickType = $this->modalWickType ? strtolower($this->modalWickType) : null;
         $sample = ! empty($this->modalExceptionIds)
-            ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
+            ? $this->tenantMappingExceptions()->whereIn('id', $this->modalExceptionIds)->first()
             : null;
 
         if (! empty($this->overrideSizeLabel)) {
@@ -429,7 +460,7 @@ class MappingExceptions extends Component
             return;
         }
 
-        $exceptions = MappingException::query()->whereIn('id', $this->modalExceptionIds)->get();
+        $exceptions = $this->tenantMappingExceptions()->whereIn('id', $this->modalExceptionIds)->get();
         DB::transaction(function () use ($exceptions, $scentId, $sizeId, $wickType, $isNonCandleForm) {
             foreach ($exceptions as $exception) {
                 $line = $exception->order_line_id
@@ -473,7 +504,7 @@ class MappingExceptions extends Component
                     $exception->save();
 
                     if ($exception->order_id) {
-                        $hasOpen = MappingException::query()
+                        $hasOpen = $this->tenantMappingExceptions()
                             ->where('order_id', $exception->order_id)
                             ->whereNull('resolved_at')
                             ->exists();
@@ -558,7 +589,7 @@ class MappingExceptions extends Component
 
     protected function exceptionsQuery()
     {
-        $query = MappingException::query();
+        $query = $this->tenantMappingExceptions();
 
         if ($this->queueTab === 'excluded') {
             $query->whereNotNull('excluded_at');
@@ -611,7 +642,11 @@ class MappingExceptions extends Component
 
     protected function normalizationsQuery()
     {
-        $query = \App\Models\ImportNormalization::query();
+        $tenantId = $this->activeTenantId();
+        $allowBootstrapGlobal = $tenantId === null && Tenant::query()->doesntExist();
+        $query = \App\Models\ImportNormalization::query()
+            ->when($tenantId !== null, fn (Builder $builder) => $builder->forTenantId($tenantId))
+            ->when($tenantId === null && ! $allowBootstrapGlobal, fn (Builder $builder) => $builder->whereRaw('1 = 0'));
 
         if ($this->filter !== 'all') {
             $query->where('store_key', $this->filter);
@@ -659,7 +694,7 @@ class MappingExceptions extends Component
 
     public function restoreGroup(string $rawTitle): void
     {
-        $ids = MappingException::query()
+        $ids = $this->tenantMappingExceptions()
             ->whereNotNull('excluded_at')
             ->where(function ($q) use ($rawTitle) {
                 $q->where('raw_scent_name', $rawTitle)
@@ -678,7 +713,7 @@ class MappingExceptions extends Component
 
     public function restoreOrder(int $orderId): void
     {
-        $ids = MappingException::query()
+        $ids = $this->tenantMappingExceptions()
             ->whereNotNull('excluded_at')
             ->where('order_id', $orderId)
             ->pluck('id')
@@ -693,7 +728,7 @@ class MappingExceptions extends Component
             return;
         }
 
-        MappingException::query()
+        $this->tenantMappingExceptions()
             ->whereIn('id', $ids)
             ->update([
                 'excluded_at' => now(),
@@ -719,7 +754,7 @@ class MappingExceptions extends Component
             return;
         }
 
-        MappingException::query()
+        $this->tenantMappingExceptions()
             ->whereIn('id', $ids)
             ->update([
                 'excluded_at' => null,
@@ -884,7 +919,7 @@ class MappingExceptions extends Component
             return null;
         }
 
-        $exceptions = MappingException::query()
+        $exceptions = $this->tenantMappingExceptions()
             ->whereIn('id', $exceptionIds)
             ->get(['raw_variant']);
 
@@ -1213,7 +1248,7 @@ class MappingExceptions extends Component
     protected function wizardUrlForModal(string $rawName, bool $isCandleClub): string
     {
         $exception = ! empty($this->modalExceptionIds)
-            ? MappingException::query()->whereIn('id', $this->modalExceptionIds)->first()
+            ? $this->tenantMappingExceptions()->whereIn('id', $this->modalExceptionIds)->first()
             : null;
 
         $channelHint = ($exception?->store_key === 'wholesale' || ! empty($exception?->account_name))
@@ -1304,7 +1339,7 @@ class MappingExceptions extends Component
                 'orders' => 0,
             ]
             : $this->summaryCounts();
-        $latestRun = ShopifyImportRun::query()->orderByDesc('id')->first();
+        $latestRun = $this->tenantImportRuns()->orderByDesc('id')->first();
 
         $orderIndex = [];
         if ($this->groupBy === 'order' && $groups) {
@@ -1330,13 +1365,13 @@ class MappingExceptions extends Component
                     ->withCount(['scentSplits as split_count'])
                     ->get();
 
-                $orderModalPayloads = MappingException::query()
+                $orderModalPayloads = $this->tenantMappingExceptions()
                     ->where('order_id', $orderModal->id)
                     ->whereNull('resolved_at')
                     ->pluck('payload_json')
                     ->all();
 
-                $orderModalLineExceptionIds = MappingException::query()
+                $orderModalLineExceptionIds = $this->tenantMappingExceptions()
                     ->where('order_id', $orderModal->id)
                     ->whereNull('resolved_at')
                     ->pluck('order_line_id')

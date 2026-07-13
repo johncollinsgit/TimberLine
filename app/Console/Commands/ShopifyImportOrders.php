@@ -2,12 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ShopifyImportRun;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyOrderIngestor;
 use App\Services\Shopify\ShopifyStores;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
-use App\Models\ShopifyImportRun;
 use Throwable;
 
 class ShopifyImportOrders extends Command
@@ -22,6 +22,7 @@ class ShopifyImportOrders extends Command
         $stores = ShopifyStores::resolve($storeArg);
         if (empty($stores)) {
             $this->renderStoreResolutionErrors($storeArg);
+
             return self::FAILURE;
         }
 
@@ -49,6 +50,7 @@ class ShopifyImportOrders extends Command
             ];
 
             $run = ShopifyImportRun::create([
+                'tenant_id' => $store['tenant_id'] ?? null,
                 'store_key' => $store['key'] ?? null,
                 'source' => $store['source'] ?? null,
                 'is_dry_run' => $dryRun,
@@ -86,11 +88,11 @@ class ShopifyImportOrders extends Command
             }
 
             foreach ($orders as $orderData) {
-                if (!$includeClosed && !$this->isOpenOrder($orderData)) {
+                if (! $includeClosed && ! $this->isOpenOrder($orderData)) {
                     continue;
                 }
                 $shopifyOrderId = isset($orderData['id']) ? (int) $orderData['id'] : null;
-                if (!$shopifyOrderId) {
+                if (! $shopifyOrderId) {
                     continue;
                 }
 
@@ -107,9 +109,16 @@ class ShopifyImportOrders extends Command
 
                 if ($dryRun) {
                     $note = $this->buildOrderNote($orderData);
-                    $mergedLines = $ingestor->mergeLineItems($orderData['line_items'] ?? [], $note, $orderData, $store['key'] ?? null);
+                    $mergedLines = $ingestor->mergeLineItems(
+                        $orderData['line_items'] ?? [],
+                        $note,
+                        $orderData,
+                        $store['key'] ?? null,
+                        isset($store['tenant_id']) ? (int) $store['tenant_id'] : null
+                    );
                     $summary['merged_lines_count'] += max(0, count($orderData['line_items'] ?? []) - count($mergedLines));
                     $summary['lines_count'] += count($mergedLines);
+
                     continue;
                 }
 
@@ -159,7 +168,7 @@ class ShopifyImportOrders extends Command
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      */
     protected function scopeErrorForOrderImport(array $store): ?string
     {
@@ -222,7 +231,7 @@ class ShopifyImportOrders extends Command
     protected function resolveSince(): CarbonImmutable
     {
         $since = $this->option('since');
-        if (!empty($since)) {
+        if (! empty($since)) {
             return CarbonImmutable::parse($since);
         }
 
@@ -233,15 +242,15 @@ class ShopifyImportOrders extends Command
     }
 
     /**
-     * @param array<string, mixed> $orderData
+     * @param  array<string, mixed>  $orderData
      */
     protected function isOpenOrder(array $orderData): bool
     {
-        if (!empty($orderData['cancelled_at'])) {
+        if (! empty($orderData['cancelled_at'])) {
             return false;
         }
 
-        if (!empty($orderData['closed_at'])) {
+        if (! empty($orderData['closed_at'])) {
             return false;
         }
 
@@ -254,7 +263,7 @@ class ShopifyImportOrders extends Command
     }
 
     /**
-     * @param array<string, mixed> $orderData
+     * @param  array<string, mixed>  $orderData
      */
     protected function buildOrderNote(array $orderData): ?string
     {
