@@ -155,6 +155,7 @@ test('every profile-owned foreign key has an explicit merge policy', function ()
 
 test('failed Shopify merge webhook is HMAC verified and recorded as a blocked operation', function (): void {
     config()->set('services.shopify.stores.retail.shop', 'retail-test.myshopify.com');
+    config()->set('services.shopify.stores.retail.client_id', 'retail-client');
     config()->set('services.shopify.stores.retail.client_secret', 'retail-secret');
     config()->set('services.shopify.allow_env_token_fallback', false);
     ShopifyStore::query()->create([

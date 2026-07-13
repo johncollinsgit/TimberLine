@@ -566,6 +566,21 @@ php artisan config:cache
 php artisan queue:restart
 ```
 
+## Backstage Customer Merge Wizard (2026-07-13)
+
+Modern Forestry operators can open the embedded Shopify app, go to `Customers`, and choose `Merge duplicate customers`. Search by name, email, phone, or Shopify customer ID before launching the duplicate review. Misspelled names are suggestions only and never merge automatically.
+
+The surface is restricted by `CUSTOMER_MERGE_TENANT_SLUGS` (initially `modern-forestry`). Shopify preview and execution require the installed retail store token to contain `read_customer_merge` and `write_customer_merge`; execution also requires an authenticated Everbranch tenant owner/admin. Other staff may prepare a request for approval.
+
+Release order matters:
+
+1. Deploy the Laravel application and migrations.
+2. Run `npm run shopify:app:deploy` to release the scopes and `customers/merge` webhook from `shopify.app.toml`.
+3. Reauthorize Modern Forestry through `/shopify/reinstall/retail`.
+4. Verify the required webhook subscription and stored scopes before enabling a real merge.
+
+Operational acceptance and recovery details, including the Megan Lawther fixture, are in `docs/operations/customer-merge-rollout.md`.
+
 ## Candle Cash Reconciliation Runbook (2026-04-07)
 
 Use this live-safe sequence whenever Candle Cash totals look inconsistent between dashboards, customer views, and ledger reports:

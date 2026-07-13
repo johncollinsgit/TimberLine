@@ -2,6 +2,8 @@
 
 Customer merge discovery is visible by default only for tenants in `CUSTOMER_MERGE_TENANT_SLUGS`. The initial tenant allowlist is `modern-forestry`. Preview and execution remain fail-closed when the verified Shopify merge scopes are missing, and execution additionally requires an authenticated tenant owner/admin.
 
+In the Modern Forestry embedded app, the entry point is `Customers` → `Merge duplicate customers`. The operator must enter a customer name, email, phone, or Shopify customer ID before candidate discovery opens.
+
 ## Deployment order
 
 1. Deploy the customer merge migration with the tenant allowlist restricted to `modern-forestry`. Confirm the normalized-name backfill completed and archive columns are present.
@@ -9,6 +11,19 @@ Customer merge discovery is visible by default only for tenants in `CUSTOMER_MER
 3. Verify the `customers/merge` subscription points to `https://app.theeverbranch.com/webhooks/shopify/customers/merge` and run `php artisan shopify:webhooks:verify --required-only`. Retain its output with the release evidence.
 4. Confirm `CUSTOMER_MERGE_ENABLED=true` with `CUSTOMER_MERGE_TENANT_SLUGS=modern-forestry`. Keep execution limited to authenticated tenant owners/admins.
 5. Run preview-only checks for Megan Lawther and several known duplicates before approving any operation.
+
+## Release verification
+
+After the Laravel deployment succeeds:
+
+```bash
+npm run shopify:app:deploy
+php artisan shopify:webhooks:verify --required-only
+```
+
+Open `https://app.theeverbranch.com/shopify/reinstall/retail` and complete Shopify's scope approval for `modernforestry.myshopify.com`. Then verify the stored retail token includes both merge scopes. The Backstage action may be visible before reauthorization, but preview and execution must remain blocked until the scopes are present.
+
+The webhook feature test must configure a shop domain, client ID, and client secret explicitly. CI intentionally leaves production Shopify credentials empty; omitting any resolver-required fixture value can produce an `Unknown shop` 404 even though the webhook route exists.
 
 ## Megan acceptance evidence
 
