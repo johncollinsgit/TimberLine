@@ -89,7 +89,7 @@ jobs:
         run: npm run build
 
       - name: Run tests
-        run: php -d memory_limit=512M ./vendor/bin/pest
+        run: php -d memory_limit=1G ./vendor/bin/pest
 
   deploy:
     name: Deploy
