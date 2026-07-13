@@ -107,6 +107,7 @@ class TenantMobileResourceService
     public function work(Tenant $tenant, mixed $user, string $search = '', int $limit = 40): array
     {
         $kind = $this->workKind($tenant, $user);
+        $includeOwnerNotes = $this->canViewOwnerNotes($user, (int) $tenant->id);
         $search = trim($search);
         $limit = max(10, min(50, $limit));
 
@@ -118,15 +119,20 @@ class TenantMobileResourceService
                         ->orWhere('customer_name', 'like', $like)->orWhere('shopify_name', 'like', $like);
                 }))->latest('ordered_at')->limit($limit)->get()->map(fn (Order $order): array => $this->orderSummary($order)),
             'jobs' => FieldServiceJob::query()->forTenantId((int) $tenant->id)
-                ->withCount(['tasks', 'materials', 'photos', 'notes'])
-                ->when($search !== '', fn (Builder $query) => $query->where(function (Builder $builder) use ($search): void {
+                ->withCount([
+                    'tasks',
+                    'materials',
+                    'photos',
+                    'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
+                ])
+                ->when($search !== '', fn (Builder $query) => $query->where(function (Builder $builder) use ($search, $includeOwnerNotes): void {
                     $like = '%'.$search.'%';
                     $builder->where('title', 'like', $like)->orWhere('customer_name', 'like', $like)
                         ->orWhere('customer_phone', 'like', $like)
                         ->orWhere('lock_box_code', 'like', $like)
                         ->orWhere('description', 'like', $like)
                         ->orWhere('service_city', 'like', $like)->orWhere('service_address_line_1', 'like', $like)
-                        ->orWhereHas('notes', fn (Builder $notes) => $notes->where('body', 'like', $like));
+                        ->orWhereHas('notes', fn (Builder $notes) => $this->visibleNotes($notes, $includeOwnerNotes)->where('body', 'like', $like));
                 }))->latest('updated_at')->limit($limit)->get()->map(fn (FieldServiceJob $job): array => $this->jobSummary($job)),
             default => ClientProject::query()->forTenantId((int) $tenant->id)
                 ->withCount(['milestones', 'tickets'])
@@ -148,7 +154,7 @@ class TenantMobileResourceService
 
         return match ($kind) {
             'orders' => $this->orderDetail((int) $tenant->id, $id),
-            'jobs' => $this->jobDetail((int) $tenant->id, $id),
+            'jobs' => $this->jobDetail((int) $tenant->id, $id, $this->canViewOwnerNotes($user, (int) $tenant->id)),
             'clients' => $this->clientDetail((int) $tenant->id, $id),
             default => abort(404),
         };
@@ -189,9 +195,17 @@ class TenantMobileResourceService
     }
 
     /** @return array<string,mixed> */
-    protected function jobDetail(int $tenantId, int $id): array
+    protected function jobDetail(int $tenantId, int $id, bool $includeOwnerNotes): array
     {
-        $job = FieldServiceJob::query()->forTenantId($tenantId)->with(['tasks.assignedUser:id,name', 'materials', 'photos', 'notes.createdBy:id,name', 'notes.photos', 'assignedUser:id,name'])->findOrFail($id);
+        $job = FieldServiceJob::query()->forTenantId($tenantId)->with([
+            'tasks.assignedUser:id,name',
+            'materials',
+            'photos',
+            'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
+            'notes.createdBy:id,name',
+            'notes.photos',
+            'assignedUser:id,name',
+        ])->findOrFail($id);
 
         return ['kind' => 'jobs', 'item' => [
             ...$this->jobSummary($job),
@@ -266,6 +280,30 @@ class TenantMobileResourceService
                 'notes' => (int) ($job->notes_count ?? $job->notes()->count()),
             ],
         ];
+    }
+
+    protected function canViewOwnerNotes(mixed $user, int $tenantId): bool
+    {
+        if (! is_object($user) || ! method_exists($user, 'tenants')) {
+            return false;
+        }
+
+        $membership = $user->tenants()->whereKey($tenantId)->first();
+        $role = strtolower(trim((string) ($membership?->pivot->role ?? '')));
+
+        return in_array($role, ['admin', 'owner', 'tenant_owner'], true);
+    }
+
+    protected function visibleNotes(mixed $query, bool $includeOwner): mixed
+    {
+        if ($includeOwner) {
+            return $query;
+        }
+
+        return $query->where(function ($visibility): void {
+            $visibility->whereNull('metadata->visibility')
+                ->orWhere('metadata->visibility', '!=', 'owner');
+        });
     }
 
     /** @return array<string,mixed> */

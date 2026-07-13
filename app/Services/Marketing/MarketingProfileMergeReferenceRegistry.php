@@ -51,6 +51,7 @@ class MarketingProfileMergeReferenceRegistry
             'subscription_candle_club_scent_feedback' => ['marketing_profile_id'],
             'mobile_push_devices' => ['marketing_profile_id'],
             'field_service_jobs' => ['marketing_profile_id'],
+            'field_service_financial_documents' => ['marketing_profile_id'],
         ];
     }
 

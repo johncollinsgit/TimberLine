@@ -6,6 +6,7 @@ use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Services\FieldService\QuickBooksFieldServiceSyncService;
 use App\Services\Integrations\ConnectionManager;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Console\Command;
 
 class FieldServiceSyncQuickBooks extends Command
@@ -14,16 +15,25 @@ class FieldServiceSyncQuickBooks extends Command
         {--tenant-id= : Tenant ID to import into}
         {--tenant= : Tenant slug to import into}
         {--connection-id= : Specific integration_connections id}
-        {--entities=customers,invoices,estimates,items : Comma-separated customers,invoices,estimates,items}
+        {--entities=customers,estimates,invoices,items,attachments : Comma-separated customers,estimates,invoices,items,attachments}
         {--dry-run : Fetch and summarize without writing}';
 
     protected $description = 'Fetch QuickBooks Online data for a tenant and import it into field-service customers, jobs, and materials.';
 
-    public function handle(ConnectionManager $connections, QuickBooksFieldServiceSyncService $syncService): int
-    {
+    public function handle(
+        ConnectionManager $connections,
+        QuickBooksFieldServiceSyncService $syncService,
+        TenantModuleAccessResolver $moduleAccessResolver
+    ): int {
         $tenant = $this->tenant();
         if (! $tenant instanceof Tenant) {
             $this->error('Pass --tenant-id or --tenant with a valid workspace.');
+
+            return self::FAILURE;
+        }
+
+        if (! $moduleAccessResolver->canAccess((int) $tenant->id, 'quickbooks')) {
+            $this->error('The QuickBooks Branch is not enabled for '.$tenant->slug.'.');
 
             return self::FAILURE;
         }
@@ -56,7 +66,7 @@ class FieldServiceSyncQuickBooks extends Command
         $this->line((bool) $this->option('dry-run') ? 'mode=dry-run' : 'mode=live');
         $this->line('tenant='.$tenant->slug);
         $this->line('connection='.$syncService->connectionLabel($connection));
-        foreach (['quickbooks_customers', 'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_items', 'customers', 'jobs', 'items', 'skipped'] as $key) {
+        foreach (['quickbooks_customers', 'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_items', 'quickbooks_attachments', 'customers', 'jobs', 'items', 'documents', 'lines', 'attachments', 'skipped'] as $key) {
             $this->line($key.'='.(int) ($summary[$key] ?? 0));
         }
 

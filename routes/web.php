@@ -533,23 +533,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->group(function () {
         Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });
-    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+    Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access'])
         ->get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
 
-    Route::middleware(['role:admin,manager,marketing_manager'])
+    Route::middleware(['role:admin'])
         ->get('/integrations/quickbooks', [QuickBooksConnectionController::class, 'index'])
         ->name('integrations.quickbooks.index');
 
-    Route::middleware(['role:admin,manager,marketing_manager'])
+    Route::middleware(['tenant.access', 'module:quickbooks'])
         ->prefix('workspaces/{tenant:slug}/integrations/quickbooks')
         ->name('integrations.quickbooks.')
         ->group(function (): void {
             Route::get('/connect', [QuickBooksConnectionController::class, 'connect'])->name('connect');
         });
 
-    Route::middleware(['role:admin,manager,marketing_manager'])
-        ->get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])
+    Route::get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])
         ->name('integrations.quickbooks.callback');
 
     Route::middleware(['role:admin', 'tenant.access'])
@@ -581,7 +580,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{project}', [ClientProjectController::class, 'show'])->name('show');
         });
 
-    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:field_service'])
+    Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access', 'module:field_service'])
         ->prefix('field-service')
         ->name('field-service.')
         ->group(function (): void {

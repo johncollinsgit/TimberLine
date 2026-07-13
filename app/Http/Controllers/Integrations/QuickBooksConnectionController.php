@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class QuickBooksConnectionController extends Controller
     {
         $tenants = $request->user()
             ->tenants()
+            ->wherePivotIn('role', ['admin', 'owner', 'tenant_owner'])
             ->orderBy('name')
             ->get();
         $connectedTenantIds = IntegrationConnection::query()
@@ -39,9 +41,14 @@ class QuickBooksConnectionController extends Controller
         return view('integrations.quickbooks.disconnected');
     }
 
-    public function connect(Request $request, Tenant $tenant, QuickBooksConnector $connector): RedirectResponse
-    {
-        $this->authorizeTenantMember($request, $tenant);
+    public function connect(
+        Request $request,
+        Tenant $tenant,
+        QuickBooksConnector $connector,
+        TenantModuleAccessResolver $moduleAccessResolver
+    ): RedirectResponse {
+        $this->authorizeTenantAdmin($request, $tenant);
+        abort_unless($moduleAccessResolver->canAccess((int) $tenant->id, 'quickbooks'), 403, 'The QuickBooks Branch is not enabled for this workspace.');
 
         $state = Str::random(48);
         Cache::store((string) config('services.quickbooks.oauth_state_cache_store', config('cache.default')))
@@ -53,15 +60,19 @@ class QuickBooksConnectionController extends Controller
         return redirect()->away($connector->buildAuthorizationUrl($tenant, ['state' => $state]));
     }
 
-    public function callback(Request $request, QuickBooksConnector $connector): RedirectResponse
-    {
+    public function callback(
+        Request $request,
+        QuickBooksConnector $connector,
+        TenantModuleAccessResolver $moduleAccessResolver
+    ): RedirectResponse {
         $state = trim((string) $request->query('state'));
         $cache = Cache::store((string) config('services.quickbooks.oauth_state_cache_store', config('cache.default')));
         $payload = $state !== '' ? $cache->pull($this->stateKey($state)) : null;
         abort_unless(is_array($payload), 403, 'QuickBooks authorization expired. Start the connection again.');
 
         $tenant = Tenant::query()->findOrFail((int) ($payload['tenant_id'] ?? 0));
-        $this->authorizeTenantMember($request, $tenant);
+        $this->authorizeTenantAdmin($request, $tenant);
+        abort_unless($moduleAccessResolver->canAccess((int) $tenant->id, 'quickbooks'), 403, 'The QuickBooks Branch is not enabled for this workspace.');
 
         $connection = $connector->handleCallback($tenant, $request);
         $connection->forceFill(['connected_by_user_id' => (int) $request->user()->id])->save();
@@ -75,10 +86,13 @@ class QuickBooksConnectionController extends Controller
         return $response;
     }
 
-    protected function authorizeTenantMember(Request $request, Tenant $tenant): void
+    protected function authorizeTenantAdmin(Request $request, Tenant $tenant): void
     {
         $user = $request->user();
-        abort_unless($user && $user->tenants()->whereKey((int) $tenant->id)->exists(), 403);
+        $membership = $user?->tenants()->whereKey((int) $tenant->id)->first();
+        $role = strtolower(trim((string) ($membership?->pivot->role ?? '')));
+
+        abort_unless($user && in_array($role, ['admin', 'owner', 'tenant_owner'], true), 403);
     }
 
     protected function stateKey(string $state): string

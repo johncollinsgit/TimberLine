@@ -78,4 +78,9 @@ class FieldServiceJob extends Model
     {
         return $this->hasMany(FieldServiceJobNote::class);
     }
+
+    public function financialDocuments(): HasMany
+    {
+        return $this->hasMany(FieldServiceFinancialDocument::class);
+    }
 }

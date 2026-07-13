@@ -5,6 +5,8 @@
     $summaryCards = is_array($dashboard['summary_cards'] ?? null) ? $dashboard['summary_cards'] : [];
     $nextActions = is_array($dashboard['next_actions'] ?? null) ? $dashboard['next_actions'] : [];
     $pinnedModules = is_array($dashboard['pinned_modules'] ?? null) ? $dashboard['pinned_modules'] : [];
+    $dateRange = is_array($dashboard['date_range'] ?? null) ? $dashboard['date_range'] : [];
+    $rangeOptions = is_array($dateRange['options'] ?? null) ? $dateRange['options'] : [];
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 min-w-0">
@@ -48,14 +50,24 @@
         </section>
 
         <section class="mf-app-card rounded-3xl p-5 sm:p-6">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                     <div class="text-[11px] uppercase tracking-[0.24em] text-[var(--fb-muted)]">Primary KPI</div>
                     <h2 class="mt-2 text-xl font-semibold text-[var(--fb-text)]">{{ $hero['label'] ?? 'Workspace readiness' }}</h2>
                     <p class="mt-2 text-sm text-[var(--fb-muted)]">{{ $hero['supporting'] ?? '' }}</p>
                 </div>
-                <div class="rounded-3xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] px-5 py-4">
-                    <div class="text-3xl font-semibold text-[var(--fb-text)]">{{ $hero['value'] ?? 'Ready' }}</div>
+                <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
+                    <label class="block min-w-[11rem] text-xs font-medium text-[var(--fb-muted)]">
+                        <span class="mb-1.5 block">Time window</span>
+                        <select wire:model.live="range" class="w-full rounded-lg border border-[var(--fb-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--fb-text)] focus:outline-none">
+                            @foreach($rangeOptions as $value => $label)
+                                <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <div class="min-w-[10rem] rounded-lg border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] px-5 py-4">
+                        <div class="text-3xl font-semibold text-[var(--fb-text)]">{{ $hero['value'] ?? 'Ready' }}</div>
+                    </div>
                 </div>
             </div>
 

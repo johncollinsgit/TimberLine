@@ -726,3 +726,14 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Every mobile-store Branch needs a purpose icon and useful owned-state product/setup copy. Do not restore generic Share actions, inert summaries, or client-only availability decisions.
 - Mobile billing is a US-only, system-browser Stripe handoff behind existing checkout and lifecycle flags. Keep non-US purchase CTAs closed, maintain idempotent webhook/audit behavior, and recheck Apple/Google rules immediately before submission.
 - New-module work is incomplete until the catalog declaration, tenant scoping, entitlement checks, provider/schema, supported actions, backend/client tests, phone screenshots, and relevant READMEs are updated. The exact checklist is in `docs/architecture/everbranch-mobile-platform.md`.
+
+## QuickBooks Branch + Financial Access Rule (2026-07-13)
+
+- QuickBooks is the shared `quickbooks` beta Branch. Do not create tenant-specific QuickBooks forks. Discovery in onboarding is interest only; it must never create an entitlement, begin OAuth, run an import, or activate billing.
+- OAuth, full audits, and live sync require an enabled tenant entitlement plus a verified tenant owner/admin. Commands must fail closed when the Branch is not enabled.
+- Keep the connector read-only and on demand. Do not add payments, QuickBooks write-back, webhooks, CDC, recurring sync, Estimator activation, or payroll activation without a separate approved release.
+- Store OAuth tokens, realm identifiers, raw source snapshots, and audit payloads encrypted and tenant-scoped. Never print raw QuickBooks records, customer details, or invoice notes to logs, CI, chat, or support tickets.
+- Financial documents and lines remain separate from field-service jobs. Link or create a job only from source evidence, preserve manual jobs, use provider/type/external-ID identities, and prove repeated imports remain duplicate-free.
+- QuickBooks `PrivateNote` content is owner/admin-only. Team members may receive operational customer memos and work-line descriptions, but not financial reports, amounts, receivables, P&L wages, contract labor, price-book costs, billing controls, or integration credentials.
+- Dashboard ranges are `1d`, `1w`, `1m`, `30d`, and `ytd`; `1m` means current calendar month and is the default. QuickBooks reports retain their requested report period and must not be relabeled to match a dashboard filter.
+- Collins-specific ownership and workflow notes belong in `docs/collins-electric-access-and-quickbooks.md`; shared connector behavior belongs in canonical services/config/tests.

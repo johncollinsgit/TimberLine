@@ -73,9 +73,52 @@ test('dashboard renders commerce hero metric for shopify-connected tenants', fun
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSeeText('Order-linked revenue (30D)')
+        ->assertSeeText('Order-linked revenue · Current month')
         ->assertSeeText('Commerce workspace')
-        ->assertSeeText('$300.00');
+        ->assertSeeText('$300.00')
+        ->assertSeeText('Time window')
+        ->assertSeeText('Last 30 days')
+        ->assertSee('wire:model.live="range"', false);
+});
+
+test('dashboard range defaults to current month and filters a selected one day window', function () {
+    $tenant = Tenant::query()->create(['name' => 'Range Tenant', 'slug' => 'range-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'growth',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'range-dashboard.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
+    Order::query()->create([
+        'tenant_id' => $tenant->id,
+        'order_number' => 'TODAY-1',
+        'status' => 'paid',
+        'total_price' => 125,
+        'ordered_at' => now(),
+    ]);
+    Order::query()->create([
+        'tenant_id' => $tenant->id,
+        'order_number' => 'OLDER-1',
+        'status' => 'paid',
+        'total_price' => 300,
+        'ordered_at' => now()->subDays(3),
+    ]);
+    $user = User::factory()->create(['role' => 'admin']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['range' => '1d']))
+        ->assertOk()
+        ->assertSeeText('Order-linked revenue · 1 day')
+        ->assertSeeText('$125.00')
+        ->assertDontSeeText('$425.00');
 });
 
 test('dashboard hides marketing only actions and customer metrics for ops managers', function () {

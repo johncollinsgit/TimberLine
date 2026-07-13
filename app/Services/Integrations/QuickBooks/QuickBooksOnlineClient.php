@@ -50,6 +50,19 @@ class QuickBooksOnlineClient
             ->json();
     }
 
+    /** @return array<string,mixed> */
+    public function report(string $report, array $parameters = []): array
+    {
+        $realmId = $this->realmId();
+
+        return $this->request()
+            ->get("/v3/company/{$realmId}/reports/{$report}", $parameters + [
+                'minorversion' => $this->minorVersion,
+            ])
+            ->throw()
+            ->json();
+    }
+
     public function realmId(): string
     {
         $realmId = trim((string) ($this->connection->external_account_secret

@@ -25,12 +25,13 @@ class UnifiedDashboardService
         protected TenantExperienceProfileService $experienceProfileService,
         protected TenantModuleCatalogService $moduleCatalogService,
         protected TenantBlueprintProfileService $blueprintProfileService,
+        protected DashboardDateRange $dateRanges,
     ) {}
 
     /**
      * @return array<string,mixed>
      */
-    public function forRequest(Request $request, ?User $user = null): array
+    public function forRequest(Request $request, ?User $user = null, ?string $rangeKey = null): array
     {
         $user ??= $request->user();
         $attributeTenant = $request->attributes->get('current_tenant');
@@ -44,13 +45,22 @@ class UnifiedDashboardService
         $catalog = ($tenantId !== null && $canAccessMarketing)
             ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
             : ['sections' => []];
-        $tradeMetrics = $this->tradeMetrics($tenant, $profile);
+        $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
+        $tradeMetrics = $this->tradeMetrics($tenant, $profile, $range);
 
         return [
             'tenant_id' => $tenantId,
+            'date_range' => [
+                'key' => $range['key'],
+                'label' => $range['label'],
+                'short_label' => $range['short_label'],
+                'starts_at' => $range['starts_at']->toIso8601String(),
+                'ends_at' => $range['ends_at']->toIso8601String(),
+                'options' => $range['options'],
+            ],
             'experience_profile' => $profile,
-            'hero' => $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $tradeMetrics),
-            'summary_cards' => $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $tradeMetrics),
+            'hero' => $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics),
+            'summary_cards' => $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics),
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
@@ -59,7 +69,7 @@ class UnifiedDashboardService
     /**
      * @return array<string,mixed>
      */
-    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, ?array $tradeMetrics = null): array
+    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null): array
     {
         $channelType = (string) ($profile['channel_type'] ?? 'direct');
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
@@ -74,13 +84,12 @@ class UnifiedDashboardService
         }
 
         if ($tenantId !== null && Schema::hasTable('orders') && in_array($channelType, ['shopify', 'hybrid'], true) && ($canAccessMarketing || $canAccessOps)) {
-            $since = now()->subDays(30);
             $query = Order::query()->forTenantId($tenantId);
-            $revenue = (float) (clone $query)->where('ordered_at', '>=', $since)->sum('total_price');
-            $orders = (int) (clone $query)->where('ordered_at', '>=', $since)->count();
+            $revenue = (float) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->sum('total_price');
+            $orders = (int) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->count();
 
             return [
-                'label' => 'Order-linked revenue (30D)',
+                'label' => 'Order-linked revenue · '.$range['short_label'],
                 'value' => '$'.number_format($revenue, 2),
                 'supporting' => number_format($orders).' recent orders',
                 'tone' => 'emerald',
@@ -104,6 +113,7 @@ class UnifiedDashboardService
         if ($canAccessMarketing && $tenantId !== null && Schema::hasTable('marketing_profiles') && in_array($useCase, ['crm', 'marketing', 'hybrid'], true)) {
             $reachable = (int) MarketingProfile::query()
                 ->forTenantId($tenantId)
+                ->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])
                 ->where(function ($query): void {
                     $query->whereNotNull('email')
                         ->where('email', '!=', '')
@@ -147,17 +157,17 @@ class UnifiedDashboardService
     /**
      * @return array<int,array<string,string|int>>
      */
-    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing, ?array $tradeMetrics = null): array
+    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null): array
     {
         $cards = [];
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
 
-        if ($tradeMetrics !== null) {
+        if ($canAccessOps && $tradeMetrics !== null) {
             return [
                 [
                     'label' => 'Total gross revenue',
                     'value' => '$'.number_format((float) $tradeMetrics['gross_revenue'], 2),
-                    'detail' => 'Value of jobs currently in progress',
+                    'detail' => 'Value of jobs in progress for '.$range['short_label'],
                 ],
                 [
                     'label' => 'Crews working',
@@ -176,7 +186,7 @@ class UnifiedDashboardService
             if (Schema::hasTable('marketing_profiles')) {
                 $cards[] = [
                     'label' => 'Customers',
-                    'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->count()),
+                    'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'People and businesses you work for',
                 ];
             }
@@ -184,7 +194,7 @@ class UnifiedDashboardService
             if (Schema::hasTable('field_service_jobs')) {
                 $cards[] = [
                     'label' => 'Jobs',
-                    'value' => number_format((int) FieldServiceJob::query()->forTenantId($tenantId)->count()),
+                    'value' => number_format((int) FieldServiceJob::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'Service work in this workspace',
                 ];
             }
@@ -192,7 +202,7 @@ class UnifiedDashboardService
             if (Schema::hasTable('field_service_materials')) {
                 $cards[] = [
                     'label' => 'Materials',
-                    'value' => number_format((int) FieldServiceMaterial::query()->forTenantId($tenantId)->count()),
+                    'value' => number_format((int) FieldServiceMaterial::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'Parts and materials to track',
                 ];
             }
@@ -200,7 +210,7 @@ class UnifiedDashboardService
             if (Schema::hasTable('field_service_vehicles')) {
                 $cards[] = [
                     'label' => 'Work vans',
-                    'value' => number_format((int) FieldServiceVehicle::query()->forTenantId($tenantId)->count()),
+                    'value' => number_format((int) FieldServiceVehicle::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'Vehicles in the field',
                 ];
             }
@@ -211,7 +221,7 @@ class UnifiedDashboardService
         if ($canAccessMarketing && $tenantId !== null && Schema::hasTable('marketing_profiles')) {
             $cards[] = [
                 'label' => 'Customers',
-                'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->count()),
+                'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                 'detail' => 'Unified tenant-scoped profiles',
             ];
         }
@@ -219,7 +229,7 @@ class UnifiedDashboardService
         if ($tenantId !== null && Schema::hasTable('orders')) {
             $cards[] = [
                 'label' => 'Orders',
-                'value' => number_format((int) Order::query()->forTenantId($tenantId)->count()),
+                'value' => number_format((int) Order::query()->forTenantId($tenantId)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->count()),
                 'detail' => 'Tenant-linked order records',
             ];
         }
@@ -227,7 +237,7 @@ class UnifiedDashboardService
         if ($tenantId !== null && Schema::hasTable('marketing_import_runs')) {
             $cards[] = [
                 'label' => 'Imports',
-                'value' => number_format((int) MarketingImportRun::query()->forTenantId($tenantId)->count()),
+                'value' => number_format((int) MarketingImportRun::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                 'detail' => 'Import runs and sync batches',
             ];
         }
@@ -244,7 +254,7 @@ class UnifiedDashboardService
     /**
      * @return array{jobs_in_progress:int,gross_revenue:float,crews_working:int,potential_jobs:int}|null
      */
-    protected function tradeMetrics(?Tenant $tenant, array $profile): ?array
+    protected function tradeMetrics(?Tenant $tenant, array $profile, array $range): ?array
     {
         if (! $tenant instanceof Tenant || ! Schema::hasTable('field_service_jobs')) {
             return null;
@@ -259,6 +269,13 @@ class UnifiedDashboardService
 
         $jobs = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
+            ->where(function ($query) use ($range): void {
+                $query->whereBetween('scheduled_for', [$range['starts_at'], $range['ends_at']])
+                    ->orWhere(function ($fallback) use ($range): void {
+                        $fallback->whereNull('scheduled_for')
+                            ->whereBetween('created_at', [$range['starts_at'], $range['ends_at']]);
+                    });
+            })
             ->get(['id', 'assigned_user_id', 'status', 'metadata']);
         $inProgress = $jobs->filter(fn (FieldServiceJob $job): bool => strtolower((string) $job->status) === 'in_progress');
         $pipelineStages = ['potential', 'estimate', 'estimated', 'quote', 'quoted', 'proposal', 'opportunity'];

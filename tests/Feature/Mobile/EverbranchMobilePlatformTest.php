@@ -348,6 +348,8 @@ test('trade workspace home reports active jobs revenue crews and potential jobs'
         ->assertOk()
         ->assertJsonPath('dashboard.hero.label', 'Jobs in progress')
         ->assertJsonPath('dashboard.hero.value', '2')
+        ->assertJsonPath('dashboard.date_range.key', '1m')
+        ->assertJsonPath('dashboard.date_range.options.30d', 'Last 30 days')
         ->assertJsonPath('dashboard.summary_cards.0.label', 'Total gross revenue')
         ->assertJsonPath('dashboard.summary_cards.0.value', '$20,000.00')
         ->assertJsonPath('dashboard.summary_cards.1.value', '2')

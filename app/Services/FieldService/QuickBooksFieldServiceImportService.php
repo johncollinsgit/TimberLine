@@ -2,11 +2,17 @@
 
 namespace App\Services\FieldService;
 
+use App\Models\FieldServiceFinancialDocument;
+use App\Models\FieldServiceFinancialDocumentAttachment;
+use App\Models\FieldServiceFinancialDocumentLine;
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceMaterial;
+use App\Models\FieldServicePriceBookItem;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\Tenant;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class QuickBooksFieldServiceImportService
@@ -52,10 +58,10 @@ class QuickBooksFieldServiceImportService
         return $summary;
     }
 
-    /** @return array{customers:int,jobs:int,items:int,skipped:int} */
+    /** @return array{customers:int,jobs:int,items:int,documents:int,lines:int,attachments:int,skipped:int} */
     public function emptySummary(): array
     {
-        return ['customers' => 0, 'jobs' => 0, 'items' => 0, 'skipped' => 0];
+        return ['customers' => 0, 'jobs' => 0, 'items' => 0, 'documents' => 0, 'lines' => 0, 'attachments' => 0, 'skipped' => 0];
     }
 
     /** @param array<string,string> $row */
@@ -82,16 +88,16 @@ class QuickBooksFieldServiceImportService
             ->where('source_type', 'quickbooks_customer')
             ->where('source_id', $linkId)
             ->first();
-        if ($existingLink instanceof MarketingProfileLink) {
-            return $existingLink->marketingProfile()->firstOrFail();
-        }
 
         $name = $this->first($row, ['customer', 'customer_name', 'name', 'display_name', 'company']);
         [$firstName, $lastName] = $this->splitName($name ?: 'QuickBooks Customer');
         $email = strtolower($this->first($row, ['email', 'email_address']));
         $phone = $this->first($row, ['phone', 'phone_number', 'mobile']);
 
-        $profile = $email !== ''
+        $profile = $existingLink instanceof MarketingProfileLink
+            ? $existingLink->marketingProfile()->first()
+            : null;
+        $profile ??= $email !== ''
             ? MarketingProfile::query()->forTenantId((int) $tenant->id)->where('normalized_email', $email)->first()
             : null;
 
@@ -109,9 +115,24 @@ class QuickBooksFieldServiceImportService
                 'postal_code' => $this->first($row, ['zip', 'postal_code']),
                 'source_channels' => ['quickbooks_import'],
             ]);
+        } else {
+            $updates = array_filter([
+                'first_name' => $name !== '' ? $firstName : null,
+                'last_name' => $name !== '' ? $lastName : null,
+                'email' => $email !== '' ? $email : null,
+                'normalized_email' => $email !== '' ? $email : null,
+                'phone' => $phone !== '' ? $phone : null,
+                'address_line_1' => $this->first($row, ['billing_address', 'address', 'street']) ?: null,
+                'city' => $this->first($row, ['city']) ?: null,
+                'state' => $this->first($row, ['state']) ?: null,
+                'postal_code' => $this->first($row, ['zip', 'postal_code']) ?: null,
+            ], static fn (mixed $value): bool => $value !== null);
+            if ($updates !== []) {
+                $profile->forceFill($updates)->save();
+            }
         }
 
-        MarketingProfileLink::query()->firstOrCreate(
+        MarketingProfileLink::query()->updateOrCreate(
             ['tenant_id' => (int) $tenant->id, 'source_type' => 'quickbooks_customer', 'source_id' => $linkId],
             [
                 'marketing_profile_id' => (int) $profile->id,
@@ -172,6 +193,339 @@ class QuickBooksFieldServiceImportService
                 'notes' => 'Imported from QuickBooks.',
             ]
         );
+    }
+
+    /** @param array<string,mixed> $transaction
+     * @return array{customers:int,jobs:int,items:int,documents:int,lines:int,attachments:int,skipped:int}
+     */
+    public function importQuickBooksTransaction(Tenant $tenant, array $transaction, string $type, bool $dryRun = false): array
+    {
+        $summary = $this->emptySummary();
+        $externalId = trim((string) ($transaction['Id'] ?? ''));
+        if ($externalId === '') {
+            $summary['skipped']++;
+
+            return $summary;
+        }
+
+        $summary['documents']++;
+        $summary['lines'] += count((array) ($transaction['Line'] ?? []));
+        $summary['jobs'] += $this->hasOperationalEvidence($transaction) ? 1 : 0;
+        if ($dryRun) {
+            return $summary;
+        }
+
+        return DB::transaction(function () use ($tenant, $transaction, $type, $externalId, $summary): array {
+            $customer = (array) ($transaction['CustomerRef'] ?? []);
+            $profile = $this->profileForRow($tenant, [
+                'customer_id' => (string) ($customer['value'] ?? ''),
+                'customer' => (string) ($customer['name'] ?? 'QuickBooks Customer'),
+                'email' => (string) data_get($transaction, 'BillEmail.Address', ''),
+                'phone' => '',
+                'billing_address' => (string) data_get($transaction, 'BillAddr.Line1', ''),
+                'city' => (string) data_get($transaction, 'BillAddr.City', ''),
+                'state' => (string) data_get($transaction, 'BillAddr.CountrySubDivisionCode', ''),
+                'postal_code' => (string) data_get($transaction, 'BillAddr.PostalCode', ''),
+            ]);
+
+            $job = $this->hasOperationalEvidence($transaction)
+                ? $this->jobForQuickBooksTransaction($tenant, $profile, $transaction, $type)
+                : null;
+
+            $document = FieldServiceFinancialDocument::query()->updateOrCreate(
+                [
+                    'tenant_id' => (int) $tenant->id,
+                    'source' => 'quickbooks',
+                    'document_type' => $type,
+                    'external_id' => $externalId,
+                ],
+                [
+                    'marketing_profile_id' => (int) $profile->id,
+                    'field_service_job_id' => $job?->id,
+                    'document_number' => trim((string) ($transaction['DocNumber'] ?? '')) ?: null,
+                    'status' => $this->transactionStatus($transaction, $type),
+                    'transaction_date' => $transaction['TxnDate'] ?? null,
+                    'due_date' => $transaction['DueDate'] ?? $transaction['ExpirationDate'] ?? null,
+                    'total_amount' => is_numeric($transaction['TotalAmt'] ?? null) ? (float) $transaction['TotalAmt'] : null,
+                    'balance' => is_numeric($transaction['Balance'] ?? null) ? (float) $transaction['Balance'] : null,
+                    'currency' => trim((string) data_get($transaction, 'CurrencyRef.value', '')) ?: null,
+                    'private_note' => trim((string) ($transaction['PrivateNote'] ?? '')) ?: null,
+                    'customer_memo' => trim((string) data_get($transaction, 'CustomerMemo.value', '')) ?: null,
+                    'linked_transactions' => array_values((array) ($transaction['LinkedTxn'] ?? [])),
+                    'metadata' => [
+                        'quickbooks' => [
+                            'sync_token' => (string) ($transaction['SyncToken'] ?? ''),
+                            'email_status' => (string) ($transaction['EmailStatus'] ?? ''),
+                            'print_status' => (string) ($transaction['PrintStatus'] ?? ''),
+                        ],
+                    ],
+                ]
+            );
+
+            FieldServiceFinancialDocumentLine::query()
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('field_service_financial_document_id', (int) $document->id)
+                ->delete();
+            foreach ((array) ($transaction['Line'] ?? []) as $index => $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+                $detail = (array) ($line['SalesItemLineDetail'] ?? []);
+                FieldServiceFinancialDocumentLine::query()->create([
+                    'tenant_id' => (int) $tenant->id,
+                    'field_service_financial_document_id' => (int) $document->id,
+                    'source_line_id' => trim((string) ($line['Id'] ?? '')) ?: null,
+                    'sort_order' => (int) $index,
+                    'detail_type' => trim((string) ($line['DetailType'] ?? '')) ?: null,
+                    'item_external_id' => trim((string) data_get($detail, 'ItemRef.value', '')) ?: null,
+                    'item_name' => trim((string) data_get($detail, 'ItemRef.name', '')) ?: null,
+                    'description' => trim((string) ($line['Description'] ?? '')) ?: null,
+                    'quantity' => is_numeric($detail['Qty'] ?? null) ? (float) $detail['Qty'] : null,
+                    'unit_price' => is_numeric($detail['UnitPrice'] ?? null) ? (float) $detail['UnitPrice'] : null,
+                    'amount' => is_numeric($line['Amount'] ?? null) ? (float) $line['Amount'] : null,
+                    'metadata' => [
+                        'tax_code' => data_get($detail, 'TaxCodeRef.value'),
+                        'class' => data_get($detail, 'ClassRef.name'),
+                        'service_date' => $detail['ServiceDate'] ?? null,
+                    ],
+                ]);
+            }
+
+            if ($job instanceof FieldServiceJob) {
+                $this->syncQuickBooksNotes($tenant, $job, $transaction, $type, $externalId);
+            }
+
+            return $summary;
+        });
+    }
+
+    /** @param array<string,mixed> $item
+     * @return array{customers:int,jobs:int,items:int,documents:int,lines:int,attachments:int,skipped:int}
+     */
+    public function importQuickBooksItem(Tenant $tenant, array $item, bool $dryRun = false): array
+    {
+        $summary = $this->emptySummary();
+        $externalId = trim((string) ($item['Id'] ?? ''));
+        if ($externalId === '') {
+            $summary['skipped']++;
+
+            return $summary;
+        }
+        $summary['items']++;
+        if ($dryRun) {
+            return $summary;
+        }
+
+        FieldServicePriceBookItem::query()->updateOrCreate(
+            ['tenant_id' => (int) $tenant->id, 'source' => 'quickbooks', 'external_id' => $externalId],
+            [
+                'name' => trim((string) ($item['Name'] ?? $item['Sku'] ?? 'QuickBooks item')),
+                'item_type' => trim((string) ($item['Type'] ?? '')) ?: null,
+                'sku' => trim((string) ($item['Sku'] ?? '')) ?: null,
+                'description' => trim((string) ($item['Description'] ?? '')) ?: null,
+                'unit_price' => is_numeric($item['UnitPrice'] ?? null) ? (float) $item['UnitPrice'] : null,
+                'purchase_cost' => is_numeric($item['PurchaseCost'] ?? null) ? (float) $item['PurchaseCost'] : null,
+                'active' => (bool) ($item['Active'] ?? true),
+                'taxable' => array_key_exists('Taxable', $item) ? (bool) $item['Taxable'] : null,
+                'metadata' => [
+                    'quantity_on_hand' => is_numeric($item['QtyOnHand'] ?? null) ? (float) $item['QtyOnHand'] : null,
+                    'income_account' => data_get($item, 'IncomeAccountRef.name'),
+                    'expense_account' => data_get($item, 'ExpenseAccountRef.name'),
+                ],
+            ]
+        );
+
+        return $summary;
+    }
+
+    /** @param array<int,array<string,mixed>> $attachables
+     * @return array{customers:int,jobs:int,items:int,documents:int,lines:int,attachments:int,skipped:int}
+     */
+    public function importQuickBooksAttachments(Tenant $tenant, array $attachables, bool $dryRun = false): array
+    {
+        $summary = $this->emptySummary();
+        foreach ($attachables as $attachable) {
+            $attachmentId = trim((string) ($attachable['Id'] ?? ''));
+            foreach ((array) ($attachable['AttachableRef'] ?? []) as $reference) {
+                $type = strtolower(trim((string) data_get($reference, 'EntityRef.type', '')));
+                $externalId = trim((string) data_get($reference, 'EntityRef.value', ''));
+                if ($attachmentId === '' || $externalId === '' || ! in_array($type, ['invoice', 'estimate'], true)) {
+                    $summary['skipped']++;
+
+                    continue;
+                }
+
+                $summary['attachments']++;
+                if ($dryRun) {
+                    continue;
+                }
+
+                $document = FieldServiceFinancialDocument::query()
+                    ->forTenantId((int) $tenant->id)
+                    ->where('source', 'quickbooks')
+                    ->where('document_type', $type)
+                    ->where('external_id', $externalId)
+                    ->first();
+                if (! $document instanceof FieldServiceFinancialDocument) {
+                    $summary['skipped']++;
+
+                    continue;
+                }
+
+                FieldServiceFinancialDocumentAttachment::query()->updateOrCreate(
+                    [
+                        'field_service_financial_document_id' => (int) $document->id,
+                        'external_id' => $attachmentId,
+                    ],
+                    [
+                        'tenant_id' => (int) $tenant->id,
+                        'file_name' => trim((string) ($attachable['FileName'] ?? '')) ?: null,
+                        'content_type' => trim((string) ($attachable['ContentType'] ?? '')) ?: null,
+                        'file_size' => is_numeric($attachable['Size'] ?? null) ? (int) $attachable['Size'] : null,
+                        'note' => trim((string) ($attachable['Note'] ?? '')) ?: null,
+                        'metadata' => ['category' => $attachable['Category'] ?? null],
+                    ]
+                );
+            }
+        }
+
+        return $summary;
+    }
+
+    /** @param array<string,mixed> $transaction */
+    protected function hasOperationalEvidence(array $transaction): bool
+    {
+        if (filled(data_get($transaction, 'ShipAddr.Line1'))
+            || filled($transaction['PrivateNote'] ?? null)
+            || filled(data_get($transaction, 'CustomerMemo.value'))) {
+            return true;
+        }
+
+        return collect((array) ($transaction['Line'] ?? []))
+            ->contains(fn (mixed $line): bool => filled(data_get($line, 'Description')));
+    }
+
+    /** @param array<string,mixed> $transaction */
+    protected function jobForQuickBooksTransaction(Tenant $tenant, MarketingProfile $profile, array $transaction, string $type): FieldServiceJob
+    {
+        foreach ((array) ($transaction['LinkedTxn'] ?? []) as $linked) {
+            $linkedType = strtolower(trim((string) ($linked['TxnType'] ?? '')));
+            $linkedId = trim((string) ($linked['TxnId'] ?? ''));
+            if ($linkedId === '' || ! in_array($linkedType, ['estimate', 'invoice'], true)) {
+                continue;
+            }
+            $linkedDocument = FieldServiceFinancialDocument::query()
+                ->forTenantId((int) $tenant->id)
+                ->where('source', 'quickbooks')
+                ->where('document_type', $linkedType)
+                ->where('external_id', $linkedId)
+                ->whereNotNull('field_service_job_id')
+                ->first();
+            if ($linkedDocument?->job instanceof FieldServiceJob) {
+                return $linkedDocument->job;
+            }
+        }
+
+        $externalId = trim((string) ($transaction['Id'] ?? ''));
+        $documentNumber = trim((string) ($transaction['DocNumber'] ?? $externalId));
+        $customerName = trim((string) data_get($transaction, 'CustomerRef.name', '')) ?: trim($profile->first_name.' '.$profile->last_name);
+        $ship = (array) ($transaction['ShipAddr'] ?? $transaction['BillAddr'] ?? []);
+
+        return FieldServiceJob::query()->updateOrCreate(
+            [
+                'tenant_id' => (int) $tenant->id,
+                'external_source' => 'quickbooks',
+                'external_id' => 'quickbooks:'.$type.':'.$externalId,
+            ],
+            [
+                'marketing_profile_id' => (int) $profile->id,
+                'title' => Str::limit(Str::headline($type).' '.$documentNumber.' · '.$customerName, 255, ''),
+                'status' => $type === 'estimate' ? 'quoted' : 'open',
+                'customer_name' => $customerName,
+                'customer_email' => $profile->email,
+                'customer_phone' => $profile->phone,
+                'service_address_line_1' => trim((string) ($ship['Line1'] ?? '')) ?: null,
+                'service_address_line_2' => trim((string) ($ship['Line2'] ?? '')) ?: null,
+                'service_city' => trim((string) ($ship['City'] ?? '')) ?: null,
+                'service_state' => trim((string) ($ship['CountrySubDivisionCode'] ?? '')) ?: null,
+                'service_postal_code' => trim((string) ($ship['PostalCode'] ?? '')) ?: null,
+                'description' => $this->primaryWorkDescription($transaction),
+                'metadata' => [
+                    'quickbooks' => ['document_type' => $type, 'external_id' => $externalId, 'document_number' => $documentNumber],
+                    'pipeline_stage' => $type === 'estimate' ? 'quoted' : 'open',
+                    'gross_revenue' => is_numeric($transaction['TotalAmt'] ?? null) ? (float) $transaction['TotalAmt'] : null,
+                    'outstanding_balance' => is_numeric($transaction['Balance'] ?? null) ? (float) $transaction['Balance'] : null,
+                ],
+            ]
+        );
+    }
+
+    /** @param array<string,mixed> $transaction */
+    protected function primaryWorkDescription(array $transaction): ?string
+    {
+        $parts = collect([
+            trim((string) data_get($transaction, 'CustomerMemo.value', '')),
+            ...collect((array) ($transaction['Line'] ?? []))
+                ->pluck('Description')
+                ->map(fn (mixed $value): string => trim((string) $value))
+                ->filter()
+                ->take(5)
+                ->all(),
+        ])->filter()->unique()->values();
+
+        return $parts->isEmpty() ? null : Str::limit($parts->implode("\n"), 4000, '');
+    }
+
+    /** @param array<string,mixed> $transaction */
+    protected function syncQuickBooksNotes(Tenant $tenant, FieldServiceJob $job, array $transaction, string $type, string $externalId): void
+    {
+        $notes = [
+            'private_note' => trim((string) ($transaction['PrivateNote'] ?? '')),
+            'customer_memo' => trim((string) data_get($transaction, 'CustomerMemo.value', '')),
+        ];
+        foreach ((array) ($transaction['Line'] ?? []) as $index => $line) {
+            $description = trim((string) data_get($line, 'Description', ''));
+            if ($description !== '') {
+                $notes['line_'.($line['Id'] ?? $index)] = $description;
+            }
+        }
+
+        foreach (array_filter($notes) as $noteType => $body) {
+            $key = $type.':'.$externalId.':'.$noteType;
+            $note = FieldServiceJobNote::query()
+                ->forTenantId((int) $tenant->id)
+                ->where('field_service_job_id', (int) $job->id)
+                ->where('metadata->quickbooks_note_key', $key)
+                ->first();
+            $values = [
+                'body' => $body,
+                'noted_at' => data_get($transaction, 'MetaData.LastUpdatedTime') ?: now(),
+                'metadata' => [
+                    'source' => 'quickbooks',
+                    'quickbooks_note_key' => $key,
+                    'document_type' => $type,
+                    'document_external_id' => $externalId,
+                    'note_type' => $noteType,
+                    'visibility' => $noteType === 'private_note' ? 'owner' : 'team',
+                ],
+            ];
+            $note instanceof FieldServiceJobNote
+                ? $note->forceFill($values)->save()
+                : FieldServiceJobNote::query()->create($values + [
+                    'tenant_id' => (int) $tenant->id,
+                    'field_service_job_id' => (int) $job->id,
+                ]);
+        }
+    }
+
+    /** @param array<string,mixed> $transaction */
+    protected function transactionStatus(array $transaction, string $type): string
+    {
+        if ($type === 'invoice') {
+            return ((float) ($transaction['Balance'] ?? 0)) > 0 ? 'open' : 'paid';
+        }
+
+        return strtolower(trim((string) ($transaction['TxnStatus'] ?? ''))) ?: 'estimate';
     }
 
     protected function key(string $value): string

@@ -139,6 +139,40 @@ test('mobile field service exposes lock box notes and tenant scoped note action'
     ])->assertNotFound();
 });
 
+test('collins team members can use operations but cannot open mobile financial reporting', function (): void {
+    [$tenant, $admin] = electricianTenantAndUser();
+    $member = User::factory()->create([
+        'role' => 'member',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $member->tenants()->attach($tenant->id, ['role' => 'member']);
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Member-visible service call',
+        'customer_name' => 'Field Customer',
+        'scheduled_for' => now()->addDay(),
+    ]);
+
+    $this->actingAs($member)
+        ->get(route('field-service.calendar', ['tenant' => $tenant->slug]))
+        ->assertOk()
+        ->assertSeeText('Member-visible service call');
+
+    $this->actingAs($member)
+        ->get(route('app.search', ['tenant' => $tenant->slug, 'q' => 'Member-visible']))
+        ->assertOk();
+
+    Sanctum::actingAs($member, ['mobile:read']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/modules/reporting')
+        ->assertForbidden();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/bootstrap')
+        ->assertOk()
+        ->assertJsonMissing(['module_key' => 'reporting']);
+
+    expect($admin->id)->not->toBe($member->id);
+});
+
 test('quickbooks csv importer accepts customers jobs and items without live sync promises', function (): void {
     [$tenant] = electricianTenantAndUser();
     $path = Storage::path('quickbooks-electrician.csv');
