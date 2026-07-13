@@ -39,12 +39,12 @@
             <article class="rounded-lg border border-zinc-200 bg-white p-4">
                 <div class="text-xs font-semibold uppercase text-zinc-500">Supplies and materials</div>
                 <div class="mt-2 text-3xl font-semibold">{{ $money($cards['supplies']['amount']) }}</div>
-                <div class="mt-2 text-sm text-zinc-600">Mapped P&amp;L accounts · {{ $report['range']['label'] }}</div>
+                <div class="mt-2 text-sm text-zinc-600">{{ $money($cards['supplies']['prior_amount']) }} in the prior-year window</div>
             </article>
             <article class="rounded-lg border border-zinc-200 bg-white p-4">
                 <div class="text-xs font-semibold uppercase text-zinc-500">Contract labor</div>
                 <div class="mt-2 text-3xl font-semibold">{{ $money($cards['contract_labor']['amount']) }}</div>
-                <div class="mt-2 text-sm text-zinc-600">{{ $percent($cards['contract_labor']['percent']) }} of income</div>
+                <div class="mt-2 text-sm text-zinc-600">{{ $percent($cards['contract_labor']['percent']) }} of income · {{ $money($cards['contract_labor']['prior_amount']) }} prior year</div>
             </article>
             <article class="rounded-lg border border-zinc-200 bg-white p-4">
                 <div class="text-xs font-semibold uppercase text-zinc-500">Work billed</div>
@@ -57,10 +57,10 @@
             <article class="rounded-lg border border-zinc-200 bg-white p-5">
                 <h2 class="text-lg font-semibold">Labor</h2>
                 <dl class="mt-4 grid grid-cols-2 gap-4">
-                    <div><dt class="text-xs uppercase text-zinc-500">Employees, with owner</dt><dd class="mt-1 text-xl font-semibold">{{ $money($cards['employee_labor']['including_owner']) }}</dd><dd class="text-xs text-zinc-500">{{ $percent($cards['employee_labor']['including_owner_percent']) }} of income</dd></div>
-                    <div><dt class="text-xs uppercase text-zinc-500">Employees, without owner</dt><dd class="mt-1 text-xl font-semibold">{{ $money($cards['employee_labor']['excluding_owner']) }}</dd><dd class="text-xs text-zinc-500">{{ $cards['employee_labor']['separable'] ? $percent($cards['employee_labor']['excluding_owner_percent']).' of income' : 'Owner compensation is not separable yet' }}</dd></div>
+                    <div><dt class="text-xs uppercase text-zinc-500">Employees, with owner</dt><dd class="mt-1 text-xl font-semibold">{{ $money($cards['employee_labor']['including_owner']) }}</dd><dd class="text-xs text-zinc-500">{{ $percent($cards['employee_labor']['including_owner_percent']) }} of income · {{ $money($cards['employee_labor']['prior_including_owner']) }} prior year</dd></div>
+                    <div><dt class="text-xs uppercase text-zinc-500">Employees, without owner</dt><dd class="mt-1 text-xl font-semibold">{{ $money($cards['employee_labor']['excluding_owner']) }}</dd><dd class="text-xs text-zinc-500">{{ $cards['employee_labor']['separable'] ? $percent($cards['employee_labor']['excluding_owner_percent']).' of income · '.$money($cards['employee_labor']['prior_excluding_owner']).' prior year' : 'Owner compensation is not separable yet' }}</dd></div>
                     <div><dt class="text-xs uppercase text-zinc-500">Owner compensation</dt><dd class="mt-1 text-xl font-semibold">{{ $money($cards['employee_labor']['owner_compensation']) }}</dd></div>
-                    <div><dt class="text-xs uppercase text-zinc-500">Combined labor</dt><dd class="mt-1 text-xl font-semibold">{{ $money($cards['combined_labor']['amount']) }}</dd><dd class="text-xs text-zinc-500">{{ $percent($cards['combined_labor']['percent']) }} of income</dd></div>
+                    <div><dt class="text-xs uppercase text-zinc-500">Combined labor</dt><dd class="mt-1 text-xl font-semibold">{{ $money($cards['combined_labor']['amount']) }}</dd><dd class="text-xs text-zinc-500">{{ $percent($cards['combined_labor']['percent']) }} of income · {{ $money($cards['combined_labor']['prior_amount']) }} prior year</dd></div>
                 </dl>
             </article>
             <article class="rounded-lg border border-zinc-200 bg-white p-5">

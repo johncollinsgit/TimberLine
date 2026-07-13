@@ -93,7 +93,12 @@ test('owner reporting uses reviewed pnl mappings and keeps finance away from tea
         'range_key' => '1m:prior_year',
         'period_start' => $range['starts_at']->subYearNoOverflow(),
         'period_end' => $range['ends_at']->subYearNoOverflow(),
-        'metrics' => ['total_income' => 50000, 'account_lines' => []],
+        'metrics' => ['total_income' => 50000, 'account_lines' => [
+            ['label' => 'Job Supplies', 'amount' => 6000],
+            ['label' => 'Wages', 'amount' => 15000],
+            ['label' => 'Nathan Owner Pay', 'amount' => 4000],
+            ['label' => 'Contract Labor', 'amount' => 10000],
+        ]],
         'observed_at' => now(),
     ]);
     $customer = MarketingProfile::query()->create(['tenant_id' => $tenant->id, 'first_name' => 'Largest', 'last_name' => 'Customer']);
@@ -109,8 +114,12 @@ test('owner reporting uses reviewed pnl mappings and keeps finance away from tea
     expect(data_get($report, 'cards.supplies.amount'))->toBe(12000.0)
         ->and(data_get($report, 'cards.employee_labor.including_owner'))->toBe(30000.0)
         ->and(data_get($report, 'cards.employee_labor.excluding_owner'))->toBe(22000.0)
+        ->and(data_get($report, 'cards.employee_labor.prior_including_owner'))->toBe(15000.0)
+        ->and(data_get($report, 'cards.employee_labor.prior_excluding_owner'))->toBe(11000.0)
         ->and(data_get($report, 'cards.contract_labor.percent'))->toBe(20.0)
+        ->and(data_get($report, 'cards.contract_labor.prior_amount'))->toBe(10000.0)
         ->and(data_get($report, 'cards.combined_labor.percent'))->toBe(50.0)
+        ->and(data_get($report, 'cards.combined_labor.prior_amount'))->toBe(25000.0)
         ->and(data_get($report, 'cards.unpaid_invoices.overdue_amount'))->toBe(900.0)
         ->and(data_get($report, 'cards.jobs_completed.count'))->toBe(1)
         ->and(data_get($report, 'upcoming_jobs.0.title'))->toBe('Next service call');
