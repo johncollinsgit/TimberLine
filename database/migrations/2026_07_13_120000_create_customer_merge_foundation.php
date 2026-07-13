@@ -10,6 +10,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $this->recoverEmptyPartialFoundation();
+
         Schema::create('customer_merge_operations', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
@@ -39,7 +41,7 @@ return new class extends Migration
 
         Schema::create('customer_merge_operation_members', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('customer_merge_operation_id')->constrained('customer_merge_operations')->cascadeOnDelete();
+            $table->foreignId('customer_merge_operation_id');
             $table->unsignedBigInteger('marketing_profile_id')->index();
             $table->string('shopify_customer_gid', 190)->nullable()->index();
             $table->string('role', 40)->default('donor');
@@ -51,6 +53,10 @@ return new class extends Migration
                 ['customer_merge_operation_id', 'marketing_profile_id'],
                 'customer_merge_member_operation_profile_unique'
             );
+            $table->foreign('customer_merge_operation_id', 'customer_merge_member_operation_fk')
+                ->references('id')
+                ->on('customer_merge_operations')
+                ->cascadeOnDelete();
         });
 
         Schema::table('marketing_profiles', function (Blueprint $table): void {
@@ -102,5 +108,30 @@ return new class extends Migration
     private function normalizeName(string $value): string
     {
         return trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(Str::ascii($value))) ?? '');
+    }
+
+    private function recoverEmptyPartialFoundation(): void
+    {
+        if (Schema::hasColumn('marketing_profiles', 'normalized_first_name')) {
+            return;
+        }
+
+        $partialTables = array_values(array_filter([
+            'customer_merge_operation_members',
+            'customer_merge_operations',
+        ], static fn (string $table): bool => Schema::hasTable($table)));
+
+        if ($partialTables === []) {
+            return;
+        }
+
+        foreach ($partialTables as $table) {
+            if (DB::table($table)->exists()) {
+                throw new RuntimeException("Refusing to remove non-empty partial customer merge table [{$table}].");
+            }
+        }
+
+        Schema::dropIfExists('customer_merge_operation_members');
+        Schema::dropIfExists('customer_merge_operations');
     }
 };
