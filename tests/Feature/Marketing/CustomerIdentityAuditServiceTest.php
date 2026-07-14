@@ -156,3 +156,19 @@ test('audit bulk loads related facts instead of issuing queries per duplicate pr
         ->and($payload['results'][0]['profile_ids'])->toHaveCount(60)
         ->and($queryCount)->toBeLessThan(400);
 });
+
+test('tenant-wide audit excludes ambiguous name-only clusters while focused lookup can inspect them', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    MarketingProfile::factory()->count(2)->sequence(
+        ['first_name' => 'Alex', 'last_name' => 'Smith', 'email' => 'alex.one@example.com', 'normalized_email' => 'alex.one@example.com'],
+        ['first_name' => 'Alex', 'last_name' => 'Smith', 'email' => 'alex.two@example.com', 'normalized_email' => 'alex.two@example.com'],
+    )->create(['tenant_id' => $tenant->id]);
+
+    $broad = app(CustomerIdentityAuditService::class)->audit($tenant->id, $tenant->slug, 'retail');
+    $focused = app(CustomerIdentityAuditService::class)->audit($tenant->id, $tenant->slug, 'retail', 'Alex Smith');
+
+    expect($broad['clusters'])->toBe(0)
+        ->and($focused['clusters'])->toBe(1)
+        ->and($focused['results'][0]['identities'])->toContain('name:alex smith')
+        ->and($focused['results'][0]['status'])->toBe('needs_review');
+});

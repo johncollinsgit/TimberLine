@@ -47,7 +47,7 @@ class CustomerIdentityAuditService
             })->values();
         }
 
-        $clusterDefinitions = collect($this->connectedDuplicateClusters($profiles));
+        $clusterDefinitions = collect($this->connectedDuplicateClusters($profiles, $filter !== ''));
         $members = $this->loadFullProfiles($clusterDefinitions->pluck('profile_ids')->flatten()->map('intval')->unique()->values()->all());
         $factsByProfile = $this->profileFactsForProfiles($members, $tenantId, $storeKey)->keyBy('id');
         $clusters = $clusterDefinitions
@@ -85,7 +85,7 @@ class CustomerIdentityAuditService
     }
 
     /** @return array<int,array{identities:array<int,string>,profile_ids:array<int,int>}> */
-    private function connectedDuplicateClusters(Collection $profiles): array
+    private function connectedDuplicateClusters(Collection $profiles, bool $includeNameOnlyMatches): array
     {
         $identityMembers = [];
         foreach ($profiles as $profile) {
@@ -99,7 +99,7 @@ class CustomerIdentityAuditService
             if ($phone !== '') {
                 $identityMembers['phone:'.$phone][] = (int) $profile->id;
             }
-            if ($firstName !== '' && $lastName !== '') {
+            if ($includeNameOnlyMatches && $firstName !== '' && $lastName !== '') {
                 $identityMembers['name:'.$firstName.' '.$lastName][] = (int) $profile->id;
             }
         }
