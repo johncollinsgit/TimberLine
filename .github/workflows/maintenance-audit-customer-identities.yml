@@ -74,7 +74,8 @@ jobs:
               ;;
           esac
           audit_file="$RUNNER_TEMP/customer-identity-audit.json"
-          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan marketing:audit-customer-identities --tenant=modern-forestry --store=retail --json$audit_query" \
             > "$audit_file"
           jq -e . "$audit_file" > /dev/null
