@@ -47,9 +47,12 @@ class CustomerIdentityAuditService
             })->values();
         }
 
-        $clusterDefinitions = collect($this->connectedDuplicateClusters($profiles, $filter !== ''));
+        $focused = $filter !== '';
+        $clusterDefinitions = collect($this->connectedDuplicateClusters($profiles, $focused));
+        unset($profiles);
         $members = $this->loadFullProfiles($clusterDefinitions->pluck('profile_ids')->flatten()->map('intval')->unique()->values()->all());
-        $factsByProfile = $this->profileFactsForProfiles($members, $tenantId, $storeKey)->keyBy('id');
+        $factsByProfile = $this->profileFactsForProfiles($members, $tenantId, $storeKey, $focused)->keyBy('id');
+        unset($members);
         $clusters = $clusterDefinitions
             ->map(function (array $cluster) use ($factsByProfile): array {
                 $facts = collect($cluster['profile_ids'])->map(fn (int $profileId): array => $factsByProfile->get($profileId));
@@ -69,6 +72,7 @@ class CustomerIdentityAuditService
             })
             ->sortBy(fn (array $cluster): int => (int) ($cluster['recommended_survivor_profile_id'] ?? $cluster['profile_ids'][0] ?? 0))
             ->values();
+        unset($clusterDefinitions, $factsByProfile);
 
         return [
             'mode' => 'preview',
@@ -179,7 +183,7 @@ class CustomerIdentityAuditService
             ->values();
     }
 
-    private function profileFactsForProfiles(Collection $profiles, int $tenantId, string $storeKey): Collection
+    private function profileFactsForProfiles(Collection $profiles, int $tenantId, string $storeKey, bool $includeDetailedSources): Collection
     {
         $profileIds = $profiles->pluck('id')->map('intval')->unique()->values();
         if ($profileIds->isEmpty()) {
@@ -193,7 +197,7 @@ class CustomerIdentityAuditService
         $birthdays = collect();
         $openMergeOperations = collect();
 
-        $profileIds->chunk(5000)->each(function (Collection $chunk) use ($balances, $transactionStats, $externalProfiles, $links, $birthdays, $openMergeOperations): void {
+        $profileIds->chunk(5000)->each(function (Collection $chunk) use ($balances, $transactionStats, $externalProfiles, $links, $birthdays, $openMergeOperations, $includeDetailedSources): void {
             DB::table('candle_cash_balances')->whereIn('marketing_profile_id', $chunk->all())
                 ->get(['marketing_profile_id', 'balance'])
                 ->each(fn (object $row) => $balances->put((int) $row->marketing_profile_id, (float) $row->balance));
@@ -208,7 +212,11 @@ class CustomerIdentityAuditService
                 ]));
 
             if (Schema::hasTable('customer_external_profiles')) {
-                DB::table('customer_external_profiles')->whereIn('marketing_profile_id', $chunk->all())->get()
+                $externalQuery = DB::table('customer_external_profiles')->whereIn('marketing_profile_id', $chunk->all());
+                if (! $includeDetailedSources) {
+                    $externalQuery->where('provider', 'shopify');
+                }
+                $externalQuery->get()
                     ->each(fn (object $row) => $externalProfiles->push([
                         'marketing_profile_id' => (int) $row->marketing_profile_id,
                         'id' => (int) $row->id,
@@ -224,7 +232,11 @@ class CustomerIdentityAuditService
                     ]));
             }
             if (Schema::hasTable('marketing_profile_links')) {
-                DB::table('marketing_profile_links')->whereIn('marketing_profile_id', $chunk->all())->get()
+                $linkQuery = DB::table('marketing_profile_links')->whereIn('marketing_profile_id', $chunk->all());
+                if (! $includeDetailedSources) {
+                    $linkQuery->whereIn('source_type', ['shopify_customer', 'growave_customer']);
+                }
+                $linkQuery->get()
                     ->each(fn (object $row) => $links->push([
                         'marketing_profile_id' => (int) $row->marketing_profile_id,
                         'id' => (int) $row->id,
