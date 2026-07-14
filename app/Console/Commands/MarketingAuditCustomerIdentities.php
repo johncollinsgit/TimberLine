@@ -13,6 +13,7 @@ class MarketingAuditCustomerIdentities extends Command
         {--tenant=modern-forestry : Tenant id or slug}
         {--store=retail : Shopify store key used for identity evidence}
         {--query= : Optional customer name or email filter}
+        {--json-lines : Emit one machine-readable JSON record per line}
         {--json : Emit machine-readable JSON}';
 
     protected $description = 'Preview duplicate customer identities and stranded Candle Cash without changing data.';
@@ -36,7 +37,16 @@ class MarketingAuditCustomerIdentities extends Command
                 ? $candidates->search((int) $tenant->id, (string) $this->option('query'), trim((string) $this->option('store')) ?: 'retail', 50)
                 : [];
 
-        if ($this->option('json')) {
+        if ($this->option('json-lines')) {
+            $summary = collect($payload)->except(['results', 'search_candidates'])->all();
+            $this->jsonLine(['record_type' => 'summary', ...$summary]);
+            foreach ($payload['results'] as $cluster) {
+                $this->jsonLine(['record_type' => 'cluster', 'cluster' => $cluster]);
+            }
+            foreach ($payload['search_candidates'] as $candidate) {
+                $this->jsonLine(['record_type' => 'search_candidate', 'candidate' => $candidate]);
+            }
+        } elseif ($this->option('json')) {
             $this->line((string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         } else {
             $this->info("Preview only: {$payload['clusters']} duplicate identity clusters found.");
@@ -69,5 +79,11 @@ class MarketingAuditCustomerIdentities extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /** @param array<string,mixed> $record */
+    private function jsonLine(array $record): void
+    {
+        $this->line((string) json_encode($record, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 }

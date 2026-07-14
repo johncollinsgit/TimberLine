@@ -200,3 +200,22 @@ test('tenant-wide audit omits unrelated source row payloads while focused lookup
         ->and($broadProfile['owned_record_counts']['marketing_profile_links.marketing_profile_id'])->toBe(1)
         ->and($focusedProfile['source_links'][0]['source_type'])->toBe('yotpo_contact');
 });
+
+test('audit command can stream summary and cluster records as json lines', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    MarketingProfile::factory()->count(2)->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Stream',
+        'last_name' => 'Customer',
+        'email' => 'stream@example.com',
+        'normalized_email' => 'stream@example.com',
+    ]);
+
+    $this->artisan('marketing:audit-customer-identities', [
+        '--tenant' => $tenant->slug,
+        '--store' => 'retail',
+        '--json-lines' => true,
+    ])->expectsOutputToContain('"record_type":"summary"')
+        ->expectsOutputToContain('"record_type":"cluster"')
+        ->assertSuccessful();
+});
