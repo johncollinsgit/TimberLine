@@ -172,3 +172,31 @@ test('tenant-wide audit excludes ambiguous name-only clusters while focused look
         ->and($focused['results'][0]['identities'])->toContain('name:alex smith')
         ->and($focused['results'][0]['status'])->toBe('needs_review');
 });
+
+test('tenant-wide audit omits unrelated source row payloads while focused lookup retains them', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    $profiles = MarketingProfile::factory()->count(2)->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Taylor',
+        'last_name' => 'Pine',
+        'email' => 'taylor@example.com',
+        'normalized_email' => 'taylor@example.com',
+    ]);
+    DB::table('marketing_profile_links')->insert([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profiles->first()->id,
+        'source_type' => 'yotpo_contact',
+        'source_id' => 'yotpo-email:taylor@example.com',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $broad = app(CustomerIdentityAuditService::class)->audit($tenant->id, $tenant->slug, 'retail');
+    $focused = app(CustomerIdentityAuditService::class)->audit($tenant->id, $tenant->slug, 'retail', 'taylor@example.com');
+    $broadProfile = collect($broad['results'][0]['profiles'])->firstWhere('id', $profiles->first()->id);
+    $focusedProfile = collect($focused['results'][0]['profiles'])->firstWhere('id', $profiles->first()->id);
+
+    expect($broadProfile['source_links'])->toBe([])
+        ->and($broadProfile['owned_record_counts']['marketing_profile_links.marketing_profile_id'])->toBe(1)
+        ->and($focusedProfile['source_links'][0]['source_type'])->toBe('yotpo_contact');
+});
