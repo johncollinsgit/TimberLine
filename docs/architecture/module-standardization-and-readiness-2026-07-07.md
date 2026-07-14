@@ -113,6 +113,7 @@ The entry is not ready until its provider returns supported primitives, every re
 ## Field Service Contract Addendum (2026-07-13)
 
 - `field_service` is the canonical Work Branch for field-service tenants. When it is enabled, `work_core` must not appear as a second product or navigation destination; old URLs remain aliases only.
+- `field_service` mobile contract v4 / Work 2.0 is production-pilot ready only for the Collins `trades` profile. Rollout is controlled by entitlement metadata `experience_version=2`; professional, retail-production, and generic profiles remain on their established surfaces until their own renderers pass role, tenancy, device, and workflow acceptance.
 - Mobile contract v3 owns Calendar/List, unscheduled work, relationship-scoped job lists, job detail, participants, tasks, comments/mentions, photos, and activity.
 - Operational lifecycle is derived as Quote, Active, Needs details, Complete, or History. Source integrations do not overwrite manual status, assignments, comments, or photos.
 - Team-member access requires an explicit job relationship. Owner/admin financial sections are separate server-authorized payloads and cannot be unlocked by client presentation state.

@@ -3,6 +3,7 @@
 namespace App\Services\FieldService;
 
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceTask;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,6 +26,53 @@ class FieldServiceAccessService
     public function canManageJobs(User $user, Tenant|int $tenant): bool
     {
         return $this->canViewAllJobs($user, $tenant);
+    }
+
+    public function canUpdateProgress(User $user, Tenant $tenant, FieldServiceJob $job): bool
+    {
+        if ($this->canManageJobs($user, $tenant)) {
+            return true;
+        }
+
+        if ((int) $job->tenant_id !== (int) $tenant->id) {
+            return false;
+        }
+
+        return (int) $job->assigned_user_id === (int) $user->id
+            || $job->participants()->whereKey((int) $user->id)->exists();
+    }
+
+    public function canCreateTask(User $user, Tenant $tenant, FieldServiceJob $job): bool
+    {
+        return $this->canManageJobs($user, $tenant) || $this->canUpdateProgress($user, $tenant, $job);
+    }
+
+    public function canUpdateTask(User $user, Tenant $tenant, FieldServiceJob $job, FieldServiceTask $task): bool
+    {
+        if ((int) $task->tenant_id !== (int) $tenant->id || (int) $task->field_service_job_id !== (int) $job->id) {
+            return false;
+        }
+        if ($this->canManageJobs($user, $tenant)) {
+            return true;
+        }
+
+        return $this->canUpdateProgress($user, $tenant, $job)
+            && ($task->assigned_user_id === null || (int) $task->assigned_user_id === (int) $user->id);
+    }
+
+    /** @return array<string,bool> */
+    public function capabilities(User $user, Tenant $tenant): array
+    {
+        $manage = $this->canManageJobs($user, $tenant);
+
+        return [
+            'view_all_jobs' => $this->canViewAllJobs($user, $tenant),
+            'manage_jobs' => $manage,
+            'create_jobs' => $manage,
+            'manage_team' => $manage,
+            'manage_any_task' => $manage,
+            'update_participating_job_progress' => true,
+        ];
     }
 
     public function scopeVisibleJobs(Builder $query, User $user, Tenant|int $tenant): Builder

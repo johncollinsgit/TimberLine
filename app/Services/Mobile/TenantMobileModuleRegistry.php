@@ -133,7 +133,7 @@ class TenantMobileModuleRegistry
             ? $jobQuery
                 ->withCount(['tasks', 'materials', 'assets'])
                 ->where(function ($query): void {
-                    $query->whereIn('operational_status', ['active', 'needs_details', 'blocked'])
+                    $query->whereIn('operational_status', ['active', 'scheduled', 'needs_details', 'blocked'])
                         ->orWhere(function ($legacy): void {
                             $legacy->whereNull('operational_status')->whereIn('status', ['open', 'scheduled', 'in_progress', 'blocked']);
                         });

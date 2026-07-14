@@ -39,6 +39,17 @@
 
 ## Everbranch Mobile Platform (2026-07-10)
 
+### Work 2.0 Collins pilot (2026-07-14)
+
+- Field Service contract v4 upgrades the existing jobs, participants, tasks, notes, assets, and QuickBooks lifecycle rather than introducing a parallel WorkOrder or universal-task system.
+- Work profiles are tenant-derived: `trades`, `professional`, `retail_production`, and `generic`. Only entitled trades tenants with `field_service.metadata.experience_version=2` receive the complete Work 2.0 renderer; Collins is the first pilot and all other tenants retain their current surfaces.
+- Collins Home is role-aware My Day. Workers receive participating jobs, due tasks, upcoming work, and unread updates. Managers receive team schedule plus blocked/unassigned/missing-detail queues. Owners/admins receive those operational views plus guarded reporting and Estimator destinations.
+- A job is ready for field only when it has a schedule, service address, work description, customer phone/email, and an assigned lead or participant. Status transitions are server-authorized; blocking requires a reason, and completion/start/cancel timestamps record actual operational state. Manual status remains authoritative over QuickBooks synchronization.
+- Job detail is organized as Overview, Tasks, Updates, and Files. Job photos are distinct from documents. The iOS picker resizes and sequentially uploads up to 100 user-selected iCloud/Shared Album photos as private Everbranch copies.
+- Everbranch push uses `EverbranchMobilePushDevice` and APNs bundle `com.everbranch.app` with dedicated `EVERBRANCH_APNS_*` credentials. Never use Modern Forestry APNs keys, device records, copy, or branding. Staff SMS remains disabled until sender verification, employee phone verification, explicit tenant-scoped operational consent, and a Collins smoke test all pass.
+- Hourly QuickBooks sync and weekly reconciliation remain read-only and per-connection opt-in. A successful sync must rerun lifecycle reconciliation and invalidate Work caches before clients refresh.
+- Full tests should run through `php -d memory_limit=512M ./vendor/bin/pest`; `phpunit.xml` also fixes the suite memory allowance at 512 MB because repeated in-memory schema rebuilds exceed PHP's 128 MB default.
+
 - Contract v2 / app 1.1.0 replaces generic module summaries with operational Branches: Messaging, Customers, tenant-aware Work, Reporting, typed Search, interactive Account, and authorized landlord triage.
 - `work_core` is included in every plan and displayed as Work Branch. Laravel resolves orders, jobs, or client projects; the phone cannot choose a vertical or spoof a work kind.
 - Contract v2 returns `branches`; `modules` and `/modules/...` remain deprecated aliases for one app release. User-facing copy says Branch while internal `module_key` values remain stable.

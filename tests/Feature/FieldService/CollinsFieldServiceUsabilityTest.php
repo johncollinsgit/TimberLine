@@ -3,12 +3,14 @@
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServicePriceBookItem;
+use App\Models\FieldServiceTask;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantMemberPreference;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Services\FieldService\FieldServiceJobLifecycleService;
+use App\Services\FieldService\FieldServiceJobReadinessService;
 use Laravel\Sanctum\Sanctum;
 
 function usabilityWorkspace(): array
@@ -142,4 +144,76 @@ test('field service mobile fails closed when the branch is disabled', function (
 
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service')->assertNotFound();
+});
+
+test('work 2 readiness and field transitions preserve manager and participant boundaries', function (): void {
+    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id, 'assigned_user_id' => $member->id, 'title' => 'Ready panel change',
+        'status' => 'open', 'operational_status' => 'scheduled', 'status_source' => 'system',
+        'customer_name' => 'Pat Customer', 'customer_phone' => '555-1010', 'description' => 'Replace the main panel.',
+        'service_address_line_1' => '100 Main Street', 'scheduled_for' => now()->addDay(),
+    ]);
+    expect(app(FieldServiceJobReadinessService::class)->forJob($job)['ready'])->toBeTrue();
+
+    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'start'])->assertForbidden();
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'block'])->assertUnprocessable();
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'start'])
+        ->assertOk()->assertJsonPath('status', 'active');
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'block', 'reason' => 'Waiting on utility disconnect'])
+        ->assertOk()->assertJsonPath('status', 'blocked');
+    expect($job->fresh()->blocked_reason)->toBe('Waiting on utility disconnect');
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'cancel'])->assertOk()->assertJsonPath('status', 'canceled');
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'reopen'])->assertOk()->assertJsonPath('status', 'scheduled');
+});
+
+test('work 2 my day and task APIs are role aware and tenant scoped', function (): void {
+    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id, 'assigned_user_id' => $member->id, 'title' => 'Today service call',
+        'status' => 'open', 'operational_status' => 'scheduled', 'customer_phone' => '555-2020',
+        'description' => 'Repair a failed receptacle.', 'service_address_line_1' => '20 Oak Street', 'scheduled_for' => now()->addHour(),
+    ]);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/my-day')
+        ->assertOk()->assertJsonPath('contract_version', 4)->assertJsonPath('today_jobs.0.id', $job->id)
+        ->assertJsonPath('viewer.capabilities.manage_jobs', false);
+    $taskId = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks', [
+        'title' => 'Verify voltage', 'assigned_user_id' => $member->id, 'priority' => 'high',
+    ])->assertCreated()->json('task_id');
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks/'.$taskId, ['status' => 'done'])->assertOk();
+    expect(FieldServiceTask::query()->find($taskId)?->completed_by_user_id)->toBe($member->id);
+
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks', [
+        'title' => 'Assign someone else', 'assigned_user_id' => $other->id,
+    ])->assertForbidden();
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/my-day')
+        ->assertOk()->assertJsonPath('viewer.capabilities.manage_jobs', true)->assertJsonCount(2, 'owner_shortcuts');
+});
+
+test('work 2 notifications remain tenant and user scoped', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id, 'assigned_user_id' => $member->id, 'title' => 'Notification job',
+        'status' => 'open', 'operational_status' => 'active', 'status_source' => 'manual',
+    ]);
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/comments', ['body' => 'Meet at the south entrance.'])->assertCreated();
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $notificationId = $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/notifications')
+        ->assertOk()->assertJsonPath('unread', 1)->json('notifications.0.id');
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/notifications/'.$notificationId.'/read')->assertOk();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/notifications')->assertJsonPath('unread', 0);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/notifications/'.$notificationId.'/read')->assertNotFound();
 });

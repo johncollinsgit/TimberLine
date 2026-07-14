@@ -8,6 +8,15 @@
 - Tenant-facing payloads and copy use Branches. Bootstrap returns `branches`; `modules` and `/modules/{key}` remain compatibility aliases through the next app release.
 - Landlord access is independent from workspace membership and exposes audited triage only. Destructive tenant/configuration and live billing changes remain web-only.
 
+## Field Service Contract v4 / Work 2.0
+
+- Work 2.0 extends the existing Field Service aggregate. It does not add `WorkOrder`, `Appointment`, or a universal task table.
+- Bootstrap resolves one server-owned profile (`trades`, `professional`, `retail_production`, `generic`) from tenant blueprint metadata. Entitlement metadata controls `experience_version`; Collins is the first version-2 trades pilot.
+- Contract v4 adds profile labels/capabilities, viewer capabilities, readiness, typed destinations, My Day, guarded transitions, task ownership/completion, notification feed/unread state, and separate photo/document counts.
+- Mobile and web use the same readiness, access, lifecycle, and transition services. Clients display permissions but never grant them.
+- Everbranch APNs uses the `com.everbranch.app` device table and dedicated credentials. Modern Forestry push infrastructure is a separate product boundary.
+- Compatibility routes remain active. Other tenant profiles continue their existing Work surfaces until their renderer is deliberately upgraded and tested.
+
 ## Boundaries
 
 The tenant app is a separate repository at `../everbranch-mobile`, bundled with React/TypeScript and Capacitor for `com.everbranch.app` on iOS and Android. It does not wrap the production web app and does not replace or modify the Modern Forestry SwiftUI customer app. The initial lane is a US B2B pilot.

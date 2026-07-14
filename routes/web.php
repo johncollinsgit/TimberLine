@@ -628,6 +628,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/calendar', [FieldServiceController::class, 'calendar'])->name('calendar');
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
+            Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
             Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
             Route::post('/jobs/{job}/tasks', [FieldServiceController::class, 'storeTask'])->name('tasks.store');
             Route::post('/jobs/{job}/photos', [FieldServiceController::class, 'storePhoto'])->name('photos.store');

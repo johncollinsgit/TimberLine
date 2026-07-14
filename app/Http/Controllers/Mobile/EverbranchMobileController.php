@@ -14,6 +14,7 @@ use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
 use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Dashboard\UnifiedDashboardService;
+use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\MobileLandlordAccessService;
 use App\Services\Mobile\TenantMobileMessagingService;
@@ -56,7 +57,8 @@ class EverbranchMobileController extends Controller
         TenantExperienceProfileService $experienceProfiles,
         UnifiedDashboardService $dashboard,
         TenantMobileModuleRegistry $mobileModules,
-        TenantModuleCatalogService $catalog
+        TenantModuleCatalogService $catalog,
+        FieldServiceWorkProfileService $workProfiles,
     ): JsonResponse {
         $tenant = $this->tenant($request);
         $user = $this->user($request);
@@ -76,6 +78,7 @@ class EverbranchMobileController extends Controller
             ],
             'branding' => $this->brandingPayload($tenant, $role),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
+            'work_profile' => $workProfiles->forTenant($tenant),
             'dashboard' => $dashboard->forRequest($request, $user),
             'workspace_insights' => $this->workspaceInsights($tenant, count($manifest)),
             'branches' => $manifest,

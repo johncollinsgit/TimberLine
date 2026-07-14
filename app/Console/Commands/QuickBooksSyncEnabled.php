@@ -7,6 +7,7 @@ use App\Models\QuickBooksReportingSetting;
 use App\Models\QuickBooksSyncRun;
 use App\Models\Tenant;
 use App\Services\Dashboard\DashboardDateRange;
+use App\Services\FieldService\FieldServiceJobLifecycleService;
 use App\Services\FieldService\QuickBooksFieldServiceSyncService;
 use App\Services\FieldService\QuickBooksReportingSnapshotService;
 use App\Services\Integrations\ConnectionManager;
@@ -27,6 +28,7 @@ class QuickBooksSyncEnabled extends Command
         ConnectionManager $connections,
         QuickBooksFieldServiceSyncService $sync,
         QuickBooksReportingSnapshotService $snapshots,
+        FieldServiceJobLifecycleService $lifecycle,
         DashboardDateRange $dateRanges,
         IntegrationHealthEventRecorder $health,
     ): int {
@@ -62,7 +64,7 @@ class QuickBooksSyncEnabled extends Command
             }
 
             try {
-                $this->syncTenant($tenant, $connection, $connections, $sync, $snapshots, $dateRanges, $health);
+                $this->syncTenant($tenant, $connection, $connections, $sync, $snapshots, $lifecycle, $dateRanges, $health);
                 $this->line('tenant='.$tenant->slug.' status=completed');
             } catch (Throwable $exception) {
                 $failures++;
@@ -90,6 +92,7 @@ class QuickBooksSyncEnabled extends Command
         ConnectionManager $connections,
         QuickBooksFieldServiceSyncService $sync,
         QuickBooksReportingSnapshotService $snapshots,
+        FieldServiceJobLifecycleService $lifecycle,
         DashboardDateRange $dateRanges,
         IntegrationHealthEventRecorder $health,
     ): void {
@@ -111,6 +114,9 @@ class QuickBooksSyncEnabled extends Command
         try {
             $client = $connections->connector('quickbooks')->client($connection);
             $summary = $sync->sync($tenant, $client, $sync->defaultEntities(), false, $checkpointStart);
+            $summary['lifecycle'] = $lifecycle->reconcileTenant($tenant);
+            Cache::forget('field-service:index:'.$tenant->id);
+            Cache::forget('field-service:my-day:'.$tenant->id);
             foreach (['1m', 'ytd'] as $key) {
                 $range = $dateRanges->resolve($key, $checkpointEnd);
                 $snapshots->refresh($tenant, $connection, $client, $key, $range['starts_at'], $range['ends_at']);

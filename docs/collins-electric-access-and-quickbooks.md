@@ -37,6 +37,15 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 - `Field Service` is Collins' canonical Work experience. Do not restore separate visible `work_core` and `field_service` Branches. The old Work URLs remain compatibility aliases only.
 - Job comments, tasks, participants, mentions, and photos are tenant-owned. SMS notifications remain suppressed unless the employee has a tenant-specific verified phone and operational opt-in and the Collins sender passes its delivery smoke test.
 
+## Work 2.0 pilot guardrails
+
+- Collins is the first `trades` Work 2.0 pilot. Enable it only through `field_service` entitlement metadata `experience_version=2`; do not infer it from the Collins slug in application code.
+- The canonical job statuses are `quote`, `needs_details`, `scheduled`, `active`, `blocked`, `complete`, `canceled`, and `history`. A blocked transition requires a reason. Lead technicians and participants may progress their own jobs; cancellation/reopen, assignments, and job editing remain manager/admin actions.
+- Ready for field means schedule + service address + work description + customer phone/email + at least one lead/participant. Readiness is computed, never a second mutable status flag.
+- My Day is role-aware and tenant-scoped. Nathan, John, and Collins managers see team attention queues; members see only participating work. Financial payloads continue through the separate owner/admin financial gate.
+- Everbranch APNs is dedicated to `com.everbranch.app`. Never reuse Modern Forestry keys or push-device rows. Assignment, schedule, mention, comment, task, status, 24-hour, and 2-hour events may create in-app/push records; operational SMS stays fail-closed.
+- iCloud and Shared Album photos are user-selected through the system picker, resized on device, uploaded sequentially, and stored as authenticated team-visible Everbranch assets. Photos and documents have separate counts and must not render twice.
+
 ## QuickBooks handling
 
 - The integration is read-only and tenant-scoped, and uses encrypted tokens, reporting snapshots, sync summaries, and source snapshots. Hourly synchronization is available only after an owner explicitly enables it for that connection; all other tenants remain off by default.

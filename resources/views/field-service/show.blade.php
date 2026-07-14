@@ -1,133 +1,76 @@
 @php
     $tenantName = (string) ($tenant->name ?? 'Workspace');
     $team = collect($team ?? []);
-    $backHref = ($back ?? '') === 'calendar' ? route('field-service.calendar') : route('field-service.index');
-    $backLabel = ($back ?? '') === 'calendar' ? 'Back to calendar' : 'Back to jobs';
+    $backHref = ($back ?? '') === 'calendar' ? route('field-service.calendar') : route('field-service.index', ['view' => 'list']);
+    $status = $job->operational_status ?: 'needs_details';
+    $canProgress = (bool) data_get($capabilities ?? [], 'update_progress', false);
+    $canManage = (bool) data_get($capabilities ?? [], 'manage_jobs', false);
 @endphp
 
 <x-layouts::app.sidebar title="Field Service Job">
     <flux:main>
         <div class="fb-workflow-shell">
-            <header class="fb-workflow-header">
-                <div class="fb-eyebrow">{{ $tenantName }} Work</div>
-                <h1 class="fb-title-xl">{{ $job->title }}</h1>
-                <p class="fb-subtitle">{{ $job->customer_name ?: 'Customer not named' }} @if($job->customer_phone) · {{ $job->customer_phone }} @endif</p>
-                <div class="mt-4 flex flex-wrap gap-3">
-                    <a href="{{ $backHref }}" class="fb-btn fb-btn-secondary">{{ $backLabel }}</a>
-                    <a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-secondary">Open calendar</a>
+            <header class="border-b border-zinc-200 pb-5">
+                <a href="{{ $backHref }}" class="text-sm font-semibold text-emerald-800">← {{ ($back ?? '') === 'calendar' ? 'Back to calendar' : 'Field Service' }}</a>
+                <div class="mt-3 flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase text-zinc-500">
+                            <span>{{ $tenantName }}</span><span>·</span><span>{{ ucfirst(str_replace('_', ' ', $status)) }}</span><span>·</span><span>{{ ucfirst($job->priority ?: 'normal') }}</span>
+                        </div>
+                        <h1 class="mt-1 text-3xl font-semibold text-zinc-950">{{ $job->title }}</h1>
+                        <p class="mt-1 text-sm text-zinc-600">{{ $job->customer_name ?: 'Customer not named' }}</p>
+                    </div>
+                    @if($canProgress)
+                        <div class="flex flex-wrap gap-2">
+                            @if(in_array($status, ['scheduled', 'needs_details'], true))
+                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="start"><button class="fb-btn fb-btn-primary">Start</button></form>
+                            @elseif($status === 'active')
+                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}" class="flex gap-2"><input type="hidden" name="action" value="block">@csrf<input name="reason" required class="w-48 rounded-lg border border-zinc-300 px-3 text-sm" placeholder="Why is it blocked?"><button class="fb-btn fb-btn-secondary">Block</button></form>
+                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="complete"><button class="fb-btn fb-btn-primary">Complete</button></form>
+                            @elseif($status === 'blocked')
+                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="resume"><button class="fb-btn fb-btn-primary">Resume</button></form>
+                            @elseif(in_array($status, ['complete', 'canceled'], true) && $canManage)
+                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="reopen"><button class="fb-btn fb-btn-secondary">Reopen</button></form>
+                            @endif
+                        </div>
+                    @endif
                 </div>
-
-                @if (session('status'))
-                    <div class="fb-state fb-state-success mt-4">{{ session('status') }}</div>
-                @endif
             </header>
 
-            <div class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-                <section class="fb-panel">
-                    <div class="fb-panel-head">
-                        <div>
-                            <div class="fb-panel-title">Job details</div>
-                            <div class="fb-panel-copy">Address, access, assignment, and work description.</div>
-                        </div>
-                    </div>
-                    <div class="fb-panel-body space-y-4">
-                        @if($job->lock_box_code)
-                            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                                <div class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Lock box / gate code</div>
-                                <div class="mt-1 text-2xl font-bold text-amber-950">{{ $job->lock_box_code }}</div>
-                            </div>
-                        @endif
+            @if (session('status'))<div class="fb-state fb-state-success">{{ session('status') }}</div>@endif
+            @unless(data_get($readiness, 'ready', false))
+                <div class="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900"><strong>Not ready for field:</strong> {{ implode(', ', data_get($readiness, 'missing_labels', [])) }}</div>
+            @endunless
+            @if($job->blocked_reason)<div class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900"><strong>Blocked:</strong> {{ $job->blocked_reason }}</div>@endif
 
-                        <div class="grid gap-3 md:grid-cols-2">
-                            <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                                <div class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Address</div>
-                                <div class="mt-1 text-sm font-semibold text-zinc-950">{{ $job->service_address_line_1 ?: 'No address yet' }}</div>
-                                <div class="text-sm text-zinc-600">{{ trim(implode(' ', array_filter([$job->service_city, $job->service_state, $job->service_postal_code]))) }}</div>
-                            </div>
-                            <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                                <div class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Schedule</div>
-                                <div class="mt-1 text-sm font-semibold text-zinc-950">{{ optional($job->scheduled_for)->format('M j, g:ia') ?: 'Not scheduled' }}</div>
-                                <div class="text-sm text-zinc-600">{{ $job->assignedUser?->name ?? 'No one assigned' }}</div>
-                            </div>
+            <div class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,.8fr)]">
+                <main class="space-y-6">
+                    <section class="fb-panel">
+                        <div class="fb-panel-head"><div class="fb-panel-title">Overview</div></div>
+                        <div class="fb-panel-body grid gap-3 md:grid-cols-2">
+                            @if($job->lock_box_code)<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 md:col-span-2"><div class="text-xs font-semibold uppercase text-amber-700">Lock box / gate code</div><div class="mt-1 text-2xl font-bold text-amber-950">{{ $job->lock_box_code }}</div></div>@endif
+                            <div class="rounded-lg border border-zinc-200 p-3"><div class="text-xs font-semibold uppercase text-zinc-500">Site</div><div class="mt-1 font-semibold text-zinc-950">{{ $job->service_address_line_1 ?: 'Address needed' }}</div><div class="text-sm text-zinc-600">{{ trim(implode(' ', array_filter([$job->service_city, $job->service_state, $job->service_postal_code]))) }}</div></div>
+                            <div class="rounded-lg border border-zinc-200 p-3"><div class="text-xs font-semibold uppercase text-zinc-500">Schedule</div><div class="mt-1 font-semibold text-zinc-950">{{ optional($job->scheduled_for)->format('M j, g:ia') ?: 'Not scheduled' }}</div><div class="text-sm text-zinc-600">{{ $job->assignedUser?->name ?? 'No lead assigned' }}</div></div>
+                            <div class="rounded-lg border border-zinc-200 p-3 md:col-span-2"><div class="text-xs font-semibold uppercase text-zinc-500">Work</div><div class="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{{ $job->description ?: 'Description needed' }}</div></div>
                         </div>
+                    </section>
 
-                        @if($job->description)
-                            <div class="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700">{{ $job->description }}</div>
-                        @endif
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <form method="POST" action="{{ route('field-service.notes.store', ['job' => $job]) }}" class="rounded-xl border border-zinc-200 bg-white p-4">
-                                @csrf
-                                <label class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Add work update</label>
-                                <textarea name="body" required rows="3" class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="What changed on the job?"></textarea>
-                                <select name="status_update" class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
-                                    <option value="">No status change</option>
-                                    @foreach(['scheduled', 'in_progress', 'blocked', 'done'] as $status)
-                                        <option value="{{ $status }}">{{ $statusLabels[$status] ?? ucfirst(str_replace('_', ' ', $status)) }}</option>
-                                    @endforeach
-                                </select>
-                                <input name="photo_file_path" class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Optional photo/file URL">
-                                <button type="submit" class="fb-btn fb-btn-secondary mt-3 w-full justify-center">Save update</button>
-                            </form>
-
-                            <form method="POST" action="{{ route('field-service.tasks.store', ['job' => $job]) }}" class="rounded-xl border border-zinc-200 bg-white p-4">
-                                @csrf
-                                <label class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Assign task</label>
-                                <input name="title" required class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Task">
-                                <select name="assigned_user_id" class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
-                                    <option value="">No one yet</option>
-                                    @foreach($team as $member)
-                                        <option value="{{ $member->id }}">{{ $member->name ?: $member->email }}</option>
-                                    @endforeach
-                                </select>
-                                <input name="due_at" type="datetime-local" class="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
-                                <button type="submit" class="fb-btn fb-btn-secondary mt-3 w-full justify-center">Add task</button>
-                            </form>
+                    <section class="fb-panel">
+                        <div class="fb-panel-head"><div class="fb-panel-title">Updates</div></div>
+                        <div class="fb-panel-body space-y-3">
+                            <form method="POST" action="{{ route('field-service.notes.store', $job) }}">@csrf<textarea name="body" required rows="3" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Share an update or @mention a teammate"></textarea><button class="fb-btn fb-btn-primary mt-2">Post update</button></form>
+                            @forelse($job->notes->sortByDesc('noted_at') as $note)<article class="border-t border-zinc-200 pt-3"><div class="text-sm font-semibold text-zinc-950">{{ $note->createdBy?->name ?? 'Team update' }} <span class="font-normal text-zinc-500">{{ optional($note->noted_at)->diffForHumans() }}</span></div><div class="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{{ $note->body }}</div></article>@empty<p class="text-sm text-zinc-600">No updates yet.</p>@endforelse
                         </div>
-                    </div>
-                </section>
+                    </section>
+                </main>
 
-                <section class="fb-panel">
-                    <div class="fb-panel-head">
-                        <div>
-                            <div class="fb-panel-title">Activity</div>
-                            <div class="fb-panel-copy">Employee updates, photos, tasks, and materials.</div>
-                        </div>
-                    </div>
-                    <div class="fb-panel-body space-y-4">
-                        <div class="space-y-2">
-                            @forelse($job->notes->sortByDesc('noted_at') as $note)
-                                <div class="rounded-xl border border-zinc-200 bg-white p-3">
-                                    <div class="text-sm font-semibold text-zinc-950">{{ $note->createdBy?->name ?? 'Team update' }} @if($note->status_update) · {{ $statusLabels[$note->status_update] ?? $note->status_update }} @endif</div>
-                                    <div class="mt-1 text-sm text-zinc-700">{{ $note->body }}</div>
-                                    @foreach($note->photos as $photo)
-                                        <a href="{{ $photo->file_path }}" class="mt-2 block text-xs font-semibold text-emerald-700 underline">{{ $photo->caption ?: 'Photo/file link' }}</a>
-                                    @endforeach
-                                </div>
-                            @empty
-                                <p class="text-sm text-zinc-600">No updates yet.</p>
-                            @endforelse
-                        </div>
-
-                        <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                            <div class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Tasks</div>
-                            <div class="mt-2 space-y-2">
-                                @foreach($job->tasks as $task)
-                                    <div class="rounded-lg bg-white px-3 py-2 text-sm text-zinc-700">{{ $task->title }} @if($task->assignedUser) · {{ $task->assignedUser->name }} @endif</div>
-                                @endforeach
-                            </div>
-                        </div>
-
-                        <div class="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                            <div class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Materials</div>
-                            <div class="mt-2 space-y-2">
-                                @foreach($job->materials as $material)
-                                    <div class="rounded-lg bg-white px-3 py-2 text-sm text-zinc-700">{{ $material->name }} · {{ $material->quantity }} {{ $material->unit }}</div>
-                                @endforeach
-                            </div>
-                        </div>
-                    </div>
-                </section>
+                <aside class="space-y-6">
+                    <section class="fb-panel"><div class="fb-panel-head"><div class="fb-panel-title">Tasks</div></div><div class="fb-panel-body space-y-3">
+                        @if(data_get($capabilities, 'create_task'))<form method="POST" action="{{ route('field-service.tasks.store', $job) }}" class="space-y-2">@csrf<input name="title" required class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Add task"><div class="grid grid-cols-2 gap-2"><select name="assigned_user_id" class="rounded-lg border border-zinc-300 px-2 py-2 text-sm"><option value="">Unassigned</option>@foreach($team as $member)<option value="{{ $member->id }}">{{ $member->name ?: $member->email }}</option>@endforeach</select><input name="due_at" type="datetime-local" class="rounded-lg border border-zinc-300 px-2 py-2 text-sm"></div><button class="fb-btn fb-btn-secondary w-full justify-center">Add task</button></form>@endif
+                        @forelse($job->tasks->sortBy('sort_order') as $task)<div class="rounded-lg border border-zinc-200 p-3"><div class="font-semibold text-zinc-950">{{ $task->title }}</div><div class="mt-1 text-xs text-zinc-500">{{ $task->assignedUser?->name ?? 'Unassigned' }}@if($task->due_at) · {{ $task->due_at->format('M j') }}@endif</div></div>@empty<p class="text-sm text-zinc-600">No tasks yet.</p>@endforelse
+                    </div></section>
+                    <section class="fb-panel"><div class="fb-panel-head"><div class="fb-panel-title">Files</div></div><div class="fb-panel-body"><div class="grid grid-cols-3 gap-2">@foreach($job->photos as $photo)<a href="{{ $photo->file_path }}" class="aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50"><img src="{{ $photo->file_path }}" alt="{{ $photo->caption ?: 'Job photo' }}" class="h-full w-full object-cover"></a>@endforeach</div>@if($job->photos->isEmpty())<p class="text-sm text-zinc-600">No photos yet. Add them from the Everbranch app.</p>@endif</div></section>
+                </aside>
             </div>
         </div>
     </flux:main>

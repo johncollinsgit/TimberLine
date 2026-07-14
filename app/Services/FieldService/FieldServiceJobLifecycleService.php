@@ -10,10 +10,12 @@ use Illuminate\Support\Collection;
 
 class FieldServiceJobLifecycleService
 {
+    public function __construct(protected FieldServiceJobReadinessService $readiness) {}
+
     /** @return array<string,int> */
     public function reconcileTenant(Tenant $tenant, bool $dryRun = false): array
     {
-        $summary = ['active' => 0, 'needs_details' => 0, 'blocked' => 0, 'quote' => 0, 'complete' => 0, 'history' => 0, 'unchanged' => 0, 'updated' => 0];
+        $summary = ['active' => 0, 'scheduled' => 0, 'needs_details' => 0, 'blocked' => 0, 'quote' => 0, 'complete' => 0, 'canceled' => 0, 'history' => 0, 'unchanged' => 0, 'updated' => 0];
 
         FieldServiceJob::query()->forTenantId((int) $tenant->id)
             ->with('financialDocuments:id,tenant_id,field_service_job_id,document_type,status,transaction_date,total_amount,balance')
@@ -88,11 +90,10 @@ class FieldServiceJobLifecycleService
         $estimateTotal = (float) $estimates->whereIn('status', ['accepted', 'converted'])->sum('total_amount');
         $unfinished = $accepted && ($invoices->isEmpty() || $invoiceBalance > 0 || ($estimateTotal > 0 && $invoiceTotal + 0.01 < $estimateTotal));
         if ($unfinished) {
-            $missingDetails = blank($job->scheduled_for) || blank($job->assigned_user_id)
-                || blank($job->service_address_line_1);
+            $ready = $this->readiness->forJob($job)['ready'];
 
             return [
-                'status' => $missingDetails ? 'needs_details' : 'active',
+                'status' => ! $ready ? 'needs_details' : ($job->started_at ? 'active' : 'scheduled'),
                 'last_financial_activity_at' => $latestAt,
                 'reason' => $invoiceBalance > 0 ? 'unpaid_invoice' : ($invoices->isEmpty() ? 'accepted_not_invoiced' : 'not_fully_invoiced'),
             ];
@@ -111,7 +112,9 @@ class FieldServiceJobLifecycleService
             'done', 'complete' => 'complete',
             'quoted', 'quote' => 'quote',
             'blocked' => 'blocked',
-            'scheduled', 'open', 'in_progress', 'active' => 'active',
+            'scheduled' => 'scheduled',
+            'cancelled', 'canceled' => 'canceled',
+            'open', 'in_progress', 'active' => 'active',
             default => $status,
         };
 
@@ -119,6 +122,9 @@ class FieldServiceJobLifecycleService
             'operational_status' => $normalized,
             'status_source' => 'manual',
             'completed_at' => $normalized === 'complete' ? ($job->completed_at ?? now()) : null,
+            'canceled_at' => $normalized === 'canceled' ? ($job->canceled_at ?? now()) : null,
+            'started_at' => $normalized === 'active' ? ($job->started_at ?? now()) : $job->started_at,
+            'blocked_reason' => $normalized === 'blocked' ? $job->blocked_reason : null,
             'archived_at' => $normalized === 'history' ? ($job->archived_at ?? now()) : null,
         ])->save();
 
@@ -130,9 +136,13 @@ class FieldServiceJobLifecycleService
         return match (strtolower((string) $job->status)) {
             'done', 'complete', 'completed' => 'complete',
             'quoted', 'quote', 'estimate', 'estimated' => 'quote',
-            'cancelled', 'canceled', 'closed' => 'history',
+            'cancelled', 'canceled' => 'canceled',
+            'closed' => 'history',
             'blocked' => 'blocked',
-            default => 'active',
+            'scheduled' => 'scheduled',
+            default => $this->readiness->forJob($job)['ready']
+                ? ($job->started_at ? 'active' : 'scheduled')
+                : 'needs_details',
         };
     }
 }

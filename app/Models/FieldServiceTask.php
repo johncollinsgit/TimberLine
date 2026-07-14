@@ -14,9 +14,14 @@ class FieldServiceTask extends Model
         'tenant_id',
         'field_service_job_id',
         'assigned_user_id',
+        'created_by_user_id',
+        'completed_by_user_id',
         'title',
+        'description',
         'status',
+        'priority',
         'due_at',
+        'completed_at',
         'sort_order',
     ];
 
@@ -24,7 +29,10 @@ class FieldServiceTask extends Model
         'tenant_id' => 'integer',
         'field_service_job_id' => 'integer',
         'assigned_user_id' => 'integer',
+        'created_by_user_id' => 'integer',
+        'completed_by_user_id' => 'integer',
         'due_at' => 'datetime',
+        'completed_at' => 'datetime',
         'sort_order' => 'integer',
     ];
 
@@ -36,5 +44,15 @@ class FieldServiceTask extends Model
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function completedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completed_by_user_id');
     }
 }

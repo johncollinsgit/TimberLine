@@ -153,3 +153,8 @@ Schedule::command('quickbooks:sync-enabled', ['--full' => true])
     ->weeklyOn(0, '02:50')
     ->withoutOverlapping(240)
     ->runInBackground();
+
+Schedule::command('field-service:send-upcoming-reminders')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(20)
+    ->runInBackground();

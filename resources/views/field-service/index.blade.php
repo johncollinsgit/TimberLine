@@ -5,13 +5,13 @@
     $vehicles = collect($vehicles ?? []);
     $team = collect($team ?? []);
     $reminderSetting = $reminderSetting ?? null;
-    $openJobs = $jobs->whereNotIn('status', ['done'])->count();
+    $openJobs = $jobs->whereIn('operational_status', ['needs_details', 'scheduled', 'active', 'blocked'])->count();
     $scheduledJobs = $jobs->filter(fn ($job) => filled($job->scheduled_for))->count();
     $statusClass = function (?string $status): string {
         return match ($status) {
-            'done' => 'border-emerald-200 bg-emerald-50 text-emerald-800',
+            'done', 'complete' => 'border-emerald-200 bg-emerald-50 text-emerald-800',
             'scheduled' => 'border-sky-200 bg-sky-50 text-sky-800',
-            'in_progress' => 'border-indigo-200 bg-indigo-50 text-indigo-800',
+            'in_progress', 'active' => 'border-indigo-200 bg-indigo-50 text-indigo-800',
             'blocked' => 'border-rose-200 bg-rose-50 text-rose-800',
             'needed', 'open' => 'border-amber-200 bg-amber-50 text-amber-800',
             default => 'border-zinc-200 bg-zinc-50 text-zinc-700',
@@ -23,11 +23,11 @@
     <flux:main>
         <div class="fb-workflow-shell">
             <header class="fb-workflow-header">
-                <div class="fb-eyebrow">Field Service</div>
-                <h1 class="fb-title-xl">{{ $tenantName }} Work</h1>
-                <p class="fb-subtitle">Customers, service jobs, materials, tasks, photos, and work vans in one simple place.</p>
+                <div class="fb-eyebrow">{{ $tenantName }}</div>
+                <h1 class="text-3xl font-semibold text-zinc-950">Field Service</h1>
                 <div class="mt-4 flex flex-wrap gap-3">
-                    <a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-secondary">Open calendar</a>
+                    <a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-primary">Calendar</a>
+                    <a href="{{ route('field-service.index', ['view' => 'list']) }}" class="fb-btn fb-btn-secondary">List</a>
                     <a href="#reminders" class="fb-btn fb-btn-secondary">Reminder setup</a>
                 </div>
 
@@ -145,8 +145,8 @@
                                             @if($job->customer_phone) · {{ $job->customer_phone }} @elseif($job->customer_email) · {{ $job->customer_email }} @endif
                                         </p>
                                     </div>
-                                    <span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $statusClass((string) $job->status) }}">
-                                        {{ $statusLabels[$job->status] ?? ucfirst(str_replace('_', ' ', (string) $job->status)) }}
+                                    <span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $statusClass((string) $job->operational_status) }}">
+                                        {{ $statusLabels[$job->operational_status] ?? ucfirst(str_replace('_', ' ', (string) ($job->operational_status ?: 'needs_details'))) }}
                                     </span>
                                 </div>
 

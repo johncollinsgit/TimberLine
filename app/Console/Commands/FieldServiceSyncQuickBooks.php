@@ -4,10 +4,12 @@ namespace App\Console\Commands;
 
 use App\Models\IntegrationConnection;
 use App\Models\Tenant;
+use App\Services\FieldService\FieldServiceJobLifecycleService;
 use App\Services\FieldService\QuickBooksFieldServiceSyncService;
 use App\Services\Integrations\ConnectionManager;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class FieldServiceSyncQuickBooks extends Command
 {
@@ -23,6 +25,7 @@ class FieldServiceSyncQuickBooks extends Command
     public function handle(
         ConnectionManager $connections,
         QuickBooksFieldServiceSyncService $syncService,
+        FieldServiceJobLifecycleService $lifecycle,
         TenantModuleAccessResolver $moduleAccessResolver
     ): int {
         $tenant = $this->tenant();
@@ -60,6 +63,9 @@ class FieldServiceSyncQuickBooks extends Command
         );
 
         if (! (bool) $this->option('dry-run')) {
+            $lifecycle->reconcileTenant($tenant);
+            Cache::forget('field-service:index:'.$tenant->id);
+            Cache::forget('field-service:my-day:'.$tenant->id);
             $connection->forceFill(['last_synced_at' => now(), 'last_error_code' => null, 'last_error_message' => null, 'last_error_at' => null])->save();
         }
 

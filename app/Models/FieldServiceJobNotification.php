@@ -12,7 +12,7 @@ class FieldServiceJobNotification extends Model
 
     protected $fillable = [
         'tenant_id', 'field_service_job_id', 'field_service_job_note_id', 'user_id',
-        'channel', 'status', 'provider_message_id', 'failure_code', 'sent_at', 'read_at', 'metadata',
+        'channel', 'event_type', 'event_key', 'status', 'provider_message_id', 'failure_code', 'sent_at', 'read_at', 'metadata',
     ];
 
     protected $casts = [

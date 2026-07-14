@@ -162,6 +162,18 @@ return [
         'timeout' => (int) env('MODERN_FORESTRY_APNS_TIMEOUT', 10),
     ],
 
+    'everbranch_apns' => [
+        'enabled' => env('EVERBRANCH_APNS_ENABLED', false),
+        'team_id' => env('EVERBRANCH_APNS_TEAM_ID'),
+        'key_id' => env('EVERBRANCH_APNS_KEY_ID'),
+        'bundle_id' => env('EVERBRANCH_IOS_BUNDLE_ID', 'com.everbranch.app'),
+        'environment' => env('EVERBRANCH_APNS_ENVIRONMENT', 'production'),
+        'auth_key' => env('EVERBRANCH_APNS_AUTH_KEY'),
+        'auth_key_base64' => env('EVERBRANCH_APNS_AUTH_KEY_BASE64'),
+        'auth_key_path' => env('EVERBRANCH_APNS_AUTH_KEY_PATH'),
+        'timeout' => (int) env('EVERBRANCH_APNS_TIMEOUT', 10),
+    ],
+
     'modern_forestry' => [
         'support_alert_phone' => env('MODERN_FORESTRY_SUPPORT_ALERT_PHONE', '+18646165468'),
     ],

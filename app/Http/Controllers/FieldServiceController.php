@@ -13,6 +13,10 @@ use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FieldService\FieldServiceAccessService;
+use App\Services\FieldService\FieldServiceJobNotificationService;
+use App\Services\FieldService\FieldServiceJobReadinessService;
+use App\Services\FieldService\FieldServiceJobTransitionService;
+use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -25,12 +29,20 @@ class FieldServiceController extends Controller
     public function __construct(
         protected TenantModuleAccessResolver $moduleAccessResolver,
         protected FieldServiceAccessService $fieldServiceAccess,
+        protected FieldServiceJobReadinessService $readiness,
+        protected FieldServiceJobTransitionService $transitions,
+        protected FieldServiceJobNotificationService $notifications,
+        protected FieldServiceWorkProfileService $profiles,
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
+        $profile = $this->profiles->forTenant($tenant);
+        if ((int) ($profile['experience_version'] ?? 1) >= 2 && $request->query('view') !== 'list') {
+            return redirect()->route('field-service.calendar');
+        }
         $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
         $jobQuery = FieldServiceJob::query()
@@ -38,6 +50,7 @@ class FieldServiceController extends Controller
             ->with([
                 'customer',
                 'assignedUser',
+                'participants:id,name',
                 'tasks.assignedUser',
                 'materials',
                 'photos',
@@ -46,7 +59,9 @@ class FieldServiceController extends Controller
             ]);
         $this->fieldServiceAccess->scopeVisibleJobs($jobQuery, $request->user(), $tenant);
         $jobs = $jobQuery
-            ->latest('updated_at')
+            ->orderByRaw('CASE WHEN scheduled_for IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('scheduled_for')
+            ->latest('last_financial_activity_at')
             ->latest('id')
             ->limit(25)
             ->get();
@@ -81,6 +96,9 @@ class FieldServiceController extends Controller
             'team' => $team,
             'statusLabels' => $this->statusLabels(),
             'reminderSetting' => $reminderSetting,
+            'readiness' => $jobs->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
+            'profile' => $profile,
+            'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
         ]);
     }
 
@@ -97,10 +115,12 @@ class FieldServiceController extends Controller
             ->forTenantId((int) $tenant->id)
             ->with([
                 'assignedUser:id,name',
+                'participants:id,name',
                 'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
             ]);
         $this->fieldServiceAccess->scopeVisibleJobs($jobQuery, $request->user(), $tenant);
-        $jobs = $jobQuery
+        $scheduled = $jobQuery
+            ->clone()
             ->whereNotNull('scheduled_for')
             ->whereBetween('scheduled_for', [$start, $end])
             ->orderBy('scheduled_for')
@@ -108,10 +128,24 @@ class FieldServiceController extends Controller
             ->get()
             ->groupBy(fn (FieldServiceJob $job): string => $job->scheduled_for?->toDateString() ?? 'unscheduled');
 
+        $unscheduledQuery = FieldServiceJob::query()
+            ->forTenantId((int) $tenant->id)
+            ->with(['assignedUser:id,name', 'participants:id,name'])
+            ->whereNull('scheduled_for')
+            ->whereIn('operational_status', ['needs_details', 'scheduled', 'active', 'blocked']);
+        $this->fieldServiceAccess->scopeVisibleJobs($unscheduledQuery, $request->user(), $tenant);
+        $unscheduled = $unscheduledQuery->latest('last_financial_activity_at')->limit(30)->get();
+
+        $all = $scheduled->flatten()->concat($unscheduled);
+
         return view('field-service.calendar', [
             'tenant' => $tenant,
-            'jobsByDay' => $jobs,
+            'jobsByDay' => $scheduled,
+            'unscheduled' => $unscheduled,
             'statusLabels' => $this->statusLabels(),
+            'readiness' => $all->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
+            'profile' => $this->profiles->forTenant($tenant),
+            'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
         ]);
     }
 
@@ -125,6 +159,7 @@ class FieldServiceController extends Controller
         $job->load([
             'customer',
             'assignedUser',
+            'participants:id,name,email',
             'tasks.assignedUser',
             'materials',
             'photos.uploadedBy',
@@ -142,6 +177,12 @@ class FieldServiceController extends Controller
             'team' => $team,
             'statusLabels' => $this->statusLabels(),
             'back' => $request->query('back') === 'calendar' ? 'calendar' : 'index',
+            'readiness' => $this->readiness->forJob($job),
+            'profile' => $this->profiles->forTenant($tenant),
+            'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant) + [
+                'update_progress' => $this->fieldServiceAccess->canUpdateProgress($request->user(), $tenant, $job),
+                'create_task' => $this->fieldServiceAccess->canCreateTask($request->user(), $tenant, $job),
+            ],
         ]);
     }
 
@@ -165,7 +206,11 @@ class FieldServiceController extends Controller
             'service_postal_code' => ['nullable', 'string', 'max:40'],
             'service_country' => ['nullable', 'string', 'max:80'],
             'scheduled_for' => ['nullable', 'date'],
+            'scheduled_end_at' => ['nullable', 'date', 'after_or_equal:scheduled_for'],
+            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
             'assigned_user_id' => ['nullable', 'integer'],
+            'participant_ids' => ['nullable', 'array'],
+            'participant_ids.*' => ['integer'],
             'first_task' => ['nullable', 'string', 'max:255'],
             'first_material' => ['nullable', 'string', 'max:255'],
         ]);
@@ -193,7 +238,23 @@ class FieldServiceController extends Controller
                 'service_country' => $validated['service_country'] ?? null,
                 'description' => $validated['description'] ?? null,
                 'scheduled_for' => $validated['scheduled_for'] ?? null,
+                'scheduled_end_at' => $validated['scheduled_end_at'] ?? null,
+                'priority' => $validated['priority'] ?? 'normal',
+                'operational_status' => filled($validated['scheduled_for'] ?? null) ? 'scheduled' : 'needs_details',
+                'status_source' => 'manual',
             ]);
+
+            $participantIds = collect($validated['participant_ids'] ?? [])
+                ->push($assignedUserId)
+                ->filter()
+                ->map(fn ($id): int => (int) $id)
+                ->filter(fn (int $id): bool => $this->validatedTenantUserId($tenant, $id) !== null)
+                ->unique();
+            $job->participants()->sync($participantIds->mapWithKeys(fn (int $id): array => [$id => [
+                'tenant_id' => (int) $tenant->id,
+                'role' => $id === $assignedUserId ? 'lead' : 'participant',
+                'following' => true,
+            ]])->all());
 
             $firstTask = trim((string) ($validated['first_task'] ?? ''));
             if ($firstTask !== '') {
@@ -226,23 +287,46 @@ class FieldServiceController extends Controller
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        abort_unless($this->fieldServiceAccess->canCreateTask($request->user(), $tenant, $job), 403);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'assigned_user_id' => ['nullable', 'integer'],
             'due_at' => ['nullable', 'date'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
         ]);
 
         FieldServiceTask::query()->create([
             'tenant_id' => (int) $tenant->id,
             'field_service_job_id' => (int) $job->id,
             'assigned_user_id' => $this->validatedTenantUserId($tenant, $validated['assigned_user_id'] ?? null),
+            'created_by_user_id' => $request->user()?->id,
             'title' => (string) $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'priority' => $validated['priority'] ?? 'normal',
             'status' => 'open',
             'due_at' => $validated['due_at'] ?? null,
         ]);
 
         return back()->with('status', 'Task added.');
+    }
+
+    public function transitionJob(Request $request, FieldServiceJob $job): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        abort_unless($this->fieldServiceAccess->canUpdateProgress($request->user(), $tenant, $job), 403);
+
+        $validated = $request->validate([
+            'action' => ['required', 'string', 'in:start,block,resume,complete,cancel,reopen'],
+            'reason' => ['nullable', 'string', 'max:2000', 'required_if:action,block'],
+        ]);
+
+        $this->transitions->transition($tenant, $job, $request->user(), $validated['action'], $validated['reason'] ?? null);
+
+        return back()->with('status', 'Job status updated.');
     }
 
     public function storeNote(Request $request, FieldServiceJob $job): RedirectResponse
@@ -559,6 +643,11 @@ class FieldServiceController extends Controller
             'done' => 'Done',
             'needed' => 'Needed',
             'active' => 'Active',
+            'quote' => 'Quote',
+            'needs_details' => 'Needs details',
+            'complete' => 'Complete',
+            'canceled' => 'Canceled',
+            'history' => 'History',
         ];
     }
 }
