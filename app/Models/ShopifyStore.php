@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Concerns\HasTenantScope;
 
 class ShopifyStore extends Model
 {
@@ -16,6 +16,7 @@ class ShopifyStore extends Model
     protected $fillable = [
         'tenant_id',
         'store_key',
+        'store_role',
         'shop_domain',
         'access_token',
         'scopes',

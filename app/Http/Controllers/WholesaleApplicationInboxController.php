@@ -20,7 +20,8 @@ class WholesaleApplicationInboxController extends Controller
         $search = trim((string) $request->query('search', ''));
         $status = strtolower(trim((string) $request->query('status', 'pending')));
         $tenantSlug = $this->wholesaleTenantSlug();
-        $tenant = Tenant::query()->where('slug', $tenantSlug)->first();
+        $tenant = $this->wholesaleTenant();
+        $tenantAliases = $this->wholesaleApplicationTenantAliases();
 
         $applications = CustomerAccessRequest::query()
             ->with([
@@ -28,15 +29,18 @@ class WholesaleApplicationInboxController extends Controller
                 'user:id,name,email,is_active',
                 'tenant:id,name,slug',
             ])
-            ->where(function ($query) use ($tenant, $tenantSlug): void {
+            ->where(function ($query) use ($tenant, $tenantAliases): void {
                 if ($tenant instanceof Tenant) {
                     $query->where('tenant_id', (int) $tenant->id)
-                        ->orWhere('requested_tenant_slug', $tenantSlug);
+                        ->orWhere(function ($legacy) use ($tenantAliases): void {
+                            $legacy->whereNull('tenant_id')
+                                ->whereIn('requested_tenant_slug', $tenantAliases);
+                        });
 
                     return;
                 }
 
-                $query->where('requested_tenant_slug', $tenantSlug);
+                $query->whereNull('tenant_id')->whereIn('requested_tenant_slug', $tenantAliases);
             })
             ->when(in_array($status, ['pending', 'approved', 'rejected'], true), function ($query) use ($status): void {
                 $query->where('status', $status);
@@ -251,31 +255,37 @@ class WholesaleApplicationInboxController extends Controller
 
     protected function countByStatus(string $status, ?Tenant $tenant): int
     {
-        $tenantSlug = $this->wholesaleTenantSlug();
+        $tenantAliases = $this->wholesaleApplicationTenantAliases();
 
         return CustomerAccessRequest::query()
             ->where('status', $status)
-            ->where(function ($query) use ($tenant, $tenantSlug): void {
+            ->where(function ($query) use ($tenant, $tenantAliases): void {
                 if ($tenant instanceof Tenant) {
                     $query->where('tenant_id', (int) $tenant->id)
-                        ->orWhere('requested_tenant_slug', $tenantSlug);
+                        ->orWhere(function ($legacy) use ($tenantAliases): void {
+                            $legacy->whereNull('tenant_id')
+                                ->whereIn('requested_tenant_slug', $tenantAliases);
+                        });
 
                     return;
                 }
 
-                $query->where('requested_tenant_slug', $tenantSlug);
+                $query->whereNull('tenant_id')->whereIn('requested_tenant_slug', $tenantAliases);
             })
             ->count();
     }
 
     protected function assertWholesaleRequest(CustomerAccessRequest $accessRequest): void
     {
-        $tenantSlug = $this->wholesaleTenantSlug();
-        $tenantId = Tenant::query()->where('slug', $tenantSlug)->value('id');
+        $tenant = $this->wholesaleTenant();
 
         abort_unless(
-            $accessRequest->requested_tenant_slug === $tenantSlug
-                || ($tenantId !== null && (int) $accessRequest->tenant_id === (int) $tenantId),
+            ($tenant instanceof Tenant && (int) $accessRequest->tenant_id === (int) $tenant->id)
+                || ($accessRequest->tenant_id === null && in_array(
+                    (string) $accessRequest->requested_tenant_slug,
+                    $this->wholesaleApplicationTenantAliases(),
+                    true
+                )),
             404
         );
     }
@@ -298,7 +308,21 @@ class WholesaleApplicationInboxController extends Controller
     {
         return (string) config(
             'product_surfaces.access_request.wholesale_storefront_tenant_slug',
-            'modern-forestry-wholesale'
+            'modern-forestry'
         );
+    }
+
+    protected function wholesaleTenant(): ?Tenant
+    {
+        return Tenant::query()->where('slug', $this->wholesaleTenantSlug())->first();
+    }
+
+    /** @return array<int,string> */
+    protected function wholesaleApplicationTenantAliases(): array
+    {
+        return array_values(array_unique([
+            $this->wholesaleTenantSlug(),
+            'modern-forestry-wholesale',
+        ]));
     }
 }

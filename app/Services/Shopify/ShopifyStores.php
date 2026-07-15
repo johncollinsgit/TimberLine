@@ -99,6 +99,7 @@ class ShopifyStores
     public static function find(string $storeKey, bool $allowMissingToken = false): ?array
     {
         $resolved = self::resolve($storeKey, $allowMissingToken);
+
         return $resolved[0] ?? null;
     }
 
@@ -236,12 +237,14 @@ class ShopifyStores
 
             if ($shop === '') {
                 $issues[] = "{$key} store domain missing in config.";
+
                 continue;
             }
 
             if ($allowMissingToken) {
                 if ($clientId === '') {
                     $issues[] = "{$key} store client id missing.";
+
                     continue;
                 }
             } elseif ($token === '') {
@@ -260,6 +263,7 @@ class ShopifyStores
                 'token' => $token,
                 'source' => $base['source'] ?? null,
                 'tenant_id' => $record?->tenant_id ? (int) $record->tenant_id : null,
+                'store_role' => $record?->store_role,
                 'secret' => $secret !== '' ? $secret : null,
                 'client_id' => $clientId !== '' ? $clientId : null,
                 'api_version' => $base['api_version'] ?? config('services.shopify.api_version', '2026-01'),
@@ -326,7 +330,7 @@ class ShopifyStores
      */
     protected static function storeRecordsByKey(array $keys): array
     {
-        if ($keys === [] || !Schema::hasTable('shopify_stores')) {
+        if ($keys === [] || ! Schema::hasTable('shopify_stores')) {
             return [];
         }
 

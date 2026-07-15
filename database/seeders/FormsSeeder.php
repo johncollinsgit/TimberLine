@@ -13,7 +13,7 @@ class FormsSeeder extends Seeder
         $service = app(TenantFormProvisioningService::class);
         $service->ensureTemplate('wholesale_application');
 
-        $tenant = Tenant::query()->where('slug', 'modern-forestry-wholesale')->first();
+        $tenant = Tenant::query()->where('slug', 'modern-forestry')->first();
         if ($tenant instanceof Tenant) {
             $service->ensureWholesaleApplicationFormForTenant($tenant);
         }

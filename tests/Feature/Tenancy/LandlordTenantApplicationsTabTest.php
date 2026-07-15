@@ -20,7 +20,7 @@ test('landlord tenant applications tab shows wholesale submissions linked by ten
 
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry Wholesale',
-        'slug' => 'modern-forestry-wholesale',
+        'slug' => 'modern-forestry',
     ]);
 
     CustomerAccessRequest::query()->create([
@@ -29,7 +29,7 @@ test('landlord tenant applications tab shows wholesale submissions linked by ten
         'name' => 'John Buyer',
         'email' => 'johnbuyer@example.com',
         'company' => 'Cedar Mercantile',
-        'requested_tenant_slug' => 'modern-forestry-wholesale',
+        'requested_tenant_slug' => 'modern-forestry',
         'message' => 'Please review our wholesale application.',
     ]);
 

@@ -19,8 +19,7 @@ class TenantDiscoveryProfileService
         protected TenantEmailSettingsService $tenantEmailSettingsService,
         protected TenantDisplayLabelResolver $tenantDisplayLabelResolver,
         protected SchemaCapabilityMap $schemaCapabilities,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -306,7 +305,7 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<string,mixed> $domainMap
+     * @param  array<string,mixed>  $domainMap
      * @return array<string,mixed>
      */
     protected function resolvedAudienceMap(array $profilePayload, array $domainMap): array
@@ -334,7 +333,7 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<int,array<string,mixed>> $pages
+     * @param  array<int,array<string,mixed>>  $pages
      * @return array<string,mixed>
      */
     protected function resolvedTrustFacts(?int $tenantId, array $profilePayload, array $pages): array
@@ -375,7 +374,7 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<string,mixed> $trustFacts
+     * @param  array<string,mixed>  $trustFacts
      * @return array<string,mixed>
      */
     protected function resolvedMerchantSignals(array $profilePayload, array $trustFacts): array
@@ -404,10 +403,10 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<string,mixed> $trustFacts
-     * @param array<string,mixed> $merchantSignals
-     * @param array<string,mixed> $domainMap
-     * @param array<int,array<string,mixed>> $pages
+     * @param  array<string,mixed>  $trustFacts
+     * @param  array<string,mixed>  $merchantSignals
+     * @param  array<string,mixed>  $domainMap
+     * @param  array<int,array<string,mixed>>  $pages
      * @return array<int,string>
      */
     protected function resolvedPlaceholders(
@@ -570,7 +569,9 @@ class TenantDiscoveryProfileService
                 ],
             ],
             'merchant_signals' => [
-                'product_categories' => [],
+                'product_categories' => $isModernForestry
+                    ? ['candles', 'home fragrance', 'gifts', 'nature-inspired home goods']
+                    : [],
                 'wholesale_available' => true,
                 'minimum_order' => null,
                 'reorder_notes' => null,
@@ -578,8 +579,12 @@ class TenantDiscoveryProfileService
                 'shipping_regions' => [],
                 'lead_time_notes' => null,
                 'buyer_type_mapping' => [],
-                'brand_descriptors' => [],
-                'best_fit_descriptors' => [],
+                'brand_descriptors' => $isModernForestry
+                    ? ['forest-inspired', 'Appalachian', 'small batch']
+                    : [],
+                'best_fit_descriptors' => $isModernForestry
+                    ? ['gift shops', 'home goods stores', 'independent retailers']
+                    : [],
             ],
             'placeholders' => [
                 'configure:support_phone',
@@ -883,7 +888,7 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<string,mixed> $domainMap
+     * @param  array<string,mixed>  $domainMap
      * @return array<string,array<string,mixed>>
      */
     protected function defaultAudiencePaths(array $domainMap): array
@@ -923,7 +928,7 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<string,mixed> $row
+     * @param  array<string,mixed>  $row
      * @return array<string,mixed>
      */
     protected function normalizedDomainRelationshipRow(array $row): array
@@ -938,7 +943,7 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<string,mixed>|mixed $row
+     * @param  array<string,mixed>|mixed  $row
      * @return array<string,mixed>
      */
     protected function normalizedAudiencePath(mixed $row): array
@@ -981,8 +986,8 @@ class TenantDiscoveryProfileService
     }
 
     /**
-     * @param array<string,mixed> $existing
-     * @param array<string,mixed> $defaults
+     * @param  array<string,mixed>  $existing
+     * @param  array<string,mixed>  $defaults
      * @return array<string,mixed>
      */
     protected function nonDestructiveMerge(array $existing, array $defaults): array
@@ -992,18 +997,21 @@ class TenantDiscoveryProfileService
         foreach ($defaults as $key => $value) {
             if (! array_key_exists($key, $payload)) {
                 $payload[$key] = $value;
+
                 continue;
             }
 
             $current = $payload[$key];
             if ($this->isBlankValue($current)) {
                 $payload[$key] = $value;
+
                 continue;
             }
 
             if (is_array($current) && is_array($value)) {
                 if ($this->isAssociativeArray($current) || $this->isAssociativeArray($value)) {
                     $payload[$key] = $this->nonDestructiveMerge($current, $value);
+
                     continue;
                 }
 

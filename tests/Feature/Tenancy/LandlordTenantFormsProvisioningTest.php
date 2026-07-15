@@ -20,7 +20,7 @@ test('landlord operator can provision wholesale application form for a tenant', 
 
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry Wholesale',
-        'slug' => 'modern-forestry-wholesale',
+        'slug' => 'modern-forestry',
     ]);
 
     $user = User::factory()->create([

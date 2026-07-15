@@ -38,7 +38,7 @@ test('admin can browse the wholesale application inbox', function (): void {
 
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry Wholesale',
-        'slug' => 'modern-forestry-wholesale',
+        'slug' => 'modern-forestry',
     ]);
 
     $template = FormTemplate::query()->create([
@@ -64,7 +64,7 @@ test('admin can browse the wholesale application inbox', function (): void {
         'name' => 'Jane Buyer',
         'email' => 'jane@example.com',
         'company' => 'Jane Shop',
-        'requested_tenant_slug' => 'modern-forestry-wholesale',
+        'requested_tenant_slug' => 'modern-forestry',
         'tenant_id' => (int) $tenant->id,
         'message' => 'Interested in carrying the line.',
         'metadata' => [
@@ -185,7 +185,7 @@ test('admin can approve wholesale application directly from the inbox detail pag
 
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry Wholesale',
-        'slug' => 'modern-forestry-wholesale',
+        'slug' => 'modern-forestry',
     ]);
 
     $accessRequest = CustomerAccessRequest::query()->create([
@@ -194,7 +194,7 @@ test('admin can approve wholesale application directly from the inbox detail pag
         'name' => 'Approve Me',
         'email' => 'approve-me@example.com',
         'company' => 'Approval Shop',
-        'requested_tenant_slug' => 'modern-forestry-wholesale',
+        'requested_tenant_slug' => 'modern-forestry',
         'tenant_id' => (int) $tenant->id,
     ]);
 
@@ -222,7 +222,7 @@ test('admin can reject wholesale application directly from the inbox detail page
 
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry Wholesale',
-        'slug' => 'modern-forestry-wholesale',
+        'slug' => 'modern-forestry',
     ]);
 
     $accessRequest = CustomerAccessRequest::query()->create([
@@ -231,7 +231,7 @@ test('admin can reject wholesale application directly from the inbox detail page
         'name' => 'Reject Me',
         'email' => 'reject-me@example.com',
         'company' => 'Rejected Shop',
-        'requested_tenant_slug' => 'modern-forestry-wholesale',
+        'requested_tenant_slug' => 'modern-forestry',
         'tenant_id' => (int) $tenant->id,
     ]);
 

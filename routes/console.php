@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\TenantWholesaleSetting;
+use App\Services\Wholesale\WholesaleSuggestionGenerator;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -91,6 +93,21 @@ Schedule::command('shopify:import-health', [
     ->hourlyAt(15)
     ->withoutOverlapping(30)
     ->runInBackground();
+
+// Refresh only evidence-based wholesale reorder/risk suggestions. The command
+// reads through WholesaleQualifiedOrderScope, so retail and ambiguous legacy
+// records cannot influence the queue.
+Schedule::call(function (): void {
+    $generator = app(WholesaleSuggestionGenerator::class);
+    TenantWholesaleSetting::query()
+        ->whereNotNull('confirmed_at')
+        ->orderBy('tenant_id')
+        ->pluck('tenant_id')
+        ->each(fn ($tenantId) => $generator->refresh((int) $tenantId));
+})
+    ->name('wholesale:suggestions:refresh-active-tenants')
+    ->dailyAt('06:15')
+    ->withoutOverlapping(60);
 
 // Reconcile click->order attributions after order imports and webhook drift.
 Schedule::command('marketing:sync-message-order-attributions', [

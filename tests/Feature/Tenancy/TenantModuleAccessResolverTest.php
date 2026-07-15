@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
@@ -35,6 +36,67 @@ test('default resolver grants starter plan modules', function () {
         ->and($resolved['modules']['reviews']['has_access'])->toBeTrue()
         ->and($resolved['modules']['wishlist']['has_access'])->toBeFalse()
         ->and($resolved['modules']['settings']['has_access'])->toBeTrue();
+});
+
+test('wholesale operations are reusable but only resolve in a wholesale-role shopify store', function (): void {
+    $modernForestry = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+    ]);
+    $collinsElectric = Tenant::query()->create([
+        'name' => 'Collins Electric',
+        'slug' => 'collins-electric',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $modernForestry->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $collinsElectric->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $modernForestry->id,
+        'store_key' => 'resolver-wholesale',
+        'store_role' => 'wholesale',
+        'shop_domain' => 'resolver-wholesale.myshopify.com',
+        'access_token' => 'token',
+        'installed_at' => now(),
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $modernForestry->id,
+        'store_key' => 'resolver-retail',
+        'store_role' => 'retail',
+        'shop_domain' => 'resolver-retail.myshopify.com',
+        'access_token' => 'token',
+        'installed_at' => now(),
+    ]);
+
+    $resolver = app(TenantModuleAccessResolver::class);
+    $modernWholesale = $resolver->resolveForStoreContext([
+        'tenant_id' => $modernForestry->id,
+        'key' => 'resolver-wholesale',
+        'shop' => 'resolver-wholesale.myshopify.com',
+    ], ['wholesale_operations']);
+    $modernRetail = $resolver->resolveForStoreContext([
+        'tenant_id' => $modernForestry->id,
+        'key' => 'resolver-retail',
+        'shop' => 'resolver-retail.myshopify.com',
+    ], ['wholesale_operations']);
+    $collins = $resolver->module($collinsElectric->id, 'wholesale_operations');
+
+    expect($modernWholesale['modules']['wholesale_operations']['enabled'])->toBeTrue()
+        ->and($modernRetail['modules']['wholesale_operations']['enabled'])->toBeFalse()
+        ->and($modernRetail['modules']['wholesale_operations']['reason'])->toBe('shopify_store_role_not_supported')
+        ->and($collins['enabled'])->toBeFalse()
+        ->and($collins['reason'])->toBe('channel_not_supported')
+        ->and($collins['cta'])->toBe('none')
+        ->and($collins['upgrade_prompt_eligible'])->toBeFalse();
 });
 
 test('resolver reports addon-gated module with upgrade prompt eligibility', function () {

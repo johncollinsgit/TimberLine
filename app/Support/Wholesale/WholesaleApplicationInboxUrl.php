@@ -13,12 +13,12 @@ class WholesaleApplicationInboxUrl
 
     public function inboxUrl(?string $tenantSlug = null): string
     {
-        $path = route('shopify.app.wholesale', [
+        $path = route('shopify.app.wholesale.applications', [
             'store_key' => self::WHOLESALE_STORE_KEY,
         ], false);
 
         return $this->absoluteUrlForPath($path, $tenantSlug)
-            ?? route('shopify.app.wholesale', [
+            ?? route('shopify.app.wholesale.applications', [
                 'store_key' => self::WHOLESALE_STORE_KEY,
             ]);
     }

@@ -22,4 +22,11 @@ test('canonical module catalog drives entitlements and commercial config for rec
         ->and((array) data_get($commercialAddons, 'bulk_email_marketing.modules', []))->toBe(['messaging', 'email', 'campaigns', 'bulk_email_marketing'])
         ->and((array) data_get($commercialAddons, 'additional_channels.modules', []))->toBe(['additional_channels'])
         ->and((array) data_get($commercialAddons, 'future_niche_modules.modules', []))->toBe(['future_niche_modules']);
+
+    expect((array) data_get($catalogModules, 'wholesale_operations.tenant_slugs'))->toBe([])
+        ->and(data_get($catalogModules, 'wholesale_operations.required_shopify_store_role'))->toBe('wholesale')
+        ->and(data_get($catalogModules, 'wholesale_operations.visibility.app_store'))->toBeTrue()
+        ->and(data_get($catalogModules, 'wholesale_operations.default_enabled'))->toBeFalse()
+        ->and((array) data_get($entitlementModules, 'wholesale_operations.tenant_slugs'))->toBe([])
+        ->and(data_get($entitlementModules, 'wholesale_operations.required_shopify_store_role'))->toBe('wholesale');
 });

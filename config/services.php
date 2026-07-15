@@ -259,6 +259,16 @@ return [
 
     ],
 
+    'google_places' => [
+        'api_key' => env('GOOGLE_PLACES_API_KEY'),
+        'base_url' => env('GOOGLE_PLACES_BASE_URL', 'https://places.googleapis.com/v1'),
+        // Configurable estimate shown before a run; reconcile this with the
+        // tenant's current Maps Platform agreement rather than hard-coding price claims.
+        'estimated_cost_per_request' => (float) env('GOOGLE_PLACES_ESTIMATED_COST_PER_REQUEST', 0),
+        'default_sample_size' => (int) env('GOOGLE_PLACES_DEFAULT_SAMPLE_SIZE', 5),
+        'large_search_threshold' => (int) env('GOOGLE_PLACES_LARGE_SEARCH_THRESHOLD', 40),
+    ],
+
     'pexels' => [
         'key' => env('PEXELS_API_KEY'),
     ],

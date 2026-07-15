@@ -118,10 +118,10 @@ test('canonical tenant host resolves pre-auth tenant context from subdomain', fu
 
 test('tenant host builder prefers explicit host map before slug subdomain fallback', function (): void {
     config()->set('tenancy.auth.host_map', [
-        'admin.modernforestrywholesale.com' => 'modern-forestry-wholesale',
+        'admin.modernforestrywholesale.com' => 'modern-forestry',
     ]);
 
-    $host = app(\App\Support\Tenancy\TenantHostBuilder::class)->hostForSlug('modern-forestry-wholesale');
+    $host = app(\App\Support\Tenancy\TenantHostBuilder::class)->hostForSlug('modern-forestry');
 
     expect($host)->toBe('admin.modernforestrywholesale.com');
 });
