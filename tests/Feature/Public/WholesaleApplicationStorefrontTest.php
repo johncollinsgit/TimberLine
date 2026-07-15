@@ -22,7 +22,7 @@ beforeEach(function (): void {
     config()->set('services.shopify.allow_env_token_fallback', false);
 
     Tenant::query()->firstOrCreate([
-        'slug' => 'modern-forestry-wholesale',
+        'slug' => 'modern-forestry',
     ], [
         'name' => 'Modern Forestry Wholesale',
     ]);
@@ -120,7 +120,7 @@ test('storefront wholesale application stores the applicant and notifies the rev
         ->and($requestRecord->status)->toBe('pending')
         ->and($requestRecord->email)->toBe('ops-review@example.com')
         ->and($requestRecord->name)->toBe('Ops Review')
-        ->and($requestRecord->requested_tenant_slug)->toBe('modern-forestry-wholesale')
+        ->and($requestRecord->requested_tenant_slug)->toBe('modern-forestry')
         ->and((string) data_get($requestRecord->metadata, 'business_type'))->toBe('gift shop')
         ->and((string) data_get($requestRecord->metadata, 'phone'))->toBe('+1 555 555 1212')
         ->and((string) data_get($requestRecord->metadata, 'city'))->toBe('Charleston')
@@ -168,7 +168,7 @@ test('storefront wholesale notification points to the embedded wholesale review 
         'name' => 'Mapped Host Review',
         'email' => 'mapped-host@example.com',
         'company' => 'Mapped Host Shop',
-        'requested_tenant_slug' => 'modern-forestry-wholesale',
+        'requested_tenant_slug' => 'modern-forestry',
     ]);
 
     $notification = new WholesaleApplicationReviewNotification($requestRecord);

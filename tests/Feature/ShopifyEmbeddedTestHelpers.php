@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\ShopifyStore;
+use App\Models\TenantModuleState;
+use App\Models\TenantWholesaleSetting;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyStores;
 
@@ -14,6 +16,7 @@ function configureEmbeddedRetailStore(?int $tenantId = null): void
         ['store_key' => 'retail'],
         [
             'tenant_id' => $tenantId,
+            'store_role' => 'retail',
             'shop_domain' => 'modernforestry.myshopify.com',
             'access_token' => 'shpat_test',
             'installed_at' => now(),
@@ -27,15 +30,32 @@ function configureEmbeddedWholesaleStore(?int $tenantId = null): void
     config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-client-id');
     config()->set('services.shopify.stores.wholesale.client_secret', 'wholesale-client-secret');
 
-    ShopifyStore::query()->updateOrCreate(
+    $store = ShopifyStore::query()->updateOrCreate(
         ['store_key' => 'wholesale'],
         [
             'tenant_id' => $tenantId,
+            'store_role' => 'wholesale',
             'shop_domain' => 's2vscq-rf.myshopify.com',
             'access_token' => 'shpat_wholesale_test',
             'installed_at' => now(),
         ]
     );
+
+    if ($tenantId !== null) {
+        TenantWholesaleSetting::query()->where('shopify_store_id', $store->id)->delete();
+        TenantWholesaleSetting::query()->updateOrCreate(
+            ['tenant_id' => $tenantId],
+            [
+                'shopify_store_id' => $store->id,
+                'qualification_mode' => 'dedicated_store',
+                'confirmed_at' => now(),
+            ]
+        );
+        TenantModuleState::query()->updateOrCreate(
+            ['tenant_id' => $tenantId, 'module_key' => 'wholesale_operations'],
+            ['enabled_override' => true, 'setup_status' => 'configured', 'setup_completed_at' => now()]
+        );
+    }
 }
 
 function configureStorefrontRetailStoreContext(
@@ -136,8 +156,8 @@ function shopifySessionToken(string $storeKey, array $overrides = [], ?string $s
 
     $now = \Carbon\CarbonImmutable::now()->timestamp;
     $payload = array_merge([
-        'iss' => 'https://' . $shopDomain . '/admin',
-        'dest' => 'https://' . $shopDomain,
+        'iss' => 'https://'.$shopDomain.'/admin',
+        'dest' => 'https://'.$shopDomain,
         'aud' => $clientId,
         'sub' => 'gid://shopify/User/1',
         'sid' => 'sid-test',
@@ -154,9 +174,9 @@ function shopifySessionToken(string $storeKey, array $overrides = [], ?string $s
 
     $encodedHeader = shopifyBase64UrlEncode(json_encode($header, JSON_THROW_ON_ERROR));
     $encodedPayload = shopifyBase64UrlEncode(json_encode($payload, JSON_THROW_ON_ERROR));
-    $signature = hash_hmac('sha256', $encodedHeader . '.' . $encodedPayload, $secret, true);
+    $signature = hash_hmac('sha256', $encodedHeader.'.'.$encodedPayload, $secret, true);
 
-    return $encodedHeader . '.' . $encodedPayload . '.' . shopifyBase64UrlEncode($signature);
+    return $encodedHeader.'.'.$encodedPayload.'.'.shopifyBase64UrlEncode($signature);
 }
 
 function shopifyBase64UrlEncode(string $value): string

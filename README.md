@@ -1,5 +1,17 @@
 # Modern Forestry Backstage
 
+## Reusable Wholesale Operations + Shopify Admin Navigation (2026-07-15)
+
+- `wholesale_operations` is an included, Module Store-visible Shopify module for eligible plans. It is reusable across tenants, disabled until setup, and has no Modern Forestry tenant allowlist.
+- Activation requires a tenant owner/admin to confirm a connected store owned by that tenant as wholesale-only. `shopify_stores.store_role` records `retail`, `wholesale`, or `mixed`; `tenant_wholesale_settings` owns the selected wholesale connection and discovery defaults. Activation writes the configured `tenant_module_states` row and a before/after landlord audit record.
+- Embedded wholesale access fails closed unless the signed Shopify store, persisted store owner, `wholesale` role, selected tenant setting, and configured module state all agree. A retail store on the same tenant never reveals the wholesale workspace.
+- The Modern Forestry backfill is intentionally narrow: only `s2vscq-rf.myshopify.com` is assigned to tenant slug `modern-forestry` and designated wholesale. The migration does not reassign another tenant's orders, imports, prospects, or other wholesale records.
+- `modernforestrywholesale.com`, legacy application aliases, review workflow, customers, classifications, Places results, and prospect data remain Modern Forestry tenant data. Other tenants see only their own records.
+- Prospect scoring and website enrichment use the active tenant discovery profile's brand keywords, product categories, descriptors, and wholesale label. Missing merchandising signals produce neutral retail-fit language. Modern Forestry retains its candle, forest-inspired, Appalachian, gift, and home-fragrance signals.
+- Manual suggestion refreshes require an explicit tenant: `php artisan wholesale:suggestions:refresh --tenant=<id-or-slug>`. The scheduler iterates confirmed `tenant_wholesale_settings` instead of assuming Modern Forestry.
+- The dedicated wholesale home remains `/shopify/app/wholesale`. Its `<s-app-nav>` emits one `rel="home"` Overview link followed by exactly seven visible sidebar links: Suggestions, Customers, Orders, Follow-Ups, Prospects, Discover, and Applications. The retail app navigation is unchanged.
+- Rollout order is strict: deploy Laravel and migrations, restart queue workers, then create/release the wholesale Shopify app version with `shopify app deploy --config wholesale --allow-updates`. Confirm the new version is active and smoke-test “MF Wholesale Backstage” from `modernforestrywholesale.com/admin`; do not release the Shopify version against an older backend.
+
 ## Tenant-Scoped Imports + Workspace Guides (2026-07-13)
 
 - Import ownership follows the active tenant, never a user's email address. Shopify import runs, mapping exceptions, bundle import exceptions, and normalization records carry `tenant_id`; tenant-facing banners, run history, exception tools, dashboard metrics, and global search must query that tenant explicitly.

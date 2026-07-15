@@ -149,13 +149,17 @@
                             $moduleKey = (string) ($module['module_key'] ?? '');
                             $isFocused = $focusModule !== '' && $focusModule === $moduleKey;
                             $ctaHref = trim((string) ($moduleState['cta_href'] ?? ''));
+                            $needsWholesaleSetup = $moduleKey === 'wholesale_operations'
+                                && (string) ($moduleState['ui_state'] ?? '') === 'setup_needed';
                         @endphp
                         <x-tenancy.module-next-step-card
                             :module="$module"
                             :module-state="$moduleState"
                             :focused="$isFocused"
                         >
-                                @if($cta === 'add')
+                                @if($needsWholesaleSetup)
+                                    <a class="module-store-link module-store-button--primary" href="{{ $embeddedUrl(route('shopify.app.store.wholesale.setup', [], false)) }}">Set up module</a>
+                                @elseif($cta === 'add')
                                     <form method="POST" action="{{ $embeddedUrl(route('shopify.app.store.activate', ['moduleKey' => $moduleKey], false)) }}">
                                         @csrf
                                         @if($contextTokenValue !== '')

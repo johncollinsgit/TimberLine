@@ -21,10 +21,11 @@ beforeEach(function (): void {
 function seedEmbeddedWholesaleApplication(string $email = 'jane@example.com'): CustomerAccessRequest
 {
     $tenant = Tenant::query()->firstOrCreate([
-        'slug' => 'modern-forestry-wholesale',
+        'slug' => 'modern-forestry',
     ], [
         'name' => 'Modern Forestry Wholesale',
     ]);
+    configureEmbeddedWholesaleStore((int) $tenant->id);
 
     $template = FormTemplate::query()->firstOrCreate([
         'key' => 'wholesale_application',
@@ -51,7 +52,7 @@ function seedEmbeddedWholesaleApplication(string $email = 'jane@example.com'): C
         'name' => 'Jane Buyer',
         'email' => $email,
         'company' => 'Jane Shop',
-        'requested_tenant_slug' => 'modern-forestry-wholesale',
+        'requested_tenant_slug' => 'modern-forestry',
         'tenant_id' => (int) $tenant->id,
         'message' => 'Interested in carrying the line.',
         'metadata' => [
@@ -90,19 +91,20 @@ function seedEmbeddedWholesaleApplication(string $email = 'jane@example.com'): C
     return $accessRequest;
 }
 
-test('shopify embedded wholesale app home renders the wholesale applications inbox', function (): void {
+test('shopify embedded wholesale app home renders the wholesale operations decision center', function (): void {
     seedEmbeddedWholesaleApplication();
 
-    $response = $this->get(route('shopify.app.wholesale'));
+    $response = $this->get(route('shopify.app.wholesale', wholesaleEmbeddedSignedQuery()));
 
     $response->assertOk()
-        ->assertSeeText('Wholesale Applications')
+        ->assertSeeText('Wholesale Operations')
+        ->assertSeeText('What needs attention')
+        ->assertSeeText('Qualified performance')
         ->assertSeeText('Applications')
-        ->assertSeeText('Review applications in one place')
-        ->assertSeeText('Jane Buyer')
+        ->assertSeeText('Customers')
+        ->assertSeeText('Orders')
         ->assertDontSeeText('Fast loyalty snapshot for recent program activity.')
         ->assertDontSeeText('AI Assistant')
-        ->assertDontSeeText('Customers')
         ->assertDontSeeText('Messages')
         ->assertDontSeeText('Rewards')
         ->assertDontSeeText('Edit App')
@@ -112,10 +114,10 @@ test('shopify embedded wholesale app home renders the wholesale applications inb
 test('shopify embedded wholesale app detail renders captured application fields', function (): void {
     $accessRequest = seedEmbeddedWholesaleApplication();
 
-    $response = $this->get(route('shopify.app.wholesale.applications.show', [
+    $response = $this->get(route('shopify.app.wholesale.applications.show', array_merge([
         'accessRequest' => $accessRequest,
         'store_key' => 'wholesale',
-    ]));
+    ], wholesaleEmbeddedSignedQuery())));
 
     $response->assertOk()
         ->assertSeeText('Wholesale Application Review')
@@ -136,9 +138,9 @@ test('shopify embedded wholesale app uses embedded app client id when configured
 
     seedEmbeddedWholesaleApplication();
 
-    $response = $this->get(route('shopify.app.wholesale', [
+    $response = $this->get(route('shopify.app.wholesale', array_merge([
         'store_key' => 'wholesale',
-    ]));
+    ], wholesaleEmbeddedSignedQuery())));
 
     $response->assertOk()
         ->assertSee('<meta name="shopify-api-key" content="wholesale-embedded-client-id">', false);
@@ -221,6 +223,8 @@ test('shopify embedded wholesale app can approve through a mapped shopify admin 
         'role' => 'admin',
         'is_active' => true,
     ]);
+    $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
+    $actor->tenants()->attach($tenant->id, ['role' => 'admin']);
 
     $response = $this->withHeaders([
         'Authorization' => 'Bearer '.wholesaleShopifySessionToken([
@@ -255,7 +259,7 @@ test('shopify embedded wholesale app can approve through a mapped shopify admin 
     expect($actor->email)->toBe('ops-review@example.com');
 });
 
-test('shopify embedded wholesale app auto provisions the current shopify admin as a wholesale operator for approval', function (): void {
+test('shopify embedded wholesale app does not auto provision an unknown shopify admin as an operator', function (): void {
     Notification::fake();
     Http::fake(function (HttpRequest $request) {
         $payload = json_decode($request->body(), true);
@@ -326,18 +330,14 @@ test('shopify embedded wholesale app auto provisions the current shopify admin a
         'decision_note' => 'Looks good.',
     ]);
 
-    $response->assertOk()
-        ->assertJsonPath('ok', true);
+    $response->assertForbidden()
+        ->assertJsonPath('ok', false);
 
     $accessRequest->refresh();
     $actor = User::query()->where('email', 'missing-operator@example.com')->first();
 
-    $applicant = User::query()->where('email', 'blocked@example.com')->firstOrFail();
+    expect($actor)->toBeNull()
+        ->and((string) $accessRequest->status)->toBe('pending');
 
-    expect($actor)->not->toBeNull()
-        ->and((string) $actor->role)->toBe('admin')
-        ->and((bool) $actor->is_active)->toBeTrue()
-        ->and((string) $accessRequest->status)->toBe('approved');
-
-    Notification::assertSentToTimes($applicant, ApprovalPasswordSetupNotification::class, 1);
+    Notification::assertNothingSent();
 });

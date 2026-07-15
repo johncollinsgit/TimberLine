@@ -18,7 +18,7 @@ test('shopify embedded app route shows helpful launch message when opened outsid
         ->assertSeeText('Dashboard')
         ->assertSeeText('Open this app from Shopify Admin to load store data.')
         ->assertDontSeeText('Install on Shopify')
-        ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
+        ->assertHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;');
 });
 
 test('shopify embedded app route renders verified admin shell for configured store', function () {
@@ -49,7 +49,7 @@ test('shopify embedded app route renders verified admin shell for configured sto
         ->assertDontSee('id="shopify-dashboard-root"', false)
         ->assertDontSee('id="shopify-dashboard-bootstrap"', false)
         ->assertSee('<s-app-nav>', false)
-        ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
+        ->assertHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;');
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
 });
@@ -64,7 +64,7 @@ test('shopify embedded app route renders verified admin shell for wholesale stor
         ->assertSeeText('Fast loyalty snapshot for recent program activity.')
         ->assertSeeText('Recent customer purchase activity')
         ->assertSee('<s-app-nav>', false)
-        ->assertHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;");
+        ->assertHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;');
 
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
 });
@@ -84,16 +84,15 @@ test('shopify embedded app route bootstraps wholesale shell from hinted store ke
         ->assertSee('data-dashboard-lite', false);
 });
 
-test('shopify embedded wholesale entry route bootstraps the wholesale shell without signed query params', function () {
+test('shopify embedded wholesale entry route fails closed without signed query params', function () {
     configureEmbeddedWholesaleStore();
 
     $response = $this->get(route('shopify.app.wholesale'));
 
     $response->assertOk()
-        ->assertSeeText('Wholesale Applications')
-        ->assertSeeText('Review applications in one place')
-        ->assertSee('name="shopify-api-key"', false)
-        ->assertSee('shopifycloud/app-bridge.js', false)
+        ->assertSeeText('Open this app from Shopify Admin')
+        ->assertDontSeeText('What needs attention')
+        ->assertDontSee('name="shopify-api-key"', false)
         ->assertDontSeeText('Fast loyalty snapshot for recent program activity.');
 });
 

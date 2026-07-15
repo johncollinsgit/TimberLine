@@ -111,7 +111,7 @@ class PlatformAccessRequestController extends Controller
             'company' => trim((string) ($contact['company'] ?? '')),
             'requested_tenant_slug' => (string) config(
                 'product_surfaces.access_request.wholesale_storefront_tenant_slug',
-                'modern-forestry-wholesale'
+                'modern-forestry'
             ),
             'business_type' => trim((string) ($contact['store_type'] ?? '')),
             'website' => trim((string) ($contact['website'] ?? '')),

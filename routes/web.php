@@ -9,12 +9,10 @@ use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
 use App\Http\Controllers\FieldServiceController;
+use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
-use App\Http\Controllers\QuickBooksReportsController;
-use App\Http\Controllers\WorkspaceDocumentsController;
-use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
@@ -60,6 +58,7 @@ use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\PublicBudConversationController;
 use App\Http\Controllers\PublicLegalController;
+use App\Http\Controllers\QuickBooksReportsController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
@@ -79,6 +78,7 @@ use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
+use App\Http\Controllers\WorkspaceDocumentsController;
 use App\Livewire\Admin\AdminHome;
 use App\Livewire\Admin\Catalog\CostsCrud as AdminCostsCrud;
 use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
@@ -1525,6 +1525,34 @@ Route::prefix('shopify/marketing/v1')
 Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/wholesale', [ShopifyEmbeddedAppController::class, 'showWholesale'])->name('shopify.app.wholesale');
+    Route::get('/app/wholesale/applications', [ShopifyEmbeddedAppController::class, 'showWholesaleApplications'])
+        ->name('shopify.app.wholesale.applications');
+    Route::get('/app/wholesale/customers', [ShopifyEmbeddedAppController::class, 'showWholesaleCustomers'])
+        ->name('shopify.app.wholesale.customers');
+    Route::get('/app/wholesale/customers/{accountKey}', [ShopifyEmbeddedAppController::class, 'showWholesaleCustomer'])
+        ->where('accountKey', '[a-f0-9]{64}')
+        ->name('shopify.app.wholesale.customers.show');
+    Route::get('/app/wholesale/orders', [ShopifyEmbeddedAppController::class, 'showWholesaleOrders'])
+        ->name('shopify.app.wholesale.orders');
+    Route::get('/app/wholesale/suggestions', [ShopifyEmbeddedAppController::class, 'showWholesaleSuggestions'])
+        ->name('shopify.app.wholesale.suggestions');
+    Route::post('/app/wholesale/suggestions/{suggestionPublicId}/decide', [ShopifyEmbeddedAppController::class, 'decideWholesaleSuggestion'])
+        ->whereUuid('suggestionPublicId')
+        ->name('shopify.app.wholesale.suggestions.decide');
+    Route::get('/app/wholesale/follow-ups', [ShopifyEmbeddedAppController::class, 'showWholesaleFollowUps'])
+        ->name('shopify.app.wholesale.follow-ups');
+    Route::get('/app/wholesale/prospects', [ShopifyEmbeddedAppController::class, 'showWholesaleProspects'])
+        ->name('shopify.app.wholesale.prospects');
+    Route::get('/app/wholesale/prospects/discover', [ShopifyEmbeddedAppController::class, 'showWholesaleProspectDiscovery'])
+        ->name('shopify.app.wholesale.prospects.discover');
+    Route::post('/app/wholesale/prospects/discover', [ShopifyEmbeddedAppController::class, 'runWholesaleProspectDiscovery'])
+        ->name('shopify.app.wholesale.prospects.run');
+    Route::get('/app/wholesale/prospects/{prospectPublicId}', [ShopifyEmbeddedAppController::class, 'showWholesaleProspect'])
+        ->whereUuid('prospectPublicId')
+        ->name('shopify.app.wholesale.prospects.show');
+    Route::post('/app/wholesale/prospects/{prospectPublicId}/action', [ShopifyEmbeddedAppController::class, 'updateWholesaleProspect'])
+        ->whereUuid('prospectPublicId')
+        ->name('shopify.app.wholesale.prospects.action');
     Route::get('/app/wholesale/applications/{accessRequest}', [ShopifyEmbeddedAppController::class, 'showWholesaleApplication'])
         ->name('shopify.app.wholesale.applications.show');
     Route::post('/app/wholesale/applications/{accessRequest}/approve', [ShopifyEmbeddedAppController::class, 'approveWholesaleApplication'])
@@ -1536,6 +1564,8 @@ Route::prefix('shopify')->middleware('web')->group(function () {
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
     Route::get('/app/plans', [ShopifyEmbeddedAppController::class, 'plansAndAddons'])->name('shopify.app.plans');
     Route::get('/app/store', [ShopifyEmbeddedAppController::class, 'moduleStore'])->name('shopify.app.store');
+    Route::get('/app/store/modules/wholesale_operations/setup', [ShopifyEmbeddedAppController::class, 'wholesaleModuleSetup'])->name('shopify.app.store.wholesale.setup');
+    Route::post('/app/store/modules/wholesale_operations/setup', [ShopifyEmbeddedAppController::class, 'configureWholesaleModule'])->name('shopify.app.store.wholesale.configure');
     Route::post('/app/store/modules/{moduleKey}/activate', [ShopifyEmbeddedAppController::class, 'activateModule'])->name('shopify.app.store.activate');
     Route::post('/app/store/modules/{moduleKey}/request', [ShopifyEmbeddedAppController::class, 'requestModuleAccess'])->name('shopify.app.store.request');
     Route::get('/app/integrations', [ShopifyEmbeddedAppController::class, 'integrations'])->name('shopify.app.integrations');

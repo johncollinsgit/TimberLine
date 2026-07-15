@@ -105,6 +105,12 @@ return [
     'access_request' => [
         'review_email' => env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com'),
         'review_email_by_tenant_slug' => [
+            'modern-forestry' => env(
+                'WHOLESALE_APPLICATION_REVIEW_EMAIL_MODERN_FORESTRY_WHOLESALE',
+                env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com')
+            ),
+            // Legacy alias for applications created before the wholesale
+            // storefront was correctly modeled as a store on tenant 1.
             'modern-forestry-wholesale' => env(
                 'WHOLESALE_APPLICATION_REVIEW_EMAIL_MODERN_FORESTRY_WHOLESALE',
                 env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com')
@@ -112,7 +118,7 @@ return [
         ],
         'wholesale_storefront_tenant_slug' => env(
             'WHOLESALE_APPLICATION_STOREFRONT_TENANT_SLUG',
-            'modern-forestry-wholesale'
+            'modern-forestry'
         ),
         'business_types' => [
             'landscaper' => 'Landscaper',

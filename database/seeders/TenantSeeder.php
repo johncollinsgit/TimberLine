@@ -16,11 +16,6 @@ class TenantSeeder extends Seeder
             ['name' => 'Modern Forestry']
         );
 
-        \App\Models\Tenant::firstOrCreate(
-            ['slug' => 'modern-forestry-wholesale'],
-            ['name' => 'Modern Forestry Wholesale']
-        );
-
         $this->attachOperatorMemberships($flagship);
     }
 

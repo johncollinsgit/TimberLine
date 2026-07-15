@@ -68,7 +68,7 @@
         </section>
 
         <section class="fb-page-surface p-6">
-            <form method="GET" action="{{ $embeddedUrl(route('shopify.app.wholesale', ['store_key' => 'wholesale'], false)) }}" class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <form method="GET" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications', ['store_key' => 'wholesale'], false)) }}" class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div class="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                     <label class="space-y-2">
                         <span class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Search</span>
@@ -96,7 +96,7 @@
                     <button type="submit" class="rounded-full bg-zinc-950 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">
                         Apply filters
                     </button>
-                    <a href="{{ $embeddedUrl(route('shopify.app.wholesale', ['store_key' => 'wholesale'], false)) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                    <a href="{{ $embeddedUrl(route('shopify.app.wholesale.applications', ['store_key' => 'wholesale'], false)) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                         Reset
                     </a>
                 </div>

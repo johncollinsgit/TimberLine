@@ -2,6 +2,8 @@
 
 namespace App\Services\Tenancy;
 
+use App\Models\ShopifyStore;
+use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleEntitlement;
@@ -55,12 +57,16 @@ class TenantModuleAccessResolver
      */
     protected array $capabilityResolutionCache = [];
 
+    /**
+     * @var array<int,?string>
+     */
+    protected array $tenantSlugCache = [];
+
     public function __construct(
         protected TenantResolver $tenantResolver,
         protected SchemaCapabilityMap $schemaCapabilities,
         protected ModernForestryAlphaBootstrapService $alphaBootstrapService
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<int,string>|null  $moduleKeys
@@ -83,6 +89,7 @@ class TenantModuleAccessResolver
         $entitlementRows = $this->moduleEntitlementRowsForTenant($tenantId);
         $requestedKeys = $this->requestedModuleKeys($moduleKeys);
         $keys = $this->expandModuleKeysWithDependencies($requestedKeys);
+        $tenantSlug = $this->tenantSlugForId($tenantId);
 
         $rawModules = [];
         foreach ($keys as $moduleKey) {
@@ -95,7 +102,7 @@ class TenantModuleAccessResolver
             if (in_array($moduleKey, $planIncludes, true)) {
                 $hasAccess = true;
                 $source = 'plan';
-                $sources[] = 'plan:' . $planKey;
+                $sources[] = 'plan:'.$planKey;
             }
 
             foreach ($enabledAddons as $addon) {
@@ -107,7 +114,7 @@ class TenantModuleAccessResolver
                 if (in_array($moduleKey, $this->addonIncludes($addonKey), true)) {
                     $hasAccess = true;
                     $source = $source === 'plan' ? $source : 'addon';
-                    $sources[] = 'addon:' . $addonKey;
+                    $sources[] = 'addon:'.$addonKey;
                 }
             }
 
@@ -117,11 +124,11 @@ class TenantModuleAccessResolver
                 if ($enabledStatus === 'enabled') {
                     $hasAccess = true;
                     $source = $this->normalizeDecisionSource((string) ($entitlementRow['entitlement_source'] ?? 'override'));
-                    $sources[] = 'entitlement:' . ($entitlementRow['entitlement_source'] ?? 'override');
+                    $sources[] = 'entitlement:'.($entitlementRow['entitlement_source'] ?? 'override');
                 } elseif ($enabledStatus === 'disabled') {
                     $hasAccess = false;
                     $source = $this->normalizeDecisionSource((string) ($entitlementRow['entitlement_source'] ?? 'override'));
-                    $sources[] = 'entitlement:' . ($entitlementRow['entitlement_source'] ?? 'override');
+                    $sources[] = 'entitlement:'.($entitlementRow['entitlement_source'] ?? 'override');
                 }
             }
 
@@ -155,6 +162,10 @@ class TenantModuleAccessResolver
                 'classification' => (string) ($definition['classification'] ?? 'shared-core'),
                 'status' => $status,
                 'channels' => $this->normalizedStringList((array) ($definition['channels'] ?? [])),
+                'tenant_slugs' => $this->normalizedIdentifierList((array) ($definition['tenant_slugs'] ?? [])),
+                'shopify_store_keys' => $this->normalizedIdentifierList((array) ($definition['shopify_store_keys'] ?? [])),
+                'required_shopify_store_role' => strtolower(trim((string) ($definition['required_shopify_store_role'] ?? ''))),
+                'tenant_allowed' => $this->tenantAllowedForDefinition($definition, $tenantSlug),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
                 'dependencies' => $this->normalizedStringList((array) ($definition['dependencies'] ?? [])),
                 'capabilities' => $this->normalizedCapabilityList((array) ($definition['capabilities'] ?? [])),
@@ -211,6 +222,9 @@ class TenantModuleAccessResolver
                 'classification' => (string) ($rawModule['classification'] ?? 'shared-core'),
                 'status' => (string) ($rawModule['status'] ?? 'disabled'),
                 'channels' => (array) ($rawModule['channels'] ?? []),
+                'tenant_slugs' => (array) ($rawModule['tenant_slugs'] ?? []),
+                'shopify_store_keys' => (array) ($rawModule['shopify_store_keys'] ?? []),
+                'required_shopify_store_role' => (string) ($rawModule['required_shopify_store_role'] ?? ''),
                 'billing_mode' => (string) ($rawModule['billing_mode'] ?? 'unavailable'),
                 'dependencies' => (array) ($rawModule['dependencies'] ?? []),
                 'capabilities' => (array) ($rawModule['capabilities'] ?? []),
@@ -255,8 +269,37 @@ class TenantModuleAccessResolver
     public function resolveForStoreContext(array $storeContext, ?array $moduleKeys = null): array
     {
         $tenantId = $this->tenantResolver->resolveTenantIdForStoreContext($storeContext);
+        $resolved = $this->resolveForTenant($tenantId, $moduleKeys);
+        $storeKey = strtolower(trim((string) ($storeContext['key'] ?? '')));
+        $shopDomain = strtolower(trim((string) ($storeContext['shop'] ?? $storeContext['shop_domain'] ?? '')));
+        $persistedStoreRole = $tenantId !== null && $shopDomain !== ''
+            ? strtolower(trim((string) ShopifyStore::query()
+                ->where('tenant_id', $tenantId)
+                ->whereRaw('LOWER(shop_domain) = ?', [$shopDomain])
+                ->value('store_role')))
+            : '';
 
-        return $this->resolveForTenant($tenantId, $moduleKeys);
+        foreach ((array) ($resolved['modules'] ?? []) as $moduleKey => $module) {
+            $allowedStoreKeys = $this->normalizedIdentifierList((array) ($module['shopify_store_keys'] ?? []));
+            $requiredStoreRole = strtolower(trim((string) ($module['required_shopify_store_role'] ?? '')));
+            $storeKeyMatches = $allowedStoreKeys === [] || in_array($storeKey, $allowedStoreKeys, true);
+            $storeRoleMatches = $requiredStoreRole === '' || $persistedStoreRole === $requiredStoreRole;
+            if ($storeKeyMatches && $storeRoleMatches) {
+                continue;
+            }
+
+            $resolved['modules'][$moduleKey] = array_merge($module, [
+                'has_access' => false,
+                'enabled' => false,
+                'source' => 'flag',
+                'reason' => $storeRoleMatches ? 'shopify_store_not_supported' : 'shopify_store_role_not_supported',
+                'cta' => 'none',
+                'ui_state' => 'locked',
+                'upgrade_prompt_eligible' => false,
+            ]);
+        }
+
+        return $resolved;
     }
 
     public function canAccess(?int $tenantId, string $moduleKey): bool
@@ -353,6 +396,7 @@ class TenantModuleAccessResolver
                 : [];
             if ($definition === []) {
                 $capabilities[$capabilityKey] = $this->defaultCapabilityState($capabilityKey, $planKey);
+
                 continue;
             }
 
@@ -645,6 +689,16 @@ class TenantModuleAccessResolver
         $source = $this->normalizeDecisionSource((string) ($module['source_raw'] ?? 'flag'));
         $enabled = (bool) ($module['has_access_raw'] ?? false);
         $reason = $enabled ? 'enabled' : 'not_enabled';
+
+        if (! (bool) ($module['tenant_allowed'] ?? true)) {
+            return [
+                'enabled' => false,
+                'reason' => 'tenant_not_supported',
+                'source' => 'flag',
+                'cta' => 'none',
+                'cta_routing' => $ctaRouting,
+            ];
+        }
 
         $channels = $this->normalizedStringList((array) ($module['channels'] ?? []));
         if (! $this->operatingModeSupportsChannels($operatingMode, $channels)) {
@@ -944,6 +998,35 @@ class TenantModuleAccessResolver
         return in_array($status, $allowed, true) ? $status : 'not_started';
     }
 
+    protected function tenantSlugForId(?int $tenantId): ?string
+    {
+        if ($tenantId === null || $tenantId <= 0) {
+            return null;
+        }
+
+        if (array_key_exists($tenantId, $this->tenantSlugCache)) {
+            return $this->tenantSlugCache[$tenantId];
+        }
+
+        $slug = Tenant::query()->whereKey($tenantId)->value('slug');
+        $normalized = strtolower(trim((string) $slug));
+
+        return $this->tenantSlugCache[$tenantId] = $normalized !== '' ? $normalized : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $definition
+     */
+    protected function tenantAllowedForDefinition(array $definition, ?string $tenantSlug): bool
+    {
+        $allowedTenantSlugs = $this->normalizedIdentifierList((array) ($definition['tenant_slugs'] ?? []));
+        if ($allowedTenantSlugs === []) {
+            return true;
+        }
+
+        return $tenantSlug !== null && in_array($tenantSlug, $allowedTenantSlugs, true);
+    }
+
     protected function defaultPlanKey(): string
     {
         return strtolower(trim((string) config('entitlements.default_plan', 'starter')));
@@ -956,7 +1039,7 @@ class TenantModuleAccessResolver
             return $this->defaultPlanKey();
         }
 
-        $alias = config('commercial.legacy_plan_aliases.' . $normalized);
+        $alias = config('commercial.legacy_plan_aliases.'.$normalized);
         if (is_string($alias) && trim($alias) !== '') {
             return strtolower(trim($alias));
         }
@@ -971,7 +1054,7 @@ class TenantModuleAccessResolver
             return '';
         }
 
-        $alias = config('module_catalog.legacy.module_aliases.' . $normalized);
+        $alias = config('module_catalog.legacy.module_aliases.'.$normalized);
         if (is_string($alias) && trim($alias) !== '') {
             return strtolower(trim($alias));
         }
@@ -1163,8 +1246,8 @@ class TenantModuleAccessResolver
     {
         $catalog = $this->moduleCatalog();
         $definition = is_array($catalog[$moduleKey] ?? null) ? (array) $catalog[$moduleKey] : [];
-        $canonical = is_array(config('module_catalog.modules.' . $moduleKey))
-            ? (array) config('module_catalog.modules.' . $moduleKey)
+        $canonical = is_array(config('module_catalog.modules.'.$moduleKey))
+            ? (array) config('module_catalog.modules.'.$moduleKey)
             : [];
 
         $canonicalString = static function (string $key, ?string $fallback = null) use ($canonical, $definition): string {
@@ -1212,6 +1295,9 @@ class TenantModuleAccessResolver
             'supports_upgrade_prompt' => (bool) ($definition['supports_upgrade_prompt'] ?? true),
             'status' => $canonicalString('status', 'disabled'),
             'channels' => $canonicalArray('channels'),
+            'tenant_slugs' => $canonicalArray('tenant_slugs'),
+            'shopify_store_keys' => $canonicalArray('shopify_store_keys'),
+            'required_shopify_store_role' => $canonicalString('required_shopify_store_role'),
             'billing_mode' => $canonicalString('billing_mode', 'unavailable'),
             'dependencies' => $canonicalArray('dependencies'),
             'capabilities' => $canonicalArray('capabilities'),
@@ -1258,6 +1344,18 @@ class TenantModuleAccessResolver
 
             return $this->canonicalModuleKey($normalized);
         }, $values)));
+    }
+
+    /**
+     * @param  array<int,mixed>  $values
+     * @return array<int,string>
+     */
+    protected function normalizedIdentifierList(array $values): array
+    {
+        return array_values(array_filter(array_unique(array_map(
+            static fn ($value): string => strtolower(trim((string) $value)),
+            $values
+        ))));
     }
 
     /**
