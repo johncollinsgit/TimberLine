@@ -30,7 +30,7 @@ test('resolve api context accepts verified shopify session tokens', function () 
     config()->set('services.shopify.stores.retail.client_secret', 'shopify-client-secret');
 
     $request = Request::create('/shopify/app/api/dashboard', 'GET', [], [], [], [
-        'HTTP_AUTHORIZATION' => 'Bearer ' . retailShopifySessionToken(),
+        'HTTP_AUTHORIZATION' => 'Bearer '.retailShopifySessionToken(),
     ]);
 
     $context = app(ShopifyEmbeddedAppContext::class)->resolveApiContext($request);
@@ -49,7 +49,7 @@ test('resolve api context accepts configured embedded app credentials for wholes
     config()->set('services.shopify.stores.wholesale.embedded_client_secret', 'wholesale-embedded-client-secret');
 
     $request = Request::create('/shopify/app/wholesale/applications/5', 'POST', [], [], [], [
-        'HTTP_AUTHORIZATION' => 'Bearer ' . shopifySessionToken('wholesale', [
+        'HTTP_AUTHORIZATION' => 'Bearer '.shopifySessionToken('wholesale', [
             'aud' => 'wholesale-embedded-client-id',
             'email' => 'johncollinsemail@gmail.com',
         ], 'wholesale-embedded-client-secret'),
@@ -62,4 +62,29 @@ test('resolve api context accepts configured embedded app credentials for wholes
         ->and($context['auth_source'] ?? null)->toBe('session_token')
         ->and($context['shop_domain'] ?? null)->toBe('s2vscq-rf.myshopify.com')
         ->and($context['shopify_admin_email'] ?? null)->toBe('johncollinsemail@gmail.com');
+});
+
+test('resolve page context accepts the dedicated embedded wholesale app hmac', function () {
+    config()->set('services.shopify.stores.wholesale.shop', 's2vscq-rf.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-admin-client-id');
+    config()->set('services.shopify.stores.wholesale.client_secret', 'wholesale-admin-client-secret');
+    config()->set('services.shopify.stores.wholesale.embedded_client_id', 'wholesale-embedded-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_secret', 'wholesale-embedded-client-secret');
+
+    $query = shopifyEmbeddedSignedQuery([
+        'embedded' => '1',
+        'host' => 'wholesale-admin-host-token',
+        'shop' => 's2vscq-rf.myshopify.com',
+        'timestamp' => (string) now()->timestamp,
+    ], 'wholesale-embedded-client-secret');
+    $request = Request::create('/shopify/app/wholesale', 'GET', $query);
+    $request->setLaravelSession(app('session')->driver());
+
+    $context = app(ShopifyEmbeddedAppContext::class)->resolvePageContext($request);
+
+    expect($context['ok'] ?? null)->toBeTrue()
+        ->and($context['status'] ?? null)->toBe('ok')
+        ->and($context['auth_source'] ?? null)->toBe('signed_query')
+        ->and($context['shop_domain'] ?? null)->toBe('s2vscq-rf.myshopify.com')
+        ->and($context['store']['key'] ?? null)->toBe('wholesale');
 });

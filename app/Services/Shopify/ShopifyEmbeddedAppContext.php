@@ -14,9 +14,9 @@ class ShopifyEmbeddedAppContext
 
     public function __construct(
         protected ShopifyHmacVerifier $hmacVerifier,
-        protected ShopifySessionTokenVerifier $sessionTokenVerifier
-    ) {
-    }
+        protected ShopifySessionTokenVerifier $sessionTokenVerifier,
+        protected ShopifyEmbeddedAppCredentials $embeddedAppCredentials
+    ) {}
 
     public function hasPageContext(Request $request): bool
     {
@@ -79,8 +79,18 @@ class ShopifyEmbeddedAppContext
             ];
         }
 
-        $secret = trim((string) ($store['secret'] ?? ''));
-        if (! $this->hmacVerifier->verifyQuery($this->contextQuery($request), $secret)) {
+        $signedQuery = $this->contextQuery($request);
+        $credentials = $this->embeddedAppCredentials->credentialsForStore($store);
+        $verified = false;
+
+        foreach ($credentials as $credential) {
+            if ($this->hmacVerifier->verifyQuery($signedQuery, $credential['secret'])) {
+                $verified = true;
+                break;
+            }
+        }
+
+        if (! $verified) {
             return [
                 'ok' => false,
                 'status' => 'invalid_hmac',
