@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Mobile\EverbranchMobileAuthController;
+use App\Http\Controllers\Mobile\EverbranchMobileClassSchedulingController;
 use App\Http\Controllers\Mobile\EverbranchMobileController;
 use App\Http\Controllers\Mobile\EverbranchMobileEstimatorController;
 use App\Http\Controllers\Mobile\EverbranchMobileFieldServiceController;
@@ -54,6 +55,9 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/work', [EverbranchMobileController::class, 'work'])->middleware('abilities:mobile:read')->name('workspace.work');
                 Route::get('/work/{kind}/{resource}', [EverbranchMobileController::class, 'workDetail'])->middleware('abilities:mobile:read')->whereIn('kind', ['orders', 'jobs', 'clients'])->whereNumber('resource')->name('workspace.work.show');
                 Route::get('/field-service', [EverbranchMobileFieldServiceController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.index');
+                Route::get('/class-scheduling', [EverbranchMobileClassSchedulingController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.class-scheduling.index');
+                Route::get('/class-scheduling/classes/{scheduledClass}', [EverbranchMobileClassSchedulingController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('scheduledClass')->name('workspace.class-scheduling.show');
+                Route::post('/class-scheduling/enrollments/{enrollment}/reminders', [EverbranchMobileClassSchedulingController::class, 'storeReminder'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('enrollment')->name('workspace.class-scheduling.reminders.store');
                 Route::get('/field-service/my-day', [EverbranchMobileFieldServiceController::class, 'myDay'])->middleware('abilities:mobile:read')->name('workspace.field-service.my-day');
                 Route::post('/field-service/jobs', [EverbranchMobileFieldServiceController::class, 'storeJob'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.field-service.jobs.store');
                 Route::get('/field-service/team', [EverbranchMobileFieldServiceController::class, 'team'])->middleware('abilities:mobile:read')->name('workspace.field-service.team');

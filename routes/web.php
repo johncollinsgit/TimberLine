@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
+use App\Http\Controllers\ClassSchedulingController;
 use App\Http\Controllers\ClientProjectController;
 use App\Http\Controllers\ClientProjectTicketController;
 use App\Http\Controllers\CustomModuleRequestController;
@@ -57,6 +58,7 @@ use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
 use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\PublicBudConversationController;
+use App\Http\Controllers\PublicClassSignupController;
 use App\Http\Controllers\PublicLegalController;
 use App\Http\Controllers\QuickBooksReportsController;
 use App\Http\Controllers\ShopifyAuthController;
@@ -525,6 +527,17 @@ Route::get('/mobile/authorize', \App\Http\Controllers\Mobile\EverbranchMobileAut
     ->name('mobile.everbranch.authorize');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 
+Route::prefix('signup/classes/{tenant:slug}')
+    ->name('public.classes.')
+    ->middleware('throttle:60,1')
+    ->group(function (): void {
+        Route::get('/', [PublicClassSignupController::class, 'index'])->name('index');
+        Route::get('/{class}', [PublicClassSignupController::class, 'show'])->name('show');
+        Route::post('/{class}', [PublicClassSignupController::class, 'store'])
+            ->middleware('throttle:10,1')
+            ->name('store');
+    });
+
 Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/workspace/create', [FirstLoginWorkspaceController::class, 'show'])
@@ -539,6 +552,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access'])
         ->get('/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:class_scheduling'])
+        ->prefix('classes')
+        ->name('class-scheduling.')
+        ->group(function (): void {
+            Route::get('/', [ClassSchedulingController::class, 'index'])->name('index');
+            Route::post('/', [ClassSchedulingController::class, 'store'])->name('store');
+            Route::put('/settings', [ClassSchedulingController::class, 'updateSettings'])->name('settings.update');
+            Route::get('/{scheduledClass}', [ClassSchedulingController::class, 'show'])->name('show');
+            Route::put('/{scheduledClass}', [ClassSchedulingController::class, 'update'])->name('update');
+            Route::post('/enrollments/{enrollment}/reminders', [ClassSchedulingController::class, 'storeReminder'])->name('reminders.store');
+        });
 
     Route::middleware(['role:admin'])
         ->get('/integrations/quickbooks', [QuickBooksConnectionController::class, 'index'])

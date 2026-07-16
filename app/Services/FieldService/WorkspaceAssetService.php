@@ -90,6 +90,65 @@ class WorkspaceAssetService
         return $asset;
     }
 
+    /**
+     * Store a durable tenant-owned copy of an internally selected HTTPS image.
+     *
+     * @param  array<int,int>  $jobIds
+     * @param  array<int,string>  $tags
+     * @param  array<string,mixed>  $metadata
+     */
+    public function importRemoteImage(
+        Tenant $tenant,
+        User $user,
+        string $url,
+        string $externalId,
+        string $fileName,
+        array $jobIds,
+        string $caption,
+        array $tags = [],
+        array $metadata = [],
+    ): WorkspaceAsset {
+        abort_unless(str_starts_with($url, 'https://'), 422, 'Remote images must use HTTPS.');
+
+        $existing = WorkspaceAsset::query()
+            ->forTenantId((int) $tenant->id)
+            ->where('source', 'demo_seed')
+            ->where('external_id', $externalId)
+            ->first();
+        if ($existing) {
+            $validJobIds = $tenant->fieldServiceJobs()->whereIn('id', $jobIds)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            $existing->jobs()->syncWithoutDetaching(collect($validJobIds)->mapWithKeys(fn (int $id): array => [$id => [
+                'tenant_id' => (int) $tenant->id,
+                'linked_by_user_id' => (int) $user->id,
+            ]])->all());
+
+            return $existing;
+        }
+
+        $response = Http::withHeaders([
+            'User-Agent' => 'Everbranch/2.0 (+https://theeverbranch.com; support@theeverbranch.com)',
+        ])->timeout(30)->retry(2, 250)->get($url)->throw();
+        $bytes = $response->body();
+        abort_if($bytes === '' || strlen($bytes) > 25 * 1024 * 1024, 422, 'The remote image is empty or too large.');
+        $mime = strtolower(trim((string) strtok((string) $response->header('Content-Type'), ';')));
+        abort_unless(in_array($mime, ['image/jpeg', 'image/png', 'image/gif'], true), 422, 'The remote file is not a supported image.');
+
+        return $this->storeBytes(
+            $tenant,
+            $bytes,
+            $fileName,
+            $mime,
+            'demo_seed',
+            $externalId,
+            'team',
+            $caption,
+            (int) $user->id,
+            $jobIds,
+            $tags,
+            $metadata,
+        );
+    }
+
     /** @param array<int,int> $jobIds */
     protected function storeBytes(
         Tenant $tenant,
@@ -102,7 +161,8 @@ class WorkspaceAssetService
         ?string $caption = null,
         ?int $uploadedBy = null,
         array $jobIds = [],
-        array $tags = []
+        array $tags = [],
+        array $metadata = [],
     ): WorkspaceAsset {
         $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
         $safeName = Str::uuid().($extension !== '' ? '.'.$extension : '');
@@ -127,6 +187,7 @@ class WorkspaceAssetService
             'caption' => $caption ? Str::limit(trim($caption), 255, '') : null,
             'tags' => $tags,
             'search_text' => trim(implode(' ', array_filter([$fileName, $caption, implode(' ', $tags), $extracted]))),
+            'metadata' => $metadata,
         ]);
         $validJobIds = $tenant->fieldServiceJobs()->whereIn('id', $jobIds)->pluck('id')->map(fn ($id): int => (int) $id)->all();
         if ($validJobIds !== []) {

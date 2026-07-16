@@ -51,9 +51,10 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
+        $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
         $isFlagshipTenant = $this->isFlagshipTenant($tenant);
@@ -87,6 +88,20 @@ class UnifiedAppNavigationService
 
         if ($canAccessOps) {
             $workItems = [];
+
+            if ($classSchedulingEnabled && Route::has('class-scheduling.index')) {
+                $workItems[] = [
+                    'key' => 'class-scheduling',
+                    'icon' => 'calendar-days',
+                    'href' => route('class-scheduling.index'),
+                    'label' => 'Classes',
+                    'current' => request()->routeIs('class-scheduling.*'),
+                    'children' => [
+                        ['key' => 'class-scheduling-calendar', 'icon' => 'calendar-days', 'href' => route('class-scheduling.index'), 'label' => 'Calendar', 'current' => request()->routeIs('class-scheduling.index')],
+                        ['key' => 'class-scheduling-settings', 'icon' => 'cog-6-tooth', 'href' => route('class-scheduling.index').'#class-settings', 'label' => 'Signup settings', 'current' => false],
+                    ],
+                ];
+            }
 
             if ($fieldServiceEnabled && Route::has('field-service.index')) {
                 $fieldServiceChildren = [

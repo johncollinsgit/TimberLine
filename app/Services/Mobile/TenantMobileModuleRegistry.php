@@ -5,6 +5,7 @@ namespace App\Services\Mobile;
 use App\Models\FieldServiceJob;
 use App\Models\MarketingProfile;
 use App\Models\MessagingConversation;
+use App\Models\ScheduledClass;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkspaceAsset;
@@ -79,6 +80,7 @@ class TenantMobileModuleRegistry
         $screen = match ($moduleKey) {
             'customers' => $this->customersScreen($tenantId),
             'field_service' => $this->fieldServiceScreen($tenantId, $user),
+            'class_scheduling' => $this->classSchedulingScreen($tenantId),
             'estimator' => $this->estimatorScreen($tenantId, $user),
             'work_core' => $this->summaryScreen($module),
             'messaging' => $this->messagingScreen($tenantId),
@@ -115,6 +117,7 @@ class TenantMobileModuleRegistry
                     'title' => trim($profile->first_name.' '.$profile->last_name) ?: ($profile->email ?: 'Customer'),
                     'subtitle' => trim(implode(' | ', array_filter([$profile->email, $profile->phone]))),
                     'icon' => 'user-round',
+                    'destination' => ['kind' => 'customer', 'id' => (int) $profile->id],
                 ])->values(),
                 'empty' => ['title' => 'No customers yet', 'message' => 'Customer records will appear here once they are added or imported.'],
             ]],
@@ -158,6 +161,37 @@ class TenantMobileModuleRegistry
                     'destination' => ['kind' => 'field_service_job', 'id' => (int) $job->id],
                 ])->values(),
                 'empty' => ['title' => 'No active jobs', 'message' => 'Accepted and scheduled work will appear here.'],
+            ]],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function classSchedulingScreen(int $tenantId): array
+    {
+        $classes = Schema::hasTable('scheduled_classes')
+            ? ScheduledClass::query()->forTenantId($tenantId)
+                ->where('starts_at', '>=', now()->startOfDay())
+                ->whereNotIn('status', ['cancelled', 'complete'])
+                ->withSum(['confirmedEnrollments as confirmed_enrollments_sum_seats'], 'seats')
+                ->orderBy('starts_at')->limit(40)->get()
+            : collect();
+
+        return [
+            'id' => 'class-scheduling.index',
+            'kind' => 'list',
+            'title' => 'Class Scheduling',
+            'refreshable' => true,
+            'sections' => [[
+                'type' => 'list',
+                'items' => $classes->map(fn (ScheduledClass $class): array => [
+                    'id' => (string) $class->id,
+                    'title' => (string) $class->title,
+                    'subtitle' => $class->starts_at->format('M j · g:i A').' · '.($class->location ?: 'Location pending'),
+                    'badge' => $class->seats_remaining.' seats left',
+                    'icon' => 'calendar-days',
+                    'destination' => ['kind' => 'scheduled_class', 'id' => (int) $class->id],
+                ])->values(),
+                'empty' => ['title' => 'No upcoming classes', 'message' => 'Published and scheduled classes will appear here.'],
             ]],
         ];
     }
@@ -212,6 +246,7 @@ class TenantMobileModuleRegistry
                     'subtitle' => (string) ($conversation->last_message_preview ?: $conversation->subject ?: 'No preview available'),
                     'badge' => $conversation->unread_count > 0 ? $conversation->unread_count.' unread' : Str::headline((string) $conversation->channel),
                     'icon' => 'messages-square',
+                    'destination' => ['kind' => 'conversation', 'id' => (int) $conversation->id],
                 ])->values(),
                 'empty' => ['title' => 'Inbox is clear', 'message' => 'Customer conversations will appear here.'],
             ]],
@@ -237,13 +272,13 @@ class TenantMobileModuleRegistry
         $owner = $user instanceof User && $this->financialAccess->allows($user, $tenant);
         $report = $owner ? $this->ownerReports->report($tenant, $range['key'], false) : null;
         $metrics = [
-            ['label' => 'Jobs completed', 'value' => number_format($completed), 'tone' => 'teal'],
-            ['label' => 'Upcoming jobs', 'value' => number_format($upcoming->count()), 'tone' => 'blue'],
+            ['label' => 'Jobs completed', 'value' => number_format($completed), 'tone' => 'teal', 'destination' => ['kind' => 'field_service', 'filter' => 'history']],
+            ['label' => 'Upcoming jobs', 'value' => number_format($upcoming->count()), 'tone' => 'blue', 'destination' => ['kind' => 'field_service', 'filter' => 'active']],
         ];
         if (is_array($report)) {
-            $metrics[] = ['label' => 'Work billed', 'value' => '$'.number_format((float) data_get($report, 'cards.work_billed.amount', 0), 2), 'tone' => 'green'];
-            $metrics[] = ['label' => 'Unpaid invoices', 'value' => '$'.number_format((float) data_get($report, 'cards.unpaid_invoices.amount', 0), 2), 'tone' => 'amber'];
-            $metrics[] = ['label' => 'Contract labor', 'value' => data_get($report, 'cards.contract_labor.amount') === null ? 'Mapping needed' : '$'.number_format((float) data_get($report, 'cards.contract_labor.amount'), 2), 'tone' => 'neutral'];
+            $metrics[] = ['label' => 'Work billed', 'value' => '$'.number_format((float) data_get($report, 'cards.work_billed.amount', 0), 2), 'tone' => 'green', 'destination' => ['kind' => 'reporting', 'section' => 'work_billed']];
+            $metrics[] = ['label' => 'Unpaid invoices', 'value' => '$'.number_format((float) data_get($report, 'cards.unpaid_invoices.amount', 0), 2), 'tone' => 'amber', 'destination' => ['kind' => 'reporting', 'section' => 'unpaid_invoices']];
+            $metrics[] = ['label' => 'Contract labor', 'value' => data_get($report, 'cards.contract_labor.amount') === null ? 'Mapping needed' : '$'.number_format((float) data_get($report, 'cards.contract_labor.amount'), 2), 'tone' => 'neutral', 'destination' => ['kind' => 'reporting', 'section' => 'contract_labor']];
         }
 
         return [
@@ -264,6 +299,7 @@ class TenantMobileModuleRegistry
                     ]))),
                     'badge' => 'Upcoming',
                     'icon' => 'calendar-days',
+                    'destination' => ['kind' => 'field_service_job', 'id' => (int) $job->id],
                 ])->values(), 'empty' => ['title' => 'No upcoming jobs', 'message' => 'Scheduled jobs will appear here.']],
             ],
         ];

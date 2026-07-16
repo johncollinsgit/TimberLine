@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-07-15 - Compact Tenant Home + Class Scheduling
+
+### What Changed
+- Removed the oversized Field Service Workspace copy and Open Palette block from tenant Home surfaces.
+- Moved a compact Google-style workspace search field near the top and made operational summary, calendar, job, customer, reporting, and Branch cards open their relevant destination.
+- Added responsive Class Scheduling calendar/detail/attendee/reminder views and a branded public class signup surface.
+- Added typed native destinations so Home, Classes, customers, messages, reminders, jobs, and photos remain tappable on narrow iPhone layouts.
+
+### Guardrails
+- Cards without a meaningful destination retain informational styling instead of implying an action.
+- Search and card payloads remain permission-aware and tenant-scoped; public scheduling fails closed unless the Branch and class are explicitly available.
+
 ## 2026-07-11 - Backstage Visual Brand Retirement
 
 ### What Changed
