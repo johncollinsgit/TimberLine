@@ -117,6 +117,7 @@ test('storefront wholesale application stores the applicant and notifies the rev
 
     $requestRecord = CustomerAccessRequest::query()->firstOrFail();
     expect($requestRecord->intent)->toBe('production')
+        ->and($requestRecord->application_kind)->toBe(CustomerAccessRequest::KIND_WHOLESALE_APPLICATION)
         ->and($requestRecord->status)->toBe('pending')
         ->and($requestRecord->email)->toBe('ops-review@example.com')
         ->and($requestRecord->name)->toBe('Ops Review')

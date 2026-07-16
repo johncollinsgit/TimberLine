@@ -9,16 +9,22 @@ use Illuminate\Support\Facades\Route;
 class ShopifyEmbeddedUrlGenerator
 {
     public function __construct(
-        protected ShopifyEmbeddedPageRegistry $pageRegistry
-    ) {
-    }
+        protected ShopifyEmbeddedPageRegistry $pageRegistry,
+        protected ?ShopifyEmbeddedAppContext $contextService = null
+    ) {}
 
     /**
      * @return array<string,mixed>
      */
     public function contextQuery(Request $request, ?string $hostOverride = null): array
     {
-        return ShopifyEmbeddedContextQuery::fromRequest($request, $hostOverride);
+        $query = ShopifyEmbeddedContextQuery::fromRequest($request, $hostOverride);
+        $storeKey = $this->contextService?->verifiedSessionStoreKey($request);
+        if ($storeKey !== null) {
+            $query['store_key'] = $storeKey;
+        }
+
+        return $query;
     }
 
     public function append(string $url, Request|array $contextSource, ?string $hostOverride = null): string
@@ -56,7 +62,7 @@ class ShopifyEmbeddedUrlGenerator
      */
     public function redirectToRoute(
         string $routeName,
-        array $parameters = [],
+        array $parameters,
         Request $request,
         ?string $hostOverride = null
     ): string {

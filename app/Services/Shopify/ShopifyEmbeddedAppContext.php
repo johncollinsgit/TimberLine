@@ -12,6 +12,10 @@ class ShopifyEmbeddedAppContext
 {
     protected const PAGE_SESSION_KEY = 'shopify_embedded_page_context';
 
+    protected const PAGE_CONTEXTS_SESSION_KEY = 'shopify_embedded_page_contexts';
+
+    protected const ACTIVE_PAGE_CONTEXT_SESSION_KEY = 'shopify_embedded_active_page_context';
+
     public function __construct(
         protected ShopifyHmacVerifier $hmacVerifier,
         protected ShopifySessionTokenVerifier $sessionTokenVerifier,
@@ -372,20 +376,20 @@ class ShopifyEmbeddedAppContext
         $host = trim((string) ($payload['host'] ?? ''));
 
         if ($storeKey === '' || $shopDomain === '') {
-            $request->session()->forget(self::PAGE_SESSION_KEY);
+            $this->forgetSessionPageContext($request, $storeKey);
 
             return null;
         }
 
         $store = ShopifyStores::find($storeKey, true);
         if ($store === null) {
-            $request->session()->forget(self::PAGE_SESSION_KEY);
+            $this->forgetSessionPageContext($request, $storeKey);
 
             return null;
         }
 
         if ($this->normalizeShopDomain((string) ($store['shop'] ?? '')) !== $shopDomain) {
-            $request->session()->forget(self::PAGE_SESSION_KEY);
+            $this->forgetSessionPageContext($request, $storeKey);
 
             return null;
         }
@@ -413,11 +417,24 @@ class ShopifyEmbeddedAppContext
      */
     protected function storeSessionPageContext(Request $request, array $context): void
     {
-        $request->session()->put(self::PAGE_SESSION_KEY, [
-            'store_key' => (string) ($context['store']['key'] ?? ''),
+        $storeKey = strtolower(trim((string) ($context['store']['key'] ?? '')));
+        $payload = [
+            'store_key' => $storeKey,
             'shop_domain' => $this->normalizeShopDomain((string) ($context['shop_domain'] ?? '')),
             'host' => trim((string) ($context['host'] ?? '')),
-        ]);
+        ];
+        if ($storeKey === '' || $payload['shop_domain'] === '') {
+            return;
+        }
+
+        $contexts = $request->session()->get(self::PAGE_CONTEXTS_SESSION_KEY, []);
+        $contexts = is_array($contexts) ? $contexts : [];
+        $contexts[$storeKey] = $payload;
+
+        $request->session()->put(self::PAGE_CONTEXTS_SESSION_KEY, $contexts);
+        $request->session()->put(self::ACTIVE_PAGE_CONTEXT_SESSION_KEY, $storeKey);
+        // Preserve the original slot during rollout for sessions created by older releases.
+        $request->session()->put(self::PAGE_SESSION_KEY, $payload);
     }
 
     /**
@@ -425,9 +442,45 @@ class ShopifyEmbeddedAppContext
      */
     protected function sessionPayload(Request $request): ?array
     {
+        $contexts = $request->session()->get(self::PAGE_CONTEXTS_SESSION_KEY, []);
+        $contexts = is_array($contexts) ? $contexts : [];
+        $requestedStoreKey = strtolower(trim((string) $request->query('store_key', '')));
+        if ($requestedStoreKey !== '' && is_array($contexts[$requestedStoreKey] ?? null)) {
+            return $contexts[$requestedStoreKey];
+        }
+
+        $activeStoreKey = strtolower(trim((string) $request->session()->get(self::ACTIVE_PAGE_CONTEXT_SESSION_KEY, '')));
+        if ($activeStoreKey !== '' && is_array($contexts[$activeStoreKey] ?? null)) {
+            return $contexts[$activeStoreKey];
+        }
+
         $payload = $request->session()->get(self::PAGE_SESSION_KEY);
 
         return is_array($payload) ? $payload : null;
+    }
+
+    public function verifiedSessionStoreKey(Request $request): ?string
+    {
+        $payload = $this->sessionPayload($request);
+        $storeKey = strtolower(trim((string) ($payload['store_key'] ?? '')));
+
+        return $storeKey !== '' ? $storeKey : null;
+    }
+
+    protected function forgetSessionPageContext(Request $request, string $storeKey): void
+    {
+        $normalized = strtolower(trim($storeKey));
+        $contexts = $request->session()->get(self::PAGE_CONTEXTS_SESSION_KEY, []);
+        $contexts = is_array($contexts) ? $contexts : [];
+        if ($normalized !== '') {
+            unset($contexts[$normalized]);
+            $request->session()->put(self::PAGE_CONTEXTS_SESSION_KEY, $contexts);
+        }
+
+        if ($normalized === '' || $request->session()->get(self::ACTIVE_PAGE_CONTEXT_SESSION_KEY) === $normalized) {
+            $request->session()->forget(self::ACTIVE_PAGE_CONTEXT_SESSION_KEY);
+        }
+        $request->session()->forget(self::PAGE_SESSION_KEY);
     }
 
     protected function requestHasSignedQuery(Request $request): bool

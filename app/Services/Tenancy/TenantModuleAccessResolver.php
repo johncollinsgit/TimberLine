@@ -1297,6 +1297,7 @@ class TenantModuleAccessResolver
             'channels' => $canonicalArray('channels'),
             'tenant_slugs' => $canonicalArray('tenant_slugs'),
             'shopify_store_keys' => $canonicalArray('shopify_store_keys'),
+            'shopify_embedded_surfaces' => $canonicalArray('shopify_embedded_surfaces'),
             'required_shopify_store_role' => $canonicalString('required_shopify_store_role'),
             'billing_mode' => $canonicalString('billing_mode', 'unavailable'),
             'dependencies' => $canonicalArray('dependencies'),

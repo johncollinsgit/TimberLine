@@ -5,19 +5,21 @@ namespace App\Services\Onboarding;
 use App\Models\CustomerAccessRequest;
 use App\Models\User;
 use Illuminate\Support\Carbon;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class CustomerAccessRequestService
 {
     public const INTENT_DEMO = 'demo';
+
     public const INTENT_PRODUCTION = 'production';
 
     /**
      * @param  array{
      *   intent:string,
+     *   application_kind?:string,
      *   name:string,
      *   email:string,
      *   company?:string,
@@ -51,6 +53,10 @@ class CustomerAccessRequestService
         $intent = strtolower(trim((string) ($input['intent'] ?? self::INTENT_PRODUCTION)));
         if (! in_array($intent, [self::INTENT_DEMO, self::INTENT_PRODUCTION], true)) {
             $intent = self::INTENT_PRODUCTION;
+        }
+        $applicationKind = strtolower(trim((string) ($input['application_kind'] ?? CustomerAccessRequest::KIND_PLATFORM_ACCESS)));
+        if (! in_array($applicationKind, [CustomerAccessRequest::KIND_PLATFORM_ACCESS, CustomerAccessRequest::KIND_WHOLESALE_APPLICATION], true)) {
+            $applicationKind = CustomerAccessRequest::KIND_PLATFORM_ACCESS;
         }
 
         $email = strtolower(trim((string) ($input['email'] ?? '')));
@@ -88,10 +94,10 @@ class CustomerAccessRequestService
             $requestedSlug = trim((string) config('tenancy.onboarding.demo_tenant_slug', 'demo'));
         }
 
-        return DB::transaction(function () use ($intent, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $phone, $city, $state, $zip, $country, $address, $address2, $retailLicenseNumber, $position, $referral, $currentSuppliers, $contactPreference, $agreementAccepted, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
+        return DB::transaction(function () use ($intent, $applicationKind, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $phone, $city, $state, $zip, $country, $address, $address2, $retailLicenseNumber, $position, $referral, $currentSuppliers, $contactPreference, $agreementAccepted, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
             $normalizedSlug = $this->normalizeSlug($requestedSlug);
 
-            $existing = $this->findOpenRequest($email, $normalizedSlug);
+            $existing = $this->findOpenRequest($email, $normalizedSlug, $applicationKind);
             if ($existing) {
                 if ($this->isRejected($existing)) {
                     throw ValidationException::withMessages([
@@ -104,6 +110,7 @@ class CustomerAccessRequestService
                     'company' => $company !== '' ? $company : $existing->company,
                     'message' => $message !== '' ? $message : $existing->message,
                     'intent' => $intent,
+                    'application_kind' => $applicationKind,
                     'requested_tenant_slug' => $normalizedSlug,
                     'metadata' => array_merge((array) ($existing->metadata ?? []), array_filter([
                         'business_type' => $businessType !== '' ? $businessType : null,
@@ -149,6 +156,7 @@ class CustomerAccessRequestService
 
             $request = CustomerAccessRequest::query()->create([
                 'intent' => $intent,
+                'application_kind' => $applicationKind,
                 'status' => 'pending',
                 'name' => $name,
                 'email' => $email,
@@ -186,7 +194,7 @@ class CustomerAccessRequestService
         });
     }
 
-    protected function findOpenRequest(string $email, ?string $normalizedSlug): ?CustomerAccessRequest
+    protected function findOpenRequest(string $email, ?string $normalizedSlug, string $applicationKind): ?CustomerAccessRequest
     {
         if (! \Schema::hasTable('customer_access_requests')) {
             return null;
@@ -194,6 +202,7 @@ class CustomerAccessRequestService
 
         $query = CustomerAccessRequest::query()
             ->where('email', $email)
+            ->where('application_kind', $applicationKind)
             ->whereIn('status', ['pending', 'approved'])
             ->orderByDesc('id');
 
