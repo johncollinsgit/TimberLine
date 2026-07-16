@@ -2,6 +2,14 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Front Yard Foods Scheduling Guardrails (2026-07-15)
+
+- Keep Class Scheduling reusable and tenant-scoped. Public signup must resolve a visible, enabled Branch and published class, then enforce capacity and normalized-email uniqueness under a database transaction.
+- Use `php artisan everbranch:prepare-front-yard-foods` for demo content. It must remain idempotent, preserve memberships, prefer tenant ID 4 only when free, fall forward to the smallest open ID, and audit commercial/module changes.
+- Reminder creation requires class consent plus a usable channel. Demo preparation may schedule reminders but must never deliver SMS or email automatically; live test delivery requires provider readiness and explicit action-time confirmation.
+- Job images must be imported into canonical private workspace assets and retain source/license attribution. Never hotlink untracked images.
+- Mobile class, enrollment, customer, message, and reminder requests must re-resolve membership, tenant, Branch access, and resource ownership on the server.
+
 ## Production Infrastructure Reality (verified 2026-07-06)
 
 - Production is ONE DigitalOcean droplet: IP `129.212.138.111`, hostname `Backstage`, managed by Laravel Forge (`modern-forestry` / `backstage-pfw`). One nginx serves every domain: `theeverbranch.com` (canonical, incl. `app.` and tenant wildcards), `backstage.theforestrystudio.com` (legacy), `evergrovesoftware.com`, `forestrybackstage.com`. All are Cloudflare-proxied.

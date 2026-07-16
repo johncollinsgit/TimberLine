@@ -1,5 +1,13 @@
 # Modern Forestry Backstage
 
+## Front Yard Foods Class Scheduling Demo (2026-07-15)
+
+- Class Scheduling is a reusable tenant-scoped Branch for published classes, capacity, enrollments, reminders, calendar views, attendee navigation, and the fail-closed public signup surface at `/signup/classes/{tenant}`.
+- Prepare the Front Yard Foods demonstration idempotently with `php artisan everbranch:prepare-front-yard-foods`. The command reuses slug `front-yard-foods`; otherwise it prefers tenant ID 4 and then the smallest open ID above 4. It preserves memberships while granting `johncollinsemail@gmail.com` tenant-admin access.
+- Demo preparation creates fictional customers using test phone `8646165468`, sourdough/gardening/preserving/edible-design classes, consultation and edible-landscape jobs, and durable job photos with source/license metadata. Re-running it does not duplicate records.
+- Home uses a compact top search field and clickable operational cards. The old Field Service Workspace hero and Open Palette block are retired across tenants.
+- Live SMS/email delivery remains provider-, consent-, and action-gated. Preparation schedules preview reminders only; it never sends automatically. See `docs/front-yard-foods-demo.md` for sources, verification, and release notes.
+
 ## Reusable Wholesale Operations + Strict Shopify Surface Isolation (2026-07-15)
 
 - `wholesale_operations` is an included, Module Store-visible Shopify module for eligible plans. It is reusable across tenants, disabled until setup, and has no Modern Forestry tenant allowlist.

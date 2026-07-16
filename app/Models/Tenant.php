@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Tenant extends Model
@@ -89,6 +89,16 @@ class Tenant extends Model
     public function moduleStates(): HasMany
     {
         return $this->hasMany(TenantModuleState::class);
+    }
+
+    public function scheduledClasses(): HasMany
+    {
+        return $this->hasMany(ScheduledClass::class);
+    }
+
+    public function classSchedulingSetting(): HasOne
+    {
+        return $this->hasOne(ClassSchedulingSetting::class);
     }
 
     public function moduleEntitlements(): HasMany

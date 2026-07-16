@@ -1,5 +1,12 @@
 # SYSTEM SNAPSHOT
 
+## Front Yard Foods Scheduling (2026-07-15)
+
+- `class_scheduling` is the reusable Class Scheduling Branch. It owns tenant settings, scheduled classes, capacity, enrollments, reminders, internal calendar/detail views, public fail-closed signup, and mobile contract v2 destinations.
+- `everbranch:prepare-front-yard-foods` reuses the canonical slug, prefers open tenant ID 4 with a smallest-open-ID fallback, preserves memberships, grants the demonstration admin, and idempotently seeds fictional customers/classes/jobs/photos. Commercial and module mutations use the audited landlord service.
+- Home no longer renders the oversized Field Service Workspace/Open Palette hero. Compact search and operational cards resolve tenant/permission-aware destinations on web and mobile.
+- SMS and email delivery are not automatic. Reminders remain scheduled/preview-only until consent, provider readiness, and an explicit send action are verified.
+
 ## Project Overview
 - Fire Forge Tech is the platform owner.
 - The Forestry Studio is the flagship tenant, not the architectural center of the platform.

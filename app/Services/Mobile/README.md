@@ -1,5 +1,11 @@
 # Mobile Catalog Services
 
+## Class Scheduling Contract (2026-07-15)
+
+`TenantMobileClassSchedulingController` exposes the tenant calendar, class detail/attendees, customer/message destinations, and consent-gated reminder scheduling. Every request is protected by mobile authentication and workspace membership, then explicitly validates tenant ownership and the canonical `class_scheduling` Branch manifest. The native client must not infer tenant or resource access from identifiers supplied by the device.
+
+Calendar/detail cards carry typed `class_scheduling`, `scheduled_class`, `customer`, and `message_customer` destinations. Reminder actions are limited to authorized workspace roles and require an attendee contact method plus the class consent flag; delivery remains a separate provider-gated operation.
+
 ## Everbranch Contract v2
 
 `TenantMobileMessagingService` owns tenant-wide conversation discovery and delegates delivery, consent, suppression, metering, and App-thread behavior to the established messaging services. `TenantMobileResourceService` owns customer details and server-resolved order/job/client Work payloads. `TenantMobileLandlordService` is guarded by `MobileLandlordAccessService` and exposes audited, non-destructive triage only.
