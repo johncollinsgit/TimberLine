@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\TenantForm;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -257,6 +258,53 @@ test('shopify embedded wholesale app can approve through a mapped shopify admin 
 
     Notification::assertSentToTimes($user, ApprovalPasswordSetupNotification::class, 1);
     expect($actor->email)->toBe('ops-review@example.com');
+});
+
+test('shopify embedded wholesale application decisions use a session token instead of iframe csrf state', function (): void {
+    $accessRequest = seedEmbeddedWholesaleApplication('reject-me@example.com');
+    $actor = User::factory()->create([
+        'email' => 'ops-reject@example.com',
+        'role' => 'admin',
+        'is_active' => true,
+    ]);
+    $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
+    $actor->tenants()->attach($tenant->id, ['role' => 'admin']);
+
+    $response = $this->withMiddleware(ValidateCsrfToken::class)
+        ->withHeader('Accept', 'application/json')
+        ->post(route('shopify.app.wholesale.applications.reject', [
+            'accessRequest' => $accessRequest,
+            'store_key' => 'wholesale',
+        ]), [
+            'shopify_session_token' => wholesaleShopifySessionToken([
+                'email' => 'ops-reject@example.com',
+            ]),
+            'rejection_note' => 'Not a fit right now.',
+        ]);
+
+    $response->assertOk()
+        ->assertJsonPath('ok', true);
+
+    expect((string) $accessRequest->fresh()->status)->toBe('rejected')
+        ->and((string) $accessRequest->fresh()->rejection_note)->toBe('Not a fit right now.');
+});
+
+test('shopify embedded wholesale application decisions fail closed without a session token', function (): void {
+    $accessRequest = seedEmbeddedWholesaleApplication('still-pending@example.com');
+
+    $response = $this->withMiddleware(ValidateCsrfToken::class)
+        ->withHeader('Accept', 'application/json')
+        ->post(route('shopify.app.wholesale.applications.reject', [
+            'accessRequest' => $accessRequest,
+            'store_key' => 'wholesale',
+        ]), [
+            'rejection_note' => 'This must not be applied.',
+        ]);
+
+    $response->assertUnauthorized()
+        ->assertJsonPath('ok', false);
+
+    expect((string) $accessRequest->fresh()->status)->toBe('pending');
 });
 
 test('shopify embedded wholesale app does not auto provision an unknown shopify admin as an operator', function (): void {
