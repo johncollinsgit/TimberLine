@@ -1522,7 +1522,7 @@ Route::prefix('shopify/marketing/v1')
             ->name('google-business.review.start');
     });
 
-Route::prefix('shopify')->middleware('web')->group(function () {
+Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/wholesale', [ShopifyEmbeddedAppController::class, 'showWholesale'])->name('shopify.app.wholesale');
     Route::get('/app/wholesale/applications', [ShopifyEmbeddedAppController::class, 'showWholesaleApplications'])

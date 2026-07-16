@@ -55,6 +55,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.tenant.context' => \App\Http\Middleware\ResolveAuthTenantContext::class,
             'module' => \App\Http\Middleware\EnsureModuleAccess::class,
             'mobile.tenant' => \App\Http\Middleware\EnsureMobileTenantAccess::class,
+            'shopify.embedded.surface' => \App\Http\Middleware\EnforceShopifyEmbeddedSurface::class,
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
         ]);

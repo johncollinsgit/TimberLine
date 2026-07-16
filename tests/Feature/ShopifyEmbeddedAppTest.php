@@ -54,22 +54,20 @@ test('shopify embedded app route renders verified admin shell for configured sto
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
 });
 
-test('shopify embedded app route renders verified admin shell for wholesale store', function () {
-    configureEmbeddedWholesaleStore();
+test('shopify embedded retail app route redirects a verified wholesale store to wholesale overview', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+        'plan' => 'pro',
+    ]);
+    configureEmbeddedWholesaleStore((int) $tenant->id);
 
     $response = $this->get(route('shopify.app', wholesaleEmbeddedSignedQuery()));
 
-    $response->assertOk()
-        ->assertSeeText('Dashboard')
-        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
-        ->assertSeeText('Recent customer purchase activity')
-        ->assertSee('<s-app-nav>', false)
-        ->assertHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;');
-
-    expect($response->headers->get('X-Frame-Options'))->toBeNull();
+    $response->assertRedirectContains('/shopify/app/wholesale');
 });
 
-test('shopify embedded app route bootstraps wholesale shell from hinted store key when signed params are incomplete', function () {
+test('shopify embedded app route does not trust an unverified store key hint', function () {
     configureEmbeddedWholesaleStore();
 
     $response = $this->get(route('shopify.app', [
@@ -77,11 +75,10 @@ test('shopify embedded app route bootstraps wholesale shell from hinted store ke
         'host' => 'wholesale-admin-host-token',
     ]));
 
-    $response->assertOk()
+    $response->assertUnauthorized()
         ->assertSeeText('Dashboard')
-        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
-        ->assertDontSeeText('We could not verify this Shopify request')
-        ->assertSee('data-dashboard-lite', false);
+        ->assertDontSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertDontSee('data-dashboard-lite', false);
 });
 
 test('shopify embedded wholesale entry route fails closed without signed query params', function () {

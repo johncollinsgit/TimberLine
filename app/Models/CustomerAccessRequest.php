@@ -2,14 +2,20 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CustomerAccessRequest extends Model
 {
+    public const KIND_PLATFORM_ACCESS = 'platform_access';
+
+    public const KIND_WHOLESALE_APPLICATION = 'wholesale_application';
+
     protected $fillable = [
         'intent',
+        'application_kind',
         'status',
         'name',
         'email',
@@ -58,5 +64,10 @@ class CustomerAccessRequest extends Model
     public function formSubmission(): HasOne
     {
         return $this->hasOne(FormSubmission::class, 'customer_access_request_id');
+    }
+
+    public function scopeWholesaleApplications(Builder $query): Builder
+    {
+        return $query->where('application_kind', self::KIND_WHOLESALE_APPLICATION);
     }
 }

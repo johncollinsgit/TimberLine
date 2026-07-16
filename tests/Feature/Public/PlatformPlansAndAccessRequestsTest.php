@@ -169,6 +169,7 @@ test('production access request submission preserves requested tenant slug', fun
     $request = CustomerAccessRequest::query()->where('email', 'ops@acme.example.com')->first();
     expect($request)->not->toBeNull()
         ->and($request->intent)->toBe('production')
+        ->and($request->application_kind)->toBe(CustomerAccessRequest::KIND_PLATFORM_ACCESS)
         ->and($request->requested_tenant_slug)->toBe('acme')
         ->and((string) data_get($request->metadata, 'business_type'))->toBe('landscaper')
         ->and((string) data_get($request->metadata, 'team_size'))->toBe('6_20')

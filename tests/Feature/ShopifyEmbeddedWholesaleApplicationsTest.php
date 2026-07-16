@@ -49,6 +49,7 @@ function seedEmbeddedWholesaleApplication(string $email = 'jane@example.com'): C
 
     $accessRequest = CustomerAccessRequest::query()->create([
         'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
         'status' => 'pending',
         'name' => 'Jane Buyer',
         'email' => $email,

@@ -49,6 +49,7 @@ class PlatformAccessRequestController extends Controller
 
         $requestRecord = $service->submit([
             'intent' => (string) $validated['intent'],
+            'application_kind' => \App\Models\CustomerAccessRequest::KIND_PLATFORM_ACCESS,
             'name' => (string) $validated['name'],
             'email' => (string) $validated['email'],
             'company' => (string) ($validated['company'] ?? ''),
@@ -106,6 +107,7 @@ class PlatformAccessRequestController extends Controller
 
         $requestRecord = $service->submit([
             'intent' => 'production',
+            'application_kind' => \App\Models\CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
             'name' => trim((string) ($contact['name'] ?? '')),
             'email' => trim((string) ($contact['email'] ?? '')),
             'company' => trim((string) ($contact['company'] ?? '')),
