@@ -9,6 +9,7 @@ use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\Order;
+use App\Models\ScheduledClass;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
@@ -58,6 +59,14 @@ class UnifiedDashboardService
             ? $this->financialSummaryCards($ownerReport)
             : $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics);
 
+        $hero = $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics);
+        $hero['href'] = $this->destinationHref((array) ($hero['destination'] ?? []), $tenant, $range['key']);
+        $summaryCards = array_map(function (array $card) use ($tenant, $range): array {
+            $card['href'] = $this->destinationHref((array) ($card['destination'] ?? []), $tenant, $range['key']);
+
+            return $card;
+        }, $summaryCards);
+
         return [
             'tenant_id' => $tenantId,
             'tenant_slug' => $tenant?->slug,
@@ -70,9 +79,10 @@ class UnifiedDashboardService
                 'options' => $range['options'],
             ],
             'experience_profile' => $profile,
-            'hero' => $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics),
+            'hero' => $hero,
             'summary_cards' => $summaryCards,
             'upcoming_jobs' => $ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant),
+            'class_calendar' => $this->classCalendar($tenant),
             'owner_reporting' => $ownerReport,
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
@@ -128,6 +138,42 @@ class UnifiedDashboardService
             ])->all();
     }
 
+    /** @return array<string,mixed>|null */
+    protected function classCalendar(?Tenant $tenant): ?array
+    {
+        if (! $tenant || ! Schema::hasTable('scheduled_classes')
+            || ! $this->moduleAccess->canAccess((int) $tenant->id, 'class_scheduling')) {
+            return null;
+        }
+
+        $month = now()->startOfMonth();
+        $classes = ScheduledClass::query()
+            ->forTenantId((int) $tenant->id)
+            ->whereBetween('starts_at', [$month->copy()->startOfWeek(), $month->copy()->endOfMonth()->endOfWeek()])
+            ->whereNotIn('status', ['cancelled'])
+            ->withSum(['confirmedEnrollments as confirmed_enrollments_sum_seats'], 'seats')
+            ->orderBy('starts_at')
+            ->get()
+            ->map(fn (ScheduledClass $class): array => [
+                'id' => (int) $class->id,
+                'title' => (string) $class->title,
+                'category' => (string) ($class->category ?: 'Class'),
+                'starts_at' => $class->starts_at->toIso8601String(),
+                'seats_taken' => $class->seats_taken,
+                'capacity' => (int) $class->capacity,
+                'href' => route('class-scheduling.show', $class),
+                'destination' => ['kind' => 'scheduled_class', 'id' => (int) $class->id],
+            ])->all();
+
+        return [
+            'month' => $month->format('Y-m'),
+            'label' => $month->format('F Y'),
+            'classes' => $classes,
+            'href' => route('class-scheduling.index', ['month' => $month->format('Y-m')]),
+            'destination' => ['kind' => 'class_scheduling'],
+        ];
+    }
+
     /**
      * @return array<string,mixed>
      */
@@ -156,6 +202,7 @@ class UnifiedDashboardService
                 'value' => '$'.number_format($revenue, 2),
                 'supporting' => number_format($orders).' recent orders',
                 'tone' => 'emerald',
+                'destination' => ['kind' => 'orders'],
             ];
         }
 
@@ -170,6 +217,7 @@ class UnifiedDashboardService
                 'value' => number_format($openJobs),
                 'supporting' => 'Customer jobs waiting for work, materials, or follow-up',
                 'tone' => 'amber',
+                'destination' => ['kind' => 'field_service', 'view' => 'list', 'filter' => 'active'],
             ];
         }
 
@@ -192,6 +240,7 @@ class UnifiedDashboardService
                 'value' => number_format($reachable),
                 'supporting' => 'Profiles with at least one usable contact path',
                 'tone' => 'sky',
+                'destination' => ['kind' => 'customers'],
             ];
         }
 
@@ -206,6 +255,7 @@ class UnifiedDashboardService
                 'value' => number_format($openQueue),
                 'supporting' => 'Orders currently moving through the pipeline',
                 'tone' => 'amber',
+                'destination' => ['kind' => 'orders'],
             ];
         }
 
@@ -214,6 +264,7 @@ class UnifiedDashboardService
             'value' => 'Ready',
             'supporting' => 'Search, shortcuts, and module discovery are available from this home surface.',
             'tone' => 'emerald',
+            'destination' => ['kind' => 'modules'],
         ];
     }
 
@@ -254,6 +305,7 @@ class UnifiedDashboardService
                     'label' => 'Customers',
                     'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'People and businesses you work for',
+                    'destination' => ['kind' => 'customers'],
                 ];
             }
 
@@ -262,6 +314,7 @@ class UnifiedDashboardService
                     'label' => 'Jobs',
                     'value' => number_format((int) FieldServiceJob::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'Service work in this workspace',
+                    'destination' => ['kind' => 'field_service', 'view' => 'list', 'filter' => 'active'],
                 ];
             }
 
@@ -270,6 +323,7 @@ class UnifiedDashboardService
                     'label' => 'Materials',
                     'value' => number_format((int) FieldServiceMaterial::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'Parts and materials to track',
+                    'destination' => ['kind' => 'field_service', 'section' => 'materials'],
                 ];
             }
 
@@ -278,6 +332,7 @@ class UnifiedDashboardService
                     'label' => 'Work vans',
                     'value' => number_format((int) FieldServiceVehicle::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                     'detail' => 'Vehicles in the field',
+                    'destination' => ['kind' => 'field_service', 'section' => 'vehicles'],
                 ];
             }
 
@@ -289,6 +344,7 @@ class UnifiedDashboardService
                 'label' => 'Customers',
                 'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                 'detail' => 'Unified tenant-scoped profiles',
+                'destination' => ['kind' => 'customers'],
             ];
         }
 
@@ -297,6 +353,7 @@ class UnifiedDashboardService
                 'label' => 'Orders',
                 'value' => number_format((int) Order::query()->forTenantId($tenantId)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->count()),
                 'detail' => 'Tenant-linked order records',
+                'destination' => ['kind' => 'orders'],
             ];
         }
 
@@ -305,6 +362,7 @@ class UnifiedDashboardService
                 'label' => 'Imports',
                 'value' => number_format((int) MarketingImportRun::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
                 'detail' => 'Import runs and sync batches',
+                'destination' => ['kind' => 'imports'],
             ];
         }
 
@@ -312,6 +370,7 @@ class UnifiedDashboardService
             'label' => 'Modules',
             'value' => number_format(count((array) ($catalog['sections']['active'] ?? []))),
             'detail' => 'Active modules in this workspace',
+            'destination' => ['kind' => 'modules'],
         ];
 
         return array_slice($cards, 0, 4);
@@ -414,14 +473,7 @@ class UnifiedDashboardService
         bool $canAccessMarketing,
         bool $canAccessOps
     ): array {
-        $actions = [
-            [
-                'label' => 'Search everything',
-                'description' => 'Find customers, orders, imports, modules, and key workflows quickly.',
-                'intent' => 'open-command',
-                'tone' => 'neutral',
-            ],
-        ];
+        $actions = [];
 
         if ($canAccessOps && (string) ($profile['use_case_profile'] ?? 'ops') === 'field_service' && route('field-service.index', [], false)) {
             $actions[] = [
@@ -551,5 +603,24 @@ class UnifiedDashboardService
                 'href' => route('marketing.modules', ['module' => (string) ($module['module_key'] ?? '')]),
             ];
         }, $rows);
+    }
+
+    /** @param array<string,mixed> $destination */
+    protected function destinationHref(array $destination, ?Tenant $tenant, string $rangeKey): ?string
+    {
+        $kind = (string) ($destination['kind'] ?? '');
+
+        return match ($kind) {
+            'field_service', 'field_service_job' => route('field-service.index').($destination['section'] ?? false ? '#'.(string) $destination['section'] : ''),
+            'customers', 'customer' => route('marketing.customers'),
+            'orders' => route('shipping.orders'),
+            'imports' => route('marketing.providers-integrations'),
+            'modules' => route('marketing.modules'),
+            'reporting' => $tenant ? route('quickbooks.reports.index', ['tenant' => $tenant->slug, 'range' => $rangeKey]) : null,
+            'class_scheduling', 'scheduled_class' => isset($destination['id'])
+                ? route('class-scheduling.show', ['scheduledClass' => (int) $destination['id']])
+                : route('class-scheduling.index'),
+            default => null,
+        };
     }
 }
