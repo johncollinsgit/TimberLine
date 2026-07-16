@@ -148,7 +148,7 @@ test('shopify embedded wholesale app uses embedded app client id when configured
         ->assertSee('<meta name="shopify-api-key" content="wholesale-embedded-client-id">', false);
 });
 
-test('shopify embedded wholesale app detail renders approval controls and client-side identity bootstrap placeholders', function (): void {
+test('shopify embedded wholesale app detail submits decisions with authenticated json and visible status feedback', function (): void {
     $accessRequest = seedEmbeddedWholesaleApplication();
 
     $response = $this->get(route('shopify.app.wholesale.applications.show', array_merge([
@@ -157,9 +157,13 @@ test('shopify embedded wholesale app detail renders approval controls and client
     ], wholesaleEmbeddedSignedQuery())));
 
     $response->assertOk()
-        ->assertSeeText('Finishing Shopify admin verification')
+        ->assertSeeText('Shopify will verify your admin identity when you choose an action.')
         ->assertSeeText('Approve application')
-        ->assertSee('shopify_session_token', false);
+        ->assertSee('shopify_session_token', false)
+        ->assertSee('data-embedded-approval-form', false)
+        ->assertSee("'X-Requested-With': 'XMLHttpRequest'", false)
+        ->assertSee('window.location.assign(payload.redirect_url)', false)
+        ->assertSeeText('Shopify admin identity verified.');
 });
 
 test('shopify embedded wholesale app can approve through a mapped shopify admin identity', function (): void {

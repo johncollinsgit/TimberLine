@@ -70,11 +70,11 @@
             <a href="{{ $embeddedUrl(route('shopify.app.wholesale', ['store_key' => 'wholesale'], false)) }}" class="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                 Back to applications
             </a>
-            <div class="text-sm text-zinc-600" data-embedded-identity-label>
+            <div class="text-sm text-zinc-600" data-embedded-identity-label aria-live="polite">
                 @if ($canManageApproval)
                     Signed in as {{ $actor?->email }}.
                 @elseif (filled($contextToken))
-                    Finishing Shopify admin verification…
+                    Shopify will verify your admin identity when you choose an action.
                 @else
                     Read-only mode until your Shopify admin email matches a wholesale operator.
                 @endif
@@ -151,15 +151,15 @@
                     <div class="text-sm font-semibold text-zinc-950">Review actions</div>
                     @if (filled($contextToken))
                         <div class="mt-3 space-y-4">
-                            <p class="text-sm text-zinc-600" data-embedded-approval-help>
+                            <p class="text-sm text-zinc-600" data-embedded-approval-help aria-live="polite">
                                 @if ($canManageApproval)
                                     Approval actions are ready.
                                 @else
-                                    Finishing Shopify admin verification…
+                                    Choose Approve or Reject to verify your Shopify admin identity.
                                 @endif
                             </p>
 
-                            <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.approve', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3">
+                            <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.approve', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3" data-embedded-approval-form>
                                 @csrf
                                 <input type="hidden" name="context_token" value="{{ $contextToken }}">
                                 <input type="hidden" name="shopify_session_token" value="" data-embedded-session-token-input>
@@ -174,12 +174,12 @@
                                 </label>
                                 <div class="flex flex-wrap gap-2">
                                     @if ($accessRequest->status !== 'approved')
-                                        <button type="submit" class="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button @disabled(! $canManageApproval)>
+                                        <button type="submit" class="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button data-embedded-pending-label="Approving…">
                                             Approve application
                                         </button>
                                     @endif
                                     @if ($accessRequest->status === 'approved')
-                                        <button type="submit" formaction="{{ $embeddedUrl(route('shopify.app.wholesale.applications.resend-activation', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button @disabled(! $canManageApproval)>
+                                        <button type="submit" formaction="{{ $embeddedUrl(route('shopify.app.wholesale.applications.resend-activation', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button data-embedded-pending-label="Sending…">
                                             Resend activation
                                         </button>
                                     @endif
@@ -187,7 +187,7 @@
                             </form>
 
                             @if ($accessRequest->status !== 'approved')
-                                <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3">
+                                <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3" data-embedded-approval-form>
                                     @csrf
                                     <input type="hidden" name="context_token" value="{{ $contextToken }}">
                                     <input type="hidden" name="shopify_session_token" value="" data-embedded-session-token-input>
@@ -200,7 +200,7 @@
                                             placeholder="Optional reason for rejection"
                                         >{{ old('rejection_note', (string) ($accessRequest->rejection_note ?? '')) }}</textarea>
                                     </label>
-                                    <button type="submit" class="rounded-full bg-rose-700 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button @disabled(! $canManageApproval)>
+                                    <button type="submit" class="rounded-full bg-rose-700 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button data-embedded-pending-label="Rejecting…">
                                         Reject application
                                     </button>
                                 </form>
@@ -231,6 +231,7 @@
     <script>
         (function () {
             const tokenInputs = Array.from(document.querySelectorAll('[data-embedded-session-token-input]'));
+            const actionForms = Array.from(document.querySelectorAll('[data-embedded-approval-form]'));
             const actionButtons = Array.from(document.querySelectorAll('[data-embedded-approval-button]'));
             const identityLabel = document.querySelector('[data-embedded-identity-label]');
             const approvalHelp = document.querySelector('[data-embedded-approval-help]');
@@ -294,8 +295,10 @@
                     ? payload.email.trim().toLowerCase()
                     : null;
 
-                if (identityLabel && email) {
-                    identityLabel.textContent = `Signed in as ${email}.`;
+                if (identityLabel) {
+                    identityLabel.textContent = email
+                        ? `Signed in as ${email}.`
+                        : 'Shopify admin identity verified.';
                 }
 
                 if (approvalHelp) {
@@ -312,23 +315,124 @@
                 verificationFinished = true;
             }
 
+            function setButtonsDisabled(disabled) {
+                actionButtons.forEach((button) => {
+                    if (disabled) {
+                        button.setAttribute('disabled', 'disabled');
+                    } else {
+                        button.removeAttribute('disabled');
+                    }
+                });
+            }
+
+            async function acquireSessionToken() {
+                const resolver = await resolveSessionTokenHelper();
+                const token = await resolver({
+                    minTtlMs: 5000,
+                    timeoutMs: 10000,
+                    requestTimeoutMs: 10000,
+                });
+
+                if (typeof token !== 'string' || token.trim() === '') {
+                    throw new Error('Missing Shopify admin session token.');
+                }
+
+                applyVerifiedToken(token.trim());
+
+                return token.trim();
+            }
+
+            async function responsePayload(response) {
+                const body = await response.text();
+                if (body.trim() === '') {
+                    return {};
+                }
+
+                try {
+                    return JSON.parse(body);
+                } catch (error) {
+                    return {};
+                }
+            }
+
+            actionForms.forEach((form) => {
+                form.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+
+                    if (form.dataset.embeddedSubmitting === 'true') {
+                        return;
+                    }
+
+                    const submitter = event.submitter instanceof HTMLButtonElement
+                        ? event.submitter
+                        : form.querySelector('[data-embedded-approval-button]');
+                    const actionUrl = submitter?.formAction || form.action;
+                    const originalLabel = submitter?.textContent || '';
+
+                    form.dataset.embeddedSubmitting = 'true';
+                    setButtonsDisabled(true);
+                    if (submitter) {
+                        submitter.textContent = submitter.dataset.embeddedPendingLabel || 'Working…';
+                    }
+                    if (approvalHelp) {
+                        approvalHelp.textContent = 'Verifying Shopify admin identity…';
+                    }
+
+                    try {
+                        const token = await acquireSessionToken();
+                        const formData = new FormData(form);
+                        formData.set('shopify_session_token', token);
+
+                        const response = await fetch(actionUrl, {
+                            method: 'POST',
+                            headers: {
+                                Accept: 'application/json',
+                                Authorization: `Bearer ${token}`,
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            body: formData,
+                            credentials: 'same-origin',
+                        });
+                        const payload = await responsePayload(response);
+
+                        if (!response.ok || payload.ok !== true) {
+                            throw new Error(payload.message || 'This application action could not be completed.');
+                        }
+
+                        if (approvalHelp) {
+                            approvalHelp.textContent = payload.message || 'Application updated.';
+                        }
+
+                        if (typeof payload.redirect_url === 'string' && payload.redirect_url.trim() !== '') {
+                            window.location.assign(payload.redirect_url);
+                            return;
+                        }
+
+                        window.location.reload();
+                    } catch (error) {
+                        form.dataset.embeddedSubmitting = 'false';
+                        setButtonsDisabled(false);
+                        if (submitter) {
+                            submitter.textContent = originalLabel;
+                        }
+                        if (approvalHelp) {
+                            approvalHelp.textContent = error instanceof Error && error.message.trim() !== ''
+                                ? error.message
+                                : 'Shopify admin verification did not load. Reopen this app from Shopify Admin and try again.';
+                        }
+                    }
+                });
+            });
+
             function bootstrapEmbeddedIdentity() {
                 if (verificationFinished) {
                     return;
                 }
 
-                resolveSessionTokenHelper()
-                    .then((resolver) => resolver())
-                    .then((token) => {
-                        if (typeof token !== 'string' || token.trim() === '') {
-                            throw new Error('Missing Shopify admin session token.');
-                        }
-
-                        applyVerifiedToken(token.trim());
-                    })
+                acquireSessionToken()
                     .catch(() => {
                         if (approvalHelp) {
-                            approvalHelp.textContent = 'Shopify admin verification did not load. Refresh this app from Shopify Admin and try again.';
+                            approvalHelp.textContent = 'Choose an action to retry Shopify admin verification.';
                         }
                     });
             }
