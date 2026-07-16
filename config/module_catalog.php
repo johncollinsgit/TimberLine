@@ -544,7 +544,7 @@ $catalog = [
             'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'none',
             'short_description' => 'Turn classes and workshops into a customer-ready calendar.',
-            'long_description' => 'Create scheduled class sessions, publish available seats, collect customer signups, open attendee records, and schedule email or SMS reminders through the tenant messaging layer.',
+            'long_description' => 'Create scheduled class sessions, publish available seats, collect customer signups, open attendee records, and schedule reminders through the tenant messaging layer.',
             'category' => 'customer_operations',
             'setup_effort' => 'light',
             'required_integrations' => [],
@@ -554,7 +554,7 @@ $catalog = [
                 'best_for' => 'Educators, consultants, makers, food businesses, and service teams that run scheduled classes or workshops.',
                 'what_you_need' => [
                     'The class names, dates, capacities, locations, and prices you want to publish.',
-                    'A verified email or SMS provider before live reminders are sent.',
+                    'A verified messaging provider before live reminders are sent.',
                 ],
                 'next_step' => 'Create the first class, review the public signup page, and confirm reminder timing.',
                 'setup_steps' => [
