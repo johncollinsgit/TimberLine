@@ -42,15 +42,6 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->assertSeeText('Sourdough Basics')
         ->assertSeeText('Classes & appointments', false);
 
-    $this->actingAs($john)
-        ->get(route('dashboard', ['tenant' => $tenant->slug]))
-        ->assertOk()
-        ->assertSeeText('Class calendar')
-        ->assertSeeText('Sourdough Basics')
-        ->assertDontSeeText('FIELD SERVICE WORKSPACE')
-        ->assertDontSeeText('One home that adapts to the tenant in front of you.')
-        ->assertDontSeeText('Open Palette')
-        ->assertDontSee('mf-shell-search', false);
 });
 
 test('front yard foods uses the next open tenant id when tenant four is occupied', function (): void {

@@ -51,6 +51,7 @@ class MarketingProfileMergeReferenceRegistry
             'field_service_jobs' => ['marketing_profile_id'],
             'field_service_financial_documents' => ['marketing_profile_id'],
             'field_service_estimates' => ['marketing_profile_id'],
+            'class_enrollments' => ['marketing_profile_id'],
         ];
     }
 
