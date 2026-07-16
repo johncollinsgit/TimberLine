@@ -1126,7 +1126,7 @@ class ShopifyEmbeddedAppController extends Controller
         string $noteField,
         string $successMessage
     ): RedirectResponse|JsonResponse {
-        $context = $contextService->resolveMutationContext($request);
+        $context = $contextService->resolveAuthenticatedApiContext($request);
         if (! (bool) ($context['ok'] ?? false)) {
             $message = (string) data_get($this->invalidContextResponse($context)->getData(true), 'message', 'This embedded Shopify request could not be verified.');
             $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id]);

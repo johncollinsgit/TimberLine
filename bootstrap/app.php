@@ -38,6 +38,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'shopify/app/api/dashboard/candle-cash-reminders',
             'shopify/app/api/rewards/earn/*',
             'shopify/app/api/rewards/redeem/*',
+            'shopify/app/wholesale/applications/*/approve',
+            'shopify/app/wholesale/applications/*/reject',
+            'shopify/app/wholesale/applications/*/resend-activation',
         ]);
 
         $middleware->redirectUsersTo(function (Request $request): string {
