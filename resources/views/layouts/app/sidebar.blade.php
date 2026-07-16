@@ -254,6 +254,19 @@
           <span class="mf-shell-location-title">{{ $workspaceLabel }}</span>
         </div>
 
+        <button
+          type="button"
+          data-command-trigger
+          class="mf-shell-search"
+          aria-label="Search or ask what you want to do..."
+        >
+          <span class="mf-shell-search-icon" aria-hidden="true">
+            <x-brand.leaf-icon />
+          </span>
+          <span class="mf-shell-search-placeholder">Search or ask what you want to do...</span>
+          <span class="mf-shell-search-shortcut">Cmd K</span>
+        </button>
+
         <div class="mf-shell-actions">
           @foreach($topbarContextPills as $pill)
             <span class="mf-shell-context-pill">{{ $pill }}</span>

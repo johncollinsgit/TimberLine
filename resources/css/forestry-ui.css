@@ -5778,9 +5778,11 @@ body.mf-app-shell {
   color: var(--fb-text-secondary);
   display: flex;
   gap: 0.62rem;
-  min-height: 2.95rem;
+  justify-self: center;
+  max-width: 18rem;
+  min-height: 2.2rem;
   min-width: 0;
-  padding: 0 0.82rem;
+  padding: 0 0.65rem;
   text-align: left;
   width: 100%;
 }
