@@ -108,6 +108,42 @@
                 @endforeach
             </nav>
             <div class="app-topbar-right">
+                @if($commandSearchEnabled)
+                    <form class="app-topbar-search" role="search" data-command-form>
+                        <label class="sr-only" for="app-topbar-command-search">Search {{ $productName }}</label>
+                        <input
+                            id="app-topbar-command-search"
+                            type="search"
+                            class="app-topbar-search-input"
+                            placeholder="{{ $commandSearchPlaceholder }}"
+                            autocomplete="off"
+                            enterkeyhint="search"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="shopify-global-command-menu-panel"
+                            data-command-field
+                        />
+                        <button
+                            id="app-topbar-command-search-trigger"
+                            type="submit"
+                            class="app-topbar-search-button"
+                            aria-haspopup="dialog"
+                            aria-expanded="false"
+                            aria-controls="shopify-global-command-menu-panel"
+                            data-command-trigger
+                        >
+                            Search
+                        </button>
+                    </form>
+                @else
+                    <button
+                        type="button"
+                        class="app-topbar-action"
+                        data-command-trigger
+                    >
+                        Search
+                    </button>
+                @endif
                 <a
                     href="{{ $assistantHref }}"
                     class="app-topbar-action app-topbar-bud"
