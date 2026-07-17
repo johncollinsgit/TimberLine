@@ -96,6 +96,8 @@ class ConfigDoctor extends Command
         $this->line('  Agreement checkout: '.($agreementCheckoutEnabled ? '<info>enabled</info>' : '<fg=yellow>disabled</>'));
         $this->line('  Direct invoicing: '.($directInvoicingEnabled ? '<info>enabled</info>' : '<fg=yellow>disabled</>'));
 
+        $allowProductionTestMode = (bool) config('commercial.billing_readiness.allow_production_test_mode', false);
+        $enabledTenantSlugs = $this->enabledStripeTenantSlugs($agreementCheckoutEnabled, $directInvoicingEnabled);
         $accountId = trim((string) config('services.stripe.account_id'));
         $publishableKey = trim((string) config('services.stripe.publishable_key'));
         $secretKey = trim((string) config('services.stripe.secret'));
@@ -126,8 +128,18 @@ class ConfigDoctor extends Command
         }
 
         if ($isProd && ($publishableMode === 'test' || $secretMode === 'test')) {
-            $this->line('  <fg=red>✗ Test-mode Stripe keys cannot enable production agreement checkout.</>');
-            $failures++;
+            if (! $allowProductionTestMode) {
+                $this->line('  <fg=red>✗ Test-mode Stripe keys cannot enable production-host billing unless EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED=true.</>');
+                $failures++;
+            } else {
+                $this->line('  <info>✓</info> EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED');
+                if ($enabledTenantSlugs === [] || in_array('*', $enabledTenantSlugs, true)) {
+                    $this->line('  <fg=red>✗ Stripe production-host test mode requires a concrete tenant allowlist, not blank or *.</>');
+                    $failures++;
+                } else {
+                    $this->line('  <info>✓</info> Stripe production-host test mode tenant allowlist');
+                }
+            }
         }
 
         if (! $isProd && ($publishableMode === 'live' || $secretMode === 'live')) {
@@ -151,6 +163,23 @@ class ConfigDoctor extends Command
         }
 
         return $failures;
+    }
+
+    /** @return array<int,string> */
+    protected function enabledStripeTenantSlugs(bool $agreementCheckoutEnabled, bool $directInvoicingEnabled): array
+    {
+        $slugs = [];
+        if ($agreementCheckoutEnabled) {
+            $slugs = array_merge($slugs, (array) config('commercial.billing_readiness.agreement_checkout.tenant_slugs', []));
+        }
+        if ($directInvoicingEnabled) {
+            $slugs = array_merge($slugs, (array) config('commercial.billing_readiness.direct_invoicing.tenant_slugs', []));
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn (mixed $slug): string => strtolower(trim((string) $slug)),
+            $slugs
+        ))));
     }
 
     protected function stripeKeyMode(string $value, string $prefix): ?string

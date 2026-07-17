@@ -5,6 +5,7 @@ function configureConfigDoctorProductionRequirements(): void
     config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
     config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('mail.default', 'smtp');
+    config()->set('commercial.billing_readiness.allow_production_test_mode', false);
     config()->set('commercial.billing_readiness.agreement_checkout.enabled', false);
     config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
     config()->set('services.shopify.stores.retail.shop', 'x.myshopify.com');
@@ -16,6 +17,7 @@ function configureAgreementStripe(string $publishableKey, string $secretKey, str
 {
     config()->set('commercial.billing_readiness.agreement_checkout.enabled', true);
     config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
+    config()->set('commercial.billing_readiness.allow_production_test_mode', false);
     config()->set('services.stripe.account_id', 'acct_1234567890');
     config()->set('services.stripe.publishable_key', $publishableKey);
     config()->set('services.stripe.secret', $secretKey);
@@ -45,6 +47,7 @@ test('config doctor passes when the required production keys are present', funct
     config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
     config()->set('app.url', 'https://example.test');
     config()->set('mail.default', 'smtp');
+    config()->set('commercial.billing_readiness.allow_production_test_mode', false);
     config()->set('commercial.billing_readiness.agreement_checkout.enabled', false);
     config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
     config()->set('services.shopify.stores.retail.shop', 'x.myshopify.com');
@@ -129,6 +132,24 @@ test('config doctor accepts live Stripe credentials only with production readine
     config()->set('commercial.billing_readiness.agreement_checkout.relay_payout_verified', true);
 
     $this->artisan('config:doctor --env=production')->assertSuccessful();
+});
+
+test('config doctor allows production-host Stripe sandbox only with explicit gate and concrete tenant allowlist', function (): void {
+    configureConfigDoctorProductionRequirements();
+    config()->set('commercial.billing_readiness.direct_invoicing.enabled', true);
+    config()->set('commercial.billing_readiness.direct_invoicing.tenant_slugs', ['front-yard-foods']);
+    config()->set('services.stripe.account_id', 'acct_1234567890');
+    config()->set('services.stripe.publishable_key', 'pk_test_example');
+    config()->set('services.stripe.secret', 'sk_test_example');
+    config()->set('services.stripe.webhook_secret', 'whsec_example');
+
+    $this->artisan('config:doctor --env=production')->assertFailed();
+
+    config()->set('commercial.billing_readiness.allow_production_test_mode', true);
+    $this->artisan('config:doctor --env=production')->assertSuccessful();
+
+    config()->set('commercial.billing_readiness.direct_invoicing.tenant_slugs', ['*']);
+    $this->artisan('config:doctor --env=production')->assertFailed();
 });
 
 test('config doctor rejects live Stripe credentials when production readiness gates are incomplete', function (): void {

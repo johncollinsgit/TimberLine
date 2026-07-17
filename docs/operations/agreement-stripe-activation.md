@@ -23,8 +23,9 @@ Keep `EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED=false` and `EVERBRANCH_STRIPE_INVOIC
 
 - Local testing: use the ignored repository `.env` with complete `acct_`, `pk_test_`, `sk_test_`, and test-endpoint `whsec_` values.
 - Production: store complete `acct_`, `pk_live_`, `sk_live_`, and production-endpoint `whsec_` values in the Laravel Forge/server environment for `app.theeverbranch.com`.
+- Production-host sandbox: to run a deliberate Stripe test-mode invoice on `app.theeverbranch.com`, use complete test credentials plus `EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED=true` and a concrete tenant allowlist such as `EVERBRANCH_STRIPE_INVOICING_TENANT_SLUGS=front-yard-foods`. Do not use `*`, and turn the sandbox gate off before live billing.
 - Do not paste live secrets into `.env.example`, source control, GitHub, issue comments, or chat. Do not add `pk_`/`sk_` prefixes manually; copy the complete key from Stripe Workbench.
-- Run `php artisan config:doctor --env=production` after setting server values and before enabling the checkout or direct-invoicing flag. The command must reject missing/malformed values, mixed test/live modes, test keys in production, missing webhook secrets, and incomplete tax or Relay gates.
+- Run `php artisan config:doctor --env=production` after setting server values and before enabling the checkout or direct-invoicing flag. The command must reject missing/malformed values, mixed test/live modes, unapproved test keys on production hosts, missing webhook secrets, and incomplete live tax or Relay gates.
 
 ## Direct invoice flow
 
