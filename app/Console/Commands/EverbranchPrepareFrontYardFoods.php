@@ -115,9 +115,10 @@ class EverbranchPrepareFrontYardFoods extends Command
                     actorId: (int) $john->id,
                 );
 
-                foreach (['customers', 'field_service', 'class_scheduling', 'plant_inventory', 'reporting'] as $moduleKey) {
+                foreach (['customers', 'class_scheduling', 'plant_inventory', 'reporting'] as $moduleKey) {
                     $commercial->setTenantModuleState((int) $tenant->id, $moduleKey, true, 'configured', (int) $john->id);
                 }
+                $commercial->setTenantModuleState((int) $tenant->id, 'field_service', false, 'pending', (int) $john->id);
                 $commercial->setTenantModuleEntitlement((int) $tenant->id, 'messaging', [
                     'availability_status' => 'available',
                     'enabled_status' => 'enabled',

@@ -85,7 +85,7 @@ class UnifiedDashboardService
             'experience_profile' => $profile,
             'hero' => $hero,
             'summary_cards' => $summaryCards,
-            'upcoming_jobs' => $ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant),
+            'upcoming_jobs' => $clientFacingFieldService ? ($ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant)) : [],
             'class_calendar' => $this->classCalendar($tenant),
             'front_yard_launch' => $this->frontYardLaunch($tenant),
             'owner_reporting' => $ownerReport,
@@ -678,10 +678,6 @@ class UnifiedDashboardService
     protected function clientFacingFieldServiceEnabled(?Tenant $tenant): bool
     {
         if (! $tenant instanceof Tenant) {
-            return false;
-        }
-
-        if ((string) $tenant->slug === 'front-yard-foods') {
             return false;
         }
 

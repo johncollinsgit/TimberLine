@@ -1,11 +1,19 @@
 <?php
 
+use App\Models\FieldServiceJob;
 use App\Models\MarketingProfile;
 use App\Models\Order;
+use App\Models\QuickBooksReportingSetting;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleState;
 use App\Models\User;
+use App\Services\FieldService\QuickBooksOwnerReportingService;
+
+beforeEach(function (): void {
+    $this->withoutVite();
+});
 
 test('dashboard renders customer-focused hero metric for direct crm tenants', function () {
     $tenant = Tenant::query()->create([
@@ -160,4 +168,51 @@ test('dashboard hides marketing only actions and customer metrics for ops manage
         ->assertDontSeeText('Reachable customers')
         ->assertDontSeeText('Open customers')
         ->assertDontSeeText('Open Modules');
+});
+
+test('dashboard suppresses owner report upcoming jobs when field service is disabled', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Reporting Without Field Service',
+        'slug' => 'reporting-without-field-service',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'quickbooks', 'enabled_override' => true, 'setup_status' => 'configured']);
+    TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'integrations', 'enabled_override' => true, 'setup_status' => 'configured']);
+    TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'field_service', 'enabled_override' => false, 'setup_status' => 'pending']);
+    QuickBooksReportingSetting::query()->create(['tenant_id' => $tenant->id]);
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Hidden owner report job',
+        'status' => 'scheduled',
+        'scheduled_for' => now()->addDay(),
+    ]);
+
+    $user = User::factory()->create(['role' => 'admin']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+    $ownerReports = \Mockery::mock(QuickBooksOwnerReportingService::class);
+    $ownerReports->shouldReceive('report')->once()->andReturn([
+        'cards' => [
+            'unpaid_invoices' => ['amount' => 0, 'count' => 0, 'overdue_amount' => 0],
+            'work_billed' => ['amount' => 0, 'count' => 0],
+            'contract_labor' => ['amount' => null, 'percent' => null],
+        ],
+        'sync_health' => ['connected' => false, 'review_count' => 0],
+        'upcoming_jobs' => [
+            ['title' => 'Hidden owner report job', 'scheduled_for' => now()->addDay()->toIso8601String()],
+        ],
+    ]);
+    $this->app->instance(QuickBooksOwnerReportingService::class, $ownerReports);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['tenant' => $tenant->slug]))
+        ->assertOk()
+        ->assertSeeText('Unpaid invoices')
+        ->assertSeeText('No upcoming jobs are scheduled.')
+        ->assertDontSeeText('Hidden owner report job');
 });
