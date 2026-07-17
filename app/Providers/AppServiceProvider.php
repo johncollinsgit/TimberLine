@@ -3,8 +3,10 @@
 namespace App\Providers;
 
 use App\Models\MarketingReviewHistory;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Observers\MarketingReviewHistoryObserver;
+use App\Observers\TenantObserver;
 use App\Services\Integrations\ConnectionManager;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use App\Services\Onboarding\Rails\DirectOnboardingRailAdapter;
@@ -56,6 +58,7 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         MarketingReviewHistory::observe(MarketingReviewHistoryObserver::class);
+        Tenant::observe(TenantObserver::class);
 
         Date::use(CarbonImmutable::class);
 

@@ -142,12 +142,17 @@ return [
         'messaging_service_sid' => env('TWILIO_MESSAGING_SERVICE_SID'),
         'from_number' => env('TWILIO_FROM_NUMBER'),
         'status_callback_url' => env('TWILIO_STATUS_CALLBACK_URL'),
+        'inbound_callback_url' => env('TWILIO_INBOUND_CALLBACK_URL'),
+        'trust_hub_primary_customer_profile_sid' => env('TWILIO_TRUST_HUB_PRIMARY_CUSTOMER_PROFILE_SID'),
     ],
 
     'sendgrid' => [
         'api_key' => env('SENDGRID_API_KEY'),
         'subuser_ips' => env('SENDGRID_SUBUSER_IPS'),
         'subuser_region' => env('SENDGRID_SUBUSER_REGION', 'global'),
+        'managed_email_domain' => env('EVERBRANCH_MANAGED_EMAIL_DOMAIN', 'messages.theeverbranch.com'),
+        'managed_domain_authentication_id' => env('SENDGRID_MANAGED_DOMAIN_AUTHENTICATION_ID'),
+        'managed_reply_to' => env('EVERBRANCH_MANAGED_EMAIL_REPLY_TO'),
     ],
 
     'modern_forestry_apns' => [

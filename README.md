@@ -813,6 +813,23 @@ Key implementation notes:
 Setup and testing details live in:
 - `docs/architecture/messaging-responses-inbox.md`
 
+## Automatic Tenant Messaging
+
+Everbranch can provision customer email and text messaging without asking tenants to open provider accounts. This path is isolated from Modern Forestry's legacy sender and remains off until an explicit tenant pilot is allowlisted.
+
+- Email uses one verified Everbranch-managed domain with an isolated SendGrid subuser and API key per tenant. The tenant supplies only the mailbox that should receive replies.
+- SMS uses an isolated Twilio subaccount and verified toll-free number per tenant. The tenant supplies the business, use-case, opt-in, privacy, and terms information required for carrier review. Sending remains blocked until Twilio reports approval.
+- Provider credentials and legal-registration details are encrypted and never returned to the tenant setup page.
+- `config/module_catalog.php` is authoritative for monthly prices, included email/SMS units, overage block sizes, and overage block prices. Usage reservations and settlements remain immutable and tenant scoped.
+- Overage is currently enforced through the existing prepaid messaging-credit ledger. Enabling a new recurring or automatic Stripe collection path is separate work.
+
+Required rollout flags and credentials are documented together in `.env.example`. Enable `FEATURE_TENANT_MESSAGING_PLATFORM`, `FEATURE_TENANT_MESSAGING_PROVISIONING`, and `FEATURE_TENANT_MESSAGING_AUTO_BOOTSTRAP` only after SendGrid's managed domain, Twilio callbacks, and an explicit `MARKETING_MESSAGING_AUTOMATIC_TENANT_IDS` allowlist are configured. Verify readiness with:
+
+```bash
+php artisan config:doctor --env=production
+php artisan everbranch:bootstrap-tenant-messaging TENANT_ID --reply-to=owner@example.com --with-sms
+```
+
 ## Shopify Storefront Tracking Bootstrap (2026-04-06)
 
 This repo now contains the Shopify CLI app container files needed for storefront tracking:

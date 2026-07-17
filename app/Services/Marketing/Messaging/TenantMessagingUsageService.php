@@ -50,10 +50,16 @@ class TenantMessagingUsageService
             if ($existing) {
                 return $this->reservationPayload($existing);
             }
-            $includedAvailable = max(0, $period->included_units - $period->used_units - $period->reserved_units);
-            $chargedUnits = max(0, $units - $includedAvailable);
-            $rate = $this->buyerRate($channel);
-            $amount = $chargedUnits * $rate;
+            $pricing = $this->rateCard($channel);
+            $usageBefore = $period->used_units + $period->reserved_units;
+            $usageAfter = $usageBefore + $units;
+            $overageBefore = max(0, $usageBefore - $period->included_units);
+            $overageAfter = max(0, $usageAfter - $period->included_units);
+            $blocksBefore = $this->blocksRequired($overageBefore, $pricing['overage_block_units']);
+            $blocksAfter = $this->blocksRequired($overageAfter, $pricing['overage_block_units']);
+            $chargedBlocks = max(0, $blocksAfter - $blocksBefore);
+            $chargedUnits = max(0, $overageAfter - $overageBefore);
+            $amount = $chargedBlocks * $pricing['overage_block_price_micros'];
             $providerCost = $units * $this->providerCost($provider, $channel);
 
             if ($amount > $credit->availableMicros()) {
@@ -74,11 +80,17 @@ class TenantMessagingUsageService
                 'units' => $units,
                 'amount_micros' => $amount,
                 'provider_cost_micros' => $providerCost,
-                'pricing_version' => (string) config('marketing.messaging.platform.pricing_version'),
+                'pricing_version' => $this->pricingVersion(),
                 'idempotency_key' => 'reserve:'.$idempotencyKey,
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
-                'metadata' => ['charged_units' => $chargedUnits, 'rate_micros' => $rate, 'provider' => $provider],
+                'metadata' => [
+                    'charged_units' => $chargedUnits,
+                    'charged_blocks' => $chargedBlocks,
+                    'overage_block_units' => $pricing['overage_block_units'],
+                    'overage_block_price_micros' => $pricing['overage_block_price_micros'],
+                    'provider' => $provider,
+                ],
                 'occurred_at' => now(),
             ]);
 
@@ -208,7 +220,7 @@ class TenantMessagingUsageService
                 'units' => 0,
                 'amount_micros' => $amountMicros,
                 'provider_cost_micros' => 0,
-                'pricing_version' => (string) config('marketing.messaging.platform.pricing_version'),
+                'pricing_version' => $this->pricingVersion(),
                 'idempotency_key' => 'fund:'.$idempotencyKey,
                 'metadata' => $metadata,
                 'occurred_at' => now(),
@@ -222,14 +234,25 @@ class TenantMessagingUsageService
         $period = $this->periodQuery($tenantId, $channel)->first();
         $credit = TenantMessagingCreditAccount::query()->forAllTenants()->where('tenant_id', $tenantId)->first();
 
+        $pricing = $this->rateCard($channel);
+        $package = $this->packageForChannel($tenantId, $channel);
+        $includedUnits = (int) ($period?->included_units ?? $this->includedUnits($tenantId, $channel));
+        $consumedUnits = (int) (($period?->used_units ?? 0) + ($period?->reserved_units ?? 0));
+
         return [
             'channel' => $channel,
-            'included_units' => (int) ($period?->included_units ?? $this->includedUnits($tenantId, $channel)),
+            'included_units' => $includedUnits,
             'used_units' => (int) ($period?->used_units ?? 0),
             'reserved_units' => (int) ($period?->reserved_units ?? 0),
+            'overage_units' => max(0, $consumedUnits - $includedUnits),
+            'overage_blocks' => $this->blocksRequired(max(0, $consumedUnits - $includedUnits), $pricing['overage_block_units']),
+            'overage_block_units' => $pricing['overage_block_units'],
+            'overage_block_price_micros' => $pricing['overage_block_price_micros'],
+            'package_key' => (string) ($package['key'] ?? ''),
+            'monthly_price_cents' => (int) ($package['monthly_price_cents'] ?? 0),
             'credit_balance_micros' => (int) ($credit?->balance_micros ?? 0),
             'credit_available_micros' => (int) ($credit?->availableMicros() ?? 0),
-            'pricing_version' => (string) config('marketing.messaging.platform.pricing_version'),
+            'pricing_version' => $this->pricingVersion(),
         ];
     }
 
@@ -314,6 +337,12 @@ class TenantMessagingUsageService
 
     protected function includedUnits(int $tenantId, string $channel): int
     {
+        return (int) ($this->packageForChannel($tenantId, $channel)['included_units'] ?? 0);
+    }
+
+    /** @return array{key:string,included_units:int,monthly_price_cents:int}|null */
+    protected function packageForChannel(int $tenantId, string $channel): ?array
+    {
         $addons = TenantAccessAddon::query()
             ->where('tenant_id', $tenantId)
             ->where('enabled', true)
@@ -322,16 +351,36 @@ class TenantMessagingUsageService
             ->pluck('addon_key')
             ->all();
 
-        if ($channel === 'email') {
-            return in_array('bulk_email_marketing', $addons, true) ? 50000 : (in_array('messaging', $addons, true) ? 5000 : 0);
-        }
-
-        return $channel === 'sms' && in_array('sms', $addons, true) ? 1000 : 0;
+        return collect($addons)
+            ->map(function (string $addon) use ($channel): array {
+                return [
+                    'key' => $addon,
+                    'included_units' => max(0, (int) config("module_catalog.addons.{$addon}.pricing.usage.{$channel}.included_units", 0)),
+                    'monthly_price_cents' => max(0, (int) config("module_catalog.addons.{$addon}.pricing.recurring_price_cents", 0)),
+                ];
+            })
+            ->filter(fn (array $package): bool => $package['included_units'] > 0)
+            ->sortByDesc('included_units')
+            ->first();
     }
 
-    protected function buyerRate(string $channel): int
+    /** @return array{overage_block_units:int,overage_block_price_micros:int} */
+    protected function rateCard(string $channel): array
     {
-        return (int) config("marketing.messaging.platform.buyer_rates_micros.{$channel}", 0);
+        $units = max(1, (int) config("module_catalog.messaging_usage.channels.{$channel}.overage_block_units", 1));
+        $price = max(0, (int) config("module_catalog.messaging_usage.channels.{$channel}.overage_block_price_micros", 0));
+
+        return ['overage_block_units' => $units, 'overage_block_price_micros' => $price];
+    }
+
+    protected function blocksRequired(int $units, int $blockUnits): int
+    {
+        return $units <= 0 ? 0 : (int) ceil($units / max(1, $blockUnits));
+    }
+
+    protected function pricingVersion(): string
+    {
+        return (string) config('module_catalog.messaging_usage.pricing_version', 'unversioned');
     }
 
     protected function providerCost(string $provider, string $channel): int

@@ -158,15 +158,14 @@ return [
                 static fn (string $value): int => (int) trim($value),
                 explode(',', (string) env('MARKETING_MESSAGING_LEGACY_TENANT_IDS', '1'))
             ), static fn (int $value): bool => $value > 0)),
+            'automatic_tenant_ids' => array_values(array_filter(array_map(
+                static fn (string $value): int => (int) trim($value),
+                explode(',', (string) env('MARKETING_MESSAGING_AUTOMATIC_TENANT_IDS', ''))
+            ), static fn (int $value): bool => $value > 0)),
             'default_email_provider' => strtolower(trim((string) env('MARKETING_MESSAGING_DEFAULT_EMAIL_PROVIDER', 'ses_tenant'))),
-            'pricing_version' => (string) env('MARKETING_MESSAGING_PRICING_VERSION', '2026-07-10-v1'),
+            'automatic_email_provider' => strtolower(trim((string) env('MARKETING_MESSAGING_AUTOMATIC_EMAIL_PROVIDER', 'sendgrid_subuser'))),
+            'automatic_sms_sender_type' => strtolower(trim((string) env('MARKETING_MESSAGING_AUTOMATIC_SMS_SENDER_TYPE', 'toll_free'))),
             'credit_packs_cents' => [2500, 5000, 10000],
-            'packages' => [
-                'messaging' => ['monthly_cents' => 1999, 'included_email_messages' => 5000],
-                'sms' => ['monthly_cents' => 9900, 'setup_cents' => 9900, 'included_sms_segments' => 1000],
-                'bulk_email_marketing' => ['monthly_cents' => 12900, 'included_email_messages' => 50000],
-            ],
-            'buyer_rates_micros' => ['email' => 1500, 'sms' => 25000, 'mms' => 60000],
             'provider_cost_micros' => [
                 'ses_tenant' => ['email' => 175],
                 'sendgrid_subuser' => ['email' => 1100],

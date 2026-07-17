@@ -16,7 +16,7 @@ class TenantMessagingAccount extends Model
     protected $fillable = [
         'tenant_id', 'channel', 'provider', 'mode', 'status', 'provider_account_id',
         'provider_resource_id', 'sender_identifier', 'authenticated_domain', 'credentials',
-        'provider_config', 'dns_records', 'registration', 'diagnostics', 'verified_at',
+        'provider_config', 'dns_records', 'registration', 'compliance_profile', 'diagnostics', 'verified_at',
         'suspended_at', 'last_error_at', 'last_error_code', 'last_error_message',
     ];
 
@@ -26,13 +26,14 @@ class TenantMessagingAccount extends Model
         'provider_config' => 'encrypted:array',
         'dns_records' => 'array',
         'registration' => 'array',
+        'compliance_profile' => 'encrypted:array',
         'diagnostics' => 'array',
         'verified_at' => 'datetime',
         'suspended_at' => 'datetime',
         'last_error_at' => 'datetime',
     ];
 
-    protected $hidden = ['credentials'];
+    protected $hidden = ['credentials', 'compliance_profile'];
 
     public function tenant(): BelongsTo
     {

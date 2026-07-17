@@ -175,3 +175,10 @@ Schedule::command('field-service:send-upcoming-reminders')
     ->everyFifteenMinutes()
     ->withoutOverlapping(20)
     ->runInBackground();
+
+// Carrier approvals are asynchronous. This remains a no-op until the explicit
+// automatic-messaging pilot flags and tenant allowlist are enabled.
+Schedule::command('everbranch:refresh-messaging-verifications', ['--limit' => 100])
+    ->hourlyAt(45)
+    ->withoutOverlapping(30)
+    ->runInBackground();
