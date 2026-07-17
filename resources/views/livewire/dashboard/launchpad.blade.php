@@ -10,6 +10,7 @@
     $upcomingJobs = is_array($dashboard['upcoming_jobs'] ?? null) ? $dashboard['upcoming_jobs'] : [];
     $ownerReporting = is_array($dashboard['owner_reporting'] ?? null) ? $dashboard['owner_reporting'] : null;
     $classCalendar = is_array($dashboard['class_calendar'] ?? null) ? $dashboard['class_calendar'] : null;
+    $frontYardLaunch = is_array($dashboard['front_yard_launch'] ?? null) ? $dashboard['front_yard_launch'] : null;
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 md:px-6 min-w-0">
@@ -31,6 +32,62 @@
                 </button>
             </form>
         </section>
+
+        @if($frontYardLaunch)
+            <section class="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[#fbf6e6] shadow-sm">
+                <div class="relative bg-gradient-to-br from-[#f9f3dc] via-white to-[#d8efe0] p-5 sm:p-8">
+                    <div class="absolute right-8 top-8 hidden size-28 rounded-full bg-[#e6b84d]/20 blur-2xl sm:block"></div>
+                    <div class="relative grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+                        <div>
+                            <div class="inline-flex items-center rounded-full border border-white/80 bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-900 shadow-sm">{{ $frontYardLaunch['brand']['name'] ?? 'Front Yard Foods' }}</div>
+                            <h1 class="mt-4 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">{{ $frontYardLaunch['headline'] ?? 'Welcome' }}</h1>
+                            <p class="mt-4 max-w-3xl text-sm leading-7 text-zinc-700 sm:text-base">{{ $frontYardLaunch['subheadline'] ?? '' }}</p>
+                            <p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">{{ $frontYardLaunch['explain'] ?? '' }}</p>
+                            <div class="mt-5 flex flex-wrap gap-3">
+                                @if($frontYardLaunch['events_href'] ?? null)<a href="{{ $frontYardLaunch['events_href'] }}" class="rounded-full bg-emerald-800 px-4 py-2 text-sm font-semibold text-white shadow-sm">Open Events & Classes</a>@endif
+                                @if($frontYardLaunch['inventory_href'] ?? null)<a href="{{ $frontYardLaunch['inventory_href'] }}" class="rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-sm font-semibold text-emerald-900 shadow-sm">Open Plant Inventory</a>@endif
+                                @if($frontYardLaunch['agreement_href'] ?? null)<a href="{{ $frontYardLaunch['agreement_href'] }}" class="rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-sm font-semibold text-zinc-800 shadow-sm">View signed agreement</a>@endif
+                            </div>
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                            @foreach(($frontYardLaunch['statuses'] ?? []) as $status)
+                                <div class="rounded-[1.5rem] border border-white/70 bg-white/80 p-4 shadow-sm">
+                                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{{ $status['label'] ?? 'Status' }}</p>
+                                    <p class="mt-2 text-lg font-semibold capitalize text-zinc-950">{{ $status['value'] ?? 'pending' }}</p>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid gap-4 bg-white/70 p-5 sm:p-6 xl:grid-cols-3">
+                    <div class="rounded-[1.5rem] border border-zinc-200 bg-white p-5 shadow-sm">
+                        <h2 class="text-lg font-semibold text-zinc-950">What Evergrove is doing</h2>
+                        <ul class="mt-4 space-y-3 text-sm leading-6 text-zinc-700">
+                            @foreach(($frontYardLaunch['evergrove_doing'] ?? []) as $item)
+                                <li class="flex gap-3"><span class="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-900">✓</span><span>{{ $item }}</span></li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    <div class="rounded-[1.5rem] border border-zinc-200 bg-white p-5 shadow-sm">
+                        <h2 class="text-lg font-semibold text-zinc-950">What I need from you</h2>
+                        <ul class="mt-4 space-y-3 text-sm leading-6 text-zinc-700">
+                            @foreach(($frontYardLaunch['client_needs'] ?? []) as $item)
+                                <li class="flex gap-3"><span class="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-900">•</span><span>{{ $item }}</span></li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    <div class="rounded-[1.5rem] border border-emerald-100 bg-emerald-50 p-5 shadow-sm">
+                        <h2 class="text-lg font-semibold text-emerald-950">How your data is used</h2>
+                        <ul class="mt-4 space-y-3 text-sm leading-6 text-emerald-950">
+                            @foreach(($frontYardLaunch['data_assurance'] ?? []) as $item)
+                                <li class="flex gap-3"><span class="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-emerald-900">✓</span><span>{{ $item }}</span></li>
+                            @endforeach
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        @endif
 
         @if($classCalendar)
             @php

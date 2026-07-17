@@ -10,7 +10,9 @@ php artisan everbranch:prepare-front-yard-foods
 
 The command reuses tenant slug `front-yard-foods`. For a new tenant it uses ID 4 only when available, otherwise the smallest unused ID greater than 4. It preserves all existing memberships and grants active tenant-admin access to `johncollinsemail@gmail.com`.
 
-It also idempotently prepares the canonical Front Yard Foods agreement draft. Configure the negotiated implementation price without changing the reusable template:
+It also idempotently prepares the canonical Front Yard Foods agreement draft. By default the first customer Stripe checkout is only the $299 Everbranch onboarding plus the $59/month Everbranch Launch Partner service. Shopify/Square implementation is presented as a separate written quote/work order until an exact amount and payment schedule are intentionally supplied.
+
+If an implementation quote is approved before sending, configure the negotiated implementation price without changing the reusable template:
 
 ```bash
 php artisan everbranch:prepare-front-yard-foods \
@@ -23,11 +25,10 @@ After operator review, rotate a password-protected proposal link. The plaintext 
 
 ```bash
 php artisan everbranch:prepare-front-yard-foods \
-  --implementation-fee=1200 \
   --send-agreement
 ```
 
-Do not send until the implementation amount, payment schedule, additional scope, exclusions, and implementation phases are approved. Electronic acceptance creates immutable evidence, a Stripe-direct subscription authorization, and an authorized billing order. It does not create a charge or activate modules; the customer must separately choose the Stripe Pay action after checkout readiness is enabled.
+Do not send until the first-checkout amount, additional scope, exclusions, and implementation phases are approved. If implementation fees are not final, leave the implementation amount blank and collect implementation through a later signed milestone/work order. Electronic acceptance creates immutable evidence, a Stripe-direct subscription authorization, and an authorized billing order. It does not create a charge or activate modules; the customer must separately choose the Stripe Pay action after checkout readiness is enabled.
 
 ### Commercial separation
 
@@ -35,8 +36,12 @@ Do not send until the implementation amount, payment schedule, additional scope,
 - Everbranch onboarding: $299 one time.
 - Everbranch Launch Partner: $59/month for six consecutive cycles.
 - Everbranch standard: $149/month beginning with cycle seven.
-- Shopify migration/implementation: agreement-specific amount and payment schedule.
+- Shopify/Square migration and implementation: separate written quote/work order unless an exact amount is intentionally added before sending.
 - Out-of-scope software work: $50/hour only after written electronic approval.
+
+### Data-use assurance
+
+The signed agreement and customer proposal page must say plainly that Evergrove and Everbranch use Front Yard Foods data only for the approved migration, setup, support, reporting, security, legal compliance, and client-authorized integrations. Evergrove does not sell Front Yard Foods data, share it with unrelated third parties, or use Shopify, Square, Squarespace, Substack, booking, customer, product, inventory, or file access outside the approved service work.
 
 The proposal must keep four cost buckets visibly separate: Shopify store expenses; third-party apps and services; Everbranch one-time setup and monthly service; and Evergrove implementation services. Stripe is the direct-client processor for Everbranch/Evergrove charges; Relay is the verified payout bank only. Shopify App Store billing remains a separate disabled lane.
 

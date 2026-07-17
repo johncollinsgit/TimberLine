@@ -25,7 +25,7 @@ beforeEach(function (): void {
     config()->set('tenancy.domains.canonical.public_host', 'theeverbranch.com');
     config()->set('tenancy.domains.canonical.landlord_host', 'app.theeverbranch.com');
     config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
-    config()->set('tenancy.landlord.hosts', ['app.theeverbranch.com']);
+    config()->set('tenancy.landlord.hosts', ['app.theeverbranch.com', 'localhost']);
     config()->set('tenancy.landlord.operator_roles', ['admin']);
     config()->set('tenancy.landlord.operator_emails', []);
 });
@@ -88,6 +88,7 @@ test('front yard agreement pricing stays separate configurable and idempotent', 
         ->and($first->currentVersion->rendered_content)->toContain('Evergrove implementation services')
         ->and($first->currentVersion->rendered_content)->toContain('Square, catalog, and inventory workflow')
         ->and($first->currentVersion->rendered_content)->toContain('Classes, consultations, and booking setup')
+        ->and($first->currentVersion->rendered_content)->toContain('Evergrove will not sell Front Yard Foods data')
         ->and($first->currentVersion->rendered_content)->toContain('internal business management only')
         ->and($first->currentVersion->rendered_content)->toContain('does not include a separate Front Yard Foods App Store listing');
 
@@ -110,8 +111,26 @@ test('proposal access is evergrove host locked password protected and secret saf
     $this->get('http://evergrove.test/proposals/'.$sent['token'])->assertOk()->assertSeeText('Open secure proposal')->assertDontSeeText('Pricing and authorization');
     $this->post('http://evergrove.test/proposals/'.$sent['token'].'/unlock', ['password' => 'wrong-password'])->assertSessionHasErrors('password');
     $this->post('http://evergrove.test/proposals/'.$sent['token'].'/unlock', ['password' => $sent['password']])->assertRedirect();
-    $this->get('http://evergrove.test/proposals/'.$sent['token'])->assertOk()->assertSeeText('Pricing and authorization')->assertSeeText('$50.00');
+    $this->get('http://evergrove.test/proposals/'.$sent['token'])
+        ->assertOk()
+        ->assertSeeText('Pricing and authorization')
+        ->assertSeeText('$50.00')
+        ->assertSee('signer_legal_name', false)
+        ->assertSee('electronic_signature_value', false)
+        ->assertSeeText('will not sell, share, or use Front Yard Foods data');
     $this->assertDatabaseHas('agreement_events', ['agreement_id' => $agreement->id, 'event_type' => 'password_failed']);
+});
+
+test('front yard first checkout agreement can leave implementation pricing to a separate work order', function (): void {
+    $tenant = agreementTenant();
+    $agreement = app(AgreementManagementService::class)->prepareFrontYardFoods($tenant, null, null, null, null);
+    $cards = collect($agreement->currentVersion->pricing_payload['cards'])->keyBy('key');
+
+    expect($cards['shopify_implementation']['amount_cents'])->toBeNull()
+        ->and($cards['shopify_implementation']['display_amount'])->toBe('Separate written quote/work order')
+        ->and($cards['shopify_implementation']['detail'])->toContain('Not charged in the first Checkout')
+        ->and($agreement->currentVersion->pricing_payload['implementation_payment_schedule']['due_on_acceptance_cents'])->toBeNull()
+        ->and($agreement->currentVersion->rendered_content)->toContain('Separate written quote/work order');
 });
 
 test('acceptance binds every confirmation and authorizes a billing order without creating a charge', function (): void {
@@ -245,7 +264,12 @@ test('termination tracks notice export window client ownership and child amendme
 test('landlord agreement management is host locked and operator only', function (): void {
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
     $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
-    $this->actingAs($admin)->get('http://app.theeverbranch.com/landlord/agreements')->assertOk()->assertSeeText('Agreements');
+    $registeredHost = app('router')->getRoutes()->getByName('landlord.agreements.index')?->getDomain() ?: parse_url(route('landlord.agreements.index'), PHP_URL_HOST) ?: 'localhost';
+    config()->set('tenancy.landlord.primary_host', $registeredHost);
+    config()->set('tenancy.landlord.hosts', [$registeredHost]);
+    $landlordUrl = 'http://'.$registeredHost.'/landlord/agreements';
+
+    $this->actingAs($admin)->get($landlordUrl)->assertOk()->assertSeeText('Agreements');
     $this->actingAs($admin)->get('http://wrong.theeverbranch.com/landlord/agreements')->assertNotFound();
-    $this->actingAs($manager)->get('http://app.theeverbranch.com/landlord/agreements')->assertForbidden();
+    $this->actingAs($manager)->get($landlordUrl)->assertForbidden();
 });

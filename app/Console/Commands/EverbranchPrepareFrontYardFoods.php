@@ -115,7 +115,7 @@ class EverbranchPrepareFrontYardFoods extends Command
                     actorId: (int) $john->id,
                 );
 
-                foreach (['customers', 'field_service', 'class_scheduling', 'reporting'] as $moduleKey) {
+                foreach (['customers', 'field_service', 'class_scheduling', 'plant_inventory', 'reporting'] as $moduleKey) {
                     $commercial->setTenantModuleState((int) $tenant->id, $moduleKey, true, 'configured', (int) $john->id);
                 }
                 $commercial->setTenantModuleEntitlement((int) $tenant->id, 'messaging', [
@@ -133,14 +133,14 @@ class EverbranchPrepareFrontYardFoods extends Command
                     'business_profile_status' => 'ready',
                     'import_path' => 'manual',
                     'csv_manual_status' => 'not_started',
-                    'module_interests' => ['customers', 'field_service', 'class_scheduling', 'messaging', 'uploads', 'reporting'],
+                    'module_interests' => ['customers', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'uploads', 'reporting'],
                     'mobile_interest' => 'ios',
                     'plan_interest' => 'base',
                     'billing_lane_interest' => 'undecided',
                     'implementation_help_interest' => true,
                     'commercial_review_status' => 'reviewed',
                     'landlord_review_status' => 'reviewed',
-                    'next_recommended_action' => 'Demonstrate class signup, customer follow-up, garden consultation jobs, and photo history.',
+                    'next_recommended_action' => 'Demonstrate class signup, customer follow-up, plant inventory holds, garden consultation jobs, and photo history.',
                     'commercial_next_action' => 'Keep messaging in demo mode until email/SMS providers and consent are verified.',
                     'internal_notes' => 'Front Yard Foods guided demonstration tenant. Prefer tenant 4, then the next open tenant ID. Website branding and photos are copied into tenant-owned demo assets.',
                     'reviewed_at' => now(),
