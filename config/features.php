@@ -19,5 +19,6 @@ return [
     // provider path. Provisioning and paid overages remain separately gated.
     'tenant_messaging_platform' => (bool) env('FEATURE_TENANT_MESSAGING_PLATFORM', false),
     'tenant_messaging_provisioning' => (bool) env('FEATURE_TENANT_MESSAGING_PROVISIONING', false),
+    'tenant_messaging_auto_bootstrap' => (bool) env('FEATURE_TENANT_MESSAGING_AUTO_BOOTSTRAP', false),
     'tenant_messaging_credit_checkout' => (bool) env('FEATURE_TENANT_MESSAGING_CREDIT_CHECKOUT', false),
 ];

@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\BootstrapTenantMessaging;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageMediaAsset;
+use App\Models\Tenant;
 use App\Models\TenantMessagingAccount;
 use App\Models\TenantMessagingSenderProfile;
 use App\Models\TenantModuleState;
@@ -513,14 +515,18 @@ class ShopifyEmbeddedMessagingController extends Controller
             : collect();
         $platformSetup = [
             'enabled' => (bool) config('features.tenant_messaging_platform'),
-            'email_account' => $platformAccounts->get('email')?->only(['provider', 'status', 'authenticated_domain', 'dns_records', 'verified_at']),
-            'sms_account' => $platformAccounts->get('sms')?->only(['provider', 'status', 'sender_identifier', 'registration', 'verified_at']),
+            'email_account' => $platformAccounts->get('email')?->only(['status', 'authenticated_domain', 'verified_at']),
+            'sms_account' => $platformAccounts->get('sms')?->only(['status', 'sender_identifier', 'verified_at', 'last_error_message']),
             'sender_profiles' => $senderProfiles->map->only(['id', 'label', 'display_name', 'from_email', 'reply_to_email', 'reply_mode', 'verification_status', 'is_default'])->values()->all(),
             'email_usage' => $tenantId !== null && Schema::hasTable('tenant_messaging_usage_periods') ? $messagingUsageService->summary($tenantId, 'email') : [],
             'sms_usage' => $tenantId !== null && Schema::hasTable('tenant_messaging_usage_periods') ? $messagingUsageService->summary($tenantId, 'sms') : [],
             'credit_checkout_enabled' => (bool) config('features.tenant_messaging_credit_checkout'),
             'credit_checkout_endpoint' => route('billing.messaging-credit.checkout', [], false),
             'credit_packs_cents' => array_map('intval', (array) config('marketing.messaging.platform.credit_packs_cents', [])),
+            'automatic_setup_enabled' => (bool) config('features.tenant_messaging_auto_bootstrap')
+                && (bool) config('features.tenant_messaging_provisioning')
+                && in_array((int) $tenantId, array_map('intval', (array) config('marketing.messaging.platform.automatic_tenant_ids', [])), true),
+            'automatic_setup_endpoint' => route('shopify.app.api.messaging.setup.activate', [], false),
             'sender_save_endpoint' => route('shopify.app.api.messaging.setup.sender-profile', [], false),
             'sender_test_endpoint' => route('shopify.app.api.messaging.setup.sender-test', [], false),
             'verification_refresh_enabled' => (bool) config('features.tenant_messaging_provisioning'),
@@ -612,6 +618,98 @@ class ShopifyEmbeddedMessagingController extends Controller
                 'setup_completed_at' => optional($state->setup_completed_at)->toIso8601String(),
             ],
         ]);
+    }
+
+    public function activateMessaging(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        TenantModuleAccessResolver $moduleAccessResolver,
+        TenantMessagingProvisioningService $provisioningService,
+    ): JsonResponse {
+        $access = $this->resolveMessagingApiAccess($request, $contextService, $tenantResolver, $moduleAccessResolver);
+        if ($access instanceof JsonResponse) {
+            return $access;
+        }
+
+        $tenantId = (int) $access['tenant_id'];
+        $allowed = array_map('intval', (array) config('marketing.messaging.platform.automatic_tenant_ids', []));
+        if (! (bool) config('features.tenant_messaging_auto_bootstrap')
+            || ! (bool) config('features.tenant_messaging_provisioning')
+            || ! in_array($tenantId, $allowed, true)) {
+            return response()->json([
+                'ok' => false,
+                'status' => 'automatic_setup_unavailable',
+                'message' => 'Automatic messaging setup is not enabled for this workspace yet.',
+            ], 403);
+        }
+
+        try {
+            $data = validator($request->all(), [
+                'reply_to_email' => ['required', 'email:rfc', 'max:255'],
+                'enable_sms' => ['nullable', 'boolean'],
+                'business_name' => ['required_if:enable_sms,true', 'nullable', 'string', 'max:255'],
+                'business_website' => ['required_if:enable_sms,true', 'nullable', 'url:http,https', 'max:500'],
+                'notification_email' => ['required_if:enable_sms,true', 'nullable', 'email:rfc', 'max:255'],
+                'use_case_categories' => ['required_if:enable_sms,true', 'nullable', 'array', 'min:1', 'max:5'],
+                'use_case_categories.*' => ['string', 'max:100'],
+                'use_case_summary' => ['required_if:enable_sms,true', 'nullable', 'string', 'max:1500'],
+                'production_message_sample' => ['required_if:enable_sms,true', 'nullable', 'string', 'max:1000'],
+                'opt_in_image_urls' => ['required_if:enable_sms,true', 'nullable', 'array', 'min:1', 'max:5'],
+                'opt_in_image_urls.*' => ['url:http,https', 'max:1000'],
+                'opt_in_type' => ['required_if:enable_sms,true', 'nullable', 'in:WEB_FORM,VERBAL,PAPER_FORM,VIA_TEXT,MOBILE_QR_CODE'],
+                'message_volume' => ['required_if:enable_sms,true', 'nullable', 'string', 'max:100'],
+                'privacy_policy_url' => ['required_if:enable_sms,true', 'nullable', 'url:http,https', 'max:500'],
+                'terms_and_conditions_url' => ['required_if:enable_sms,true', 'nullable', 'url:http,https', 'max:500'],
+                'business_type' => ['nullable', 'string', 'max:100'],
+                'registration_id' => ['nullable', 'string', 'max:150'],
+                'registration_authority' => ['nullable', 'string', 'max:150'],
+                'registration_country' => ['nullable', 'string', 'size:2'],
+                'contact_first_name' => ['nullable', 'string', 'max:100'],
+                'contact_last_name' => ['nullable', 'string', 'max:100'],
+                'contact_email' => ['nullable', 'email:rfc', 'max:255'],
+                'contact_phone' => ['nullable', 'string', 'max:32'],
+                'business_address' => ['nullable', 'string', 'max:255'],
+                'business_city' => ['nullable', 'string', 'max:120'],
+                'business_state' => ['nullable', 'string', 'max:120'],
+                'business_postal_code' => ['nullable', 'string', 'max:30'],
+                'business_country' => ['nullable', 'string', 'size:2'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            return $this->validationFailureResponse('Messaging setup could not be started.', $exception);
+        }
+
+        $includeSms = (bool) ($data['enable_sms'] ?? false);
+        $profile = $includeSms
+            ? collect($data)->except(['reply_to_email', 'enable_sms'])->all()
+            : [];
+        if ($includeSms) {
+            try {
+                $tenant = Tenant::query()->findOrFail($tenantId);
+                $provisioningService->stageSmsComplianceProfile($tenant, $profile);
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return response()->json([
+                    'ok' => false,
+                    'status' => 'sms_setup_staging_failed',
+                    'message' => 'Text-message setup could not be secured for processing. Please try again.',
+                ], 500);
+            }
+        }
+        BootstrapTenantMessaging::dispatch(
+            $tenantId,
+            strtolower((string) $data['reply_to_email']),
+            $includeSms,
+        )->afterCommit();
+
+        return response()->json([
+            'ok' => true,
+            'status' => 'setup_queued',
+            'message' => $includeSms
+                ? 'Email activation is queued. Text messaging will unlock after carrier approval.'
+                : 'Email activation is queued.',
+        ], 202);
     }
 
     public function saveSenderProfile(
@@ -735,7 +833,11 @@ class ShopifyEmbeddedMessagingController extends Controller
         }
 
         try {
-            $account = $provisioningService->refreshEmailVerification((int) $access['tenant_id']);
+            $data = validator($request->all(), ['channel' => ['nullable', 'in:email,sms']])->validate();
+            $channel = (string) ($data['channel'] ?? 'email');
+            $account = $channel === 'sms'
+                ? $provisioningService->refreshSmsVerification((int) $access['tenant_id'])
+                : $provisioningService->refreshEmailVerification((int) $access['tenant_id']);
         } catch (Throwable $exception) {
             return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
         }
@@ -743,9 +845,11 @@ class ShopifyEmbeddedMessagingController extends Controller
         return response()->json([
             'ok' => true,
             'message' => $account->isReady()
-                ? 'Your sending domain is verified. Sender profiles are ready to use.'
-                : 'DNS is not verified yet. Check the records below, then try again.',
-            'data' => ['status' => $account->status, 'verified' => $account->isReady()],
+                ? ucfirst((string) $account->channel).' messaging is ready.'
+                : ((string) $account->channel === 'sms'
+                    ? 'Carrier review is still in progress or needs updated business information.'
+                    : 'Email verification is still in progress.'),
+            'data' => ['channel' => $account->channel, 'status' => $account->status, 'verified' => $account->isReady()],
         ]);
     }
 

@@ -393,8 +393,40 @@
             <article class="message-setup-card" aria-labelledby="sending-identities-title">
                 <div>
                     <h2 id="sending-identities-title">Sending identities and usage</h2>
-                    <p class="message-setup-muted">Each company gets separate provider resources. Customers see your verified sender, and replies follow the inbox choice shown below.</p>
+                    <p class="message-setup-muted">Everbranch handles the provider setup. Your customers see your company name, and replies go to the inbox you choose.</p>
                 </div>
+                @if($platformSetup['automatic_setup_enabled'] ?? false)
+                    <div class="message-setup-guide" data-automatic-messaging-form>
+                        <h4>Turn on customer messaging</h4>
+                        <p class="message-setup-muted">Email setup is automatic. Text messaging also requires the business information carriers use for approval.</p>
+                        <input class="rounded-md border-zinc-300 text-sm" name="reply_to_email" type="email" placeholder="Email address that receives customer replies" required>
+                        <label class="flex items-center gap-2 text-sm text-zinc-700"><input type="checkbox" name="enable_sms" value="1"> Also set up text messaging</label>
+                        <details class="border-t border-zinc-200 pt-3">
+                            <summary class="cursor-pointer text-sm font-semibold">Business information for text-message approval</summary>
+                            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                                <input class="rounded-md border-zinc-300 text-sm" name="business_name" placeholder="Legal business name">
+                                <input class="rounded-md border-zinc-300 text-sm" name="business_website" type="url" placeholder="https://company.com">
+                                <input class="rounded-md border-zinc-300 text-sm" name="notification_email" type="email" placeholder="Carrier-review contact email">
+                                <select class="rounded-md border-zinc-300 text-sm" name="message_volume"><option value="">Expected monthly texts</option><option value="10">Up to 10</option><option value="100">Up to 100</option><option value="1,000">Up to 1,000</option><option value="10,000">Up to 10,000</option><option value="100,000">Up to 100,000</option></select>
+                                <textarea class="rounded-md border-zinc-300 text-sm sm:col-span-2" name="use_case_summary" placeholder="How will you use text messages?"></textarea>
+                                <textarea class="rounded-md border-zinc-300 text-sm sm:col-span-2" name="production_message_sample" placeholder="Example: Front Yard Foods: Your class starts tomorrow at 10 AM. Reply STOP to opt out."></textarea>
+                                <div class="sm:col-span-2 text-sm text-zinc-700">
+                                    <span class="font-semibold">Message types</span>
+                                    <div class="mt-1 flex flex-wrap gap-3">
+                                        <label><input type="checkbox" name="use_case_categories[]" value="CUSTOMER_CARE"> Customer care</label>
+                                        <label><input type="checkbox" name="use_case_categories[]" value="ACCOUNT_NOTIFICATIONS"> Account notifications</label>
+                                        <label><input type="checkbox" name="use_case_categories[]" value="MARKETING"> Marketing</label>
+                                    </div>
+                                </div>
+                                <select class="rounded-md border-zinc-300 text-sm" name="opt_in_type"><option value="">How customers opt in</option><option value="WEB_FORM">Website form</option><option value="VERBAL">Verbal</option><option value="PAPER_FORM">Paper form</option><option value="VIA_TEXT">By text</option><option value="MOBILE_QR_CODE">QR code</option></select>
+                                <input class="rounded-md border-zinc-300 text-sm" name="opt_in_image_urls[]" type="url" placeholder="Link to screenshot showing opt-in">
+                                <input class="rounded-md border-zinc-300 text-sm" name="privacy_policy_url" type="url" placeholder="Privacy policy URL">
+                                <input class="rounded-md border-zinc-300 text-sm" name="terms_and_conditions_url" type="url" placeholder="Terms and conditions URL">
+                            </div>
+                        </details>
+                        <button type="button" class="message-setup-button message-setup-button--primary" data-activate-messaging data-endpoint="{{ $platformSetup['automatic_setup_endpoint'] ?? '' }}">Activate messaging</button>
+                    </div>
+                @endif
                 @foreach(['email_account' => 'Email', 'sms_account' => 'Text messaging'] as $accountKey => $accountLabel)
                     @php $account = is_array($platformSetup[$accountKey] ?? null) ? $platformSetup[$accountKey] : []; @endphp
                     <div class="message-setup-guide">
@@ -405,26 +437,15 @@
                         @if($account === [])
                             <p class="message-setup-muted">Next: ask your Everbranch administrator to start the isolated provider setup for this company.</p>
                         @elseif($accountKey === 'email_account')
-                            <p class="message-setup-muted">Provider: {{ str((string) ($account['provider'] ?? ''))->replace('_', ' ')->title() }} · domain: {{ $account['authenticated_domain'] ?? 'waiting for domain' }}</p>
-                            @if(!empty($account['dns_records']))
-                                <p class="message-setup-muted">Next: add these DNS records with your domain host. Keep every host and value exactly as shown.</p>
-                                <div class="overflow-x-auto">
-                                    <table class="w-full border-collapse text-left text-xs">
-                                        <thead><tr class="border-b border-zinc-200"><th class="p-2">Type</th><th class="p-2">Host</th><th class="p-2">Value</th></tr></thead>
-                                        <tbody>
-                                            @foreach((array) $account['dns_records'] as $record)
-                                                <tr class="border-b border-zinc-100"><td class="p-2 font-medium">{{ $record['type'] ?? '' }}</td><td class="break-all p-2">{{ $record['host'] ?? '' }}</td><td class="break-all p-2">{{ $record['value'] ?? '' }}</td></tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                                @if(($platformSetup['verification_refresh_enabled'] ?? false) && ($account['status'] ?? '') !== 'ready')
-                                    <button type="button" class="message-setup-button" data-refresh-domain-verification data-endpoint="{{ $platformSetup['verification_refresh_endpoint'] ?? '' }}">Check verification</button>
-                                @endif
-                            @endif
+                            <p class="message-setup-muted">Sending address domain: {{ $account['authenticated_domain'] ?? 'being assigned' }}. Everbranch manages verification automatically.</p>
                         @else
                             <p class="message-setup-muted">Number: {{ $account['sender_identifier'] ?? 'assigned after registration' }}</p>
-                            @if(($account['status'] ?? '') !== 'ready')<p class="message-setup-muted">Next: complete the customer profile, brand, campaign, Messaging Service, and number registration. Sending stays blocked until all five are approved.</p>@endif
+                            @if(($account['status'] ?? '') !== 'ready')
+                                <p class="message-setup-muted">Carrier review is required. Sending stays blocked until approval is confirmed.</p>
+                                @if(($platformSetup['verification_refresh_enabled'] ?? false) && in_array(($account['status'] ?? ''), ['pending_verification', 'needs_changes'], true))
+                                    <button type="button" class="message-setup-button" data-refresh-messaging-verification data-channel="sms" data-endpoint="{{ $platformSetup['verification_refresh_endpoint'] ?? '' }}">Check carrier review</button>
+                                @endif
+                            @endif
                         @endif
                     </div>
                 @endforeach
@@ -439,7 +460,7 @@
                     @empty
                         <p class="message-setup-muted">Next: verify your sending domain, then add the first From address and choose whether replies go to your mailbox or stay in Everbranch.</p>
                     @endforelse
-                    @if(is_array($platformSetup['email_account'] ?? null))
+                    @if(is_array($platformSetup['email_account'] ?? null) && !($platformSetup['automatic_setup_enabled'] ?? false))
                         <div class="grid gap-2 border-t border-zinc-200 pt-3 sm:grid-cols-2" data-sender-profile-form>
                             <input class="rounded-md border-zinc-300 text-sm" name="label" placeholder="Label, such as Support">
                             <input class="rounded-md border-zinc-300 text-sm" name="display_name" placeholder="Name customers see">
@@ -464,8 +485,9 @@
                 </div>
 
                 <div class="message-setup-guide">
-                    <h4>Monthly usage and prepaid credit</h4>
+                    <h4>Monthly plan and usage</h4>
                     <p class="message-setup-muted">Email: {{ number_format((int) data_get($platformSetup, 'email_usage.used_units', 0)) }} of {{ number_format((int) data_get($platformSetup, 'email_usage.included_units', 0)) }} included. Text: {{ number_format((int) data_get($platformSetup, 'sms_usage.used_units', 0)) }} of {{ number_format((int) data_get($platformSetup, 'sms_usage.included_units', 0)) }} included segments.</p>
+                    <p class="message-setup-muted">Email overage: ${{ number_format(((int) data_get($platformSetup, 'email_usage.overage_block_price_micros', 0)) / 1000000, 2) }} per {{ number_format((int) data_get($platformSetup, 'email_usage.overage_block_units', 0)) }} emails. Text overage: ${{ number_format(((int) data_get($platformSetup, 'sms_usage.overage_block_price_micros', 0)) / 1000000, 2) }} per {{ number_format((int) data_get($platformSetup, 'sms_usage.overage_block_units', 0)) }} segments.</p>
                     <p class="message-setup-muted">Available prepaid credit: ${{ number_format(((int) data_get($platformSetup, 'email_usage.credit_available_micros', 0)) / 1000000, 2) }}.</p>
                     @if($platformSetup['credit_checkout_enabled'] ?? false)
                         <div class="message-setup-actions">
@@ -492,7 +514,9 @@
                 const saveSenderButton = document.querySelector('[data-save-sender-profile]');
                 const senderTestForm = document.querySelector('[data-sender-test-form]');
                 const testSenderButton = document.querySelector('[data-test-sender-profile]');
-                const refreshVerificationButton = document.querySelector('[data-refresh-domain-verification]');
+                const automaticMessagingForm = document.querySelector('[data-automatic-messaging-form]');
+                const activateMessagingButton = document.querySelector('[data-activate-messaging]');
+                const refreshVerificationButtons = document.querySelectorAll('[data-refresh-messaging-verification]');
                 const setupStatusNode = document.getElementById('message-setup-inline-status');
 
                 function setSetupStatus(message, tone = 'neutral') {
@@ -696,21 +720,52 @@
                     });
                 }
 
-                if (refreshVerificationButton) {
-                    refreshVerificationButton.addEventListener('click', async () => {
-                        refreshVerificationButton.disabled = true;
-                        setStatus('Checking DNS verification…');
+                if (activateMessagingButton && automaticMessagingForm) {
+                    activateMessagingButton.addEventListener('click', async () => {
+                        activateMessagingButton.disabled = true;
+                        setSetupStatus('Starting secure messaging setup…');
+                        const field = (name) => automaticMessagingForm.querySelector(`[name="${name}"]`)?.value || '';
+                        const checkedValues = (name) => Array.from(automaticMessagingForm.querySelectorAll(`[name="${name}"]:checked`)).map((node) => node.value);
                         try {
-                            const payload = await postJson(refreshVerificationButton.dataset.endpoint, {});
-                            setStatus(payload.message || 'Verification checked.', payload.ok ? 'success' : 'error');
-                            if (payload.ok && payload.data?.verified) window.location.reload();
+                            const payload = await postJson(activateMessagingButton.dataset.endpoint, {
+                                reply_to_email: field('reply_to_email'),
+                                enable_sms: Boolean(automaticMessagingForm.querySelector('[name="enable_sms"]')?.checked),
+                                business_name: field('business_name'),
+                                business_website: field('business_website'),
+                                notification_email: field('notification_email'),
+                                use_case_categories: checkedValues('use_case_categories[]'),
+                                use_case_summary: field('use_case_summary'),
+                                production_message_sample: field('production_message_sample'),
+                                opt_in_image_urls: Array.from(automaticMessagingForm.querySelectorAll('[name="opt_in_image_urls[]"]')).map((node) => node.value).filter(Boolean),
+                                opt_in_type: field('opt_in_type'),
+                                message_volume: field('message_volume'),
+                                privacy_policy_url: field('privacy_policy_url'),
+                                terms_and_conditions_url: field('terms_and_conditions_url'),
+                            });
+                            setSetupStatus(payload.message || 'Messaging setup started.', 'success');
                         } catch (error) {
-                            setStatus(error.message || 'Could not check verification.', 'error');
+                            setSetupStatus(error.message || 'Messaging setup could not be started.', 'error');
                         } finally {
-                            refreshVerificationButton.disabled = false;
+                            activateMessagingButton.disabled = false;
                         }
                     });
                 }
+
+                refreshVerificationButtons.forEach((button) => {
+                    button.addEventListener('click', async () => {
+                        button.disabled = true;
+                        setSetupStatus('Checking approval status…');
+                        try {
+                            const payload = await postJson(button.dataset.endpoint, { channel: button.dataset.channel || 'email' });
+                            setSetupStatus(payload.message || 'Verification checked.', payload.ok ? 'success' : 'error');
+                            if (payload.ok && payload.data?.verified) window.location.reload();
+                        } catch (error) {
+                            setSetupStatus(error.message || 'Could not check verification.', 'error');
+                        } finally {
+                            button.disabled = false;
+                        }
+                    });
+                });
             })();
         </script>
     @endif

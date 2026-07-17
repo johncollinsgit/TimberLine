@@ -55,6 +55,18 @@ $catalog = [
         ],
     ],
 
+    // Canonical metered-messaging rate card. Add-ons below define the monthly
+    // subscription and included units; this table defines how overage is sold.
+    'messaging_usage' => [
+        'pricing_version' => '2026-07-17-v2',
+        'currency' => 'USD',
+        'channels' => [
+            'email' => ['unit_type' => 'email', 'overage_block_units' => 1000, 'overage_block_price_micros' => 1500000],
+            'sms' => ['unit_type' => 'segment', 'overage_block_units' => 100, 'overage_block_price_micros' => 2500000],
+            'mms' => ['unit_type' => 'message', 'overage_block_units' => 100, 'overage_block_price_micros' => 6000000],
+        ],
+    ],
+
     'capabilities' => [
         'dashboard.overview' => [
             'display_name' => 'Overview dashboard',
@@ -1562,7 +1574,12 @@ $catalog = [
             'display_name' => 'SMS',
             'label' => 'SMS',
             'purchase_key' => 'addon.sms',
-            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 9900, 'setup_price_cents' => 9900],
+            'pricing' => [
+                'currency' => 'USD',
+                'recurring_price_cents' => 9900,
+                'setup_price_cents' => 9900,
+                'usage' => ['sms' => ['included_units' => 1000]],
+            ],
             'stripe' => ['product_lookup_key' => 'addon_sms', 'recurring_price_lookup_key' => 'addon_sms_monthly'],
             'modules' => ['messaging', 'sms'],
             'legacy_grants' => ['messaging', 'sms'],
@@ -1572,7 +1589,12 @@ $catalog = [
             'display_name' => 'Messaging',
             'label' => 'Messaging',
             'purchase_key' => 'addon.messaging',
-            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 1999, 'setup_price_cents' => 0],
+            'pricing' => [
+                'currency' => 'USD',
+                'recurring_price_cents' => 1999,
+                'setup_price_cents' => 0,
+                'usage' => ['email' => ['included_units' => 5000]],
+            ],
             'stripe' => ['product_lookup_key' => 'addon_messaging', 'recurring_price_lookup_key' => 'addon_messaging_monthly'],
             'modules' => ['messaging'],
             'legacy_grants' => ['messaging'],
@@ -1592,7 +1614,12 @@ $catalog = [
             'display_name' => 'Bulk Email Marketing',
             'label' => 'Bulk Marketing Email',
             'purchase_key' => 'addon.bulk_email_marketing',
-            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 12900, 'setup_price_cents' => 0],
+            'pricing' => [
+                'currency' => 'USD',
+                'recurring_price_cents' => 12900,
+                'setup_price_cents' => 0,
+                'usage' => ['email' => ['included_units' => 50000]],
+            ],
             'stripe' => ['product_lookup_key' => 'addon_bulk_email_marketing', 'recurring_price_lookup_key' => 'addon_bulk_email_marketing_monthly'],
             'modules' => ['messaging', 'email', 'campaigns', 'bulk_email_marketing'],
             'legacy_grants' => ['messaging', 'email'],

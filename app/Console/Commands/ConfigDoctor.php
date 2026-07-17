@@ -65,6 +65,43 @@ class ConfigDoctor extends Command
             $failures++;
         }
 
+        if ((bool) config('features.tenant_messaging_auto_bootstrap')) {
+            $this->line('');
+            $this->line('<comment>Automatic tenant messaging</comment>');
+            $requirements = [
+                ['features.tenant_messaging_platform', 'FEATURE_TENANT_MESSAGING_PLATFORM'],
+                ['features.tenant_messaging_provisioning', 'FEATURE_TENANT_MESSAGING_PROVISIONING'],
+                ['services.sendgrid.api_key', 'SENDGRID_API_KEY'],
+                ['services.sendgrid.managed_email_domain', 'EVERBRANCH_MANAGED_EMAIL_DOMAIN'],
+                ['services.sendgrid.managed_domain_authentication_id', 'SENDGRID_MANAGED_DOMAIN_AUTHENTICATION_ID'],
+                ['services.twilio.account_sid', 'TWILIO_ACCOUNT_SID'],
+                ['services.twilio.auth_token', 'TWILIO_AUTH_TOKEN'],
+                ['services.twilio.status_callback_url', 'TWILIO_STATUS_CALLBACK_URL'],
+                ['services.twilio.inbound_callback_url', 'TWILIO_INBOUND_CALLBACK_URL'],
+            ];
+            foreach ($requirements as [$path, $envKey]) {
+                if (filled(config($path))) {
+                    $this->line("  <info>✓</info> {$envKey}");
+                } else {
+                    $this->line("  <fg=red>✗ {$envKey} — MISSING while automatic messaging is enabled</>");
+                    $failures++;
+                }
+            }
+
+            if ((array) config('marketing.messaging.platform.automatic_tenant_ids', []) === []) {
+                $this->line('  <fg=red>✗ MARKETING_MESSAGING_AUTOMATIC_TENANT_IDS — at least one pilot tenant is required</>');
+                $failures++;
+            } else {
+                $this->line('  <info>✓</info> MARKETING_MESSAGING_AUTOMATIC_TENANT_IDS');
+            }
+
+            $sid = trim((string) config('services.twilio.account_sid'));
+            if ($sid !== '' && ! preg_match('/^AC[a-fA-F0-9]{32}$/', $sid)) {
+                $this->line('  <fg=red>✗ TWILIO_ACCOUNT_SID — expected a complete AC-prefixed account SID</>');
+                $failures++;
+            }
+        }
+
         $this->line('');
 
         if ($failures > 0) {

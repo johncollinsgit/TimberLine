@@ -2,6 +2,8 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
+use App\Jobs\BootstrapTenantMessaging;
+use App\Jobs\PrepareMessagingCampaignRecipientsJob;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingConsentEvent;
 use App\Models\MarketingDeliveryEvent;
@@ -19,7 +21,6 @@ use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\User;
-use App\Jobs\PrepareMessagingCampaignRecipientsJob;
 use App\Services\Marketing\SendGridEmailService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Http\UploadedFile;
@@ -335,6 +336,79 @@ test('messaging setup can be marked complete from embedded api', function () {
     expect($state)->not->toBeNull()
         ->and((string) ($state?->setup_status ?? ''))->toBe('configured')
         ->and($state?->setup_completed_at)->not->toBeNull();
+});
+
+test('automatic messaging activation is tenant scoped and ignores browser provider identifiers', function () {
+    Queue::fake();
+    $tenant = Tenant::query()->create([
+        'name' => 'Automatic Messaging Tenant',
+        'slug' => 'automatic-messaging-tenant',
+    ]);
+    $otherTenant = Tenant::query()->create([
+        'name' => 'Other Messaging Tenant',
+        'slug' => 'other-messaging-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+    config()->set('features.tenant_messaging_auto_bootstrap', true);
+    config()->set('features.tenant_messaging_provisioning', true);
+    config()->set('marketing.messaging.platform.automatic_tenant_ids', [$tenant->id]);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.setup.activate'), [
+            'reply_to_email' => 'owner@automatic.test',
+            'enable_sms' => false,
+            'tenant_id' => $otherTenant->id,
+            'provider_account_id' => 'attacker-provider-id',
+            'from_email' => 'spoof@attacker.test',
+        ])
+        ->assertStatus(202)
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('status', 'setup_queued');
+
+    Queue::assertPushed(BootstrapTenantMessaging::class, function (BootstrapTenantMessaging $job) use ($tenant): bool {
+        return $job->tenantId === $tenant->id
+            && $job->replyToEmail === 'owner@automatic.test'
+            && $job->includeSms === false;
+    });
+});
+
+test('automatic text activation encrypts carrier business data before queueing provider work', function () {
+    Queue::fake();
+    $tenant = Tenant::query()->create([
+        'name' => 'Automatic Text Tenant',
+        'slug' => 'automatic-text-tenant',
+    ]);
+    shopifyMessagingGrantEntitlement($tenant);
+    configureEmbeddedRetailStore($tenant->id);
+    config()->set('features.tenant_messaging_auto_bootstrap', true);
+    config()->set('features.tenant_messaging_provisioning', true);
+    config()->set('marketing.messaging.platform.automatic_tenant_ids', [$tenant->id]);
+
+    $this->withHeaders(shopifyMessagingApiHeaders())
+        ->postJson(route('shopify.app.api.messaging.setup.activate'), [
+            'reply_to_email' => 'owner@automatic-text.test',
+            'enable_sms' => true,
+            'business_name' => 'Automatic Text Company LLC',
+            'business_website' => 'https://automatic-text.test',
+            'notification_email' => 'owner@automatic-text.test',
+            'use_case_categories' => ['CUSTOMER_CARE'],
+            'use_case_summary' => 'Customer-requested service reminders.',
+            'production_message_sample' => 'Automatic Text: Your service is tomorrow. Reply STOP to opt out.',
+            'opt_in_image_urls' => ['https://automatic-text.test/opt-in.png'],
+            'opt_in_type' => 'WEB_FORM',
+            'message_volume' => '1,000',
+            'privacy_policy_url' => 'https://automatic-text.test/privacy',
+            'terms_and_conditions_url' => 'https://automatic-text.test/terms',
+        ])
+        ->assertStatus(202)
+        ->assertJsonPath('ok', true);
+
+    $account = DB::table('tenant_messaging_accounts')->where('tenant_id', $tenant->id)->where('channel', 'sms')->first();
+    expect($account)->not->toBeNull()
+        ->and((string) $account?->status)->toBe('awaiting_carrier_submission')
+        ->and((string) $account?->compliance_profile)->not->toContain('Automatic Text Company LLC');
+    Queue::assertPushed(BootstrapTenantMessaging::class, fn (BootstrapTenantMessaging $job): bool => $job->tenantId === $tenant->id && $job->includeSms);
 });
 
 test('messaging setup can save tenant-scoped modern forestry support alert phone', function () {

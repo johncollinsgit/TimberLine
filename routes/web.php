@@ -1777,6 +1777,9 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         Route::post('/messaging/setup/complete', [ShopifyEmbeddedMessagingController::class, 'completeSetup'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.setup.complete');
+        Route::post('/messaging/setup/activate', [ShopifyEmbeddedMessagingController::class, 'activateMessaging'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('messaging.setup.activate');
         Route::post('/messaging/setup/support-alert', [ShopifyEmbeddedMessagingController::class, 'updateSupportAlertPhone'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.setup.support-alert.update');

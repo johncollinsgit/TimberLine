@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\BootstrapTenantMessaging;
 use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantMessagingAccount;
@@ -16,6 +17,7 @@ use App\Services\Marketing\MessagingEmailReplyAddressService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
@@ -120,6 +122,47 @@ test('sendgrid provisioning creates an isolated subuser and buyer ready domain v
         && $request['domain'] === 'domain-co.test');
 });
 
+test('managed email setup reuses one verified domain and is idempotent per tenant', function () {
+    config()->set('features.tenant_messaging_provisioning', true);
+    config()->set('services.sendgrid.api_key', 'parent-sendgrid-key');
+    config()->set('services.sendgrid.managed_email_domain', 'messages.theeverbranch.test');
+    config()->set('services.sendgrid.managed_domain_authentication_id', '44001');
+    $tenant = Tenant::query()->create(['name' => 'Easy Mail Co', 'slug' => 'easy-mail-co']);
+    Http::fake([
+        'https://api.sendgrid.com/v3/subusers' => Http::response([], 201),
+        'https://api.sendgrid.com/v3/whitelabel/domains/44001/subuser' => Http::response([], 201),
+        'https://api.sendgrid.com/v3/api_keys' => Http::response(['api_key' => 'tenant-managed-key'], 201),
+    ]);
+
+    $service = app(TenantMessagingProvisioningService::class);
+    $account = $service->provisionManagedEmail($tenant, 'owner@easy-mail.test');
+    $replay = $service->provisionManagedEmail($tenant, 'new-replies@easy-mail.test');
+    $sender = TenantMessagingSenderProfile::query()->forAllTenants()->where('tenant_id', $tenant->id)->firstOrFail();
+    $rawCredentials = (string) DB::table('tenant_messaging_accounts')->whereKey($account->id)->value('credentials');
+
+    expect($account->isReady())->toBeTrue()
+        ->and($replay->id)->toBe($account->id)
+        ->and($sender->from_email)->toBe('easy-mail-co@messages.theeverbranch.test')
+        ->and($sender->reply_to_email)->toBe('new-replies@easy-mail.test')
+        ->and($sender->verification_status)->toBe('verified')
+        ->and($rawCredentials)->not->toContain('tenant-managed-key');
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://api.sendgrid.com/v3/whitelabel/domains/44001/subuser'
+        && $request['username'] === 'everbranch_tenant_'.$tenant->id);
+    Http::assertSentCount(3);
+});
+
+test('new tenant bootstrap is queued only for explicitly allowlisted tenants', function () {
+    Queue::fake();
+    config()->set('features.tenant_messaging_auto_bootstrap', true);
+    config()->set('marketing.messaging.platform.automatic_tenant_ids', [1]);
+
+    $allowed = Tenant::query()->create(['name' => 'Allowed', 'slug' => 'allowed']);
+    Tenant::query()->create(['name' => 'Not Allowed', 'slug' => 'not-allowed']);
+
+    Queue::assertPushed(BootstrapTenantMessaging::class, fn (BootstrapTenantMessaging $job): bool => $job->tenantId === $allowed->id && $job->includeSms);
+    Queue::assertPushed(BootstrapTenantMessaging::class, 1);
+});
+
 test('verified sender profiles enforce authenticated domains and both reply modes', function () {
     $tenant = Tenant::query()->create(['name' => 'Sender Co', 'slug' => 'sender-co']);
     $account = TenantMessagingAccount::query()->forAllTenants()->create([
@@ -192,11 +235,101 @@ test('overage requires prepaid credit and failed reservations can be refunded ex
     $sameRefund = $usage->refund($tenant->id, 'sms-1', 'provider_failed');
     $summary = $usage->summary($tenant->id, 'sms');
 
-    expect($reservation['amount_micros'])->toBe(50000)
+    expect($reservation['amount_micros'])->toBe(2500000)
         ->and($refund->id)->toBe($sameRefund->id)
         ->and($summary['credit_balance_micros'])->toBe(25000000)
         ->and($summary['credit_available_micros'])->toBe(25000000)
         ->and(DB::table('tenant_messaging_ledger_entries')->where('entry_type', 'credit_funding')->count())->toBe(1);
+});
+
+test('monthly allowances charge each overage block only once as usage crosses boundaries', function () {
+    $tenant = Tenant::query()->create(['name' => 'Block Billing Co', 'slug' => 'block-billing-co']);
+    TenantAccessAddon::query()->create(['tenant_id' => $tenant->id, 'addon_key' => 'sms', 'enabled' => true]);
+    $usage = app(TenantMessagingUsageService::class);
+    $usage->fund($tenant->id, 10000000, 'block-credit');
+
+    $included = $usage->reserve($tenant->id, 'sms', 1000, 'included', 'twilio_subaccount');
+    $usage->settle($tenant->id, 'included');
+    $firstBlock = $usage->reserve($tenant->id, 'sms', 1, 'block-1-start', 'twilio_subaccount');
+    $usage->settle($tenant->id, 'block-1-start');
+    $sameBlock = $usage->reserve($tenant->id, 'sms', 99, 'block-1-rest', 'twilio_subaccount');
+    $usage->settle($tenant->id, 'block-1-rest');
+    $secondBlock = $usage->reserve($tenant->id, 'sms', 1, 'block-2-start', 'twilio_subaccount');
+    $usage->settle($tenant->id, 'block-2-start');
+    $summary = $usage->summary($tenant->id, 'sms');
+
+    expect($included['amount_micros'])->toBe(0)
+        ->and($firstBlock['amount_micros'])->toBe(2500000)
+        ->and($sameBlock['amount_micros'])->toBe(0)
+        ->and($secondBlock['amount_micros'])->toBe(2500000)
+        ->and($summary['included_units'])->toBe(1000)
+        ->and($summary['overage_units'])->toBe(101)
+        ->and($summary['overage_blocks'])->toBe(2)
+        ->and($summary['overage_block_units'])->toBe(100)
+        ->and($summary['monthly_price_cents'])->toBe(9900);
+});
+
+test('sms business data stays encrypted and sending unlocks only after carrier approval', function () {
+    config()->set('features.tenant_messaging_provisioning', true);
+    config()->set('services.twilio.account_sid', 'ACparent');
+    config()->set('services.twilio.auth_token', 'parent-token');
+    $tenant = Tenant::query()->create(['name' => 'Text Ready Co', 'slug' => 'text-ready-co']);
+    $subSid = 'ACsubaccount';
+    $verificationChecks = 0;
+    Http::fake(function ($request) use ($subSid, &$verificationChecks) {
+        $url = $request->url();
+        if ($url === 'https://api.twilio.com/2010-04-01/Accounts/ACparent.json') {
+            return Http::response(['sid' => $subSid, 'auth_token' => 'sub-token'], 201);
+        }
+        if ($url === 'https://messaging.twilio.com/v1/Services') {
+            return Http::response(['sid' => 'MGservice'], 201);
+        }
+        if (str_contains($url, '/AvailablePhoneNumbers/US/TollFree.json')) {
+            return Http::response(['available_phone_numbers' => [['phone_number' => '+18005550123']]], 200);
+        }
+        if (str_contains($url, '/IncomingPhoneNumbers.json')) {
+            return Http::response(['sid' => 'PNnumber', 'phone_number' => '+18005550123'], 201);
+        }
+        if ($url === 'https://messaging.twilio.com/v1/Services/MGservice/PhoneNumbers') {
+            return Http::response(['sid' => 'MGservice'], 201);
+        }
+        if ($url === 'https://messaging.twilio.com/v1/Tollfree/Verifications' && $request->method() === 'POST') {
+            return Http::response(['sid' => 'TFverification', 'status' => 'PENDING_REVIEW'], 201);
+        }
+        if ($url === 'https://messaging.twilio.com/v1/Tollfree/Verifications/TFverification') {
+            $verificationChecks++;
+
+            return Http::response(['sid' => 'TFverification', 'status' => 'TWILIO_APPROVED'], 200);
+        }
+
+        return Http::response(['message' => 'Unexpected fake request: '.$url], 500);
+    });
+
+    $service = app(TenantMessagingProvisioningService::class);
+    $service->provisionSms($tenant);
+    $service->saveSmsComplianceProfile($tenant->id, [
+        'business_name' => 'Text Ready Company LLC',
+        'business_website' => 'https://text-ready.test',
+        'notification_email' => 'owner@text-ready.test',
+        'use_case_categories' => ['CUSTOMER_CARE'],
+        'use_case_summary' => 'Appointment reminders requested by customers.',
+        'production_message_sample' => 'Text Ready: Your appointment is tomorrow. Reply STOP to opt out.',
+        'opt_in_image_urls' => ['https://text-ready.test/opt-in.png'],
+        'opt_in_type' => 'WEB_FORM',
+        'message_volume' => '1,000',
+        'privacy_policy_url' => 'https://text-ready.test/privacy',
+        'terms_and_conditions_url' => 'https://text-ready.test/terms',
+    ]);
+    $pending = $service->submitTollFreeVerification($tenant->id);
+    $rawProfile = (string) DB::table('tenant_messaging_accounts')->whereKey($pending->id)->value('compliance_profile');
+    $approved = $service->refreshSmsVerification($tenant->id);
+
+    expect($pending->status)->toBe('pending_verification')
+        ->and($pending->isReady())->toBeFalse()
+        ->and($rawProfile)->not->toContain('Text Ready Company LLC')
+        ->and($approved->isReady())->toBeTrue()
+        ->and($approved->sender_identifier)->toBe('+18005550123')
+        ->and($verificationChecks)->toBe(1);
 });
 
 test('messaging ledger entries reject edits and deletes', function () {
