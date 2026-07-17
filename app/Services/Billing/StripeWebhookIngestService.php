@@ -6,6 +6,7 @@ use App\Models\StripeWebhookEvent;
 use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
 use App\Models\TenantCommercialOverride;
+use App\Models\TenantDirectInvoice;
 use App\Services\Marketing\Messaging\TenantMessagingUsageService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Database\QueryException;
@@ -23,6 +24,7 @@ class StripeWebhookIngestService
         protected TenantBillingSubscriptionLedger $subscriptionLedger,
         protected AgreementStripeWebhookService $agreementWebhooks,
         protected AgreementStripeScheduleService $agreementSchedules,
+        protected DirectStripeInvoiceWebhookService $directInvoiceWebhooks,
     ) {}
 
     /**
@@ -176,6 +178,20 @@ class StripeWebhookIngestService
                     $tenantId = (int) $tenantCandidates->first();
                 }
             }
+            if ($tenantId < 1 && Schema::hasTable('tenant_direct_invoices')) {
+                $directInvoiceId = (int) ($metadata['direct_invoice_id'] ?? 0);
+                $invoiceReference = (data_get($event, 'data.object.object') === 'invoice') ? trim((string) data_get($event, 'data.object.id')) : trim((string) data_get($event, 'data.object.invoice'));
+                $paymentIntent = trim((string) data_get($event, 'data.object.payment_intent'));
+                $directInvoice = $directInvoiceId > 0
+                    ? TenantDirectInvoice::withoutGlobalScopes()->find($directInvoiceId)
+                    : TenantDirectInvoice::withoutGlobalScopes()->where('provider_invoice_id', $invoiceReference)->first();
+                if (! $directInvoice && $paymentIntent !== '') {
+                    $directInvoice = TenantDirectInvoice::withoutGlobalScopes()->where('provider_payment_intent_id', $paymentIntent)->first();
+                }
+                if ($directInvoice) {
+                    $tenantId = (int) $directInvoice->tenant_id;
+                }
+            }
             if ($tenantId < 1) {
                 $tenantId = $this->resolveTenantIdFromStripeReferences($stripeCustomer, $stripeSubscription, $stripeObjectId);
             }
@@ -214,6 +230,23 @@ class StripeWebhookIngestService
                 ])->save();
 
                 return ['status' => 'ignored_tenant_missing', 'tenant_id' => $tenantId];
+            }
+
+            $directInvoiceChanged = Schema::hasTable('tenant_direct_invoices') && $this->directInvoiceWebhooks->handle(
+                tenantId: $tenantId,
+                eventId: $eventId,
+                eventType: $eventType,
+                object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
+                metadata: $metadata,
+            );
+            if (($metadata['purpose'] ?? null) === 'direct_invoice' || $directInvoiceChanged) {
+                $row->forceFill([
+                    'status' => $directInvoiceChanged ? 'processed' : 'processed_no_change',
+                    'tenant_id' => $tenantId,
+                    'processed_at' => now(),
+                ])->save();
+
+                return ['status' => $directInvoiceChanged ? 'processed' : 'processed_no_change', 'tenant_id' => $tenantId];
             }
 
             $override = TenantCommercialOverride::query()
@@ -308,7 +341,7 @@ class StripeWebhookIngestService
                 $this->agreementSchedules->configure($order);
             }
         }
-        $shouldReconcileFulfillment = $tenantId > 0;
+        $shouldReconcileFulfillment = $tenantId > 0 && ($metadata['purpose'] ?? null) !== 'direct_invoice';
         if (($metadata['purpose'] ?? null) === 'agreement_checkout') {
             $billingOrderId = (int) ($metadata['billing_order_id'] ?? 0);
             $agreementOrder = $billingOrderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($billingOrderId) : null;
@@ -350,7 +383,11 @@ class StripeWebhookIngestService
             'customer.subscription.updated',
             'customer.subscription.deleted',
             'invoice.paid',
+            'invoice.finalized',
+            'invoice.finalization_failed',
+            'invoice.sent',
             'invoice.voided',
+            'invoice.marked_uncollectible',
             'invoice.payment_failed',
             'invoice.payment_succeeded',
             'charge.refunded',

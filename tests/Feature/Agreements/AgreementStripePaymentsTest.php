@@ -5,6 +5,7 @@ use App\Models\SubscriptionAuthorization;
 use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
 use App\Models\TenantBillingReceipt;
+use App\Models\TenantDirectInvoice;
 use App\Services\Agreements\AgreementManagementService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -73,8 +74,12 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
         $data = $request->data();
         expect($data['mode'])->toBe('subscription')
             ->and($data['metadata[billing_order_id]'])->toBe((string) $order->id)
+            ->and($data['customer_email'])->toBe('laura@example.test')
             ->and($data['payment_method_types[0]'])->toBe('card')
             ->and($data['payment_method_types[1]'])->toBe('us_bank_account')
+            ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled')
+            ->and($data['saved_payment_method_options[payment_method_remove]'])->toBe('enabled')
+            ->and($data['subscription_data[payment_settings][save_default_payment_method]'])->toBe('on_subscription')
             ->and($data['automatic_tax[enabled]'])->toBe('false')
             ->and(collect($data)->filter(fn ($value, $key) => str_ends_with($key, '[unit_amount]'))->values()->all())->toBe([29900, 5900, 60000])
             ->and($data)->not->toContain(3900)
@@ -88,6 +93,58 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
     expect($order->fresh()->status)->toBe('checkout_pending')
         ->and($order->fresh()->provider_checkout_session_id)->toBe('cs_test_agreement')
         ->and($order->fresh()->authorized_subtotal_cents)->toBe(95800);
+});
+
+test('checkout reuses saved Stripe customers and one-time work can save payment methods', function (): void {
+    $sent = stripePaymentAgreement();
+    $order = acceptStripeAgreement($this, $sent);
+    TenantDirectInvoice::query()->create([
+        'tenant_id' => $order->tenant_id,
+        'status' => 'paid',
+        'currency' => 'USD',
+        'customer_name' => 'Laura K. Lee',
+        'customer_email' => 'laura@example.test',
+        'billing_address' => ['line1' => '10 Main Street', 'city' => 'Greenville', 'state' => 'SC', 'postal_code' => '29601', 'country' => 'US'],
+        'days_until_due' => 30,
+        'authorization_reference' => 'Prior paid invoice',
+        'line_items' => [],
+        'authorized_subtotal_cents' => 0,
+        'provider_customer_id' => 'cus_saved',
+    ]);
+    Http::fake(function (Request $request) {
+        $data = $request->data();
+        if (($data['mode'] ?? null) === 'subscription') {
+            expect($data['customer'])->toBe('cus_saved')
+                ->and($data)->not->toHaveKey('customer_email')
+                ->and($data)->not->toHaveKey('customer_creation')
+                ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled')
+                ->and($data['subscription_data[payment_settings][save_default_payment_method]'])->toBe('on_subscription');
+
+            return Http::response(['id' => 'cs_saved_customer', 'url' => 'https://checkout.stripe.test/cs_saved_customer']);
+        }
+
+        expect($data['mode'])->toBe('payment')
+            ->and($data['customer'])->toBe('cus_saved')
+            ->and($data['payment_intent_data[setup_future_usage]'])->toBe('on_session')
+            ->and($data['invoice_creation[enabled]'])->toBe('true')
+            ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled');
+
+        return Http::response(['id' => 'cs_saved_one_time', 'url' => 'https://checkout.stripe.test/cs_saved_one_time']);
+    });
+    $this->post($sent['url'].'/checkout')->assertRedirect('https://checkout.stripe.test/cs_saved_customer');
+    expect($order->fresh()->provider_customer_id)->toBe('cus_saved');
+
+    $management = app(AgreementManagementService::class);
+    $work = $management->createSupplementalWork($sent['agreement']->fresh(), null, 'Final inventory import.', 5000, 1.0);
+    $access = $management->send($work, null, 'WorkOrderPass123');
+    $token = basename(parse_url($access['url'], PHP_URL_PATH));
+    $url = 'http://evergrove.test/proposals/'.$token;
+    $this->post($url.'/unlock', ['password' => 'WorkOrderPass123']);
+    $this->post($url.'/accept', stripeAcceptancePayload())->assertRedirect();
+    $oneTimeOrder = TenantBillingOrder::query()->where('agreement_id', $work->id)->firstOrFail();
+
+    $this->post($url.'/checkout')->assertRedirect('https://checkout.stripe.test/cs_saved_one_time');
+    expect($oneTimeOrder->fresh()->provider_customer_id)->toBe('cus_saved');
 });
 
 test('checkout rejects unsigned locked expired and live-unready proposals', function (): void {

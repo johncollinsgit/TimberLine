@@ -14,6 +14,7 @@ Front Yard Foods is an implementation client, not the basis for an App Store pri
 | --- | --- | --- | --- | --- |
 | Shopify App Store merchant | `shopify_app_pricing` / `shopify` | Shopify | Shopify merchant invoice | Verify Partner API subscription state, mirror receipts/tax, gate access |
 | Direct or non-Shopify customer | `stripe_direct` / `stripe` | Hosted gateway on `theeverbranch.com` | Stripe Tax/invoice when configured | Use hosted Checkout/portal, verify webhook state, mirror receipts/tax, gate access |
+| Approved direct implementation invoice | `stripe_direct_invoice` | Stripe hosted invoice sent by Everbranch landlord operator | Stripe invoice when configured | Snapshot approved lines, send invoice, mirror receipt/tax/status evidence, never gate access |
 | Manual implementation work | separately approved one-time service line | Approved provider/manual accounting process | Issuing provider/accounting record | Record the agreed line and external receipt reference; do not silently convert it to recurring access |
 
 A subscription has exactly one active provider lane. A Shopify-distributed merchant cannot choose Stripe to bypass Shopify app billing. A direct customer who later installs the Shopify-distributed app must be deliberately migrated without overlap or double billing.
@@ -21,6 +22,10 @@ A subscription has exactly one active provider lane. A Shopify-distributed merch
 ## À-la-carte pricing
 
 `subscription_authorizations.authorized_line_items` preserves the negotiated recurring, one-time, promotional-cycle, and future-price components. `tenant_billing_orders` snapshots only the accepted collectible lines and attaches Stripe identifiers after the customer begins payment. Shopify and third-party lines remain informational and can never be submitted to Stripe.
+
+`tenant_direct_invoices` is the landlord-created invoice ledger for approved one-time, milestone, and supplemental work. It snapshots the tenant, authorization reference, customer billing contact, line items, allowed Everbranch/Evergrove categories, Stripe invoice/customer/payment identifiers, and mirrored receipt evidence. It rejects Shopify and third-party pass-through costs and never feeds entitlement fulfillment.
+
+Stripe customer reuse is tenant-scoped and signer/contact-aware. Proposal Checkout may reuse a prior Stripe Customer for the same tenant and billing email, and Checkout exposes saved payment method controls so repeat payments are easier. Saved payment methods do not authorize silent charges: each supplemental work order, milestone, or direct invoice still needs its own accepted approval and customer payment action.
 
 ## State transition
 

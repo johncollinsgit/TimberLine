@@ -35,4 +35,9 @@ class TenantBillingReceipt extends Model
     {
         return $this->belongsTo(TenantBillingOrder::class, 'tenant_billing_order_id');
     }
+
+    public function directInvoice(): BelongsTo
+    {
+        return $this->belongsTo(TenantDirectInvoice::class, 'tenant_direct_invoice_id');
+    }
 }

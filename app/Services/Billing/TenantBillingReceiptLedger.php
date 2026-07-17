@@ -6,12 +6,13 @@ use App\Models\SubscriptionAuthorization;
 use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
 use App\Models\TenantBillingReceipt;
+use App\Models\TenantDirectInvoice;
 use InvalidArgumentException;
 
 class TenantBillingReceiptLedger
 {
     /** @param array<string,mixed> $receipt */
-    public function recordVerifiedProviderReceipt(Tenant $tenant, string $provider, array $receipt, ?SubscriptionAuthorization $authorization = null, ?TenantBillingOrder $billingOrder = null): TenantBillingReceipt
+    public function recordVerifiedProviderReceipt(Tenant $tenant, string $provider, array $receipt, ?SubscriptionAuthorization $authorization = null, ?TenantBillingOrder $billingOrder = null, ?TenantDirectInvoice $directInvoice = null): TenantBillingReceipt
     {
         $provider = strtolower(trim($provider));
         $providerReceiptId = trim((string) ($receipt['provider_receipt_id'] ?? ''));
@@ -23,6 +24,9 @@ class TenantBillingReceiptLedger
         }
         if ($billingOrder && (int) $billingOrder->tenant_id !== (int) $tenant->id) {
             throw new InvalidArgumentException('The billing order does not belong to this tenant.');
+        }
+        if ($directInvoice && (int) $directInvoice->tenant_id !== (int) $tenant->id) {
+            throw new InvalidArgumentException('The direct invoice does not belong to this tenant.');
         }
         $existing = TenantBillingReceipt::query()->where('provider', $provider)->where('provider_receipt_id', $providerReceiptId)->first();
         if ($existing && (int) $existing->tenant_id !== (int) $tenant->id) {
@@ -40,6 +44,7 @@ class TenantBillingReceiptLedger
             [
                 'tenant_id' => (int) $tenant->id,
                 'tenant_billing_order_id' => $billingOrder?->id ?? $existing?->tenant_billing_order_id,
+                'tenant_direct_invoice_id' => $directInvoice?->id ?? $existing?->tenant_direct_invoice_id,
                 'subscription_authorization_id' => $authorization?->id ?? $existing?->subscription_authorization_id,
                 'provider_subscription_id' => $receipt['provider_subscription_id'] ?? null,
                 'invoice_number' => $receipt['invoice_number'] ?? null,

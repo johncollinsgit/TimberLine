@@ -85,11 +85,16 @@ class ConfigDoctor extends Command
         $this->line('');
         $this->line('<comment>Stripe direct agreement checkout</comment>');
 
-        if (! (bool) config('commercial.billing_readiness.agreement_checkout.enabled', false)) {
-            $this->line('  <fg=yellow>–</> EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED=false (Stripe validation skipped)');
+        $agreementCheckoutEnabled = (bool) config('commercial.billing_readiness.agreement_checkout.enabled', false);
+        $directInvoicingEnabled = (bool) config('commercial.billing_readiness.direct_invoicing.enabled', false);
+        if (! $agreementCheckoutEnabled && ! $directInvoicingEnabled) {
+            $this->line('  <fg=yellow>–</> agreement checkout and direct invoicing are disabled (Stripe validation skipped)');
 
             return 0;
         }
+
+        $this->line('  Agreement checkout: '.($agreementCheckoutEnabled ? '<info>enabled</info>' : '<fg=yellow>disabled</>'));
+        $this->line('  Direct invoicing: '.($directInvoicingEnabled ? '<info>enabled</info>' : '<fg=yellow>disabled</>'));
 
         $accountId = trim((string) config('services.stripe.account_id'));
         $publishableKey = trim((string) config('services.stripe.publishable_key'));
@@ -131,9 +136,10 @@ class ConfigDoctor extends Command
         }
 
         if ($publishableMode === 'live' && $secretMode === 'live') {
+            $readinessPath = $directInvoicingEnabled ? 'direct_invoicing' : 'agreement_checkout';
             foreach ([
-                'EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED' => (bool) config('commercial.billing_readiness.agreement_checkout.tax_decision_confirmed', false),
-                'EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED' => (bool) config('commercial.billing_readiness.agreement_checkout.relay_payout_verified', false),
+                'EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED' => (bool) config('commercial.billing_readiness.'.$readinessPath.'.tax_decision_confirmed', false),
+                'EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED' => (bool) config('commercial.billing_readiness.'.$readinessPath.'.relay_payout_verified', false),
             ] as $name => $valid) {
                 if ($valid) {
                     $this->line("  <info>✓</info> {$name}");

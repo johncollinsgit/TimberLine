@@ -3,6 +3,8 @@
 namespace App\Services\Billing;
 
 use App\Models\TenantBillingOrder;
+use App\Models\TenantCommercialOverride;
+use App\Models\TenantDirectInvoice;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
@@ -37,20 +39,33 @@ class AgreementStripeCheckoutService
 
         $mode = is_array($currentRecurring) ? 'subscription' : 'payment';
         $returnUrl = route('proposals.show', ['token' => $proposalToken], true);
+        $customerId = $this->reusableCustomerId($order);
         $payload = [
             'mode' => $mode,
             'success_url' => $returnUrl.'?payment=return&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $returnUrl.'?payment=cancel',
             'client_reference_id' => 'billing-order-'.(int) $order->id,
-            'customer_email' => (string) $order->acceptance->signer_email,
             'billing_address_collection' => 'required',
             'tax_id_collection[enabled]' => 'true',
             'payment_method_types[0]' => 'card',
             'payment_method_types[1]' => 'us_bank_account',
+            'saved_payment_method_options[payment_method_save]' => 'enabled',
+            'saved_payment_method_options[payment_method_remove]' => 'enabled',
             'automatic_tax[enabled]' => $this->automaticTaxEnabled() ? 'true' : 'false',
         ];
+        if ($customerId !== null) {
+            $payload['customer'] = $customerId;
+        } else {
+            $payload['customer_email'] = (string) $order->acceptance->signer_email;
+            if ($mode === 'payment') {
+                $payload['customer_creation'] = 'always';
+            }
+        }
         if ($mode === 'payment') {
             $payload['invoice_creation[enabled]'] = 'true';
+            $payload['payment_intent_data[setup_future_usage]'] = 'on_session';
+        } else {
+            $payload['subscription_data[payment_settings][save_default_payment_method]'] = 'on_subscription';
         }
 
         $metadata = [
@@ -101,8 +116,8 @@ class AgreementStripeCheckoutService
             return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe returned an invalid checkout session.'];
         }
         $order->forceFill([
-            'status' => 'checkout_pending', 'provider_checkout_session_id' => $sessionId,
-            'checkout_started_at' => now(), 'metadata' => [...(array) $order->metadata, 'checkout_mode' => $mode, 'automatic_tax_enabled' => $this->automaticTaxEnabled()],
+            'status' => 'checkout_pending', 'provider_checkout_session_id' => $sessionId, 'provider_customer_id' => $customerId,
+            'checkout_started_at' => now(), 'metadata' => [...(array) $order->metadata, 'checkout_mode' => $mode, 'automatic_tax_enabled' => $this->automaticTaxEnabled(), 'saved_payment_method_collection' => true],
         ])->save();
         $this->audit->record((int) $order->tenant_id, null, 'tenant_billing.agreement_checkout.create', status: 'success', targetType: 'tenant_billing_order', targetId: $order->id, context: ['stripe_checkout_session_id' => $sessionId, 'mode' => $mode]);
 
@@ -112,6 +127,36 @@ class AgreementStripeCheckoutService
     public function availableFor(TenantBillingOrder $order): bool
     {
         return $this->readinessBlocker($order->loadMissing('tenant')) === null;
+    }
+
+    protected function reusableCustomerId(TenantBillingOrder $order): ?string
+    {
+        $email = trim(strtolower((string) $order->acceptance?->signer_email));
+        $candidates = [
+            $order->provider_customer_id,
+            $email !== '' ? TenantBillingOrder::withoutGlobalScopes()
+                ->where('tenant_id', $order->tenant_id)
+                ->whereNotNull('provider_customer_id')
+                ->whereHas('acceptance', fn ($query) => $query->whereRaw('LOWER(signer_email) = ?', [$email]))
+                ->latest('id')
+                ->value('provider_customer_id') : null,
+            $email !== '' ? TenantDirectInvoice::withoutGlobalScopes()
+                ->where('tenant_id', $order->tenant_id)
+                ->whereRaw('LOWER(customer_email) = ?', [$email])
+                ->whereNotNull('provider_customer_id')
+                ->latest('id')
+                ->value('provider_customer_id') : null,
+            data_get(TenantCommercialOverride::query()->where('tenant_id', $order->tenant_id)->first()?->billing_mapping, 'stripe.customer_reference'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $customerId = trim((string) $candidate);
+            if (str_starts_with($customerId, 'cus_')) {
+                return $customerId;
+            }
+        }
+
+        return null;
     }
 
     protected function readinessBlocker(TenantBillingOrder $order): ?string

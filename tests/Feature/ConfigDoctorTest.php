@@ -79,6 +79,21 @@ test('config doctor accepts complete test-mode Stripe credentials locally', func
     $this->artisan('config:doctor --env=local')->assertSuccessful();
 });
 
+test('config doctor validates Stripe credentials when direct invoicing alone is enabled', function (): void {
+    config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
+    config()->set('commercial.billing_readiness.agreement_checkout.enabled', false);
+    config()->set('commercial.billing_readiness.direct_invoicing.enabled', true);
+    config()->set('services.stripe.account_id', 'acct_1234567890');
+    config()->set('services.stripe.publishable_key', 'pk_test_example');
+    config()->set('services.stripe.secret', 'sk_test_example');
+    config()->set('services.stripe.webhook_secret', 'whsec_example');
+
+    $this->artisan('config:doctor --env=local')->assertSuccessful();
+
+    config()->set('services.stripe.secret', 'mk_invalid');
+    $this->artisan('config:doctor --env=local')->assertFailed();
+});
+
 test('config doctor rejects manually prefixed or malformed Stripe credentials', function (): void {
     config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
     configureAgreementStripe('mk_publishable', 'mk_secret');

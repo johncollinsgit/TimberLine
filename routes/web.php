@@ -20,6 +20,7 @@ use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
 use App\Http\Controllers\Landlord\LandlordDeveloperDashboardController;
+use App\Http\Controllers\Landlord\LandlordDirectInvoiceController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
@@ -253,6 +254,14 @@ $landlordRoutes = static function (): void {
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
     Route::get('/landlord/agreements', [LandlordAgreementController::class, 'index'])->name('agreements.index');
+    Route::get('/landlord/invoices', [LandlordDirectInvoiceController::class, 'index'])->name('invoices.index');
+    Route::get('/landlord/tenants/{tenant}/invoices/create', [LandlordDirectInvoiceController::class, 'create'])->name('invoices.create');
+    Route::post('/landlord/tenants/{tenant}/invoices', [LandlordDirectInvoiceController::class, 'store'])->name('invoices.store');
+    Route::get('/landlord/tenants/{tenant}/invoices/{invoice}', [LandlordDirectInvoiceController::class, 'show'])->name('invoices.show');
+    Route::get('/landlord/tenants/{tenant}/invoices/{invoice}/edit', [LandlordDirectInvoiceController::class, 'edit'])->name('invoices.edit');
+    Route::put('/landlord/tenants/{tenant}/invoices/{invoice}', [LandlordDirectInvoiceController::class, 'update'])->name('invoices.update');
+    Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/send', [LandlordDirectInvoiceController::class, 'send'])->name('invoices.send');
+    Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/void', [LandlordDirectInvoiceController::class, 'void'])->name('invoices.void');
     Route::get('/landlord/agreements/create', [LandlordAgreementController::class, 'create'])->name('agreements.create');
     Route::post('/landlord/agreements', [LandlordAgreementController::class, 'store'])->name('agreements.store');
     Route::get('/landlord/agreements/{agreement}', [LandlordAgreementController::class, 'show'])->name('agreements.show');
