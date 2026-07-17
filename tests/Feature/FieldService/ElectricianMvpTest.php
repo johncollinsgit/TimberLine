@@ -49,6 +49,30 @@ test('collins electric prep command creates guided workspace and john mobile adm
         ->assertJsonFragment(['slug' => 'collins-electric']);
 });
 
+test('collins electric keeps electrician workspace navigation and rejects plant inventory', function (): void {
+    $this->artisan('everbranch:prepare-collins-electric --seed-demo-job')
+        ->assertSuccessful();
+
+    $tenant = Tenant::query()->where('slug', 'collins-electric')->firstOrFail();
+    $john = User::query()->where('email', 'johncollinsemail@gmail.com')->firstOrFail();
+
+    $this->actingAs($john)
+        ->get(route('dashboard', ['tenant' => $tenant->slug]))
+        ->assertOk()
+        ->assertSeeText('Work')
+        ->assertSeeText('Jobs')
+        ->assertSeeText('Materials')
+        ->assertSeeText('Work vans')
+        ->assertSeeText('Create a job')
+        ->assertDontSeeText('Welcome, Laura')
+        ->assertDontSeeText('Plant Inventory')
+        ->assertDontSeeText('Events & Classes');
+
+    $this->actingAs($john)
+        ->get(route('plant-inventory.index', ['tenant' => $tenant->slug]))
+        ->assertForbidden();
+});
+
 test('electrician field service captures lock box notes calendar and searchable updates', function (): void {
     [$tenant, $user] = electricianTenantAndUser();
 

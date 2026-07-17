@@ -1,12 +1,16 @@
+@php
+    $isFrontYardFoods = $tenant->slug === 'front-yard-foods';
+@endphp
+
 <x-layouts::app.sidebar title="{{ $scheduledClass->title }}">
     <div class="mx-auto w-full max-w-[1400px] space-y-6 px-4 py-5 sm:px-6">
         @if(session('status'))<div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">{{ session('status') }}</div>@endif
-        <a href="{{ route('class-scheduling.index', ['month' => $scheduledClass->starts_at->format('Y-m')]) }}" class="text-sm font-semibold text-emerald-800">← Back to class calendar</a>
+        <a href="{{ route('class-scheduling.index', ['month' => $scheduledClass->starts_at->format('Y-m')]) }}" class="text-sm font-semibold text-emerald-800">← Back to {{ $isFrontYardFoods ? 'events & classes' : 'class' }} calendar</a>
 
         <section class="mf-app-card overflow-hidden rounded-3xl">
             @if($scheduledClass->image_url)<img src="{{ $scheduledClass->image_url }}" alt="{{ $scheduledClass->title }}" class="h-56 w-full object-cover">@endif
             <div class="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1fr_auto]">
-                <div><div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">{{ $scheduledClass->category ?: 'Class' }}</div><h1 class="mt-2 text-3xl font-semibold text-zinc-950">{{ $scheduledClass->title }}</h1><p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">{{ $scheduledClass->description }}</p></div>
+                <div><div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">{{ $scheduledClass->category ?: ($isFrontYardFoods ? 'Event or class' : 'Class') }}</div><h1 class="mt-2 text-3xl font-semibold text-zinc-950">{{ $scheduledClass->title }}</h1><p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">{{ $scheduledClass->description }}</p>@if($isFrontYardFoods)<div class="mt-4 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900">Shopify publishing pending connection</div>@endif</div>
                 <div class="rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-950"><div class="font-semibold">{{ $scheduledClass->starts_at->format('D, M j · g:i A') }}</div><div class="mt-1">{{ $scheduledClass->location ?: 'Location pending' }}</div><div class="mt-3 text-2xl font-semibold">{{ $scheduledClass->seats_taken }}/{{ $scheduledClass->capacity }}</div><div class="text-xs text-emerald-800">seats enrolled</div></div>
             </div>
         </section>
@@ -36,7 +40,7 @@
             </section>
 
             <section class="mf-app-card rounded-3xl p-5 sm:p-6">
-                <h2 class="text-xl font-semibold text-zinc-950">Class settings</h2>
+                <h2 class="text-xl font-semibold text-zinc-950">{{ $isFrontYardFoods ? 'Event/class settings' : 'Class settings' }}</h2>
                 <form method="POST" action="{{ route('class-scheduling.update', $scheduledClass) }}" class="mt-5 space-y-4">
                     @csrf @method('PUT')
                     <label class="block text-sm font-medium text-zinc-700">Name<input name="title" required value="{{ $scheduledClass->title }}" class="mt-1.5 w-full rounded-xl border-zinc-200"></label>
@@ -47,9 +51,9 @@
                     <label class="block text-sm font-medium text-zinc-700">Status<select name="status" class="mt-1.5 w-full rounded-xl border-zinc-200">@foreach(['draft','published','cancelled','complete'] as $status)<option value="{{ $status }}" @selected($scheduledClass->status === $status)>{{ Str::headline($status) }}</option>@endforeach</select></label>
                     <label class="block text-sm font-medium text-zinc-700">Description<textarea name="description" rows="5" class="mt-1.5 w-full rounded-xl border-zinc-200">{{ $scheduledClass->description }}</textarea></label>
                     <label class="flex items-center gap-2 text-sm text-zinc-700"><input type="checkbox" name="registration_open" value="1" @checked($scheduledClass->registration_open) class="rounded border-zinc-300 text-emerald-700">Registration open</label>
-                    <button class="fb-btn fb-btn-primary">Save class</button>
+                    <button class="fb-btn fb-btn-primary">{{ $isFrontYardFoods ? 'Save event or class' : 'Save class' }}</button>
                 </form>
-                <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">Reminders are queued here. Email/text delivery still requires this workspace’s provider readiness and the customer’s consent.</div>
+                <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">Reminders are queued here. Email/text delivery still requires this workspace’s provider readiness and the customer’s consent.@if($isFrontYardFoods) Publishing this event to Shopify is disabled until the Shopify site is connected and mapped.@endif</div>
             </section>
         </div>
     </div>

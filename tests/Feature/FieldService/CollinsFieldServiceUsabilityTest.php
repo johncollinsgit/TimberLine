@@ -177,7 +177,7 @@ test('work 2 my day and task APIs are role aware and tenant scoped', function ()
     $job = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id, 'assigned_user_id' => $member->id, 'title' => 'Today service call',
         'status' => 'open', 'operational_status' => 'scheduled', 'customer_phone' => '555-2020',
-        'description' => 'Repair a failed receptacle.', 'service_address_line_1' => '20 Oak Street', 'scheduled_for' => now()->addHour(),
+        'description' => 'Repair a failed receptacle.', 'service_address_line_1' => '20 Oak Street', 'scheduled_for' => now()->startOfDay()->addHours(10),
     ]);
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
