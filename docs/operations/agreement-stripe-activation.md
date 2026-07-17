@@ -48,7 +48,7 @@ Direct invoice note: the July 17, 2026 smoke test satisfies the first internal c
 ## Staged enablement
 
 1. Set the target flow flag true with test keys and an explicit tenant allowlist.
-2. For proposal Checkout, complete an accepted-proposal card test and ACH test. Confirm Stripe invoices and mirrored Everbranch receipts match.
+2. For proposal Checkout, complete an accepted-proposal card test and ACH test. Confirm Stripe invoices and mirrored Everbranch receipts match. For Front Yard Foods, copy `docs/operations/evidence/front-yard-foods-proposal-checkout-smoke-template.md` into a dated evidence note and require `php artisan everbranch:front-yard-foods-readiness --require-paid` before sending a client link.
 3. For direct invoices, create a draft, send it through Stripe test mode, pay by card, test ACH pending-to-paid, void an open invoice, and replay webhook duplicates.
    - Completed internal card-paid direct invoice smoke test: 2026-07-17, Stripe invoice `GHPJWFCX-0001`.
 4. Configure live secrets, confirm the tax decision and Relay payout evidence, then repeat with an internal allowlisted tenant.
