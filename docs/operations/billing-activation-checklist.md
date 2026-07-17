@@ -2,6 +2,19 @@
 
 Status: Readiness checklist plus guarded live-slice reference. This is not full lifecycle implementation.
 
+2026-07-17 direct invoice update: landlord-created direct Stripe invoices are **production-ready pending live gates** after an internal paid sandbox invoice smoke test. This does not enable live payment collection, proposal Checkout, tenant self-serve billing, Shopify App Store billing, or entitlement fulfillment. See `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.
+
+Before sending a live customer invoice, confirm all of the following:
+
+- `php artisan config:doctor --env=production` passes on the production server.
+- Production mail is not `log`.
+- Live `STRIPE_ACCOUNT_ID`, `STRIPE_KEY`, `STRIPE_SECRET`, and `STRIPE_WEBHOOK_SECRET` are stored in the production secret store.
+- Stripe production webhook events are registered and signed.
+- Relay payout verification evidence is attached.
+- Accountant taxability/registration determination is attached.
+- `EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED=false`.
+- The first live tenant is explicitly allowlisted; do not use `*` for the first launch.
+
 ## What Must Be True Before Billing Lifecycle Work Starts
 - Staging commercial UAT matrix is complete with blocking rows passing.
 - Landlord commercial assignment propagation is stable for:
