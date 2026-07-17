@@ -4,6 +4,7 @@ namespace App\Services\Billing;
 
 use App\Models\StripeWebhookEvent;
 use App\Models\Tenant;
+use App\Models\TenantBillingOrder;
 use App\Models\TenantCommercialOverride;
 use App\Services\Marketing\Messaging\TenantMessagingUsageService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
@@ -20,6 +21,8 @@ class StripeWebhookIngestService
         protected StripeCommercialFulfillmentService $fulfillmentService,
         protected TenantMessagingUsageService $messagingUsage,
         protected TenantBillingSubscriptionLedger $subscriptionLedger,
+        protected AgreementStripeWebhookService $agreementWebhooks,
+        protected AgreementStripeScheduleService $agreementSchedules,
     ) {}
 
     /**
@@ -59,6 +62,10 @@ class StripeWebhookIngestService
 
         $object = is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [];
         $metadata = is_array($object['metadata'] ?? null) ? (array) $object['metadata'] : [];
+        $subscriptionMetadata = data_get($object, 'parent.subscription_details.metadata', data_get($object, 'subscription_details.metadata', []));
+        if (is_array($subscriptionMetadata)) {
+            $metadata = [...$subscriptionMetadata, ...$metadata];
+        }
 
         if (($metadata['purpose'] ?? null) === 'messaging_credit') {
             return $this->fulfillMessagingCredit($eventId, $eventType, $object, $metadata);
@@ -154,6 +161,21 @@ class StripeWebhookIngestService
             }
 
             $tenantId = (int) ($metadata['tenant_id'] ?? 0);
+            if ($tenantId < 1 && Schema::hasTable('tenant_billing_orders')) {
+                $paymentIntent = trim((string) (data_get($event, 'data.object.payment_intent') ?? ''));
+                $invoiceReference = (data_get($event, 'data.object.object') === 'invoice') ? trim((string) data_get($event, 'data.object.id')) : trim((string) data_get($event, 'data.object.invoice'));
+                $tenantCandidates = collect();
+                if ($paymentIntent !== '') {
+                    $tenantCandidates = TenantBillingOrder::withoutGlobalScopes()->where('provider_payment_intent_id', $paymentIntent)->pluck('tenant_id');
+                }
+                if ($tenantCandidates->isEmpty() && $invoiceReference !== '') {
+                    $tenantCandidates = TenantBillingOrder::withoutGlobalScopes()->where('provider_invoice_id', $invoiceReference)->pluck('tenant_id');
+                }
+                $tenantCandidates = $tenantCandidates->map(fn ($id) => (int) $id)->filter()->unique()->values();
+                if ($tenantCandidates->count() === 1) {
+                    $tenantId = (int) $tenantCandidates->first();
+                }
+            }
             if ($tenantId < 1) {
                 $tenantId = $this->resolveTenantIdFromStripeReferences($stripeCustomer, $stripeSubscription, $stripeObjectId);
             }
@@ -237,10 +259,18 @@ class StripeWebhookIngestService
                 subscriptionReference: $stripeSubscription,
             );
 
+            $agreementChanged = $this->agreementWebhooks->handle(
+                tenantId: $tenantId,
+                eventId: $eventId,
+                eventType: $eventType,
+                object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
+                metadata: $metadata,
+            );
+
             $after = $this->snapshotOverride($override);
 
             $row->forceFill([
-                'status' => $changed ? 'processed' : 'processed_no_change',
+                'status' => ($changed || $agreementChanged) ? 'processed' : 'processed_no_change',
                 'tenant_id' => $tenantId,
                 'checkout_session_id' => $checkoutSessionId !== '' ? $checkoutSessionId : $row->checkout_session_id,
                 'processed_at' => now(),
@@ -250,7 +280,7 @@ class StripeWebhookIngestService
                 tenantId: $tenantId,
                 actorUserId: null,
                 actionType: 'tenant_billing.stripe_webhook_confirmation',
-                status: $changed ? 'success' : 'noop',
+                status: ($changed || $agreementChanged) ? 'success' : 'noop',
                 targetType: 'tenant_commercial_override',
                 targetId: $override->id,
                 context: [
@@ -265,13 +295,28 @@ class StripeWebhookIngestService
             );
 
             return [
-                'status' => $changed ? 'processed' : 'processed_no_change',
+                'status' => ($changed || $agreementChanged) ? 'processed' : 'processed_no_change',
                 'tenant_id' => $tenantId,
             ];
         });
 
         $tenantId = (int) ($result['tenant_id'] ?? 0);
-        if ($tenantId > 0) {
+        if ($tenantId > 0 && $eventType === 'checkout.session.completed' && ($metadata['purpose'] ?? null) === 'agreement_checkout') {
+            $orderId = (int) ($metadata['billing_order_id'] ?? 0);
+            $order = $orderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($orderId) : null;
+            if ($order) {
+                $this->agreementSchedules->configure($order);
+            }
+        }
+        $shouldReconcileFulfillment = $tenantId > 0;
+        if (($metadata['purpose'] ?? null) === 'agreement_checkout') {
+            $billingOrderId = (int) ($metadata['billing_order_id'] ?? 0);
+            $agreementOrder = $billingOrderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($billingOrderId) : null;
+            $shouldReconcileFulfillment = $agreementOrder !== null
+                && filled($agreementOrder->provider_subscription_id)
+                && collect((array) $agreementOrder->line_items)->contains(fn (mixed $line): bool => is_array($line) && ($line['payment_timing'] ?? '') === 'recurring_current');
+        }
+        if ($shouldReconcileFulfillment) {
             try {
                 $this->fulfillmentService->reconcileTenant(
                     tenantId: $tenantId,
@@ -300,11 +345,17 @@ class StripeWebhookIngestService
             'checkout.session.completed',
             'checkout.session.async_payment_succeeded',
             'checkout.session.async_payment_failed',
+            'checkout.session.expired',
             'customer.subscription.created',
             'customer.subscription.updated',
             'customer.subscription.deleted',
+            'invoice.paid',
+            'invoice.voided',
             'invoice.payment_failed',
             'invoice.payment_succeeded',
+            'charge.refunded',
+            'refund.created',
+            'charge.dispute.created',
         ], true);
     }
 
@@ -564,14 +615,16 @@ class StripeWebhookIngestService
             $shouldConfirm = false;
 
             if (in_array($eventType, ['checkout.session.completed', 'checkout.session.async_payment_succeeded'], true)) {
-                $shouldConfirm = $paymentStatus === '' || in_array($paymentStatus, ['paid', 'no_payment_required'], true);
+                $shouldConfirm = ($metadata['purpose'] ?? null) === 'agreement_checkout'
+                    ? in_array($paymentStatus, ['paid', 'no_payment_required'], true)
+                    : ($paymentStatus === '' || in_array($paymentStatus, ['paid', 'no_payment_required'], true));
             }
 
             if (str_starts_with($eventType, 'customer.subscription.') && in_array($subscriptionStatus, ['active', 'trialing'], true)) {
                 $shouldConfirm = true;
             }
 
-            if ($eventType === 'invoice.payment_succeeded') {
+            if (in_array($eventType, ['invoice.paid', 'invoice.payment_succeeded'], true)) {
                 $shouldConfirm = true;
             }
 
@@ -639,6 +692,20 @@ class StripeWebhookIngestService
 
     protected function resolveTenantIdFromStripeReferences(string $stripeCustomer, string $stripeSubscription, string $stripeObjectId): int
     {
+        if (Schema::hasTable('tenant_billing_orders')) {
+            $orderTenantIds = collect();
+            $subscription = $stripeSubscription !== '' ? $stripeSubscription : $stripeObjectId;
+            if ($subscription !== '') {
+                $orderTenantIds = TenantBillingOrder::withoutGlobalScopes()->where('provider_subscription_id', $subscription)->pluck('tenant_id');
+            }
+            if ($orderTenantIds->isEmpty() && $stripeCustomer !== '') {
+                $orderTenantIds = TenantBillingOrder::withoutGlobalScopes()->where('provider_customer_id', $stripeCustomer)->pluck('tenant_id');
+            }
+            $resolvedOrderTenants = $orderTenantIds->map(fn ($id) => (int) $id)->filter()->unique()->values();
+            if ($resolvedOrderTenants->count() === 1) {
+                return (int) $resolvedOrderTenants->first();
+            }
+        }
         if (! Schema::hasTable('tenant_commercial_overrides')) {
             return 0;
         }

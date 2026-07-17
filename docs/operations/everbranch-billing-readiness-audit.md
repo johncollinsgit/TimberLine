@@ -1,5 +1,14 @@
 # Everbranch Billing / Stripe Readiness Audit
 
+## 2026-07-16 Agreement and Dual-Lane Update
+
+- Agreement-first authorization now exists for tenant-specific, à-la-carte pricing. Acceptance records an immutable exact version and normalized subscription authorization but does not activate checkout, subscriptions, billing, or entitlements.
+- Front Yard Foods uses the explicitly approved `stripe_direct` client-services lane. This does not activate Shopify App Pricing or private Shopify plans. Agreement checkout remains disabled until credentials, webhook signing, tax decision, Relay payout verification, allowlisting, and test evidence are complete.
+- Existing Shopify and hosted Stripe rails remain disabled options for a later separately approved billing decision. The current deliverable is agreement and implementation readiness, not provider architecture.
+- `AgreementBillingActivationGuard` requires an accepted active agreement, exact accepted version, matching approved provider lane, provider-verified active subscription, and audited applied fulfillment. This guard must be connected to the final Shopify and direct Stripe activation work before either lane is enabled.
+- `tenant_billing_receipts` is an idempotent tenant-bound provider receipt mirror. It rejects inconsistent subtotal/tax/total values, cross-tenant provider receipt reuse, and non-HTTPS receipt links. Everbranch does not calculate provider taxes.
+- Provider selection, production reconciliation, tax configuration, refund/dunning SOPs, and provider receipt ingestion remain later external activation decisions and blockers.
+
 Status: PR 14 landlord commercial intent gate.
 Date: 2026-05-21.
 

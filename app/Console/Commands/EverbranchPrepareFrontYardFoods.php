@@ -11,6 +11,7 @@ use App\Models\ScheduledClass;
 use App\Models\Tenant;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
+use App\Services\Agreements\AgreementManagementService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Onboarding\TenantSetupStatusService;
 use App\Services\Tenancy\LandlordCommercialConfigService;
@@ -23,7 +24,12 @@ use Throwable;
 class EverbranchPrepareFrontYardFoods extends Command
 {
     protected $signature = 'everbranch:prepare-front-yard-foods
-        {--john-email=johncollinsemail@gmail.com : Admin user to attach for the customer demonstration}';
+        {--john-email=johncollinsemail@gmail.com : Admin user to attach for the customer demonstration}
+        {--implementation-fee= : Agreed Shopify migration and implementation amount in dollars}
+        {--implementation-due-on-acceptance= : Implementation amount due on acceptance in dollars}
+        {--implementation-due-before-launch= : Implementation amount due before launch in dollars}
+        {--send-agreement : Rotate proposal access and print the one-time password}
+        {--agreement-password= : Optional 10+ character proposal password used only when sending}';
 
     protected $description = 'Create or refresh the Front Yard Foods demonstration workspace, preferring tenant ID 4.';
 
@@ -75,10 +81,20 @@ class EverbranchPrepareFrontYardFoods extends Command
         LandlordCommercialConfigService $commercial,
         TenantSetupStatusService $setupStatuses,
         WorkspaceAssetService $assets,
+        AgreementManagementService $agreements,
     ): int {
         $email = strtolower(trim((string) $this->option('john-email')));
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->error('Invalid --john-email value.');
+
+            return self::FAILURE;
+        }
+        try {
+            $implementationFee = $this->dollarsToCents($this->option('implementation-fee'));
+            $implementationOnAcceptance = $this->dollarsToCents($this->option('implementation-due-on-acceptance'));
+            $implementationBeforeLaunch = $this->dollarsToCents($this->option('implementation-due-before-launch'));
+        } catch (\InvalidArgumentException $exception) {
+            $this->error($exception->getMessage());
 
             return self::FAILURE;
         }
@@ -120,7 +136,7 @@ class EverbranchPrepareFrontYardFoods extends Command
                     'module_interests' => ['customers', 'field_service', 'class_scheduling', 'messaging', 'uploads', 'reporting'],
                     'mobile_interest' => 'ios',
                     'plan_interest' => 'base',
-                    'billing_lane_interest' => 'manual_invoice',
+                    'billing_lane_interest' => 'undecided',
                     'implementation_help_interest' => true,
                     'commercial_review_status' => 'reviewed',
                     'landlord_review_status' => 'reviewed',
@@ -152,12 +168,45 @@ class EverbranchPrepareFrontYardFoods extends Command
             return self::FAILURE;
         }
 
+        try {
+            $tenant = Tenant::query()->findOrFail((int) $result['tenant_id']);
+            $actorId = User::query()->where('email', $email)->value('id');
+            $agreement = $agreements->prepareFrontYardFoods($tenant, $actorId ? (int) $actorId : null, $implementationFee, $implementationOnAcceptance, $implementationBeforeLaunch);
+            $result['agreement_id'] = (int) $agreement->id;
+            $result['agreement_status'] = (string) $agreement->status;
+            $result['agreement_version'] = (int) $agreement->currentVersion?->version_number;
+            $result['agreement_content_hash'] = (string) $agreement->currentVersion?->content_hash;
+            $result['billing_activation'] = 'disabled_until_acceptance_billing_lane_decision_and_provider_verification';
+
+            if ((bool) $this->option('send-agreement')) {
+                $access = $agreements->send($agreement, $actorId ? (int) $actorId : null, $this->option('agreement-password') ?: null);
+                $result['proposal_url'] = $access['url'];
+                $result['proposal_password'] = $access['password'];
+            }
+        } catch (Throwable $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
         foreach ($result as $key => $value) {
             $this->line($key.'='.$value);
         }
         $this->line('sms_delivery=blocked_until_provider_and_consent_ready');
 
         return self::SUCCESS;
+    }
+
+    protected function dollarsToCents(mixed $value): ?int
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+        if (! is_numeric($value) || (float) $value < 0 || (float) $value > 999999.99) {
+            throw new \InvalidArgumentException('Agreement pricing options must be valid non-negative dollar amounts.');
+        }
+
+        return (int) round(((float) $value) * 100);
     }
 
     protected function frontYardTenant(): Tenant

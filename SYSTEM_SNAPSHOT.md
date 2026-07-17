@@ -1,5 +1,14 @@
 # SYSTEM SNAPSHOT
 
+## Agreements and Provider-Neutral Billing Authorization (2026-07-16)
+
+- Everbranch now has tenant-scoped agreements, immutable versions/content hashes, password-protected Evergrove proposal links, electronic acceptance evidence, permanent HTML snapshots, subscription authorizations, append-only events, termination/export tracking, and provider-confirmed receipt mirrors.
+- `/landlord/agreements` is the canonical landlord management surface. Tenant owners/admins receive read-only `/agreements` “User Agreements” without operator notes, raw IP addresses, user agents, password material, or internal references. Public proposals only resolve on configured Evergrove hosts and fail closed when expired or revoked.
+- Front Yard Foods is a client implementation project with no selected Everbranch collection provider. Its agreement separates Shopify store expenses, third-party apps/services, Everbranch one-time setup and monthly service, and Evergrove implementation work. Shopify Basic is $39 month-to-month or $29/month effective annually; Everbranch setup is $299; Launch Partner service is $59 for six cycles; ongoing service is $149 beginning cycle seven; implementation is configurable; out-of-scope work is $50/hour after written approval.
+- The Front Yard Foods implementation is phased through discovery/access, Shopify migration, Square/inventory workflow, classes/consultations/bookings, validation/training/launch, and post-launch handoff. Existing Shopify and Stripe rails remain disabled options until an explicit later billing-lane decision; this agreement does not choose one.
+- Acceptance records authorization only. Checkout and entitlement activation remain disabled by default. Activation requires the accepted exact version, an approved provider lane, a provider-verified active subscription, and audited fulfillment. Taxes and receipt totals are mirrored from Shopify or Stripe; Everbranch does not calculate or invent provider taxes.
+- Front Yard Foods termination preserves its Shopify store, Square account, domain, branding, content, and client data. Everbranch access/integrations stop at the effective date, the shared Everbranch App Store application remains listed, and the operational export window is tracked for 30 days.
+
 ## Front Yard Foods Scheduling (2026-07-15)
 
 - `class_scheduling` is the reusable Class Scheduling Branch. It owns tenant settings, scheduled classes, capacity, enrollments, reminders, internal calendar/detail views, public fail-closed signup, and mobile contract v2 destinations.

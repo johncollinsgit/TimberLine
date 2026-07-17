@@ -117,12 +117,18 @@ class TenantBillingSubscriptionLedger
             return 'past_due';
         }
 
+        if ($eventType === 'checkout.session.completed'
+            && data_get($object, 'metadata.purpose') === 'agreement_checkout'
+            && ! in_array(strtolower(trim((string) ($object['payment_status'] ?? ''))), ['paid', 'no_payment_required'], true)) {
+            return 'pending';
+        }
+
         $status = strtolower(trim((string) ($object['status'] ?? '')));
         if ($status !== '') {
             return $status;
         }
 
-        return in_array($eventType, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'invoice.payment_succeeded'], true)
+        return in_array($eventType, ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'invoice.paid', 'invoice.payment_succeeded'], true)
             ? 'active'
             : 'pending';
     }

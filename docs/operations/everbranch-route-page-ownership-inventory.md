@@ -25,6 +25,8 @@ This inventory documents who each major route/page belongs to so future work can
 | `/landlord` | landlord | Landlord Operator Console | Everbranch operator/admin context | Everbranch Admin Console | Yes |
 | `/landlord/tenants` | landlord | Tenant Workspace Directory | Everbranch Admin tenant management | Keep tenant/admin language | Later |
 | `/landlord/commercial` | landlord | Tenant Management/commercial readiness | Everbranch Admin commercial controls | Keep guarded billing/readiness language | Later |
+| `/landlord/agreements` | landlord | Agreement portfolio, draft/version/send/evidence/termination tools | Everbranch Admin legal/commercial operations | Operator-only; immutable accepted versions and audited mutations | Yes, 2026-07-16 |
+| `/landlord/tenants/{tenant}/agreements` | landlord | Per-workspace agreement list | Everbranch Admin tenant commercial operations | Tenant-scoped operator view | Yes, 2026-07-16 |
 | `/landlord/onboarding/journey` | landlord | Onboarding diagnostics plus client setup status review | Everbranch Admin diagnostics | Keep diagnostics/admin language; setup review remains lightweight | PR 3 updated |
 | `/landlord/onboarding/intake` | landlord | Intake queue with setup status filters | Everbranch Admin intake triage | Keep operator triage language; no connector or billing actions | PR 5 added |
 | `POST /landlord/onboarding/setup-status/{tenant}` | landlord | Setup review save action | Everbranch Admin diagnostics | Landlord-only review status, next action, and internal notes | PR 3 added |
@@ -33,6 +35,9 @@ This inventory documents who each major route/page belongs to so future work can
 | `POST /start/setup-status` | tenant | Setup status save action | Tenant setup inside Everbranch | Captures intent/status only; no connector or billing activation | PR 3 added |
 | `/onboarding` | tenant | Authenticated onboarding wizard | Tenant setup inside Everbranch | Keep onboarding, do not claim self-service complete | Later |
 | `/billing/checkout`, `/billing/portal` | tenant guarded billing | Hosted billing handoff routes exist behind guards | Tenant billing readiness | Keep disabled/guarded posture | No |
+| `/agreements` | tenant | User Agreements and provider receipt mirrors | Tenant owner/admin financial records | Read-only accepted copies; hide landlord and access evidence | Yes, 2026-07-16 |
+| `/agreements/{agreement}` | tenant | Accepted immutable agreement | Tenant owner/admin financial records | Exact tenant/version only | Yes, 2026-07-16 |
+| `/proposals/{public_token}` | Evergrove public | Password-protected proposal and electronic signature | Evergrove client agreement delivery | Evergrove-host-only, noindex, throttled, expiring/revocable | Yes, 2026-07-16 |
 | `/marketing/*` | tenant | Backstage appears as operational/internal source language in many mature pages | Tenant marketing/operations | Change only after page-by-page tenant UX pass | Later |
 | `/admin/*` | internal tenant/admin | Backstage/admin operational language | Internal/tenant admin tools | Keep for now unless surfaced publicly | Later |
 | `/wiki/*` | internal/tenant knowledge base | Backstage Wiki | Internal/tenant knowledge base | Keep for now; needs separate IA decision | Later |

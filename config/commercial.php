@@ -408,6 +408,13 @@ return [
     'billing_readiness' => [
         'checkout_active' => false,
         'lifecycle_mutations_enabled' => false,
+        'agreement_checkout' => [
+            'enabled' => (bool) env('EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED', false),
+            'tenant_slugs' => array_values(array_filter(array_map('trim', explode(',', (string) env('EVERBRANCH_AGREEMENT_CHECKOUT_TENANT_SLUGS', ''))))),
+            'automatic_tax_enabled' => (bool) env('EVERBRANCH_AGREEMENT_STRIPE_TAX_ENABLED', false),
+            'tax_decision_confirmed' => (bool) env('EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED', false),
+            'relay_payout_verified' => (bool) env('EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED', false),
+        ],
         'provider_priority' => ['stripe', 'braintree'],
         'providers' => [
             'stripe' => [

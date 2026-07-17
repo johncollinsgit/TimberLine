@@ -149,6 +149,9 @@ class UnifiedAppNavigationService
 
         if ($canAccessOps) {
             $items[] = ['key' => 'administration', 'icon' => 'cog-6-tooth', 'href' => route('admin.index'), 'label' => 'Settings', 'current' => request()->routeIs('admin.*')];
+            if ($tenantId !== null && Route::has('agreements.index')) {
+                $items[] = ['key' => 'user-agreements', 'icon' => 'document-check', 'href' => route('agreements.index', ['tenant' => $tenant?->slug]), 'label' => 'User Agreements', 'current' => request()->routeIs('agreements.*')];
+            }
         }
 
         $items[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Workspace Guide', 'current' => request()->routeIs('wiki.*')];
@@ -193,6 +196,7 @@ class UnifiedAppNavigationService
             ['key' => 'features', 'icon' => 'squares-plus', 'href' => route('landlord.commercial.index'), 'label' => 'Features', 'current' => $request->routeIs('landlord.commercial.*')],
             ['key' => 'custom-requests', 'icon' => 'chat-bubble-left-right', 'href' => route('landlord.custom-module-requests.index'), 'label' => 'Custom Requests', 'current' => $request->routeIs('landlord.custom-module-requests.*')],
             ['key' => 'plan-billing-readiness', 'icon' => 'credit-card', 'href' => route('landlord.commercial-intent.index'), 'label' => 'Plan / Billing Readiness', 'current' => $request->routeIs('landlord.commercial-intent.*')],
+            ['key' => 'agreements', 'icon' => 'document-check', 'href' => route('landlord.agreements.index'), 'label' => 'Agreements', 'current' => $request->routeIs('landlord.agreements.*')],
             ['key' => 'shopify-readiness', 'icon' => 'shopping-bag', 'href' => route('landlord.readiness').'#shopify-app-readiness', 'label' => 'Shopify Readiness', 'current' => false],
             ['key' => 'system-readiness', 'icon' => 'shield-check', 'href' => route('landlord.readiness'), 'label' => 'System Readiness', 'current' => $request->routeIs('landlord.readiness')],
             ['key' => 'developer', 'icon' => 'command-line', 'href' => route('landlord.developer'), 'label' => 'Developer', 'current' => $request->routeIs('landlord.developer')],

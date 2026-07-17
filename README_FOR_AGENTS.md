@@ -2,6 +2,15 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Agreement and Billing-Lane Guardrails (2026-07-16)
+
+- Treat `agreement_versions`, `agreement_acceptances`, and `agreement_events` as immutable/append-only legal evidence. Never update or delete accepted evidence; create a new version or child amendment.
+- Public proposals belong only on configured Evergrove hosts. Store only the SHA-256 token lookup and encrypted token, hash passwords, throttle attempts, never log plaintext secrets, and fail closed for expiry/revocation.
+- Tenant “User Agreements” must re-resolve current tenant membership and financial access. Never expose `internal_notes`, token/password fields, raw IP, user agent, or internal audit references.
+- Agreement acceptance is not billing activation. Shopify App Store merchants use `shopify_app_pricing`; direct/non-Shopify customers may use `stripe_direct`. Never charge one subscription through both providers and never route a Shopify App Store merchant around Shopify billing.
+- Pricing is agreement-specific and may be à la carte. Preserve exact authorized line items, content/version hashes, provider plan/subscription references, and provider-confirmed tax/receipt values. Do not derive tax locally.
+- Any future checkout or entitlement activation must pass `AgreementBillingActivationGuard` or an equally strict pre-check requiring exact accepted version, approved lane, verified active provider subscription, and audited fulfillment. Defaults stay disabled until provider evidence exists.
+
 ## Front Yard Foods Scheduling Guardrails (2026-07-15)
 
 - Keep Class Scheduling reusable and tenant-scoped. Public signup must resolve a visible, enabled Branch and published class, then enforce capacity and normalized-email uniqueness under a database transaction.

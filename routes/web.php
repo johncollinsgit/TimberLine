@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminMasterDataController;
+use App\Http\Controllers\AgreementProposalController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\ClassSchedulingController;
 use App\Http\Controllers\ClientProjectController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
+use App\Http\Controllers\Landlord\LandlordAgreementController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
@@ -76,11 +78,13 @@ use App\Http\Controllers\ShopifyProductOptionsController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\SubscriptionPublicController;
 use App\Http\Controllers\SubscriptionStorefrontController;
+use App\Http\Controllers\TenantAgreementController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Http\Controllers\WorkspaceDocumentsController;
+use App\Http\Middleware\EnsureEvergroveProposalHost;
 use App\Livewire\Admin\AdminHome;
 use App\Livewire\Admin\Catalog\CostsCrud as AdminCostsCrud;
 use App\Livewire\Admin\Catalog\ScentsCrud as AdminScentsCrud;
@@ -192,6 +196,14 @@ Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms
 Route::get('/integrations/quickbooks/disconnected', [QuickBooksConnectionController::class, 'disconnected'])
     ->name('integrations.quickbooks.disconnected');
 
+Route::middleware([EnsureEvergroveProposalHost::class])->prefix('proposals/{token}')->name('proposals.')->group(function (): void {
+    Route::get('/', [AgreementProposalController::class, 'show'])->name('show');
+    Route::post('/unlock', [AgreementProposalController::class, 'unlock'])->middleware('throttle:10,1')->name('unlock');
+    Route::post('/accept', [AgreementProposalController::class, 'accept'])->middleware('throttle:5,1')->name('accept');
+    Route::post('/checkout', [AgreementProposalController::class, 'checkout'])->middleware('throttle:5,1')->name('checkout');
+    Route::get('/download', [AgreementProposalController::class, 'download'])->middleware('throttle:20,1')->name('download');
+});
+
 $landlordHosts = collect((array) config('tenancy.landlord.hosts', []))
     ->map(static fn (mixed $host): ?string => $normalizeHost($host))
     ->filter(static fn (?string $host): bool => $host !== null)
@@ -240,6 +252,22 @@ $landlordRoutes = static function (): void {
         ->name('messages.index');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
+    Route::get('/landlord/agreements', [LandlordAgreementController::class, 'index'])->name('agreements.index');
+    Route::get('/landlord/agreements/create', [LandlordAgreementController::class, 'create'])->name('agreements.create');
+    Route::post('/landlord/agreements', [LandlordAgreementController::class, 'store'])->name('agreements.store');
+    Route::get('/landlord/agreements/{agreement}', [LandlordAgreementController::class, 'show'])->name('agreements.show');
+    Route::get('/landlord/agreements/{agreement}/edit', [LandlordAgreementController::class, 'edit'])->name('agreements.edit');
+    Route::post('/landlord/agreements/{agreement}/versions', [LandlordAgreementController::class, 'version'])->name('agreements.version');
+    Route::post('/landlord/agreements/{agreement}/send', [LandlordAgreementController::class, 'send'])->name('agreements.send');
+    Route::post('/landlord/agreements/{agreement}/revoke', [LandlordAgreementController::class, 'revoke'])->name('agreements.revoke');
+    Route::post('/landlord/agreements/{agreement}/notes', [LandlordAgreementController::class, 'notes'])->name('agreements.notes');
+    Route::post('/landlord/agreements/{agreement}/amendments', [LandlordAgreementController::class, 'amendment'])->name('agreements.amendment');
+    Route::post('/landlord/agreements/{agreement}/supplemental-work', [LandlordAgreementController::class, 'supplementalWork'])->name('agreements.supplemental-work');
+    Route::post('/landlord/agreements/{agreement}/milestone', [LandlordAgreementController::class, 'milestone'])->name('agreements.milestone');
+    Route::post('/landlord/agreements/{agreement}/termination', [LandlordAgreementController::class, 'termination'])->name('agreements.termination');
+    Route::post('/landlord/agreements/{agreement}/export', [LandlordAgreementController::class, 'export'])->name('agreements.export');
+    Route::get('/landlord/agreements/{agreement}/download', [LandlordAgreementController::class, 'download'])->name('agreements.download');
+    Route::get('/landlord/tenants/{tenant}/agreements', [LandlordAgreementController::class, 'forTenant'])->name('tenants.agreements.index');
     Route::get('/landlord/commercial/analytics/tenants', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsTable'])
         ->name('commercial.analytics.tenants');
     Route::get('/landlord/commercial/analytics/activity', [LandlordCommercialConfigurationController::class, 'tenantAnalyticsActivity'])
@@ -539,6 +567,12 @@ Route::prefix('signup/classes/{tenant:slug}')
     });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->prefix('agreements')->name('agreements.')->group(function (): void {
+        Route::get('/', [TenantAgreementController::class, 'index'])->name('index');
+        Route::get('/{agreement}', [TenantAgreementController::class, 'show'])->name('show');
+        Route::get('/{agreement}/download', [TenantAgreementController::class, 'download'])->name('download');
+    });
 
     Route::get('/workspace/create', [FirstLoginWorkspaceController::class, 'show'])
         ->name('workspace.first-login');

@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-07-16 - Secure Agreements, Pricing Cards, and Provider Receipts
+
+### What Changed
+- Added a mobile-friendly Evergrove proposal experience with password access, clearly separated clickable Shopify/Everbranch/implementation pricing cards, full scope matrix, electronic signature confirmations, and accepted-copy download.
+- Added the landlord Agreements console for filtering, preparing, versioning, sending, revoking, evidence review, amendments, internal notes, and termination/export tracking.
+- Added tenant “User Agreements” with read-only accepted copies and clickable provider-confirmed receipt links showing subtotal, provider tax, and total.
+
+### Guardrails
+- Proposal links render only on configured Evergrove hosts, accepted versions become read-only, and tenant pages hide landlord notes and private access evidence.
+- Shopify and Everbranch prices are never visually combined. Provider invoices remain the tax/payment source of truth.
+- No checkout, subscription, or entitlement is activated by these UI changes.
+
 ## 2026-07-15 - Compact Tenant Home + Class Scheduling
 
 ### What Changed
@@ -1685,3 +1697,16 @@
 - No impersonation flow, login bypass, tenant boundary relaxation, billing activation, module auto-install, or host-lane merge was introduced.
 - Landlord routes remain landlord-host only, and tenant routes remain tenant-host scoped.
 - Modern Forestry is still the flagship tenant, not the generic definition of the product shell.
+
+## 2026-07-16 - Accepted Proposal Payments
+
+### What changed
+- Accepted Evergrove proposal links now show a locked, server-priced payment summary and a separately gated Stripe card/ACH action.
+- Shopify and third-party expenses remain visible but are never included in the Stripe payment request.
+- Landlord agreement management now shows billing-order status and can prepare separately signed fixed-price, $50/hour, and due-before-launch child work orders.
+- Tenant User Agreements now present Stripe-confirmed one-time and recurring invoices as clickable payment receipts.
+
+### Safety posture
+- Live checkout defaults off and is tenant-allowlisted.
+- Acceptance alone creates no charge, pending ACH is not treated as paid, and implementation-only payments cannot change module access.
+- Tax collection, Relay payout verification, webhook signing, and production credentials remain explicit launch blockers.
