@@ -54,6 +54,7 @@ class UnifiedAppNavigationService
             ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
+        $fieldServiceNavigationEnabled = $fieldServiceEnabled && ! $this->isFrontYardFoodsTenant($tenant);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
         $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
@@ -116,7 +117,7 @@ class UnifiedAppNavigationService
                 ];
             }
 
-            if ($fieldServiceEnabled && Route::has('field-service.index')) {
+            if ($fieldServiceNavigationEnabled && Route::has('field-service.index')) {
                 $fieldServiceChildren = [
                     ['key' => 'field-service-jobs', 'icon' => 'briefcase', 'href' => route('field-service.index'), 'label' => 'Jobs', 'current' => request()->routeIs('field-service.*')],
                     ['key' => 'field-service-materials', 'icon' => 'archive-box', 'href' => route('field-service.index').'#materials', 'label' => 'Materials', 'current' => false],
@@ -210,7 +211,7 @@ class UnifiedAppNavigationService
             'marketing_sub_groups' => $marketingSubGroups,
             'birthday_sub_groups' => $birthdaySubGroups,
             'wiki_sections' => $this->wikiSections($tenant),
-            'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId, $fieldServiceEnabled),
+            'quick_actions' => $this->quickActions($profile, $canAccessOps, $canAccessMarketing, $tenantId, $fieldServiceNavigationEnabled),
             'ops_attention' => $canAccessOps ? $this->opsAttention($tenantId) : ['unresolved_exceptions' => 0, 'latest_run' => null],
             'current_console' => $this->currentConsolePayload($tenant, $profile),
             'console_switches' => $this->consoleSwitches($user, $tenant, false),

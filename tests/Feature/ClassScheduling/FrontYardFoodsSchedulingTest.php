@@ -98,6 +98,12 @@ test('front yard foods workspace shows launch welcome checklist assurance and cl
         ->assertSeeText('Plant Inventory')
         ->assertSeeText('Messaging · pending')
         ->assertSeeText('User Agreements')
+        ->assertDontSeeText('Next jobs')
+        ->assertDontSeeText('Create a job')
+        ->assertDontSeeText('Add materials')
+        ->assertDontSee('>Jobs<', false)
+        ->assertDontSee('>Materials<', false)
+        ->assertDontSee('>Work vans<', false)
         ->assertDontSeeText('Pouring')
         ->assertDontSeeText('candle wax')
         ->assertDontSeeText('Market box');

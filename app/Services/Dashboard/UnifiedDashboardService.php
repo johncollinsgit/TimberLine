@@ -56,13 +56,14 @@ class UnifiedDashboardService
             ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
             : ['sections' => []];
         $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
-        $tradeMetrics = $this->tradeMetrics($tenant, $profile, $range);
+        $clientFacingFieldService = $this->clientFacingFieldServiceEnabled($tenant);
+        $tradeMetrics = $clientFacingFieldService ? $this->tradeMetrics($tenant, $profile, $range) : null;
         $ownerReport = $this->ownerReport($tenant, $user, $range['key']);
         $summaryCards = $ownerReport
             ? $this->financialSummaryCards($ownerReport)
-            : $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics);
+            : $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics, $clientFacingFieldService);
 
-        $hero = $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics);
+        $hero = $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics, $clientFacingFieldService);
         $hero['href'] = $this->destinationHref((array) ($hero['destination'] ?? []), $tenant, $range['key']);
         $summaryCards = array_map(function (array $card) use ($tenant, $range): array {
             $card['href'] = $this->destinationHref((array) ($card['destination'] ?? []), $tenant, $range['key']);
@@ -88,7 +89,7 @@ class UnifiedDashboardService
             'class_calendar' => $this->classCalendar($tenant),
             'front_yard_launch' => $this->frontYardLaunch($tenant),
             'owner_reporting' => $ownerReport,
-            'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps),
+            'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
     }
@@ -189,7 +190,7 @@ class UnifiedDashboardService
     /** @return array<int,array<string,mixed>> */
     protected function upcomingJobs(?Tenant $tenant): array
     {
-        if (! $tenant || ! Schema::hasTable('field_service_jobs')) {
+        if (! $this->clientFacingFieldServiceEnabled($tenant) || ! Schema::hasTable('field_service_jobs')) {
             return [];
         }
 
@@ -245,7 +246,7 @@ class UnifiedDashboardService
     /**
      * @return array<string,mixed>
      */
-    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null): array
+    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null, bool $clientFacingFieldService = true): array
     {
         $channelType = (string) ($profile['channel_type'] ?? 'direct');
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
@@ -274,7 +275,7 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($canAccessOps && $tenantId !== null && $useCase === 'field_service' && Schema::hasTable('field_service_jobs')) {
+        if ($clientFacingFieldService && $canAccessOps && $tenantId !== null && $useCase === 'field_service' && Schema::hasTable('field_service_jobs')) {
             $openJobs = (int) FieldServiceJob::query()
                 ->forTenantId($tenantId)
                 ->whereNotIn('status', ['done'])
@@ -339,7 +340,7 @@ class UnifiedDashboardService
     /**
      * @return array<int,array<string,string|int>>
      */
-    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null): array
+    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null, bool $clientFacingFieldService = true): array
     {
         $cards = [];
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
@@ -367,7 +368,7 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($tenantId !== null && $useCase === 'field_service') {
+        if ($clientFacingFieldService && $tenantId !== null && $useCase === 'field_service') {
             if (Schema::hasTable('marketing_profiles')) {
                 $cards[] = [
                     'label' => 'Customers',
@@ -539,11 +540,12 @@ class UnifiedDashboardService
         array $profile,
         array $catalog,
         bool $canAccessMarketing,
-        bool $canAccessOps
+        bool $canAccessOps,
+        bool $clientFacingFieldService = true
     ): array {
         $actions = [];
 
-        if ($canAccessOps && (string) ($profile['use_case_profile'] ?? 'ops') === 'field_service' && route('field-service.index', [], false)) {
+        if ($clientFacingFieldService && $canAccessOps && (string) ($profile['use_case_profile'] ?? 'ops') === 'field_service' && route('field-service.index', [], false)) {
             $actions[] = [
                 'label' => 'Add a customer',
                 'description' => 'Create the customer and first job together.',
@@ -671,6 +673,19 @@ class UnifiedDashboardService
                 'href' => route('marketing.modules', ['module' => (string) ($module['module_key'] ?? '')]),
             ];
         }, $rows);
+    }
+
+    protected function clientFacingFieldServiceEnabled(?Tenant $tenant): bool
+    {
+        if (! $tenant instanceof Tenant) {
+            return false;
+        }
+
+        if ((string) $tenant->slug === 'front-yard-foods') {
+            return false;
+        }
+
+        return $this->moduleAccess->canAccess((int) $tenant->id, 'field_service');
     }
 
     /** @param array<string,mixed> $destination */
