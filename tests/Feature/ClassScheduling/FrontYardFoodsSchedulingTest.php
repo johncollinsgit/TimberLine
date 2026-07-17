@@ -4,6 +4,7 @@ use App\Models\Agreement;
 use App\Models\ClassEnrollment;
 use App\Models\ClassReminder;
 use App\Models\ClassSchedulingSetting;
+use App\Models\FieldServiceJob;
 use App\Models\MarketingProfile;
 use App\Models\PlantInventoryAdjustment;
 use App\Models\PlantInventoryItem;
@@ -11,9 +12,11 @@ use App\Models\ScheduledClass;
 use App\Models\SubscriptionAuthorization;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\User;
-use App\Models\WorkspaceAsset;
+use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -22,6 +25,15 @@ beforeEach(function (): void {
     $this->withoutVite();
     Storage::fake('local');
     Http::fake(['*' => Http::response('demo-image-bytes', 200, ['Content-Type' => 'image/jpeg'])]);
+});
+
+test('plant inventory is launch scoped to front yard foods only', function (): void {
+    expect((array) config('module_catalog.modules.plant_inventory.tenant_slugs'))->toBe(['front-yard-foods'])
+        ->and((array) config('module_catalog.modules.plant_inventory.included_in_plans'))->toBe([])
+        ->and((string) config('module_catalog.modules.plant_inventory.market_state'))->toBe('INTERNAL_ONLY')
+        ->and((bool) config('module_catalog.modules.plant_inventory.visibility.app_store'))->toBeFalse()
+        ->and((bool) config('module_catalog.modules.plant_inventory.visibility.mobile_store'))->toBeFalse()
+        ->and((array) config('module_catalog.modules.plant_inventory.mobile.actions'))->toBe([]);
 });
 
 test('front yard foods preparation is idempotent and creates tenant four demo access', function (): void {
@@ -37,13 +49,20 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->and(ClassEnrollment::query()->forTenantId(4)->count())->toBe(10)
         ->and(MarketingProfile::query()->forTenantId(4)->count())->toBe(6)
         ->and(MarketingProfile::query()->forTenantId(4)->where('normalized_phone', '!=', '8646165468')->exists())->toBeFalse()
-        ->and(WorkspaceAsset::query()->forTenantId(4)->where('source', 'demo_seed')->count())->toBe(4)
-        ->and(WorkspaceAsset::query()->forTenantId(4)->where('metadata->demo_reference', true)->count())->toBe(4)
         ->and(Agreement::query()->forTenantId(4)->where('template_key', 'front_yard_foods_launch_partner')->count())->toBe(1)
         ->and(Agreement::query()->forTenantId(4)->firstOrFail()->versions()->count())->toBe(1)
         ->and(SubscriptionAuthorization::query()->forTenantId(4)->count())->toBe(0)
         ->and(TenantModuleState::query()->where('tenant_id', 4)->where('module_key', 'plant_inventory')->where('enabled_override', true)->exists())->toBeTrue()
+        ->and(TenantModuleEntitlement::query()->where('tenant_id', 4)->where('module_key', 'plant_inventory')->where('enabled_status', 'enabled')->exists())->toBeTrue()
+        ->and(TenantModuleState::query()->where('tenant_id', 4)->where('module_key', 'field_service')->where('enabled_override', false)->exists())->toBeTrue()
+        ->and(FieldServiceJob::query()->forTenantId(4)->where('external_source', 'front_yard_foods_demo')->whereNull('archived_at')->exists())->toBeFalse()
+        ->and($tenant->setupStatus()->firstOrFail()->module_interests)->not->toContain('field_service')
         ->and($tenant->setupStatus()->firstOrFail()->billing_lane_interest)->toBe('undecided');
+
+    $resolved = app(TenantModuleAccessResolver::class)->resolveForTenant((int) $tenant->id, ['plant_inventory', 'field_service']);
+    expect(data_get($resolved, 'modules.plant_inventory.enabled'))->toBeTrue()
+        ->and(data_get($resolved, 'modules.field_service.enabled'))->toBeFalse()
+        ->and(data_get($resolved, 'modules.field_service.reason'))->toBe('disabled_by_override');
 
     $this->actingAs($john)
         ->get(route('class-scheduling.index', ['tenant' => $tenant->slug]))
@@ -52,6 +71,9 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->assertSeeText('Events & Classes')
         ->assertSeeText('Shopify publish pending');
 
+    $this->actingAs($john)
+        ->get(route('field-service.index', ['tenant' => $tenant->slug]))
+        ->assertForbidden();
 });
 
 test('front yard foods workspace shows launch welcome checklist assurance and clean navigation', function (): void {
@@ -130,10 +152,49 @@ test('front yard foods plant inventory supports CRUD adjustments and rejects cro
     TenantModuleState::query()->create(['tenant_id' => $other->id, 'module_key' => 'plant_inventory', 'enabled_override' => true, 'setup_status' => 'configured']);
     $other->users()->attach($john->id, ['role' => 'admin']);
 
+    $otherResolved = app(TenantModuleAccessResolver::class)->module((int) $other->id, 'plant_inventory');
+    expect($otherResolved['enabled'])->toBeFalse()
+        ->and($otherResolved['reason'])->toBe('tenant_not_supported');
+
+    $storePayload = app(TenantModuleCatalogService::class)->tenantStorePayload((int) $other->id);
+    expect(collect($storePayload['modules'] ?? [])->pluck('module_key')->all())->not->toContain('plant_inventory');
+
+    $this->actingAs($john)
+        ->get(route('plant-inventory.index', ['tenant' => $other->slug]))
+        ->assertForbidden();
+
     $this->post(route('plant-inventory.adjustments.store', ['item' => $item, 'tenant' => $other->slug]), [
         'adjustment_type' => PlantInventoryAdjustment::TYPE_SOLD,
         'quantity' => 1,
     ])->assertNotFound();
+});
+
+test('front yard foods preparation archives only legacy front yard demo field service jobs', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Front Yard Foods', 'slug' => 'front-yard-foods']);
+    $demoJob = FieldServiceJob::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'title' => 'Legacy demo consultation',
+        'status' => 'scheduled',
+        'operational_status' => 'scheduled',
+        'external_source' => 'front_yard_foods_demo',
+        'external_id' => 'legacy-demo',
+    ]);
+    $realJob = FieldServiceJob::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'title' => 'Real imported customer work',
+        'status' => 'scheduled',
+        'operational_status' => 'scheduled',
+        'external_source' => 'manual',
+        'external_id' => 'real-work',
+    ]);
+
+    $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
+
+    expect($demoJob->fresh()->status)->toBe('archived')
+        ->and($demoJob->fresh()->operational_status)->toBe('archived')
+        ->and($demoJob->fresh()->archived_at)->not->toBeNull()
+        ->and($realJob->fresh()->status)->toBe('scheduled')
+        ->and($realJob->fresh()->archived_at)->toBeNull();
 });
 
 test('front yard foods uses the next open tenant id when tenant four is occupied', function (): void {
@@ -209,13 +270,12 @@ test('class detail rejects a class owned by another active scheduling tenant', f
         ->assertNotFound();
 });
 
-test('mobile scheduling exposes clickable classes customers reminders and canonical job photos', function (): void {
+test('mobile scheduling exposes clickable classes customers and reminders without field service access', function (): void {
     $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
     $tenant = Tenant::query()->where('slug', 'front-yard-foods')->firstOrFail();
     $john = User::query()->where('email', 'johncollinsemail@gmail.com')->firstOrFail();
     $class = ScheduledClass::query()->forTenantId($tenant->id)->where('slug', 'sourdough-basics')->firstOrFail();
     $enrollment = ClassEnrollment::query()->forTenantId($tenant->id)->where('scheduled_class_id', $class->id)->firstOrFail();
-    $job = $tenant->fieldServiceJobs()->where('external_id', 'fyf-demo-fruit-tree-installation')->firstOrFail();
     Sanctum::actingAs($john, ['mobile:read', 'mobile:write']);
 
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/class-scheduling')
@@ -233,7 +293,6 @@ test('mobile scheduling exposes clickable classes customers reminders and canoni
         'scheduled_for' => now()->addHours(6)->toIso8601String(),
     ])->assertCreated()->assertJsonPath('reminder.status', 'scheduled');
 
-    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
-        ->assertOk()
-        ->assertJsonCount(2, 'job.photos');
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service')
+        ->assertNotFound();
 });
