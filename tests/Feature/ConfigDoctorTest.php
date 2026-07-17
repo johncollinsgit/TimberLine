@@ -5,6 +5,8 @@ function configureConfigDoctorProductionRequirements(): void
     config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
     config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('mail.default', 'smtp');
+    config()->set('commercial.billing_readiness.agreement_checkout.enabled', false);
+    config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
     config()->set('services.shopify.stores.retail.shop', 'x.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'id');
     config()->set('services.shopify.stores.retail.client_secret', 'secret');
@@ -13,6 +15,7 @@ function configureConfigDoctorProductionRequirements(): void
 function configureAgreementStripe(string $publishableKey, string $secretKey, string $webhookSecret = 'whsec_example'): void
 {
     config()->set('commercial.billing_readiness.agreement_checkout.enabled', true);
+    config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
     config()->set('services.stripe.account_id', 'acct_1234567890');
     config()->set('services.stripe.publishable_key', $publishableKey);
     config()->set('services.stripe.secret', $secretKey);
@@ -42,6 +45,8 @@ test('config doctor passes when the required production keys are present', funct
     config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
     config()->set('app.url', 'https://example.test');
     config()->set('mail.default', 'smtp');
+    config()->set('commercial.billing_readiness.agreement_checkout.enabled', false);
+    config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
     config()->set('services.shopify.stores.retail.shop', 'x.myshopify.com');
     config()->set('services.shopify.stores.retail.access_token', 'token');
     config()->set('services.shopify.stores.retail.client_id', 'id');
@@ -65,6 +70,7 @@ test('config doctor fails loudly when the required retail store keys are missing
 test('config doctor skips Stripe credential validation while agreement checkout is disabled', function (): void {
     config()->set('app.key', 'base64:'.base64_encode(str_repeat('a', 32)));
     config()->set('commercial.billing_readiness.agreement_checkout.enabled', false);
+    config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
     config()->set('services.stripe.account_id', 'not-an-account');
     config()->set('services.stripe.publishable_key', 'mk_invalid');
     config()->set('services.stripe.secret', 'mk_invalid');
