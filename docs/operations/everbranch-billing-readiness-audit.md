@@ -1,5 +1,14 @@
 # Everbranch Billing / Stripe Readiness Audit
 
+## 2026-07-17 Direct Invoice Production-Ready Pending Live Gates
+
+- Landlord-created direct Stripe invoices have moved from implementation-ready to **production-ready pending live gates**.
+- Sandbox evidence exists for one internal card-paid hosted invoice: Stripe invoice `GHPJWFCX-0001`, amount `$299.00`, `livemode=false`, `status=paid`, paid on July 17, 2026 with Stripe events `invoice.paid` and `invoice.payment_succeeded`.
+- Evidence file: `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.
+- Focused regression tests passed: `tests/Feature/Billing/DirectStripeInvoiceTest.php`, `tests/Feature/Agreements/AgreementStripePaymentsTest.php`, and `tests/Feature/ConfigDoctorTest.php` (`23 passed`, `163 assertions`).
+- Live billing is still not enabled. The remaining launch gates are live Stripe keys in the production secret store, production webhook registration/signing, Relay payout verification, accountant tax determination, production mail configuration, first-tenant allowlisting, and final `config:doctor --env=production` pass on the server.
+- Proposal Checkout, tenant self-serve billing, Shopify App Store billing, subscription entitlement fulfillment, and broad tenant rollout remain outside this status.
+
 ## 2026-07-16 Agreement and Dual-Lane Update
 
 - Agreement-first authorization now exists for tenant-specific, à-la-carte pricing. Acceptance records an immutable exact version and normalized subscription authorization but does not activate checkout, subscriptions, billing, or entitlements.
