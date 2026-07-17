@@ -33,6 +33,10 @@ test('plant inventory is launch scoped to front yard foods only', function (): v
         ->and((string) config('module_catalog.modules.plant_inventory.market_state'))->toBe('INTERNAL_ONLY')
         ->and((bool) config('module_catalog.modules.plant_inventory.visibility.app_store'))->toBeFalse()
         ->and((bool) config('module_catalog.modules.plant_inventory.visibility.mobile_store'))->toBeFalse()
+        ->and((string) config('module_catalog.modules.plant_inventory.mobile.status'))->toBe('hidden')
+        ->and((string) config('module_catalog.modules.plant_inventory.mobile.renderer'))->toBe('none')
+        ->and(config('module_catalog.modules.plant_inventory.mobile.entry_screen'))->toBeNull()
+        ->and((string) config('module_catalog.modules.plant_inventory.mobile.min_app_version'))->toBe('1.0.0')
         ->and((array) config('module_catalog.modules.plant_inventory.mobile.actions'))->toBe([]);
 });
 
@@ -53,7 +57,7 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->and(Agreement::query()->forTenantId(4)->firstOrFail()->versions()->count())->toBe(1)
         ->and(SubscriptionAuthorization::query()->forTenantId(4)->count())->toBe(0)
         ->and(TenantModuleState::query()->where('tenant_id', 4)->where('module_key', 'plant_inventory')->where('enabled_override', true)->exists())->toBeTrue()
-        ->and(TenantModuleEntitlement::query()->where('tenant_id', 4)->where('module_key', 'plant_inventory')->where('enabled_status', 'enabled')->exists())->toBeTrue()
+        ->and(TenantModuleEntitlement::query()->where('tenant_id', 4)->where('module_key', 'plant_inventory')->where('enabled_status', 'enabled')->where('billing_status', 'custom_contract')->where('entitlement_source', 'front_yard_foods_launch_partner')->exists())->toBeTrue()
         ->and(TenantModuleState::query()->where('tenant_id', 4)->where('module_key', 'field_service')->where('enabled_override', false)->exists())->toBeTrue()
         ->and(FieldServiceJob::query()->forTenantId(4)->where('external_source', 'front_yard_foods_demo')->whereNull('archived_at')->exists())->toBeFalse()
         ->and($tenant->setupStatus()->firstOrFail()->module_interests)->not->toContain('field_service')
@@ -190,11 +194,16 @@ test('front yard foods preparation archives only legacy front yard demo field se
 
     $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
 
-    expect($demoJob->fresh()->status)->toBe('archived')
-        ->and($demoJob->fresh()->operational_status)->toBe('archived')
-        ->and($demoJob->fresh()->archived_at)->not->toBeNull()
-        ->and($realJob->fresh()->status)->toBe('scheduled')
-        ->and($realJob->fresh()->archived_at)->toBeNull();
+    $archivedDemoJob = $demoJob->fresh();
+    $realJob = $realJob->fresh();
+
+    expect($archivedDemoJob->status)->toBe('done')
+        ->and($archivedDemoJob->operational_status)->toBe('history')
+        ->and($archivedDemoJob->archived_at)->not->toBeNull()
+        ->and($archivedDemoJob->metadata['archived_reason'] ?? null)->toBe('front_yard_foods_events_classes_launch_scope')
+        ->and($realJob->status)->toBe('scheduled')
+        ->and($realJob->operational_status)->toBe('scheduled')
+        ->and($realJob->archived_at)->toBeNull();
 });
 
 test('front yard foods uses the next open tenant id when tenant four is occupied', function (): void {

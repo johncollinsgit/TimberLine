@@ -88,8 +88,8 @@ class EverbranchPrepareFrontYardFoods extends Command
                 $commercial->setTenantModuleEntitlement((int) $tenant->id, 'plant_inventory', [
                     'availability_status' => 'available',
                     'enabled_status' => 'enabled',
-                    'billing_status' => 'complimentary',
-                    'entitlement_source' => 'guided_demo',
+                    'billing_status' => 'custom_contract',
+                    'entitlement_source' => 'front_yard_foods_launch_partner',
                     'notes' => 'Front Yard Foods launch-only plant inventory workspace. Keep hidden from other tenants until productized.',
                     'metadata' => ['launch_scope' => 'front_yard_foods_only', 'mobile_hidden' => true],
                 ], (int) $john->id);
@@ -365,11 +365,20 @@ class EverbranchPrepareFrontYardFoods extends Command
         FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
             ->where('external_source', 'front_yard_foods_demo')
-            ->update([
-                'status' => 'archived',
-                'operational_status' => 'archived',
-                'archived_at' => now(),
-                'metadata' => DB::raw("json_set(coalesce(metadata, '{}'), '$.archived_reason', 'front_yard_foods_events_classes_launch_scope')"),
-            ]);
+            ->orderBy('id')
+            ->chunkById(100, function ($jobs): void {
+                foreach ($jobs as $job) {
+                    $metadata = is_array($job->metadata) ? $job->metadata : [];
+
+                    $job->forceFill([
+                        'status' => 'done',
+                        'operational_status' => 'history',
+                        'archived_at' => $job->archived_at ?? now(),
+                        'metadata' => array_merge($metadata, [
+                            'archived_reason' => 'front_yard_foods_events_classes_launch_scope',
+                        ]),
+                    ])->save();
+                }
+            });
     }
 }
