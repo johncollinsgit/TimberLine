@@ -39,15 +39,15 @@ test('tenant with valid sendgrid config is ready for runtime sending', function 
         ->and((bool) ($summary['using_fallback_config'] ?? true))->toBeFalse();
 });
 
-test('tenant readiness uses fallback config when tenant settings are missing', function () {
+test('Modern Forestry readiness retains the configured legacy sender fallback', function () {
     config()->set('marketing.email.enabled', true);
     config()->set('marketing.email.from_email', 'fallback@example.test');
     config()->set('marketing.email.from_name', 'Fallback Sender');
     config()->set('services.sendgrid.api_key', 'SG.fallback-key');
 
     $tenant = Tenant::query()->create([
-        'name' => 'Fallback Tenant',
-        'slug' => 'fallback-tenant',
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
     ]);
 
     $summary = app(MarketingEmailReadiness::class)->summary($tenant->id);
@@ -57,6 +57,36 @@ test('tenant readiness uses fallback config when tenant settings are missing', f
         ->and((string) ($summary['resolution_source'] ?? ''))->toBe('fallback')
         ->and((bool) ($summary['using_fallback_config'] ?? false))->toBeTrue()
         ->and((bool) ($summary['sendgrid_key_present'] ?? false))->toBeTrue();
+});
+
+test('a non-legacy tenant cannot inherit the Modern Forestry sender or provider account', function () {
+    config()->set('marketing.messaging.platform.legacy_tenant_ids', []);
+    config()->set('marketing.email.enabled', true);
+    config()->set('marketing.email.from_email', 'info@theforestrystudio.com');
+    config()->set('marketing.email.from_name', 'Forestry Studio');
+    config()->set('marketing.email.reply_to_email', 'info@theforestrystudio.com');
+    config()->set('services.sendgrid.api_key', 'SG.modern-forestry-only');
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Everbranch Client',
+        'slug' => 'everbranch-client',
+    ]);
+
+    $summary = app(MarketingEmailReadiness::class)->summary($tenant->id);
+
+    expect((string) ($summary['status'] ?? ''))->not->toBe('ready')
+        ->and((bool) ($summary['can_send'] ?? true))->toBeFalse()
+        ->and((bool) ($summary['sendgrid_key_present'] ?? true))->toBeFalse()
+        ->and((string) ($summary['from_email'] ?? ''))->not->toContain('theforestrystudio.com');
+
+    $result = app(TenantEmailDispatchService::class)->sendEmail(
+        'recipient@example.test',
+        'Tenant sender isolation',
+        'This must fail closed.',
+        ['tenant_id' => $tenant->id]
+    );
+
+    expect((bool) ($result['success'] ?? true))->toBeFalse();
 });
 
 test('tenant with incomplete sendgrid setup is not ready', function () {
@@ -202,7 +232,8 @@ test('dispatch uses global fallback sendgrid api key at runtime', function () {
     });
 });
 
-test('dispatch uses tenant from email with global api key when tenant api key is absent', function () {
+test('dispatch does not give a non-legacy tenant the global provider key', function () {
+    config()->set('marketing.messaging.platform.legacy_tenant_ids', []);
     config()->set('marketing.email.enabled', true);
     config()->set('marketing.email.from_email', 'fallback@example.test');
     config()->set('marketing.email.from_name', 'TimberLine Marketing');
@@ -229,28 +260,16 @@ test('dispatch uses tenant from email with global api key when tenant api key is
         'analytics_enabled' => true,
     ]);
 
-    Http::fake([
-        'https://api.sendgrid.com/v3/mail/send' => Http::response('', 202, [
-            'X-Message-Id' => 'SG_TENANT_FROM_GLOBAL_KEY',
-        ]),
-    ]);
+    Http::fake();
 
     $result = app(TenantEmailDispatchService::class)->sendTestEmail('recipient@example.test', [
         'tenant_id' => $tenant->id,
     ]);
 
-    expect((bool) ($result['success'] ?? false))->toBeTrue()
-        ->and((string) ($result['message_id'] ?? ''))->toBe('SG_TENANT_FROM_GLOBAL_KEY');
+    expect((bool) ($result['success'] ?? true))->toBeFalse()
+        ->and((string) ($result['error_code'] ?? ''))->toBe('missing_api_key');
 
-    Http::assertSent(function ($request): bool {
-        $payload = $request->data();
-
-        return $request->url() === 'https://api.sendgrid.com/v3/mail/send'
-            && $request->hasHeader('Authorization', 'Bearer SG.global-fallback-key')
-            && (string) data_get($payload, 'from.email') === 'brand@tenant.test'
-            && (string) data_get($payload, 'from.name') === 'Tenant Sender Override'
-            && (string) data_get($payload, 'reply_to.email') === 'reply@example.test';
-    });
+    Http::assertNothingSent();
 });
 
 test('dispatch uses tenant sender and tenant api key when both are configured', function () {
@@ -368,6 +387,7 @@ test('dispatch disables SendGrid tracking when tenant tracking is turned off', f
         'reply_to_email' => 'reply@tracking-off.test',
         'provider_status' => 'healthy',
         'provider_config' => [
+            'api_key' => 'SG.tenant-tracking-key',
             'sender_mode' => 'global_fallback',
             'tracking_enabled' => false,
         ],

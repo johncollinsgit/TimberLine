@@ -1587,6 +1587,16 @@ Temporarily disable deploy:
   - `php artisan optimize:clear`
   - `php artisan config:clear`
 
+## Everbranch Environment, Stripe, and Sender Ownership
+
+- Local development values live only in the ignored `.env` file. `.env.example` is the committed key-name/default template and must never contain real credentials.
+- Production values live in the Laravel Forge/server environment for `app.theeverbranch.com`; live Stripe, SendGrid, Twilio, Shopify, or webhook secrets do not belong in local files, GitHub, issue comments, or chat.
+- Stripe direct billing uses `STRIPE_ACCOUNT_ID`, `STRIPE_KEY`, `STRIPE_SECRET`, and `STRIPE_WEBHOOK_SECRET`. Paste the complete Stripe-issued value with its prefix intact (`acct_`, `pk_test_`/`pk_live_`, `sk_test_`/`sk_live_`, `whsec_`). Never manufacture a key by adding a prefix to another identifier.
+- Agreement checkout stays disabled until `config:doctor` accepts the credential mode and the webhook, tax-decision, Relay-payout, and tenant-allowlist gates are satisfied.
+- Everbranch owns the platform provider relationships. Customer-facing marketing remains tenant-branded: email requires a verified tenant sender/domain and SMS requires the tenant's approved subaccount, Messaging Service, and number.
+- Modern Forestry is the only legacy global-sender fallback. Its Forestry Studio identity remains valid for tenant 1, but another tenant must fail closed rather than inherit that email, reply-to address, SendGrid credential, Twilio account, or number.
+- Everbranch-branded platform email/SMS remains disabled until separate verified Everbranch sender identities are configured.
+
 ## Twilio SMS Configuration
 - Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.
 - Preferred: configure `MARKETING_TWILIO_SENDERS` as a JSON array of sender objects. All senders share the same `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.

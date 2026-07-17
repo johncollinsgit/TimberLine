@@ -65,6 +65,8 @@ class ConfigDoctor extends Command
             $failures++;
         }
 
+        $failures += $this->validateAgreementStripeCheckout($isProd);
+
         $this->line('');
 
         if ($failures > 0) {
@@ -76,5 +78,81 @@ class ConfigDoctor extends Command
         $this->info('All required configuration present.');
 
         return self::SUCCESS;
+    }
+
+    protected function validateAgreementStripeCheckout(bool $isProd): int
+    {
+        $this->line('');
+        $this->line('<comment>Stripe direct agreement checkout</comment>');
+
+        if (! (bool) config('commercial.billing_readiness.agreement_checkout.enabled', false)) {
+            $this->line('  <fg=yellow>–</> EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED=false (Stripe validation skipped)');
+
+            return 0;
+        }
+
+        $accountId = trim((string) config('services.stripe.account_id'));
+        $publishableKey = trim((string) config('services.stripe.publishable_key'));
+        $secretKey = trim((string) config('services.stripe.secret'));
+        $webhookSecret = trim((string) config('services.stripe.webhook_secret'));
+        $publishableMode = $this->stripeKeyMode($publishableKey, 'pk');
+        $secretMode = $this->stripeKeyMode($secretKey, 'sk');
+
+        $failures = 0;
+        $checks = [
+            ['STRIPE_ACCOUNT_ID', preg_match('/^acct_[A-Za-z0-9]+$/', $accountId) === 1, 'must be the acct_ identifier from Stripe'],
+            ['STRIPE_KEY', $publishableMode !== null, 'must be a complete pk_test_ or pk_live_ key'],
+            ['STRIPE_SECRET', $secretMode !== null, 'must be a complete sk_test_ or sk_live_ key'],
+            ['STRIPE_WEBHOOK_SECRET', preg_match('/^whsec_[A-Za-z0-9]+$/', $webhookSecret) === 1, 'must be the whsec_ secret for this endpoint'],
+        ];
+
+        foreach ($checks as [$name, $valid, $message]) {
+            if ($valid) {
+                $this->line("  <info>✓</info> {$name}");
+            } else {
+                $this->line("  <fg=red>✗ {$name} — INVALID ({$message}).</>");
+                $failures++;
+            }
+        }
+
+        if ($publishableMode !== null && $secretMode !== null && $publishableMode !== $secretMode) {
+            $this->line('  <fg=red>✗ STRIPE_KEY and STRIPE_SECRET use different test/live modes.</>');
+            $failures++;
+        }
+
+        if ($isProd && ($publishableMode === 'test' || $secretMode === 'test')) {
+            $this->line('  <fg=red>✗ Test-mode Stripe keys cannot enable production agreement checkout.</>');
+            $failures++;
+        }
+
+        if (! $isProd && ($publishableMode === 'live' || $secretMode === 'live')) {
+            $this->line('  <fg=red>✗ Live Stripe keys are reserved for the production secret store.</>');
+            $failures++;
+        }
+
+        if ($publishableMode === 'live' && $secretMode === 'live') {
+            foreach ([
+                'EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED' => (bool) config('commercial.billing_readiness.agreement_checkout.tax_decision_confirmed', false),
+                'EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED' => (bool) config('commercial.billing_readiness.agreement_checkout.relay_payout_verified', false),
+            ] as $name => $valid) {
+                if ($valid) {
+                    $this->line("  <info>✓</info> {$name}");
+                } else {
+                    $this->line("  <fg=red>✗ {$name}=false — required before live agreement checkout.</>");
+                    $failures++;
+                }
+            }
+        }
+
+        return $failures;
+    }
+
+    protected function stripeKeyMode(string $value, string $prefix): ?string
+    {
+        if (preg_match('/^'.preg_quote($prefix, '/').'_(test|live)_[A-Za-z0-9]+$/', $value, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
     }
 }
