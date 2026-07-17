@@ -337,6 +337,54 @@ test('agreement checkout webhook with another tenant metadata is ignored before 
         ->and(TenantBillingFulfillment::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse();
 });
 
+test('agreement webhook without purpose but wrong tenant metadata is ignored before commercial state writes', function (): void {
+    config()->set('commercial.billing_readiness.lifecycle_mutations_enabled', true);
+
+    $sent = stripePaymentAgreement();
+    $order = acceptStripeAgreement($this, $sent);
+    $order->forceFill([
+        'status' => 'processing',
+        'provider_customer_id' => 'cus_fyf_implicit',
+        'provider_subscription_id' => 'sub_fyf_implicit',
+        'provider_invoice_id' => 'in_fyf_implicit',
+    ])->save();
+    $authorization = SubscriptionAuthorization::query()->findOrFail($order->subscription_authorization_id);
+    $collins = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+
+    [$payload, $signature] = signStripeEvent(['id' => 'evt_fyf_implicit_collins', 'type' => 'invoice.paid', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'in_fyf_implicit',
+        'object' => 'invoice',
+        'customer' => 'cus_fyf_implicit',
+        'subscription' => 'sub_fyf_implicit',
+        'status' => 'paid',
+        'currency' => 'usd',
+        'total' => 95800,
+        'subtotal' => 95800,
+        'total_tax_amounts' => [],
+        'created' => time(),
+        'status_transitions' => ['paid_at' => time()],
+        'hosted_invoice_url' => 'https://invoice.stripe.test/in_fyf_implicit',
+        'invoice_pdf' => 'https://invoice.stripe.test/in_fyf_implicit.pdf',
+        'metadata' => [
+            'tenant_id' => (string) $collins->id,
+            'checkout_plan_key' => 'starter',
+        ],
+    ]]]);
+
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $signature], $payload)
+        ->assertOk()
+        ->assertSee('ignored_agreement_security_mismatch');
+
+    expect(StripeWebhookEvent::query()->where('event_id', 'evt_fyf_implicit_collins')->value('status'))->toBe('ignored_agreement_security_mismatch')
+        ->and((int) StripeWebhookEvent::query()->where('event_id', 'evt_fyf_implicit_collins')->value('tenant_id'))->toBe((int) $collins->id)
+        ->and($order->fresh()->status)->toBe('processing')
+        ->and($authorization->fresh()->status)->toBe('authorized_pending_provider')
+        ->and(TenantBillingReceipt::query()->where('provider_receipt_id', 'in_fyf_implicit')->exists())->toBeFalse()
+        ->and(TenantCommercialOverride::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse()
+        ->and(TenantBillingSubscription::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse()
+        ->and(TenantBillingFulfillment::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse();
+});
+
 test('agreement checkout webhooks can resolve by provider references and remain idempotent without billing order metadata', function (): void {
     $sent = stripePaymentAgreement();
     $order = acceptStripeAgreement($this, $sent);
@@ -363,7 +411,6 @@ test('agreement checkout webhooks can resolve by provider references and remain 
         'hosted_invoice_url' => 'https://invoice.stripe.test/in_fyf_provider_refs',
         'invoice_pdf' => 'https://invoice.stripe.test/in_fyf_provider_refs.pdf',
         'metadata' => [
-            'purpose' => 'agreement_checkout',
             'tenant_id' => (string) $order->tenant_id,
             'checkout_plan_key' => 'starter',
         ],

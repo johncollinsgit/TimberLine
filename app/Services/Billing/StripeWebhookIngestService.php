@@ -163,7 +163,13 @@ class StripeWebhookIngestService
             }
 
             $agreementContext = null;
-            if (($metadata['purpose'] ?? null) === 'agreement_checkout') {
+            if ($this->shouldResolveAgreementCheckoutContext(
+                metadata: $metadata,
+                object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
+                checkoutSessionId: $checkoutSessionId,
+                stripeSubscription: $stripeSubscription,
+                stripeObjectId: $stripeObjectId,
+            )) {
                 $agreementContext = $this->resolveAgreementCheckoutContext(
                     metadata: $metadata,
                     object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
@@ -197,6 +203,7 @@ class StripeWebhookIngestService
                 $tenantId = (int) $agreementOrder->tenant_id;
                 $metadata = [
                     ...$metadata,
+                    'purpose' => 'agreement_checkout',
                     'tenant_id' => (string) $tenantId,
                     'billing_order_id' => (string) $agreementOrder->id,
                     'agreement_id' => (string) $agreementOrder->agreement_id,
@@ -379,15 +386,19 @@ class StripeWebhookIngestService
         });
 
         $tenantId = (int) ($result['tenant_id'] ?? 0);
-        if ($tenantId > 0 && $eventType === 'checkout.session.completed' && ($metadata['purpose'] ?? null) === 'agreement_checkout') {
+        $resultStatus = (string) ($result['status'] ?? '');
+        $canPostProcess = ! str_starts_with($resultStatus, 'ignored') && $resultStatus !== 'duplicate';
+        $agreementOrderId = (int) ($result['agreement_order_id'] ?? 0);
+        $isAgreementContext = $agreementOrderId > 0 || ($metadata['purpose'] ?? null) === 'agreement_checkout';
+        if ($canPostProcess && $tenantId > 0 && $eventType === 'checkout.session.completed' && $isAgreementContext) {
             $orderId = (int) ($result['agreement_order_id'] ?? ($metadata['billing_order_id'] ?? 0));
             $order = $orderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($orderId) : null;
             if ($order) {
                 $this->agreementSchedules->configure($order);
             }
         }
-        $shouldReconcileFulfillment = $tenantId > 0 && ($metadata['purpose'] ?? null) !== 'direct_invoice';
-        if (($metadata['purpose'] ?? null) === 'agreement_checkout') {
+        $shouldReconcileFulfillment = $canPostProcess && $tenantId > 0 && ($metadata['purpose'] ?? null) !== 'direct_invoice';
+        if ($canPostProcess && $isAgreementContext) {
             $billingOrderId = (int) ($result['agreement_order_id'] ?? ($metadata['billing_order_id'] ?? 0));
             $agreementOrder = $billingOrderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($billingOrderId) : null;
             $shouldReconcileFulfillment = $agreementOrder !== null
@@ -442,10 +453,73 @@ class StripeWebhookIngestService
     }
 
     /**
-     * Agreement checkout webhooks are allowed to update tenant commercial state only
-     * after the signed event can be tied back to one immutable, tenant-owned billing
-     * order. This prevents a valid Stripe event with mismatched metadata from
-     * polluting another tenant's commercial override or subscription ledger.
+     * Agreement checkout webhooks are allowed to update tenant commercial state
+     * only after the signed event can be tied back to one immutable, tenant-owned
+     * billing order. Stripe can omit Checkout metadata on follow-up invoice,
+     * refund, or subscription events, so agreement context is required whenever
+     * the event carries agreement identifiers or matches an agreement order by a
+     * provider reference. Unrelated generic Stripe events with no order match are
+     * left on the normal path, while direct invoices remain separated.
+     *
+     * @param  array<string,mixed>  $metadata
+     * @param  array<string,mixed>  $object
+     */
+    protected function shouldResolveAgreementCheckoutContext(
+        array $metadata,
+        array $object,
+        string $checkoutSessionId,
+        string $stripeSubscription,
+        string $stripeObjectId,
+    ): bool {
+        $purpose = trim((string) ($metadata['purpose'] ?? ''));
+        $hasAgreementIdentifiers = $this->hasAgreementMetadataIdentifiers($metadata)
+            || $this->hasAgreementMetadataIdentifiers((array) data_get($object, 'parent.subscription_details.metadata', []))
+            || $this->hasAgreementMetadataIdentifiers((array) data_get($object, 'subscription_details.metadata', []));
+
+        if ($purpose === 'agreement_checkout') {
+            return true;
+        }
+
+        if ($purpose === 'direct_invoice' && ! $hasAgreementIdentifiers) {
+            return false;
+        }
+
+        if ((int) ($metadata['direct_invoice_id'] ?? 0) > 0 && ! $hasAgreementIdentifiers) {
+            return false;
+        }
+
+        if ($hasAgreementIdentifiers) {
+            return true;
+        }
+
+        if (! Schema::hasTable('tenant_billing_orders')) {
+            return false;
+        }
+
+        return $this->agreementOrderCandidates($object, $checkoutSessionId, $stripeSubscription, $stripeObjectId)->isNotEmpty();
+    }
+
+    /** @param array<string,mixed> $metadata */
+    protected function hasAgreementMetadataIdentifiers(array $metadata): bool
+    {
+        foreach ([
+            'billing_order_id',
+            'agreement_id',
+            'agreement_version_id',
+            'agreement_acceptance_id',
+            'subscription_authorization_id',
+        ] as $key) {
+            if ((int) ($metadata[$key] ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve and validate the exact agreement billing order before tenant-wide
+     * Stripe ledgers can be updated.
      *
      * @param  array<string,mixed>  $metadata
      * @param  array<string,mixed>  $object
