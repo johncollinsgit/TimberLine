@@ -80,6 +80,118 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->assertForbidden();
 });
 
+test('front yard foods class detail uses events wording while other tenants keep class wording', function (): void {
+    $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
+    $frontYard = Tenant::query()->where('slug', 'front-yard-foods')->firstOrFail();
+    $john = User::query()->where('email', 'johncollinsemail@gmail.com')->firstOrFail();
+    $frontYardClass = ScheduledClass::query()->forTenantId((int) $frontYard->id)->where('slug', 'sourdough-basics')->firstOrFail();
+
+    $this->actingAs($john)
+        ->get(route('class-scheduling.show', ['tenant' => $frontYard->slug, 'scheduledClass' => $frontYardClass]))
+        ->assertOk()
+        ->assertSeeText('Back to events & classes calendar')
+        ->assertSeeText('Shopify publishing pending connection')
+        ->assertSeeText('Event/class settings')
+        ->assertSeeText('Save event or class')
+        ->assertSeeText('Publishing this event to Shopify is disabled until the Shopify site is connected and mapped.');
+
+    $this->put(route('class-scheduling.update', ['tenant' => $frontYard->slug, 'scheduledClass' => $frontYardClass]), [
+        'title' => 'Sourdough Basics',
+        'category' => 'Workshop',
+        'description' => 'Hands-on bread class.',
+        'location' => 'Front Yard Foods',
+        'starts_at' => now()->addWeek()->setTime(10, 0)->toDateTimeString(),
+        'ends_at' => now()->addWeek()->setTime(12, 0)->toDateTimeString(),
+        'capacity' => 12,
+        'price' => '45.00',
+        'status' => 'published',
+        'registration_open' => 1,
+        'reminder_hours' => 24,
+    ])->assertRedirect()
+        ->assertSessionHas('status', 'Event/class settings updated.');
+
+    $this->post(route('class-scheduling.store', ['tenant' => $frontYard->slug]), [
+        'title' => 'Market pickup window',
+        'category' => 'Pickup',
+        'description' => 'Pick up reserved plants.',
+        'location' => 'Saturday market',
+        'starts_at' => now()->addWeeks(2)->setTime(9, 0)->toDateTimeString(),
+        'ends_at' => now()->addWeeks(2)->setTime(11, 0)->toDateTimeString(),
+        'capacity' => 20,
+        'price' => '0.00',
+        'status' => 'draft',
+        'registration_open' => 1,
+        'reminder_hours' => 24,
+    ])->assertRedirect()
+        ->assertSessionHas('status', 'Event or class added to the calendar.');
+
+    $other = Tenant::query()->create(['name' => 'Other Educator', 'slug' => 'other-educator']);
+    TenantAccessProfile::query()->create(['tenant_id' => $other->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    TenantModuleState::query()->create(['tenant_id' => $other->id, 'module_key' => 'class_scheduling', 'enabled_override' => true, 'setup_status' => 'configured']);
+    $other->users()->attach($john->id, ['role' => 'admin']);
+    $otherClass = ScheduledClass::query()->create([
+        'tenant_id' => (int) $other->id,
+        'title' => 'Intro Class',
+        'slug' => 'intro-class',
+        'category' => null,
+        'description' => 'A regular class tenant.',
+        'location' => 'Studio',
+        'starts_at' => now()->addWeek()->setTime(14, 0),
+        'ends_at' => now()->addWeek()->setTime(15, 0),
+        'capacity' => 10,
+        'price' => '25.00',
+        'status' => 'published',
+        'registration_open' => true,
+        'reminder_offsets' => [24],
+    ]);
+
+    $this->actingAs($john)
+        ->get(route('class-scheduling.index', ['tenant' => $other->slug]))
+        ->assertOk()
+        ->assertSeeText('Classes & appointments')
+        ->assertSeeText('Add a class')
+        ->assertDontSeeText('Events & Classes')
+        ->assertDontSeeText('Shopify publish pending');
+
+    $this->get(route('class-scheduling.show', ['tenant' => $other->slug, 'scheduledClass' => $otherClass]))
+        ->assertOk()
+        ->assertSeeText('Back to class calendar')
+        ->assertSeeText('Class settings')
+        ->assertSeeText('Save class')
+        ->assertDontSeeText('Shopify publishing pending connection')
+        ->assertDontSeeText('Publishing this event to Shopify is disabled until the Shopify site is connected and mapped.');
+
+    $this->put(route('class-scheduling.update', ['tenant' => $other->slug, 'scheduledClass' => $otherClass]), [
+        'title' => 'Intro Class',
+        'category' => 'Education',
+        'description' => 'A regular class tenant.',
+        'location' => 'Studio',
+        'starts_at' => now()->addWeek()->setTime(14, 0)->toDateTimeString(),
+        'ends_at' => now()->addWeek()->setTime(15, 0)->toDateTimeString(),
+        'capacity' => 10,
+        'price' => '25.00',
+        'status' => 'published',
+        'registration_open' => 1,
+        'reminder_hours' => 24,
+    ])->assertRedirect()
+        ->assertSessionHas('status', 'Class settings updated.');
+
+    $this->post(route('class-scheduling.store', ['tenant' => $other->slug]), [
+        'title' => 'Second Class',
+        'category' => 'Education',
+        'description' => 'Another regular class.',
+        'location' => 'Studio',
+        'starts_at' => now()->addWeeks(2)->setTime(14, 0)->toDateTimeString(),
+        'ends_at' => now()->addWeeks(2)->setTime(15, 0)->toDateTimeString(),
+        'capacity' => 10,
+        'price' => '25.00',
+        'status' => 'draft',
+        'registration_open' => 1,
+        'reminder_hours' => 24,
+    ])->assertRedirect()
+        ->assertSessionHas('status', 'Class added to the calendar.');
+});
+
 test('front yard foods workspace shows launch welcome checklist assurance and clean navigation', function (): void {
     $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
     $tenant = Tenant::query()->where('slug', 'front-yard-foods')->firstOrFail();
@@ -285,7 +397,7 @@ test('class detail rejects a class owned by another active scheduling tenant', f
         ->assertNotFound();
 });
 
-test('mobile scheduling exposes clickable classes customers and reminders without field service access', function (): void {
+test('mobile scheduling exposes clickable classes and reminders while field service fails closed', function (): void {
     $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
     $tenant = Tenant::query()->where('slug', 'front-yard-foods')->firstOrFail();
     $john = User::query()->where('email', 'johncollinsemail@gmail.com')->firstOrFail();

@@ -54,7 +54,10 @@ class ClassSchedulingController extends Controller
 
         $class = ScheduledClass::query()->create($this->classPayload($data, $tenant, $slug));
 
-        return redirect()->route('class-scheduling.show', $class)->with('status', 'Class added to the calendar.');
+        return redirect()->route('class-scheduling.show', $class)->with(
+            'status',
+            $this->isFrontYardFoodsTenant($tenant) ? 'Event or class added to the calendar.' : 'Class added to the calendar.'
+        );
     }
 
     public function update(Request $request, ScheduledClass $scheduledClass): RedirectResponse
@@ -64,7 +67,10 @@ class ClassSchedulingController extends Controller
         $data = $this->validatedClass($request, $tenant);
         $scheduledClass->update($this->classPayload($data, $tenant, (string) $scheduledClass->slug));
 
-        return back()->with('status', 'Class settings updated.');
+        return back()->with(
+            'status',
+            $this->isFrontYardFoodsTenant($tenant) ? 'Event/class settings updated.' : 'Class settings updated.'
+        );
     }
 
     public function show(Request $request, ScheduledClass $scheduledClass): View
@@ -108,7 +114,10 @@ class ClassSchedulingController extends Controller
             ]
         );
 
-        return back()->with('status', 'Class signup settings updated.');
+        return back()->with(
+            'status',
+            $this->isFrontYardFoodsTenant($tenant) ? 'Event/class signup and publishing settings updated.' : 'Class signup settings updated.'
+        );
     }
 
     public function storeReminder(Request $request, ClassEnrollment $enrollment): RedirectResponse
@@ -208,6 +217,11 @@ class ClassSchedulingController extends Controller
         }
 
         return $slug;
+    }
+
+    protected function isFrontYardFoodsTenant(Tenant $tenant): bool
+    {
+        return (string) $tenant->slug === 'front-yard-foods';
     }
 
     protected function month(mixed $value): Carbon
