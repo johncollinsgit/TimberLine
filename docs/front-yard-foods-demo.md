@@ -30,6 +30,27 @@ php artisan everbranch:prepare-front-yard-foods \
 
 Do not send until the first-checkout amount, additional scope, exclusions, and implementation phases are approved. If implementation fees are not final, leave the implementation amount blank and collect implementation through a later signed milestone/work order. Electronic acceptance creates immutable evidence, a Stripe-direct subscription authorization, and an authorized billing order. It does not create a charge or activate modules; the customer must separately choose the Stripe Pay action after checkout readiness is enabled.
 
+## End-to-End Send-Link Readiness
+
+Use the readiness command as the final app-side gate before calling this prime time:
+
+```bash
+php artisan everbranch:front-yard-foods-readiness --require-paid
+```
+
+The command must pass only after the disposable smoke test proves the real chain: password unlock, customer-facing signature, immutable acceptance, server-priced Stripe Checkout, Stripe-confirmed payment, mirrored invoice/receipt/subscription, audited fulfillment, and Laura's workspace membership. Before payment is verified, the same command intentionally fails if the accepted signer already has workspace access.
+
+For live customer payment, also require production gates:
+
+```bash
+php artisan config:doctor --env=production
+php artisan everbranch:front-yard-foods-readiness --require-paid --require-live-gates
+```
+
+`--require-live-gates` expects live Stripe keys, the production webhook secret, Relay payout verification, accountant tax decision evidence, production mail, and an explicit `front-yard-foods` allowlist without `*`.
+
+For the first client launch, workspace activation may remain a documented operator step after Stripe payment is verified. Create or activate Laura's user, attach her to the Front Yard Foods tenant, and then rerun the readiness command. Do not send the real link until the evidence template at `docs/operations/evidence/front-yard-foods-proposal-checkout-smoke-template.md` has been copied into a dated evidence note and completed.
+
 ### Commercial separation
 
 - Shopify Basic: $39/month month-to-month or $29/month effective when billed annually, paid directly to Shopify.
