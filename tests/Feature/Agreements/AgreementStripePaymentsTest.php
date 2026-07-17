@@ -28,11 +28,11 @@ beforeEach(function (): void {
 });
 
 /** @return array{agreement:Agreement,token:string,password:string,url:string} */
-function stripePaymentAgreement(string $slug = 'front-yard-foods'): array
+function stripePaymentAgreement(string $slug = 'front-yard-foods', ?int $implementationAmount = 120000, ?int $dueOnAcceptance = 60000, ?int $dueBeforeLaunch = 60000): array
 {
     $tenant = Tenant::query()->create(['name' => str($slug)->headline(), 'slug' => $slug]);
     $management = app(AgreementManagementService::class);
-    $agreement = $management->prepareFrontYardFoods($tenant, null, 120000, 60000, 60000);
+    $agreement = $management->prepareFrontYardFoods($tenant, null, $implementationAmount, $dueOnAcceptance, $dueBeforeLaunch);
     $sent = $management->send($agreement, null, 'ProposalPass123');
     $token = basename(parse_url($sent['url'], PHP_URL_PATH));
 
@@ -67,7 +67,7 @@ function acceptStripeAgreement($test, array $sent): TenantBillingOrder
 }
 
 test('accepted proposal checkout is server priced and excludes Shopify and third party costs', function (): void {
-    $sent = stripePaymentAgreement();
+    $sent = stripePaymentAgreement(implementationAmount: null, dueOnAcceptance: null, dueBeforeLaunch: null);
     $order = acceptStripeAgreement($this, $sent);
     Http::fake(function (Request $request) use ($order) {
         expect($request->url())->toEndWith('/v1/checkout/sessions');
@@ -81,7 +81,7 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
             ->and($data['saved_payment_method_options[payment_method_remove]'])->toBe('enabled')
             ->and($data['subscription_data[payment_settings][save_default_payment_method]'])->toBe('on_subscription')
             ->and($data['automatic_tax[enabled]'])->toBe('false')
-            ->and(collect($data)->filter(fn ($value, $key) => str_ends_with($key, '[unit_amount]'))->values()->all())->toBe([29900, 5900, 60000])
+            ->and(collect($data)->filter(fn ($value, $key) => str_ends_with($key, '[unit_amount]'))->values()->all())->toBe([29900, 5900])
             ->and($data)->not->toContain(3900)
             ->and($data)->not->toContain(14900);
 
@@ -92,7 +92,7 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
         ->assertRedirect('https://checkout.stripe.test/cs_test_agreement');
     expect($order->fresh()->status)->toBe('checkout_pending')
         ->and($order->fresh()->provider_checkout_session_id)->toBe('cs_test_agreement')
-        ->and($order->fresh()->authorized_subtotal_cents)->toBe(95800);
+        ->and($order->fresh()->authorized_subtotal_cents)->toBe(35800);
 });
 
 test('checkout reuses saved Stripe customers and one-time work can save payment methods', function (): void {

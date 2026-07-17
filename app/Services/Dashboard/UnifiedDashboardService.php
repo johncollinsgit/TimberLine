@@ -2,6 +2,7 @@
 
 namespace App\Services\Dashboard;
 
+use App\Models\Agreement;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceVehicle;
@@ -11,6 +12,7 @@ use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\ScheduledClass;
 use App\Models\Tenant;
+use App\Models\TenantBillingOrder;
 use App\Models\User;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
@@ -20,6 +22,7 @@ use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
 class UnifiedDashboardService
@@ -83,9 +86,74 @@ class UnifiedDashboardService
             'summary_cards' => $summaryCards,
             'upcoming_jobs' => $ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant),
             'class_calendar' => $this->classCalendar($tenant),
+            'front_yard_launch' => $this->frontYardLaunch($tenant),
             'owner_reporting' => $ownerReport,
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
+        ];
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function frontYardLaunch(?Tenant $tenant): ?array
+    {
+        if (! $tenant || (string) $tenant->slug !== 'front-yard-foods') {
+            return null;
+        }
+
+        $agreement = Schema::hasTable('agreements')
+            ? Agreement::query()
+                ->forTenantId((int) $tenant->id)
+                ->where('template_key', 'front_yard_foods_launch_partner')
+                ->with(['acceptance', 'billingOrders' => fn ($query) => $query->latest()])
+                ->latest()
+                ->first()
+            : null;
+
+        /** @var TenantBillingOrder|null $billingOrder */
+        $billingOrder = $agreement?->billingOrders?->first();
+        $paymentStatus = $billingOrder?->status ?? 'waiting_for_signature';
+        $agreementStatus = $agreement?->acceptance ? 'signed' : ($agreement ? 'ready_to_sign' : 'drafting');
+
+        return [
+            'headline' => 'Welcome, Laura',
+            'subheadline' => 'Front Yard Foods is being prepared as a calm, central workspace for the Shopify migration, Square mapping, classes, consultations, customers, messaging, sales context, and plant inventory.',
+            'brand' => [
+                'name' => 'Front Yard Foods',
+                'primary' => '#42654a',
+                'cream' => '#fbf6e6',
+                'accent' => '#e6b84d',
+            ],
+            'explain' => 'Once Shopify and Square are connected, this dashboard will start tying together customers, messaging readiness, schedulable events, product sales context, and inventory on one page. Publishing and sync remain pending until each provider connection is approved and tested.',
+            'statuses' => [
+                ['label' => 'Agreement', 'value' => str_replace('_', ' ', $agreementStatus), 'tone' => $agreementStatus === 'signed' ? 'green' : 'amber'],
+                ['label' => 'Payment', 'value' => str_replace('_', ' ', $paymentStatus), 'tone' => $paymentStatus === 'paid' ? 'green' : 'amber'],
+                ['label' => 'Shopify/Square sync', 'value' => 'pending connection', 'tone' => 'amber'],
+            ],
+            'evergrove_doing' => [
+                'Prepare Shopify migration plan.',
+                'Match Shopify design to the current Squarespace site.',
+                'Set up product and inventory structure.',
+                'Prepare Square → Shopify inventory mapping.',
+                'Configure classes/events and pickup/delivery workflows.',
+                'Review launch readiness before domain cutover.',
+            ],
+            'client_needs' => [
+                'Squarespace login or collaborator invite.',
+                'Shopify login or collaborator invite.',
+                'Square login or collaborator invite.',
+                'Inventory and product files.',
+                'Customer files currently used for the company.',
+                'Website photos, copy, policies, delivery/pickup details, and class/consultation info.',
+            ],
+            'data_assurance' => [
+                'Your data is used only to perform the approved migration, setup, support, reporting, security, and client-authorized integrations.',
+                'Your data is not sold.',
+                'Your data is not shared with unrelated third parties.',
+                'Shopify, Square, Substack, booking, and website access is used only for the approved implementation.',
+            ],
+            'agreement_href' => route('agreements.index', ['tenant' => $tenant->slug]),
+            'events_href' => Route::has('class-scheduling.index') ? route('class-scheduling.index') : null,
+            'inventory_href' => Route::has('plant-inventory.index') ? route('plant-inventory.index') : null,
         ];
     }
 

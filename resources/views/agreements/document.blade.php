@@ -45,13 +45,17 @@
                     <p class="mt-1 text-sm text-zinc-600">{{ $category['description'] }}</p>
                     <div class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         @foreach($categoryCards as $card)
-                            @php $isShopify = ($card['owner'] ?? '') === 'Shopify'; $isThirdParty = $categoryKey === 'third_party'; @endphp
+                            @php
+                                $isShopify = ($card['owner'] ?? '') === 'Shopify';
+                                $isThirdParty = $categoryKey === 'third_party';
+                                $isSeparateWorkOrder = ($card['payment_timing'] ?? '') === 'separate_work_order';
+                            @endphp
                             <a href="{{ $isShopify ? 'https://www.shopify.com/pricing' : ($isThirdParty ? '#third-party-costs' : '#acceptance') }}" @if($isShopify) target="_blank" rel="noopener noreferrer" @endif class="group block rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-emerald-500 hover:shadow-md">
                                 <div class="flex items-start justify-between gap-4"><h4 class="font-semibold text-zinc-950">{{ $card['label'] }}</h4><span class="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">{{ $card['owner'] }}</span></div>
                                 <p class="mt-5 text-3xl font-semibold tracking-tight text-zinc-950">{{ $money($card) }}</p>
                                 <p class="mt-1 text-sm font-medium text-emerald-700">{{ str_replace('_', ' ', $card['frequency']) }}</p>
                                 <p class="mt-3 text-sm leading-6 text-zinc-600">{{ $card['detail'] }}</p>
-                                <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">{{ $isShopify ? 'Review Shopify pricing ↗' : ($isThirdParty ? 'Review separate provider costs ↓' : 'Included in this agreement →') }}</p>
+                                <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">{{ $isShopify ? 'Review Shopify pricing ↗' : ($isThirdParty ? 'Review separate provider costs ↓' : ($isSeparateWorkOrder ? 'Separate written work order required' : 'Included in this agreement →')) }}</p>
                             </a>
                         @endforeach
                     </div>

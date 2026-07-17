@@ -5,6 +5,8 @@ use App\Models\ClassEnrollment;
 use App\Models\ClassReminder;
 use App\Models\ClassSchedulingSetting;
 use App\Models\MarketingProfile;
+use App\Models\PlantInventoryAdjustment;
+use App\Models\PlantInventoryItem;
 use App\Models\ScheduledClass;
 use App\Models\SubscriptionAuthorization;
 use App\Models\Tenant;
@@ -40,14 +42,98 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->and(Agreement::query()->forTenantId(4)->where('template_key', 'front_yard_foods_launch_partner')->count())->toBe(1)
         ->and(Agreement::query()->forTenantId(4)->firstOrFail()->versions()->count())->toBe(1)
         ->and(SubscriptionAuthorization::query()->forTenantId(4)->count())->toBe(0)
+        ->and(TenantModuleState::query()->where('tenant_id', 4)->where('module_key', 'plant_inventory')->where('enabled_override', true)->exists())->toBeTrue()
         ->and($tenant->setupStatus()->firstOrFail()->billing_lane_interest)->toBe('undecided');
 
     $this->actingAs($john)
         ->get(route('class-scheduling.index', ['tenant' => $tenant->slug]))
         ->assertOk()
         ->assertSeeText('Sourdough Basics')
-        ->assertSeeText('Classes & appointments', false);
+        ->assertSeeText('Events & Classes')
+        ->assertSeeText('Shopify publish pending');
 
+});
+
+test('front yard foods workspace shows launch welcome checklist assurance and clean navigation', function (): void {
+    $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
+    $tenant = Tenant::query()->where('slug', 'front-yard-foods')->firstOrFail();
+    $john = User::query()->where('email', 'johncollinsemail@gmail.com')->firstOrFail();
+
+    $this->actingAs($john)
+        ->get(route('dashboard', ['tenant' => $tenant->slug]))
+        ->assertOk()
+        ->assertSeeText('Welcome, Laura')
+        ->assertSeeText('What Evergrove is doing')
+        ->assertSeeText('What I need from you')
+        ->assertSeeText('Shopify login or collaborator invite.')
+        ->assertSeeText('Square login or collaborator invite.')
+        ->assertSeeText('Your data is not sold.')
+        ->assertSeeText('Events & Classes')
+        ->assertSeeText('Plant Inventory')
+        ->assertSeeText('Messaging · pending')
+        ->assertSeeText('User Agreements')
+        ->assertDontSeeText('Pouring')
+        ->assertDontSeeText('candle wax')
+        ->assertDontSeeText('Market box');
+});
+
+test('front yard foods plant inventory supports CRUD adjustments and rejects cross tenant changes', function (): void {
+    $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
+    $tenant = Tenant::query()->where('slug', 'front-yard-foods')->firstOrFail();
+    $john = User::query()->where('email', 'johncollinsemail@gmail.com')->firstOrFail();
+
+    $this->actingAs($john)
+        ->get(route('plant-inventory.index', ['tenant' => $tenant->slug]))
+        ->assertOk()
+        ->assertSeeText('No plant inventory yet.')
+        ->assertSeeText('Square access');
+
+    $this->post(route('plant-inventory.store', ['tenant' => $tenant->slug]), [
+        'name' => 'Strawberry starts',
+        'category' => 'Edible plants',
+        'sku' => 'FYF-STRAW-START',
+        'vendor_source' => 'Purchased resale plants',
+        'purchased_cost' => '2.50',
+        'sell_price' => '6.00',
+        'quantity_on_hand' => 12,
+        'reserved_quantity' => 3,
+        'square_id' => 'square-strawberry',
+        'shopify_product_id' => 'gid://shopify/Product/1',
+        'shopify_variant_id' => 'gid://shopify/ProductVariant/1',
+        'status' => 'active',
+    ])->assertRedirect();
+
+    $item = PlantInventoryItem::query()->forTenantId((int) $tenant->id)->where('sku', 'FYF-STRAW-START')->firstOrFail();
+    expect($item->available_quantity)->toBe(9)
+        ->and(PlantInventoryAdjustment::query()->forTenantId((int) $tenant->id)->where('plant_inventory_item_id', $item->id)->exists())->toBeTrue();
+
+    $this->post(route('plant-inventory.adjustments.store', ['item' => $item, 'tenant' => $tenant->slug]), [
+        'adjustment_type' => PlantInventoryAdjustment::TYPE_HELD,
+        'quantity' => 2,
+        'notes' => 'Laura asked to hold strawberries.',
+    ])->assertRedirect();
+
+    expect($item->fresh()->reserved_quantity)->toBe(5)
+        ->and($item->fresh()->available_quantity)->toBe(7);
+
+    $this->post(route('plant-inventory.adjustments.store', ['item' => $item, 'tenant' => $tenant->slug]), [
+        'adjustment_type' => PlantInventoryAdjustment::TYPE_SOLD,
+        'quantity' => 2,
+    ])->assertRedirect();
+
+    expect($item->fresh()->quantity_on_hand)->toBe(10)
+        ->and($item->fresh()->reserved_quantity)->toBe(3)
+        ->and($item->fresh()->available_quantity)->toBe(7);
+
+    $other = Tenant::query()->create(['name' => 'Other Garden', 'slug' => 'other-garden']);
+    TenantAccessProfile::query()->create(['tenant_id' => $other->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    TenantModuleState::query()->create(['tenant_id' => $other->id, 'module_key' => 'plant_inventory', 'enabled_override' => true, 'setup_status' => 'configured']);
+    $other->users()->attach($john->id, ['role' => 'admin']);
+
+    $this->post(route('plant-inventory.adjustments.store', ['item' => $item, 'tenant' => $other->slug]), [
+        'adjustment_type' => PlantInventoryAdjustment::TYPE_SOLD,
+        'quantity' => 1,
+    ])->assertNotFound();
 });
 
 test('front yard foods uses the next open tenant id when tenant four is occupied', function (): void {

@@ -58,6 +58,7 @@ use App\Http\Controllers\Onboarding\FirstLoginWorkspaceController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
 use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
+use App\Http\Controllers\PlantInventoryController;
 use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\PlatformProductPagesController;
 use App\Http\Controllers\PublicBudConversationController;
@@ -608,6 +609,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/enrollments/{enrollment}/reminders', [ClassSchedulingController::class, 'storeReminder'])->name('reminders.store');
         });
 
+    Route::middleware(['role:admin,manager', 'tenant.access', 'module:plant_inventory'])
+        ->prefix('inventory/plants')
+        ->name('plant-inventory.')
+        ->group(function (): void {
+            Route::get('/', [PlantInventoryController::class, 'index'])->name('index');
+            Route::post('/', [PlantInventoryController::class, 'store'])->name('store');
+            Route::put('/{item}', [PlantInventoryController::class, 'update'])->name('update');
+            Route::post('/{item}/adjustments', [PlantInventoryController::class, 'adjust'])->name('adjustments.store');
+            Route::post('/{item}/archive', [PlantInventoryController::class, 'archive'])->name('archive');
+        });
+
     Route::middleware(['role:admin'])
         ->get('/integrations/quickbooks', [QuickBooksConnectionController::class, 'index'])
         ->name('integrations.quickbooks.index');
@@ -1132,7 +1144,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             });
         });
 
-    // Inventory
     Route::middleware(['role:admin,manager'])->group(function () {
         Route::get('/inventory', InventoryIndex::class)->name('inventory.index');
     });
