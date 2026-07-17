@@ -54,7 +54,7 @@ class TenantEmailSettingsService
      */
     public function resolvedForTenant(?int $tenantId): array
     {
-        $fallback = $this->fallbackFromConfig($tenantId);
+        $fallback = $this->fallbackForTenant($tenantId);
 
         return $this->resolvedRuntimeSettings($tenantId, $fallback);
     }
@@ -78,7 +78,7 @@ class TenantEmailSettingsService
      */
     public function resolvedForRuntime(?int $tenantId): array
     {
-        $fallback = $this->fallbackFromConfig($tenantId);
+        $fallback = $this->fallbackForTenant($tenantId);
 
         return $this->resolvedRuntimeSettings($tenantId, $fallback);
     }
@@ -121,7 +121,7 @@ class TenantEmailSettingsService
      */
     public function forAdmin(?int $tenantId): array
     {
-        $fallback = $this->fallbackFromConfig($tenantId);
+        $fallback = $this->fallbackForTenant($tenantId);
         $resolved = $this->withAdminContext($this->resolvedRuntimeSettings($tenantId, $fallback), $fallback);
 
         return [
@@ -131,7 +131,7 @@ class TenantEmailSettingsService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     public function saveForTenant(int $tenantId, array $payload): TenantEmailSetting
     {
@@ -266,6 +266,58 @@ class TenantEmailSettingsService
     /**
      * @return array<string,mixed>
      */
+    protected function fallbackForTenant(?int $tenantId): array
+    {
+        $fallback = $this->fallbackFromConfig($tenantId);
+        if ($tenantId === null || $this->allowsLegacySenderFallback($tenantId)) {
+            return $fallback;
+        }
+
+        return [
+            ...$fallback,
+            'email_enabled' => false,
+            'from_email' => null,
+            'reply_to_email' => null,
+            'provider_status' => 'unknown',
+            'provider_status_message' => 'A verified tenant sender is required.',
+            'provider_config' => [
+                ...(array) ($fallback['provider_config'] ?? []),
+                'api_key' => null,
+                'api_key_source' => 'none',
+                'sender_mode' => 'single_sender',
+                'verified_sender_email' => null,
+                'reply_to_email' => null,
+            ],
+            'source' => 'tenant_sender_required',
+        ];
+    }
+
+    protected function allowsLegacySenderFallback(int $tenantId): bool
+    {
+        $legacyIds = collect((array) config('marketing.messaging.platform.legacy_tenant_ids', [1]))
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $value): bool => $value > 0)
+            ->all();
+
+        if (in_array($tenantId, $legacyIds, true)) {
+            return true;
+        }
+
+        if (! Schema::hasTable('tenants')) {
+            return false;
+        }
+
+        $flagshipSlug = strtolower(trim((string) config('tenancy.auth.flagship_tenant_slug', 'modern-forestry')));
+
+        return $flagshipSlug !== '' && Tenant::query()
+            ->whereKey($tenantId)
+            ->whereRaw('LOWER(slug) = ?', [$flagshipSlug])
+            ->exists();
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
     protected function fallbackFromConfig(?int $tenantId): array
     {
         $apiKey = trim((string) (config('services.sendgrid.api_key') ?? config('services.sendgrid_api_key') ?? ''));
@@ -316,8 +368,8 @@ class TenantEmailSettingsService
     }
 
     /**
-     * @param array<string,mixed> $incomingConfig
-     * @param array<string,mixed> $existingConfig
+     * @param  array<string,mixed>  $incomingConfig
+     * @param  array<string,mixed>  $existingConfig
      * @return array<string,mixed>
      */
     protected function normalizedProviderConfig(string $provider, array $incomingConfig, array $existingConfig): array
@@ -378,7 +430,7 @@ class TenantEmailSettingsService
     }
 
     /**
-     * @param array<string,mixed> $providerConfig
+     * @param  array<string,mixed>  $providerConfig
      * @return array<string,mixed>
      */
     protected function sanitizedProviderConfig(string $provider, array $providerConfig): array
@@ -393,7 +445,7 @@ class TenantEmailSettingsService
                 'api_key_masked' => $this->maskedSecret($apiKey),
                 'api_key_source' => in_array(
                     (string) ($providerConfig['api_key_source'] ?? 'tenant'),
-                    ['tenant', 'global'],
+                    ['tenant', 'global', 'none'],
                     true
                 ) ? (string) $providerConfig['api_key_source'] : 'tenant',
                 'sender_mode' => $this->normalizedSenderMode($providerConfig['sender_mode'] ?? null),
@@ -475,7 +527,7 @@ class TenantEmailSettingsService
 
             return [
                 'api_key' => $resolvedApiKey,
-                'api_key_source' => $tenantApiKey !== null ? 'tenant' : 'global',
+                'api_key_source' => $tenantApiKey !== null ? 'tenant' : ($fallbackApiKey !== null ? 'global' : 'none'),
                 'sender_mode' => $this->normalizedSenderMode($tenantConfig['sender_mode'] ?? null),
                 'verified_sender_email' => $this->nullableString($tenantConfig['verified_sender_email'] ?? null)
                     ?? $this->nullableString($resolvedFields['from_email'] ?? null)
@@ -580,7 +632,7 @@ class TenantEmailSettingsService
             return str_repeat('*', strlen($value));
         }
 
-        return substr($value, 0, 4) . str_repeat('*', max(4, strlen($value) - 8)) . substr($value, -4);
+        return substr($value, 0, 4).str_repeat('*', max(4, strlen($value) - 8)).substr($value, -4);
     }
 
     protected function nullableString(mixed $value): ?string

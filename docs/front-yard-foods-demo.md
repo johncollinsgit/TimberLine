@@ -10,6 +10,36 @@ php artisan everbranch:prepare-front-yard-foods
 
 The command reuses tenant slug `front-yard-foods`. For a new tenant it uses ID 4 only when available, otherwise the smallest unused ID greater than 4. It preserves all existing memberships and grants active tenant-admin access to `johncollinsemail@gmail.com`.
 
+It also idempotently prepares the canonical Front Yard Foods agreement draft. Configure the negotiated implementation price without changing the reusable template:
+
+```bash
+php artisan everbranch:prepare-front-yard-foods \
+  --implementation-fee=1200 \
+  --implementation-due-on-acceptance=600 \
+  --implementation-due-before-launch=600
+```
+
+After operator review, rotate a password-protected proposal link. The plaintext password is printed once and is never stored:
+
+```bash
+php artisan everbranch:prepare-front-yard-foods \
+  --implementation-fee=1200 \
+  --send-agreement
+```
+
+Do not send until the implementation amount, payment schedule, additional scope, exclusions, and implementation phases are approved. Electronic acceptance creates immutable evidence, a Stripe-direct subscription authorization, and an authorized billing order. It does not create a charge or activate modules; the customer must separately choose the Stripe Pay action after checkout readiness is enabled.
+
+### Commercial separation
+
+- Shopify Basic: $39/month month-to-month or $29/month effective when billed annually, paid directly to Shopify.
+- Everbranch onboarding: $299 one time.
+- Everbranch Launch Partner: $59/month for six consecutive cycles.
+- Everbranch standard: $149/month beginning with cycle seven.
+- Shopify migration/implementation: agreement-specific amount and payment schedule.
+- Out-of-scope software work: $50/hour only after written electronic approval.
+
+The proposal must keep four cost buckets visibly separate: Shopify store expenses; third-party apps and services; Everbranch one-time setup and monthly service; and Evergrove implementation services. Stripe is the direct-client processor for Everbranch/Evergrove charges; Relay is the verified payout bank only. Shopify App Store billing remains a separate disabled lane.
+
 It idempotently prepares Customers, Class Scheduling, Field Service, Messaging, and Reporting; six fictional customers with test phone `8646165468`; four classes covering sourdough, vegetable growing, preserving, and edible garden design; four consultation/installation jobs; enrollments; preview reminders; and durable job photos.
 
 ## Public and Mobile Surfaces
@@ -37,6 +67,9 @@ Each downloaded image is stored as a private tenant workspace asset and records 
 5. Confirm another tenant cannot read class, enrollment, customer, job, asset, or reminder records.
 6. Confirm desktop and iPhone cards open the intended details and the calendar remains usable at narrow widths.
 7. Only after provider/consent readiness and explicit action-time confirmation, deliver at most one test SMS to `8646165468` and one test email to `johncollinsemail@gmail.com`.
+8. Confirm `/landlord/agreements` shows the draft/version hash and the proposal is only available on an Evergrove host after password entry.
+9. Confirm tenant `/agreements` only exposes the accepted copy and provider-confirmed receipts, without internal notes or raw access evidence.
+10. Confirm acceptance alone creates no charge; payment requires the locked Stripe action and access remains blocked until settlement, schedule configuration, provider verification, and audited fulfillment exist.
 
 ## Suggested Front Yard Foods Branches
 

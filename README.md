@@ -1,5 +1,15 @@
 # Modern Forestry Backstage
 
+## Everbranch Direct Stripe Invoices (2026-07-17)
+
+- Landlord operators can draft tenant-scoped direct invoices from `/landlord/invoices` or `/landlord/tenants/{tenant}/invoices/create` for approved Everbranch service, Evergrove implementation, supplemental work, or milestone charges.
+- Direct invoices are separate from accepted-proposal Checkout and from future Shopify App Store billing. Shopify plan costs, Shopify processing charges, taxes collected by Shopify, and third-party app subscriptions must stay informational and must not be entered as Everbranch invoice lines.
+- Invoice sending is disabled unless `EVERBRANCH_STRIPE_INVOICING_ENABLED=true`, the tenant slug is allowlisted in `EVERBRANCH_STRIPE_INVOICING_TENANT_SLUGS`, Stripe keys/webhook signing pass `config:doctor`, and the production tax/Relay gates are satisfied for live mode.
+- Stripe owns invoice delivery, payment collection, tax calculation when enabled, receipts, refunds, disputes, and payment status. Everbranch mirrors Stripe-confirmed invoice links, receipt links, totals, tax, status, and billing evidence into tenant-scoped records.
+- Proposal Checkout reuses tenant-scoped Stripe Customers when the same billing signer is known and asks Stripe to let customers save/remove payment methods. Saved methods make future Checkout or hosted invoice payment easier, but new work still requires a new approved payment action.
+- ACH-style invoice payments remain open/processing until Stripe confirms `invoice.paid` or `invoice.payment_succeeded`. Direct invoice payments never grant module access or mutate plan entitlements.
+- Focused verification: `php -d memory_limit=512M ./vendor/bin/pest tests/Feature/Billing/DirectStripeInvoiceTest.php tests/Feature/Agreements/AgreementStripePaymentsTest.php tests/Feature/ConfigDoctorTest.php`.
+
 ## Front Yard Foods Class Scheduling Demo (2026-07-15)
 
 - Class Scheduling is a reusable tenant-scoped Branch for published classes, capacity, enrollments, reminders, calendar views, attendee navigation, and the fail-closed public signup surface at `/signup/classes/{tenant}`.
@@ -1586,6 +1596,17 @@ Temporarily disable deploy:
 - After changing those values, run:
   - `php artisan optimize:clear`
   - `php artisan config:clear`
+
+## Everbranch Environment, Stripe, and Sender Ownership
+
+- Local development values live only in the ignored `.env` file. `.env.example` is the committed key-name/default template and must never contain real credentials.
+- Production values live in the Laravel Forge/server environment for `app.theeverbranch.com`; live Stripe, SendGrid, Twilio, Shopify, or webhook secrets do not belong in local files, GitHub, issue comments, or chat.
+- Stripe direct billing uses `STRIPE_ACCOUNT_ID`, `STRIPE_KEY`, `STRIPE_SECRET`, and `STRIPE_WEBHOOK_SECRET`. Paste the complete Stripe-issued value with its prefix intact (`acct_`, `pk_test_`/`pk_live_`, `sk_test_`/`sk_live_`, `whsec_`). Never manufacture a key by adding a prefix to another identifier.
+- A production-host sandbox may temporarily use test-mode Stripe keys only when `EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED=true` and the enabled flow has a concrete tenant allowlist such as `front-yard-foods`; never use `*` for sandbox rollout.
+- Agreement checkout stays disabled until `config:doctor` accepts the credential mode and the webhook, tax-decision, Relay-payout, and tenant-allowlist gates are satisfied.
+- Everbranch owns the platform provider relationships. Customer-facing marketing remains tenant-branded: email requires a verified tenant sender/domain and SMS requires the tenant's approved subaccount, Messaging Service, and number.
+- Modern Forestry is the only legacy global-sender fallback. Its Forestry Studio identity remains valid for tenant 1, but another tenant must fail closed rather than inherit that email, reply-to address, SendGrid credential, Twilio account, or number.
+- Everbranch-branded platform email/SMS remains disabled until separate verified Everbranch sender identities are configured.
 
 ## Twilio SMS Configuration
 - Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`.

@@ -1,5 +1,15 @@
 # Everbranch Billing / Stripe Readiness Audit
 
+## 2026-07-16 Agreement and Dual-Lane Update
+
+- Agreement-first authorization now exists for tenant-specific, à-la-carte pricing. Acceptance records an immutable exact version and normalized subscription authorization but does not activate checkout, subscriptions, billing, or entitlements.
+- Front Yard Foods uses the explicitly approved `stripe_direct` client-services lane. This does not activate Shopify App Pricing or private Shopify plans. Agreement checkout remains disabled until credentials, webhook signing, tax decision, Relay payout verification, allowlisting, and test evidence are complete.
+- Landlord direct Stripe invoices now exist for approved Everbranch/Evergrove one-time, milestone, and supplemental work. They remain disabled unless `EVERBRANCH_STRIPE_INVOICING_ENABLED=true` and the tenant is allowlisted. They exclude Shopify/third-party expenses, send Stripe hosted invoices, mirror provider receipt/tax/status evidence, and never mutate entitlements.
+- Existing Shopify and hosted Stripe rails remain disabled options for a later separately approved billing decision. The current deliverable is agreement and implementation readiness, not provider architecture.
+- `AgreementBillingActivationGuard` requires an accepted active agreement, exact accepted version, matching approved provider lane, provider-verified active subscription, and audited applied fulfillment. This guard must be connected to the final Shopify and direct Stripe activation work before either lane is enabled.
+- `tenant_billing_receipts` is an idempotent tenant-bound provider receipt mirror. It rejects inconsistent subtotal/tax/total values, cross-tenant provider receipt reuse, and non-HTTPS receipt links. Everbranch does not calculate provider taxes.
+- Provider selection, production reconciliation, tax configuration, refund/dunning SOPs, and provider receipt ingestion remain later external activation decisions and blockers.
+
 Status: PR 14 landlord commercial intent gate.
 Date: 2026-05-21.
 
@@ -69,6 +79,7 @@ PR 14 adds a landlord-only commercial intent summary and billing lane decision g
 | `tenant_setup_statuses` commercial intent fields | Shopify/Stripe/manual/free intent | Captures plan interest and billing lane interest | Intent-only status metadata | Tenant-facing + landlord review | No | No | Low | Keep as planning signal only; do not wire to checkout or entitlements. |
 | `/landlord/onboarding/intake` commercial intent columns | Shopify/Stripe/manual/free intent | Landlord triage for selected plan/billing lane | Review/status only | Landlord-only | No | No | Low | Use for operator review, not billing actions. |
 | `/landlord/commercial-intent` | Shopify/Stripe/manual/free intent | Operator summary and billing lane decision gate | Review/status only | Landlord-only | No | No | Low | Use to decide next follow-up. It must not become a charge/subscription/entitlement surface without a future activation PR. |
+| `/landlord/invoices` | Stripe direct invoice | Landlord drafts/sends approved direct invoices | Disabled by default through `EVERBRANCH_STRIPE_INVOICING_ENABLED=false` and tenant allowlist | Landlord-only | No by default; yes if explicitly enabled with Stripe keys and gates | Yes | High | Use only for approved Everbranch/Evergrove service work. Reject Shopify/third-party lines and never trigger entitlement fulfillment. |
 | `resources/views/marketing/modules.blade.php` | Display-only | Module pricing labels | Says checkout is not active | Tenant-facing | No | No | Low | Keep pricing labels display-only. |
 | `resources/views/shopify/app-store.blade.php` | Display-only / future Shopify lane | Embedded module pricing labels | Says checkout is not active | Shopify embedded tenant-facing | No | No | Medium | For App Store merchants, future billing lane should be Shopify App Pricing/Billing, not Stripe checkout. |
 | `custom_module_requests` surfaces | Manual/custom | Discovery/intake for custom work | Explicitly does not activate billing or generate quotes/invoices | Tenant + landlord triage | No | No | Low | Keep requests separate from quotes, invoices, and entitlement changes. |
@@ -87,7 +98,7 @@ Answers from code inspection:
 - Are subscriptions created? Code exists in the guarded landlord live subscription sync path, but that action is disabled by default.
 - Are checkout sessions created? Code exists in tenant hosted billing, but it is disabled by default because checkout/lifecycle flags are false.
 - Are billing portal sessions created? Code exists, but it is disabled by default and requires Stripe customer/subscription references.
-- Are invoices generated? No direct invoice creation route was found. Live subscription sync uses Stripe subscription behavior and may generate/send invoices if explicitly enabled.
+- Are invoices generated? Yes, landlord direct invoice code exists for approved Everbranch/Evergrove work, but the send action is disabled by default and requires explicit Stripe invoicing flags, tenant allowlisting, signed webhooks, and production readiness gates. Live subscription sync may also generate/send invoices if separately enabled.
 - Are payment links used? No Stripe Payment Links implementation found.
 - Are Stripe webhooks registered? A local webhook endpoint exists at `/webhooks/stripe/events`; Stripe Dashboard registration is external/manual.
 - Is any Stripe flow tenant-facing? Yes, `/billing/checkout` and `/billing/portal` exist, but are inert by default.
@@ -101,7 +112,7 @@ Answers from code inspection:
 | --- | --- | --- | --- | --- | --- |
 | A. Shopify App Store Billing / Shopify App Pricing | Merchants who install Everbranch through the Shopify App Store | Shopify App Pricing / Shopify Billing API | Not active | Partner Dashboard pricing setup, Shopify billing implementation, install/reinstall billing evidence, privacy webhook readiness, scope review | Do not route App Store merchant app charges through Stripe unless Shopify explicitly allows the distribution/billing lane. |
 | B. Stripe Direct Billing | Direct SaaS, non-Shopify tenants, custom module retainers, manual contracts, service work | Stripe Billing + Checkout/Portal if approved | Code exists but disabled by default | Provider/legal/product decision, checkout activation PR, tax/refund/cancellation/support evidence, tenant-boundary tests | Keep separate from App Store merchant billing. Require explicit flags, audit, and no accidental entitlement activation. |
-| C. Manual invoice / service billing | Early custom module discovery/build work, consulting, one-off service contracts | Manual invoice or operator-managed Stripe outside tenant self-serve | Manual only | Operator SOP, quote/invoice workflow, approval states, audit trail | Custom requests do not create modules, invoices, quotes, or entitlements automatically. |
+| C. Direct Stripe invoice / service billing | Early implementation work, supplemental/milestone charges, consulting, one-off service contracts | Stripe hosted invoice sent by landlord operator | Code exists but disabled by default | Operator approval record, tenant allowlist, Stripe keys/webhook, tax/Relay gates, invoice lifecycle tests | Customer payment action is required. Do not convert Shopify/third-party expenses into Everbranch charges or grant access from invoice payment. |
 | D. Free/internal/demo tenants | Modern Forestry/internal/staging/demo tenants | No automated billing | Active posture | Landlord plan/entitlement controls only | Keep Modern Forestry stable; comped/internal access must be explicit and auditable. |
 
 ## Shopify Billing Research Notes

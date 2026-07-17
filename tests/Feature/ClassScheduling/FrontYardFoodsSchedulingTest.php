@@ -1,10 +1,12 @@
 <?php
 
+use App\Models\Agreement;
 use App\Models\ClassEnrollment;
 use App\Models\ClassReminder;
 use App\Models\ClassSchedulingSetting;
 use App\Models\MarketingProfile;
 use App\Models\ScheduledClass;
+use App\Models\SubscriptionAuthorization;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleState;
@@ -34,7 +36,11 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->and(MarketingProfile::query()->forTenantId(4)->count())->toBe(6)
         ->and(MarketingProfile::query()->forTenantId(4)->where('normalized_phone', '!=', '8646165468')->exists())->toBeFalse()
         ->and(WorkspaceAsset::query()->forTenantId(4)->where('source', 'demo_seed')->count())->toBe(4)
-        ->and(WorkspaceAsset::query()->forTenantId(4)->where('metadata->demo_reference', true)->count())->toBe(4);
+        ->and(WorkspaceAsset::query()->forTenantId(4)->where('metadata->demo_reference', true)->count())->toBe(4)
+        ->and(Agreement::query()->forTenantId(4)->where('template_key', 'front_yard_foods_launch_partner')->count())->toBe(1)
+        ->and(Agreement::query()->forTenantId(4)->firstOrFail()->versions()->count())->toBe(1)
+        ->and(SubscriptionAuthorization::query()->forTenantId(4)->count())->toBe(0)
+        ->and($tenant->setupStatus()->firstOrFail()->billing_lane_interest)->toBe('undecided');
 
     $this->actingAs($john)
         ->get(route('class-scheduling.index', ['tenant' => $tenant->slug]))

@@ -4,8 +4,8 @@ require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashBalance;
-use App\Models\CandleCashReward;
 use App\Models\CandleCashRedemption;
+use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
 use App\Models\CatalogItemCost;
 use App\Models\CustomerBirthdayProfile;
@@ -1275,6 +1275,23 @@ test('manual candle cash reminder endpoint keeps sends scoped to the authenticat
     config()->set('marketing.email.from_email', 'rewards@theforestrystudio.com');
     config()->set('marketing.email.from_name', 'Modern Forestry');
     config()->set('services.sendgrid.api_key', 'sg-test-key');
+
+    TenantEmailSetting::query()->create([
+        'tenant_id' => 101,
+        'email_provider' => 'sendgrid',
+        'email_enabled' => true,
+        'from_name' => 'Retail Tenant',
+        'from_email' => 'rewards@retail-tenant.example',
+        'reply_to_email' => 'support@retail-tenant.example',
+        'provider_status' => 'configured',
+        'provider_config' => [
+            'api_key' => 'sg-retail-tenant-key',
+            'sender_mode' => 'single_sender',
+            'verified_sender_email' => 'rewards@retail-tenant.example',
+            'tracking_enabled' => true,
+        ],
+        'analytics_enabled' => true,
+    ]);
 
     config()->set('services.shopify.stores.wholesale.shop', 'other-shop.myshopify.com');
     config()->set('services.shopify.stores.wholesale.client_id', 'shopify-wholesale-client-id');

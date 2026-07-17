@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\SubscriptionAuthorization;
 use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantAccessProfile;
@@ -20,8 +21,8 @@ class StripeCommercialFulfillmentService
         protected LandlordCommercialConfigService $commercialConfigService,
         protected LandlordOperatorActionAuditService $auditService,
         protected TenantCommercialExperienceService $experienceService,
-    ) {
-    }
+        protected AgreementBillingActivationGuard $agreementGuard,
+    ) {}
 
     /**
      * Reconcile Stripe-confirmed billing state into canonical local commercial access.
@@ -92,6 +93,21 @@ class StripeCommercialFulfillmentService
             ];
         }
 
+        $subscriptionReference = trim((string) ($stripe['subscription_reference'] ?? ''));
+        $agreementAuthorization = $subscriptionReference !== ''
+            ? SubscriptionAuthorization::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('provider', 'stripe')->where('provider_subscription_id', $subscriptionReference)->first()
+            : null;
+        if ($agreementAuthorization && ! $subscriptionInactive) {
+            $agreementGate = $this->agreementGuard->evaluateForFulfillment($agreementAuthorization);
+            if (! $agreementGate['allowed']) {
+                return [
+                    'ok' => false, 'status' => 'blocked_agreement_billing_gate', 'tenant_id' => $tenantId,
+                    'plan_key' => null, 'addon_keys' => [], 'state_hash' => null,
+                    'message' => 'Agreement billing requirements are incomplete: '.implode(', ', $agreementGate['reasons']),
+                ];
+            }
+        }
+
         $desiredPlanKey = $this->nullableKey($stripe['confirmed_plan_key'] ?? null)
             ?? $this->nullableKey($stripe['checkout_plan_key'] ?? null)
             ?? $this->nullableKey($stripe['preferred_plan_key'] ?? null);
@@ -127,7 +143,6 @@ class StripeCommercialFulfillmentService
             static fn (string $addonKey): bool => in_array($addonKey, $eligibleAddons, true)
         ));
 
-        $subscriptionReference = trim((string) ($stripe['subscription_reference'] ?? ''));
         $customerReference = trim((string) ($stripe['customer_reference'] ?? ''));
         $checkoutSessionId = trim((string) ($stripe['checkout_session_id'] ?? ''));
 

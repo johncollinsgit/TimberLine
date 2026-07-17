@@ -101,6 +101,31 @@ class Tenant extends Model
         return $this->hasOne(ClassSchedulingSetting::class);
     }
 
+    public function agreements(): HasMany
+    {
+        return $this->hasMany(Agreement::class);
+    }
+
+    public function subscriptionAuthorizations(): HasMany
+    {
+        return $this->hasMany(SubscriptionAuthorization::class);
+    }
+
+    public function billingReceipts(): HasMany
+    {
+        return $this->hasMany(TenantBillingReceipt::class);
+    }
+
+    public function billingOrders(): HasMany
+    {
+        return $this->hasMany(TenantBillingOrder::class);
+    }
+
+    public function directInvoices(): HasMany
+    {
+        return $this->hasMany(TenantDirectInvoice::class);
+    }
+
     public function moduleEntitlements(): HasMany
     {
         return $this->hasMany(TenantModuleEntitlement::class);
