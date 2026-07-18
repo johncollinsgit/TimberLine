@@ -18,6 +18,7 @@ class TenantDirectInvoice extends Model
         'evergrove_implementation',
         'evergrove_supplemental_work',
         'evergrove_milestone',
+        'discount',
     ];
 
     protected $guarded = [];

@@ -64,8 +64,12 @@ class DirectInvoiceManagementService
             }
             $quantity = max(1, (int) ($line['quantity'] ?? 1));
             $unitAmount = $this->cents($line['unit_amount'] ?? null);
-            if ($unitAmount < 1) {
-                throw new InvalidArgumentException('Invoice line amounts must be greater than zero.');
+            $isDiscount = $category === 'discount';
+            if ($isDiscount && $unitAmount >= 0) {
+                throw new InvalidArgumentException('Discount line amounts must be negative.');
+            }
+            if (! $isDiscount && $unitAmount < 1) {
+                throw new InvalidArgumentException('Charge line amounts must be greater than zero.');
             }
 
             return [
@@ -76,11 +80,15 @@ class DirectInvoiceManagementService
                 'unit_amount_cents' => $unitAmount,
                 'amount_cents' => $quantity * $unitAmount,
                 'frequency' => 'one_time',
-                'tax_treatment' => 'stripe_determined',
+                'tax_treatment' => $isDiscount ? 'non_taxable_adjustment' : 'stripe_determined',
             ];
         })->values()->all();
         if ($lines === []) {
             throw new InvalidArgumentException('At least one invoice line is required.');
+        }
+        $subtotalCents = (int) collect($lines)->sum('amount_cents');
+        if ($subtotalCents < 1) {
+            throw new InvalidArgumentException('Discounts must leave a positive invoice total.');
         }
 
         return [
@@ -100,7 +108,7 @@ class DirectInvoiceManagementService
             'memo' => trim((string) ($input['memo'] ?? '')) ?: null,
             'footer' => trim((string) ($input['footer'] ?? '')) ?: null,
             'line_items' => $lines,
-            'authorized_subtotal_cents' => (int) collect($lines)->sum('amount_cents'),
+            'authorized_subtotal_cents' => $subtotalCents,
             'metadata' => ['pricing_source' => 'landlord_approved_draft', 'provider_tax_authority' => 'stripe'],
         ];
     }
@@ -108,13 +116,15 @@ class DirectInvoiceManagementService
     protected function cents(mixed $value): int
     {
         $normalized = trim((string) $value);
-        if (! preg_match('/^\d+(?:\.\d{1,2})?$/', $normalized)) {
+        if (! preg_match('/^-?\d+(?:\.\d{1,2})?$/', $normalized)) {
             throw new InvalidArgumentException('Amounts must use no more than two decimal places.');
         }
 
-        [$whole, $decimal] = array_pad(explode('.', $normalized, 2), 2, '');
+        $negative = str_starts_with($normalized, '-');
+        [$whole, $decimal] = array_pad(explode('.', ltrim($normalized, '-'), 2), 2, '');
+        $cents = ((int) $whole * 100) + (int) str_pad($decimal, 2, '0');
 
-        return ((int) $whole * 100) + (int) str_pad($decimal, 2, '0');
+        return $negative ? -$cents : $cents;
     }
 
     /** @return array<string,mixed> */

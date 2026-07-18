@@ -77,6 +77,64 @@ test('landlord creates a tenant-scoped draft while Shopify and third-party lines
     expect(LandlordOperatorAction::query()->where('action_type', 'tenant_billing.direct_invoice.create')->where('tenant_id', $tenant->id)->exists())->toBeTrue();
 });
 
+test('landlord can show a standard rate and a separate discount on a direct invoice', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $payload = directInvoicePayload(['lines' => [
+        ['category' => 'evergrove_supplemental_work', 'description' => 'Hours of work', 'quantity' => 3, 'unit_amount' => '50.00'],
+        ['category' => 'discount', 'description' => 'Courtesy rate discount', 'quantity' => 1, 'unit_amount' => '-45.00'],
+    ]]);
+
+    $this->actingAs($admin)->post(route('landlord.invoices.store', $tenant), $payload)->assertRedirect();
+
+    $invoice = TenantDirectInvoice::query()->sole();
+    expect($invoice->authorized_subtotal_cents)->toBe(10500)
+        ->and($invoice->line_items[0]['amount_cents'])->toBe(15000)
+        ->and($invoice->line_items[1]['amount_cents'])->toBe(-4500)
+        ->and($invoice->line_items[1]['tax_treatment'])->toBe('non_taxable_adjustment');
+
+    $this->actingAs($admin)->get(route('landlord.invoices.show', [$tenant, $invoice]))
+        ->assertOk()
+        ->assertSee('$150.00')
+        ->assertSee('Discount −$45.00')
+        ->assertSee('$105.00')
+        ->assertSee('line-through', false);
+
+    $this->actingAs($admin)->post(route('landlord.invoices.store', $tenant), directInvoicePayload(['lines' => [
+        ['category' => 'discount', 'description' => 'Invalid discount', 'quantity' => 1, 'unit_amount' => '45.00'],
+    ]]))->assertSessionHasErrors('lines.0.unit_amount');
+});
+
+test('Stripe receives the discount as a negative invoice item', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $invoice = app(DirectInvoiceManagementService::class)->createDraft($tenant, directInvoicePayload(['lines' => [
+        ['category' => 'evergrove_supplemental_work', 'description' => 'Hours of work', 'quantity' => 3, 'unit_amount' => '50.00'],
+        ['category' => 'discount', 'description' => 'Courtesy rate discount', 'quantity' => 1, 'unit_amount' => '-45.00'],
+    ]]), null);
+
+    Http::fakeSequence()
+        ->push(['id' => 'cus_discount'])
+        ->push(['id' => 'in_discount'])
+        ->push(['id' => 'ii_charge'])
+        ->push(['id' => 'ii_discount'])
+        ->push(['id' => 'in_discount', 'status' => 'open', 'total' => 10500, 'amount_due' => 10500])
+        ->push(['id' => 'in_discount', 'status' => 'open', 'total' => 10500, 'amount_due' => 10500]);
+
+    $result = app(\App\Services\Billing\DirectStripeInvoiceService::class)->send($invoice, null);
+    $amounts = [];
+    Http::assertSent(function (Request $request) use (&$amounts): bool {
+        if (str_ends_with($request->url(), '/v1/invoiceitems')) {
+            $amounts[] = (int) $request->data()['amount'];
+        }
+
+        return true;
+    });
+
+    expect($result['ok'])->toBeTrue()
+        ->and($amounts)->toBe([15000, -4500])
+        ->and($invoice->fresh()->provider_total_cents)->toBe(10500);
+});
+
 test('sending uses only the stored snapshot and creates a Stripe hosted invoice with card and ACH', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
