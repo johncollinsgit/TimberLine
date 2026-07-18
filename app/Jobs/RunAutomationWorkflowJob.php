@@ -8,15 +8,13 @@ use App\Services\Automation\AutomationWorkflowException;
 use App\Services\Automation\WorkflowAutomationReadinessService;
 use App\Services\Automation\WorkflowProductService;
 use App\Support\Tenancy\TenantContext;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 
-class RunAutomationWorkflowJob implements ShouldBeUnique, ShouldQueue
+class RunAutomationWorkflowJob implements ShouldQueue
 {
     use Queueable;
-
-    public int $uniqueFor = 900;
 
     public int $tries = 4;
 
@@ -29,9 +27,14 @@ class RunAutomationWorkflowJob implements ShouldBeUnique, ShouldQueue
         public ?int $actorUserId = null,
     ) {}
 
-    public function uniqueId(): string
+    /** @return array<int,object> */
+    public function middleware(): array
     {
-        return 'automation-workflow:'.$this->workflowId;
+        return [
+            (new WithoutOverlapping('automation-workflow:'.$this->workflowId))
+                ->releaseAfter(30)
+                ->expireAfter(900),
+        ];
     }
 
     public function handle(WorkflowProductService $service, WorkflowAutomationReadinessService $readiness, TenantContext $tenantContext): void

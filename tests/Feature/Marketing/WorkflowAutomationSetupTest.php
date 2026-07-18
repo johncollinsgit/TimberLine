@@ -582,3 +582,80 @@ test('google calendar oauth callback stores refresh token and auto-selects the o
         ->assertSeeText('Google Calendar account')
         ->assertSeeText('Active');
 });
+
+test('legacy google connection tests keep the refresh token paired with its issuing oauth client', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Legacy Calendar', 'slug' => 'legacy-calendar']);
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'workflow_automations',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'entitlement',
+        'price_source' => 'test',
+    ]);
+    $user = User::factory()->create(['role' => 'marketing_manager', 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'marketing_manager']);
+
+    config()->set('services.google_calendar.oauth_client_id', 'shared-google-client');
+    config()->set('services.google_calendar.oauth_client_secret', 'shared-google-secret');
+    TenantMarketingSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'key' => 'workflow_automation_asana_google_calendar',
+        'description' => 'Legacy Google connection',
+        'value' => [
+            'workflow_key' => 'asana_to_google_calendar',
+            'action' => ['calendar_id' => 'legacy-calendar@example.com'],
+            'credentials' => [
+                'google_calendar_client_id_encrypted' => Crypt::encryptString('legacy-google-client'),
+                'google_calendar_client_secret_encrypted' => Crypt::encryptString('legacy-google-secret'),
+                'google_calendar_refresh_token_encrypted' => Crypt::encryptString('legacy-google-refresh'),
+            ],
+        ],
+    ]);
+    $legacy = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'google_calendar',
+        'external_account_id' => '',
+        'external_account_label' => 'Migrated Google account',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'refresh_token' => 'legacy-google-refresh',
+        'metadata' => ['credential_source' => 'legacy_migration'],
+        'connected_at' => now()->subDay(),
+    ]);
+    $retiredDuplicate = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'google_calendar',
+        'external_account_id' => 'retired-google-account',
+        'external_account_label' => 'Retired Google account',
+        'status' => IntegrationConnection::STATUS_DISCONNECTED,
+        'connected_at' => now()->subDays(2),
+    ]);
+
+    Http::fake([
+        'https://oauth2.googleapis.com/token' => Http::response([
+            'access_token' => 'legacy-google-access',
+            'expires_in' => 3600,
+            'token_type' => 'Bearer',
+        ]),
+        'https://www.googleapis.com/calendar/v3/users/me/calendarList*' => Http::response([
+            'items' => [[
+                'id' => 'legacy-calendar@example.com',
+                'summary' => 'Legacy operations calendar',
+                'accessRole' => 'owner',
+            ]],
+        ]),
+    ]);
+
+    $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
+        ->post(route('workflows.connections.google.test'))
+        ->assertRedirect()
+        ->assertSessionHas('toast', fn (array $toast): bool => ($toast['style'] ?? null) === 'success');
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://oauth2.googleapis.com/token'
+        && $request['client_id'] === 'legacy-google-client'
+        && $request['client_secret'] === 'legacy-google-secret'
+        && $request['refresh_token'] === 'legacy-google-refresh');
+    expect($legacy->fresh()->last_error_code)->toBeNull()
+        ->and($retiredDuplicate->fresh()->status)->toBe(IntegrationConnection::STATUS_DISCONNECTED);
+});

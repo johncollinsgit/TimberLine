@@ -26,7 +26,7 @@ class GoogleCalendarWorkflowConnectionService
     public function status(int $tenantId, string $workflowKey = self::WORKFLOW_KEY): array
     {
         $workflowKey = $this->normalizeWorkflowKey($workflowKey);
-        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
+        $credentials = $this->connectionCredentials($tenantId, $workflowKey);
         $redirectUri = $this->redirectUri();
         $oauthReady = $credentials['google_calendar_client_id'] !== null
             && $credentials['google_calendar_client_secret'] !== null
@@ -278,7 +278,7 @@ class GoogleCalendarWorkflowConnectionService
             }
         }
 
-        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
+        $credentials = $this->connectionCredentials($tenantId, $workflowKey);
         $accessToken = $this->refreshAccessToken(
             clientId: $credentials['google_calendar_client_id'] ?? null,
             clientSecret: $credentials['google_calendar_client_secret'] ?? null,
@@ -298,7 +298,7 @@ class GoogleCalendarWorkflowConnectionService
      */
     public function testCalendarWrite(int $tenantId, string $calendarId, string $workflowKey = self::WORKFLOW_KEY): array
     {
-        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $this->normalizeWorkflowKey($workflowKey));
+        $credentials = $this->connectionCredentials($tenantId, $this->normalizeWorkflowKey($workflowKey));
         $accessToken = $this->refreshAccessToken(
             $credentials['google_calendar_client_id'] ?? null,
             $credentials['google_calendar_client_secret'] ?? null,
@@ -342,6 +342,30 @@ class GoogleCalendarWorkflowConnectionService
     protected function redirectUri(): ?string
     {
         return $this->nullableString(config('services.google_calendar.redirect_uri'));
+    }
+
+    /** @return array<string,mixed> */
+    protected function connectionCredentials(int $tenantId, string $workflowKey): array
+    {
+        $connection = IntegrationConnection::query()->forTenantId($tenantId)
+            ->where('provider', 'google_calendar')
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+        $usesSharedOAuth = data_get($connection?->metadata, 'credential_source') === 'shared_oauth';
+        $credentials = $this->workflowSettingsService->effectiveCredentials(
+            $tenantId,
+            $workflowKey,
+            preferLegacyOAuthClients: $connection !== null && ! $usesSharedOAuth,
+        );
+
+        if ($connection?->refresh_token) {
+            $credentials['google_calendar_refresh_token'] = $connection->refresh_token;
+            $credentials['sources']['google_calendar_refresh_token'] = 'connection';
+        }
+
+        return $credentials;
     }
 
     /**
