@@ -22,8 +22,8 @@ test('legacy cutover preserves cursor and destination links and activates only a
         'entitlement_source' => 'entitlement',
         'price_source' => 'test',
     ]);
-    config()->set('services.google_calendar.oauth_client_id', 'google-client');
-    config()->set('services.google_calendar.oauth_client_secret', 'google-secret');
+    config()->set('services.google_calendar.oauth_client_id', 'shared-google-client');
+    config()->set('services.google_calendar.oauth_client_secret', 'shared-google-secret');
     config()->set('services.asana.api_base', 'https://app.asana.com/api/1.0');
 
     TenantMarketingSetting::query()->create([
@@ -36,6 +36,8 @@ test('legacy cutover preserves cursor and destination links and activates only a
             'action' => ['calendar_id' => 'modern-calendar', 'timezone' => 'America/New_York'],
             'credentials' => [
                 'asana_personal_access_token_encrypted' => Crypt::encryptString('asana-token'),
+                'google_calendar_client_id_encrypted' => Crypt::encryptString('legacy-google-client'),
+                'google_calendar_client_secret_encrypted' => Crypt::encryptString('legacy-google-secret'),
                 'google_calendar_refresh_token_encrypted' => Crypt::encryptString('google-refresh'),
             ],
         ],
@@ -91,4 +93,8 @@ test('legacy cutover preserves cursor and destination links and activates only a
         ->and(AutomationWorkflowAuditEvent::query()->forAllTenants()->where('automation_workflow_id', $workflow->id)->where('event_type', 'legacy_cutover_completed')->exists())->toBeTrue();
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'PATCH' && str_contains($request->url(), '/events/existing-event'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'oauth2.googleapis.com/token')
+        && $request['client_id'] === 'legacy-google-client'
+        && $request['client_secret'] === 'legacy-google-secret'
+        && $request['refresh_token'] === 'google-refresh');
 });

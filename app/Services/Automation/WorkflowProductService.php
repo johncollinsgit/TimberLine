@@ -272,7 +272,15 @@ class WorkflowProductService
     protected function runtimeDefinition(AutomationWorkflow $workflow, array $definition): array
     {
         $base = (array) config('automation_workflows.workflows.asana_to_google_calendar', []);
-        $credentials = $this->legacySettings->effectiveCredentials((int) $workflow->tenant_id);
+        $isLegacyMigration = AutomationWorkflowAuditEvent::query()->forAllTenants()
+            ->where('tenant_id', $workflow->tenant_id)
+            ->where('automation_workflow_id', $workflow->id)
+            ->where('event_type', 'legacy_migrated')
+            ->exists();
+        $credentials = $this->legacySettings->effectiveCredentials(
+            (int) $workflow->tenant_id,
+            preferLegacyOAuthClients: $isLegacyMigration,
+        );
         $connections = IntegrationConnection::query()->forTenantId((int) $workflow->tenant_id)
             ->whereIn('provider', ['asana', 'google_calendar'])
             ->where('status', IntegrationConnection::STATUS_CONNECTED)
