@@ -26,6 +26,9 @@
             @endforeach
         </div>
     </div>
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+        To show a standard rate with a courtesy reduction, add the regular charge first, then add a <strong>Discount</strong> line with a negative unit price. Example: 3 × $50.00 and a −$45.00 discount produces $105.00 due.
+    </div>
     <p class="text-xs text-zinc-500">Stripe receives only the saved server-side snapshot. Shopify plans, Shopify processing fees, and third-party app subscriptions stay out of these lines.</p>
     <label class="block text-sm font-medium">Invoice memo<textarea name="memo" rows="3" maxlength="1000" class="mt-1 block w-full rounded-lg border-zinc-300">{{ old('memo', $invoice->memo) }}</textarea></label><label class="block text-sm font-medium">Invoice footer<textarea name="footer" rows="2" maxlength="1000" class="mt-1 block w-full rounded-lg border-zinc-300">{{ old('footer', $invoice->footer) }}</textarea></label>
     <div class="flex justify-end gap-3"><a href="{{ route('landlord.invoices.index', ['tenant_id' => $tenant->id]) }}" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Cancel</a><button class="rounded-lg bg-zinc-950 px-4 py-2 text-sm font-semibold text-white">Save draft</button></div>

@@ -10,7 +10,9 @@ use App\Services\Billing\DirectStripeInvoiceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class LandlordDirectInvoiceController extends Controller
@@ -43,7 +45,7 @@ class LandlordDirectInvoiceController extends Controller
     public function store(Request $request, Tenant $tenant, DirectInvoiceManagementService $management): RedirectResponse
     {
         Gate::authorize('manage-landlord-commercial');
-        $invoice = $management->createDraft($tenant, $request->validate($this->rules()), $request->user()?->id);
+        $invoice = $management->createDraft($tenant, $this->validated($request), $request->user()?->id);
 
         return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with('status', 'Invoice draft created. Review it before sending.');
     }
@@ -68,7 +70,7 @@ class LandlordDirectInvoiceController extends Controller
     public function update(Request $request, Tenant $tenant, TenantDirectInvoice $invoice, DirectInvoiceManagementService $management): RedirectResponse
     {
         Gate::authorize('manage-landlord-commercial');
-        $invoice = $management->updateDraft($this->scoped($tenant, $invoice), $request->validate($this->rules()), $request->user()?->id);
+        $invoice = $management->updateDraft($this->scoped($tenant, $invoice), $this->validated($request), $request->user()?->id);
 
         return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with('status', 'Invoice draft updated.');
     }
@@ -116,7 +118,35 @@ class LandlordDirectInvoiceController extends Controller
             'lines.*.category' => ['required', Rule::in(TenantDirectInvoice::LINE_CATEGORIES)],
             'lines.*.description' => ['required', 'string', 'max:250'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:1000'],
-            'lines.*.unit_amount' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:999999.99'],
+            'lines.*.unit_amount' => ['required', 'numeric', 'decimal:0,2', 'min:-999999.99', 'max:999999.99'],
         ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function validated(Request $request): array
+    {
+        $validator = Validator::make($request->all(), $this->rules());
+        $validator->after(function ($validator) use ($request): void {
+            foreach ((array) $request->input('lines', []) as $index => $line) {
+                if (! is_array($line) || ! is_numeric($line['unit_amount'] ?? null)) {
+                    continue;
+                }
+
+                $category = strtolower(trim((string) ($line['category'] ?? '')));
+                $unitAmount = (float) $line['unit_amount'];
+                if ($category === 'discount' && $unitAmount >= 0) {
+                    $validator->errors()->add("lines.{$index}.unit_amount", 'Discount amounts must be negative.');
+                }
+                if ($category !== 'discount' && $unitAmount <= 0) {
+                    $validator->errors()->add("lines.{$index}.unit_amount", 'Charge amounts must be greater than zero.');
+                }
+            }
+        });
+
+        if ($validator->fails()) {
+            throw new ValidationException($validator);
+        }
+
+        return $validator->validated();
     }
 }
