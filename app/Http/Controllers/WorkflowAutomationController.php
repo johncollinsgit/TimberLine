@@ -343,21 +343,32 @@ class WorkflowAutomationController extends Controller
     protected function testConnection(Request $request, string $provider, callable $test, string $message): RedirectResponse
     {
         $tenantId = $this->tenantId($request);
+        $connection = IntegrationConnection::query()->forTenantId($tenantId)
+            ->where('provider', $provider)
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->where(function ($query): void {
+                $query->whereNotNull('access_token')
+                    ->orWhereNotNull('refresh_token')
+                    ->orWhereNotNull('external_account_secret');
+            })
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
         try {
             $options = $test($tenantId);
-            IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenantId)->where('provider', $provider)->update([
+            $connection?->forceFill([
                 'status' => IntegrationConnection::STATUS_CONNECTED,
                 'last_synced_at' => now(),
                 'last_error_code' => null,
                 'last_error_message' => null,
                 'last_error_at' => null,
-            ]);
+            ])->save();
         } catch (\Throwable $exception) {
-            IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenantId)->where('provider', $provider)->update([
+            $connection?->forceFill([
                 'last_error_code' => 'connection_test_failed',
                 'last_error_message' => 'Connection test failed. Reconnect the account and try again.',
                 'last_error_at' => now(),
-            ]);
+            ])->save();
 
             return back()->with('toast', ['style' => 'warning', 'message' => 'Connection test failed. Reconnect the account and try again.']);
         }

@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Automation\AutomationWorkflowException;
 use App\Services\Automation\TenantWorkflowAutomationSettingsService;
 use App\Services\Automation\WorkflowProductService;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Queue;
 
@@ -181,6 +182,9 @@ test('multiple workflows publish immutable versions and reuse tenant connections
     Queue::assertPushed(RunAutomationWorkflowJob::class, fn (RunAutomationWorkflowJob $job): bool => $job->workflowId === $first->id
         && $job->mode === 'manual'
         && $job->actorUserId === $user->id);
+    $queuedJob = new RunAutomationWorkflowJob($first->id, 'manual', $user->id);
+    expect($queuedJob->middleware())->toHaveCount(1)
+        ->and($queuedJob->middleware()[0])->toBeInstanceOf(WithoutOverlapping::class);
 
     $paused = $service->pauseForProvider($tenant->id, 'asana', $user);
     expect($paused)->toBe(1)->and($first->fresh()->status)->toBe(AutomationWorkflow::STATUS_PAUSED);
