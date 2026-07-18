@@ -162,6 +162,33 @@ test('automation recreates a remembered destination when google returns 404', fu
     Http::assertSent(fn (Request $request): bool => $request->method() === 'POST' && str_ends_with($request->url(), '/events'));
 });
 
+test('automation clears timed fields when updating an existing event to all day', function (): void {
+    AutomationWorkflowLink::query()->create([
+        'workflow_key' => 'asana_to_google_calendar',
+        'source_system' => 'asana_task',
+        'source_id' => '343049949',
+        'destination_system' => 'google_calendar_event',
+        'destination_id' => 'previously-timed-event',
+        'source_fingerprint' => 'outdated-timed-fingerprint',
+    ]);
+
+    Http::fake(function (Request $request) {
+        if ($request->method() === 'GET') {
+            return Http::response(['data' => [fakeAsanaTaskPayload()], 'next_page' => null]);
+        }
+
+        return Http::response(['id' => 'previously-timed-event']);
+    });
+
+    expect(Artisan::call('automation:run', ['--workflow' => 'asana_to_google_calendar']))->toBe(0)
+        ->and(Artisan::output())->toContain('updated=1');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'PATCH'
+        && str_contains($request->url(), 'previously-timed-event')
+        && $request['start'] === ['date' => '2026-06-02', 'dateTime' => null, 'timeZone' => null]
+        && $request['end'] === ['date' => '2026-06-03', 'dateTime' => null, 'timeZone' => null]);
+});
+
 test('automation keeps its cursor behind unresolved partial failures', function (): void {
     $cursor = '2026-05-31T10:00:00+00:00';
     AutomationWorkflowState::query()->create([
