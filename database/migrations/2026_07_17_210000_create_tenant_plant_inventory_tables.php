@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('tenant_plant_inventory_items', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
+            $table->foreignId('tenant_id');
             $table->string('name');
             $table->string('category')->nullable()->index();
             $table->string('sku')->nullable();
@@ -26,15 +26,16 @@ return new class extends Migration
             $table->string('status', 40)->default('active')->index();
             $table->timestamps();
 
+            $table->foreign('tenant_id', 'tpi_items_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
             $table->unique(['tenant_id', 'sku'], 'tenant_plant_inventory_items_tenant_sku_unique');
             $table->index(['tenant_id', 'status', 'category'], 'tenant_plant_inventory_items_scope_idx');
         });
 
         Schema::create('tenant_plant_inventory_adjustments', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-            $table->foreignId('plant_inventory_item_id')->constrained('tenant_plant_inventory_items')->cascadeOnDelete();
-            $table->foreignId('performed_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('tenant_id');
+            $table->foreignId('plant_inventory_item_id');
+            $table->foreignId('performed_by_user_id')->nullable();
             $table->string('adjustment_type', 40)->index();
             $table->integer('quantity_delta')->default(0);
             $table->integer('reserved_delta')->default(0);
@@ -46,6 +47,9 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
+            $table->foreign('tenant_id', 'tpi_adjustments_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+            $table->foreign('plant_inventory_item_id', 'tpi_adjustments_item_fk')->references('id')->on('tenant_plant_inventory_items')->cascadeOnDelete();
+            $table->foreign('performed_by_user_id', 'tpi_adjustments_actor_fk')->references('id')->on('users')->nullOnDelete();
             $table->index(['tenant_id', 'plant_inventory_item_id'], 'tenant_plant_adjustments_scope_idx');
         });
     }
