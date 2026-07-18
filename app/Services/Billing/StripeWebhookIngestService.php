@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\Agreement;
 use App\Models\StripeWebhookEvent;
 use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
@@ -24,6 +25,7 @@ class StripeWebhookIngestService
         protected TenantBillingSubscriptionLedger $subscriptionLedger,
         protected AgreementStripeWebhookService $agreementWebhooks,
         protected AgreementStripeScheduleService $agreementSchedules,
+        protected AgreementSandboxValidationEvidenceService $sandboxValidationEvidence,
         protected DirectStripeInvoiceWebhookService $directInvoiceWebhooks,
     ) {}
 
@@ -145,7 +147,8 @@ class StripeWebhookIngestService
             $stripeSubscription,
             $stripeObjectId,
             $eventCreatedAt,
-            $event
+            $event,
+            $livemode
         ): array {
             /** @var StripeWebhookEvent|null $row */
             $row = StripeWebhookEvent::query()
@@ -211,6 +214,62 @@ class StripeWebhookIngestService
                     'agreement_acceptance_id' => (string) $agreementOrder->agreement_acceptance_id,
                     'subscription_authorization_id' => (string) $agreementOrder->subscription_authorization_id,
                 ];
+
+                $sandboxType = $agreementOrder->agreement?->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION;
+                $validationSnapshot = data_get($agreementOrder->metadata, 'validation_only') === true;
+                if ($sandboxType !== $validationSnapshot || ($sandboxType && $livemode)) {
+                    $status = $sandboxType && $livemode
+                        ? 'ignored_sandbox_live_mode'
+                        : 'ignored_agreement_context_invalid';
+                    $row->forceFill([
+                        'status' => $status,
+                        'tenant_id' => $tenantId,
+                        'processed_at' => now(),
+                    ])->save();
+                    $this->auditService->record(
+                        tenantId: $tenantId,
+                        actorUserId: null,
+                        actionType: 'tenant_billing.sandbox_validation_rejected',
+                        status: 'ignored',
+                        targetType: 'tenant_billing_order',
+                        targetId: $agreementOrder->id,
+                        context: ['event_id' => $eventId, 'event_type' => $eventType, 'reason' => $status],
+                    );
+
+                    return ['status' => $status, 'tenant_id' => $tenantId, 'agreement_order_id' => (int) $agreementOrder->id];
+                }
+
+                if ($sandboxType) {
+                    $changed = $this->agreementWebhooks->handle(
+                        tenantId: $tenantId,
+                        eventId: $eventId,
+                        eventType: $eventType,
+                        object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
+                        metadata: $metadata,
+                    );
+                    $row->forceFill([
+                        'status' => $changed ? 'processed_validation' : 'processed_validation_no_change',
+                        'tenant_id' => $tenantId,
+                        'checkout_session_id' => $checkoutSessionId !== '' ? $checkoutSessionId : $row->checkout_session_id,
+                        'processed_at' => now(),
+                    ])->save();
+                    $this->auditService->record(
+                        tenantId: $tenantId,
+                        actorUserId: null,
+                        actionType: 'tenant_billing.sandbox_validation_webhook',
+                        status: $changed ? 'success' : 'noop',
+                        targetType: 'tenant_billing_order',
+                        targetId: $agreementOrder->id,
+                        context: ['event_id' => $eventId, 'event_type' => $eventType, 'validation_only' => true],
+                    );
+
+                    return [
+                        'status' => $changed ? 'processed_validation' : 'processed_validation_no_change',
+                        'tenant_id' => $tenantId,
+                        'agreement_order_id' => (int) $agreementOrder->id,
+                        'validation_only' => true,
+                    ];
+                }
             }
 
             $tenantId = (int) ($metadata['tenant_id'] ?? 0);
@@ -389,21 +448,28 @@ class StripeWebhookIngestService
         $resultStatus = (string) ($result['status'] ?? '');
         $canPostProcess = ! str_starts_with($resultStatus, 'ignored') && $resultStatus !== 'duplicate';
         $agreementOrderId = (int) ($result['agreement_order_id'] ?? 0);
+        $validationOnly = (bool) ($result['validation_only'] ?? false);
         $isAgreementContext = $agreementOrderId > 0 || ($metadata['purpose'] ?? null) === 'agreement_checkout';
         if ($canPostProcess && $tenantId > 0 && $eventType === 'checkout.session.completed' && $isAgreementContext) {
             $orderId = (int) ($result['agreement_order_id'] ?? ($metadata['billing_order_id'] ?? 0));
             $order = $orderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($orderId) : null;
-            if ($order) {
+            if ($order && (! $validationOnly || (! $livemode && str_starts_with((string) config('services.stripe.secret'), 'sk_test_')))) {
                 $this->agreementSchedules->configure($order);
             }
         }
         $shouldReconcileFulfillment = $canPostProcess && $tenantId > 0 && ($metadata['purpose'] ?? null) !== 'direct_invoice';
-        if ($canPostProcess && $isAgreementContext) {
+        if ($canPostProcess && $isAgreementContext && ! $validationOnly) {
             $billingOrderId = (int) ($result['agreement_order_id'] ?? ($metadata['billing_order_id'] ?? 0));
             $agreementOrder = $billingOrderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($billingOrderId) : null;
             $shouldReconcileFulfillment = $agreementOrder !== null
                 && filled($agreementOrder->provider_subscription_id)
                 && collect((array) $agreementOrder->line_items)->contains(fn (mixed $line): bool => is_array($line) && ($line['payment_timing'] ?? '') === 'recurring_current');
+        }
+        if ($canPostProcess && $validationOnly && $agreementOrderId > 0) {
+            $validationOrder = TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($agreementOrderId);
+            if ($validationOrder) {
+                $this->sandboxValidationEvidence->recordIfComplete($validationOrder, $eventId, $eventType);
+            }
         }
         if ($shouldReconcileFulfillment) {
             try {

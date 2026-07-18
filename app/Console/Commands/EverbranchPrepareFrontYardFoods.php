@@ -27,6 +27,7 @@ class EverbranchPrepareFrontYardFoods extends Command
         {--implementation-fee= : Agreed Shopify migration and implementation amount in dollars}
         {--implementation-due-on-acceptance= : Implementation amount due on acceptance in dollars}
         {--implementation-due-before-launch= : Implementation amount due before launch in dollars}
+        {--sandbox-agreement : Create a fresh TEST MODE validation agreement without changing the client agreement}
         {--send-agreement : Rotate proposal access and print the one-time password}
         {--agreement-password= : Optional 10+ character proposal password used only when sending}';
 
@@ -49,6 +50,22 @@ class EverbranchPrepareFrontYardFoods extends Command
         TenantSetupStatusService $setupStatuses,
         AgreementManagementService $agreements,
     ): int {
+        $sandboxAgreement = (bool) $this->option('sandbox-agreement');
+        if ($sandboxAgreement && ! (bool) $this->option('send-agreement')) {
+            $this->error('--sandbox-agreement must be combined with --send-agreement so each disposable agreement has one explicit test link.');
+
+            return self::FAILURE;
+        }
+        if ($sandboxAgreement && collect([
+            $this->option('implementation-fee'),
+            $this->option('implementation-due-on-acceptance'),
+            $this->option('implementation-due-before-launch'),
+        ])->contains(fn (mixed $value): bool => trim((string) $value) !== '')) {
+            $this->error('Sandbox validation always uses the fixed $299 + $59/month checkout and cannot accept implementation pricing.');
+
+            return self::FAILURE;
+        }
+
         $email = strtolower(trim((string) $this->option('john-email')));
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->error('Invalid --john-email value.');
@@ -146,12 +163,17 @@ class EverbranchPrepareFrontYardFoods extends Command
         try {
             $tenant = Tenant::query()->findOrFail((int) $result['tenant_id']);
             $actorId = User::query()->where('email', $email)->value('id');
-            $agreement = $agreements->prepareFrontYardFoods($tenant, $actorId ? (int) $actorId : null, $implementationFee, $implementationOnAcceptance, $implementationBeforeLaunch);
+            $agreement = $sandboxAgreement
+                ? $agreements->createFrontYardFoodsSandboxValidation($tenant, $actorId ? (int) $actorId : null)
+                : $agreements->prepareFrontYardFoods($tenant, $actorId ? (int) $actorId : null, $implementationFee, $implementationOnAcceptance, $implementationBeforeLaunch);
             $result['agreement_id'] = (int) $agreement->id;
             $result['agreement_status'] = (string) $agreement->status;
             $result['agreement_version'] = (int) $agreement->currentVersion?->version_number;
             $result['agreement_content_hash'] = (string) $agreement->currentVersion?->content_hash;
-            $result['billing_activation'] = 'disabled_until_acceptance_billing_lane_decision_and_provider_verification';
+            $result['agreement_mode'] = $sandboxAgreement ? 'sandbox_validation' : 'client_services';
+            $result['billing_activation'] = $sandboxAgreement
+                ? 'validation_only_no_entitlement_or_workspace_access'
+                : 'disabled_until_acceptance_billing_lane_decision_and_provider_verification';
 
             if ((bool) $this->option('send-agreement')) {
                 $access = $agreements->send($agreement, $actorId ? (int) $actorId : null, $this->option('agreement-password') ?: null);

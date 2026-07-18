@@ -48,7 +48,10 @@ Direct invoice note: the July 17, 2026 smoke test satisfies the first internal c
 ## Staged enablement
 
 1. Set the target flow flag true with test keys and an explicit tenant allowlist.
-2. For proposal Checkout, complete an accepted-proposal card test and ACH test. Confirm Stripe invoices and mirrored Everbranch receipts match. For Front Yard Foods, copy `docs/operations/evidence/front-yard-foods-proposal-checkout-smoke-template.md` into a dated evidence note and require `php artisan everbranch:front-yard-foods-readiness --require-paid` before sending a client link.
+2. For Front Yard proposal Checkout, create a disposable agreement with `php artisan everbranch:prepare-front-yard-foods --sandbox-agreement --send-agreement`. Complete card and ACH tests, then require `php artisan everbranch:front-yard-foods-readiness --stage=sandbox-paid --agreement-id=<id>`. Sandbox webhooks record the exact order, authorization, invoice, receipt, schedule, and a validation-only noop audit while bypassing tenant commercial state, subscription ledgers, entitlements, and workspace access.
+   - Cancel the test subscription/schedule after evidence capture and wait for `customer.subscription.deleted`.
+   - Switch to live keys only after Relay and tax evidence exists, rotate Laura's untouched real link, and require `php artisan everbranch:front-yard-foods-readiness --stage=pre-send` before sending it.
+   - After Laura's verified payment and operator workspace activation, require `php artisan everbranch:front-yard-foods-readiness --stage=post-payment`.
 3. For direct invoices, create a draft, send it through Stripe test mode, pay by card, test ACH pending-to-paid, void an open invoice, and replay webhook duplicates.
    - Completed internal card-paid direct invoice smoke test: 2026-07-17, Stripe invoice `GHPJWFCX-0001`.
 4. Configure live secrets, confirm the tax decision and Relay payout evidence, then repeat with an internal allowlisted tenant.

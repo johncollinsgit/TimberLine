@@ -6,6 +6,7 @@ use App\Models\Agreement;
 use App\Models\AgreementTermination;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class AgreementTerminationService
 {
@@ -13,6 +14,10 @@ class AgreementTerminationService
 
     public function request(Agreement $agreement, ?int $actorUserId, ?string $reason = null, ?\DateTimeInterface $effectiveAt = null): AgreementTermination
     {
+        if ($agreement->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION) {
+            throw new InvalidArgumentException('Sandbox validation agreements do not create client termination workflows.');
+        }
+
         return DB::transaction(function () use ($agreement, $actorUserId, $reason, $effectiveAt): AgreementTermination {
             $effective = $effectiveAt ? now()->parse($effectiveAt) : now()->addDays(30);
             $termination = AgreementTermination::query()->updateOrCreate(['agreement_id' => (int) $agreement->id], [

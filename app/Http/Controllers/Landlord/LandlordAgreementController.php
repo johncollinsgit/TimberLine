@@ -59,6 +59,7 @@ class LandlordAgreementController extends Controller
 
     public function edit(Agreement $agreement): View
     {
+        abort_if($agreement->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION, 409, 'Sandbox validation agreements are read-only.');
         abort_if(in_array($agreement->status, ['accepted', 'active', 'termination_pending', 'terminated'], true), 409, 'Accepted agreements are read-only. Create an amendment.');
 
         return view('landlord.agreements.edit', ['agreement' => $agreement->load('currentVersion')]);
@@ -66,6 +67,7 @@ class LandlordAgreementController extends Controller
 
     public function version(Request $request, Agreement $agreement, AgreementManagementService $management): RedirectResponse
     {
+        abort_if($agreement->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION, 409, 'Sandbox validation agreements cannot version the client agreement.');
         abort_if(in_array($agreement->status, ['accepted', 'active', 'termination_pending', 'terminated'], true), 409);
         $data = $request->validate($this->pricingRules(false));
         $management->prepareFrontYardFoods($agreement->tenant, $request->user()?->id, $this->cents($data['implementation_amount'] ?? null), $this->cents($data['due_on_acceptance'] ?? null), $this->cents($data['due_before_launch'] ?? null), $data['additional_scope'] ?? null);

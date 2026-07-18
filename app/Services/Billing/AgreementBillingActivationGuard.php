@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\Agreement;
 use App\Models\SubscriptionAuthorization;
 use App\Models\TenantBillingFulfillment;
 use App\Models\TenantBillingSubscription;
@@ -30,6 +31,10 @@ class AgreementBillingActivationGuard
     {
         $authorization->loadMissing(['agreement', 'acceptance']);
         $reasons = [];
+        if ($authorization->agreement?->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION
+            || data_get($authorization->metadata, 'validation_only') === true) {
+            $reasons[] = 'sandbox_validation_cannot_activate';
+        }
         if (! $authorization->acceptance || ! in_array($authorization->agreement?->status, ['active', 'termination_pending'], true)) {
             $reasons[] = 'accepted_active_agreement_required';
         }
