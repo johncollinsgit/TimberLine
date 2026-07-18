@@ -325,3 +325,166 @@ test('commerce draft settings reject connections and locations outside the tenan
         ->assertDontSee('owned-token')
         ->assertDontSee('calendar-token-that-must-not-render');
 });
+
+test('squarespace orders rotate access and create configurable delivery events', function (): void {
+    $tenant = commerceExecutionTenant('squarespace-commerce-execution');
+    $workflow = commerceExecutionWorkflow($tenant, 'squarespace_order_to_google_calendar');
+    config()->set('services.squarespace.oauth_client_id', 'squarespace-client');
+    config()->set('services.squarespace.oauth_client_secret', 'squarespace-secret');
+    config()->set('services.squarespace.token_url', 'https://login.squarespace.com/api/1/login/oauth/provider/tokens');
+    config()->set('services.squarespace.api_base', 'https://api.squarespace.com');
+    config()->set('services.squarespace.user_agent', 'Everbranch Order Calendar/1.0');
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'squarespace',
+        'external_account_id' => 'squarespace-account-hash',
+        'external_account_secret' => 'website-22',
+        'external_account_label' => 'Harbor Squarespace',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'expired-squarespace-access',
+        'refresh_token' => 'squarespace-refresh-1',
+        'expires_at' => now()->subMinute(),
+        'metadata' => ['site_url' => 'https://harbor.example'],
+        'connected_at' => now(),
+    ]);
+
+    Http::fake(function (Request $request) {
+        if ($request->url() === 'https://login.squarespace.com/api/1/login/oauth/provider/tokens') {
+            return Http::response([
+                'access_token' => 'squarespace-access-2',
+                'refresh_token' => 'squarespace-refresh-2',
+                'access_token_expires_at' => (string) now()->addMinutes(30)->getTimestamp(),
+            ]);
+        }
+        if (str_starts_with($request->url(), 'https://api.squarespace.com/1.0/commerce/orders')) {
+            return Http::response(['pagination' => ['hasNextPage' => false], 'result' => [[
+                'id' => 'ss-order-12', 'orderNumber' => '1204',
+                'createdOn' => '2026-07-18T14:00:00Z', 'modifiedOn' => '2026-07-18T16:00:00Z',
+                'paymentState' => 'PAID', 'fulfillmentStatus' => 'PENDING',
+                'customerEmail' => 'casey@example.com',
+                'shippingAddress' => ['firstName' => 'Casey', 'lastName' => 'Morgan', 'address1' => '44 Bay St', 'city' => 'Portland', 'state' => 'ME', 'postalCode' => '04101', 'countryCode' => 'US'],
+                'lineItems' => [['productName' => 'Celebration box', 'quantity' => 1]],
+                'grandTotal' => ['currency' => 'USD', 'value' => 72.50],
+                'formSubmission' => [['label' => 'Requested delivery date', 'value' => '2026-07-24T15:00:00Z']],
+            ]]]);
+        }
+        if ($request->method() === 'POST' && str_contains($request->url(), 'googleapis.com/calendar/v3')) {
+            return Http::response(['id' => 'squarespace-calendar-event']);
+        }
+
+        return Http::response(['error' => 'unexpected request'], 500);
+    });
+
+    $result = app(AutomationWorkflowEngine::class)->runDefinition('workflow:'.$workflow->id, [
+        'enabled' => true,
+        'tenant_id' => $tenant->id,
+        'automation_workflow_id' => $workflow->id,
+        'required_module' => 'workflow_automations',
+        'driver' => 'commerce_order_google_calendar',
+        'trigger' => ['provider' => 'squarespace', 'connection_id' => $connection->id, 'schedule_source' => 'delivery'],
+        'action' => [
+            'calendar_id' => 'delivery-calendar', 'timezone' => 'America/New_York',
+            'event_time_mode' => 'source_time', 'default_duration_minutes' => 45,
+            'presentation' => [
+                'title_template' => '{{source}} #{{order_number}} — {{customer_name}}',
+                'description_fields' => ['items', 'total'], 'location_source' => 'shipping_address',
+                'availability' => 'busy', 'visibility' => 'default', 'reminders' => 'default',
+                'cancelled_order_behavior' => 'mark_cancelled',
+            ],
+        ],
+        'credentials' => ['google_calendar_access_token' => 'google-access-token'],
+    ]);
+
+    expect($result['ok'])->toBeTrue()
+        ->and(data_get($result, 'counts.created'))->toBe(1)
+        ->and($connection->fresh()->access_token)->toBe('squarespace-access-2')
+        ->and($connection->fresh()->refresh_token)->toBe('squarespace-refresh-2');
+    Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.squarespace.com/1.0/commerce/orders')
+        && $request->hasHeader('Authorization', 'Bearer squarespace-access-2')
+        && $request->hasHeader('User-Agent', 'Everbranch Order Calendar/1.0'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'googleapis.com/calendar/v3')
+        && $request['summary'] === 'Squarespace #1204 — Casey Morgan'
+        && $request['start']['dateTime'] === '2026-07-24T11:00:00-04:00'
+        && $request['location'] === 'Casey Morgan, 44 Bay St, Portland, ME, 04101, US');
+});
+
+test('wix orders use app instance access and create all day pickup events', function (): void {
+    $tenant = commerceExecutionTenant('wix-commerce-execution');
+    $workflow = commerceExecutionWorkflow($tenant, 'wix_order_to_google_calendar');
+    config()->set('services.wix.app_id', 'wix-app');
+    config()->set('services.wix.client_secret', 'wix-secret');
+    config()->set('services.wix.token_url', 'https://www.wixapis.com/oauth2/token');
+    config()->set('services.wix.api_base', 'https://www.wixapis.com');
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'wix',
+        'external_account_id' => 'wix-account-hash',
+        'external_account_secret' => 'wix-instance-88',
+        'external_account_label' => 'Harbor Wix',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'expired-wix-access',
+        'expires_at' => now()->subMinute(),
+        'metadata' => ['site_url' => 'https://harbor-wix.example'],
+        'connected_at' => now(),
+    ]);
+
+    Http::fake(function (Request $request) {
+        if ($request->url() === 'https://www.wixapis.com/oauth2/token') {
+            return Http::response(['access_token' => 'wix-access-2', 'expires_in' => 14400]);
+        }
+        if ($request->url() === 'https://www.wixapis.com/ecom/v1/orders/search') {
+            return Http::response(['orders' => [[
+                'id' => 'wix-order-99', 'number' => '99', 'status' => 'APPROVED',
+                'paymentStatus' => 'PAID', 'fulfillmentStatus' => 'NOT_FULFILLED',
+                'createdDate' => '2026-07-18T14:00:00Z', 'updatedDate' => '2026-07-18T17:00:00Z',
+                'buyerInfo' => ['email' => 'riley@example.com'],
+                'lineItems' => [['quantity' => 2, 'productName' => ['original' => 'Picnic box']]],
+                'currency' => 'USD', 'priceSummary' => ['total' => ['amount' => '96.00']],
+                'businessLocation' => ['name' => 'Market counter'],
+                'shippingInfo' => ['title' => 'Store pickup', 'logistics' => [
+                    'deliveryTime' => '2026-07-27T16:00:00Z',
+                    'shippingDestination' => [
+                        'contactDetails' => ['firstName' => 'Riley', 'lastName' => 'Chen', 'phone' => '555-0100'],
+                        'address' => ['addressLine' => '8 Market St', 'city' => 'Boston', 'subdivision' => 'MA', 'postalCode' => '02108', 'country' => 'US'],
+                    ],
+                ]],
+            ]], 'metadata' => ['cursors' => ['next' => null]]]);
+        }
+        if ($request->method() === 'POST' && str_contains($request->url(), 'googleapis.com/calendar/v3')) {
+            return Http::response(['id' => 'wix-calendar-event']);
+        }
+
+        return Http::response(['error' => 'unexpected request'], 500);
+    });
+
+    $result = app(AutomationWorkflowEngine::class)->runDefinition('workflow:'.$workflow->id, [
+        'enabled' => true,
+        'tenant_id' => $tenant->id,
+        'automation_workflow_id' => $workflow->id,
+        'required_module' => 'workflow_automations',
+        'driver' => 'commerce_order_google_calendar',
+        'trigger' => ['provider' => 'wix', 'connection_id' => $connection->id, 'schedule_source' => 'pickup'],
+        'action' => [
+            'calendar_id' => 'pickup-calendar', 'timezone' => 'America/New_York', 'event_time_mode' => 'all_day',
+            'presentation' => [
+                'title_template' => '{{source}} #{{order_number}}',
+                'description_fields' => ['items', 'total'], 'location_source' => 'pickup_location',
+                'availability' => 'free', 'visibility' => 'default', 'reminders' => 'default',
+                'cancelled_order_behavior' => 'mark_cancelled',
+            ],
+        ],
+        'credentials' => ['google_calendar_access_token' => 'google-access-token'],
+    ]);
+
+    expect($result['ok'])->toBeTrue()
+        ->and(data_get($result, 'counts.created'))->toBe(1)
+        ->and($connection->fresh()->access_token)->toBe('wix-access-2');
+    Http::assertSent(fn (Request $request): bool => $request->url() === 'https://www.wixapis.com/ecom/v1/orders/search'
+        && $request->hasHeader('Authorization', 'Bearer wix-access-2')
+        && data_get($request->data(), 'search.filter.updatedDate.$gte') !== null);
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'googleapis.com/calendar/v3')
+        && $request['summary'] === 'Wix #99'
+        && $request['start']['date'] === '2026-07-27'
+        && $request['end']['date'] === '2026-07-28'
+        && str_contains((string) $request['location'], 'Market counter'));
+});

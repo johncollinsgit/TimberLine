@@ -141,7 +141,8 @@ return [
         'authorization_url' => env('SQUARESPACE_OAUTH_AUTHORIZATION_URL', 'https://login.squarespace.com/api/1/login/oauth/provider/authorize'),
         'token_url' => env('SQUARESPACE_OAUTH_TOKEN_URL', 'https://login.squarespace.com/api/1/login/oauth/provider/tokens'),
         'api_base' => env('SQUARESPACE_API_BASE', 'https://api.squarespace.com'),
-        'oauth_scopes' => env('SQUARESPACE_OAUTH_SCOPES', 'website.orders.read website.webhook_subscriptions.read_write'),
+        'oauth_scopes' => env('SQUARESPACE_OAUTH_SCOPES', 'website.orders.read'),
+        'user_agent' => env('SQUARESPACE_USER_AGENT', 'Everbranch Order Calendar/1.0'),
     ],
 
     'wix' => [
@@ -151,6 +152,7 @@ return [
         'redirect_uri' => env('WIX_OAUTH_REDIRECT_URI', $workflowCommerceRedirect('wix')),
         'token_url' => env('WIX_OAUTH_TOKEN_URL', 'https://www.wixapis.com/oauth2/token'),
         'api_base' => env('WIX_API_BASE', 'https://www.wixapis.com'),
+        'required_permission' => env('WIX_REQUIRED_PERMISSION', 'Read Orders'),
     ],
 
     'quickbooks' => [

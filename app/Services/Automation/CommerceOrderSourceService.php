@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class CommerceOrderSourceService
 {
-    public const LIVE_PROVIDERS = ['shopify', 'square'];
+    public const LIVE_PROVIDERS = ['shopify', 'square', 'squarespace', 'wix'];
 
     public function __construct(protected CommerceWorkflowConnectionService $connections) {}
 
@@ -30,9 +30,12 @@ class CommerceOrderSourceService
 
         $connection = $this->connections->connectionForTenant($tenantId, $connectionId, $provider);
 
-        return $provider === 'shopify'
-            ? $this->fetchShopify($connection, $modifiedSince, $pollLimit, $maxOrders)
-            : $this->fetchSquare($connection, $modifiedSince, $pollLimit, $maxOrders, $locationIds);
+        return match ($provider) {
+            'shopify' => $this->fetchShopify($connection, $modifiedSince, $pollLimit, $maxOrders),
+            'square' => $this->fetchSquare($connection, $modifiedSince, $pollLimit, $maxOrders, $locationIds),
+            'squarespace' => $this->fetchSquarespace($connection, $modifiedSince, $maxOrders),
+            'wix' => $this->fetchWix($connection, $modifiedSince, $pollLimit, $maxOrders),
+        };
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -179,6 +182,82 @@ GRAPHQL;
         return $orders;
     }
 
+    /** @return array<int,array<string,mixed>> */
+    protected function fetchSquarespace(IntegrationConnection $connection, CarbonImmutable $modifiedSince, int $maxOrders): array
+    {
+        $accessToken = $this->connections->accessToken($connection);
+        $endpoint = rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/commerce/orders';
+        $cursor = null;
+        $orders = [];
+
+        do {
+            $query = $cursor === null
+                ? [
+                    'modifiedAfter' => $modifiedSince->utc()->format('Y-m-d\TH:i:s.v\Z'),
+                    'modifiedBefore' => CarbonImmutable::now()->utc()->addMinute()->format('Y-m-d\TH:i:s.v\Z'),
+                    'paymentStates' => 'NOT_CHARGED,AUTHORIZED,PAID,PARTIALLY_PAID,REFUNDED',
+                ]
+                : ['cursor' => $cursor];
+            $response = Http::acceptJson()->withToken($accessToken)
+                ->withHeaders(['User-Agent' => (string) config('services.squarespace.user_agent', 'Everbranch Order Calendar/1.0')])
+                ->timeout(25)->retry(2, 300, throw: false)
+                ->get($endpoint, $query);
+            $payload = $this->decode($response, 'Squarespace orders fetch failed.');
+            foreach ((array) ($payload['result'] ?? []) as $order) {
+                if (! is_array($order)) {
+                    continue;
+                }
+                $orders[] = $this->normalizeSquarespace($order, (string) data_get($connection->metadata, 'site_url', ''));
+                if (count($orders) >= $maxOrders) {
+                    break 2;
+                }
+            }
+
+            $cursor = (bool) data_get($payload, 'pagination.hasNextPage', false)
+                ? trim((string) data_get($payload, 'pagination.nextPageCursor', '')) ?: null
+                : null;
+        } while ($cursor !== null);
+
+        return $orders;
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    protected function fetchWix(IntegrationConnection $connection, CarbonImmutable $modifiedSince, int $pollLimit, int $maxOrders): array
+    {
+        $accessToken = $this->connections->accessToken($connection);
+        $endpoint = rtrim((string) config('services.wix.api_base', 'https://www.wixapis.com'), '/').'/ecom/v1/orders/search';
+        $cursor = null;
+        $orders = [];
+
+        do {
+            $cursorPaging = ['limit' => min(100, max(1, $pollLimit))];
+            if ($cursor !== null) {
+                $cursorPaging['cursor'] = $cursor;
+            }
+            $response = Http::acceptJson()->asJson()->withToken($accessToken)
+                ->timeout(25)->retry(2, 300, throw: false)
+                ->post($endpoint, ['search' => [
+                    'filter' => ['updatedDate' => ['$gte' => $modifiedSince->utc()->toIso8601String()]],
+                    'sort' => [['fieldName' => 'updatedDate', 'order' => 'ASC']],
+                    'cursorPaging' => $cursorPaging,
+                ]]);
+            $payload = $this->decode($response, 'Wix orders fetch failed.');
+            foreach ((array) ($payload['orders'] ?? []) as $order) {
+                if (! is_array($order)) {
+                    continue;
+                }
+                $orders[] = $this->normalizeWix($order, (string) data_get($connection->metadata, 'site_url', ''));
+                if (count($orders) >= $maxOrders) {
+                    break 2;
+                }
+            }
+
+            $cursor = trim((string) data_get($payload, 'metadata.cursors.next', '')) ?: null;
+        } while ($cursor !== null);
+
+        return $orders;
+    }
+
     /** @return array<string,mixed> */
     protected function normalizeShopify(array $order, string $shop): array
     {
@@ -259,6 +338,94 @@ GRAPHQL;
         ];
     }
 
+    /** @return array<string,mixed> */
+    protected function normalizeSquarespace(array $order, string $siteUrl): array
+    {
+        $shipping = (array) ($order['shippingAddress'] ?? []);
+        $billing = (array) ($order['billingAddress'] ?? []);
+        $forms = array_values(array_filter((array) ($order['formSubmission'] ?? []), 'is_array'));
+        $fulfillments = array_values(array_filter((array) ($order['fulfillments'] ?? []), 'is_array'));
+        $fulfillmentStatus = strtoupper(trim((string) ($order['fulfillmentStatus'] ?? '')));
+        $cancelled = $fulfillmentStatus === 'CANCELED';
+        $orderNumber = trim((string) ($order['orderNumber'] ?? $order['externalOrderReference'] ?? $order['id'] ?? ''));
+
+        return [
+            'source_id' => trim((string) ($order['id'] ?? '')),
+            'order_number' => $orderNumber,
+            'updated_at' => (string) ($order['modifiedOn'] ?? ''),
+            'schedule' => [
+                'order_created' => $order['createdOn'] ?? null,
+                'fulfillment' => $order['fulfilledOn'] ?? data_get($fulfillments, '0.shipDate'),
+                'delivery' => $this->formDate($forms, ['delivery', 'deliver']),
+                'pickup' => $this->formDate($forms, ['pickup', 'pick up', 'collection']),
+            ],
+            'source' => 'Squarespace',
+            'customer_name' => trim(implode(' ', array_filter([$shipping['firstName'] ?? $billing['firstName'] ?? null, $shipping['lastName'] ?? $billing['lastName'] ?? null]))),
+            'customer_email' => trim((string) ($order['customerEmail'] ?? '')),
+            'customer_phone' => trim((string) ($shipping['phone'] ?? $billing['phone'] ?? '')),
+            'items' => $this->squarespaceItems((array) ($order['lineItems'] ?? [])),
+            'total' => $this->money(data_get($order, 'grandTotal.value'), data_get($order, 'grandTotal.currency')),
+            'status' => $cancelled ? 'Cancelled' : trim(implode(' · ', array_filter([
+                Str::headline((string) ($order['paymentState'] ?? '')),
+                Str::headline($fulfillmentStatus),
+            ]))),
+            'notes' => collect((array) ($order['internalNotes'] ?? []))->filter(fn (mixed $note): bool => is_array($note))->pluck('content')->filter()->implode("\n"),
+            'source_url' => rtrim($siteUrl, '/'),
+            'shipping_address' => $this->squarespaceAddress($shipping),
+            'billing_address' => $this->squarespaceAddress($billing),
+            'pickup_location' => trim((string) ($order['shippingOptionName'] ?? '')),
+            'cancelled' => $cancelled,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function normalizeWix(array $order, string $siteUrl): array
+    {
+        $shippingInfo = (array) ($order['shippingInfo'] ?? []);
+        $logistics = (array) ($shippingInfo['logistics'] ?? []);
+        $destination = (array) ($logistics['shippingDestination'] ?? $order['recipientInfo'] ?? []);
+        $contact = (array) ($destination['contactDetails'] ?? $shippingInfo['contactDetails'] ?? []);
+        $address = (array) ($destination['address'] ?? []);
+        $billingInfo = (array) ($order['billingInfo'] ?? []);
+        $billingAddress = (array) ($billingInfo['address'] ?? []);
+        $status = strtoupper(trim((string) ($order['status'] ?? '')));
+        $cancelled = in_array($status, ['CANCELED', 'CANCELLED'], true);
+        $deliveryTime = data_get($logistics, 'deliveryTimeSlot.from') ?? ($logistics['deliveryTime'] ?? null);
+
+        return [
+            'source_id' => trim((string) ($order['id'] ?? '')),
+            'order_number' => trim((string) ($order['number'] ?? $order['id'] ?? '')),
+            'updated_at' => (string) ($order['updatedDate'] ?? ''),
+            'schedule' => [
+                'order_created' => $order['purchasedDate'] ?? $order['createdDate'] ?? null,
+                'fulfillment' => $deliveryTime,
+                'delivery' => $deliveryTime,
+                'pickup' => $deliveryTime,
+            ],
+            'source' => 'Wix',
+            'customer_name' => trim(implode(' ', array_filter([$contact['firstName'] ?? null, $contact['lastName'] ?? null]))),
+            'customer_email' => trim((string) data_get($order, 'buyerInfo.email', '')),
+            'customer_phone' => trim((string) ($contact['phone'] ?? '')),
+            'items' => $this->wixItems((array) ($order['lineItems'] ?? [])),
+            'total' => $this->money(data_get($order, 'priceSummary.total.amount'), data_get($order, 'currency', data_get($order, 'priceSummary.total.currency'))),
+            'status' => $cancelled ? 'Cancelled' : trim(implode(' · ', array_filter([
+                Str::headline($status),
+                Str::headline((string) ($order['paymentStatus'] ?? '')),
+                Str::headline((string) ($order['fulfillmentStatus'] ?? '')),
+            ]))),
+            'notes' => trim((string) ($order['buyerNote'] ?? '')),
+            'source_url' => rtrim($siteUrl, '/'),
+            'shipping_address' => $this->wixAddress($address, $contact),
+            'billing_address' => $this->wixAddress($billingAddress, (array) ($billingInfo['contactDetails'] ?? [])),
+            'pickup_location' => trim(implode(', ', array_filter([
+                data_get($order, 'businessLocation.name'),
+                $shippingInfo['title'] ?? null,
+                $this->wixAddress($address, []),
+            ]))),
+            'cancelled' => $cancelled,
+        ];
+    }
+
     protected function shopifyItems(array $items): string
     {
         return collect($items)->filter(fn (mixed $item): bool => is_array($item))->map(fn (array $item): string => max(1, (int) ($item['quantity'] ?? 1)).' × '.trim((string) ($item['name'] ?? 'Item')))->implode(', ');
@@ -267,6 +434,23 @@ GRAPHQL;
     protected function squareItems(array $items): string
     {
         return collect($items)->filter(fn (mixed $item): bool => is_array($item))->map(fn (array $item): string => trim((string) ($item['quantity'] ?? '1')).' × '.trim((string) ($item['name'] ?? 'Item')))->implode(', ');
+    }
+
+    protected function squarespaceItems(array $items): string
+    {
+        return collect($items)->filter(fn (mixed $item): bool => is_array($item))->map(fn (array $item): string => max(1, (int) ($item['quantity'] ?? 1)).' × '.trim((string) ($item['productName'] ?? $item['title'] ?? 'Item')))->implode(', ');
+    }
+
+    protected function wixItems(array $items): string
+    {
+        return collect($items)->filter(fn (mixed $item): bool => is_array($item))->map(function (array $item): string {
+            $name = data_get($item, 'productName.translated') ?? data_get($item, 'productName.original');
+            if (! is_string($name) || trim($name) === '') {
+                $name = is_string($item['productName'] ?? null) ? $item['productName'] : 'Item';
+            }
+
+            return max(1, (int) ($item['quantity'] ?? 1)).' × '.trim($name);
+        })->implode(', ');
     }
 
     protected function shopifyAddress(array $address): string
@@ -284,6 +468,41 @@ GRAPHQL;
             $address['address_line_1'] ?? null, $address['address_line_2'] ?? null, $address['locality'] ?? null,
             $address['administrative_district_level_1'] ?? null, $address['postal_code'] ?? null, $address['country'] ?? null,
         ])));
+    }
+
+    protected function squarespaceAddress(array $address): string
+    {
+        return trim(implode(', ', array_filter([
+            trim(implode(' ', array_filter([$address['firstName'] ?? null, $address['lastName'] ?? null]))),
+            $address['address1'] ?? null, $address['address2'] ?? null, $address['city'] ?? null,
+            $address['state'] ?? null, $address['postalCode'] ?? null, $address['countryCode'] ?? null,
+        ])));
+    }
+
+    protected function wixAddress(array $address, array $contact): string
+    {
+        return trim(implode(', ', array_filter([
+            trim(implode(' ', array_filter([$contact['firstName'] ?? null, $contact['lastName'] ?? null]))),
+            $contact['company'] ?? null, $address['addressLine'] ?? null, $address['addressLine2'] ?? null,
+            data_get($address, 'streetAddress.name'), data_get($address, 'streetAddress.number'),
+            $address['city'] ?? null, $address['subdivision'] ?? null, $address['postalCode'] ?? null, $address['country'] ?? null,
+        ])));
+    }
+
+    protected function formDate(array $fields, array $needles): ?string
+    {
+        foreach ($fields as $field) {
+            $label = Str::lower((string) ($field['label'] ?? ''));
+            if (! collect($needles)->contains(fn (string $needle): bool => str_contains($label, $needle))) {
+                continue;
+            }
+            $value = trim((string) ($field['value'] ?? ''));
+            if ($this->date($value) !== null) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     protected function attributeDate(array $attributes, array $needles): ?string

@@ -68,7 +68,7 @@ class CommerceWorkflowConnectionService
         return match ($provider) {
             'shopify' => $this->shopifyAuthorizationUrl($state, (string) $payload['shop_domain']),
             'square' => $this->squareAuthorizationUrl($state),
-            'squarespace' => $this->oauthAuthorizationUrl('squarespace', $state),
+            'squarespace' => $this->squarespaceAuthorizationUrl($state),
             'wix' => $this->wixInstallUrl($state),
         };
     }
@@ -93,7 +93,7 @@ class CommerceWorkflowConnectionService
         $token = match ($provider) {
             'shopify' => $this->exchangeShopify($request, (string) $statePayload['shop_domain']),
             'square' => $this->exchangeStandardCode('square', $request),
-            'squarespace' => $this->exchangeStandardCode('squarespace', $request),
+            'squarespace' => $this->exchangeSquarespace($request),
             'wix' => $this->exchangeWixInstance($request),
         };
         $identity = $this->identity($provider, $token, $statePayload);
@@ -116,6 +116,7 @@ class CommerceWorkflowConnectionService
                     'api_base' => config("services.{$provider}.api_base"),
                     'shop_domain' => $provider === 'shopify' ? (string) $statePayload['shop_domain'] : null,
                     'legacy_coexistence' => true,
+                    ...(array) ($identity['metadata'] ?? []),
                 ]),
                 'connected_by_user_id' => $request->user()?->id,
                 'connected_at' => now(),
@@ -136,7 +137,7 @@ class CommerceWorkflowConnectionService
         $response = match ($provider) {
             'shopify' => $this->shopifyRequest((string) data_get($connection->metadata, 'shop_domain'), $accessToken),
             'square' => $this->squareRequest($accessToken)->get(rtrim((string) config('services.square.api_base', 'https://connect.squareup.com'), '/').'/v2/merchants/me'),
-            'squarespace' => Http::withToken($accessToken)->acceptJson()->get(rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/authorization/website'),
+            'squarespace' => $this->squarespaceRequest($accessToken)->get(rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/authorization/website'),
             'wix' => Http::withToken((string) $this->wixAccessToken($connection))->acceptJson()->get(rtrim((string) config('services.wix.api_base', 'https://www.wixapis.com'), '/').'/site-properties/v4/properties'),
             default => throw new AutomationWorkflowException('Unsupported commerce provider.'),
         };
@@ -173,6 +174,15 @@ class CommerceWorkflowConnectionService
     {
         if ((string) $connection->provider === 'square' && $connection->needsRefresh()) {
             return $this->refreshSquareAccessToken($connection);
+        }
+        if ((string) $connection->provider === 'squarespace' && $connection->needsRefresh()) {
+            return $this->refreshSquarespaceAccessToken($connection);
+        }
+        if ((string) $connection->provider === 'wix') {
+            return $this->wixAccessToken($connection);
+        }
+        if ($connection->isExpired()) {
+            throw new AutomationWorkflowException(Str::headline((string) $connection->provider).' access expired and cannot be refreshed. Reconnect the account.');
         }
 
         $token = trim((string) $connection->access_token);
@@ -253,6 +263,27 @@ class CommerceWorkflowConnectionService
     }
 
     /** @return array<string,mixed> */
+    protected function exchangeSquarespace(Request $request): array
+    {
+        $code = trim((string) $request->query('code'));
+        if ($code === '') {
+            throw new AutomationWorkflowException('Squarespace did not return an authorization code.');
+        }
+
+        return $this->successfulJson(
+            Http::asJson()->acceptJson()
+                ->withBasicAuth((string) config('services.squarespace.oauth_client_id'), (string) config('services.squarespace.oauth_client_secret'))
+                ->withHeaders(['User-Agent' => (string) config('services.squarespace.user_agent', 'Everbranch Order Calendar/1.0')])
+                ->post((string) config('services.squarespace.token_url'), [
+                    'grant_type' => 'authorization_code',
+                    'code' => $code,
+                    'redirect_uri' => config('services.squarespace.redirect_uri'),
+                ]),
+            'Squarespace token exchange failed.',
+        );
+    }
+
+    /** @return array<string,mixed> */
     protected function exchangeWixInstance(Request $request): array
     {
         $instanceId = trim((string) $request->query('instanceId'));
@@ -295,13 +326,31 @@ class CommerceWorkflowConnectionService
             ];
         }
         if ($provider === 'wix') {
-            return ['id' => (string) $token['instance_id'], 'label' => 'Wix site'];
+            $response = Http::withToken((string) $token['access_token'])->acceptJson()
+                ->get(rtrim((string) config('services.wix.api_base', 'https://www.wixapis.com'), '/').'/site-properties/v4/properties');
+            $properties = $response->successful() ? (array) $response->json('properties', []) : [];
+            $label = trim((string) ($properties['businessName'] ?? $properties['siteDisplayName'] ?? '')) ?: 'Wix site';
+
+            return [
+                'id' => (string) $token['instance_id'],
+                'label' => $label,
+                'metadata' => array_filter(['site_url' => $properties['siteUrl'] ?? null]),
+            ];
         }
-        $response = Http::withToken((string) $token['access_token'])->acceptJson()->get(rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/authorization/website');
+        $response = $this->squarespaceRequest((string) $token['access_token'])
+            ->get(rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/authorization/website');
         $json = $this->successfulJson($response, 'Squarespace website lookup failed.');
         $id = trim((string) ($json['id'] ?? $json['websiteId'] ?? ''));
 
-        return ['id' => $id, 'label' => (string) ($json['siteTitle'] ?? 'Squarespace site')];
+        return [
+            'id' => $id,
+            'label' => trim((string) ($json['title'] ?? $json['siteTitle'] ?? '')) ?: 'Squarespace site',
+            'metadata' => array_filter([
+                'site_id' => $json['siteId'] ?? null,
+                'site_url' => $json['url'] ?? null,
+                'site_timezone' => $json['timeZone'] ?? null,
+            ]),
+        ];
     }
 
     protected function shopifyAuthorizationUrl(string $state, string $shop): string
@@ -325,11 +374,16 @@ class CommerceWorkflowConnectionService
         ]);
     }
 
-    protected function oauthAuthorizationUrl(string $provider, string $state): string
+    protected function squarespaceAuthorizationUrl(string $state): string
     {
-        return rtrim((string) config("services.{$provider}.authorization_url"), '?').'?'.http_build_query([
-            'client_id' => config("services.{$provider}.oauth_client_id"), 'redirect_uri' => config("services.{$provider}.redirect_uri"),
-            'response_type' => 'code', 'scope' => config("services.{$provider}.oauth_scopes"), 'state' => $state,
+        $scopes = preg_split('/[\s,]+/', trim((string) config('services.squarespace.oauth_scopes', 'website.orders.read'))) ?: [];
+
+        return rtrim((string) config('services.squarespace.authorization_url'), '?').'?'.http_build_query([
+            'client_id' => config('services.squarespace.oauth_client_id'),
+            'redirect_uri' => config('services.squarespace.redirect_uri'),
+            'scope' => implode(',', array_filter($scopes)),
+            'state' => $state,
+            'access_type' => 'offline',
         ]);
     }
 
@@ -396,6 +450,40 @@ class CommerceWorkflowConnectionService
         return $accessToken;
     }
 
+    protected function refreshSquarespaceAccessToken(IntegrationConnection $connection): string
+    {
+        $refreshToken = trim((string) $connection->refresh_token);
+        if ($refreshToken === '') {
+            throw new AutomationWorkflowException('Squarespace access expired and no refresh token is available. Reconnect Squarespace.');
+        }
+
+        $token = $this->successfulJson(
+            Http::asJson()->acceptJson()
+                ->withBasicAuth((string) config('services.squarespace.oauth_client_id'), (string) config('services.squarespace.oauth_client_secret'))
+                ->withHeaders(['User-Agent' => (string) config('services.squarespace.user_agent', 'Everbranch Order Calendar/1.0')])
+                ->post((string) config('services.squarespace.token_url'), [
+                    'grant_type' => 'refresh_token',
+                    'refresh_token' => $refreshToken,
+                ]),
+            'Squarespace token refresh failed.',
+        );
+        $accessToken = trim((string) ($token['access_token'] ?? ''));
+        if ($accessToken === '') {
+            throw new AutomationWorkflowException('Squarespace token refresh did not return an access token.');
+        }
+
+        $connection->forceFill([
+            'access_token' => $accessToken,
+            'refresh_token' => $this->nullableString($token['refresh_token'] ?? null) ?? $refreshToken,
+            'expires_at' => $this->tokenExpiry($token),
+            'last_error_code' => null,
+            'last_error_message' => null,
+            'last_error_at' => null,
+        ])->save();
+
+        return $accessToken;
+    }
+
     /** @return array<int,array{id:string,label:string,status:?string,address:?string}> */
     protected function discoverSquareLocations(string $accessToken): array
     {
@@ -432,6 +520,13 @@ class CommerceWorkflowConnectionService
             ->timeout(20)->retry(2, 250, throw: false);
     }
 
+    protected function squarespaceRequest(string $accessToken)
+    {
+        return Http::acceptJson()->withToken($accessToken)
+            ->withHeaders(['User-Agent' => (string) config('services.squarespace.user_agent', 'Everbranch Order Calendar/1.0')])
+            ->timeout(20)->retry(2, 250, throw: false);
+    }
+
     protected function shopifyRequest(string $shop, string $accessToken)
     {
         return Http::acceptJson()->asJson()
@@ -443,8 +538,11 @@ class CommerceWorkflowConnectionService
             ]);
     }
 
-    protected function tokenExpiry(array $token): ?Carbon
+    protected function tokenExpiry(array $token): ?\DateTimeInterface
     {
+        if (filled($token['access_token_expires_at'] ?? null) && is_numeric($token['access_token_expires_at'])) {
+            return Carbon::createFromTimestamp((int) floor((float) $token['access_token_expires_at']));
+        }
         if (filled($token['expires_at'] ?? null)) {
             try {
                 return Carbon::parse((string) $token['expires_at']);

@@ -17,8 +17,8 @@ return [
         'google_calendar' => ['label' => 'Google Calendar', 'accent' => 'sky', 'initials' => '31', 'state' => 'live'],
         'shopify' => ['label' => 'Shopify', 'accent' => 'emerald', 'initials' => 'S', 'state' => 'beta'],
         'square' => ['label' => 'Square', 'accent' => 'zinc', 'initials' => 'Sq', 'state' => 'beta'],
-        'squarespace' => ['label' => 'Squarespace', 'accent' => 'zinc', 'initials' => 'Ss', 'state' => 'connector_required'],
-        'wix' => ['label' => 'Wix', 'accent' => 'violet', 'initials' => 'W', 'state' => 'connector_required'],
+        'squarespace' => ['label' => 'Squarespace', 'accent' => 'zinc', 'initials' => 'Ss', 'state' => 'beta'],
+        'wix' => ['label' => 'Wix', 'accent' => 'violet', 'initials' => 'W', 'state' => 'beta'],
     ],
 
     'templates' => [
@@ -59,7 +59,8 @@ return [
             'trigger_event' => 'New or updated order',
             'action_provider' => 'google_calendar',
             'action_event' => 'Create or update event',
-            'launchable' => false,
+            'driver' => 'commerce_order_google_calendar',
+            'launchable' => (bool) env('AUTOMATION_SQUARESPACE_ORDER_CALENDAR_ENABLED', false),
         ],
         'wix_order_to_google_calendar' => [
             'name' => 'Wix orders to Google Calendar',
@@ -68,7 +69,8 @@ return [
             'trigger_event' => 'New or updated order',
             'action_provider' => 'google_calendar',
             'action_event' => 'Create or update event',
-            'launchable' => false,
+            'driver' => 'commerce_order_google_calendar',
+            'launchable' => (bool) env('AUTOMATION_WIX_ORDER_CALENDAR_ENABLED', false),
         ],
     ],
 

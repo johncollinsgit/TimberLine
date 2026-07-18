@@ -19,6 +19,8 @@ class WorkflowAutomationReadinessService
     {
         $shopifyEnabled = (bool) config('automation_workflows.templates.shopify_order_to_google_calendar.launchable', false);
         $squareEnabled = (bool) config('automation_workflows.templates.square_order_to_google_calendar.launchable', false);
+        $squarespaceEnabled = (bool) config('automation_workflows.templates.squarespace_order_to_google_calendar.launchable', false);
+        $wixEnabled = (bool) config('automation_workflows.templates.wix_order_to_google_calendar.launchable', false);
         $schedulerAge = $this->scheduler->minutesSinceHeartbeat();
         $queueAt = $this->queueHeartbeatAt();
         $schemaReady = collect([
@@ -47,7 +49,9 @@ class WorkflowAutomationReadinessService
                 $this->validRedirect(config('services.asana.redirect_uri'))
                     && $this->validRedirect(config('services.google_calendar.redirect_uri'))
                     && (! $shopifyEnabled || $this->validRedirect(config('services.shopify.automation_redirect_uri')))
-                    && (! $squareEnabled || $this->validRedirect(config('services.square.redirect_uri'))),
+                    && (! $squareEnabled || $this->validRedirect(config('services.square.redirect_uri')))
+                    && (! $squarespaceEnabled || $this->validRedirect(config('services.squarespace.redirect_uri')))
+                    && (! $wixEnabled || $this->validRedirect(config('services.wix.redirect_uri'))),
                 'Enabled provider callback URLs are absolute HTTPS URLs.',
                 'Register and configure absolute HTTPS callback URLs for every enabled provider.'
             ),
@@ -74,6 +78,28 @@ class WorkflowAutomationReadinessService
                 ),
                 $squareEnabled ? 'The Square order connector is registered with order and location discovery scopes.' : 'The Square order connector remains safely feature-gated.',
                 'Configure the Square app, ORDERS_READ and MERCHANT_PROFILE_READ scopes, API version, and commerce driver before enabling its template.'
+            ),
+            'squarespace_order_connector' => $this->check(
+                ! $squarespaceEnabled || (
+                    filled(config('services.squarespace.oauth_client_id'))
+                    && filled(config('services.squarespace.oauth_client_secret'))
+                    && collect(preg_split('/[\s,]+/', (string) config('services.squarespace.oauth_scopes')) ?: [])->contains('website.orders.read')
+                    && filled(config('services.squarespace.user_agent'))
+                    && filled(config('automation_workflows.drivers.commerce_order_google_calendar'))
+                ),
+                $squarespaceEnabled ? 'The Squarespace order connector is registered for offline order access.' : 'The Squarespace order connector remains safely feature-gated.',
+                'Register the Squarespace OAuth client, website.orders.read scope, User-Agent, callback, and commerce driver before enabling its template.'
+            ),
+            'wix_order_connector' => $this->check(
+                ! $wixEnabled || (
+                    filled(config('services.wix.app_id'))
+                    && filled(config('services.wix.client_secret'))
+                    && filled(config('services.wix.install_url'))
+                    && filled(config('services.wix.required_permission'))
+                    && filled(config('automation_workflows.drivers.commerce_order_google_calendar'))
+                ),
+                $wixEnabled ? 'The Wix app-instance connector is registered with order-read permission.' : 'The Wix order connector remains safely feature-gated.',
+                'Register the Wix app, install URL, Read Orders permission, callback, and commerce driver before enabling its template.'
             ),
             'scheduler_heartbeat' => $this->check(
                 $schedulerAge !== null && $schedulerAge <= 10,
