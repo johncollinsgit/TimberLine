@@ -19,7 +19,7 @@
         </section>
         <section class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-8">{!! $agreement->currentVersion->rendered_content !!}</section>
         @if($agreement->acceptance)
-            <section class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6"><h2 class="text-xl font-semibold text-emerald-950">Accepted and locked</h2><p class="mt-2 text-sm text-emerald-900">Accepted {{ $agreement->acceptance->accepted_at->toDayDateTimeString() }}. This exact version is read-only.</p><a class="mt-4 inline-flex rounded-lg bg-emerald-800 px-4 py-2 font-semibold text-white" href="{{ route('proposals.download', ['token' => $token]) }}">Download permanent agreement copy</a></section>
+            <section class="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6"><h2 class="text-xl font-semibold text-emerald-950">Accepted and locked</h2><p class="mt-2 text-sm text-emerald-900">Accepted {{ $agreement->acceptance->accepted_at->toDayDateTimeString() }}. This exact version is read-only.</p><a class="mt-4 inline-flex rounded-lg bg-emerald-800 px-4 py-2 text-base font-semibold !text-white shadow-sm transition hover:bg-emerald-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800" style="color: #fff !important;" href="{{ route('proposals.download', ['token' => $token]) }}">Download permanent agreement copy</a></section>
             @if($billingOrder)
                 @php
                     $payableLines = collect((array) $billingOrder->line_items)->whereIn('payment_timing', ['due_on_acceptance', 'recurring_current']);
