@@ -334,6 +334,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
      */
     protected function updateGoogleEvent(string $calendarId, string $eventId, array $payload, array $credentials = []): ?string
     {
+        $payload = $this->googleCalendarPatchPayload($payload);
         $response = $this->googleCalendarRequest($credentials)->patch(
             $this->googleCalendarApiBase().'/calendars/'.rawurlencode($calendarId).'/events/'.rawurlencode($eventId),
             $payload
@@ -347,6 +348,32 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         $resolvedId = trim((string) ($json['id'] ?? ''));
 
         return $resolvedId !== '' ? $resolvedId : $eventId;
+    }
+
+    /**
+     * Google applies PATCH recursively. Explicitly remove the prior date shape
+     * when a task changes between a timed and an all-day event; otherwise an
+     * existing dateTime can survive beside date and Google rejects the update.
+     *
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    protected function googleCalendarPatchPayload(array $payload): array
+    {
+        foreach (['start', 'end'] as $boundary) {
+            $value = (array) ($payload[$boundary] ?? []);
+
+            if (array_key_exists('date', $value)) {
+                $value['dateTime'] = null;
+                $value['timeZone'] = null;
+            } elseif (array_key_exists('dateTime', $value)) {
+                $value['date'] = null;
+            }
+
+            $payload[$boundary] = $value;
+        }
+
+        return $payload;
     }
 
     protected function asanaRequest(array $credentials = []): PendingRequest
