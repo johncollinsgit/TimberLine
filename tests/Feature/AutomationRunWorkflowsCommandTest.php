@@ -106,7 +106,81 @@ test('automation run command creates google calendar events from asana tasks', f
     });
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
-        && str_contains($request->url(), '/calendar/v3/calendars/calendar%40example.com/events'));
+        && str_contains($request->url(), '/calendar/v3/calendars/calendar%40example.com/events')
+        && $request['start'] === ['date' => '2026-06-02']
+        && $request['end'] === ['date' => '2026-06-03']);
+});
+
+test('automation maps timed tasks to timed events and skips completed tasks', function (): void {
+    $timed = fakeAsanaTaskPayload();
+    $timed['gid'] = 'timed-task';
+    $timed['due_on'] = null;
+    $timed['due_at'] = '2026-06-02T16:30:00.000Z';
+    $completed = fakeAsanaTaskPayload();
+    $completed['gid'] = 'completed-task';
+    $completed['completed'] = true;
+
+    Http::fake([
+        'https://app.asana.com/api/1.0/tasks*' => Http::response(['data' => [$timed, $completed], 'next_page' => null]),
+        'https://www.googleapis.com/calendar/v3/calendars/*/events' => Http::response(['id' => 'timed-event']),
+    ]);
+
+    expect(Artisan::call('automation:run', ['--workflow' => 'asana_to_google_calendar']))->toBe(0)
+        ->and(Artisan::output())->toContain('created=1')->toContain('skipped=1');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && data_get($request->data(), 'start.dateTime') === '2026-06-02T12:30:00-04:00'
+        && data_get($request->data(), 'end.dateTime') === '2026-06-02T13:30:00-04:00');
+    expect(AutomationWorkflowLink::query()->where('source_id', 'completed-task')->exists())->toBeFalse();
+});
+
+test('automation recreates a remembered destination when google returns 404', function (): void {
+    AutomationWorkflowLink::query()->create([
+        'workflow_key' => 'asana_to_google_calendar',
+        'source_system' => 'asana_task',
+        'source_id' => '343049949',
+        'destination_system' => 'google_calendar_event',
+        'destination_id' => 'missing-event',
+        'source_fingerprint' => 'outdated-fingerprint',
+    ]);
+
+    Http::fake(function (Request $request) {
+        if ($request->method() === 'GET') {
+            return Http::response(['data' => [fakeAsanaTaskPayload()], 'next_page' => null]);
+        }
+        if ($request->method() === 'PATCH') {
+            return Http::response(['error' => ['message' => 'Not found']], 404);
+        }
+
+        return Http::response(['id' => 'replacement-event'], 200);
+    });
+
+    expect(Artisan::call('automation:run', ['--workflow' => 'asana_to_google_calendar']))->toBe(0)
+        ->and(AutomationWorkflowLink::query()->where('source_id', '343049949')->value('destination_id'))->toBe('replacement-event');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'PATCH' && str_contains($request->url(), 'missing-event'));
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST' && str_ends_with($request->url(), '/events'));
+});
+
+test('automation keeps its cursor behind unresolved partial failures', function (): void {
+    $cursor = '2026-05-31T10:00:00+00:00';
+    AutomationWorkflowState::query()->create([
+        'workflow_key' => 'asana_to_google_calendar',
+        'cursor' => $cursor,
+        'status' => 'idle',
+    ]);
+
+    Http::fake([
+        'https://app.asana.com/api/1.0/tasks*' => Http::response([
+            'data' => [fakeAsanaTaskPayload('2026-06-02T12:00:00.000Z')],
+            'next_page' => null,
+        ]),
+        'https://www.googleapis.com/calendar/v3/calendars/*/events' => Http::response(['error' => ['message' => 'Temporary failure']], 500),
+    ]);
+
+    expect(Artisan::call('automation:run', ['--workflow' => 'asana_to_google_calendar']))->toBe(1)
+        ->and(AutomationWorkflowState::query()->where('workflow_key', 'asana_to_google_calendar')->value('cursor'))->toBe($cursor)
+        ->and(AutomationWorkflowState::query()->where('workflow_key', 'asana_to_google_calendar')->value('last_status'))->toBe('partial_failure');
 });
 
 test('automation run command is idempotent when source fingerprint is unchanged', function (): void {

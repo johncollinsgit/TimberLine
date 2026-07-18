@@ -3,6 +3,8 @@
 namespace App\Services\Billing;
 
 use App\Models\Tenant;
+use App\Models\TenantAccessAddon;
+use App\Models\TenantAccessProfile;
 use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
@@ -16,8 +18,7 @@ class StripeHostedBillingService
         protected LandlordCommercialConfigService $commercialConfigService,
         protected LandlordOperatorActionAuditService $auditService,
         protected TenantHostBuilder $hostBuilder,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array{
@@ -182,6 +183,125 @@ class StripeHostedBillingService
             afterState: null,
         );
 
+        if ($sessionId === '' || $url === '') {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe checkout session returned no redirect URL.'];
+        }
+
+        return ['ok' => true, 'url' => $url, 'session_id' => $sessionId, 'message' => null];
+    }
+
+    /**
+     * Create a server-priced Stripe Checkout session for one canonical add-on.
+     * Client-provided prices and line items are intentionally ignored.
+     *
+     * @return array{ok:bool,url:?string,session_id:?string,message:?string}
+     */
+    public function createAddonCheckoutSession(Tenant $tenant, User $actor, string $addonKey): array
+    {
+        if (! $this->hostedBillingEnabled()) {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Hosted billing is not enabled.'];
+        }
+
+        if (! $this->stripeConfigured()) {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe is not configured.'];
+        }
+
+        $tenantId = (int) $tenant->id;
+        $addonKey = strtolower(trim($addonKey));
+        $addon = is_array(config('module_catalog.addons.'.$addonKey))
+            ? (array) config('module_catalog.addons.'.$addonKey)
+            : [];
+        if ($addon === [] || strtolower(trim((string) ($addon['billing_mode'] ?? ''))) !== 'add_on') {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'This add-on is not available for self-serve checkout.'];
+        }
+
+        $planKey = strtolower(trim((string) TenantAccessProfile::query()
+            ->where('tenant_id', $tenantId)
+            ->value('plan_key')));
+        if ($planKey === '') {
+            $planKey = strtolower(trim((string) config('module_catalog.defaults.plan', 'starter')));
+        }
+        if (! in_array($addonKey, $this->eligibleAddonsForPlan($planKey), true)) {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'This add-on is not available for the current plan.'];
+        }
+
+        if (TenantAccessAddon::query()->where('tenant_id', $tenantId)->where('addon_key', $addonKey)->where('enabled', true)->exists()) {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'This add-on is already active.'];
+        }
+
+        $lookupKey = strtolower(trim((string) data_get($addon, 'stripe.recurring_price_lookup_key', '')));
+        if ($lookupKey === '') {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe mapping is missing for this add-on.'];
+        }
+
+        $resolved = $this->resolvePriceIdsByLookupKey([$lookupKey]);
+        $priceId = trim((string) data_get($resolved, 'price_ids_by_lookup_key.'.$lookupKey, ''));
+        if (! ($resolved['ok'] ?? false) || $priceId === '') {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => (string) ($resolved['message'] ?? 'Stripe price lookup failed.')];
+        }
+
+        $commercialProfile = $this->commercialConfigService->tenantCommercialProfile($tenantId);
+        $stripeCustomerReference = trim((string) data_get($commercialProfile, 'billing_mapping.stripe.customer_reference', ''));
+        $successUrl = $this->tenantReturnUrl($tenant, 'success');
+        $cancelUrl = $this->tenantReturnUrl($tenant, 'cancel');
+        $separator = str_contains($successUrl, '?') ? '&' : '?';
+        $billingInterest = [
+            'preferred_plan_key' => $planKey,
+            'addons_interest' => [$addonKey],
+            'source' => 'tenant_module_store',
+            'access_request_id' => null,
+        ];
+        $metadata = $this->stripeMetadata($tenant, $actor, $billingInterest, [
+            'purpose' => 'addon_checkout',
+            'checkout_plan_key' => $planKey,
+            'checkout_addons_interest' => $addonKey,
+        ]);
+
+        $payload = [
+            'mode' => 'subscription',
+            'success_url' => $successUrl.$separator.'session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $cancelUrl,
+            'client_reference_id' => 'tenant-'.$tenantId,
+            'line_items[0][price]' => $priceId,
+            'line_items[0][quantity]' => 1,
+        ];
+        if ($stripeCustomerReference !== '') {
+            $payload['customer'] = $stripeCustomerReference;
+        } else {
+            $payload['customer_email'] = (string) ($actor->email ?? '');
+        }
+        foreach ($metadata as $key => $value) {
+            $payload['metadata['.$key.']'] = $value;
+            $payload['subscription_data[metadata]['.$key.']'] = $value;
+        }
+
+        $response = $this->stripeRequest()
+            ->withHeaders(['Idempotency-Key' => sprintf('tenant-%d-addon-%s-checkout-v1', $tenantId, $addonKey)])
+            ->post($this->stripeApiBaseUrl().'/v1/checkout/sessions', $payload);
+        $json = is_array($response->json()) ? $response->json() : [];
+        $sessionId = trim((string) ($json['id'] ?? ''));
+        $url = trim((string) ($json['url'] ?? ''));
+
+        $this->auditService->record(
+            tenantId: $tenantId,
+            actorUserId: (int) $actor->id,
+            actionType: 'tenant_billing.addon_checkout_session',
+            status: $response->successful() && $sessionId !== '' && $url !== '' ? 'success' : 'failed',
+            targetType: 'tenant',
+            targetId: $tenantId,
+            context: [
+                'stripe_status' => $response->status(),
+                'stripe_session_id' => $sessionId,
+                'addon_key' => $addonKey,
+                'plan_key' => $planKey,
+            ],
+            beforeState: null,
+            afterState: null,
+        );
+
+        if ($response->failed()) {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => $this->stripeErrorMessage($json, $response->status())];
+        }
         if ($sessionId === '' || $url === '') {
             return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe checkout session returned no redirect URL.'];
         }

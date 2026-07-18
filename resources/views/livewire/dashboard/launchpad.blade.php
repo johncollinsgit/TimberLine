@@ -11,6 +11,7 @@
     $ownerReporting = is_array($dashboard['owner_reporting'] ?? null) ? $dashboard['owner_reporting'] : null;
     $classCalendar = is_array($dashboard['class_calendar'] ?? null) ? $dashboard['class_calendar'] : null;
     $frontYardLaunch = is_array($dashboard['front_yard_launch'] ?? null) ? $dashboard['front_yard_launch'] : null;
+    $workflowHealth = is_array($dashboard['workflow_automation_health'] ?? null) ? $dashboard['workflow_automation_health'] : null;
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 md:px-6 min-w-0">
@@ -32,6 +33,37 @@
                 </button>
             </form>
         </section>
+
+        @if($workflowHealth)
+            <section class="overflow-hidden rounded-3xl border border-emerald-200/70 bg-gradient-to-br from-[#fffaf0] via-white to-sky-50 shadow-sm" aria-labelledby="workflow-health-title">
+                <div class="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                    <div class="flex min-w-0 items-start gap-4">
+                        <span class="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-900 text-white shadow-sm" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="size-6"><path d="M13 2 4.5 13H11l-1 9 8.5-12H12l1-8Z"/></svg>
+                        </span>
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Order Calendar health</p>
+                            <h2 id="workflow-health-title" class="mt-1 text-xl font-semibold text-zinc-950">
+                                {{ $workflowHealth['active'] }} active of {{ $workflowHealth['total'] }} workflow{{ $workflowHealth['total'] === 1 ? '' : 's' }}
+                            </h2>
+                            <p class="mt-1 text-sm text-zinc-600">
+                                @if(($workflowHealth['needs_attention'] ?? 0) > 0)
+                                    {{ $workflowHealth['needs_attention'] }} run{{ $workflowHealth['needs_attention'] === 1 ? '' : 's' }} need attention from the last 7 days.
+                                @elseif($workflowHealth['total'] > 0)
+                                    Your recent workflow runs are healthy.
+                                @else
+                                    Connect Asana and Google Calendar to build your first workflow.
+                                @endif
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex shrink-0 flex-wrap gap-2">
+                        <a href="{{ $workflowHealth['history_href'] }}" class="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-zinc-300">Run history</a>
+                        <a href="{{ $workflowHealth['href'] }}" class="rounded-full bg-emerald-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800">Open automations</a>
+                    </div>
+                </div>
+            </section>
+        @endif
 
         @if($frontYardLaunch)
             <section class="overflow-hidden rounded-[2.25rem] border border-emerald-100 bg-[#fbf6e6] shadow-sm">

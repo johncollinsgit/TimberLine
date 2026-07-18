@@ -727,6 +727,38 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{customModuleRequest}', [CustomModuleRequestController::class, 'show'])->name('show');
         });
 
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:workflow_automations'])
+        ->prefix('workflows')
+        ->name('workflows.')
+        ->controller(\App\Http\Controllers\WorkflowAutomationController::class)
+        ->group(function (): void {
+            Route::get('/', 'index')->name('index');
+            Route::get('/new', 'create')->name('create');
+            Route::post('/', 'store')->name('store');
+            Route::get('/history', 'history')->name('history');
+            Route::get('/connections', 'connections')->name('connections');
+            Route::post('/connections/asana/connect', 'connectAsana')->name('connections.asana.connect');
+            Route::post('/connections/asana/test', 'testAsanaConnection')->name('connections.asana.test');
+            Route::post('/connections/asana/disconnect', 'disconnectAsana')->name('connections.asana.disconnect');
+            Route::post('/connections/google-calendar/connect', 'connectGoogle')->name('connections.google.connect');
+            Route::post('/connections/google-calendar/test', 'testGoogleConnection')->name('connections.google.test');
+            Route::post('/connections/google-calendar/disconnect', 'disconnectGoogle')->name('connections.google.disconnect');
+            Route::post('/connections/{provider}/connect', 'connectCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.connect');
+            Route::get('/connections/{provider}/callback', 'commerceCallback')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.callback');
+            Route::post('/connections/{provider}/{connection}/test', 'testCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.test');
+            Route::post('/connections/{provider}/{connection}/disconnect', 'disconnectCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.disconnect');
+            Route::get('/runs/{run}', 'run')->name('runs.show');
+            Route::post('/runs/{run}/retry', 'retry')->name('runs.retry');
+            Route::get('/{workflow}', 'show')->name('show');
+            Route::put('/{workflow}', 'update')->name('update');
+            Route::post('/{workflow}/test-trigger', 'testTrigger')->name('test-trigger');
+            Route::post('/{workflow}/test-action', 'testAction')->name('test-action');
+            Route::post('/{workflow}/publish', 'publish')->name('publish');
+            Route::post('/{workflow}/pause', 'pause')->name('pause');
+            Route::post('/{workflow}/resume', 'resume')->name('resume');
+            Route::post('/{workflow}/run', 'runNow')->name('run');
+        });
+
     // Guarded hosted billing handoff (Stripe hosted checkout / billing portal). Read-only on our side; no plan mutation.
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->prefix('billing')
@@ -734,6 +766,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::post('/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'checkout'])
                 ->name('checkout');
+            Route::post('/addons/{addonKey}/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'addonCheckout'])
+                ->where('addonKey', '[a-z0-9_]+')
+                ->name('addons.checkout');
             Route::post('/portal', [\App\Http\Controllers\Billing\HostedBillingController::class, 'portal'])
                 ->name('portal');
             Route::post('/messaging-credit', [\App\Http\Controllers\Billing\MessagingCreditController::class, 'checkout'])
@@ -1086,6 +1121,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::get('/providers-integrations/shopify-customer-sync-health', [MarketingProvidersIntegrationsController::class, 'shopifyCustomerSyncHealth'])
                         ->name('providers-integrations.shopify-customer-sync-health');
                     Route::post('/providers-integrations/workflow-automations', [MarketingProvidersIntegrationsController::class, 'saveWorkflowAutomation'])
+                        ->middleware('module:workflow_automations')
                         ->name('providers-integrations.workflow-automations.save');
                     Route::post('/providers-integrations/sync-square', [MarketingProvidersIntegrationsController::class, 'runSquareSync'])
                         ->name('providers-integrations.sync-square');

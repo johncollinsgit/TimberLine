@@ -77,8 +77,9 @@ class StripeCommercialFulfillmentService
         $stripe = is_array($billingMapping['stripe'] ?? null) ? (array) $billingMapping['stripe'] : [];
 
         $subscriptionStatus = strtolower(trim((string) ($stripe['subscription_status'] ?? '')));
-        $subscriptionInactive = in_array($subscriptionStatus, ['canceled', 'unpaid', 'incomplete_expired'], true)
-            || strtolower(trim((string) ($sourceEventType ?? ''))) === 'customer.subscription.deleted';
+        $addonCheckoutEvent = strtolower(trim((string) ($stripe['last_event_purpose'] ?? ''))) === 'addon_checkout';
+        $subscriptionInactive = ! $addonCheckoutEvent && (in_array($subscriptionStatus, ['canceled', 'unpaid', 'incomplete_expired'], true)
+            || strtolower(trim((string) ($sourceEventType ?? ''))) === 'customer.subscription.deleted');
 
         $billingConfirmed = $this->stripeBillingConfirmed($stripe);
         if (! $subscriptionInactive && ! $billingConfirmed) {
@@ -112,6 +113,11 @@ class StripeCommercialFulfillmentService
             ?? $this->nullableKey($stripe['checkout_plan_key'] ?? null)
             ?? $this->nullableKey($stripe['preferred_plan_key'] ?? null);
 
+        if ($addonCheckoutEvent) {
+            $desiredPlanKey = $this->nullableKey(TenantAccessProfile::query()->where('tenant_id', $tenantId)->value('plan_key'))
+                ?? $desiredPlanKey;
+        }
+
         if ($subscriptionInactive) {
             $desiredPlanKey = $this->downgradePlanKey();
         }
@@ -131,6 +137,24 @@ class StripeCommercialFulfillmentService
         $desiredAddonKeys = $this->normalizeAddonKeys($stripe['confirmed_addon_keys'] ?? null);
         if ($desiredAddonKeys === []) {
             $desiredAddonKeys = $this->normalizeAddonKeys($stripe['checkout_addon_keys'] ?? null);
+        }
+
+        if ($addonCheckoutEvent) {
+            $currentStripeAddons = TenantAccessAddon::query()
+                ->where('tenant_id', $tenantId)
+                ->where('source', 'stripe_fulfillment')
+                ->where('enabled', true)
+                ->pluck('addon_key')
+                ->map(fn (mixed $value): string => strtolower(trim((string) $value)))
+                ->filter()
+                ->values()
+                ->all();
+            $eventAddonKeys = $desiredAddonKeys;
+            $addonSubscriptionDeleted = strtolower(trim((string) ($sourceEventType ?? ''))) === 'customer.subscription.deleted'
+                || in_array($subscriptionStatus, ['canceled', 'unpaid', 'incomplete_expired'], true);
+            $desiredAddonKeys = $addonSubscriptionDeleted
+                ? array_values(array_diff($currentStripeAddons, $eventAddonKeys))
+                : array_values(array_unique([...$currentStripeAddons, ...$eventAddonKeys]));
         }
 
         if ($subscriptionInactive) {

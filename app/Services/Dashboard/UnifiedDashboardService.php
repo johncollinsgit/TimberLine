@@ -3,6 +3,8 @@
 namespace App\Services\Dashboard;
 
 use App\Models\Agreement;
+use App\Models\AutomationWorkflow;
+use App\Models\AutomationWorkflowRun;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceVehicle;
@@ -88,9 +90,42 @@ class UnifiedDashboardService
             'upcoming_jobs' => $clientFacingFieldService ? ($ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant)) : [],
             'class_calendar' => $this->classCalendar($tenant),
             'front_yard_launch' => $this->frontYardLaunch($tenant),
+            'workflow_automation_health' => $this->workflowAutomationHealth($tenantId, $canAccessOps || $canAccessMarketing),
             'owner_reporting' => $ownerReport,
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
+        ];
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function workflowAutomationHealth(?int $tenantId, bool $roleAllowed): ?array
+    {
+        if (! $roleAllowed
+            || $tenantId === null
+            || ! Route::has('workflows.index')
+            || ! Schema::hasTable('automation_workflows')
+            || ! $this->moduleAccess->canAccess($tenantId, 'workflow_automations')) {
+            return null;
+        }
+
+        $workflows = AutomationWorkflow::query()->forTenantId($tenantId);
+        $total = (clone $workflows)->count();
+        $active = (clone $workflows)->where('status', AutomationWorkflow::STATUS_ACTIVE)->count();
+        $needsAttention = Schema::hasTable('automation_workflow_runs')
+            ? AutomationWorkflowRun::query()->forTenantId($tenantId)->whereIn('status', ['failed', 'partial_failure'])->where('created_at', '>=', now()->subDays(7))->count()
+            : 0;
+        $latest = Schema::hasTable('automation_workflow_runs')
+            ? AutomationWorkflowRun::query()->forTenantId($tenantId)->latest()->first(['status', 'finished_at', 'created_at'])
+            : null;
+
+        return [
+            'total' => $total,
+            'active' => $active,
+            'needs_attention' => $needsAttention,
+            'latest_status' => $latest?->status,
+            'latest_at' => ($latest?->finished_at ?? $latest?->created_at)?->toIso8601String(),
+            'href' => route('workflows.index'),
+            'history_href' => route('workflows.history'),
         ];
     }
 

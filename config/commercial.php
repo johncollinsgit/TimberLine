@@ -189,6 +189,15 @@ return [
             'included_usage' => ['email_usage' => 5000],
             'modules' => (array) ($canonicalAddons['messaging']['modules'] ?? ['messaging', 'email']),
         ],
+        'order_calendar' => [
+            'name' => (string) ($canonicalAddons['order_calendar']['name'] ?? 'Order Calendar'),
+            'position' => 35,
+            'currency' => (string) data_get($canonicalAddons, 'order_calendar.pricing.currency', 'USD'),
+            'recurring_price_cents' => (int) data_get($canonicalAddons, 'order_calendar.pricing.recurring_price_cents', 2900),
+            'setup_price_cents' => (int) data_get($canonicalAddons, 'order_calendar.pricing.setup_price_cents', 0),
+            'modules' => (array) ($canonicalAddons['order_calendar']['modules'] ?? ['workflow_automations']),
+            'legacy_grants' => (array) ($canonicalAddons['order_calendar']['legacy_grants'] ?? ['workflow_automations']),
+        ],
         'additional_channels' => [
             'name' => (string) ($canonicalAddons['additional_channels']['name'] ?? 'Additional Stores/Channels'),
             'position' => 40,
@@ -406,8 +415,8 @@ return [
     ],
 
     'billing_readiness' => [
-        'checkout_active' => false,
-        'lifecycle_mutations_enabled' => false,
+        'checkout_active' => (bool) env('EVERBRANCH_STRIPE_CHECKOUT_ACTIVE', false),
+        'lifecycle_mutations_enabled' => (bool) env('EVERBRANCH_STRIPE_LIFECYCLE_MUTATIONS_ENABLED', false),
         'allow_production_test_mode' => (bool) env('EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED', false),
         'agreement_checkout' => [
             'enabled' => (bool) env('EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED', false),

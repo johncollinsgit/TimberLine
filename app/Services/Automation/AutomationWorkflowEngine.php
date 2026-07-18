@@ -3,8 +3,8 @@
 namespace App\Services\Automation;
 
 use App\Models\AutomationWorkflowState;
-use App\Services\Automation\Contracts\AutomationWorkflowDriver;
 use App\Models\Tenant;
+use App\Services\Automation\Contracts\AutomationWorkflowDriver;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
@@ -14,8 +14,7 @@ class AutomationWorkflowEngine
     public function __construct(
         protected TenantModuleAccessResolver $moduleAccessResolver,
         protected TenantWorkflowAutomationSettingsService $workflowSettingsService
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -96,6 +95,19 @@ class AutomationWorkflowEngine
     }
 
     /**
+     * Run a fully resolved, tenant-owned workflow definition. This is the public
+     * seam used by the productized workflow records; legacy settings continue to
+     * use runTenantWorkflow() during the compatibility window.
+     *
+     * @param  array<string,mixed>  $definition
+     * @return array<string,mixed>
+     */
+    public function runDefinition(string $instanceKey, array $definition, bool $dryRun = false): array
+    {
+        return $this->runWorkflow($instanceKey, $definition, $dryRun);
+    }
+
+    /**
      * @param  array<string,mixed>  $definition
      * @return array<string,mixed>
      */
@@ -117,7 +129,11 @@ class AutomationWorkflowEngine
 
         $state = null;
         if (! $dryRun) {
-            $state = $this->state($workflowKey);
+            $state = $this->state(
+                $workflowKey,
+                isset($definition['tenant_id']) ? (int) $definition['tenant_id'] : null,
+                isset($definition['automation_workflow_id']) ? (int) $definition['automation_workflow_id'] : null,
+            );
             $state->fill([
                 'status' => 'running',
                 'last_started_at' => now(),
@@ -140,7 +156,10 @@ class AutomationWorkflowEngine
 
                 $state->fill([
                     'status' => 'idle',
-                    'cursor' => $cursor !== '' ? $cursor : $state->cursor,
+                    // A partial failure must not move beyond unresolved source
+                    // records. The driver's overlap is helpful, but cursor safety
+                    // is the guarantee that makes replay lossless.
+                    'cursor' => $resolvedOk && $cursor !== '' ? $cursor : $state->cursor,
                     'context' => $context !== [] ? $context : $state->context,
                     'last_finished_at' => now(),
                     'last_status' => $resolvedStatus,
@@ -253,16 +272,28 @@ class AutomationWorkflowEngine
         return $driver;
     }
 
-    protected function state(string $workflowKey): AutomationWorkflowState
+    protected function state(string $workflowKey, ?int $tenantId = null, ?int $automationWorkflowId = null): AutomationWorkflowState
     {
         if (! Schema::hasTable('automation_workflow_states')) {
             throw new AutomationWorkflowException('automation_workflow_states table is missing. Run migrations first.');
         }
 
-        return AutomationWorkflowState::query()->firstOrCreate(
-            ['workflow_key' => $workflowKey],
-            ['status' => 'idle']
+        $identity = $automationWorkflowId !== null
+            ? ['automation_workflow_id' => $automationWorkflowId]
+            : ['workflow_key' => $workflowKey];
+        $state = AutomationWorkflowState::query()->firstOrCreate(
+            $identity,
+            ['workflow_key' => $workflowKey, 'status' => 'idle', 'tenant_id' => $tenantId]
         );
+
+        if (($tenantId !== null && $state->tenant_id === null) || ($automationWorkflowId !== null && $state->automation_workflow_id === null)) {
+            $state->forceFill([
+                'tenant_id' => $state->tenant_id ?? $tenantId,
+                'automation_workflow_id' => $state->automation_workflow_id ?? $automationWorkflowId,
+            ])->save();
+        }
+
+        return $state;
     }
 
     /**

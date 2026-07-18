@@ -237,6 +237,62 @@ test('billing portal endpoint creates session and redirects', function (): void 
         ->assertRedirect($portalUrl);
 });
 
+test('order calendar add-on checkout is server priced and preserves the tenant plan', function (): void {
+    config()->set('commercial.billing_readiness.checkout_active', true);
+    config()->set('services.stripe.secret', 'sk_test_123');
+
+    $tenant = Tenant::query()->create(['name' => 'Calendar Shop', 'slug' => 'calendar-shop']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create([
+        'role' => 'manager',
+        'requested_via' => 'customer_production',
+        'is_active' => true,
+        'email' => 'owner@calendar-shop.example',
+    ]);
+    $user->tenants()->attach($tenant->id, ['role' => 'manager']);
+
+    Http::fake(function (\Illuminate\Http\Client\Request $request) use ($tenant) {
+        if (str_contains($request->url(), '/v1/prices')) {
+            expect($request->data()['lookup_keys[0]'] ?? null)->toBe('addon_order_calendar_monthly');
+
+            return Http::response(['data' => [[
+                'id' => 'price_order_calendar',
+                'lookup_key' => 'addon_order_calendar_monthly',
+            ]]], 200);
+        }
+
+        if (str_contains($request->url(), '/v1/checkout/sessions')) {
+            $data = $request->data();
+            expect((string) ($data['line_items[0][price]'] ?? ''))->toBe('price_order_calendar')
+                ->and((string) ($data['metadata[purpose]'] ?? ''))->toBe('addon_checkout')
+                ->and((string) ($data['metadata[checkout_plan_key]'] ?? ''))->toBe('starter')
+                ->and((string) ($data['metadata[checkout_addons_interest]'] ?? ''))->toBe('order_calendar')
+                ->and((string) ($data['metadata[tenant_id]'] ?? ''))->toBe((string) $tenant->id)
+                ->and(json_encode($data))->not->toContain('price_evil');
+
+            return Http::response([
+                'id' => 'cs_order_calendar',
+                'url' => 'https://checkout.stripe.test/order-calendar',
+            ], 200);
+        }
+
+        return Http::response(['error' => ['message' => 'unexpected']], 500);
+    });
+
+    $this->actingAs($user)
+        ->post('http://calendar-shop.theeverbranch.com/billing/addons/order_calendar/checkout', [
+            'price_id' => 'price_evil',
+        ])
+        ->assertRedirect('https://checkout.stripe.test/order-calendar');
+
+    expect(TenantAccessProfile::query()->where('tenant_id', $tenant->id)->value('plan_key'))->toBe('starter');
+});
+
 test('unknown plan keys are rejected and do not enable checkout', function (): void {
     config()->set('commercial.billing_readiness.checkout_active', true);
     config()->set('services.stripe.secret', 'sk_test_123');

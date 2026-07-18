@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class AutomationWorkflowState extends Model
 {
     protected $fillable = [
+        'tenant_id',
+        'automation_workflow_id',
         'workflow_key',
         'status',
         'cursor',
@@ -19,6 +21,8 @@ class AutomationWorkflowState extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
+        'automation_workflow_id' => 'integer',
         'context' => 'array',
         'last_result' => 'array',
         'last_started_at' => 'datetime',

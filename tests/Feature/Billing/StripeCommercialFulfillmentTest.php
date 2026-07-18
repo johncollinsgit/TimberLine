@@ -180,6 +180,72 @@ test('landlord reconcile endpoint is gated and replays fulfillment safely', func
     expect((string) TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('growth');
 });
 
+test('add-on checkout preserves the active plan and other separately billed add-ons', function (): void {
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
+    $landlordHost = is_string($landlordHost) && $landlordHost !== '' ? strtolower($landlordHost) : 'app.theeverbranch.com';
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme-addon']);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'plan_key' => 'growth',
+        'operating_mode' => 'shopify',
+        'source' => 'stripe_fulfillment',
+    ]);
+    TenantAccessAddon::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'addon_key' => 'sms',
+        'enabled' => true,
+        'source' => 'stripe_fulfillment',
+    ]);
+
+    $event = static function (string $id, string $type, string $status) use ($tenant): string {
+        $object = [
+            'id' => $type === 'checkout.session.completed' ? 'cs_addon_1' : 'sub_addon_1',
+            'object' => $type === 'checkout.session.completed' ? 'checkout.session' : 'subscription',
+            'customer' => 'cus_addon_1',
+            'status' => $status,
+            'metadata' => [
+                'tenant_id' => (string) $tenant->id,
+                'purpose' => 'addon_checkout',
+                'checkout_plan_key' => 'growth',
+                'checkout_addons_interest' => 'order_calendar',
+            ],
+        ];
+        if ($type === 'checkout.session.completed') {
+            $object['payment_status'] = 'paid';
+            $object['subscription'] = 'sub_addon_1';
+        }
+
+        return json_encode([
+            'id' => $id,
+            'type' => $type,
+            'created' => time(),
+            'livemode' => false,
+            'data' => ['object' => $object],
+        ], JSON_THROW_ON_ERROR);
+    };
+
+    $completed = $event('evt_addon_complete_1', 'checkout.session.completed', 'complete');
+    $this->call('POST', "http://{$landlordHost}/webhooks/stripe/events", [], [], [], [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_STRIPE_SIGNATURE' => stripeSignatureHeader($completed, (string) config('services.stripe.webhook_secret')),
+    ], $completed)->assertOk();
+
+    expect((string) TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('growth')
+        ->and(TenantAccessAddon::query()->where('tenant_id', (int) $tenant->id)->where('enabled', true)->pluck('addon_key')->sort()->values()->all())
+        ->toBe(['order_calendar', 'sms']);
+
+    $deleted = $event('evt_addon_deleted_1', 'customer.subscription.deleted', 'canceled');
+    $this->call('POST', "http://{$landlordHost}/webhooks/stripe/events", [], [], [], [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_STRIPE_SIGNATURE' => stripeSignatureHeader($deleted, (string) config('services.stripe.webhook_secret')),
+    ], $deleted)->assertOk();
+
+    expect((string) TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('growth')
+        ->and(TenantAccessAddon::query()->where('tenant_id', (int) $tenant->id)->where('enabled', true)->pluck('addon_key')->sort()->values()->all())
+        ->toBe(['sms']);
+});
+
 test('subscription deleted webhook downgrades stripe-fulfilled access and keeps lifecycle truthful', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
 

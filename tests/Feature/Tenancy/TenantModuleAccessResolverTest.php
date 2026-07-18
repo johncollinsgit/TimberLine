@@ -212,7 +212,7 @@ test('workflow automations stay tenant-gated unless explicitly entitled', functi
     $after = app(TenantModuleAccessResolver::class)->module($tenant->id, 'workflow_automations');
 
     expect($before['has_access'])->toBeFalse()
-        ->and($before['reason'])->toBe('plan_upgrade_required')
+        ->and($before['reason'])->toBe('add_on_required')
         ->and($after['has_access'])->toBeTrue()
         ->and($after['source'])->toBe('override')
         ->and($after['ui_state'])->toBe('active');

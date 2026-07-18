@@ -935,6 +935,11 @@ class StripeWebhookIngestService
         string $eventId
     ): bool {
         $changed = false;
+        $eventPurpose = strtolower(trim((string) ($metadata['purpose'] ?? '')));
+        if (($stripe['last_event_purpose'] ?? '') !== $eventPurpose) {
+            $stripe['last_event_purpose'] = $eventPurpose;
+            $changed = true;
+        }
 
         if ($stripeCustomer !== '' && ($stripe['customer_reference'] ?? '') !== $stripeCustomer) {
             $stripe['customer_reference'] = $stripeCustomer;

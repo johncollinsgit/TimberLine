@@ -66,4 +66,22 @@ class HostedBillingController extends Controller
 
         return redirect()->away((string) $result['url']);
     }
+
+    public function addonCheckout(
+        Request $request,
+        string $addonKey,
+        StripeHostedBillingService $stripeService
+    ): RedirectResponse {
+        /** @var Tenant|null $tenant */
+        $tenant = $request->attributes->get('current_tenant');
+        abort_unless($tenant instanceof Tenant, 403);
+        abort_unless($request->user() instanceof User, 403);
+
+        $result = $stripeService->createAddonCheckoutSession($tenant, $request->user(), $addonKey);
+        if (! ($result['ok'] ?? false) || ! filled($result['url'] ?? null)) {
+            return back()->with('status_error', (string) ($result['message'] ?? 'Add-on checkout could not be created.'));
+        }
+
+        return redirect()->away((string) $result['url']);
+    }
 }

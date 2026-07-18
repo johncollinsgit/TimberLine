@@ -151,6 +151,7 @@
                             $ctaHref = trim((string) ($moduleState['cta_href'] ?? ''));
                             $needsWholesaleSetup = $moduleKey === 'wholesale_operations'
                                 && (string) ($moduleState['ui_state'] ?? '') === 'setup_needed';
+                            $purchase = is_array($module['purchase'] ?? null) ? (array) $module['purchase'] : [];
                         @endphp
                         <x-tenancy.module-next-step-card
                             :module="$module"
@@ -159,6 +160,14 @@
                         >
                                 @if($needsWholesaleSetup)
                                     <a class="module-store-link module-store-button--primary" href="{{ $embeddedUrl(route('shopify.app.store.wholesale.setup', [], false)) }}">Set up module</a>
+                                @elseif($cta === 'add' && filled($purchase['addon_key'] ?? null))
+                                    <form method="POST" action="{{ $embeddedUrl(route('billing.addons.checkout', ['addonKey' => $purchase['addon_key']], false)) }}">
+                                        @csrf
+                                        @if($contextTokenValue !== '')
+                                            <input type="hidden" name="context_token" value="{{ $contextTokenValue }}">
+                                        @endif
+                                        <button type="submit" class="module-store-button module-store-button--primary">Buy for {{ $purchase['price_display'] }}</button>
+                                    </form>
                                 @elseif($cta === 'add')
                                     <form method="POST" action="{{ $embeddedUrl(route('shopify.app.store.activate', ['moduleKey' => $moduleKey], false)) }}">
                                         @csrf

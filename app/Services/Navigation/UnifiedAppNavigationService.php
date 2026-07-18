@@ -51,13 +51,14 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
         $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
+        $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
         $isFlagshipTenant = $this->isFlagshipTenant($tenant);
@@ -86,6 +87,16 @@ class UnifiedAppNavigationService
                 'label' => 'Marketing',
                 'current' => $marketingCurrent,
                 'children' => $marketingChildren,
+            ];
+        }
+
+        if (($canAccessOps || $roleCanAccessMarketing) && $workflowAutomationsEnabled && Route::has('workflows.index')) {
+            $items[] = [
+                'key' => 'workflow-automations',
+                'icon' => 'bolt',
+                'href' => route('workflows.index'),
+                'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Order Calendar'),
+                'current' => request()->routeIs('workflows.*'),
             ];
         }
 

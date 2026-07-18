@@ -300,6 +300,11 @@ return [
                 'price_display' => '+$19.99/mo',
                 'summary' => 'A shared customer inbox with 5,000 monthly emails. Additional email is $1.50 per 1,000.',
             ],
+            'order_calendar' => [
+                'name' => 'Order Calendar',
+                'price_display' => '+$29/mo',
+                'summary' => 'Configurable Asana and ecommerce events on Google Calendar, with testing, run history, retries, and preserved event links.',
+            ],
             'additional_channels' => [
                 'name' => 'Additional Stores/Channels',
                 'price_display' => '+$59/mo per channel',
@@ -541,8 +546,8 @@ return [
             'workflow_automations' => [
                 'key' => 'workflow_automations',
                 'module_key' => 'workflow_automations',
-                'title' => 'Workflow Automations',
-                'description' => 'Create Zap-style trigger/action workflows inside Everbranch to replace external task-based automations.',
+                'title' => 'Order Calendar',
+                'description' => 'Turn connected work and orders into configurable Google Calendar events with dependable run history.',
                 'category' => 'marketing',
                 'availability' => 'available',
                 'fallback_mode' => 'manual_import',
@@ -561,8 +566,9 @@ return [
                 ],
                 'setup' => [
                     'setup_steps' => [
-                        'Configure Asana and Google Calendar credentials in environment settings.',
-                        'Enable the workflow and run a dry-run command to verify mapping.',
+                        'Connect an Asana account and a Google Calendar account.',
+                        'Choose the source project and destination calendar, then customize how events appear.',
+                        'Test both steps and publish the workflow when the preview looks right.',
                         'Schedule the automation command and monitor run status.',
                     ],
                     'required_fields' => [

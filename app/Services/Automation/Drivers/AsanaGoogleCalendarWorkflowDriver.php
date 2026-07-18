@@ -5,6 +5,7 @@ namespace App\Services\Automation\Drivers;
 use App\Models\AutomationWorkflowLink;
 use App\Models\AutomationWorkflowState;
 use App\Services\Automation\AutomationWorkflowException;
+use App\Services\Automation\CalendarEventPresentationService;
 use App\Services\Automation\Contracts\AutomationWorkflowDriver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\PendingRequest;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Schema;
 
 class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 {
+    public function __construct(protected CalendarEventPresentationService $calendarPresentation) {}
+
     /**
      * @param  array<string,mixed>  $definition
      * @return array<string,mixed>
@@ -36,6 +39,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         $defaultStartTime = trim((string) data_get($definition, 'action.default_start_time', '12:00:00'));
         $defaultDurationMinutes = max(1, (int) data_get($definition, 'action.default_duration_minutes', 60));
         $skipCompleted = (bool) data_get($definition, 'action.skip_completed_tasks', true);
+        $automationWorkflowId = isset($definition['automation_workflow_id']) ? (int) $definition['automation_workflow_id'] : null;
 
         $pollLimit = min(100, max(1, (int) data_get($definition, 'trigger.poll_limit', 100)));
         $maxTasksPerRun = max(1, (int) data_get($definition, 'trigger.max_tasks_per_run', 500));
@@ -44,6 +48,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 
         $modifiedSince = $this->modifiedSince(
             workflowKey: $workflowKey,
+            automationWorkflowId: $automationWorkflowId,
             bootstrapLookbackDays: $bootstrapLookbackDays,
             overlapMinutes: $overlapMinutes
         );
@@ -88,11 +93,13 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 
             if ($taskGid === '') {
                 $counts['skipped']++;
+
                 continue;
             }
 
             if ($skipCompleted && (bool) ($task['completed'] ?? false)) {
                 $counts['skipped']++;
+
                 continue;
             }
 
@@ -101,16 +108,18 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
                 workflowKey: $workflowKey,
                 timezone: $timezone,
                 defaultStartTime: $defaultStartTime,
-                defaultDurationMinutes: $defaultDurationMinutes
+                defaultDurationMinutes: $defaultDurationMinutes,
+                presentation: (array) data_get($definition, 'action.presentation', [])
             );
 
             if ($eventPayload === null) {
                 $counts['skipped']++;
+
                 continue;
             }
 
             $fingerprint = hash('sha256', json_encode($eventPayload, JSON_UNESCAPED_SLASHES));
-            $link = $this->link($workflowKey, $taskGid, ! $dryRun);
+            $link = $this->link($workflowKey, $taskGid, ! $dryRun, $automationWorkflowId);
 
             if (
                 $link !== null
@@ -118,6 +127,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
                 && trim((string) $link->source_fingerprint) === $fingerprint
             ) {
                 $counts['unchanged']++;
+
                 continue;
             }
 
@@ -149,7 +159,9 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
                     sourceId: $taskGid,
                     destinationId: $eventId,
                     sourceFingerprint: $fingerprint,
-                    task: $task
+                    task: $task,
+                    tenantId: isset($definition['tenant_id']) ? (int) $definition['tenant_id'] : null,
+                    automationWorkflowId: isset($definition['automation_workflow_id']) ? (int) $definition['automation_workflow_id'] : null,
                 );
             } catch (\Throwable $exception) {
                 $counts['failed']++;
@@ -169,10 +181,10 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         ];
     }
 
-    protected function modifiedSince(string $workflowKey, int $bootstrapLookbackDays, int $overlapMinutes): CarbonImmutable
+    protected function modifiedSince(string $workflowKey, ?int $automationWorkflowId, int $bootstrapLookbackDays, int $overlapMinutes): CarbonImmutable
     {
         $fallback = CarbonImmutable::now()->subDays($bootstrapLookbackDays);
-        $state = $this->state($workflowKey);
+        $state = $this->state($workflowKey, $automationWorkflowId);
 
         $cursor = trim((string) ($state?->cursor ?? ''));
         if ($cursor === '') {
@@ -248,7 +260,8 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         string $workflowKey,
         string $timezone,
         string $defaultStartTime,
-        int $defaultDurationMinutes
+        int $defaultDurationMinutes,
+        array $presentation = []
     ): ?array {
         $taskGid = trim((string) ($task['gid'] ?? ''));
         $summary = trim((string) ($task['name'] ?? ''));
@@ -268,28 +281,25 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 
         if ($dueAt !== '') {
             $start = CarbonImmutable::parse($dueAt)->setTimezone($timezone);
-        } else {
-            $start = CarbonImmutable::parse($dueOn.' '.$defaultStartTime, $timezone);
+            $end = $start->addMinutes($defaultDurationMinutes);
         }
 
-        $end = $start->addMinutes($defaultDurationMinutes);
-
-        $eventDescription = $description;
-        if ($permalink !== '') {
-            $eventDescription .= ($eventDescription !== '' ? "\n\n" : '').'Asana task: '.$permalink;
-        }
+        $appearance = $this->calendarPresentation->render([
+            'task_name' => $summary,
+            'notes' => $description,
+            'source' => 'Asana',
+            'status' => (bool) ($task['completed'] ?? false) ? 'Completed' : 'In progress',
+            'source_url' => $permalink,
+        ], $presentation, 'asana');
 
         return [
-            'summary' => $summary,
-            'description' => $eventDescription,
-            'start' => [
-                'dateTime' => $start->toIso8601String(),
-                'timeZone' => $timezone,
-            ],
-            'end' => [
-                'dateTime' => $end->toIso8601String(),
-                'timeZone' => $timezone,
-            ],
+            ...$appearance,
+            'start' => $dueAt !== ''
+                ? ['dateTime' => $start->toIso8601String(), 'timeZone' => $timezone]
+                : ['date' => CarbonImmutable::parse($dueOn, $timezone)->toDateString()],
+            'end' => $dueAt !== ''
+                ? ['dateTime' => $end->toIso8601String(), 'timeZone' => $timezone]
+                : ['date' => CarbonImmutable::parse($dueOn, $timezone)->addDay()->toDateString()],
             'extendedProperties' => [
                 'private' => [
                     'asanaTaskGid' => $taskGid,
@@ -468,18 +478,18 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         throw new AutomationWorkflowException($message.' (HTTP '.$response->status().($apiMessage !== '' ? ': '.$apiMessage : '').')');
     }
 
-    protected function state(string $workflowKey): ?AutomationWorkflowState
+    protected function state(string $workflowKey, ?int $automationWorkflowId = null): ?AutomationWorkflowState
     {
         if (! Schema::hasTable('automation_workflow_states')) {
             return null;
         }
 
         return AutomationWorkflowState::query()
-            ->where('workflow_key', $workflowKey)
+            ->when($automationWorkflowId !== null, fn ($query) => $query->where('automation_workflow_id', $automationWorkflowId), fn ($query) => $query->where('workflow_key', $workflowKey))
             ->first();
     }
 
-    protected function link(string $workflowKey, string $sourceId, bool $requireTable = true): ?AutomationWorkflowLink
+    protected function link(string $workflowKey, string $sourceId, bool $requireTable = true, ?int $automationWorkflowId = null): ?AutomationWorkflowLink
     {
         if (! Schema::hasTable('automation_workflow_links')) {
             if (! $requireTable) {
@@ -490,7 +500,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         }
 
         return AutomationWorkflowLink::query()
-            ->where('workflow_key', $workflowKey)
+            ->when($automationWorkflowId !== null, fn ($query) => $query->where('automation_workflow_id', $automationWorkflowId), fn ($query) => $query->where('workflow_key', $workflowKey))
             ->where('source_system', 'asana_task')
             ->where('source_id', $sourceId)
             ->first();
@@ -504,15 +514,19 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
         string $sourceId,
         string $destinationId,
         string $sourceFingerprint,
-        array $task
+        array $task,
+        ?int $tenantId = null,
+        ?int $automationWorkflowId = null,
     ): void {
+        $identity = $automationWorkflowId !== null
+            ? ['automation_workflow_id' => $automationWorkflowId, 'source_system' => 'asana_task', 'source_id' => $sourceId]
+            : ['workflow_key' => $workflowKey, 'source_system' => 'asana_task', 'source_id' => $sourceId];
         AutomationWorkflowLink::query()->updateOrCreate(
+            $identity,
             [
                 'workflow_key' => $workflowKey,
-                'source_system' => 'asana_task',
-                'source_id' => $sourceId,
-            ],
-            [
+                'tenant_id' => $tenantId,
+                'automation_workflow_id' => $automationWorkflowId,
                 'destination_system' => 'google_calendar_event',
                 'destination_id' => $destinationId,
                 'source_fingerprint' => $sourceFingerprint,

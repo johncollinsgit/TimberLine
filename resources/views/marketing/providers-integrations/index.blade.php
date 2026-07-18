@@ -26,7 +26,20 @@
             </a>
         </div>
 
-        @if(is_array($workflowAutomationSetup ?? null))
+        @if((bool) data_get($workflowAutomationModule ?? [], 'enabled') && Route::has('workflows.index'))
+            <section class="rounded-[2rem] border border-emerald-200 bg-gradient-to-br from-[#fffaf0] via-white to-sky-50 p-5 shadow-sm sm:p-6">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Workflow automations moved</p>
+                        <h2 class="mt-2 text-xl font-semibold text-zinc-950">Build and monitor automations in their own workspace</h2>
+                        <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Connections now use customer-safe account controls. OAuth credentials, tokens, polling limits, and raw IDs are no longer shown here.</p>
+                    </div>
+                    <a href="{{ route('workflows.index') }}" class="inline-flex shrink-0 items-center justify-center rounded-full bg-emerald-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm">Open automations</a>
+                </div>
+            </section>
+        @endif
+
+        @if(false)
             @php
                 $workflowSetup = $workflowAutomationSetup;
                 $workflowModule = is_array($workflowAutomationModule ?? null) ? $workflowAutomationModule : [];
@@ -73,7 +86,7 @@
                             Calendar Sync
                         </div>
                         <div>
-                            <h2 class="text-xl font-semibold text-zinc-950">{{ $workflowSetup['title'] ?? 'Workflow Automations' }}</h2>
+                            <h2 class="text-xl font-semibold text-zinc-950">{{ $workflowSetup['title'] ?? 'Order Calendar' }}</h2>
                             <p class="mt-2 text-sm text-zinc-700">
                                 Keep a Google Calendar matched to one Asana project. New dated Asana tasks become calendar events, and later task edits update the same calendar event.
                             </p>

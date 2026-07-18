@@ -154,7 +154,7 @@ Schedule::command('marketing:send-modern-forestry-bag-reminders', [
     ->runInBackground();
 
 // Zap-style internal workflow automations (Asana -> Google Calendar, etc).
-Schedule::command('automation:run')
+Schedule::command('automation:dispatch')
     ->everyTenMinutes()
     ->withoutOverlapping(15)
     ->runInBackground();
