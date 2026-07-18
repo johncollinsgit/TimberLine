@@ -162,6 +162,57 @@ class StripeWebhookIngestService
                 return ['status' => 'duplicate', 'tenant_id' => $row->tenant_id];
             }
 
+            $agreementContext = null;
+            if ($this->shouldResolveAgreementCheckoutContext(
+                metadata: $metadata,
+                object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
+                checkoutSessionId: $checkoutSessionId,
+                stripeSubscription: $stripeSubscription,
+                stripeObjectId: $stripeObjectId,
+            )) {
+                $agreementContext = $this->resolveAgreementCheckoutContext(
+                    metadata: $metadata,
+                    object: is_array(data_get($event, 'data.object')) ? (array) data_get($event, 'data.object') : [],
+                    checkoutSessionId: $checkoutSessionId,
+                    stripeSubscription: $stripeSubscription,
+                    stripeObjectId: $stripeObjectId,
+                );
+
+                if (! ($agreementContext['ok'] ?? false)) {
+                    $status = (string) ($agreementContext['status'] ?? 'ignored_agreement_security_mismatch');
+                    $tenantId = (int) ($agreementContext['tenant_id'] ?? 0) ?: null;
+                    Log::warning('stripe.webhook.agreement_context_rejected', [
+                        'event_id' => $eventId,
+                        'event_type' => $eventType,
+                        'status' => $status,
+                        'tenant_id' => $tenantId,
+                        'billing_order_id' => $metadata['billing_order_id'] ?? null,
+                    ]);
+
+                    $row->forceFill([
+                        'status' => $status,
+                        'tenant_id' => $tenantId,
+                        'processed_at' => now(),
+                    ])->save();
+
+                    return ['status' => $status, 'tenant_id' => $tenantId];
+                }
+
+                /** @var TenantBillingOrder $agreementOrder */
+                $agreementOrder = $agreementContext['order'];
+                $tenantId = (int) $agreementOrder->tenant_id;
+                $metadata = [
+                    ...$metadata,
+                    'purpose' => 'agreement_checkout',
+                    'tenant_id' => (string) $tenantId,
+                    'billing_order_id' => (string) $agreementOrder->id,
+                    'agreement_id' => (string) $agreementOrder->agreement_id,
+                    'agreement_version_id' => (string) $agreementOrder->agreement_version_id,
+                    'agreement_acceptance_id' => (string) $agreementOrder->agreement_acceptance_id,
+                    'subscription_authorization_id' => (string) $agreementOrder->subscription_authorization_id,
+                ];
+            }
+
             $tenantId = (int) ($metadata['tenant_id'] ?? 0);
             if ($tenantId < 1 && Schema::hasTable('tenant_billing_orders')) {
                 $paymentIntent = trim((string) (data_get($event, 'data.object.payment_intent') ?? ''));
@@ -330,20 +381,25 @@ class StripeWebhookIngestService
             return [
                 'status' => ($changed || $agreementChanged) ? 'processed' : 'processed_no_change',
                 'tenant_id' => $tenantId,
+                'agreement_order_id' => $agreementContext && isset($agreementContext['order']) ? (int) $agreementContext['order']->id : null,
             ];
         });
 
         $tenantId = (int) ($result['tenant_id'] ?? 0);
-        if ($tenantId > 0 && $eventType === 'checkout.session.completed' && ($metadata['purpose'] ?? null) === 'agreement_checkout') {
-            $orderId = (int) ($metadata['billing_order_id'] ?? 0);
+        $resultStatus = (string) ($result['status'] ?? '');
+        $canPostProcess = ! str_starts_with($resultStatus, 'ignored') && $resultStatus !== 'duplicate';
+        $agreementOrderId = (int) ($result['agreement_order_id'] ?? 0);
+        $isAgreementContext = $agreementOrderId > 0 || ($metadata['purpose'] ?? null) === 'agreement_checkout';
+        if ($canPostProcess && $tenantId > 0 && $eventType === 'checkout.session.completed' && $isAgreementContext) {
+            $orderId = (int) ($result['agreement_order_id'] ?? ($metadata['billing_order_id'] ?? 0));
             $order = $orderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($orderId) : null;
             if ($order) {
                 $this->agreementSchedules->configure($order);
             }
         }
-        $shouldReconcileFulfillment = $tenantId > 0 && ($metadata['purpose'] ?? null) !== 'direct_invoice';
-        if (($metadata['purpose'] ?? null) === 'agreement_checkout') {
-            $billingOrderId = (int) ($metadata['billing_order_id'] ?? 0);
+        $shouldReconcileFulfillment = $canPostProcess && $tenantId > 0 && ($metadata['purpose'] ?? null) !== 'direct_invoice';
+        if ($canPostProcess && $isAgreementContext) {
+            $billingOrderId = (int) ($result['agreement_order_id'] ?? ($metadata['billing_order_id'] ?? 0));
             $agreementOrder = $billingOrderId > 0 ? TenantBillingOrder::withoutGlobalScopes()->where('tenant_id', $tenantId)->find($billingOrderId) : null;
             $shouldReconcileFulfillment = $agreementOrder !== null
                 && filled($agreementOrder->provider_subscription_id)
@@ -394,6 +450,254 @@ class StripeWebhookIngestService
             'refund.created',
             'charge.dispute.created',
         ], true);
+    }
+
+    /**
+     * Agreement checkout webhooks are allowed to update tenant commercial state
+     * only after the signed event can be tied back to one immutable, tenant-owned
+     * billing order. Stripe can omit Checkout metadata on follow-up invoice,
+     * refund, or subscription events, so agreement context is required whenever
+     * the event carries agreement identifiers or matches an agreement order by a
+     * provider reference. Unrelated generic Stripe events with no order match are
+     * left on the normal path, while direct invoices remain separated.
+     *
+     * @param  array<string,mixed>  $metadata
+     * @param  array<string,mixed>  $object
+     */
+    protected function shouldResolveAgreementCheckoutContext(
+        array $metadata,
+        array $object,
+        string $checkoutSessionId,
+        string $stripeSubscription,
+        string $stripeObjectId,
+    ): bool {
+        $purpose = trim((string) ($metadata['purpose'] ?? ''));
+        $hasAgreementIdentifiers = $this->hasAgreementMetadataIdentifiers($metadata)
+            || $this->hasAgreementMetadataIdentifiers((array) data_get($object, 'parent.subscription_details.metadata', []))
+            || $this->hasAgreementMetadataIdentifiers((array) data_get($object, 'subscription_details.metadata', []));
+
+        if ($purpose === 'agreement_checkout') {
+            return true;
+        }
+
+        if ($purpose === 'direct_invoice' && ! $hasAgreementIdentifiers) {
+            return false;
+        }
+
+        if ((int) ($metadata['direct_invoice_id'] ?? 0) > 0 && ! $hasAgreementIdentifiers) {
+            return false;
+        }
+
+        if ($hasAgreementIdentifiers) {
+            return true;
+        }
+
+        if (! Schema::hasTable('tenant_billing_orders')) {
+            return false;
+        }
+
+        return $this->agreementOrderCandidates($object, $checkoutSessionId, $stripeSubscription, $stripeObjectId)->isNotEmpty();
+    }
+
+    /** @param array<string,mixed> $metadata */
+    protected function hasAgreementMetadataIdentifiers(array $metadata): bool
+    {
+        foreach ([
+            'billing_order_id',
+            'agreement_id',
+            'agreement_version_id',
+            'agreement_acceptance_id',
+            'subscription_authorization_id',
+        ] as $key) {
+            if ((int) ($metadata[$key] ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve and validate the exact agreement billing order before tenant-wide
+     * Stripe ledgers can be updated.
+     *
+     * @param  array<string,mixed>  $metadata
+     * @param  array<string,mixed>  $object
+     * @return array{ok:bool,status:string,tenant_id:?int,order?:TenantBillingOrder}
+     */
+    protected function resolveAgreementCheckoutContext(
+        array $metadata,
+        array $object,
+        string $checkoutSessionId,
+        string $stripeSubscription,
+        string $stripeObjectId,
+    ): array {
+        if (! Schema::hasTable('tenant_billing_orders')) {
+            return ['ok' => false, 'status' => 'ignored_agreement_order_missing', 'tenant_id' => null];
+        }
+
+        $explicitTenantId = (int) ($metadata['tenant_id'] ?? 0);
+        $explicitOrderId = (int) ($metadata['billing_order_id'] ?? data_get($object, 'parent.subscription_details.metadata.billing_order_id', data_get($object, 'subscription_details.metadata.billing_order_id', 0)));
+
+        if ($explicitOrderId > 0) {
+            $order = $this->agreementOrderWithContext($explicitOrderId);
+            if (! $order) {
+                return ['ok' => false, 'status' => 'ignored_agreement_order_missing', 'tenant_id' => $explicitTenantId ?: null];
+            }
+            if ($explicitTenantId > 0 && (int) $order->tenant_id !== $explicitTenantId) {
+                return ['ok' => false, 'status' => 'ignored_agreement_security_mismatch', 'tenant_id' => $explicitTenantId];
+            }
+            if ($this->orderReferenceConflict($order, $object, $checkoutSessionId, $stripeSubscription, $stripeObjectId)) {
+                return ['ok' => false, 'status' => 'ignored_agreement_security_mismatch', 'tenant_id' => (int) $order->tenant_id];
+            }
+
+            $invalidStatus = $this->agreementOrderInvalidStatus($order, $metadata);
+
+            return $invalidStatus === null
+                ? ['ok' => true, 'status' => 'agreement_order_verified', 'tenant_id' => (int) $order->tenant_id, 'order' => $order]
+                : ['ok' => false, 'status' => $invalidStatus, 'tenant_id' => (int) $order->tenant_id];
+        }
+
+        $candidates = $this->agreementOrderCandidates($object, $checkoutSessionId, $stripeSubscription, $stripeObjectId);
+        if ($candidates->isEmpty()) {
+            return ['ok' => false, 'status' => 'ignored_agreement_order_unresolved', 'tenant_id' => $explicitTenantId ?: null];
+        }
+        if ($candidates->count() > 1) {
+            return ['ok' => false, 'status' => 'ignored_agreement_order_ambiguous', 'tenant_id' => $explicitTenantId ?: null];
+        }
+
+        /** @var TenantBillingOrder $order */
+        $order = $candidates->first();
+        if ($explicitTenantId > 0 && (int) $order->tenant_id !== $explicitTenantId) {
+            return ['ok' => false, 'status' => 'ignored_agreement_security_mismatch', 'tenant_id' => $explicitTenantId];
+        }
+
+        $invalidStatus = $this->agreementOrderInvalidStatus($order, $metadata);
+
+        return $invalidStatus === null
+            ? ['ok' => true, 'status' => 'agreement_order_verified', 'tenant_id' => (int) $order->tenant_id, 'order' => $order]
+            : ['ok' => false, 'status' => $invalidStatus, 'tenant_id' => (int) $order->tenant_id];
+    }
+
+    protected function agreementOrderWithContext(int $orderId): ?TenantBillingOrder
+    {
+        return TenantBillingOrder::withoutGlobalScopes()
+            ->with(['agreement.currentVersion', 'acceptance', 'authorization'])
+            ->find($orderId);
+    }
+
+    /**
+     * @param  array<string,mixed>  $object
+     * @return \Illuminate\Support\Collection<int,TenantBillingOrder>
+     */
+    protected function agreementOrderCandidates(array $object, string $checkoutSessionId, string $stripeSubscription, string $stripeObjectId): \Illuminate\Support\Collection
+    {
+        $ids = collect();
+        $checkout = $checkoutSessionId !== '' ? $checkoutSessionId : (str_starts_with($stripeObjectId, 'cs_') ? $stripeObjectId : '');
+        $subscription = $stripeSubscription !== '' ? $stripeSubscription : (($object['object'] ?? '') === 'subscription' ? $stripeObjectId : trim((string) ($object['subscription'] ?? '')));
+        $paymentIntent = trim((string) ($object['payment_intent'] ?? ''));
+        $invoice = ($object['object'] ?? '') === 'invoice'
+            ? $stripeObjectId
+            : trim((string) ($object['invoice'] ?? ''));
+
+        foreach ([
+            'provider_checkout_session_id' => $checkout,
+            'provider_subscription_id' => $subscription,
+            'provider_payment_intent_id' => $paymentIntent,
+            'provider_invoice_id' => $invoice,
+        ] as $column => $value) {
+            $value = trim((string) $value);
+            if ($value === '') {
+                continue;
+            }
+            $ids = $ids->merge(TenantBillingOrder::withoutGlobalScopes()->where($column, $value)->pluck('id'));
+        }
+
+        $ids = $ids->map(fn (mixed $id): int => (int) $id)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return TenantBillingOrder::withoutGlobalScopes()
+            ->with(['agreement.currentVersion', 'acceptance', 'authorization'])
+            ->whereIn('id', $ids->all())
+            ->get();
+    }
+
+    /**
+     * @param  array<string,mixed>  $metadata
+     */
+    protected function agreementOrderInvalidStatus(TenantBillingOrder $order, array $metadata): ?string
+    {
+        $order->loadMissing(['agreement.currentVersion', 'acceptance', 'authorization']);
+        $agreement = $order->agreement;
+        $acceptance = $order->acceptance;
+        $authorization = $order->authorization;
+
+        if (! $agreement || ! $acceptance || ! $authorization) {
+            return 'ignored_agreement_context_invalid';
+        }
+
+        $tenantId = (int) $order->tenant_id;
+        if ($tenantId < 1
+            || (int) $agreement->tenant_id !== $tenantId
+            || (int) $acceptance->tenant_id !== $tenantId
+            || (int) $authorization->tenant_id !== $tenantId) {
+            return 'ignored_agreement_security_mismatch';
+        }
+
+        if ((int) $order->agreement_id !== (int) $agreement->id
+            || (int) $order->agreement_version_id !== (int) $agreement->current_version_id
+            || (int) $order->agreement_version_id !== (int) $acceptance->agreement_version_id
+            || (int) $order->agreement_version_id !== (int) $authorization->agreement_version_id
+            || (int) $order->agreement_acceptance_id !== (int) $acceptance->id
+            || (int) $order->subscription_authorization_id !== (int) $authorization->id
+            || (int) $authorization->agreement_id !== (int) $agreement->id
+            || (int) $authorization->agreement_acceptance_id !== (int) $acceptance->id) {
+            return 'ignored_agreement_context_invalid';
+        }
+
+        foreach ([
+            'agreement_id' => (int) $order->agreement_id,
+            'agreement_version_id' => (int) $order->agreement_version_id,
+            'agreement_acceptance_id' => (int) $order->agreement_acceptance_id,
+            'subscription_authorization_id' => (int) $order->subscription_authorization_id,
+        ] as $key => $expected) {
+            $actual = (int) ($metadata[$key] ?? 0);
+            if ($actual > 0 && $actual !== $expected) {
+                return 'ignored_agreement_security_mismatch';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $object
+     */
+    protected function orderReferenceConflict(TenantBillingOrder $order, array $object, string $checkoutSessionId, string $stripeSubscription, string $stripeObjectId): bool
+    {
+        $checkout = $checkoutSessionId !== '' ? $checkoutSessionId : (str_starts_with($stripeObjectId, 'cs_') ? $stripeObjectId : '');
+        $subscription = $stripeSubscription !== '' ? $stripeSubscription : (($object['object'] ?? '') === 'subscription' ? $stripeObjectId : trim((string) ($object['subscription'] ?? '')));
+        $paymentIntent = trim((string) ($object['payment_intent'] ?? ''));
+        $invoice = ($object['object'] ?? '') === 'invoice'
+            ? $stripeObjectId
+            : trim((string) ($object['invoice'] ?? ''));
+
+        foreach ([
+            'provider_checkout_session_id' => $checkout,
+            'provider_subscription_id' => $subscription,
+            'provider_payment_intent_id' => $paymentIntent,
+            'provider_invoice_id' => $invoice,
+        ] as $column => $incoming) {
+            $incoming = trim((string) $incoming);
+            $existing = trim((string) $order->{$column});
+            if ($incoming !== '' && $existing !== '' && $incoming !== $existing) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param array<string,mixed> $object @param array<string,mixed> $metadata */

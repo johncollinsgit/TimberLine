@@ -1,10 +1,14 @@
 <?php
 
 use App\Models\Agreement;
+use App\Models\StripeWebhookEvent;
 use App\Models\SubscriptionAuthorization;
 use App\Models\Tenant;
+use App\Models\TenantBillingFulfillment;
 use App\Models\TenantBillingOrder;
 use App\Models\TenantBillingReceipt;
+use App\Models\TenantBillingSubscription;
+use App\Models\TenantCommercialOverride;
 use App\Models\TenantDirectInvoice;
 use App\Services\Agreements\AgreementManagementService;
 use Illuminate\Http\Client\Request;
@@ -28,11 +32,11 @@ beforeEach(function (): void {
 });
 
 /** @return array{agreement:Agreement,token:string,password:string,url:string} */
-function stripePaymentAgreement(string $slug = 'front-yard-foods'): array
+function stripePaymentAgreement(string $slug = 'front-yard-foods', ?int $implementationAmount = 120000, ?int $dueOnAcceptance = 60000, ?int $dueBeforeLaunch = 60000): array
 {
     $tenant = Tenant::query()->create(['name' => str($slug)->headline(), 'slug' => $slug]);
     $management = app(AgreementManagementService::class);
-    $agreement = $management->prepareFrontYardFoods($tenant, null, 120000, 60000, 60000);
+    $agreement = $management->prepareFrontYardFoods($tenant, null, $implementationAmount, $dueOnAcceptance, $dueBeforeLaunch);
     $sent = $management->send($agreement, null, 'ProposalPass123');
     $token = basename(parse_url($sent['url'], PHP_URL_PATH));
 
@@ -67,7 +71,7 @@ function acceptStripeAgreement($test, array $sent): TenantBillingOrder
 }
 
 test('accepted proposal checkout is server priced and excludes Shopify and third party costs', function (): void {
-    $sent = stripePaymentAgreement();
+    $sent = stripePaymentAgreement(implementationAmount: null, dueOnAcceptance: null, dueBeforeLaunch: null);
     $order = acceptStripeAgreement($this, $sent);
     Http::fake(function (Request $request) use ($order) {
         expect($request->url())->toEndWith('/v1/checkout/sessions');
@@ -81,7 +85,7 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
             ->and($data['saved_payment_method_options[payment_method_remove]'])->toBe('enabled')
             ->and($data['subscription_data[payment_settings][save_default_payment_method]'])->toBe('on_subscription')
             ->and($data['automatic_tax[enabled]'])->toBe('false')
-            ->and(collect($data)->filter(fn ($value, $key) => str_ends_with($key, '[unit_amount]'))->values()->all())->toBe([29900, 5900, 60000])
+            ->and(collect($data)->filter(fn ($value, $key) => str_ends_with($key, '[unit_amount]'))->values()->all())->toBe([29900, 5900])
             ->and($data)->not->toContain(3900)
             ->and($data)->not->toContain(14900);
 
@@ -92,7 +96,7 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
         ->assertRedirect('https://checkout.stripe.test/cs_test_agreement');
     expect($order->fresh()->status)->toBe('checkout_pending')
         ->and($order->fresh()->provider_checkout_session_id)->toBe('cs_test_agreement')
-        ->and($order->fresh()->authorized_subtotal_cents)->toBe(95800);
+        ->and($order->fresh()->authorized_subtotal_cents)->toBe(35800);
 });
 
 test('checkout reuses saved Stripe customers and one-time work can save payment methods', function (): void {
@@ -285,4 +289,209 @@ test('failed invoices refunds disputes and expired sessions update the agreement
         'id' => 'cs_expired', 'object' => 'checkout.session',
     ], ['billing_order_id' => (string) $expiring->id]);
     expect($expiring->fresh()->status)->toBe('expired');
+});
+
+test('agreement checkout webhook with another tenant metadata is ignored before commercial state writes', function (): void {
+    config()->set('commercial.billing_readiness.lifecycle_mutations_enabled', true);
+
+    $sent = stripePaymentAgreement();
+    $order = acceptStripeAgreement($this, $sent);
+    $order->forceFill([
+        'status' => 'checkout_pending',
+        'provider_checkout_session_id' => 'cs_fyf_isolation',
+    ])->save();
+    $authorization = SubscriptionAuthorization::query()->findOrFail($order->subscription_authorization_id);
+    $collins = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+
+    [$payload, $signature] = signStripeEvent(['id' => 'evt_fyf_collins_mismatch', 'type' => 'checkout.session.completed', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'cs_fyf_isolation',
+        'object' => 'checkout.session',
+        'customer' => 'cus_wrong_tenant',
+        'subscription' => 'sub_wrong_tenant',
+        'payment_status' => 'paid',
+        'metadata' => [
+            'purpose' => 'agreement_checkout',
+            'tenant_id' => (string) $collins->id,
+            'billing_order_id' => (string) $order->id,
+            'agreement_id' => (string) $order->agreement_id,
+            'agreement_version_id' => (string) $order->agreement_version_id,
+            'agreement_acceptance_id' => (string) $order->agreement_acceptance_id,
+            'subscription_authorization_id' => (string) $order->subscription_authorization_id,
+            'checkout_plan_key' => 'starter',
+        ],
+    ]]]);
+
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $signature], $payload)
+        ->assertOk()
+        ->assertSee('ignored_agreement_security_mismatch');
+
+    expect(StripeWebhookEvent::query()->where('event_id', 'evt_fyf_collins_mismatch')->value('status'))->toBe('ignored_agreement_security_mismatch')
+        ->and((int) StripeWebhookEvent::query()->where('event_id', 'evt_fyf_collins_mismatch')->value('tenant_id'))->toBe((int) $collins->id)
+        ->and($order->fresh()->status)->toBe('checkout_pending')
+        ->and($order->fresh()->provider_customer_id)->toBeNull()
+        ->and($order->fresh()->provider_subscription_id)->toBeNull()
+        ->and($authorization->fresh()->status)->toBe('authorized_pending_provider')
+        ->and(TenantCommercialOverride::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse()
+        ->and(TenantBillingSubscription::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse()
+        ->and(TenantBillingReceipt::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse()
+        ->and(TenantBillingFulfillment::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse();
+});
+
+test('agreement webhook without purpose but wrong tenant metadata is ignored before commercial state writes', function (): void {
+    config()->set('commercial.billing_readiness.lifecycle_mutations_enabled', true);
+
+    $sent = stripePaymentAgreement();
+    $order = acceptStripeAgreement($this, $sent);
+    $order->forceFill([
+        'status' => 'processing',
+        'provider_customer_id' => 'cus_fyf_implicit',
+        'provider_subscription_id' => 'sub_fyf_implicit',
+        'provider_invoice_id' => 'in_fyf_implicit',
+    ])->save();
+    $authorization = SubscriptionAuthorization::query()->findOrFail($order->subscription_authorization_id);
+    $collins = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+
+    [$payload, $signature] = signStripeEvent(['id' => 'evt_fyf_implicit_collins', 'type' => 'invoice.paid', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'in_fyf_implicit',
+        'object' => 'invoice',
+        'customer' => 'cus_fyf_implicit',
+        'subscription' => 'sub_fyf_implicit',
+        'status' => 'paid',
+        'currency' => 'usd',
+        'total' => 95800,
+        'subtotal' => 95800,
+        'total_tax_amounts' => [],
+        'created' => time(),
+        'status_transitions' => ['paid_at' => time()],
+        'hosted_invoice_url' => 'https://invoice.stripe.test/in_fyf_implicit',
+        'invoice_pdf' => 'https://invoice.stripe.test/in_fyf_implicit.pdf',
+        'metadata' => [
+            'tenant_id' => (string) $collins->id,
+            'checkout_plan_key' => 'starter',
+        ],
+    ]]]);
+
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $signature], $payload)
+        ->assertOk()
+        ->assertSee('ignored_agreement_security_mismatch');
+
+    expect(StripeWebhookEvent::query()->where('event_id', 'evt_fyf_implicit_collins')->value('status'))->toBe('ignored_agreement_security_mismatch')
+        ->and((int) StripeWebhookEvent::query()->where('event_id', 'evt_fyf_implicit_collins')->value('tenant_id'))->toBe((int) $collins->id)
+        ->and($order->fresh()->status)->toBe('processing')
+        ->and($authorization->fresh()->status)->toBe('authorized_pending_provider')
+        ->and(TenantBillingReceipt::query()->where('provider_receipt_id', 'in_fyf_implicit')->exists())->toBeFalse()
+        ->and(TenantCommercialOverride::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse()
+        ->and(TenantBillingSubscription::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse()
+        ->and(TenantBillingFulfillment::query()->whereIn('tenant_id', [$order->tenant_id, $collins->id])->exists())->toBeFalse();
+});
+
+test('agreement checkout webhooks can resolve by provider references and remain idempotent without billing order metadata', function (): void {
+    $sent = stripePaymentAgreement();
+    $order = acceptStripeAgreement($this, $sent);
+    $order->forceFill([
+        'status' => 'processing',
+        'provider_checkout_session_id' => 'cs_fyf_provider_refs',
+        'provider_customer_id' => 'cus_fyf_provider_refs',
+        'provider_subscription_id' => 'sub_fyf_provider_refs',
+        'provider_invoice_id' => 'in_fyf_provider_refs',
+    ])->save();
+
+    [$payload, $signature] = signStripeEvent(['id' => 'evt_fyf_provider_ref_paid', 'type' => 'invoice.paid', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'in_fyf_provider_refs',
+        'object' => 'invoice',
+        'customer' => 'cus_fyf_provider_refs',
+        'subscription' => 'sub_fyf_provider_refs',
+        'status' => 'paid',
+        'currency' => 'usd',
+        'total' => 95800,
+        'subtotal' => 95800,
+        'total_tax_amounts' => [],
+        'created' => time(),
+        'status_transitions' => ['paid_at' => time()],
+        'hosted_invoice_url' => 'https://invoice.stripe.test/in_fyf_provider_refs',
+        'invoice_pdf' => 'https://invoice.stripe.test/in_fyf_provider_refs.pdf',
+        'metadata' => [
+            'tenant_id' => (string) $order->tenant_id,
+            'checkout_plan_key' => 'starter',
+        ],
+    ]]]);
+
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $signature], $payload)->assertOk();
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $signature], $payload)->assertOk();
+
+    expect(StripeWebhookEvent::query()->where('event_id', 'evt_fyf_provider_ref_paid')->count())->toBe(1)
+        ->and(StripeWebhookEvent::query()->where('event_id', 'evt_fyf_provider_ref_paid')->value('status'))->toBe('processed')
+        ->and($order->fresh()->status)->toBe('paid')
+        ->and(SubscriptionAuthorization::query()->find($order->subscription_authorization_id)->status)->toBe('provider_verified')
+        ->and(TenantBillingReceipt::query()->where('tenant_billing_order_id', $order->id)->where('provider_receipt_id', 'in_fyf_provider_refs')->count())->toBe(1)
+        ->and(TenantBillingSubscription::query()->where('tenant_id', $order->tenant_id)->where('provider_subscription_reference', 'sub_fyf_provider_refs')->count())->toBe(1)
+        ->and((string) data_get(TenantCommercialOverride::query()->where('tenant_id', $order->tenant_id)->first()?->billing_mapping ?? [], 'stripe.subscription_reference'))->toBe('sub_fyf_provider_refs');
+});
+
+test('cross tenant replay of an agreement invoice by provider reference is ignored without rebinding receipts', function (): void {
+    $sent = stripePaymentAgreement();
+    $order = acceptStripeAgreement($this, $sent);
+    $order->forceFill([
+        'status' => 'processing',
+        'provider_customer_id' => 'cus_fyf_replay',
+        'provider_subscription_id' => 'sub_fyf_replay',
+        'provider_invoice_id' => 'in_fyf_replay',
+    ])->save();
+    $collins = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+
+    [$paidPayload, $paidSignature] = signStripeEvent(['id' => 'evt_fyf_replay_source_paid', 'type' => 'invoice.paid', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'in_fyf_replay',
+        'object' => 'invoice',
+        'customer' => 'cus_fyf_replay',
+        'subscription' => 'sub_fyf_replay',
+        'status' => 'paid',
+        'currency' => 'usd',
+        'total' => 95800,
+        'subtotal' => 95800,
+        'total_tax_amounts' => [],
+        'created' => time(),
+        'status_transitions' => ['paid_at' => time()],
+        'hosted_invoice_url' => 'https://invoice.stripe.test/in_fyf_replay',
+        'invoice_pdf' => 'https://invoice.stripe.test/in_fyf_replay.pdf',
+        'metadata' => [
+            'purpose' => 'agreement_checkout',
+            'tenant_id' => (string) $order->tenant_id,
+            'checkout_plan_key' => 'starter',
+        ],
+    ]]]);
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $paidSignature], $paidPayload)->assertOk();
+    $order->refresh();
+
+    [$replayPayload, $replaySignature] = signStripeEvent(['id' => 'evt_fyf_replay_collins', 'type' => 'invoice.paid', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'in_fyf_replay',
+        'object' => 'invoice',
+        'customer' => 'cus_fyf_replay',
+        'subscription' => 'sub_fyf_replay',
+        'status' => 'paid',
+        'currency' => 'usd',
+        'total' => 95800,
+        'subtotal' => 95800,
+        'total_tax_amounts' => [],
+        'created' => time(),
+        'status_transitions' => ['paid_at' => time()],
+        'hosted_invoice_url' => 'https://invoice.stripe.test/in_fyf_replay',
+        'invoice_pdf' => 'https://invoice.stripe.test/in_fyf_replay.pdf',
+        'metadata' => [
+            'purpose' => 'agreement_checkout',
+            'tenant_id' => (string) $collins->id,
+            'checkout_plan_key' => 'starter',
+        ],
+    ]]]);
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $replaySignature], $replayPayload)
+        ->assertOk()
+        ->assertSee('ignored_agreement_security_mismatch');
+
+    expect(StripeWebhookEvent::query()->where('event_id', 'evt_fyf_replay_collins')->value('status'))->toBe('ignored_agreement_security_mismatch')
+        ->and((int) StripeWebhookEvent::query()->where('event_id', 'evt_fyf_replay_collins')->value('tenant_id'))->toBe((int) $collins->id)
+        ->and(TenantBillingReceipt::query()->where('provider_receipt_id', 'in_fyf_replay')->count())->toBe(1)
+        ->and((int) TenantBillingReceipt::query()->where('provider_receipt_id', 'in_fyf_replay')->value('tenant_id'))->toBe((int) $order->tenant_id)
+        ->and($order->fresh()->last_provider_event_id)->toBe('evt_fyf_replay_source_paid')
+        ->and(TenantCommercialOverride::query()->where('tenant_id', $collins->id)->exists())->toBeFalse()
+        ->and(TenantBillingSubscription::query()->where('tenant_id', $collins->id)->exists())->toBeFalse()
+        ->and(TenantBillingFulfillment::query()->where('tenant_id', $collins->id)->exists())->toBeFalse();
 });

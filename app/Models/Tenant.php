@@ -126,6 +126,11 @@ class Tenant extends Model
         return $this->hasMany(TenantDirectInvoice::class);
     }
 
+    public function plantInventoryItems(): HasMany
+    {
+        return $this->hasMany(PlantInventoryItem::class);
+    }
+
     public function moduleEntitlements(): HasMany
     {
         return $this->hasMany(TenantModuleEntitlement::class);

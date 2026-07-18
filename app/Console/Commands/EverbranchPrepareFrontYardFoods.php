@@ -12,7 +12,6 @@ use App\Models\Tenant;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
 use App\Services\Agreements\AgreementManagementService;
-use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Onboarding\TenantSetupStatusService;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use Illuminate\Console\Command;
@@ -45,42 +44,9 @@ class EverbranchPrepareFrontYardFoods extends Command
         'https://images.squarespace-cdn.com/content/v1/63c03400f2062a1549dffcf0/fc26df7a-430d-4097-8425-24ad3870d6fc/processed_20220615_072332.jpg',
     ];
 
-    /** @var array<string,array{url:string,file:string,caption:string,source:string,license:string}> */
-    private const PORTFOLIO_PHOTOS = [
-        'front-yard-installation' => [
-            'url' => self::SERVICE_PHOTOS[1],
-            'file' => 'front-yard-foods-edible-garden-installation.jpg',
-            'caption' => 'Edible garden installation portfolio image from Front Yard Foods.',
-            'source' => 'https://www.frontyardfoods.com/services',
-            'license' => 'Client-authorized brand asset',
-        ],
-        'front-yard-garden' => [
-            'url' => self::SERVICE_PHOTOS[2],
-            'file' => 'front-yard-foods-garden-work.jpg',
-            'caption' => 'Garden work portfolio image from Front Yard Foods.',
-            'source' => 'https://www.frontyardfoods.com/services',
-            'license' => 'Client-authorized brand asset',
-        ],
-        'apple-orchard' => [
-            'url' => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Apple_orchard.jpg',
-            'file' => 'apple-orchard-usda.jpg',
-            'caption' => 'Apple orchard reference image for the edible-orchard demonstration job.',
-            'source' => 'https://commons.wikimedia.org/wiki/File:Apple_orchard.jpg',
-            'license' => 'Public domain · USDA ARS · Scott Bauer',
-        ],
-        'tree-planting' => [
-            'url' => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Tree_Planting.jpg',
-            'file' => 'tree-planting-fquasie.jpg',
-            'caption' => 'Tree planting reference image for the fruit-tree installation demonstration job.',
-            'source' => 'https://commons.wikimedia.org/wiki/File:Tree_Planting.jpg',
-            'license' => 'CC BY-SA 4.0 · Fquasie',
-        ],
-    ];
-
     public function handle(
         LandlordCommercialConfigService $commercial,
         TenantSetupStatusService $setupStatuses,
-        WorkspaceAssetService $assets,
         AgreementManagementService $agreements,
     ): int {
         $email = strtolower(trim((string) $this->option('john-email')));
@@ -100,7 +66,7 @@ class EverbranchPrepareFrontYardFoods extends Command
         }
 
         try {
-            $result = DB::transaction(function () use ($assets, $commercial, $setupStatuses, $email): array {
+            $result = DB::transaction(function () use ($commercial, $setupStatuses, $email): array {
                 $tenant = $this->frontYardTenant();
                 $john = $this->john($email);
                 $tenant->users()->syncWithoutDetaching([
@@ -115,9 +81,18 @@ class EverbranchPrepareFrontYardFoods extends Command
                     actorId: (int) $john->id,
                 );
 
-                foreach (['customers', 'field_service', 'class_scheduling', 'reporting'] as $moduleKey) {
+                foreach (['customers', 'class_scheduling', 'plant_inventory', 'reporting'] as $moduleKey) {
                     $commercial->setTenantModuleState((int) $tenant->id, $moduleKey, true, 'configured', (int) $john->id);
                 }
+                $commercial->setTenantModuleState((int) $tenant->id, 'field_service', false, 'not_started', (int) $john->id);
+                $commercial->setTenantModuleEntitlement((int) $tenant->id, 'plant_inventory', [
+                    'availability_status' => 'available',
+                    'enabled_status' => 'enabled',
+                    'billing_status' => 'custom_contract',
+                    'entitlement_source' => 'front_yard_foods_launch_partner',
+                    'notes' => 'Front Yard Foods launch-only plant inventory workspace. Keep hidden from other tenants until productized.',
+                    'metadata' => ['launch_scope' => 'front_yard_foods_only', 'mobile_hidden' => true],
+                ], (int) $john->id);
                 $commercial->setTenantModuleEntitlement((int) $tenant->id, 'messaging', [
                     'availability_status' => 'available',
                     'enabled_status' => 'enabled',
@@ -133,14 +108,14 @@ class EverbranchPrepareFrontYardFoods extends Command
                     'business_profile_status' => 'ready',
                     'import_path' => 'manual',
                     'csv_manual_status' => 'not_started',
-                    'module_interests' => ['customers', 'field_service', 'class_scheduling', 'messaging', 'uploads', 'reporting'],
+                    'module_interests' => ['customers', 'class_scheduling', 'plant_inventory', 'messaging', 'uploads', 'reporting'],
                     'mobile_interest' => 'ios',
                     'plan_interest' => 'base',
                     'billing_lane_interest' => 'undecided',
                     'implementation_help_interest' => true,
                     'commercial_review_status' => 'reviewed',
                     'landlord_review_status' => 'reviewed',
-                    'next_recommended_action' => 'Demonstrate class signup, customer follow-up, garden consultation jobs, and photo history.',
+                    'next_recommended_action' => 'Demonstrate class signup, garden consultation scheduling, customer follow-up, and plant inventory holds.',
                     'commercial_next_action' => 'Keep messaging in demo mode until email/SMS providers and consent are verified.',
                     'internal_notes' => 'Front Yard Foods guided demonstration tenant. Prefer tenant 4, then the next open tenant ID. Website branding and photos are copied into tenant-owned demo assets.',
                     'reviewed_at' => now(),
@@ -151,7 +126,7 @@ class EverbranchPrepareFrontYardFoods extends Command
                 $customers = $this->customers($tenant);
                 $classes = $this->classes($tenant);
                 $this->enrollments($tenant, $classes, $customers);
-                $this->jobsAndPhotos($tenant, $john, $customers, $assets);
+                $this->archiveFrontYardDemoJobs($tenant);
 
                 return [
                     'tenant_id' => (int) $tenant->id,
@@ -385,53 +360,25 @@ class EverbranchPrepareFrontYardFoods extends Command
         }
     }
 
-    /** @param array<string,MarketingProfile> $customers */
-    protected function jobsAndPhotos(Tenant $tenant, User $john, array $customers, WorkspaceAssetService $assets): void
+    protected function archiveFrontYardDemoJobs(Tenant $tenant): void
     {
-        $definitions = [
-            'fyf-demo-garden-consultation' => ['Garden consultation & site plan', $customers['elliot'], '24 Oakview Lane', 'Greenville', 'SC', ['front-yard-garden']],
-            'fyf-demo-raised-bed-installation' => ['Raised-bed garden installation', $customers['sofia'], '108 Cedar Street', 'Greenville', 'SC', ['front-yard-installation', 'front-yard-garden']],
-            'fyf-demo-fruit-tree-installation' => ['Fruit tree planting & care plan', $customers['maya'], '42 Maple Terrace', 'Greenville', 'SC', ['tree-planting', 'front-yard-installation']],
-            'fyf-demo-edible-orchard' => ['Backyard edible orchard installation', $customers['daniel'], '315 Willow Bend', 'Greenville', 'SC', ['apple-orchard', 'tree-planting']],
-        ];
-        foreach ($definitions as $offset => [$title, $customer, $address, $city, $state, $photoKeys]) {
-            $externalId = (string) $offset;
-            $daysUntil = 3 + (array_search($externalId, array_keys($definitions), true) * 3);
-            $job = FieldServiceJob::query()->updateOrCreate(
-                ['tenant_id' => (int) $tenant->id, 'external_source' => 'front_yard_foods_demo', 'external_id' => $externalId],
-                [
-                    'marketing_profile_id' => (int) $customer->id,
-                    'assigned_user_id' => (int) $john->id,
-                    'title' => $title,
-                    'status' => 'scheduled',
-                    'operational_status' => 'scheduled',
-                    'status_source' => 'manual',
-                    'customer_name' => trim($customer->first_name.' '.$customer->last_name),
-                    'customer_email' => $customer->email,
-                    'customer_phone' => '8646165468',
-                    'service_address_line_1' => $address,
-                    'service_city' => $city,
-                    'service_state' => $state,
-                    'description' => 'Demo property work record for consultation notes, tasks, materials, and before/after photos.',
-                    'scheduled_for' => now()->addDays($daysUntil)->setTime(9, 0),
-                    'scheduled_end_at' => now()->addDays($daysUntil)->setTime(11, 0),
-                    'metadata' => ['demo' => true],
-                ]
-            );
-            foreach ($photoKeys as $photoKey) {
-                $photo = self::PORTFOLIO_PHOTOS[$photoKey];
-                $assets->importRemoteImage(
-                    $tenant,
-                    $john,
-                    $photo['url'],
-                    'front-yard-foods-'.$photoKey,
-                    $photo['file'],
-                    [(int) $job->id],
-                    $photo['caption'],
-                    ['demo', 'front-yard-foods', 'portfolio', 'fruit-tree'],
-                    ['source_url' => $photo['source'], 'license' => $photo['license'], 'demo_reference' => true],
-                );
-            }
-        }
+        FieldServiceJob::query()
+            ->forTenantId((int) $tenant->id)
+            ->where('external_source', 'front_yard_foods_demo')
+            ->orderBy('id')
+            ->chunkById(100, function ($jobs): void {
+                foreach ($jobs as $job) {
+                    $metadata = is_array($job->metadata) ? $job->metadata : [];
+
+                    $job->forceFill([
+                        'status' => 'done',
+                        'operational_status' => 'history',
+                        'archived_at' => $job->archived_at ?? now(),
+                        'metadata' => array_merge($metadata, [
+                            'archived_reason' => 'front_yard_foods_events_classes_launch_scope',
+                        ]),
+                    ])->save();
+                }
+            });
     }
 }

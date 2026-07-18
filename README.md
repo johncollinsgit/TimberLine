@@ -2,6 +2,7 @@
 
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
+- Status: direct invoices are production-ready pending live gates after an internal paid Stripe sandbox invoice smoke test. Live customer invoicing remains blocked until production secrets, webhook signing, Relay payout verification, tax/accounting approval, production mail, and first-tenant allowlisting pass. Evidence: `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.
 - Landlord operators can draft tenant-scoped direct invoices from `/landlord/invoices` or `/landlord/tenants/{tenant}/invoices/create` for approved Everbranch service, Evergrove implementation, supplemental work, or milestone charges.
 - Direct invoices are separate from accepted-proposal Checkout and from future Shopify App Store billing. Shopify plan costs, Shopify processing charges, taxes collected by Shopify, and third-party app subscriptions must stay informational and must not be entered as Everbranch invoice lines.
 - Invoice sending is disabled unless `EVERBRANCH_STRIPE_INVOICING_ENABLED=true`, the tenant slug is allowlisted in `EVERBRANCH_STRIPE_INVOICING_TENANT_SLUGS`, Stripe keys/webhook signing pass `config:doctor`, and the production tax/Relay gates are satisfied for live mode.

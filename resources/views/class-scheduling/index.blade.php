@@ -2,19 +2,27 @@
     $calendarStart = $month->copy()->startOfMonth()->startOfWeek();
     $calendarEnd = $month->copy()->endOfMonth()->endOfWeek();
     $classesByDate = $classes->groupBy(fn ($class) => $class->starts_at->format('Y-m-d'));
+    $isFrontYardFoods = $tenant->slug === 'front-yard-foods';
 @endphp
 
-<x-layouts::app.sidebar title="Classes">
+<x-layouts::app.sidebar :title="$isFrontYardFoods ? 'Events & Classes' : 'Classes'">
     <div class="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-5 sm:px-6">
         @if(session('status'))<div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900">{{ session('status') }}</div>@endif
 
         <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-800">Class Scheduling Branch</div>
-                <h1 class="mt-2 text-3xl font-semibold text-zinc-950">Classes & appointments</h1>
-                <p class="mt-2 max-w-2xl text-sm text-zinc-600">Publish available classes, open a session to see its customers, and schedule reminders before class.</p>
+                <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-800">{{ $isFrontYardFoods ? 'Front Yard Foods calendar' : 'Class Scheduling Branch' }}</div>
+                <h1 class="mt-2 text-3xl font-semibold text-zinc-950">{{ $isFrontYardFoods ? 'Events & Classes' : 'Classes & appointments' }}</h1>
+                <p class="mt-2 max-w-2xl text-sm text-zinc-600">
+                    {{ $isFrontYardFoods ? 'Create classes, workshops, garden consultations, and market pickup windows. Shopify publishing is pending until the Shopify storefront is connected and mapped.' : 'Publish available classes, open a session to see its customers, and schedule reminders before class.' }}
+                </p>
             </div>
-            <a href="{{ $publicUrl }}" target="_blank" rel="noopener" class="fb-btn fb-btn-secondary">Preview customer signup</a>
+            <div class="flex flex-wrap gap-2">
+                @if($isFrontYardFoods)
+                    <span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">Shopify publish pending</span>
+                @endif
+                <a href="{{ $publicUrl }}" target="_blank" rel="noopener" class="fb-btn fb-btn-secondary">Preview customer signup</a>
+            </div>
         </header>
 
         <section class="mf-app-card overflow-hidden rounded-3xl">
@@ -49,11 +57,11 @@
 
         <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
             <section class="mf-app-card rounded-3xl p-5 sm:p-6">
-                <h2 class="text-xl font-semibold text-zinc-950">Add a class</h2>
+                <h2 class="text-xl font-semibold text-zinc-950">{{ $isFrontYardFoods ? 'Add an event, class, or consultation' : 'Add a class' }}</h2>
                 <form method="POST" action="{{ route('class-scheduling.store') }}" class="mt-5 grid gap-4 sm:grid-cols-2">
                     @csrf
-                    <label class="sm:col-span-2 text-sm font-medium text-zinc-700">Class name<input name="title" required value="{{ old('title') }}" class="mt-1.5 w-full rounded-xl border-zinc-200" placeholder="Sourdough Basics"></label>
-                    <label class="text-sm font-medium text-zinc-700">Category<input name="category" value="{{ old('category') }}" class="mt-1.5 w-full rounded-xl border-zinc-200" placeholder="Cooking"></label>
+                    <label class="sm:col-span-2 text-sm font-medium text-zinc-700">{{ $isFrontYardFoods ? 'Event/class name' : 'Class name' }}<input name="title" required value="{{ old('title') }}" class="mt-1.5 w-full rounded-xl border-zinc-200" placeholder="{{ $isFrontYardFoods ? 'Strawberry pickup window or garden consultation' : 'Sourdough Basics' }}"></label>
+                    <label class="text-sm font-medium text-zinc-700">Category<input name="category" value="{{ old('category') }}" class="mt-1.5 w-full rounded-xl border-zinc-200" placeholder="{{ $isFrontYardFoods ? 'Workshop, consultation, market pickup' : 'Cooking' }}"></label>
                     <label class="text-sm font-medium text-zinc-700">Location<input name="location" value="{{ old('location') }}" class="mt-1.5 w-full rounded-xl border-zinc-200" placeholder="Greenville, SC"></label>
                     <label class="text-sm font-medium text-zinc-700">Starts<input type="datetime-local" name="starts_at" required value="{{ old('starts_at') }}" class="mt-1.5 w-full rounded-xl border-zinc-200"></label>
                     <label class="text-sm font-medium text-zinc-700">Ends<input type="datetime-local" name="ends_at" value="{{ old('ends_at') }}" class="mt-1.5 w-full rounded-xl border-zinc-200"></label>
@@ -64,13 +72,13 @@
                     <label class="sm:col-span-2 text-sm font-medium text-zinc-700">Photo URL<input type="url" name="image_url" value="{{ old('image_url') }}" class="mt-1.5 w-full rounded-xl border-zinc-200" placeholder="https://..."></label>
                     <label class="sm:col-span-2 text-sm font-medium text-zinc-700">Description<textarea name="description" rows="4" class="mt-1.5 w-full rounded-xl border-zinc-200">{{ old('description') }}</textarea></label>
                     <label class="sm:col-span-2 flex items-center gap-2 text-sm text-zinc-700"><input type="checkbox" name="registration_open" value="1" checked class="rounded border-zinc-300 text-emerald-700">Open customer registration</label>
-                    <div class="sm:col-span-2"><button class="fb-btn fb-btn-primary">Add class</button></div>
+                    <div class="sm:col-span-2"><button class="fb-btn fb-btn-primary">{{ $isFrontYardFoods ? 'Add to calendar' : 'Add class' }}</button></div>
                 </form>
             </section>
 
             <section id="class-settings" class="mf-app-card rounded-3xl p-5 sm:p-6">
                 <h2 class="text-xl font-semibold text-zinc-950">Signup settings</h2>
-                <p class="mt-2 text-sm text-zinc-600">These settings control the customer-facing class page.</p>
+                <p class="mt-2 text-sm text-zinc-600">{{ $isFrontYardFoods ? 'These settings control the customer-facing events/classes signup preview. Shopify publishing remains disabled until connection is complete.' : 'These settings control the customer-facing class page.' }}</p>
                 <form method="POST" action="{{ route('class-scheduling.settings.update') }}" class="mt-5 space-y-4">
                     @csrf @method('PUT')
                     <label class="flex items-center gap-2 text-sm font-medium text-zinc-800"><input type="checkbox" name="public_signup_enabled" value="1" @checked($settings->public_signup_enabled) class="rounded border-zinc-300 text-emerald-700">Publish customer signup page</label>

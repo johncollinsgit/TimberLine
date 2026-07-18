@@ -51,10 +51,13 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
+        $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
+        $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
+        $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
         $isFlagshipTenant = $this->isFlagshipTenant($tenant);
@@ -94,12 +97,22 @@ class UnifiedAppNavigationService
                     'key' => 'class-scheduling',
                     'icon' => 'calendar-days',
                     'href' => route('class-scheduling.index'),
-                    'label' => 'Classes',
+                    'label' => $this->isFrontYardFoodsTenant($tenant) ? 'Events & Classes' : 'Classes',
                     'current' => request()->routeIs('class-scheduling.*'),
                     'children' => [
                         ['key' => 'class-scheduling-calendar', 'icon' => 'calendar-days', 'href' => route('class-scheduling.index'), 'label' => 'Calendar', 'current' => request()->routeIs('class-scheduling.index')],
-                        ['key' => 'class-scheduling-settings', 'icon' => 'cog-6-tooth', 'href' => route('class-scheduling.index').'#class-settings', 'label' => 'Signup settings', 'current' => false],
+                        ['key' => 'class-scheduling-settings', 'icon' => 'cog-6-tooth', 'href' => route('class-scheduling.index').'#class-settings', 'label' => $this->isFrontYardFoodsTenant($tenant) ? 'Signup & publishing' : 'Signup settings', 'current' => false],
                     ],
+                ];
+            }
+
+            if ($plantInventoryEnabled && Route::has('plant-inventory.index')) {
+                $workItems[] = [
+                    'key' => 'plant-inventory',
+                    'icon' => 'archive-box',
+                    'href' => route('plant-inventory.index'),
+                    'label' => 'Plant Inventory',
+                    'current' => request()->routeIs('plant-inventory.*'),
                 ];
             }
 
@@ -138,6 +151,28 @@ class UnifiedAppNavigationService
             }
 
             $opsItems = $workItems;
+
+            if ($this->isFrontYardFoodsTenant($tenant)) {
+                if ($customersEnabled && Route::has('marketing.customers')) {
+                    $opsItems[] = [
+                        'key' => 'front-yard-customers',
+                        'icon' => 'users',
+                        'href' => route('marketing.customers'),
+                        'label' => 'Customers',
+                        'current' => request()->routeIs('marketing.customers*'),
+                    ];
+                }
+
+                if ($messagingRelevant && Route::has('marketing.messages')) {
+                    $opsItems[] = [
+                        'key' => 'front-yard-messaging',
+                        'icon' => 'chat-bubble-left-right',
+                        'href' => route('marketing.messages'),
+                        'label' => 'Messaging · pending',
+                        'current' => request()->routeIs('marketing.messages*'),
+                    ];
+                }
+            }
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
             $items = $prioritizeGrowth
@@ -777,6 +812,11 @@ class UnifiedAppNavigationService
 
         return in_array($slug, array_map('strtolower', (array) ($alpha['tenant_slugs'] ?? [])), true)
             || in_array($name, array_map('strtolower', (array) ($alpha['tenant_names'] ?? [])), true);
+    }
+
+    protected function isFrontYardFoodsTenant(?Tenant $tenant): bool
+    {
+        return $tenant instanceof Tenant && strtolower(trim((string) $tenant->slug)) === 'front-yard-foods';
     }
 
     protected function isLandlordShell(Request $request): bool

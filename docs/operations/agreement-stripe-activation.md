@@ -1,5 +1,11 @@
 # Agreement Stripe Activation Runbook
 
+## Current status — 2026-07-17
+
+Direct Stripe invoices are **production-ready pending live gates**. A Stripe sandbox hosted invoice was sent to the internal test recipient, paid by card, verified through the Stripe API, and backed by `invoice.paid` / `invoice.payment_succeeded` event evidence. See `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.
+
+This status applies only to landlord-created direct invoices for approved Everbranch/Evergrove work. Proposal Checkout, tenant self-serve billing, Shopify App Store billing, subscription entitlement fulfillment, and live payment collection remain gated and disabled until their separate activation requirements pass.
+
 ## Fixed architecture
 
 - Stripe is the only direct-client processor. Relay Financial is the Stripe payout bank only; do not enable Relay invoicing for Everbranch orders.
@@ -18,6 +24,8 @@ Keep `EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED=false` and `EVERBRANCH_STRIPE_INVOIC
 5. An accountant supplies written taxability/registration direction. Set `EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED=true` only after that evidence is attached. Enable `EVERBRANCH_AGREEMENT_STRIPE_TAX_ENABLED` only for approved registrations.
 6. Stripe Billing Portal is configured for payment-method and invoice access only. Subscription cancellation stays in Everbranch so termination and the 30-day export window are retained.
 7. Test-mode evidence covers card success/failure, ACH pending/success/failure, six promotional cycles followed by the standard phase, direct invoice send/pay/fail/void/refund/dispute paths, duplicate webhooks, receipts, and tenant isolation.
+
+Direct invoice note: the July 17, 2026 smoke test satisfies the first internal card-paid sandbox proof for landlord-created direct invoices. It does not satisfy the remaining live gates: live keys, production webhook registration, Relay payout verification, accountant tax determination, production mail, ACH settlement evidence, refund/dispute replay, and first-tenant live allowlisting.
 
 ## Credential placement
 
@@ -40,8 +48,9 @@ Keep `EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED=false` and `EVERBRANCH_STRIPE_INVOIC
 ## Staged enablement
 
 1. Set the target flow flag true with test keys and an explicit tenant allowlist.
-2. For proposal Checkout, complete an accepted-proposal card test and ACH test. Confirm Stripe invoices and mirrored Everbranch receipts match.
+2. For proposal Checkout, complete an accepted-proposal card test and ACH test. Confirm Stripe invoices and mirrored Everbranch receipts match. For Front Yard Foods, copy `docs/operations/evidence/front-yard-foods-proposal-checkout-smoke-template.md` into a dated evidence note and require `php artisan everbranch:front-yard-foods-readiness --require-paid` before sending a client link.
 3. For direct invoices, create a draft, send it through Stripe test mode, pay by card, test ACH pending-to-paid, void an open invoice, and replay webhook duplicates.
+   - Completed internal card-paid direct invoice smoke test: 2026-07-17, Stripe invoice `GHPJWFCX-0001`.
 4. Configure live secrets, confirm the tax decision and Relay payout evidence, then repeat with an internal allowlisted tenant.
 5. Add Front Yard Foods to the live allowlist. Use `*` only after multiple-client production evidence is approved.
 

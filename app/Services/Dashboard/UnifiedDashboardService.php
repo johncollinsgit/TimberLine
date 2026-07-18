@@ -2,6 +2,7 @@
 
 namespace App\Services\Dashboard;
 
+use App\Models\Agreement;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceVehicle;
@@ -11,6 +12,7 @@ use App\Models\MarketingProfile;
 use App\Models\Order;
 use App\Models\ScheduledClass;
 use App\Models\Tenant;
+use App\Models\TenantBillingOrder;
 use App\Models\User;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
@@ -20,6 +22,7 @@ use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
 class UnifiedDashboardService
@@ -53,13 +56,14 @@ class UnifiedDashboardService
             ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
             : ['sections' => []];
         $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
-        $tradeMetrics = $this->tradeMetrics($tenant, $profile, $range);
+        $clientFacingFieldService = $this->clientFacingFieldServiceEnabled($tenant);
+        $tradeMetrics = $clientFacingFieldService ? $this->tradeMetrics($tenant, $profile, $range) : null;
         $ownerReport = $this->ownerReport($tenant, $user, $range['key']);
         $summaryCards = $ownerReport
             ? $this->financialSummaryCards($ownerReport)
-            : $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics);
+            : $this->summaryCards($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics, $clientFacingFieldService);
 
-        $hero = $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics);
+        $hero = $this->heroMetric($tenantId, $profile, $canAccessMarketing, $canAccessOps, $range, $tradeMetrics, $clientFacingFieldService);
         $hero['href'] = $this->destinationHref((array) ($hero['destination'] ?? []), $tenant, $range['key']);
         $summaryCards = array_map(function (array $card) use ($tenant, $range): array {
             $card['href'] = $this->destinationHref((array) ($card['destination'] ?? []), $tenant, $range['key']);
@@ -81,11 +85,76 @@ class UnifiedDashboardService
             'experience_profile' => $profile,
             'hero' => $hero,
             'summary_cards' => $summaryCards,
-            'upcoming_jobs' => $ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant),
+            'upcoming_jobs' => $clientFacingFieldService ? ($ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant)) : [],
             'class_calendar' => $this->classCalendar($tenant),
+            'front_yard_launch' => $this->frontYardLaunch($tenant),
             'owner_reporting' => $ownerReport,
-            'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps),
+            'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
+        ];
+    }
+
+    /** @return array<string,mixed>|null */
+    protected function frontYardLaunch(?Tenant $tenant): ?array
+    {
+        if (! $tenant || (string) $tenant->slug !== 'front-yard-foods') {
+            return null;
+        }
+
+        $agreement = Schema::hasTable('agreements')
+            ? Agreement::query()
+                ->forTenantId((int) $tenant->id)
+                ->where('template_key', 'front_yard_foods_launch_partner')
+                ->with(['acceptance', 'billingOrders' => fn ($query) => $query->latest()])
+                ->latest()
+                ->first()
+            : null;
+
+        /** @var TenantBillingOrder|null $billingOrder */
+        $billingOrder = $agreement?->billingOrders?->first();
+        $paymentStatus = $billingOrder?->status ?? 'waiting_for_signature';
+        $agreementStatus = $agreement?->acceptance ? 'signed' : ($agreement ? 'ready_to_sign' : 'drafting');
+
+        return [
+            'headline' => 'Welcome, Laura',
+            'subheadline' => 'Front Yard Foods is being prepared as a calm, central workspace for the Shopify migration, Square mapping, classes, consultations, customers, messaging, sales context, and plant inventory.',
+            'brand' => [
+                'name' => 'Front Yard Foods',
+                'primary' => '#42654a',
+                'cream' => '#fbf6e6',
+                'accent' => '#e6b84d',
+            ],
+            'explain' => 'Once Shopify and Square are connected, this dashboard will start tying together customers, messaging readiness, schedulable events, product sales context, and inventory on one page. Publishing and sync remain pending until each provider connection is approved and tested.',
+            'statuses' => [
+                ['label' => 'Agreement', 'value' => str_replace('_', ' ', $agreementStatus), 'tone' => $agreementStatus === 'signed' ? 'green' : 'amber'],
+                ['label' => 'Payment', 'value' => str_replace('_', ' ', $paymentStatus), 'tone' => $paymentStatus === 'paid' ? 'green' : 'amber'],
+                ['label' => 'Shopify/Square sync', 'value' => 'pending connection', 'tone' => 'amber'],
+            ],
+            'evergrove_doing' => [
+                'Prepare Shopify migration plan.',
+                'Match Shopify design to the current Squarespace site.',
+                'Set up product and inventory structure.',
+                'Prepare Square → Shopify inventory mapping.',
+                'Configure classes/events and pickup/delivery workflows.',
+                'Review launch readiness before domain cutover.',
+            ],
+            'client_needs' => [
+                'Squarespace login or collaborator invite.',
+                'Shopify login or collaborator invite.',
+                'Square login or collaborator invite.',
+                'Inventory and product files.',
+                'Customer files currently used for the company.',
+                'Website photos, copy, policies, delivery/pickup details, and class/consultation info.',
+            ],
+            'data_assurance' => [
+                'Your data is used only to perform the approved migration, setup, support, reporting, security, and client-authorized integrations.',
+                'Your data is not sold.',
+                'Your data is not shared with unrelated third parties.',
+                'Shopify, Square, Substack, booking, and website access is used only for the approved implementation.',
+            ],
+            'agreement_href' => route('agreements.index', ['tenant' => $tenant->slug]),
+            'events_href' => Route::has('class-scheduling.index') ? route('class-scheduling.index') : null,
+            'inventory_href' => Route::has('plant-inventory.index') ? route('plant-inventory.index') : null,
         ];
     }
 
@@ -121,7 +190,7 @@ class UnifiedDashboardService
     /** @return array<int,array<string,mixed>> */
     protected function upcomingJobs(?Tenant $tenant): array
     {
-        if (! $tenant || ! Schema::hasTable('field_service_jobs')) {
+        if (! $this->clientFacingFieldServiceEnabled($tenant) || ! Schema::hasTable('field_service_jobs')) {
             return [];
         }
 
@@ -177,7 +246,7 @@ class UnifiedDashboardService
     /**
      * @return array<string,mixed>
      */
-    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null): array
+    protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null, bool $clientFacingFieldService = true): array
     {
         $channelType = (string) ($profile['channel_type'] ?? 'direct');
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
@@ -206,7 +275,7 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($canAccessOps && $tenantId !== null && $useCase === 'field_service' && Schema::hasTable('field_service_jobs')) {
+        if ($clientFacingFieldService && $canAccessOps && $tenantId !== null && $useCase === 'field_service' && Schema::hasTable('field_service_jobs')) {
             $openJobs = (int) FieldServiceJob::query()
                 ->forTenantId($tenantId)
                 ->whereNotIn('status', ['done'])
@@ -271,7 +340,7 @@ class UnifiedDashboardService
     /**
      * @return array<int,array<string,string|int>>
      */
-    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null): array
+    protected function summaryCards(?int $tenantId, array $profile, array $catalog, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null, bool $clientFacingFieldService = true): array
     {
         $cards = [];
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
@@ -299,7 +368,7 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($tenantId !== null && $useCase === 'field_service') {
+        if ($clientFacingFieldService && $tenantId !== null && $useCase === 'field_service') {
             if (Schema::hasTable('marketing_profiles')) {
                 $cards[] = [
                     'label' => 'Customers',
@@ -471,11 +540,12 @@ class UnifiedDashboardService
         array $profile,
         array $catalog,
         bool $canAccessMarketing,
-        bool $canAccessOps
+        bool $canAccessOps,
+        bool $clientFacingFieldService = true
     ): array {
         $actions = [];
 
-        if ($canAccessOps && (string) ($profile['use_case_profile'] ?? 'ops') === 'field_service' && route('field-service.index', [], false)) {
+        if ($clientFacingFieldService && $canAccessOps && (string) ($profile['use_case_profile'] ?? 'ops') === 'field_service' && route('field-service.index', [], false)) {
             $actions[] = [
                 'label' => 'Add a customer',
                 'description' => 'Create the customer and first job together.',
@@ -603,6 +673,15 @@ class UnifiedDashboardService
                 'href' => route('marketing.modules', ['module' => (string) ($module['module_key'] ?? '')]),
             ];
         }, $rows);
+    }
+
+    protected function clientFacingFieldServiceEnabled(?Tenant $tenant): bool
+    {
+        if (! $tenant instanceof Tenant) {
+            return false;
+        }
+
+        return $this->moduleAccess->canAccess((int) $tenant->id, 'field_service');
     }
 
     /** @param array<string,mixed> $destination */
