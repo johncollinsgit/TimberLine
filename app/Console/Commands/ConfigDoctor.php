@@ -87,14 +87,17 @@ class ConfigDoctor extends Command
 
         $agreementCheckoutEnabled = (bool) config('commercial.billing_readiness.agreement_checkout.enabled', false);
         $directInvoicingEnabled = (bool) config('commercial.billing_readiness.direct_invoicing.enabled', false);
-        if (! $agreementCheckoutEnabled && ! $directInvoicingEnabled) {
-            $this->line('  <fg=yellow>–</> agreement checkout and direct invoicing are disabled (Stripe validation skipped)');
+        $selfServeCheckoutEnabled = (bool) config('commercial.billing_readiness.checkout_active', false)
+            || (bool) config('commercial.billing_readiness.lifecycle_mutations_enabled', false);
+        if (! $agreementCheckoutEnabled && ! $directInvoicingEnabled && ! $selfServeCheckoutEnabled) {
+            $this->line('  <fg=yellow>–</> hosted checkout, agreement checkout, and direct invoicing are disabled (Stripe validation skipped)');
 
             return 0;
         }
 
         $this->line('  Agreement checkout: '.($agreementCheckoutEnabled ? '<info>enabled</info>' : '<fg=yellow>disabled</>'));
         $this->line('  Direct invoicing: '.($directInvoicingEnabled ? '<info>enabled</info>' : '<fg=yellow>disabled</>'));
+        $this->line('  Self-serve checkout: '.($selfServeCheckoutEnabled ? '<info>enabled</info>' : '<fg=yellow>disabled</>'));
 
         $allowProductionTestMode = (bool) config('commercial.billing_readiness.allow_production_test_mode', false);
         $enabledTenantSlugs = $this->enabledStripeTenantSlugs($agreementCheckoutEnabled, $directInvoicingEnabled);
@@ -157,7 +160,7 @@ class ConfigDoctor extends Command
                 if ($valid) {
                     $this->line("  <info>✓</info> {$name}");
                 } else {
-                    $this->line("  <fg=red>✗ {$name}=false — required before live agreement checkout.</>");
+                    $this->line("  <fg=red>✗ {$name}=false — required before live Stripe billing.</>");
                     $failures++;
                 }
             }

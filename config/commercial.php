@@ -415,8 +415,8 @@ return [
     ],
 
     'billing_readiness' => [
-        'checkout_active' => false,
-        'lifecycle_mutations_enabled' => false,
+        'checkout_active' => (bool) env('EVERBRANCH_STRIPE_CHECKOUT_ACTIVE', false),
+        'lifecycle_mutations_enabled' => (bool) env('EVERBRANCH_STRIPE_LIFECYCLE_MUTATIONS_ENABLED', false),
         'allow_production_test_mode' => (bool) env('EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED', false),
         'agreement_checkout' => [
             'enabled' => (bool) env('EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED', false),
