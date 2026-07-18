@@ -150,6 +150,7 @@ class ConfigDoctor extends Command
         if ($publishableMode === 'live' && $secretMode === 'live') {
             $readinessPath = $directInvoicingEnabled ? 'direct_invoicing' : 'agreement_checkout';
             foreach ([
+                'EVERBRANCH_STRIPE_LIVE_WEBHOOK_VERIFIED' => (bool) config('commercial.billing_readiness.'.$readinessPath.'.live_webhook_verified', false),
                 'EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED' => (bool) config('commercial.billing_readiness.'.$readinessPath.'.tax_decision_confirmed', false),
                 'EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED' => (bool) config('commercial.billing_readiness.'.$readinessPath.'.relay_payout_verified', false),
             ] as $name => $valid) {

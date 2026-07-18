@@ -149,6 +149,7 @@ function enableFrontYardLiveReadinessGates(): void
     config()->set('services.stripe.webhook_secret', 'whsec_frontyard');
     config()->set('commercial.billing_readiness.agreement_checkout.enabled', true);
     config()->set('commercial.billing_readiness.agreement_checkout.tenant_slugs', ['front-yard-foods']);
+    config()->set('commercial.billing_readiness.agreement_checkout.live_webhook_verified', true);
     config()->set('commercial.billing_readiness.agreement_checkout.relay_payout_verified', true);
     config()->set('commercial.billing_readiness.agreement_checkout.tax_decision_confirmed', true);
     config()->set('mail.default', 'smtp');
@@ -196,6 +197,21 @@ test('pre send readiness requires canceled sandbox evidence and leaves the real 
     $this->artisan('everbranch:front-yard-foods-readiness --stage=pre-send')->assertSuccessful();
     expect($client->fresh()->acceptance)->toBeNull()
         ->and(TenantBillingOrder::query()->where('agreement_id', $client->id)->exists())->toBeFalse();
+});
+
+test('pre send readiness requires recorded live webhook verification evidence', function (): void {
+    $this->artisan('everbranch:prepare-front-yard-foods')->assertSuccessful();
+    $tenant = Tenant::query()->where('slug', 'front-yard-foods')->firstOrFail();
+    $client = Agreement::query()->where('tenant_id', $tenant->id)->where('agreement_type', Agreement::TYPE_FRONT_YARD_CLIENT_SERVICES)->firstOrFail();
+    app(AgreementManagementService::class)->send($client, null, 'LauraProposalPass123');
+    paidSandboxAgreementForReadiness($this, $tenant, canceled: true);
+    enableFrontYardLiveReadinessGates();
+    config()->set('commercial.billing_readiness.agreement_checkout.live_webhook_verified', false);
+
+    $this->artisan('everbranch:front-yard-foods-readiness --stage=pre-send')->assertFailed();
+
+    config()->set('commercial.billing_readiness.agreement_checkout.live_webhook_verified', true);
+    $this->artisan('everbranch:front-yard-foods-readiness --stage=pre-send')->assertSuccessful();
 });
 
 test('front yard end to end readiness fails until paid fulfillment and client workspace access exist', function (): void {

@@ -415,6 +415,7 @@ return [
             'automatic_tax_enabled' => (bool) env('EVERBRANCH_AGREEMENT_STRIPE_TAX_ENABLED', false),
             'tax_decision_confirmed' => (bool) env('EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED', false),
             'relay_payout_verified' => (bool) env('EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED', false),
+            'live_webhook_verified' => (bool) env('EVERBRANCH_STRIPE_LIVE_WEBHOOK_VERIFIED', false),
         ],
         'direct_invoicing' => [
             'enabled' => (bool) env('EVERBRANCH_STRIPE_INVOICING_ENABLED', false),
@@ -422,6 +423,7 @@ return [
             'automatic_tax_enabled' => (bool) env('EVERBRANCH_AGREEMENT_STRIPE_TAX_ENABLED', false),
             'tax_decision_confirmed' => (bool) env('EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED', false),
             'relay_payout_verified' => (bool) env('EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED', false),
+            'live_webhook_verified' => (bool) env('EVERBRANCH_STRIPE_LIVE_WEBHOOK_VERIFIED', false),
         ],
         'provider_priority' => ['stripe', 'braintree'],
         'providers' => [

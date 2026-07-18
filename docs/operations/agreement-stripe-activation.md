@@ -20,7 +20,7 @@ Keep `EVERBRANCH_AGREEMENT_CHECKOUT_ENABLED=false` and `EVERBRANCH_STRIPE_INVOIC
 2. Live `STRIPE_KEY`, `STRIPE_SECRET`, and `STRIPE_WEBHOOK_SECRET` are stored in deployment secrets, never repository files.
 3. Cards and US bank accounts are enabled. Stripe customer emails, branding, statement descriptor, failed-payment handling, refunds, and disputes are configured.
    - Enable Stripe's invoice setting to save customer payment information so hosted invoices can offer saved payment methods on the reused Stripe Customer.
-4. The production webhook endpoint subscribes to Checkout completion/expiry/asynchronous outcomes, invoice finalized/sent/paid/failed/voided/marked-uncollectible, subscription changes/deletion, refunds, and disputes.
+4. The production webhook endpoint subscribes to Checkout completion/expiry/asynchronous outcomes, invoice finalized/sent/paid/failed/voided/marked-uncollectible, subscription changes/deletion, refunds, and disputes. Set `EVERBRANCH_STRIPE_LIVE_WEBHOOK_VERIFIED=true` only after the endpoint records a signed live-mode Stripe event.
 5. An accountant supplies written taxability/registration direction. Set `EVERBRANCH_AGREEMENT_TAX_DECISION_CONFIRMED=true` only after that evidence is attached. Enable `EVERBRANCH_AGREEMENT_STRIPE_TAX_ENABLED` only for approved registrations.
 6. Stripe Billing Portal is configured for payment-method and invoice access only. Subscription cancellation stays in Everbranch so termination and the 30-day export window are retained.
 7. Test-mode evidence covers card success/failure, ACH pending/success/failure, six promotional cycles followed by the standard phase, direct invoice send/pay/fail/void/refund/dispute paths, duplicate webhooks, receipts, and tenant isolation.
@@ -33,7 +33,7 @@ Direct invoice note: the July 17, 2026 smoke test satisfies the first internal c
 - Production: store complete `acct_`, `pk_live_`, `sk_live_`, and production-endpoint `whsec_` values in the Laravel Forge/server environment for `app.theeverbranch.com`.
 - Production-host sandbox: to run a deliberate Stripe test-mode invoice on `app.theeverbranch.com`, use complete test credentials plus `EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED=true` and a concrete tenant allowlist such as `EVERBRANCH_STRIPE_INVOICING_TENANT_SLUGS=front-yard-foods`. Do not use `*`, and turn the sandbox gate off before live billing.
 - Do not paste live secrets into `.env.example`, source control, GitHub, issue comments, or chat. Do not add `pk_`/`sk_` prefixes manually; copy the complete key from Stripe Workbench.
-- Run `php artisan config:doctor --env=production` after setting server values and before enabling the checkout or direct-invoicing flag. The command must reject missing/malformed values, mixed test/live modes, unapproved test keys on production hosts, missing webhook secrets, and incomplete live tax or Relay gates.
+- Run `php artisan config:doctor --env=production` after setting server values and before enabling the checkout or direct-invoicing flag. The command must reject missing/malformed values, mixed test/live modes, unapproved test keys on production hosts, missing webhook secrets, unverified live webhook evidence, and incomplete live tax or Relay gates.
 
 ## Direct invoice flow
 
