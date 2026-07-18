@@ -766,6 +766,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::post('/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'checkout'])
                 ->name('checkout');
+            Route::post('/addons/{addonKey}/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'addonCheckout'])
+                ->where('addonKey', '[a-z0-9_]+')
+                ->name('addons.checkout');
             Route::post('/portal', [\App\Http\Controllers\Billing\HostedBillingController::class, 'portal'])
                 ->name('portal');
             Route::post('/messaging-credit', [\App\Http\Controllers\Billing\MessagingCreditController::class, 'checkout'])

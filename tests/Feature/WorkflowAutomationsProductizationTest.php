@@ -68,6 +68,16 @@ test('workflow library and templates are entitled, tenant scoped, and credential
         ->assertDontSee('client_secret')
         ->assertDontSee('refresh_token');
 
+    $workflow = app(WorkflowProductService::class)->create($tenant->id, 'asana_to_google_calendar', $user);
+    $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
+        ->get(route('workflows.show', $workflow))
+        ->assertOk()
+        ->assertSeeText('Setup')
+        ->assertSeeText('Test')
+        ->assertSeeText('Calendar appearance')
+        ->assertDontSee('client_secret')
+        ->assertDontSee('refresh_token');
+
     $otherTenant = Tenant::query()->create(['name' => 'Other', 'slug' => 'other-workflow-tenant']);
     $otherWorkflow = AutomationWorkflow::query()->forAllTenants()->create([
         'tenant_id' => $otherTenant->id,

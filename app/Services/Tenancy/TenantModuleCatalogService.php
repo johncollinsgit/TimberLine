@@ -54,6 +54,7 @@ class TenantModuleCatalogService
             }
 
             $productMetadata = $this->moduleProductMetadata($moduleKey, $definition, $moduleState);
+            $purchaseMetadata = $this->modulePurchaseMetadata($moduleKey);
 
             $modules[] = [
                 'module_key' => $moduleKey,
@@ -77,6 +78,7 @@ class TenantModuleCatalogService
                 'tenant_visibility_label' => (string) ($productMetadata['tenant_visibility_label'] ?? 'Hidden unless explicitly safe'),
                 'product_summary' => (string) ($productMetadata['product_summary'] ?? ''),
                 'buyer_setup' => is_array($productMetadata['buyer_setup'] ?? null) ? (array) $productMetadata['buyer_setup'] : [],
+                'purchase' => $purchaseMetadata,
                 'blueprint_display_state' => 'unavailable',
                 'blueprint_display_state_label' => 'Unavailable',
                 'blueprint_recommendation_reason' => 'Catalog display state only.',
@@ -196,6 +198,7 @@ class TenantModuleCatalogService
         $modules = [];
         foreach ($this->storeVisibleModuleDefinitions('public_site') as $moduleKey => $definition) {
             $productMetadata = $this->moduleProductMetadata($moduleKey, $definition);
+            $purchaseMetadata = $this->modulePurchaseMetadata($moduleKey);
 
             $modules[] = [
                 'key' => $moduleKey,
@@ -208,6 +211,7 @@ class TenantModuleCatalogService
                 'mobile_relevance_label' => (string) ($productMetadata['mobile_relevance_label'] ?? 'Not mobile-specific'),
                 'pricing_impact_label' => (string) ($productMetadata['pricing_impact_label'] ?? 'Pricing impact not configured'),
                 'buyer_setup' => is_array($productMetadata['buyer_setup'] ?? null) ? (array) $productMetadata['buyer_setup'] : [],
+                'purchase' => $purchaseMetadata,
                 'status' => strtolower(trim((string) ($definition['status'] ?? 'disabled'))),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
                 'channels' => array_values(array_map('strval', (array) ($definition['channels'] ?? []))),
@@ -550,6 +554,46 @@ class TenantModuleCatalogService
             'product_summary' => $this->productSummary($definition, $moduleState, $billingMode),
             'buyer_setup' => $this->buyerSetup($moduleKey, $definition, $moduleState, $billingMode),
         ];
+    }
+
+    /**
+     * @return array{addon_key:string,purchase_key:string,currency:string,recurring_price_cents:int,setup_price_cents:int,price_display:string}|array{}
+     */
+    protected function modulePurchaseMetadata(string $moduleKey): array
+    {
+        $moduleKey = strtolower(trim($moduleKey));
+
+        foreach ((array) config('module_catalog.addons', []) as $addonKey => $definition) {
+            if (! is_array($definition) || ! in_array($moduleKey, array_map('strval', (array) ($definition['modules'] ?? [])), true)) {
+                continue;
+            }
+
+            $billingMode = strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable')));
+            $purchaseKey = trim((string) ($definition['purchase_key'] ?? ''));
+            $recurring = max(0, (int) data_get($definition, 'pricing.recurring_price_cents', 0));
+            if ($billingMode !== 'add_on' || $purchaseKey === '' || $recurring <= 0) {
+                return [];
+            }
+
+            $currency = strtoupper(trim((string) data_get($definition, 'pricing.currency', 'USD'))) ?: 'USD';
+            $setup = max(0, (int) data_get($definition, 'pricing.setup_price_cents', 0));
+            $symbol = $currency === 'USD' ? '$' : $currency.' ';
+            $display = $symbol.number_format($recurring / 100, 2).'/month';
+            if ($setup > 0) {
+                $display .= ' + '.$symbol.number_format($setup / 100, 2).' setup';
+            }
+
+            return [
+                'addon_key' => strtolower(trim((string) $addonKey)),
+                'purchase_key' => $purchaseKey,
+                'currency' => $currency,
+                'recurring_price_cents' => $recurring,
+                'setup_price_cents' => $setup,
+                'price_display' => $display,
+            ];
+        }
+
+        return [];
     }
 
     /**

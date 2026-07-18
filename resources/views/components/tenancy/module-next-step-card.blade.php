@@ -25,6 +25,7 @@
     )));
     $primaryAction = trim((string) ($buyerSetup['primary_action'] ?? data_get($moduleState, 'cta_label', 'Review module')));
     $helpText = trim((string) ($buyerSetup['help_text'] ?? ''));
+    $purchase = is_array($module['purchase'] ?? null) ? (array) $module['purchase'] : [];
 @endphp
 
 @once
@@ -185,6 +186,9 @@
     <header class="tenant-module-next-card__head">
         <div>
             <h3 class="tenant-module-next-card__title">{{ $displayName }}</h3>
+            @if(filled($purchase['price_display'] ?? null))
+                <div class="tenant-module-next-card__label" style="margin-top: 4px">{{ $purchase['price_display'] }}</div>
+            @endif
             @if($outcome !== '')
                 <p class="tenant-module-next-card__summary">{{ $outcome }}</p>
             @endif

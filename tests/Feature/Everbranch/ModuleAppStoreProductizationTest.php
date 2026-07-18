@@ -68,6 +68,23 @@ test('tenant module store payload exposes product grade metadata for visible mod
         ->and($sms['buyer_setup']['setup_steps'] ?? [])->not->toBeEmpty();
 });
 
+test('order calendar is a public purchasable add-on with canonical pricing', function (): void {
+    $tenant = moduleStoreTenant('order-calendar-store');
+    $payload = app(TenantModuleCatalogService::class)->tenantStorePayload($tenant->id, 'marketing');
+    $module = collect((array) ($payload['modules'] ?? []))->firstWhere('module_key', 'workflow_automations');
+
+    expect($module)->toBeArray()
+        ->and($module['display_name'])->toBe('Order Calendar')
+        ->and($module['status'])->toBe('live')
+        ->and($module['billing_mode'])->toBe('add_on')
+        ->and(data_get($module, 'purchase.addon_key'))->toBe('order_calendar')
+        ->and(data_get($module, 'purchase.purchase_key'))->toBe('addon.order_calendar')
+        ->and(data_get($module, 'purchase.recurring_price_cents'))->toBe(2900)
+        ->and(data_get($module, 'purchase.price_display'))->toBe('$29.00/month')
+        ->and(config('commercial.addons.order_calendar.modules'))->toBe(['workflow_automations'])
+        ->and(config('commercial.stripe_mapping.addons.order_calendar.recurring_price_lookup_key'))->toBe('addon_order_calendar_monthly');
+});
+
 test('quickbooks is an opt-in reusable branch with guided owner setup', function (): void {
     $tenant = moduleStoreTenant('quickbooks-branch-tenant');
     $user = moduleStoreUser($tenant);

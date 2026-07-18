@@ -110,13 +110,19 @@
  $moduleKey = (string) ($module['module_key'] ?? '');
  $isFocused = $focusModule !== '' && $focusModule === $moduleKey;
  $ctaHref = trim((string) ($moduleState['cta_href'] ?? ''));
+ $purchase = is_array($module['purchase'] ?? null) ? (array) $module['purchase'] : [];
  @endphp
  <x-tenancy.module-next-step-card
  :module="$module"
  :module-state="$moduleState"
  :focused="$isFocused"
  >
- @if($cta === 'add')
+ @if($cta === 'add' && filled($purchase['addon_key'] ?? null))
+ <form method="POST" action="{{ route('billing.addons.checkout', ['addonKey' => $purchase['addon_key']]) }}">
+ @csrf
+ <button type="submit" class="fb-btn-soft fb-btn-accent fb-link-soft">Buy for {{ $purchase['price_display'] }}</button>
+ </form>
+ @elseif($cta === 'add')
  <form method="POST" action="{{ route('marketing.modules.activate', ['moduleKey' => $moduleKey]) }}">
  @csrf
  <button type="submit" class="fb-btn-soft fb-btn-accent fb-link-soft">{{ $moduleState['cta_label'] ?? 'Add module' }}</button>

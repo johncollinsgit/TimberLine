@@ -15,6 +15,10 @@
     $triggerConnected = $commerceSource ? (bool)($commerceConnectionStatus['connected'] ?? false) : $asanaConnected;
     $presentation = (array) $calendarAppearance;
     $descriptionFields = (array) ($presentation['description_fields'] ?? []);
+    $defaultTitleTemplate = $commerceSource ? '{{source}} #{{order_number}}' : '{{task_name}}';
+    $primaryMappingChip = $commerceSource ? '{{order_number}}' : '{{task_name}}';
+    $customerMappingChip = '{{customer_name}}';
+    $sourceMappingChip = '{{source}}';
     $calendarColors = [
         '1' => ['Lavender', '#7986cb'], '2' => ['Sage', '#33b679'], '3' => ['Grape', '#8e24aa'],
         '4' => ['Flamingo', '#e67c73'], '5' => ['Banana', '#f6c026'], '6' => ['Tangerine', '#f4511e'],
@@ -37,7 +41,7 @@
             </div>
         </header>
 
-        <div class="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[minmax(0,1fr),430px]">
+        <div class="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 sm:px-6 xl:grid-cols-[minmax(0,1fr)_430px]">
             <main class="relative min-h-[720px] overflow-hidden rounded-3xl border border-zinc-200 bg-stone-100 p-5 sm:p-8">
                 <div class="absolute inset-0 opacity-60 [background-image:radial-gradient(#d4d4d8_1px,transparent_1px)] [background-size:20px_20px]"></div>
                 <div class="relative mx-auto max-w-2xl">
@@ -93,7 +97,7 @@
                         <details open class="group rounded-2xl border border-sky-100 bg-white">
                             <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-zinc-950"><span>Calendar appearance</span><span class="text-zinc-400 transition group-open:rotate-180" aria-hidden="true">⌄</span></summary>
                             <div class="space-y-4 border-t border-sky-100 p-4">
-                                <div><label class="text-xs font-bold text-zinc-700" for="event-title-template">Event title</label><input id="event-title-template" name="event_title_template" value="{{ old('event_title_template', $presentation['title_template'] ?? '{{task_name}}') }}" class="mt-1 w-full rounded-xl border-zinc-200 bg-zinc-50 text-sm" data-event-title-template /><p class="mt-1.5 text-[11px] leading-4 text-zinc-500">Use mapping chips like <code class="rounded bg-zinc-100 px-1">{{ $commerceSource ? '{{order_number}}' : '{{task_name}}' }}</code>{{ $commerceSource ? ', <code class="rounded bg-zinc-100 px-1">{{customer_name}}</code>, and <code class="rounded bg-zinc-100 px-1">{{source}}</code>' : '' }}.</p></div>
+                                <div><label class="text-xs font-bold text-zinc-700" for="event-title-template">Event title</label><input id="event-title-template" name="event_title_template" value="{{ old('event_title_template', $presentation['title_template'] ?? $defaultTitleTemplate) }}" class="mt-1 w-full rounded-xl border-zinc-200 bg-zinc-50 text-sm" data-event-title-template /><p class="mt-1.5 text-[11px] leading-4 text-zinc-500">Use mapping chips like <code class="rounded bg-zinc-100 px-1">{{ $primaryMappingChip }}</code>@if($commerceSource), <code class="rounded bg-zinc-100 px-1">{{ $customerMappingChip }}</code>, and <code class="rounded bg-zinc-100 px-1">{{ $sourceMappingChip }}</code>@endif.</p></div>
                                 <fieldset><legend class="text-xs font-bold text-zinc-700">Show in description</legend><div class="mt-2 grid gap-2 sm:grid-cols-2">
                                     @foreach(($commerceSource ? ['items' => 'Order items', 'total' => 'Order total', 'status' => 'Order status', 'customer_contact' => 'Customer contact', 'source_link' => 'Source link'] : ['notes' => 'Task notes', 'status' => 'Task status', 'source_link' => 'Asana link']) as $field => $label)
                                         <label class="flex items-center gap-2 rounded-lg border border-zinc-100 px-2.5 py-2 text-xs font-semibold text-zinc-700"><input type="checkbox" name="event_description_fields[]" value="{{ $field }}" class="rounded border-zinc-300 text-emerald-600" @checked(in_array($field, $descriptionFields, true)) data-description-field />{{ $label }}</label>

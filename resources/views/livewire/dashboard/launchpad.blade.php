@@ -42,7 +42,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="size-6"><path d="M13 2 4.5 13H11l-1 9 8.5-12H12l1-8Z"/></svg>
                         </span>
                         <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Automation health</p>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Order Calendar health</p>
                             <h2 id="workflow-health-title" class="mt-1 text-xl font-semibold text-zinc-950">
                                 {{ $workflowHealth['active'] }} active of {{ $workflowHealth['total'] }} workflow{{ $workflowHealth['total'] === 1 ? '' : 's' }}
                             </h2>

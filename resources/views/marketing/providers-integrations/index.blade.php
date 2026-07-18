@@ -86,7 +86,7 @@
                             Calendar Sync
                         </div>
                         <div>
-                            <h2 class="text-xl font-semibold text-zinc-950">{{ $workflowSetup['title'] ?? 'Workflow Automations' }}</h2>
+                            <h2 class="text-xl font-semibold text-zinc-950">{{ $workflowSetup['title'] ?? 'Order Calendar' }}</h2>
                             <p class="mt-2 text-sm text-zinc-700">
                                 Keep a Google Calendar matched to one Asana project. New dated Asana tasks become calendar events, and later task edits update the same calendar event.
                             </p>

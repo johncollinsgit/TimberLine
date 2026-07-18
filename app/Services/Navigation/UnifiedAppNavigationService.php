@@ -95,7 +95,7 @@ class UnifiedAppNavigationService
                 'key' => 'workflow-automations',
                 'icon' => 'bolt',
                 'href' => route('workflows.index'),
-                'label' => 'Automations',
+                'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Order Calendar'),
                 'current' => request()->routeIs('workflows.*'),
             ];
         }
