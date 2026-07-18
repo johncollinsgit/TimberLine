@@ -357,6 +357,7 @@ class EverbranchFrontYardFoodsReadiness extends Command
             ['Live Stripe publishable key', preg_match('/^pk_live_[A-Za-z0-9]+$/', (string) config('services.stripe.publishable_key')) === 1, 'STRIPE_KEY is a pk_live_ value.'],
             ['Live Stripe secret key', preg_match('/^sk_live_[A-Za-z0-9]+$/', (string) config('services.stripe.secret')) === 1, 'STRIPE_SECRET is an sk_live_ value.'],
             ['Production webhook secret', preg_match('/^whsec_[A-Za-z0-9]+$/', (string) config('services.stripe.webhook_secret')) === 1, 'STRIPE_WEBHOOK_SECRET is configured.'],
+            ['Live webhook verified', (bool) config('commercial.billing_readiness.agreement_checkout.live_webhook_verified', false), 'The production endpoint has recorded signed live-mode Stripe evidence.'],
             ['Relay payout verified', (bool) config('commercial.billing_readiness.agreement_checkout.relay_payout_verified', false), 'Stripe payout destination has verified Relay evidence.'],
             ['Tax decision confirmed', (bool) config('commercial.billing_readiness.agreement_checkout.tax_decision_confirmed', false), 'Accountant taxability/registration decision is attached.'],
             ['Production mail enabled', strtolower((string) config('mail.default')) !== 'log', 'MAIL_MAILER is not log.'],

@@ -14,7 +14,7 @@
 - Sandbox ACH agreement: ID 3, version 1, billing order 2
 - Immutable content hash: `6cf909bac44bf5b6f1c7ecc16f51854ada9a92f3021091bc6df762abb0a839d8`
 - Final sandbox status: **passed and canceled**
-- Pre-send status: **blocked only by four live operational gates**
+- Pre-send status: **blocked only by five live operational gates**
 
 Proposal tokens, passwords, full Stripe object identifiers, and credentials are intentionally excluded from this repository evidence.
 
@@ -84,7 +84,7 @@ php artisan everbranch:front-yard-foods-readiness --stage=sandbox-paid --agreeme
 # PASS
 
 php artisan everbranch:front-yard-foods-readiness --stage=pre-send
-# BLOCKED: 4 live operational gates remain.
+# BLOCKED: 5 live operational gates remain.
 ```
 
 ## Acceptance Checklist
@@ -106,6 +106,7 @@ php artisan everbranch:front-yard-foods-readiness --stage=pre-send
 - [x] Required Front Yard modules resolve: Customers, Events & Classes, Plant Inventory, Messaging pending, and Reporting.
 - [x] PR CI passed on PHP 8.4, PHP 8.5, quality checks, and the production deployment.
 - [ ] Replace test Stripe keys with live publishable and secret keys in Forge.
+- [ ] Register the production webhook endpoint, record a signed live-mode event, and set the verification gate.
 - [ ] Confirm an actual Stripe payout arrives in Relay and attach evidence.
 - [ ] Attach the written accountant taxability/registration determination.
 - [ ] Run `pre-send` green, rotate Laura's real link, and send it.
@@ -115,7 +116,8 @@ php artisan everbranch:front-yard-foods-readiness --stage=pre-send
 
 1. Live Stripe publishable key (`pk_live_...`) is not configured.
 2. Live Stripe secret key (`sk_live_...`) is not configured.
-3. An actual Stripe-to-Relay payout has not yet been evidenced.
-4. Written accountant tax guidance has not yet been attached/confirmed.
+3. The production webhook endpoint has not yet recorded verified signed live-mode evidence.
+4. An actual Stripe-to-Relay payout has not yet been evidenced.
+5. Written accountant tax guidance has not yet been attached/confirmed.
 
-The live proposal must not be rotated or sent until all four blockers are cleared and `pre-send` passes.
+The live proposal must not be rotated or sent until all five blockers are cleared and `pre-send` passes.

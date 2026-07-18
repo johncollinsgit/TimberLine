@@ -8,6 +8,8 @@ function configureConfigDoctorProductionRequirements(): void
     config()->set('commercial.billing_readiness.allow_production_test_mode', false);
     config()->set('commercial.billing_readiness.agreement_checkout.enabled', false);
     config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
+    config()->set('commercial.billing_readiness.agreement_checkout.live_webhook_verified', false);
+    config()->set('commercial.billing_readiness.direct_invoicing.live_webhook_verified', false);
     config()->set('services.shopify.stores.retail.shop', 'x.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'id');
     config()->set('services.shopify.stores.retail.client_secret', 'secret');
@@ -39,6 +41,7 @@ test('environment template has unique keys and safe Stripe placeholders', functi
         ->and($contents)->toContain('STRIPE_KEY=')
         ->and($contents)->toContain('STRIPE_SECRET=')
         ->and($contents)->toContain('STRIPE_WEBHOOK_SECRET=')
+        ->and($contents)->toContain('EVERBRANCH_STRIPE_LIVE_WEBHOOK_VERIFIED=false')
         ->and($contents)->toContain('pk_test_... or pk_live_...')
         ->and($contents)->toContain('sk_test_... or sk_live_...');
 });
@@ -130,6 +133,7 @@ test('config doctor accepts live Stripe credentials only with production readine
     configureAgreementStripe('pk_live_example', 'sk_live_example');
     config()->set('commercial.billing_readiness.agreement_checkout.tax_decision_confirmed', true);
     config()->set('commercial.billing_readiness.agreement_checkout.relay_payout_verified', true);
+    config()->set('commercial.billing_readiness.agreement_checkout.live_webhook_verified', true);
 
     $this->artisan('config:doctor --env=production')->assertSuccessful();
 });
@@ -157,6 +161,7 @@ test('config doctor rejects live Stripe credentials when production readiness ga
     configureAgreementStripe('pk_live_example', 'sk_live_example');
     config()->set('commercial.billing_readiness.agreement_checkout.tax_decision_confirmed', false);
     config()->set('commercial.billing_readiness.agreement_checkout.relay_payout_verified', false);
+    config()->set('commercial.billing_readiness.agreement_checkout.live_webhook_verified', false);
 
     $this->artisan('config:doctor --env=production')->assertFailed();
 });
