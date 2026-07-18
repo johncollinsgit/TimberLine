@@ -83,7 +83,7 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
             ->and($data['payment_method_types[1]'])->toBe('us_bank_account')
             ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled')
             ->and($data['saved_payment_method_options[payment_method_remove]'])->toBe('enabled')
-            ->and($data['subscription_data[payment_settings][save_default_payment_method]'])->toBe('on_subscription')
+            ->and($data)->not->toHaveKey('subscription_data[payment_settings][save_default_payment_method]')
             ->and($data['automatic_tax[enabled]'])->toBe('false')
             ->and(collect($data)->filter(fn ($value, $key) => str_ends_with($key, '[unit_amount]'))->values()->all())->toBe([29900, 5900])
             ->and($data)->not->toContain(3900)
@@ -242,7 +242,7 @@ test('checkout reuses saved Stripe customers and one-time work can save payment 
                 ->and($data)->not->toHaveKey('customer_email')
                 ->and($data)->not->toHaveKey('customer_creation')
                 ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled')
-                ->and($data['subscription_data[payment_settings][save_default_payment_method]'])->toBe('on_subscription');
+                ->and($data)->not->toHaveKey('subscription_data[payment_settings][save_default_payment_method]');
 
             return Http::response(['id' => 'cs_saved_customer', 'url' => 'https://checkout.stripe.test/cs_saved_customer']);
         }

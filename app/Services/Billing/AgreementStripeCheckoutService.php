@@ -65,8 +65,6 @@ class AgreementStripeCheckoutService
         if ($mode === 'payment') {
             $payload['invoice_creation[enabled]'] = 'true';
             $payload['payment_intent_data[setup_future_usage]'] = 'on_session';
-        } else {
-            $payload['subscription_data[payment_settings][save_default_payment_method]'] = 'on_subscription';
         }
 
         $metadata = [
