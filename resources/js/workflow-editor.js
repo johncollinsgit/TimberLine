@@ -10,9 +10,12 @@ function mount(root) {
 
   let timer = null;
   let controller = null;
+  let reloadAfterSave = false;
 
   const sample = {
-    task_name: "Prepare launch order", source: "Shopify", order_number: "1042", customer_name: "Jamie Lee",
+    task_name: "Prepare launch order", source: root.dataset.workflowSourceLabel || "Shopify", order_number: "1042", customer_name: "Jamie Lee",
+    notes: "Confirm products and delivery details.", items: "2 × Cedar Candle, 1 × Wick Trimmer", total: "USD 84.00",
+    status: "Ready to fulfill", customer_contact: "Customer: jamie@example.com · (555) 010-1042", source_link: `${root.dataset.workflowSourceLabel || "Source"} record: https://example.com/orders/1042`,
   };
   const renderPreview = () => {
     const input = root.querySelector("[data-event-title-template]");
@@ -30,6 +33,19 @@ function mount(root) {
       const value = locations[location.value] || "";
       locationPreview.textContent = value ? `⌖ ${value}` : "";
       locationPreview.classList.toggle("hidden", !value);
+    }
+    const description = root.querySelector("[data-preview-description]");
+    if (description) {
+      const labels = { notes: sample.notes, items: `Items: ${sample.items}`, total: `Total: ${sample.total}`, status: `Status: ${sample.status}`, customer_contact: sample.customer_contact, source_link: sample.source_link };
+      description.textContent = [...root.querySelectorAll("[data-description-field]:checked")].map((field) => labels[field.value] || "").filter(Boolean).join("\n\n");
+    }
+    const time = root.querySelector("[data-preview-time]");
+    if (time) {
+      const mode = root.querySelector("[data-event-time-mode]")?.value || "source_time";
+      const duration = root.querySelector("[data-event-duration]")?.value || "60";
+      const fixedTime = root.querySelector("[data-default-start-time]")?.value || "09:00";
+      const availability = root.querySelector("[data-event-availability]")?.value === "free" ? "Free" : "Busy";
+      time.textContent = `Tue, Jul 21 · ${mode === "all_day" ? "All day" : `${mode === "fixed_time" ? `${fixedTime} · ` : ""}${duration} minutes`} · ${availability}`;
     }
   };
 
@@ -55,6 +71,7 @@ function mount(root) {
       if (!response.ok) throw new Error("Autosave failed");
       status.textContent = "Draft saved";
       root.querySelectorAll("[data-test-passed]").forEach((node) => node.remove());
+      if (reloadAfterSave) window.location.reload();
     } catch (error) {
       if (error?.name !== "AbortError") status.textContent = "Save needs attention";
     }
@@ -66,7 +83,8 @@ function mount(root) {
     clearTimeout(timer);
     timer = setTimeout(save, 900);
   });
-  form.addEventListener("change", () => {
+  form.addEventListener("change", (event) => {
+    if (event.target?.id === "trigger-connection") reloadAfterSave = true;
     renderPreview();
     status.textContent = "Unsaved changes";
     clearTimeout(timer);

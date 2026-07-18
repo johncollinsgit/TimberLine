@@ -6,6 +6,7 @@ use App\Models\IntegrationConnection;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -19,7 +20,11 @@ class CommerceWorkflowConnectionService
     {
         $this->assertProvider($provider);
         $connection = IntegrationConnection::query()->forTenantId($tenantId)
-            ->where('provider', $provider)->latest('connected_at')->first();
+            ->where('provider', $provider)
+            ->orderByRaw('case when status = ? then 0 else 1 end', [IntegrationConnection::STATUS_CONNECTED])
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
 
         return [
             'configured' => $this->configured($provider),
@@ -28,6 +33,7 @@ class CommerceWorkflowConnectionService
             'account_label' => $connection?->external_account_label,
             'last_checked_at' => $connection?->last_synced_at,
             'reconnect_required' => $connection?->last_error_code === 'reconnect_required',
+            'source_options' => $connection ? $this->sourceOptions($connection) : [],
         ];
     }
 
@@ -91,7 +97,10 @@ class CommerceWorkflowConnectionService
             'wix' => $this->exchangeWixInstance($request),
         };
         $identity = $this->identity($provider, $token, $statePayload);
-        $rawId = (string) $identity['id'];
+        $rawId = trim((string) ($identity['id'] ?? ''));
+        if ($rawId === '') {
+            throw new AutomationWorkflowException(Str::headline($provider).' did not return a stable account identifier. Reconnect and try again.');
+        }
         $connection = IntegrationConnection::query()->forAllTenants()->updateOrCreate(
             ['tenant_id' => $tenantId, 'provider' => $provider, 'external_account_id' => $this->accountHash($rawId)],
             [
@@ -101,7 +110,7 @@ class CommerceWorkflowConnectionService
                 'access_token' => (string) ($token['access_token'] ?? ''),
                 'refresh_token' => $this->nullableString($token['refresh_token'] ?? null),
                 'token_type' => (string) ($token['token_type'] ?? 'Bearer'),
-                'expires_at' => isset($token['expires_in']) ? now()->addSeconds(max(60, (int) $token['expires_in'])) : null,
+                'expires_at' => $this->tokenExpiry($token),
                 'scopes' => $this->scopes($token['scope'] ?? config("services.{$provider}.oauth_scopes", '')),
                 'metadata' => array_filter([
                     'api_base' => config("services.{$provider}.api_base"),
@@ -123,20 +132,65 @@ class CommerceWorkflowConnectionService
     public function test(IntegrationConnection $connection): array
     {
         $provider = (string) $connection->provider;
+        $accessToken = $this->accessToken($connection);
         $response = match ($provider) {
-            'shopify' => Http::withHeaders(['X-Shopify-Access-Token' => (string) $connection->access_token])->acceptJson()->get('https://'.data_get($connection->metadata, 'shop_domain').'/admin/api/'.config('services.shopify.api_version', '2026-01').'/shop.json'),
-            'square' => Http::withToken((string) $connection->access_token)->acceptJson()->get(rtrim((string) config('services.square.api_base', 'https://connect.squareup.com'), '/').'/v2/merchants/me'),
-            'squarespace' => Http::withToken((string) $connection->access_token)->acceptJson()->get(rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/authorization/website'),
+            'shopify' => $this->shopifyRequest((string) data_get($connection->metadata, 'shop_domain'), $accessToken),
+            'square' => $this->squareRequest($accessToken)->get(rtrim((string) config('services.square.api_base', 'https://connect.squareup.com'), '/').'/v2/merchants/me'),
+            'squarespace' => Http::withToken($accessToken)->acceptJson()->get(rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/authorization/website'),
             'wix' => Http::withToken((string) $this->wixAccessToken($connection))->acceptJson()->get(rtrim((string) config('services.wix.api_base', 'https://www.wixapis.com'), '/').'/site-properties/v4/properties'),
             default => throw new AutomationWorkflowException('Unsupported commerce provider.'),
         };
-        if ($response->failed()) {
+        if ($response->failed() || ($provider === 'shopify' && filled($response->json('errors')))) {
             $connection->forceFill(['status' => IntegrationConnection::STATUS_ERROR, 'last_error_code' => 'connection_test_failed', 'last_error_message' => 'Provider connection test failed with HTTP '.$response->status().'.', 'last_error_at' => now()])->save();
             throw new AutomationWorkflowException(Str::headline($provider).' connection test failed. Reconnect the account and try again.');
         }
-        $connection->forceFill(['status' => IntegrationConnection::STATUS_CONNECTED, 'last_synced_at' => now(), 'last_error_code' => null, 'last_error_message' => null, 'last_error_at' => null])->save();
+        $metadata = (array) $connection->metadata;
+        if ($provider === 'square') {
+            $metadata['locations'] = $this->discoverSquareLocations($accessToken);
+        }
+        $connection->forceFill(['status' => IntegrationConnection::STATUS_CONNECTED, 'metadata' => $metadata, 'last_synced_at' => now(), 'last_error_code' => null, 'last_error_message' => null, 'last_error_at' => null])->save();
 
-        return ['ok' => true];
+        return ['ok' => true, 'source_options' => $this->sourceOptions($connection->fresh())];
+    }
+
+    public function connectionForTenant(int $tenantId, int $connectionId, string $provider): IntegrationConnection
+    {
+        $this->assertProvider($provider);
+        $connection = IntegrationConnection::query()->forTenantId($tenantId)
+            ->whereKey($connectionId)
+            ->where('provider', $provider)
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->first();
+
+        if (! $connection) {
+            throw new AutomationWorkflowException('The selected '.Str::headline($provider).' connection is unavailable. Reconnect it and try again.');
+        }
+
+        return $connection;
+    }
+
+    public function accessToken(IntegrationConnection $connection): string
+    {
+        if ((string) $connection->provider === 'square' && $connection->needsRefresh()) {
+            return $this->refreshSquareAccessToken($connection);
+        }
+
+        $token = trim((string) $connection->access_token);
+        if ($token === '') {
+            throw new AutomationWorkflowException(Str::headline((string) $connection->provider).' needs to be reconnected.');
+        }
+
+        return $token;
+    }
+
+    /** @return array<int,array{id:string,label:string,status:?string,address:?string}> */
+    public function sourceOptions(IntegrationConnection $connection): array
+    {
+        if ((string) $connection->provider !== 'square') {
+            return [];
+        }
+
+        return array_values(array_filter((array) data_get($connection->metadata, 'locations', []), static fn (mixed $row): bool => is_array($row) && filled($row['id'] ?? null)));
     }
 
     public function disconnect(IntegrationConnection $connection): void
@@ -221,15 +275,24 @@ class CommerceWorkflowConnectionService
     {
         if ($provider === 'shopify') {
             $shop = (string) $state['shop_domain'];
-            $response = Http::withHeaders(['X-Shopify-Access-Token' => (string) $token['access_token']])->acceptJson()->get('https://'.$shop.'/admin/api/'.config('services.shopify.api_version', '2026-01').'/shop.json');
+            $response = $this->shopifyRequest($shop, (string) $token['access_token']);
             $json = $this->successfulJson($response, 'Shopify shop lookup failed.');
+            if (filled($json['errors'] ?? null)) {
+                throw new AutomationWorkflowException('Shopify shop lookup failed.');
+            }
 
-            return ['id' => $shop, 'label' => (string) data_get($json, 'shop.name', $shop)];
+            return ['id' => $shop, 'label' => (string) data_get($json, 'data.shop.name', $shop)];
         }
         if ($provider === 'square') {
             $id = trim((string) ($token['merchant_id'] ?? ''));
+            $response = $this->squareRequest((string) ($token['access_token'] ?? ''))
+                ->get(rtrim((string) config('services.square.api_base', 'https://connect.squareup.com'), '/').'/v2/merchants/me');
+            $merchant = $response->successful() && is_array($response->json('merchant')) ? (array) $response->json('merchant') : [];
 
-            return ['id' => $id, 'label' => $id !== '' ? 'Square merchant' : 'Square account'];
+            return [
+                'id' => $id !== '' ? $id : (string) ($merchant['id'] ?? ''),
+                'label' => trim((string) ($merchant['business_name'] ?? '')) ?: 'Square account',
+            ];
         }
         if ($provider === 'wix') {
             return ['id' => (string) $token['instance_id'], 'label' => 'Wix site'];
@@ -254,7 +317,11 @@ class CommerceWorkflowConnectionService
     protected function squareAuthorizationUrl(string $state): string
     {
         return rtrim((string) config('services.square.authorization_url'), '?').'?'.http_build_query([
-            'client_id' => config('services.square.oauth_client_id'), 'scope' => config('services.square.oauth_scopes'), 'session' => 'false', 'state' => $state,
+            'client_id' => config('services.square.oauth_client_id'),
+            'redirect_uri' => config('services.square.redirect_uri'),
+            'scope' => config('services.square.oauth_scopes'),
+            'session' => 'false',
+            'state' => $state,
         ]);
     }
 
@@ -297,6 +364,96 @@ class CommerceWorkflowConnectionService
         $connection->forceFill(['access_token' => (string) $json['access_token'], 'expires_at' => now()->addSeconds((int) ($json['expires_in'] ?? 14400))])->save();
 
         return (string) $json['access_token'];
+    }
+
+    protected function refreshSquareAccessToken(IntegrationConnection $connection): string
+    {
+        $refreshToken = trim((string) $connection->refresh_token);
+        if ($refreshToken === '') {
+            throw new AutomationWorkflowException('Square access expired and no refresh token is available. Reconnect Square.');
+        }
+
+        $token = $this->successfulJson(Http::asJson()->acceptJson()->post((string) config('services.square.token_url'), [
+            'client_id' => config('services.square.oauth_client_id'),
+            'client_secret' => config('services.square.oauth_client_secret'),
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $refreshToken,
+        ]), 'Square token refresh failed.');
+        $accessToken = trim((string) ($token['access_token'] ?? ''));
+        if ($accessToken === '') {
+            throw new AutomationWorkflowException('Square token refresh did not return an access token.');
+        }
+
+        $connection->forceFill([
+            'access_token' => $accessToken,
+            'refresh_token' => $this->nullableString($token['refresh_token'] ?? null) ?? $refreshToken,
+            'expires_at' => $this->tokenExpiry($token),
+            'last_error_code' => null,
+            'last_error_message' => null,
+            'last_error_at' => null,
+        ])->save();
+
+        return $accessToken;
+    }
+
+    /** @return array<int,array{id:string,label:string,status:?string,address:?string}> */
+    protected function discoverSquareLocations(string $accessToken): array
+    {
+        $response = $this->squareRequest($accessToken)
+            ->get(rtrim((string) config('services.square.api_base', 'https://connect.squareup.com'), '/').'/v2/locations');
+        $payload = $this->successfulJson($response, 'Square location discovery failed.');
+
+        return collect((array) ($payload['locations'] ?? []))
+            ->filter(fn (mixed $location): bool => is_array($location))
+            ->map(function (array $location): array {
+                $address = (array) ($location['address'] ?? []);
+
+                return [
+                    'id' => trim((string) ($location['id'] ?? '')),
+                    'label' => trim((string) ($location['name'] ?? '')) ?: 'Square location',
+                    'status' => $this->nullableString($location['status'] ?? null),
+                    'address' => $this->nullableString(implode(', ', array_filter([
+                        $address['address_line_1'] ?? null,
+                        $address['locality'] ?? null,
+                        $address['administrative_district_level_1'] ?? null,
+                        $address['postal_code'] ?? null,
+                    ]))),
+                ];
+            })
+            ->filter(fn (array $location): bool => $location['id'] !== '' && ($location['status'] === null || $location['status'] === 'ACTIVE'))
+            ->values()
+            ->all();
+    }
+
+    protected function squareRequest(string $accessToken)
+    {
+        return Http::acceptJson()->asJson()->withToken($accessToken)
+            ->withHeaders(['Square-Version' => (string) config('services.square.api_version', '2026-05-20')])
+            ->timeout(20)->retry(2, 250, throw: false);
+    }
+
+    protected function shopifyRequest(string $shop, string $accessToken)
+    {
+        return Http::acceptJson()->asJson()
+            ->withHeaders(['X-Shopify-Access-Token' => $accessToken])
+            ->timeout(20)
+            ->retry(2, 250, throw: false)
+            ->post('https://'.$shop.'/admin/api/'.config('services.shopify.automation_api_version', '2026-07').'/graphql.json', [
+                'query' => 'query EverbranchShopIdentity { shop { id name myshopifyDomain } }',
+            ]);
+    }
+
+    protected function tokenExpiry(array $token): ?Carbon
+    {
+        if (filled($token['expires_at'] ?? null)) {
+            try {
+                return Carbon::parse((string) $token['expires_at']);
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        return isset($token['expires_in']) ? now()->addSeconds(max(60, (int) $token['expires_in'])) : null;
     }
 
     protected function accountHash(string $rawId): string

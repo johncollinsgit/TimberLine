@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\Automation\Drivers\AsanaGoogleCalendarWorkflowDriver;
+use App\Services\Automation\Drivers\CommerceOrderGoogleCalendarWorkflowDriver;
 
 return [
     'enabled' => (bool) env('AUTOMATION_WORKFLOWS_ENABLED', false),
@@ -8,6 +9,7 @@ return [
 
     'drivers' => [
         'asana_google_calendar' => AsanaGoogleCalendarWorkflowDriver::class,
+        'commerce_order_google_calendar' => CommerceOrderGoogleCalendarWorkflowDriver::class,
     ],
 
     'providers' => [
@@ -37,7 +39,8 @@ return [
             'trigger_event' => 'New or updated order',
             'action_provider' => 'google_calendar',
             'action_event' => 'Create or update event',
-            'launchable' => false,
+            'driver' => 'commerce_order_google_calendar',
+            'launchable' => (bool) env('AUTOMATION_SHOPIFY_ORDER_CALENDAR_ENABLED', false),
         ],
         'square_order_to_google_calendar' => [
             'name' => 'Square orders to Google Calendar',
@@ -46,7 +49,8 @@ return [
             'trigger_event' => 'New or updated order',
             'action_provider' => 'google_calendar',
             'action_event' => 'Create or update event',
-            'launchable' => false,
+            'driver' => 'commerce_order_google_calendar',
+            'launchable' => (bool) env('AUTOMATION_SQUARE_ORDER_CALENDAR_ENABLED', false),
         ],
         'squarespace_order_to_google_calendar' => [
             'name' => 'Squarespace orders to Google Calendar',

@@ -131,6 +131,7 @@ return [
         'authorization_url' => env('SQUARE_OAUTH_AUTHORIZATION_URL', 'https://connect.squareup.com/oauth2/authorize'),
         'token_url' => env('SQUARE_OAUTH_TOKEN_URL', 'https://connect.squareup.com/oauth2/token'),
         'oauth_scopes' => env('SQUARE_OAUTH_SCOPES', 'MERCHANT_PROFILE_READ ORDERS_READ ITEMS_READ'),
+        'api_version' => env('SQUARE_API_VERSION', '2026-05-20'),
     ],
 
     'squarespace' => [
@@ -244,7 +245,9 @@ return [
         'automation_oauth_client_id' => env('SHOPIFY_AUTOMATIONS_CLIENT_ID'),
         'automation_oauth_client_secret' => env('SHOPIFY_AUTOMATIONS_CLIENT_SECRET'),
         'automation_redirect_uri' => env('SHOPIFY_AUTOMATIONS_REDIRECT_URI', $workflowCommerceRedirect('shopify')),
-        'automation_oauth_scopes' => env('SHOPIFY_AUTOMATIONS_SCOPES', 'read_orders,read_fulfillments'),
+        'automation_oauth_scopes' => env('SHOPIFY_AUTOMATIONS_SCOPES', 'read_orders'),
+        'automation_api_version' => env('SHOPIFY_AUTOMATIONS_API_VERSION', '2026-07'),
+        'automation_protected_customer_data_approved' => (bool) env('SHOPIFY_AUTOMATIONS_PROTECTED_CUSTOMER_DATA_APPROVED', false),
         'allow_env_token_fallback' => (bool) env('SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK', false),
         // Reporting window timezone used by embedded admin surfaces (Dashboard Lite, etc).
         // Defaults to the primary business timezone so "Today" matches merchant expectations.

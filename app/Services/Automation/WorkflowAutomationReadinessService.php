@@ -17,6 +17,8 @@ class WorkflowAutomationReadinessService
     /** @return array{ready:bool,checks:array<string,array{ready:bool,message:string}>} */
     public function evaluate(): array
     {
+        $shopifyEnabled = (bool) config('automation_workflows.templates.shopify_order_to_google_calendar.launchable', false);
+        $squareEnabled = (bool) config('automation_workflows.templates.square_order_to_google_calendar.launchable', false);
         $schedulerAge = $this->scheduler->minutesSinceHeartbeat();
         $queueAt = $this->queueHeartbeatAt();
         $schemaReady = collect([
@@ -42,9 +44,36 @@ class WorkflowAutomationReadinessService
                 'Set the shared GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET.'
             ),
             'redirect_uris' => $this->check(
-                $this->validRedirect(config('services.asana.redirect_uri')) && $this->validRedirect(config('services.google_calendar.redirect_uri')),
-                'OAuth callback URLs are absolute HTTPS URLs.',
-                'Register and configure absolute HTTPS callback URLs for both providers.'
+                $this->validRedirect(config('services.asana.redirect_uri'))
+                    && $this->validRedirect(config('services.google_calendar.redirect_uri'))
+                    && (! $shopifyEnabled || $this->validRedirect(config('services.shopify.automation_redirect_uri')))
+                    && (! $squareEnabled || $this->validRedirect(config('services.square.redirect_uri'))),
+                'Enabled provider callback URLs are absolute HTTPS URLs.',
+                'Register and configure absolute HTTPS callback URLs for every enabled provider.'
+            ),
+            'shopify_order_connector' => $this->check(
+                ! $shopifyEnabled || (
+                    filled(config('services.shopify.automation_oauth_client_id'))
+                    && filled(config('services.shopify.automation_oauth_client_secret'))
+                    && str_contains((string) config('services.shopify.automation_oauth_scopes'), 'read_orders')
+                    && filled(config('services.shopify.automation_api_version'))
+                    && (bool) config('services.shopify.automation_protected_customer_data_approved', false)
+                    && filled(config('automation_workflows.drivers.commerce_order_google_calendar'))
+                ),
+                $shopifyEnabled ? 'The Shopify order connector is registered with its required read scope and protected customer data approval.' : 'The Shopify order connector remains safely feature-gated.',
+                'Configure the Shopify automation app, read_orders scope, API version, protected customer data approval, and commerce driver before enabling its template.'
+            ),
+            'square_order_connector' => $this->check(
+                ! $squareEnabled || (
+                    filled(config('services.square.oauth_client_id'))
+                    && filled(config('services.square.oauth_client_secret'))
+                    && str_contains((string) config('services.square.oauth_scopes'), 'ORDERS_READ')
+                    && str_contains((string) config('services.square.oauth_scopes'), 'MERCHANT_PROFILE_READ')
+                    && filled(config('services.square.api_version'))
+                    && filled(config('automation_workflows.drivers.commerce_order_google_calendar'))
+                ),
+                $squareEnabled ? 'The Square order connector is registered with order and location discovery scopes.' : 'The Square order connector remains safely feature-gated.',
+                'Configure the Square app, ORDERS_READ and MERCHANT_PROFILE_READ scopes, API version, and commerce driver before enabling its template.'
             ),
             'scheduler_heartbeat' => $this->check(
                 $schedulerAge !== null && $schedulerAge <= 10,
