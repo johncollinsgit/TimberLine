@@ -102,7 +102,13 @@ class AutomationMigrateLegacySettings extends Command
                     }
                     IntegrationConnection::query()->forAllTenants()->updateOrCreate(
                         ['tenant_id' => $tenantId, 'provider' => $provider, 'external_account_id' => ''],
-                        ['external_account_label' => ucfirst(str_replace('_', ' ', $provider)).' workflow account', 'status' => IntegrationConnection::STATUS_CONNECTED, ...$tokens, 'connected_at' => now()]
+                        [
+                            'external_account_label' => ucfirst(str_replace('_', ' ', $provider)).' workflow account',
+                            'status' => IntegrationConnection::STATUS_CONNECTED,
+                            ...$tokens,
+                            'metadata' => ['credential_source' => 'legacy_migration'],
+                            'connected_at' => now(),
+                        ]
                     );
                 }
 

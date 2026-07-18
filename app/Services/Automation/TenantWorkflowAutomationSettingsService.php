@@ -273,8 +273,11 @@ class TenantWorkflowAutomationSettingsService
     /**
      * @return array<string,mixed>
      */
-    public function effectiveCredentials(int $tenantId, string $workflowKey = 'asana_to_google_calendar'): array
-    {
+    public function effectiveCredentials(
+        int $tenantId,
+        string $workflowKey = 'asana_to_google_calendar',
+        bool $preferLegacyOAuthClients = false,
+    ): array {
         $workflowKey = $this->normalizeBaseWorkflowKey($workflowKey);
         $stored = $this->storedValue($tenantId, $workflowKey);
 
@@ -295,25 +298,72 @@ class TenantWorkflowAutomationSettingsService
         $globalGoogleClientSecret = $this->nullableString(config('services.google_calendar.oauth_client_secret'));
         $globalGoogleRefreshToken = $this->nullableString(config('services.google_calendar.oauth_refresh_token'));
 
+        [$asanaClientId, $asanaClientSecret, $asanaClientSource] = $this->oauthClientPair(
+            $globalAsanaClientId,
+            $globalAsanaClientSecret,
+            $tenantAsanaClientId,
+            $tenantAsanaClientSecret,
+            $preferLegacyOAuthClients,
+        );
+        [$googleClientId, $googleClientSecret, $googleClientSource] = $this->oauthClientPair(
+            $globalGoogleClientId,
+            $globalGoogleClientSecret,
+            $tenantGoogleClientId,
+            $tenantGoogleClientSecret,
+            $preferLegacyOAuthClients,
+        );
+
         return [
             'asana_personal_access_token' => $tenantAsanaToken ?? $globalAsanaToken,
-            'asana_oauth_client_id' => $globalAsanaClientId ?? $tenantAsanaClientId,
-            'asana_oauth_client_secret' => $globalAsanaClientSecret ?? $tenantAsanaClientSecret,
+            'asana_oauth_client_id' => $asanaClientId,
+            'asana_oauth_client_secret' => $asanaClientSecret,
             'asana_oauth_refresh_token' => $tenantAsanaRefreshToken ?? $globalAsanaRefreshToken,
             'asana_access_token' => $globalAsanaAccessToken,
-            'google_calendar_client_id' => $globalGoogleClientId ?? $tenantGoogleClientId,
-            'google_calendar_client_secret' => $globalGoogleClientSecret ?? $tenantGoogleClientSecret,
+            'google_calendar_client_id' => $googleClientId,
+            'google_calendar_client_secret' => $googleClientSecret,
             'google_calendar_refresh_token' => $tenantGoogleRefreshToken ?? $globalGoogleRefreshToken,
             'sources' => [
                 'asana_personal_access_token' => $tenantAsanaToken !== null ? 'tenant' : ($globalAsanaToken !== null ? 'global' : 'missing'),
-                'asana_oauth_client_id' => $globalAsanaClientId !== null ? 'global' : ($tenantAsanaClientId !== null ? 'legacy_tenant' : 'missing'),
-                'asana_oauth_client_secret' => $globalAsanaClientSecret !== null ? 'global' : ($tenantAsanaClientSecret !== null ? 'legacy_tenant' : 'missing'),
+                'asana_oauth_client_id' => $asanaClientSource,
+                'asana_oauth_client_secret' => $asanaClientSource,
                 'asana_oauth_refresh_token' => $tenantAsanaRefreshToken !== null ? 'tenant' : ($globalAsanaRefreshToken !== null ? 'global' : 'missing'),
-                'google_calendar_client_id' => $globalGoogleClientId !== null ? 'global' : ($tenantGoogleClientId !== null ? 'legacy_tenant' : 'missing'),
-                'google_calendar_client_secret' => $globalGoogleClientSecret !== null ? 'global' : ($tenantGoogleClientSecret !== null ? 'legacy_tenant' : 'missing'),
+                'google_calendar_client_id' => $googleClientSource,
+                'google_calendar_client_secret' => $googleClientSource,
                 'google_calendar_refresh_token' => $tenantGoogleRefreshToken !== null ? 'tenant' : ($globalGoogleRefreshToken !== null ? 'global' : 'missing'),
             ],
         ];
+    }
+
+    /**
+     * OAuth refresh tokens are bound to the client that issued them. Keep IDs
+     * and secrets together, and only prefer a tenant pair for the one-release
+     * legacy migration compatibility path.
+     *
+     * @return array{0:?string,1:?string,2:string}
+     */
+    protected function oauthClientPair(
+        ?string $globalClientId,
+        ?string $globalClientSecret,
+        ?string $tenantClientId,
+        ?string $tenantClientSecret,
+        bool $preferLegacy,
+    ): array {
+        $globalComplete = $globalClientId !== null && $globalClientSecret !== null;
+        $tenantComplete = $tenantClientId !== null && $tenantClientSecret !== null;
+
+        if ($preferLegacy && $tenantComplete) {
+            return [$tenantClientId, $tenantClientSecret, 'legacy_tenant'];
+        }
+
+        if ($globalComplete) {
+            return [$globalClientId, $globalClientSecret, 'global'];
+        }
+
+        if ($tenantComplete) {
+            return [$tenantClientId, $tenantClientSecret, 'legacy_tenant'];
+        }
+
+        return [null, null, 'missing'];
     }
 
     /**

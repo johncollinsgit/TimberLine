@@ -11,6 +11,7 @@ use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Services\Automation\AutomationWorkflowException;
+use App\Services\Automation\TenantWorkflowAutomationSettingsService;
 use App\Services\Automation\WorkflowProductService;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Queue;
@@ -197,6 +198,10 @@ test('legacy migration is dry-run capable and replay safe', function (): void {
             'action' => ['calendar_id' => 'legacy-calendar', 'timezone' => 'America/New_York'],
             'credentials' => [
                 'asana_personal_access_token_encrypted' => Crypt::encryptString('legacy-asana-token'),
+                'asana_oauth_client_id_encrypted' => Crypt::encryptString('legacy-asana-client'),
+                'asana_oauth_client_secret_encrypted' => Crypt::encryptString('legacy-asana-secret'),
+                'google_calendar_client_id_encrypted' => Crypt::encryptString('legacy-google-client'),
+                'google_calendar_client_secret_encrypted' => Crypt::encryptString('legacy-google-secret'),
                 'google_calendar_refresh_token_encrypted' => Crypt::encryptString('legacy-google-token'),
             ],
         ],
@@ -218,11 +223,31 @@ test('legacy migration is dry-run capable and replay safe', function (): void {
     $this->artisan('automation:migrate-legacy-settings')->assertSuccessful();
 
     $workflow = AutomationWorkflow::query()->forAllTenants()->where('tenant_id', $tenant->id)->firstOrFail();
+    $migratedConnections = IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->get();
     expect(AutomationWorkflow::query()->forAllTenants()->where('tenant_id', $tenant->id)->count())->toBe(1)
-        ->and(IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->count())->toBe(2)
+        ->and($migratedConnections)->toHaveCount(2)
+        ->and($migratedConnections->every(fn (IntegrationConnection $connection): bool => data_get($connection->metadata, 'credential_source') === 'legacy_migration'))->toBeTrue()
         ->and(AutomationWorkflowState::query()->where('workflow_key', $legacyKey)->value('automation_workflow_id'))->toBe($workflow->id)
         ->and(AutomationWorkflowLink::query()->where('workflow_key', $legacyKey)->value('automation_workflow_id'))->toBe($workflow->id)
         ->and(AutomationWorkflowLink::query()->where('destination_id', 'existing-event')->count())->toBe(1)
         ->and(AutomationWorkflowAuditEvent::query()->forAllTenants()->where('automation_workflow_id', $workflow->id)->where('event_type', 'legacy_migrated')->count())->toBe(1)
         ->and(TenantMarketingSetting::query()->where('tenant_id', $tenant->id)->where('key', 'workflow_automation_asana_google_calendar')->exists())->toBeTrue();
+
+    config()->set('services.asana.oauth_client_id', 'shared-asana-client');
+    config()->set('services.asana.oauth_client_secret', 'shared-asana-secret');
+    config()->set('services.google_calendar.oauth_client_id', 'shared-google-client');
+    config()->set('services.google_calendar.oauth_client_secret', 'shared-google-secret');
+
+    $settings = app(TenantWorkflowAutomationSettingsService::class);
+    $sharedCredentials = $settings->effectiveCredentials($tenant->id);
+    $migrationCredentials = $settings->effectiveCredentials($tenant->id, preferLegacyOAuthClients: true);
+
+    expect($sharedCredentials['google_calendar_client_id'])->toBe('shared-google-client')
+        ->and($sharedCredentials['google_calendar_client_secret'])->toBe('shared-google-secret')
+        ->and($sharedCredentials['sources']['google_calendar_client_id'])->toBe('global')
+        ->and($migrationCredentials['asana_oauth_client_id'])->toBe('legacy-asana-client')
+        ->and($migrationCredentials['asana_oauth_client_secret'])->toBe('legacy-asana-secret')
+        ->and($migrationCredentials['google_calendar_client_id'])->toBe('legacy-google-client')
+        ->and($migrationCredentials['google_calendar_client_secret'])->toBe('legacy-google-secret')
+        ->and($migrationCredentials['sources']['google_calendar_client_id'])->toBe('legacy_tenant');
 });
