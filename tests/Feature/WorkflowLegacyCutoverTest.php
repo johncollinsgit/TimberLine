@@ -4,9 +4,11 @@ use App\Models\AutomationWorkflow;
 use App\Models\AutomationWorkflowAuditEvent;
 use App\Models\AutomationWorkflowLink;
 use App\Models\AutomationWorkflowState;
+use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
+use App\Services\Automation\WorkflowProductService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
@@ -97,4 +99,16 @@ test('legacy cutover preserves cursor and destination links and activates only a
         && $request['client_id'] === 'legacy-google-client'
         && $request['client_secret'] === 'legacy-google-secret'
         && $request['refresh_token'] === 'google-refresh');
+
+    $googleConnection = IntegrationConnection::query()->forAllTenants()
+        ->where('tenant_id', $tenant->id)->where('provider', 'google_calendar')->firstOrFail();
+    $googleConnection->forceFill(['metadata' => ['credential_source' => 'shared_oauth']])->save();
+    $runtimeMethod = new ReflectionMethod(WorkflowProductService::class, 'runtimeDefinition');
+    $runtime = $runtimeMethod->invoke(
+        app(WorkflowProductService::class),
+        $workflow->fresh(),
+        (array) $workflow->publishedVersion->definition,
+    );
+    expect(data_get($runtime, 'credentials.google_calendar_client_id'))->toBe('shared-google-client')
+        ->and(data_get($runtime, 'credentials.google_calendar_client_secret'))->toBe('shared-google-secret');
 });
