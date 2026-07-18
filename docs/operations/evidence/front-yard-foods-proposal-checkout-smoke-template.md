@@ -14,6 +14,7 @@ Copy this file to a dated note such as:
 - Operator:
 - Proposal token suffix or internal reference:
 - Agreement ID:
+- Agreement mode: `sandbox_validation`
 - Agreement version/content hash:
 - Billing order ID:
 - Stripe checkout session:
@@ -40,13 +41,13 @@ Copy this file to a dated note such as:
 
 ```bash
 php artisan config:doctor --env=production
-php artisan everbranch:front-yard-foods-readiness --require-paid
+php artisan everbranch:front-yard-foods-readiness --stage=sandbox-paid --agreement-id=<sandbox-agreement-id>
 ```
 
-For live billing:
+After canceling the test subscription and configuring verified live gates:
 
 ```bash
-php artisan everbranch:front-yard-foods-readiness --require-paid --require-live-gates
+php artisan everbranch:front-yard-foods-readiness --stage=pre-send
 ```
 
 ## Acceptance Checklist
@@ -61,6 +62,9 @@ php artisan everbranch:front-yard-foods-readiness --require-paid --require-live-
 - [ ] ACH remains processing until Stripe confirms settlement.
 - [ ] Duplicate webhook replay is safe.
 - [ ] Receipt and invoice links are tenant-scoped.
+- [ ] Sandbox payment creates no tenant commercial override, subscription ledger, entitlement change, or client workspace membership.
+- [ ] Sandbox agreement and receipt are hidden from tenant User Agreements and the Front Yard dashboard.
+- [ ] Stripe test subscription/schedule is canceled and the deletion webhook is recorded.
 - [ ] Laura does not have workspace access before verified payment.
 - [ ] Laura has workspace access after verified payment and operator activation.
 - [ ] Dashboard says “Welcome, Laura” and shows the Front Yard Foods launch checklist, client needs, data-use assurance, agreement link, Events & Classes, Plant Inventory, and Messaging pending.

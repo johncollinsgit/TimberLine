@@ -113,7 +113,12 @@ class AgreementAcceptanceService
                     'tax_disclosure' => (string) data_get($locked->currentVersion->pricing_payload, 'tax_disclosure', ''),
                     'authorized_line_items' => (array) ($subscription['authorized_line_items'] ?? []),
                     'authorized_at' => $acceptedAt,
-                    'metadata' => ['canonical_plan_key' => $subscription['canonical_plan_key'] ?? null, 'activation_requirements' => $subscription['activation_requirements'] ?? [], 'activation_status' => 'disabled_pending_verified_payment'],
+                    'metadata' => [
+                        'canonical_plan_key' => $subscription['canonical_plan_key'] ?? null,
+                        'activation_requirements' => $subscription['activation_requirements'] ?? [],
+                        'activation_status' => $locked->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION ? 'validation_only_no_entitlement' : 'disabled_pending_verified_payment',
+                        'validation_only' => $locked->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION,
+                    ],
                 ]);
                 $this->billingOrders->authorize($locked, $acceptance, $authorization);
                 $this->events->record($locked, 'accepted', $request->user()?->id, ['content_hash' => $locked->currentVersion->content_hash, 'evidence_hash' => $evidenceHash], $locked->currentVersion);

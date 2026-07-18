@@ -98,6 +98,32 @@ test('front yard agreement pricing stays separate configurable and idempotent', 
         ->and($changed->currentVersion->rendered_content)->toContain('Import up to 75 currently active products.');
 });
 
+test('disposable sandbox agreements never replace or version the client agreement', function (): void {
+    $tenant = agreementTenant();
+    $service = app(AgreementManagementService::class);
+    $client = $service->prepareFrontYardFoods($tenant, null);
+    $clientHash = $client->currentVersion->content_hash;
+
+    $firstSandbox = $service->createFrontYardFoodsSandboxValidation($tenant, null);
+    $secondSandbox = $service->createFrontYardFoodsSandboxValidation($tenant, null);
+    $clientAgain = $service->prepareFrontYardFoods($tenant, null);
+
+    expect($firstSandbox->id)->not->toBe($secondSandbox->id)
+        ->and($firstSandbox->agreement_type)->toBe(Agreement::TYPE_SANDBOX_VALIDATION)
+        ->and($firstSandbox->template_key)->toBe(Agreement::TEMPLATE_FRONT_YARD_SANDBOX_VALIDATION)
+        ->and($firstSandbox->title)->toStartWith('TEST MODE ONLY')
+        ->and($firstSandbox->currentVersion->subscription_payload['validation_only'])->toBeTrue()
+        ->and($clientAgain->id)->toBe($client->id)
+        ->and($clientAgain->currentVersion->content_hash)->toBe($clientHash)
+        ->and($clientAgain->versions()->count())->toBe(1);
+
+    $firstSandbox->forceFill(['status' => 'active'])->save();
+    expect(fn () => $service->createAmendment($firstSandbox, null))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $service->createSupplementalWork($firstSandbox, null, 'Not allowed', 5000))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => $service->createImplementationMilestone($firstSandbox, null))->toThrow(InvalidArgumentException::class)
+        ->and(fn () => app(AgreementTerminationService::class)->request($firstSandbox, null))->toThrow(InvalidArgumentException::class);
+});
+
 test('proposal access is evergrove host locked password protected and secret safe', function (): void {
     $sent = sentAgreement(agreementTenant());
     $agreement = $sent['agreement'];
@@ -206,6 +232,47 @@ test('tenant agreements are financially permissioned tenant scoped and hide inte
 
     $this->actingAs($ownerA)->get('http://tenant-a.theeverbranch.com/agreements?tenant=tenant-a')->assertOk()->assertSeeText('User Agreements')->assertDontSeeText('PRIVATE LANDLORD NOTE');
     $this->actingAs($ownerB)->get('http://tenant-b.theeverbranch.com/agreements/'.$sent['agreement']->id.'?tenant=tenant-b')->assertNotFound();
+});
+
+test('sandbox agreements and their receipts are hidden from tenant agreement pages', function (): void {
+    $tenant = agreementTenant();
+    $service = app(AgreementManagementService::class);
+    $sandbox = $service->createFrontYardFoodsSandboxValidation($tenant, null);
+    $access = $service->send($sandbox, null, 'SandboxPass123');
+    $token = basename(parse_url($access['url'], PHP_URL_PATH));
+    $url = 'http://evergrove.test/proposals/'.$token;
+    $this->post($url.'/unlock', ['password' => 'SandboxPass123']);
+    $this->post($url.'/accept', acceptancePayload(['signer_email' => 'john@example.test']))->assertRedirect();
+    $order = TenantBillingOrder::query()->where('agreement_id', $sandbox->id)->firstOrFail();
+    TenantBillingReceipt::query()->create([
+        'tenant_id' => $tenant->id,
+        'tenant_billing_order_id' => $order->id,
+        'subscription_authorization_id' => $order->subscription_authorization_id,
+        'provider' => 'stripe',
+        'provider_receipt_id' => 'in_sandbox_hidden',
+        'status' => 'paid',
+        'currency' => 'USD',
+        'subtotal_amount_cents' => 35800,
+        'tax_amount_cents' => 0,
+        'total_amount_cents' => 35800,
+        'provider_calculated_tax' => true,
+        'billed_at' => now(),
+        'paid_at' => now(),
+    ]);
+    $owner = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+    $owner->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $this->actingAs($owner)
+        ->get('http://front-yard-foods.theeverbranch.com/agreements?tenant=front-yard-foods')
+        ->assertOk()
+        ->assertDontSeeText('TEST MODE ONLY')
+        ->assertDontSeeText('in_sandbox_hidden');
+    $this->actingAs($owner)
+        ->get('http://front-yard-foods.theeverbranch.com/agreements/'.$sandbox->id.'?tenant=front-yard-foods')
+        ->assertNotFound();
+    $this->actingAs($owner)
+        ->get('http://front-yard-foods.theeverbranch.com/agreements/'.$sandbox->id.'/download?tenant=front-yard-foods')
+        ->assertNotFound();
 });
 
 test('provider receipts are idempotent tax aware and cannot cross tenant boundaries', function (): void {

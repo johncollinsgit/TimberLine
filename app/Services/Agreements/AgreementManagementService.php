@@ -34,7 +34,8 @@ class AgreementManagementService
         return DB::transaction(function () use ($tenant, $actorUserId, $payload): Agreement {
             $agreement = Agreement::query()
                 ->forTenant($tenant)
-                ->where('template_key', 'front_yard_foods_launch_partner')
+                ->where('agreement_type', Agreement::TYPE_FRONT_YARD_CLIENT_SERVICES)
+                ->where('template_key', Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES)
                 ->whereNull('parent_agreement_id')
                 ->latest('id')
                 ->lockForUpdate()
@@ -44,7 +45,7 @@ class AgreementManagementService
                 $agreement = Agreement::query()->create([
                     'tenant_id' => (int) $tenant->id,
                     'agreement_type' => (string) $payload['agreement_type'],
-                    'template_key' => 'front_yard_foods_launch_partner',
+                    'template_key' => Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES,
                     'title' => (string) $payload['title'],
                     'status' => 'draft',
                     'created_by' => $actorUserId,
@@ -92,6 +93,67 @@ class AgreementManagementService
             ]);
 
             return $agreement;
+        });
+    }
+
+    /**
+     * Create a disposable validation agreement without selecting, versioning, or
+     * otherwise changing the canonical client agreement.
+     */
+    public function createFrontYardFoodsSandboxValidation(Tenant $tenant, ?int $actorUserId): Agreement
+    {
+        $payload = $this->frontYardTemplate->build();
+        $payload['agreement_type'] = Agreement::TYPE_SANDBOX_VALIDATION;
+        $payload['title'] = 'TEST MODE ONLY — '.$payload['title'];
+        $payload['content']['agreement_type'] = Agreement::TYPE_SANDBOX_VALIDATION;
+        $payload['content']['title'] = $payload['title'];
+        $payload['content']['purpose'] = 'TEST MODE ONLY. This disposable agreement validates the Evergrove proposal, Stripe Checkout, invoice, receipt, subscription schedule, and webhook flow. It does not activate service, grant workspace access, or replace the real Front Yard Foods agreement.';
+        $payload['subscription']['validation_only'] = true;
+        $payload['subscription']['activation_status'] = 'validation_only_no_entitlement';
+        $payload['subscription']['activation_requirements'] = [];
+
+        return DB::transaction(function () use ($tenant, $actorUserId, $payload): Agreement {
+            $agreement = Agreement::query()->create([
+                'tenant_id' => (int) $tenant->id,
+                'agreement_type' => Agreement::TYPE_SANDBOX_VALIDATION,
+                'template_key' => Agreement::TEMPLATE_FRONT_YARD_SANDBOX_VALIDATION,
+                'title' => (string) $payload['title'],
+                'status' => 'draft',
+                'internal_notes' => 'TEST MODE ONLY — disposable Stripe validation agreement. Never send this agreement to the client.',
+                'created_by' => $actorUserId,
+                'updated_by' => $actorUserId,
+            ]);
+            $this->events->record($agreement, 'created', $actorUserId, ['validation_only' => true]);
+
+            $rendered = $this->renderer->render($payload);
+            $version = AgreementVersion::query()->create([
+                'agreement_id' => (int) $agreement->id,
+                'version_number' => 1,
+                'title' => (string) $payload['title'],
+                'rendered_content' => $rendered,
+                'content_payload' => (array) $payload['content'],
+                'scope_payload' => (array) $payload['scope'],
+                'pricing_payload' => (array) $payload['pricing'],
+                'subscription_payload' => (array) $payload['subscription'],
+                'termination_payload' => (array) $payload['termination'],
+                'content_hash' => $this->renderer->hash($rendered),
+                'created_by' => $actorUserId,
+                'created_at' => now(),
+            ]);
+            $agreement->forceFill(['current_version_id' => (int) $version->id])->save();
+            $this->events->record($agreement, 'version_created', $actorUserId, [
+                'version_number' => 1,
+                'content_hash' => $version->content_hash,
+                'validation_only' => true,
+            ], $version);
+            $this->audit->record((int) $tenant->id, $actorUserId, 'agreement.sandbox_validation.prepare', targetType: 'agreement', targetId: $agreement->id, afterState: [
+                'status' => 'draft',
+                'version_id' => (int) $version->id,
+                'content_hash' => $version->content_hash,
+                'validation_only' => true,
+            ]);
+
+            return $agreement->load('currentVersion');
         });
     }
 
@@ -152,6 +214,9 @@ class AgreementManagementService
 
     public function createAmendment(Agreement $parent, ?int $actorUserId, ?int $implementationAmountCents = null, ?string $additionalScope = null): Agreement
     {
+        if ($parent->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION) {
+            throw new InvalidArgumentException('Sandbox validation agreements cannot receive amendments.');
+        }
         if (! in_array($parent->status, ['active', 'termination_pending'], true)) {
             throw new InvalidArgumentException('Only an accepted agreement can receive an amendment.');
         }
@@ -202,6 +267,9 @@ class AgreementManagementService
 
     public function createSupplementalWork(Agreement $parent, ?int $actorUserId, string $description, int $amountCents, ?float $approvedHours = null): Agreement
     {
+        if ($parent->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION) {
+            throw new InvalidArgumentException('Sandbox validation agreements cannot authorize supplemental work.');
+        }
         if (! in_array($parent->status, ['active', 'termination_pending'], true)) {
             throw new InvalidArgumentException('Supplemental work requires an accepted parent agreement.');
         }
@@ -238,6 +306,9 @@ class AgreementManagementService
 
     public function createImplementationMilestone(Agreement $parent, ?int $actorUserId): Agreement
     {
+        if ($parent->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION) {
+            throw new InvalidArgumentException('Sandbox validation agreements cannot create implementation milestones.');
+        }
         if (! in_array($parent->status, ['active', 'termination_pending'], true)) {
             throw new InvalidArgumentException('A milestone requires an accepted parent agreement.');
         }

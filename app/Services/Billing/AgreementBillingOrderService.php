@@ -47,7 +47,10 @@ class AgreementBillingOrderService
                 'authorized_subtotal_cents' => $subtotal,
                 'provider_total_cents' => $subtotal,
                 'authorized_at' => now(),
-                'metadata' => ['content_hash' => (string) $agreement->currentVersion->content_hash],
+                'metadata' => [
+                    'content_hash' => (string) $agreement->currentVersion->content_hash,
+                    'validation_only' => $agreement->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION,
+                ],
             ]
         );
 

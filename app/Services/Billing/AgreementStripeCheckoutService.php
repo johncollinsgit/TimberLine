@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\Agreement;
 use App\Models\TenantBillingOrder;
 use App\Models\TenantCommercialOverride;
 use App\Models\TenantDirectInvoice;
@@ -77,6 +78,7 @@ class AgreementStripeCheckoutService
             'subscription_authorization_id' => (string) ((int) $order->subscription_authorization_id),
             'purchase_key' => (string) ($order->authorization?->purchase_key ?? ''),
             'checkout_plan_key' => (string) data_get($order->authorization?->metadata, 'canonical_plan_key', ''),
+            'validation_only' => data_get($order->metadata, 'validation_only') === true ? '1' : '0',
         ];
         foreach (array_filter($metadata, fn (string $value): bool => $value !== '') as $key => $value) {
             $payload['metadata['.$key.']'] = $value;
@@ -126,16 +128,21 @@ class AgreementStripeCheckoutService
 
     public function availableFor(TenantBillingOrder $order): bool
     {
-        return $this->readinessBlocker($order->loadMissing('tenant')) === null;
+        return $this->readinessBlocker($order->loadMissing(['tenant', 'agreement'])) === null;
     }
 
     protected function reusableCustomerId(TenantBillingOrder $order): ?string
     {
+        if ($order->agreement?->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION) {
+            return null;
+        }
+
         $email = trim(strtolower((string) $order->acceptance?->signer_email));
         $candidates = [
             $order->provider_customer_id,
             $email !== '' ? TenantBillingOrder::withoutGlobalScopes()
                 ->where('tenant_id', $order->tenant_id)
+                ->whereHas('agreement', fn ($query) => $query->where('agreement_type', '!=', Agreement::TYPE_SANDBOX_VALIDATION))
                 ->whereNotNull('provider_customer_id')
                 ->whereHas('acceptance', fn ($query) => $query->whereRaw('LOWER(signer_email) = ?', [$email]))
                 ->latest('id')
@@ -171,6 +178,18 @@ class AgreementStripeCheckoutService
         $secret = trim((string) config('services.stripe.secret', ''));
         if (! str_starts_with($secret, 'sk_test_') && ! str_starts_with($secret, 'sk_live_')) {
             return 'Stripe is not configured.';
+        }
+        $sandboxAgreement = $order->agreement?->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION;
+        $validationSnapshot = data_get($order->metadata, 'validation_only') === true;
+        if ($sandboxAgreement !== $validationSnapshot) {
+            return 'The agreement and billing-order validation modes do not match.';
+        }
+        $validationOnly = $sandboxAgreement;
+        if ($validationOnly && str_starts_with($secret, 'sk_live_')) {
+            return 'Sandbox validation agreements cannot use live Stripe credentials.';
+        }
+        if (! $validationOnly && app()->environment('production') && str_starts_with($secret, 'sk_test_')) {
+            return 'Client agreements cannot use Stripe test credentials on production.';
         }
         if (str_starts_with($secret, 'sk_live_')) {
             if (! filled(config('services.stripe.webhook_secret'))) {

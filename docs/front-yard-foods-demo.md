@@ -32,24 +32,26 @@ Do not send until the first-checkout amount, additional scope, exclusions, and i
 
 ## End-to-End Send-Link Readiness
 
-Use the readiness command as the final app-side gate before calling this prime time:
+Create a disposable TEST MODE agreement for the production-hosted Stripe sandbox. This always creates a new agreement and never selects or versions Laura's real proposal:
 
 ```bash
-php artisan everbranch:front-yard-foods-readiness --require-paid
+php artisan everbranch:prepare-front-yard-foods --sandbox-agreement --send-agreement
+php artisan everbranch:front-yard-foods-readiness --stage=sandbox-paid --agreement-id=123
 ```
 
-The command must pass only after the disposable smoke test proves the real chain: password unlock, customer-facing signature, immutable acceptance, server-priced Stripe Checkout, Stripe-confirmed payment, mirrored invoice/receipt/subscription, audited fulfillment, and Laura's workspace membership. Before payment is verified, the same command intentionally fails if the accepted signer already has workspace access.
+Use the printed test link only for the internal signer. The sandbox agreement and receipt remain visible to landlord operators but are excluded from Laura's dashboard and User Agreements. After the paid check passes, cancel the Stripe test subscription/schedule and wait for the signed `customer.subscription.deleted` webhook.
 
-For live customer payment, also require production gates:
+Switch Forge to live credentials only after the Relay payout and accountant evidence gates are complete. Rotate Laura's real link, then run the pre-send gate:
 
 ```bash
 php artisan config:doctor --env=production
-php artisan everbranch:front-yard-foods-readiness --require-paid --require-live-gates
+php artisan everbranch:prepare-front-yard-foods --send-agreement
+php artisan everbranch:front-yard-foods-readiness --stage=pre-send
 ```
 
-`--require-live-gates` expects live Stripe keys, the production webhook secret, Relay payout verification, accountant tax decision evidence, production mail, and an explicit `front-yard-foods` allowlist without `*`.
+`pre-send` implicitly requires live Stripe keys, the production webhook secret, Relay payout verification, accountant tax decision evidence, production mail, an explicit `front-yard-foods` allowlist without `*`, canceled sandbox evidence, and an unsigned real agreement with no billing order or Laura membership.
 
-For the first client launch, workspace activation may remain a documented operator step after Stripe payment is verified. Create or activate Laura's user, attach her to the Front Yard Foods tenant, and then rerun the readiness command. Do not send the real link until the evidence template at `docs/operations/evidence/front-yard-foods-proposal-checkout-smoke-template.md` has been copied into a dated evidence note and completed.
+After Laura signs and Stripe confirms payment, create or activate Laura's user, attach her to Front Yard Foods, and run `php artisan everbranch:front-yard-foods-readiness --stage=post-payment`. The legacy `--require-paid` option remains an alias for `post-payment`.
 
 ### Commercial separation
 

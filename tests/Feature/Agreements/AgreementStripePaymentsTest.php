@@ -99,6 +99,126 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
         ->and($order->fresh()->authorized_subtotal_cents)->toBe(35800);
 });
 
+test('sandbox checkout records isolated Stripe evidence without commercial activation', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Front Yard Foods', 'slug' => 'front-yard-foods']);
+    $management = app(AgreementManagementService::class);
+    $management->prepareFrontYardFoods($tenant, null);
+    $sandbox = $management->createFrontYardFoodsSandboxValidation($tenant, null);
+    $access = $management->send($sandbox, null, 'SandboxPass123');
+    $token = basename(parse_url($access['url'], PHP_URL_PATH));
+    $sent = ['agreement' => $sandbox, 'token' => $token, 'password' => 'SandboxPass123', 'url' => 'http://evergrove.test/proposals/'.$token];
+    $order = acceptStripeAgreement($this, $sent);
+    $beforeOverrideCount = TenantCommercialOverride::withoutGlobalScopes()->count();
+    $beforeMembershipCount = $tenant->users()->count();
+
+    expect(data_get($order->metadata, 'validation_only'))->toBeTrue()
+        ->and(data_get($order->authorization->metadata, 'validation_only'))->toBeTrue();
+
+    Http::fake(function (Request $request) {
+        $data = $request->data();
+        if (str_ends_with($request->url(), '/v1/checkout/sessions')) {
+            expect($data['metadata[validation_only]'] ?? null)->toBe('1')
+                ->and($data)->not->toHaveKey('customer');
+
+            return Http::response(['id' => 'cs_test_validation', 'url' => 'https://checkout.stripe.test/cs_test_validation']);
+        }
+        if (str_contains($request->url(), '/v1/subscriptions/sub_validation')) {
+            return Http::response(['id' => 'sub_validation', 'start_date' => now()->timestamp, 'items' => ['data' => [['price' => ['id' => 'price_validation_promo', 'product' => ['id' => 'prod_validation']]]]]]);
+        }
+        if (str_ends_with($request->url(), '/v1/prices')) {
+            return Http::response(['id' => 'price_validation_standard']);
+        }
+        if (str_ends_with($request->url(), '/v1/subscription_schedules')) {
+            return Http::response(['id' => 'sub_sched_validation']);
+        }
+        if (str_contains($request->url(), '/v1/subscription_schedules/sub_sched_validation')) {
+            return Http::response(['id' => 'sub_sched_validation', 'status' => 'active']);
+        }
+
+        return Http::response([], 404);
+    });
+    $this->post($sent['url'].'/checkout')->assertRedirect('https://checkout.stripe.test/cs_test_validation');
+    [$checkoutPayload, $checkoutSignature] = signStripeEvent(['id' => 'evt_validation_checkout', 'type' => 'checkout.session.completed', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'cs_test_validation', 'object' => 'checkout.session', 'customer' => 'cus_validation', 'subscription' => 'sub_validation', 'payment_status' => 'paid',
+        'metadata' => ['purpose' => 'agreement_checkout', 'tenant_id' => (string) $tenant->id, 'billing_order_id' => (string) $order->id, 'agreement_id' => (string) $sandbox->id, 'agreement_version_id' => (string) $sandbox->current_version_id, 'subscription_authorization_id' => (string) $order->subscription_authorization_id, 'validation_only' => '1'],
+    ]]]);
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $checkoutSignature], $checkoutPayload)->assertOk();
+
+    [$invoicePayload, $invoiceSignature] = signStripeEvent(['id' => 'evt_validation_invoice', 'type' => 'invoice.paid', 'created' => time(), 'livemode' => false, 'data' => ['object' => [
+        'id' => 'in_validation', 'object' => 'invoice', 'customer' => 'cus_validation', 'subscription' => 'sub_validation', 'status' => 'paid', 'currency' => 'usd',
+        'total' => 35800, 'subtotal' => 35800, 'total_tax_amounts' => [], 'created' => time(), 'status_transitions' => ['paid_at' => time()],
+        'hosted_invoice_url' => 'https://invoice.stripe.test/in_validation', 'invoice_pdf' => 'https://invoice.stripe.test/in_validation.pdf',
+        'parent' => ['subscription_details' => ['metadata' => ['purpose' => 'agreement_checkout', 'tenant_id' => (string) $tenant->id, 'billing_order_id' => (string) $order->id, 'agreement_id' => (string) $sandbox->id, 'agreement_version_id' => (string) $sandbox->current_version_id, 'subscription_authorization_id' => (string) $order->subscription_authorization_id, 'validation_only' => '1']]],
+    ]]]);
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $invoiceSignature], $invoicePayload)->assertOk();
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $invoiceSignature], $invoicePayload)->assertOk();
+
+    expect($order->fresh()->status)->toBe('paid')
+        ->and($order->fresh()->provider_schedule_id)->toBe('sub_sched_validation')
+        ->and($order->authorization->fresh()->status)->toBe('provider_verified')
+        ->and(TenantBillingReceipt::query()->where('tenant_billing_order_id', $order->id)->count())->toBe(1)
+        ->and(TenantBillingFulfillment::query()->where('tenant_id', $tenant->id)->where('desired_plan_key', 'validation_only')->where('status', 'noop')->count())->toBe(1)
+        ->and(TenantCommercialOverride::withoutGlobalScopes()->count())->toBe($beforeOverrideCount)
+        ->and(TenantBillingSubscription::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count())->toBe(0)
+        ->and($tenant->users()->count())->toBe($beforeMembershipCount);
+
+    config()->set('services.stripe.secret', 'sk_live_validation');
+    expect(app(\App\Services\Billing\AgreementStripeCheckoutService::class)->availableFor($order->fresh()))->toBeFalse()
+        ->and(app(\App\Services\Billing\AgreementBillingActivationGuard::class)->evaluateForFulfillment($order->authorization->fresh())['reasons'])->toContain('sandbox_validation_cannot_activate');
+});
+
+test('live mode webhook cannot mutate a sandbox validation order', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Front Yard Foods', 'slug' => 'front-yard-foods']);
+    $management = app(AgreementManagementService::class);
+    $sandbox = $management->createFrontYardFoodsSandboxValidation($tenant, null);
+    $access = $management->send($sandbox, null, 'SandboxPass123');
+    $sent = [
+        'agreement' => $sandbox,
+        'password' => 'SandboxPass123',
+        'url' => 'http://evergrove.test/proposals/'.basename(parse_url($access['url'], PHP_URL_PATH)),
+    ];
+    $order = acceptStripeAgreement($this, $sent);
+    $order->forceFill(['status' => 'checkout_pending', 'provider_checkout_session_id' => 'cs_live_rejected'])->save();
+
+    [$payload, $signature] = signStripeEvent(['id' => 'evt_live_sandbox_rejected', 'type' => 'checkout.session.completed', 'created' => time(), 'livemode' => true, 'data' => ['object' => [
+        'id' => 'cs_live_rejected', 'object' => 'checkout.session', 'customer' => 'cus_live_rejected', 'subscription' => 'sub_live_rejected', 'payment_status' => 'paid',
+        'metadata' => ['purpose' => 'agreement_checkout', 'tenant_id' => (string) $tenant->id, 'billing_order_id' => (string) $order->id],
+    ]]]);
+    $this->call('POST', '/webhooks/stripe/events', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $signature], $payload)->assertOk();
+
+    expect($order->fresh()->status)->toBe('checkout_pending')
+        ->and($order->fresh()->provider_subscription_id)->toBeNull()
+        ->and(StripeWebhookEvent::query()->where('event_id', 'evt_live_sandbox_rejected')->value('status'))->toBe('ignored_sandbox_live_mode')
+        ->and(TenantBillingReceipt::query()->where('tenant_billing_order_id', $order->id)->count())->toBe(0)
+        ->and(TenantCommercialOverride::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count())->toBe(0);
+});
+
+test('checkout fails closed when agreement and billing validation modes differ', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Front Yard Foods', 'slug' => 'front-yard-foods']);
+    $management = app(AgreementManagementService::class);
+    $sandbox = $management->createFrontYardFoodsSandboxValidation($tenant, null);
+    $access = $management->send($sandbox, null, 'SandboxPass123');
+    $sandboxOrder = acceptStripeAgreement($this, [
+        'agreement' => $sandbox,
+        'password' => 'SandboxPass123',
+        'url' => 'http://evergrove.test/proposals/'.basename(parse_url($access['url'], PHP_URL_PATH)),
+    ]);
+    $sandboxOrder->forceFill(['metadata' => [...(array) $sandboxOrder->metadata, 'validation_only' => false]])->save();
+
+    $realAgreement = $management->prepareFrontYardFoods($tenant, null);
+    $realAccess = $management->send($realAgreement, null, 'ProposalPass123');
+    $realOrder = acceptStripeAgreement($this, [
+        'agreement' => $realAgreement,
+        'password' => 'ProposalPass123',
+        'url' => 'http://evergrove.test/proposals/'.basename(parse_url($realAccess['url'], PHP_URL_PATH)),
+    ]);
+    $realOrder->forceFill(['metadata' => [...(array) $realOrder->metadata, 'validation_only' => true]])->save();
+
+    $checkout = app(\App\Services\Billing\AgreementStripeCheckoutService::class);
+    expect($checkout->availableFor($sandboxOrder->fresh()))->toBeFalse()
+        ->and($checkout->availableFor($realOrder->fresh()))->toBeFalse();
+});
+
 test('checkout reuses saved Stripe customers and one-time work can save payment methods', function (): void {
     $sent = stripePaymentAgreement();
     $order = acceptStripeAgreement($this, $sent);

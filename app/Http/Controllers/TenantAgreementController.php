@@ -18,15 +18,27 @@ class TenantAgreementController extends Controller
     public function index(Request $request): View
     {
         $tenant = $this->tenant($request);
-        $agreements = Agreement::query()->forTenant($tenant)->with(['currentVersion', 'acceptance', 'termination'])->whereIn('status', ['accepted', 'active', 'termination_pending', 'terminated'])->latest('id')->get();
+        $agreements = Agreement::query()
+            ->forTenant($tenant)
+            ->where('agreement_type', '!=', Agreement::TYPE_SANDBOX_VALIDATION)
+            ->with(['currentVersion', 'acceptance', 'termination'])
+            ->whereIn('status', ['accepted', 'active', 'termination_pending', 'terminated'])
+            ->latest('id')
+            ->get();
+        $receipts = $tenant->billingReceipts()
+            ->whereDoesntHave('billingOrder.agreement', fn ($query) => $query->where('agreement_type', Agreement::TYPE_SANDBOX_VALIDATION))
+            ->latest('billed_at')
+            ->get();
 
-        return view('agreements.tenant.index', ['tenant' => $tenant, 'agreements' => $agreements, 'receipts' => $tenant->billingReceipts()->latest('billed_at')->get()]);
+        return view('agreements.tenant.index', ['tenant' => $tenant, 'agreements' => $agreements, 'receipts' => $receipts]);
     }
 
     public function show(Request $request, Agreement $agreement): View
     {
         $tenant = $this->tenant($request);
-        abort_unless((int) $agreement->tenant_id === (int) $tenant->id && in_array($agreement->status, ['accepted', 'active', 'termination_pending', 'terminated'], true), 404);
+        abort_unless((int) $agreement->tenant_id === (int) $tenant->id
+            && $agreement->agreement_type !== Agreement::TYPE_SANDBOX_VALIDATION
+            && in_array($agreement->status, ['accepted', 'active', 'termination_pending', 'terminated'], true), 404);
 
         return view('agreements.tenant.show', ['tenant' => $tenant, 'agreement' => $agreement->load(['currentVersion', 'acceptance', 'termination'])]);
     }
@@ -34,7 +46,8 @@ class TenantAgreementController extends Controller
     public function download(Request $request, Agreement $agreement): BinaryFileResponse
     {
         $tenant = $this->tenant($request);
-        abort_unless((int) $agreement->tenant_id === (int) $tenant->id, 404);
+        abort_unless((int) $agreement->tenant_id === (int) $tenant->id
+            && $agreement->agreement_type !== Agreement::TYPE_SANDBOX_VALIDATION, 404);
         $acceptance = $agreement->acceptance()->firstOrFail();
 
         return Storage::disk('local')->download((string) $acceptance->snapshot_path, 'user-agreement-'.$agreement->id.'.html', ['Content-Type' => 'text/html; charset=UTF-8']);

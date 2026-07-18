@@ -12,6 +12,14 @@ class Agreement extends Model
 {
     use HasTenantScope;
 
+    public const TYPE_FRONT_YARD_CLIENT_SERVICES = 'launch_partner';
+
+    public const TYPE_SANDBOX_VALIDATION = 'sandbox_validation';
+
+    public const TEMPLATE_FRONT_YARD_CLIENT_SERVICES = 'front_yard_foods_launch_partner';
+
+    public const TEMPLATE_FRONT_YARD_SANDBOX_VALIDATION = 'front_yard_foods_sandbox_validation';
+
     public const STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'active', 'termination_pending', 'terminated'];
 
     protected $guarded = [];
