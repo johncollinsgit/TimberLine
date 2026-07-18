@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class AutomationWorkflowLink extends Model
 {
     protected $fillable = [
+        'tenant_id',
+        'automation_workflow_id',
         'workflow_key',
         'source_system',
         'source_id',
@@ -18,6 +20,8 @@ class AutomationWorkflowLink extends Model
     ];
 
     protected $casts = [
+        'tenant_id' => 'integer',
+        'automation_workflow_id' => 'integer',
         'metadata' => 'array',
         'last_synced_at' => 'datetime',
     ];

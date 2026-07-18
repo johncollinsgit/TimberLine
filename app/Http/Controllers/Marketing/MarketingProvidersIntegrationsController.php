@@ -22,8 +22,8 @@ use App\Services\Marketing\MarketingLegacyImportService;
 use App\Services\Marketing\MarketingSourceOverlapReportService;
 use App\Services\Marketing\ShopifyCustomerSyncHealthService;
 use App\Services\Marketing\SquareMarketingSyncService;
-use App\Support\Marketing\MarketingSectionRegistry;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\RedirectResponse;
@@ -44,8 +44,7 @@ class MarketingProvidersIntegrationsController extends Controller
         TenantModuleAccessResolver $moduleAccessResolver,
         AsanaWorkflowConnectionService $asanaConnectionService,
         GoogleCalendarWorkflowConnectionService $googleCalendarConnectionService
-    ): View
-    {
+    ): View {
         $tenantId = $this->currentTenantId($request);
         if ($tenantId === null && Tenant::query()->exists()) {
             abort(403, 'Tenant context is required to view integrations.');
@@ -76,9 +75,9 @@ class MarketingProvidersIntegrationsController extends Controller
             ->when($tenantId !== null, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($search !== '', function ($query) use ($search): void {
                 $query->where(function ($nested) use ($search): void {
-                    $nested->where('raw_value', 'like', '%' . $search . '%')
-                        ->orWhere('normalized_value', 'like', '%' . $search . '%')
-                        ->orWhere('notes', 'like', '%' . $search . '%');
+                    $nested->where('raw_value', 'like', '%'.$search.'%')
+                        ->orWhere('normalized_value', 'like', '%'.$search.'%')
+                        ->orWhere('notes', 'like', '%'.$search.'%');
                 });
             })
             ->when($sourceSystem !== 'all' && $sourceSystem !== '', fn ($query) => $query->where('source_system', $sourceSystem))
@@ -287,8 +286,7 @@ class MarketingProvidersIntegrationsController extends Controller
         Request $request,
         MarketingEventSourceMapping $mapping,
         MarketingEventAttributionService $attributionService
-    ): RedirectResponse
-    {
+    ): RedirectResponse {
         $tenantId = $this->currentTenantId($request);
         if ($tenantId === null) {
             abort(403, 'Tenant context is required to manage event source mappings.');
@@ -358,7 +356,7 @@ class MarketingProvidersIntegrationsController extends Controller
 
         $toastStyle = $result['status'] === 'blocked' ? 'error' : 'success';
         $toastMessage = $result['status'] === 'blocked'
-            ? 'Square sync blocked: ' . ($result['reason'] ?? 'missing tenant context or configuration.')
+            ? 'Square sync blocked: '.($result['reason'] ?? 'missing tenant context or configuration.')
             : 'Square sync started and logged.';
 
         return redirect()
@@ -611,7 +609,8 @@ class MarketingProvidersIntegrationsController extends Controller
         try {
             $result = $googleCalendarConnectionService->connectFromCallback(
                 code: $data['code'],
-                state: $data['state']
+                state: $data['state'],
+                actor: $request->user()
             );
         } catch (\Throwable $exception) {
             return redirect()
@@ -634,7 +633,7 @@ class MarketingProvidersIntegrationsController extends Controller
             : sprintf('Google Calendar connected. %d writable calendar(s) are ready to choose from.', count($calendars));
 
         return redirect()
-            ->route('marketing.providers-integrations')
+            ->to((string) ($result['return_path'] ?? route('workflows.connections', absolute: false)))
             ->with('toast', [
                 'style' => 'success',
                 'message' => $message,
@@ -653,7 +652,8 @@ class MarketingProvidersIntegrationsController extends Controller
         try {
             $result = $asanaConnectionService->connectFromCallback(
                 code: $data['code'],
-                state: $data['state']
+                state: $data['state'],
+                actor: $request->user()
             );
         } catch (\Throwable $exception) {
             return redirect()
@@ -676,7 +676,7 @@ class MarketingProvidersIntegrationsController extends Controller
             : sprintf('Asana connected. %d project(s) are ready to choose from.', count($projects));
 
         return redirect()
-            ->route('marketing.providers-integrations')
+            ->to((string) ($result['return_path'] ?? route('workflows.connections', absolute: false)))
             ->with('toast', [
                 'style' => 'success',
                 'message' => $message,
@@ -695,7 +695,7 @@ class MarketingProvidersIntegrationsController extends Controller
             ->get(['id', 'title', 'starts_at'])
             ->map(fn (EventInstance $row): array => [
                 'id' => (int) $row->id,
-                'label' => (string) $row->title . ' (' . (optional($row->starts_at)->toDateString() ?: 'no-date') . ')',
+                'label' => (string) $row->title.' ('.(optional($row->starts_at)->toDateString() ?: 'no-date').')',
             ])
             ->values()
             ->all();
@@ -790,11 +790,11 @@ class MarketingProvidersIntegrationsController extends Controller
 
         if ($search !== '') {
             $query->where(function ($nested) use ($search): void {
-                $nested->where('marketing_profiles.first_name', 'like', '%' . $search . '%')
-                    ->orWhere('marketing_profiles.last_name', 'like', '%' . $search . '%')
-                    ->orWhere('marketing_profiles.email', 'like', '%' . $search . '%')
-                    ->orWhere('marketing_profiles.phone', 'like', '%' . $search . '%')
-                    ->orWhereRaw('coalesce(square_customer_metrics.sample_square_customer_id, "") like ?', ['%' . $search . '%']);
+                $nested->where('marketing_profiles.first_name', 'like', '%'.$search.'%')
+                    ->orWhere('marketing_profiles.last_name', 'like', '%'.$search.'%')
+                    ->orWhere('marketing_profiles.email', 'like', '%'.$search.'%')
+                    ->orWhere('marketing_profiles.phone', 'like', '%'.$search.'%')
+                    ->orWhereRaw('coalesce(square_customer_metrics.sample_square_customer_id, "") like ?', ['%'.$search.'%']);
             });
         }
 
@@ -895,9 +895,9 @@ class MarketingProvidersIntegrationsController extends Controller
         }
 
         $orderRows = DB::table('orders')
-            ->selectRaw($this->shopifyOrderSourceIdExpression() . ' as shopify_source_id')
+            ->selectRaw($this->shopifyOrderSourceIdExpression().' as shopify_source_id')
             ->whereNotNull('shopify_order_id')
-            ->selectRaw('round(coalesce(' . $amountColumn . ', 0) * 100, 0) as spend_cents');
+            ->selectRaw('round(coalesce('.$amountColumn.', 0) * 100, 0) as spend_cents');
 
         return DB::table('marketing_profile_links as shopify_links')
             ->leftJoinSub($orderRows, 'shopify_order_rows', function ($join): void {
@@ -921,10 +921,10 @@ class MarketingProvidersIntegrationsController extends Controller
         };
 
         if ($driver === 'sqlite') {
-            return $storeExpression . " || ':' || cast(shopify_order_id as text)";
+            return $storeExpression." || ':' || cast(shopify_order_id as text)";
         }
 
-        return "concat(" . $storeExpression . ", ':', cast(shopify_order_id as char))";
+        return 'concat('.$storeExpression.", ':', cast(shopify_order_id as char))";
     }
 
     protected function detectShopifyOrderAmountColumn(): ?string
@@ -1076,7 +1076,7 @@ class MarketingProvidersIntegrationsController extends Controller
      */
     protected function squarePayloadDiagnostics(?int $tenantId): array
     {
-        $cacheKey = 'marketing:square-contact-quality:payload-diagnostics:' . ($tenantId !== null ? 'tenant:' . $tenantId : 'global');
+        $cacheKey = 'marketing:square-contact-quality:payload-diagnostics:'.($tenantId !== null ? 'tenant:'.$tenantId : 'global');
 
         return Cache::remember($cacheKey, now()->addMinutes(15), function () use ($tenantId): array {
             $orders = [
@@ -1337,7 +1337,7 @@ class MarketingProvidersIntegrationsController extends Controller
                 'key' => $key,
                 'label' => $section['label'],
                 'href' => route($section['route']),
-                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
+                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
             ];
         }
 

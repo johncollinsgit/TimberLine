@@ -127,10 +127,10 @@ test('workflow automation setup saves encrypted tenant credentials and preserves
     $this->actingAs($user)
         ->get(route('marketing.providers-integrations'))
         ->assertOk()
-        ->assertSeeText('Asana to Google Calendar')
-        ->assertSeeText('Calendar Sync')
-        ->assertSeeText('Saved for this tenant')
-        ->assertSeeText('asan********1234');
+        ->assertSeeText('Workflow automations moved')
+        ->assertSeeText('Open automations')
+        ->assertDontSee('asana-token-1234')
+        ->assertDontSee('asan********1234');
 });
 
 test('workflow automation setup can run live from the connections page using tenant saved credentials', function (): void {
@@ -433,7 +433,7 @@ test('asana oauth callback stores refresh token and auto-selects the only visibl
             'code' => 'asana-oauth-code-123',
             'state' => $state,
         ]))
-        ->assertRedirect(route('marketing.providers-integrations'))
+        ->assertRedirect(route('workflows.connections'))
         ->assertSessionHas('toast', function (array $toast): bool {
             return ($toast['style'] ?? null) === 'success'
                 && str_contains((string) ($toast['message'] ?? ''), 'selected automatically');
@@ -450,11 +450,11 @@ test('asana oauth callback stores refresh token and auto-selects the only visibl
 
     $this->actingAs($user)
         ->withSession(['tenant_id' => $tenant->id])
-        ->get(route('marketing.providers-integrations'))
+        ->get(route('workflows.connections'))
         ->assertOk()
-        ->assertSeeText('Connected via Asana OAuth')
-        ->assertSeeText('EVENT CALENDAR')
-        ->assertSeeText('Events');
+        ->assertSeeText('Connections')
+        ->assertSeeText('John Collins')
+        ->assertSeeText('Active');
 });
 
 test('google calendar oauth callback stores refresh token and auto-selects the only writable calendar', function (): void {
@@ -518,11 +518,20 @@ test('google calendar oauth callback stores refresh token and auto-selects the o
             'code' => 'oauth-code-123',
             'state' => $state,
         ]))
-        ->assertRedirect(route('marketing.providers-integrations'))
+        ->assertRedirect(route('workflows.connections'))
         ->assertSessionHas('toast', function (array $toast): bool {
             return ($toast['style'] ?? null) === 'success'
                 && str_contains((string) ($toast['message'] ?? ''), 'selected automatically');
         });
+
+    $this->actingAs($user)
+        ->get(route('marketing.providers-integrations.workflow-automations.google-calendar.callback', [
+            'code' => 'replayed-oauth-code',
+            'state' => $state,
+        ]))
+        ->assertRedirect(route('marketing.providers-integrations'))
+        ->assertSessionHas('toast', fn (array $toast): bool => ($toast['style'] ?? null) === 'warning'
+            && str_contains((string) ($toast['message'] ?? ''), 'state expired'));
 
     $setting = TenantMarketingSetting::query()
         ->where('tenant_id', $tenant->id)
@@ -535,8 +544,8 @@ test('google calendar oauth callback stores refresh token and auto-selects the o
 
     $this->actingAs($user)
         ->withSession(['tenant_id' => $tenant->id])
-        ->get(route('marketing.providers-integrations'))
+        ->get(route('workflows.connections'))
         ->assertOk()
-        ->assertSeeText('Connected via Google OAuth')
-        ->assertSeeText('Asana to Skylight');
+        ->assertSeeText('Google Calendar account')
+        ->assertSeeText('Active');
 });

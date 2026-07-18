@@ -81,6 +81,12 @@ const contextualModules = [
     load: () => import("./gantt-scroll"),
     mountExport: "mountGanttScrollNow",
   },
+  {
+    key: "workflowEditor",
+    selectors: ["[data-workflow-editor-root]"],
+    load: () => import("./workflow-editor"),
+    mountExport: "mountWorkflowEditorNow",
+  },
 ];
 
 const contextualModuleState = new Map();

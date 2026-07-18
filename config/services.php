@@ -40,6 +40,9 @@ $defaultAsanaWorkflowRedirect = $canonicalLandlordHost !== null
 $defaultQuickBooksRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/quickbooks/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/quickbooks/callback';
+$workflowCommerceRedirect = static fn (string $provider): string => ($canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/')).'/workflows/connections/'.$provider.'/callback';
 
 return [
 
@@ -119,8 +122,34 @@ return [
     'square' => [
         'access_token' => env('SQUARE_ACCESS_TOKEN'),
         'base_url' => env('SQUARE_BASE_URL', 'https://connect.squareup.com'),
+        'api_base' => env('SQUARE_BASE_URL', 'https://connect.squareup.com'),
         'environment' => env('SQUARE_ENVIRONMENT', 'production'),
         'location_id' => env('SQUARE_LOCATION_ID'),
+        'oauth_client_id' => env('SQUARE_OAUTH_CLIENT_ID'),
+        'oauth_client_secret' => env('SQUARE_OAUTH_CLIENT_SECRET'),
+        'redirect_uri' => env('SQUARE_OAUTH_REDIRECT_URI', $workflowCommerceRedirect('square')),
+        'authorization_url' => env('SQUARE_OAUTH_AUTHORIZATION_URL', 'https://connect.squareup.com/oauth2/authorize'),
+        'token_url' => env('SQUARE_OAUTH_TOKEN_URL', 'https://connect.squareup.com/oauth2/token'),
+        'oauth_scopes' => env('SQUARE_OAUTH_SCOPES', 'MERCHANT_PROFILE_READ ORDERS_READ ITEMS_READ'),
+    ],
+
+    'squarespace' => [
+        'oauth_client_id' => env('SQUARESPACE_OAUTH_CLIENT_ID'),
+        'oauth_client_secret' => env('SQUARESPACE_OAUTH_CLIENT_SECRET'),
+        'redirect_uri' => env('SQUARESPACE_OAUTH_REDIRECT_URI', $workflowCommerceRedirect('squarespace')),
+        'authorization_url' => env('SQUARESPACE_OAUTH_AUTHORIZATION_URL', 'https://login.squarespace.com/api/1/login/oauth/provider/authorize'),
+        'token_url' => env('SQUARESPACE_OAUTH_TOKEN_URL', 'https://login.squarespace.com/api/1/login/oauth/provider/tokens'),
+        'api_base' => env('SQUARESPACE_API_BASE', 'https://api.squarespace.com'),
+        'oauth_scopes' => env('SQUARESPACE_OAUTH_SCOPES', 'website.orders.read website.webhook_subscriptions.read_write'),
+    ],
+
+    'wix' => [
+        'app_id' => env('WIX_APP_ID'),
+        'client_secret' => env('WIX_APP_SECRET'),
+        'install_url' => env('WIX_INSTALL_URL'),
+        'redirect_uri' => env('WIX_OAUTH_REDIRECT_URI', $workflowCommerceRedirect('wix')),
+        'token_url' => env('WIX_OAUTH_TOKEN_URL', 'https://www.wixapis.com/oauth2/token'),
+        'api_base' => env('WIX_API_BASE', 'https://www.wixapis.com'),
     ],
 
     'quickbooks' => [
@@ -210,6 +239,12 @@ return [
     'shopify' => [
 
         'api_version' => env('SHOPIFY_API_VERSION', '2026-01'),
+        // Dedicated Everbranch Automations app. These do not replace the
+        // Modern Forestry retail/wholesale app registrations below.
+        'automation_oauth_client_id' => env('SHOPIFY_AUTOMATIONS_CLIENT_ID'),
+        'automation_oauth_client_secret' => env('SHOPIFY_AUTOMATIONS_CLIENT_SECRET'),
+        'automation_redirect_uri' => env('SHOPIFY_AUTOMATIONS_REDIRECT_URI', $workflowCommerceRedirect('shopify')),
+        'automation_oauth_scopes' => env('SHOPIFY_AUTOMATIONS_SCOPES', 'read_orders,read_fulfillments'),
         'allow_env_token_fallback' => (bool) env('SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK', false),
         // Reporting window timezone used by embedded admin surfaces (Dashboard Lite, etc).
         // Defaults to the primary business timezone so "Today" matches merchant expectations.

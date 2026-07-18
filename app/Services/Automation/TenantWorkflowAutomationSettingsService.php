@@ -297,20 +297,20 @@ class TenantWorkflowAutomationSettingsService
 
         return [
             'asana_personal_access_token' => $tenantAsanaToken ?? $globalAsanaToken,
-            'asana_oauth_client_id' => $tenantAsanaClientId ?? $globalAsanaClientId,
-            'asana_oauth_client_secret' => $tenantAsanaClientSecret ?? $globalAsanaClientSecret,
+            'asana_oauth_client_id' => $globalAsanaClientId ?? $tenantAsanaClientId,
+            'asana_oauth_client_secret' => $globalAsanaClientSecret ?? $tenantAsanaClientSecret,
             'asana_oauth_refresh_token' => $tenantAsanaRefreshToken ?? $globalAsanaRefreshToken,
             'asana_access_token' => $globalAsanaAccessToken,
-            'google_calendar_client_id' => $tenantGoogleClientId ?? $globalGoogleClientId,
-            'google_calendar_client_secret' => $tenantGoogleClientSecret ?? $globalGoogleClientSecret,
+            'google_calendar_client_id' => $globalGoogleClientId ?? $tenantGoogleClientId,
+            'google_calendar_client_secret' => $globalGoogleClientSecret ?? $tenantGoogleClientSecret,
             'google_calendar_refresh_token' => $tenantGoogleRefreshToken ?? $globalGoogleRefreshToken,
             'sources' => [
                 'asana_personal_access_token' => $tenantAsanaToken !== null ? 'tenant' : ($globalAsanaToken !== null ? 'global' : 'missing'),
-                'asana_oauth_client_id' => $tenantAsanaClientId !== null ? 'tenant' : ($globalAsanaClientId !== null ? 'global' : 'missing'),
-                'asana_oauth_client_secret' => $tenantAsanaClientSecret !== null ? 'tenant' : ($globalAsanaClientSecret !== null ? 'global' : 'missing'),
+                'asana_oauth_client_id' => $globalAsanaClientId !== null ? 'global' : ($tenantAsanaClientId !== null ? 'legacy_tenant' : 'missing'),
+                'asana_oauth_client_secret' => $globalAsanaClientSecret !== null ? 'global' : ($tenantAsanaClientSecret !== null ? 'legacy_tenant' : 'missing'),
                 'asana_oauth_refresh_token' => $tenantAsanaRefreshToken !== null ? 'tenant' : ($globalAsanaRefreshToken !== null ? 'global' : 'missing'),
-                'google_calendar_client_id' => $tenantGoogleClientId !== null ? 'tenant' : ($globalGoogleClientId !== null ? 'global' : 'missing'),
-                'google_calendar_client_secret' => $tenantGoogleClientSecret !== null ? 'tenant' : ($globalGoogleClientSecret !== null ? 'global' : 'missing'),
+                'google_calendar_client_id' => $globalGoogleClientId !== null ? 'global' : ($tenantGoogleClientId !== null ? 'legacy_tenant' : 'missing'),
+                'google_calendar_client_secret' => $globalGoogleClientSecret !== null ? 'global' : ($tenantGoogleClientSecret !== null ? 'legacy_tenant' : 'missing'),
                 'google_calendar_refresh_token' => $tenantGoogleRefreshToken !== null ? 'tenant' : ($globalGoogleRefreshToken !== null ? 'global' : 'missing'),
             ],
         ];
@@ -637,6 +637,7 @@ class TenantWorkflowAutomationSettingsService
         foreach ($patch as $key => $value) {
             if (is_array($value) && is_array($existing[$key] ?? null)) {
                 $existing[$key] = $this->mergeArrays((array) $existing[$key], $value);
+
                 continue;
             }
 

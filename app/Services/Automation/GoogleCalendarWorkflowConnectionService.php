@@ -2,7 +2,9 @@
 
 namespace App\Services\Automation;
 
+use App\Models\IntegrationConnection;
 use App\Models\User;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -14,9 +16,9 @@ class GoogleCalendarWorkflowConnectionService
     public const WORKFLOW_KEY = 'asana_to_google_calendar';
 
     public function __construct(
-        protected TenantWorkflowAutomationSettingsService $workflowSettingsService
-    ) {
-    }
+        protected TenantWorkflowAutomationSettingsService $workflowSettingsService,
+        protected TenantModuleAccessResolver $moduleAccessResolver,
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -50,6 +52,7 @@ class GoogleCalendarWorkflowConnectionService
         $selectedCalendar = collect($calendars)->first(
             fn (array $calendar): bool => trim((string) ($calendar['id'] ?? '')) === $selectedCalendarId
         );
+        $normalized = IntegrationConnection::query()->forTenantId($tenantId)->where('provider', 'google_calendar')->first();
 
         return [
             'oauth_ready' => $oauthReady,
@@ -59,6 +62,9 @@ class GoogleCalendarWorkflowConnectionService
             'selected_calendar_id' => $selectedCalendarId,
             'selected_calendar_summary' => is_array($selectedCalendar) ? ($selectedCalendar['summary'] ?? null) : null,
             'error' => $error,
+            'account_label' => $normalized?->external_account_label,
+            'last_checked_at' => $normalized?->last_synced_at?->toIso8601String() ?? $normalized?->connected_at?->toIso8601String(),
+            'connection_status' => $normalized?->status ?? ($connected ? IntegrationConnection::STATUS_CONNECTED : IntegrationConnection::STATUS_DISCONNECTED),
             'credential_sources' => [
                 'client_id' => $credentials['sources']['google_calendar_client_id'] ?? 'missing',
                 'client_secret' => $credentials['sources']['google_calendar_client_secret'] ?? 'missing',
@@ -67,7 +73,7 @@ class GoogleCalendarWorkflowConnectionService
         ];
     }
 
-    public function buildConnectUrl(int $tenantId, User $user, string $workflowKey = self::WORKFLOW_KEY): string
+    public function buildConnectUrl(int $tenantId, User $user, string $workflowKey = self::WORKFLOW_KEY, string $returnPath = '/workflows/connections'): string
     {
         $workflowKey = $this->normalizeWorkflowKey($workflowKey);
         $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
@@ -84,6 +90,7 @@ class GoogleCalendarWorkflowConnectionService
             'user_id' => (int) $user->id,
             'tenant_id' => $tenantId,
             'workflow_key' => $workflowKey,
+            'return_path' => $this->safeReturnPath($returnPath),
             'created_at' => now()->toIso8601String(),
         ], now()->addMinutes(15));
 
@@ -104,7 +111,7 @@ class GoogleCalendarWorkflowConnectionService
     /**
      * @return array<string,mixed>
      */
-    public function connectFromCallback(string $code, string $state): array
+    public function connectFromCallback(string $code, string $state, ?User $actor = null): array
     {
         $cached = $this->stateCache()->pull($this->stateCacheKey($state));
         if (! is_array($cached) || (int) ($cached['tenant_id'] ?? 0) <= 0 || trim((string) ($cached['workflow_key'] ?? '')) === '') {
@@ -115,8 +122,14 @@ class GoogleCalendarWorkflowConnectionService
         $workflowKey = $this->normalizeWorkflowKey((string) $cached['workflow_key']);
 
         $user = User::query()->find((int) ($cached['user_id'] ?? 0));
-        if (! $user || ! in_array((string) $user->role, ['admin', 'marketing_manager'], true)) {
+        if (! $user || ! in_array((string) $user->role, ['admin', 'manager', 'marketing_manager'], true)) {
             throw new AutomationWorkflowException('Only admins or marketing managers can connect Google Calendar.');
+        }
+        if (! $user->tenants()->whereKey($tenantId)->exists() || ! $this->moduleAccessResolver->canAccess($tenantId, 'workflow_automations')) {
+            throw new AutomationWorkflowException('This Google Calendar connection is no longer authorized for the workspace.');
+        }
+        if ($actor !== null && (int) $actor->id !== (int) $user->id) {
+            throw new AutomationWorkflowException('Google Calendar connection state belongs to a different user.');
         }
 
         $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
@@ -145,6 +158,23 @@ class GoogleCalendarWorkflowConnectionService
             ],
         ]);
 
+        IntegrationConnection::query()->forAllTenants()->updateOrCreate(
+            ['tenant_id' => $tenantId, 'provider' => 'google_calendar', 'external_account_id' => 'google-calendar-workflow-account'],
+            [
+                'external_account_label' => 'Google Calendar account',
+                'status' => IntegrationConnection::STATUS_CONNECTED,
+                'refresh_token' => $refreshToken,
+                'token_type' => (string) ($token['token_type'] ?? 'Bearer'),
+                'scopes' => $token['granted_scopes'] ?? $this->scopes(),
+                'connected_by_user_id' => $user->id,
+                'connected_at' => now(),
+                'last_synced_at' => now(),
+                'last_error_code' => null,
+                'last_error_message' => null,
+                'last_error_at' => null,
+            ]
+        );
+
         $calendars = $this->calendarOptions($tenantId, $workflowKey, true);
         $stored = $this->workflowSettingsService->storedValueForTenant($tenantId, $workflowKey);
         $currentCalendarId = $this->nullableString(data_get($stored, 'action.calendar_id'));
@@ -164,7 +194,17 @@ class GoogleCalendarWorkflowConnectionService
             'workflow_key' => $workflowKey,
             'calendars' => $calendars,
             'auto_selected' => $autoSelected,
+            'return_path' => $this->safeReturnPath((string) ($cached['return_path'] ?? '/workflows/connections')),
         ];
+    }
+
+    protected function safeReturnPath(string $path): string
+    {
+        $path = trim($path);
+
+        return str_starts_with($path, '/') && ! str_starts_with($path, '//')
+            ? $path
+            : '/workflows/connections';
     }
 
     public function disconnect(int $tenantId, string $workflowKey = self::WORKFLOW_KEY): void
@@ -184,6 +224,12 @@ class GoogleCalendarWorkflowConnectionService
         ]);
 
         $this->calendarCache()->forget($this->calendarCacheKey($tenantId, $workflowKey));
+        IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenantId)->where('provider', 'google_calendar')->update([
+            'status' => IntegrationConnection::STATUS_DISCONNECTED,
+            'access_token' => null,
+            'refresh_token' => null,
+            'last_synced_at' => now(),
+        ]);
     }
 
     /**
@@ -212,6 +258,41 @@ class GoogleCalendarWorkflowConnectionService
         $this->calendarCache()->put($cacheKey, $options, now()->addMinutes(15));
 
         return $options;
+    }
+
+    /**
+     * Verify write access without leaving test data behind.
+     *
+     * @return array{ok:bool,event_id:string,cleanup_ok:bool}
+     */
+    public function testCalendarWrite(int $tenantId, string $calendarId, string $workflowKey = self::WORKFLOW_KEY): array
+    {
+        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $this->normalizeWorkflowKey($workflowKey));
+        $accessToken = $this->refreshAccessToken(
+            $credentials['google_calendar_client_id'] ?? null,
+            $credentials['google_calendar_client_secret'] ?? null,
+            $credentials['google_calendar_refresh_token'] ?? null,
+        );
+
+        $start = now()->addDay()->startOfHour();
+        $response = Http::acceptJson()->asJson()->withToken($accessToken)->timeout(20)->retry(2, 250, throw: false)
+            ->post('https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events', [
+                'summary' => 'Everbranch connection test (safe to remove)',
+                'description' => 'Temporary event created while testing an Everbranch workflow connection.',
+                'start' => ['dateTime' => $start->toIso8601String()],
+                'end' => ['dateTime' => $start->copy()->addMinutes(15)->toIso8601String()],
+            ]);
+
+        $payload = is_array($response->json()) ? $response->json() : [];
+        if (! $response->successful() || blank($payload['id'] ?? null)) {
+            throw new AutomationWorkflowException(trim((string) data_get($payload, 'error.message', 'Google Calendar test event could not be created.')));
+        }
+
+        $eventId = (string) $payload['id'];
+        $cleanup = Http::acceptJson()->withToken($accessToken)->timeout(20)->retry(2, 250, throw: false)
+            ->delete('https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events/'.rawurlencode($eventId));
+
+        return ['ok' => true, 'event_id' => $eventId, 'cleanup_ok' => $cleanup->successful() || $cleanup->status() === 410];
     }
 
     /**
@@ -354,7 +435,6 @@ class GoogleCalendarWorkflowConnectionService
     }
 
     /**
-     * @param  mixed  $payload
      * @return array<string,mixed>
      */
     protected function decodeTokenResponse(int $status, mixed $payload): array

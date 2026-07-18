@@ -206,6 +206,11 @@ $catalog = [
             'description' => 'Square commerce connection and data ingestion.',
             'module_key' => 'square',
         ],
+        'squarespace.sync' => [
+            'display_name' => 'Squarespace sync',
+            'description' => 'Squarespace commerce connector and setup state.',
+            'module_key' => 'squarespace',
+        ],
         'workflow.automations' => [
             'display_name' => 'Workflow automations',
             'description' => 'Zap-style trigger/action automations powered by the first-party scheduler and queue.',
@@ -1143,6 +1148,22 @@ $catalog = [
             'cta_routing' => 'contact_sales',
             'capabilities' => ['wix.sync'],
         ],
+        'squarespace' => [
+            'display_name' => 'Squarespace',
+            'description' => 'Squarespace commerce connector placeholder.',
+            'status' => 'roadmap',
+            'market_state' => 'PLACEHOLDER',
+            'channels' => ['backstage'],
+            'classification' => 'integration-layer',
+            'included_in_plans' => [],
+            'default_enabled' => false,
+            'default_setup_status' => 'not_started',
+            'dependencies' => ['integrations'],
+            'billing_mode' => 'unavailable',
+            'visibility' => ['public_site' => false, 'app_store' => false],
+            'cta_routing' => 'contact_sales',
+            'capabilities' => ['squarespace.sync'],
+        ],
         'square' => [
             'display_name' => 'Square',
             'description' => 'Square ingestion and connector readiness.',
@@ -1174,6 +1195,7 @@ $catalog = [
             'visibility' => ['public_site' => false, 'app_store' => false],
             'cta_routing' => 'none',
             'capabilities' => ['workflow.automations'],
+            'readiness_gates' => ['oauth_registration', 'redirect_uris', 'scheduler_heartbeat', 'queue_execution', 'encryption_key', 'database_schema', 'staging_smoke'],
         ],
         'email' => [
             'display_name' => 'Email',

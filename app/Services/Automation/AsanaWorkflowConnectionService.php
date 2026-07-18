@@ -2,7 +2,9 @@
 
 namespace App\Services\Automation;
 
+use App\Models\IntegrationConnection;
 use App\Models\User;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -14,9 +16,9 @@ class AsanaWorkflowConnectionService
     public const WORKFLOW_KEY = 'asana_to_google_calendar';
 
     public function __construct(
-        protected TenantWorkflowAutomationSettingsService $workflowSettingsService
-    ) {
-    }
+        protected TenantWorkflowAutomationSettingsService $workflowSettingsService,
+        protected TenantModuleAccessResolver $moduleAccessResolver,
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -55,6 +57,7 @@ class AsanaWorkflowConnectionService
         $selectedProject = collect($projects)->first(
             fn (array $project): bool => trim((string) ($project['gid'] ?? '')) === $selectedProjectGid
         );
+        $normalized = IntegrationConnection::query()->forTenantId($tenantId)->where('provider', 'asana')->first();
 
         return [
             'oauth_ready' => $oauthReady,
@@ -71,6 +74,9 @@ class AsanaWorkflowConnectionService
                 : (($credentials['asana_personal_access_token'] !== null || $credentials['asana_access_token'] !== null)
                     ? 'personal_access_token'
                     : 'missing'),
+            'account_label' => $normalized?->external_account_label,
+            'last_checked_at' => $normalized?->last_synced_at?->toIso8601String() ?? $normalized?->connected_at?->toIso8601String(),
+            'connection_status' => $normalized?->status ?? ($oauthConnected ? IntegrationConnection::STATUS_CONNECTED : IntegrationConnection::STATUS_DISCONNECTED),
             'credential_sources' => [
                 'personal_access_token' => $credentials['sources']['asana_personal_access_token'] ?? 'missing',
                 'client_id' => $credentials['sources']['asana_oauth_client_id'] ?? 'missing',
@@ -80,7 +86,7 @@ class AsanaWorkflowConnectionService
         ];
     }
 
-    public function buildConnectUrl(int $tenantId, User $user, string $workflowKey = self::WORKFLOW_KEY): string
+    public function buildConnectUrl(int $tenantId, User $user, string $workflowKey = self::WORKFLOW_KEY, string $returnPath = '/workflows/connections'): string
     {
         $workflowKey = $this->normalizeWorkflowKey($workflowKey);
         $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
@@ -99,6 +105,7 @@ class AsanaWorkflowConnectionService
             'tenant_id' => $tenantId,
             'workflow_key' => $workflowKey,
             'code_verifier' => $codeVerifier,
+            'return_path' => $this->safeReturnPath($returnPath),
             'created_at' => now()->toIso8601String(),
         ], now()->addMinutes(15));
 
@@ -122,7 +129,7 @@ class AsanaWorkflowConnectionService
     /**
      * @return array<string,mixed>
      */
-    public function connectFromCallback(string $code, string $state): array
+    public function connectFromCallback(string $code, string $state, ?User $actor = null): array
     {
         $cached = $this->stateCache()->pull($this->stateCacheKey($state));
         if (
@@ -138,8 +145,14 @@ class AsanaWorkflowConnectionService
         $workflowKey = $this->normalizeWorkflowKey((string) $cached['workflow_key']);
 
         $user = User::query()->find((int) ($cached['user_id'] ?? 0));
-        if (! $user || ! in_array((string) $user->role, ['admin', 'marketing_manager'], true)) {
+        if (! $user || ! in_array((string) $user->role, ['admin', 'manager', 'marketing_manager'], true)) {
             throw new AutomationWorkflowException('Only admins or marketing managers can connect Asana.');
+        }
+        if (! $user->tenants()->whereKey($tenantId)->exists() || ! $this->moduleAccessResolver->canAccess($tenantId, 'workflow_automations')) {
+            throw new AutomationWorkflowException('This Asana connection is no longer authorized for the workspace.');
+        }
+        if ($actor !== null && (int) $actor->id !== (int) $user->id) {
+            throw new AutomationWorkflowException('Asana connection state belongs to a different user.');
         }
 
         $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
@@ -174,6 +187,23 @@ class AsanaWorkflowConnectionService
             ],
         ]);
 
+        IntegrationConnection::query()->forAllTenants()->updateOrCreate(
+            ['tenant_id' => $tenantId, 'provider' => 'asana', 'external_account_id' => (string) ($tokenUser['gid'] ?? 'asana-workflow-account')],
+            [
+                'external_account_label' => $this->nullableString($tokenUser['name'] ?? null) ?? $this->nullableString($tokenUser['email'] ?? null) ?? 'Asana account',
+                'status' => IntegrationConnection::STATUS_CONNECTED,
+                'refresh_token' => $refreshToken,
+                'token_type' => (string) ($token['token_type'] ?? 'bearer'),
+                'scopes' => $token['granted_scopes'] ?? $this->scopes(),
+                'connected_by_user_id' => $user->id,
+                'connected_at' => now(),
+                'last_synced_at' => now(),
+                'last_error_code' => null,
+                'last_error_message' => null,
+                'last_error_at' => null,
+            ]
+        );
+
         $projects = $this->projectOptions($tenantId, $workflowKey, true);
         $stored = $this->workflowSettingsService->storedValueForTenant($tenantId, $workflowKey);
         $currentProjectGid = $this->nullableString(data_get($stored, 'trigger.project_gid'));
@@ -193,7 +223,17 @@ class AsanaWorkflowConnectionService
             'workflow_key' => $workflowKey,
             'projects' => $projects,
             'auto_selected' => $autoSelected,
+            'return_path' => $this->safeReturnPath((string) ($cached['return_path'] ?? '/workflows/connections')),
         ];
+    }
+
+    protected function safeReturnPath(string $path): string
+    {
+        $path = trim($path);
+
+        return str_starts_with($path, '/') && ! str_starts_with($path, '//')
+            ? $path
+            : '/workflows/connections';
     }
 
     public function disconnect(int $tenantId, string $workflowKey = self::WORKFLOW_KEY): void
@@ -236,6 +276,12 @@ class AsanaWorkflowConnectionService
         ]);
 
         $this->projectCache()->forget($this->projectCacheKey($tenantId, $workflowKey));
+        IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenantId)->where('provider', 'asana')->update([
+            'status' => IntegrationConnection::STATUS_DISCONNECTED,
+            'access_token' => null,
+            'refresh_token' => null,
+            'last_synced_at' => now(),
+        ]);
     }
 
     /**
@@ -481,7 +527,6 @@ class AsanaWorkflowConnectionService
     }
 
     /**
-     * @param  mixed  $payload
      * @return array<string,mixed>
      */
     protected function decodeTokenResponse(int $status, mixed $payload): array
@@ -508,7 +553,6 @@ class AsanaWorkflowConnectionService
     }
 
     /**
-     * @param  mixed  $payload
      * @return array<string,mixed>
      */
     protected function decodeApiResponse(int $status, mixed $payload, string $defaultMessage): array
