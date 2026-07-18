@@ -272,19 +272,32 @@ class WorkflowProductService
     protected function runtimeDefinition(AutomationWorkflow $workflow, array $definition): array
     {
         $base = (array) config('automation_workflows.workflows.asana_to_google_calendar', []);
+        $connections = IntegrationConnection::query()->forTenantId((int) $workflow->tenant_id)
+            ->whereIn('provider', ['asana', 'google_calendar'])
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->oldest('connected_at')
+            ->oldest('id')
+            ->get()->keyBy('provider');
         $isLegacyMigration = AutomationWorkflowAuditEvent::query()->forAllTenants()
             ->where('tenant_id', $workflow->tenant_id)
             ->where('automation_workflow_id', $workflow->id)
             ->where('event_type', 'legacy_migrated')
             ->exists();
-        $credentials = $this->legacySettings->effectiveCredentials(
-            (int) $workflow->tenant_id,
-            preferLegacyOAuthClients: $isLegacyMigration,
-        );
-        $connections = IntegrationConnection::query()->forTenantId((int) $workflow->tenant_id)
-            ->whereIn('provider', ['asana', 'google_calendar'])
-            ->where('status', IntegrationConnection::STATUS_CONNECTED)
-            ->get()->keyBy('provider');
+        $credentials = $this->legacySettings->effectiveCredentials((int) $workflow->tenant_id);
+        if ($isLegacyMigration) {
+            $legacyCredentials = $this->legacySettings->effectiveCredentials(
+                (int) $workflow->tenant_id,
+                preferLegacyOAuthClients: true,
+            );
+            foreach (['asana' => ['asana_oauth_client_id', 'asana_oauth_client_secret'], 'google_calendar' => ['google_calendar_client_id', 'google_calendar_client_secret']] as $provider => $keys) {
+                if (data_get($connections->get($provider)?->metadata, 'credential_source') === 'shared_oauth') {
+                    continue;
+                }
+                foreach ($keys as $key) {
+                    $credentials[$key] = $legacyCredentials[$key] ?? $credentials[$key] ?? null;
+                }
+            }
+        }
         if ($connections->get('asana')?->refresh_token) {
             $credentials['asana_oauth_refresh_token'] = $connections->get('asana')->refresh_token;
         }

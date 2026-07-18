@@ -52,7 +52,11 @@ class GoogleCalendarWorkflowConnectionService
         $selectedCalendar = collect($calendars)->first(
             fn (array $calendar): bool => trim((string) ($calendar['id'] ?? '')) === $selectedCalendarId
         );
-        $normalized = IntegrationConnection::query()->forTenantId($tenantId)->where('provider', 'google_calendar')->first();
+        $normalized = IntegrationConnection::query()->forTenantId($tenantId)
+            ->where('provider', 'google_calendar')
+            ->orderByRaw('status = ? desc', [IntegrationConnection::STATUS_CONNECTED])
+            ->latest('connected_at')
+            ->first();
 
         return [
             'oauth_ready' => $oauthReady,
@@ -158,21 +162,15 @@ class GoogleCalendarWorkflowConnectionService
             ],
         ]);
 
-        IntegrationConnection::query()->forAllTenants()->updateOrCreate(
-            ['tenant_id' => $tenantId, 'provider' => 'google_calendar', 'external_account_id' => 'google-calendar-workflow-account'],
-            [
+        $this->persistSharedConnection(
+            tenantId: $tenantId,
+            values: [
                 'external_account_label' => 'Google Calendar account',
-                'status' => IntegrationConnection::STATUS_CONNECTED,
                 'refresh_token' => $refreshToken,
                 'token_type' => (string) ($token['token_type'] ?? 'Bearer'),
                 'scopes' => $token['granted_scopes'] ?? $this->scopes(),
                 'connected_by_user_id' => $user->id,
-                'connected_at' => now(),
-                'last_synced_at' => now(),
-                'last_error_code' => null,
-                'last_error_message' => null,
-                'last_error_at' => null,
-            ]
+            ],
         );
 
         $calendars = $this->calendarOptions($tenantId, $workflowKey, true);
@@ -196,6 +194,39 @@ class GoogleCalendarWorkflowConnectionService
             'auto_selected' => $autoSelected,
             'return_path' => $this->safeReturnPath((string) ($cached['return_path'] ?? '/workflows/connections')),
         ];
+    }
+
+    /** @param array<string,mixed> $values */
+    protected function persistSharedConnection(int $tenantId, array $values): IntegrationConnection
+    {
+        $externalAccountId = 'google-calendar-workflow-account';
+        $query = IntegrationConnection::query()->forAllTenants()
+            ->where('tenant_id', $tenantId)
+            ->where('provider', 'google_calendar');
+        $connection = (clone $query)->where('external_account_id', $externalAccountId)->first()
+            ?? (clone $query)->where('external_account_id', '')->oldest('id')->first()
+            ?? new IntegrationConnection(['tenant_id' => $tenantId, 'provider' => 'google_calendar']);
+
+        $connection->fill([
+            ...$values,
+            'external_account_id' => $externalAccountId,
+            'status' => IntegrationConnection::STATUS_CONNECTED,
+            'metadata' => [...(array) $connection->metadata, 'credential_source' => 'shared_oauth'],
+            'connected_at' => now(),
+            'last_synced_at' => now(),
+            'last_error_code' => null,
+            'last_error_message' => null,
+            'last_error_at' => null,
+        ])->save();
+
+        (clone $query)->whereKeyNot($connection->id)->update([
+            'status' => IntegrationConnection::STATUS_DISCONNECTED,
+            'access_token' => null,
+            'refresh_token' => null,
+            'last_synced_at' => now(),
+        ]);
+
+        return $connection;
     }
 
     protected function safeReturnPath(string $path): string

@@ -2,6 +2,7 @@
 
 use App\Models\AutomationWorkflowLink;
 use App\Models\AutomationWorkflowState;
+use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
@@ -390,6 +391,17 @@ test('asana oauth callback stores refresh token and auto-selects the only visibl
 
     expect($state)->not->toBe('');
 
+    IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'asana',
+        'external_account_id' => '',
+        'external_account_label' => 'Migrated Asana account',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'refresh_token' => 'legacy-asana-refresh-token',
+        'metadata' => ['credential_source' => 'legacy_migration'],
+        'connected_at' => now()->subDay(),
+    ]);
+
     Http::fake([
         'https://app.asana.com/-/oauth_token' => Http::response([
             'access_token' => 'connected-asana-access-token',
@@ -444,9 +456,14 @@ test('asana oauth callback stores refresh token and auto-selects the only visibl
         ->where('key', 'workflow_automation_asana_google_calendar')
         ->firstOrFail();
 
+    $asanaConnection = IntegrationConnection::query()->forAllTenants()
+        ->where('tenant_id', $tenant->id)->where('provider', 'asana')->firstOrFail();
     expect(Crypt::decryptString((string) data_get($setting->value, 'credentials.asana_oauth_refresh_token_encrypted')))
         ->toBe('connected-asana-refresh-token')
-        ->and(data_get($setting->value, 'trigger.project_gid'))->toBe('1201541082238924');
+        ->and(data_get($setting->value, 'trigger.project_gid'))->toBe('1201541082238924')
+        ->and(IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->where('provider', 'asana')->count())->toBe(1)
+        ->and($asanaConnection->external_account_id)->toBe('999')
+        ->and(data_get($asanaConnection->metadata, 'credential_source'))->toBe('shared_oauth');
 
     $this->actingAs($user)
         ->withSession(['tenant_id' => $tenant->id])
@@ -491,6 +508,17 @@ test('google calendar oauth callback stores refresh token and auto-selects the o
     $state = (string) ($query['state'] ?? '');
 
     expect($state)->not->toBe('');
+
+    IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'google_calendar',
+        'external_account_id' => '',
+        'external_account_label' => 'Migrated Google account',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'refresh_token' => 'legacy-google-refresh-token',
+        'metadata' => ['credential_source' => 'legacy_migration'],
+        'connected_at' => now()->subDay(),
+    ]);
 
     Http::fake([
         'https://oauth2.googleapis.com/token' => Http::response([
@@ -538,9 +566,14 @@ test('google calendar oauth callback stores refresh token and auto-selects the o
         ->where('key', 'workflow_automation_asana_google_calendar')
         ->firstOrFail();
 
+    $googleConnection = IntegrationConnection::query()->forAllTenants()
+        ->where('tenant_id', $tenant->id)->where('provider', 'google_calendar')->firstOrFail();
     expect(Crypt::decryptString((string) data_get($setting->value, 'credentials.google_calendar_refresh_token_encrypted')))
         ->toBe('connected-google-refresh-token')
-        ->and(data_get($setting->value, 'action.calendar_id'))->toBe('selected-calendar@example.com');
+        ->and(data_get($setting->value, 'action.calendar_id'))->toBe('selected-calendar@example.com')
+        ->and(IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->where('provider', 'google_calendar')->count())->toBe(1)
+        ->and($googleConnection->external_account_id)->toBe('google-calendar-workflow-account')
+        ->and(data_get($googleConnection->metadata, 'credential_source'))->toBe('shared_oauth');
 
     $this->actingAs($user)
         ->withSession(['tenant_id' => $tenant->id])
