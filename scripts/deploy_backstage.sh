@@ -26,11 +26,6 @@ php artisan migrate --force
 echo "== clear caches =="
 php artisan optimize:clear
 
-echo "== cache for prod =="
-php artisan config:cache
-php artisan route:clear
-php artisan view:cache
-
 echo "== build assets =="
 # Forge reruns this script in-place on the active release, so a failed `npm ci`
 # can leave a partially removed node_modules tree behind. Move the asset dirs
@@ -65,6 +60,15 @@ fi
 npm run build
 rm -f public/hot
 
+# Finalize runtime caches after the asset build. Keeping this step last prevents
+# active PHP workers from retaining compiled-view paths that an in-place deploy
+# has cleared or replaced while npm is rebuilding the public bundle.
+echo "== finalize runtime caches =="
+php artisan config:cache
+php artisan route:cache
+php artisan view:clear
+php artisan view:cache
+
 echo "== restart queues =="
 php artisan queue:restart || true
 
@@ -79,6 +83,24 @@ if sudo -n true 2>/dev/null; then
   fi
 else
   echo "WARN: sudo requires a password; skipping service reloads"
+fi
+
+echo "== verify live health =="
+HEALTH_URL="${DEPLOY_HEALTH_URL:-https://app.theeverbranch.com/up}"
+HEALTHY=false
+for attempt in 1 2 3 4 5; do
+  if curl --fail --silent --show-error --max-time 15 "$HEALTH_URL" >/dev/null; then
+    HEALTHY=true
+    break
+  fi
+
+  echo "WARN: health check attempt $attempt failed"
+  sleep 2
+done
+
+if [ "$HEALTHY" != true ]; then
+  echo "ERROR: live health check failed: $HEALTH_URL"
+  exit 1
 fi
 
 echo "== done =="
