@@ -1,11 +1,13 @@
 <?php
 
+use App\Models\Agreement;
 use App\Models\Tenant;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantMessagingAccount;
 use App\Models\TenantMessagingLedgerEntry;
 use App\Models\TenantMessagingSenderProfile;
 use App\Models\TenantMessagingUsagePeriod;
+use App\Services\Agreements\AgreementManagementService;
 use App\Services\Billing\StripeWebhookIngestService;
 use App\Services\Marketing\Messaging\TenantMessagingAccountResolver;
 use App\Services\Marketing\Messaging\TenantMessagingGateway;
@@ -192,11 +194,51 @@ test('overage requires prepaid credit and failed reservations can be refunded ex
     $sameRefund = $usage->refund($tenant->id, 'sms-1', 'provider_failed');
     $summary = $usage->summary($tenant->id, 'sms');
 
-    expect($reservation['amount_micros'])->toBe(50000)
+    expect($reservation['amount_micros'])->toBe(100000)
         ->and($refund->id)->toBe($sameRefund->id)
         ->and($summary['credit_balance_micros'])->toBe(25000000)
         ->and($summary['credit_available_micros'])->toBe(25000000)
         ->and(DB::table('tenant_messaging_ledger_entries')->where('entry_type', 'credit_funding')->count())->toBe(1);
+});
+
+test('accepted client agreements authorize postpaid messaging at their immutable contract rate', function () {
+    $cases = [
+        ['name' => 'Collins Electric', 'slug' => 'collins-contract', 'template' => Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES],
+        ['name' => 'Front Yard Foods', 'slug' => 'front-yard-contract', 'template' => Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES],
+    ];
+
+    foreach ($cases as $index => $case) {
+        $tenant = Tenant::query()->create(['name' => $case['name'], 'slug' => $case['slug']]);
+        $agreement = $case['template'] === Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES
+            ? app(AgreementManagementService::class)->prepareCollinsElectric($tenant, null)
+            : app(AgreementManagementService::class)->prepareFrontYardFoods($tenant, null);
+        $agreement->forceFill(['status' => 'active', 'accepted_at' => now(), 'effective_at' => now()])->save();
+        TenantAccessAddon::query()->create([
+            'tenant_id' => $tenant->id,
+            'addon_key' => 'messaging_usage',
+            'enabled' => true,
+            'source' => 'agreement_test',
+            'metadata' => [
+                'billing_mode' => 'postpaid_invoice',
+                'included_units' => ['sms' => 250, 'email' => 1000],
+                'overage_rates_micros' => ['sms' => 50000, 'email' => 5000],
+                'pricing_version' => 'contract-'.$index,
+                'agreement_template_key' => $case['template'],
+            ],
+        ]);
+
+        $usage = app(TenantMessagingUsageService::class);
+        $reservation = $usage->reserve($tenant->id, 'sms', 251, 'contract-'.$index, 'twilio_subaccount');
+        $usage->settle($tenant->id, 'contract-'.$index);
+        $summary = $usage->summary($tenant->id, 'sms');
+
+        expect($reservation['amount_micros'])->toBe(50000)
+            ->and($summary['included_units'])->toBe(250)
+            ->and($summary['used_units'])->toBe(251)
+            ->and($summary['billing_mode'])->toBe('postpaid_invoice')
+            ->and($summary['overage_rate_micros'])->toBe(50000)
+            ->and($summary['pricing_version'])->toBe('contract-'.$index);
+    }
 });
 
 test('messaging ledger entries reject edits and deletes', function () {

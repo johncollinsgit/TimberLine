@@ -32,6 +32,9 @@ class FrontYardFoodsAgreementTemplate
                 ['key' => 'everbranch_onboarding', 'cost_category' => 'everbranch_service', 'label' => 'Everbranch one-time setup', 'amount_cents' => 29900, 'frequency' => 'one_time', 'owner' => 'Everbranch', 'collectible_by_everbranch' => true, 'payment_timing' => 'due_on_acceptance', 'detail' => 'Due on electronic acceptance unless a written payment arrangement is approved.'],
                 ['key' => 'everbranch_launch_partner', 'cost_category' => 'everbranch_service', 'label' => 'Everbranch Launch Partner service', 'amount_cents' => 5900, 'frequency' => 'month', 'owner' => 'Everbranch', 'collectible_by_everbranch' => true, 'payment_timing' => 'recurring_current', 'detail' => 'First six consecutive billing cycles.'],
                 ['key' => 'everbranch_standard', 'cost_category' => 'everbranch_service', 'label' => 'Everbranch ongoing service', 'amount_cents' => 14900, 'frequency' => 'month', 'owner' => 'Everbranch', 'collectible_by_everbranch' => true, 'payment_timing' => 'recurring_future', 'detail' => 'Begins with billing cycle seven.'],
+                ['key' => 'included_messaging', 'cost_category' => 'everbranch_service', 'label' => 'Included monthly messaging', 'amount_cents' => 0, 'display_amount' => 'Included', 'frequency' => 'month', 'owner' => 'Everbranch', 'collectible_by_everbranch' => true, 'payment_timing' => 'included_with_subscription', 'detail' => 'Includes 250 outbound SMS segments and 1,000 outbound emails per calendar month. Unused allowance does not roll over.'],
+                ['key' => 'sms_overage', 'cost_category' => 'everbranch_service', 'label' => 'SMS usage above the allowance', 'amount_cents' => null, 'amount_micros' => 50000, 'display_amount' => '$0.05 per segment', 'frequency' => 'sms_segment', 'owner' => 'Everbranch', 'collectible_by_everbranch' => true, 'payment_timing' => 'monthly_in_arrears', 'detail' => 'Each SMS segment above 250 in a calendar month is metered and invoiced after that month closes. Multi-segment messages count as multiple segments.'],
+                ['key' => 'email_overage', 'cost_category' => 'everbranch_service', 'label' => 'Email usage above the allowance', 'amount_cents' => null, 'amount_micros' => 5000, 'display_amount' => '$0.005 per email', 'frequency' => 'email', 'owner' => 'Everbranch', 'collectible_by_everbranch' => true, 'payment_timing' => 'monthly_in_arrears', 'detail' => 'Each outbound email above 1,000 in a calendar month is metered and invoiced after that month closes.'],
                 ['key' => 'shopify_implementation', 'cost_category' => 'evergrove_implementation', 'label' => 'Shopify/Square implementation project', 'amount_cents' => $implementationAmountCents, 'display_amount' => $implementationAmountCents === null ? 'Separate written quote/work order' : null, 'frequency' => 'one_time', 'owner' => 'Evergrove implementation', 'collectible_by_everbranch' => true, 'payment_timing' => $implementationAmountCents === null ? 'separate_work_order' : 'scheduled', 'detail' => $implementationAmountCents === null ? 'Not charged in the first Checkout. Exact implementation pricing requires a separate written quote, milestone, or work order before payment.' : 'Agreed one-time project amount and payment schedule configured before the proposal is sent.'],
                 ['key' => 'out_of_scope', 'cost_category' => 'evergrove_implementation', 'label' => 'Approved out-of-scope work', 'amount_cents' => 5000, 'frequency' => 'hour', 'owner' => 'Evergrove implementation', 'collectible_by_everbranch' => false, 'payment_timing' => 'supplemental_work_order', 'detail' => 'Only after written electronic approval.'],
             ],
@@ -61,6 +64,15 @@ class FrontYardFoodsAgreementTemplate
                 ['key' => 'everbranch_onboarding', 'amount_cents' => 29900, 'frequency' => 'one_time'],
                 ['key' => 'everbranch_launch_partner', 'amount_cents' => 5900, 'frequency' => 'month', 'cycles' => 6],
                 ['key' => 'everbranch_standard', 'amount_cents' => 14900, 'frequency' => 'month', 'starts_cycle' => 7],
+                ['key' => 'sms_overage', 'amount_micros' => 50000, 'frequency' => 'sms_segment', 'included_units_per_calendar_month' => 250, 'billing_timing' => 'monthly_in_arrears'],
+                ['key' => 'email_overage', 'amount_micros' => 5000, 'frequency' => 'email', 'included_units_per_calendar_month' => 1000, 'billing_timing' => 'monthly_in_arrears'],
+            ],
+            'messaging_usage' => [
+                'period' => 'calendar_month',
+                'unused_allowance_rolls_over' => false,
+                'sms' => ['included_segments' => 250, 'overage_rate_micros' => 50000],
+                'email' => ['included_messages' => 1000, 'overage_rate_micros' => 5000],
+                'invoice_timing' => 'after_period_close',
             ],
         ];
 

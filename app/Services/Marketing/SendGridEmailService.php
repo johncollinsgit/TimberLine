@@ -4,12 +4,15 @@ namespace App\Services\Marketing;
 
 use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Messaging\TenantMessagingGateway;
+use App\Services\Marketing\Messaging\TenantMessagingUsageService;
+use Illuminate\Support\Str;
 
 class SendGridEmailService
 {
     public function __construct(
         protected TenantEmailDispatchService $dispatchService,
         protected TenantMessagingGateway $gateway,
+        protected TenantMessagingUsageService $usage,
     ) {}
 
     /**
@@ -32,12 +35,14 @@ class SendGridEmailService
         $tenantId = is_numeric($options['tenant_id'] ?? null) ? (int) $options['tenant_id'] : 0;
         $result = $tenantId > 0 && (bool) config('features.tenant_messaging_platform')
             ? $this->gateway->sendEmail($tenantId, $toEmail, $subject, $bodyText, $options)
-            : $this->dispatchService->sendEmail(
-                toEmail: $toEmail,
-                subject: $subject,
-                textBody: $bodyText,
-                options: $options,
-            );
+            : ($tenantId > 0 && $this->usage->hasUsageContract($tenantId)
+                ? $this->sendMeteredLegacy($tenantId, $toEmail, $subject, $bodyText, $options)
+                : $this->dispatchService->sendEmail(
+                    toEmail: $toEmail,
+                    subject: $subject,
+                    textBody: $bodyText,
+                    options: $options,
+                ));
 
         return [
             'success' => (bool) ($result['success'] ?? false),
@@ -53,5 +58,69 @@ class SendGridEmailService
                 ? (int) $result['tenant_id']
                 : null,
         ];
+    }
+
+    /** @param array<string,mixed> $options */
+    protected function sendMeteredLegacy(int $tenantId, string $toEmail, string $subject, string $bodyText, array $options): array
+    {
+        $dryRun = (bool) ($options['dry_run'] ?? false) || (bool) config('marketing.email.dry_run');
+        $idempotencyKey = trim((string) ($options['idempotency_key'] ?? '')) ?: 'email:'.Str::uuid();
+        if ($settled = $this->usage->settledEntry($tenantId, $idempotencyKey)) {
+            return [...(array) data_get($settled->metadata, 'provider_result', []), 'tenant_id' => $tenantId, 'idempotent_replay' => true];
+        }
+
+        try {
+            if (! $dryRun) {
+                $this->usage->reserve(
+                    $tenantId,
+                    'email',
+                    1,
+                    $idempotencyKey,
+                    'sendgrid',
+                    $this->nullableString($options['ledger_source_type'] ?? $options['source_type'] ?? null),
+                    $this->positiveInt($options['source_id'] ?? null),
+                );
+            }
+            $result = $this->dispatchService->sendEmail(
+                toEmail: $toEmail,
+                subject: $subject,
+                textBody: $bodyText,
+                options: $options,
+            );
+            if (! $dryRun) {
+                if ((bool) ($result['success'] ?? false)) {
+                    $this->usage->settle($tenantId, $idempotencyKey, ['provider_result' => $result]);
+                } else {
+                    $this->usage->refund($tenantId, $idempotencyKey, (string) ($result['error_code'] ?? 'provider_failed'));
+                }
+            }
+
+            return [...$result, 'tenant_id' => $tenantId];
+        } catch (\Throwable $exception) {
+            return [
+                'success' => false,
+                'provider' => 'sendgrid',
+                'message_id' => null,
+                'status' => 'failed',
+                'error_code' => 'messaging_usage_unavailable',
+                'error_message' => $exception->getMessage(),
+                'payload' => [],
+                'dry_run' => $dryRun,
+                'retryable' => false,
+                'tenant_id' => $tenantId,
+            ];
+        }
+    }
+
+    protected function nullableString(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    protected function positiveInt(mixed $value): ?int
+    {
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
     }
 }
