@@ -166,6 +166,15 @@ test('short agreement link redirects to the current password-protected proposal'
     $this->get($shortUrl)->assertNotFound();
 });
 
+test('evergrove agreement pages use a host-only session cookie for password unlocks', function (): void {
+    config()->set('session.domain', 'theeverbranch.com');
+    $sent = sentAgreement(agreementTenant());
+
+    $this->get('http://evergrove.test/proposals/'.$sent['token'])->assertOk();
+
+    expect(config('session.domain'))->toBeNull();
+});
+
 test('operator can text one agreement link to comma separated distinct recipients', function (): void {
     $tenant = agreementTenant('collins-electric');
     $agreement = app(AgreementManagementService::class)->prepareFrontYardFoods($tenant, null);
@@ -201,6 +210,27 @@ test('operator can text one agreement link to comma separated distinct recipient
     expect($agreement->recipient_phone)->toBe('(864) 640-6642, (931) 703-0915')
         ->and($agreement->sms_sent_at)->not->toBeNull()
         ->and(data_get($event->metadata, 'recipient_phones'))->toBe(['(864) 640-6642', '(931) 703-0915']);
+});
+
+test('operator can tailor an agreement message and include a previewed MMS image', function (): void {
+    $tenant = agreementTenant('collins-electric');
+    $agreement = app(AgreementManagementService::class)->prepareFrontYardFoods($tenant, null);
+    $operator = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $imageUrl = 'https://cdn.example.test/collins-service-card.jpg';
+
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')->once()->andReturn(['success' => true]);
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $this->actingAs($operator)->post('https://app.theeverbranch.com/landlord/agreements/'.$agreement->id.'/send-text', [
+        'recipient_phone' => '(864) 640-6642',
+        'message_intro' => 'Your electrical workspace is ready, {{tenant_name}}.',
+        'image_url' => $imageUrl,
+    ])->assertRedirect();
+
+    $agreement->refresh();
+    expect($agreement->agreement_sms_message)->toBe('Your electrical workspace is ready, Collins Electric.')
+        ->and($agreement->agreement_mms_image_url)->toBe($imageUrl);
 });
 
 test('front yard first checkout agreement can leave implementation pricing to a separate work order', function (): void {

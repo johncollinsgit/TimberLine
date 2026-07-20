@@ -48,6 +48,7 @@ class TwilioProviderClient
         $twilioEnabled = (bool) config('marketing.twilio.enabled');
         $shortenUrls = (bool) ($options['shorten_urls'] ?? false);
         $sendAsMms = (bool) ($options['send_as_mms'] ?? false);
+        $mediaUrl = $this->nullableString((string) ($options['media_url'] ?? ''));
         $smartEncoded = array_key_exists('smart_encoded', $options)
             ? (bool) $options['smart_encoded']
             : (bool) config('marketing.twilio.smart_encoding', true);
@@ -183,6 +184,7 @@ class TwilioProviderClient
             'ShortenUrls' => (! empty($sender['messaging_service_sid']) && $shortenUrls) ? 'true' : null,
             'SmartEncoded' => $smartEncoded ? 'true' : null,
             'SendAsMms' => $sendAsMms ? 'true' : null,
+            'MediaUrl' => $mediaUrl,
             'StatusCallback' => $this->nullableString((string) ($options['status_callback_url'] ?? '')) ?: $this->statusCallbackUrl,
         ], fn ($value) => $value !== null && $value !== '');
 

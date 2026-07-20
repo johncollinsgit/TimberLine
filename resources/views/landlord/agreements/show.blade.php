@@ -85,6 +85,20 @@
                                 <div><label class="agreement-field-label" for="agreement-text-expires">Expires</label><input id="agreement-text-expires" name="expires_in_days" type="number" min="1" max="90" value="14" class="agreement-input"></div>
                                 <p class="self-end pb-1 text-xs leading-5 text-zinc-500">The secure link stops working after the selected number of days.</p>
                             </div>
+                            <div class="agreement-message-composer">
+                                <div class="flex items-center justify-between gap-3"><label class="agreement-field-label" for="agreement-message-intro">Text message <span>edit before sending</span></label><span id="agreement-message-count" class="text-xs text-zinc-500"></span></div>
+                                <textarea id="agreement-message-intro" name="message_intro" rows="3" maxlength="240" class="agreement-input agreement-message-input" data-default-message="Hi! {{ $agreement->tenant->name }}: your Everbranch workspace is ready." placeholder="Hi! {{ $agreement->tenant->name }}: your Everbranch workspace is ready.">{{ old('message_intro', $agreement->agreement_sms_message) }}</textarea>
+                                <p class="mt-2 text-xs leading-5 text-zinc-500">Use <code>{{ '{{tenant_name}}' }}</code> to insert the workspace name. The secure link and one-time code are always added separately.</p>
+                                <label class="agreement-field-label mt-4" for="agreement-message-image">Optional image <span>sends as MMS</span></label>
+                                <input id="agreement-message-image" name="image_url" type="url" inputmode="url" value="{{ old('image_url', $agreement->agreement_mms_image_url) }}" placeholder="https://…/service-card.jpg" class="agreement-input">
+                                <p class="mt-2 text-xs leading-5 text-zinc-500">Paste a public image URL. You can see it before it is sent; remove the URL to send a normal text only.</p>
+                                <div class="agreement-phone-preview" aria-live="polite">
+                                    <div class="agreement-phone-preview-bar"><span></span><strong>Message preview</strong><span>•••</span></div>
+                                    <img id="agreement-message-image-preview" class="hidden" alt="Selected message image preview">
+                                    <div id="agreement-message-preview" class="agreement-message-bubble"></div>
+                                    <p class="agreement-preview-note">The live link and code are inserted only when you send.</p>
+                                </div>
+                            </div>
                             <button class="agreement-text-button">Text agreement link + code</button>
                         </div>
                     </form>
@@ -232,6 +246,30 @@
             </div>
         </section>
     </div>
+    <script>
+        (() => {
+            const text = document.getElementById('agreement-message-intro');
+            const image = document.getElementById('agreement-message-image');
+            const preview = document.getElementById('agreement-message-preview');
+            const imagePreview = document.getElementById('agreement-message-image-preview');
+            const count = document.getElementById('agreement-message-count');
+            if (!text || !image || !preview || !imagePreview || !count) return;
+            const tenant = @json($agreement->tenant->name);
+            const placeholderLink = 'https://evergrovesoftware.com/a/{{ $agreement->id }}/••••••••••••••••';
+            const refresh = () => {
+                const intro = (text.value.trim() || text.dataset.defaultMessage).replaceAll('{{tenant_name}}', tenant);
+                preview.textContent = intro + ' Open, approve & pay: ' + placeholderLink + ' Code: ••••••••••';
+                count.textContent = `${intro.length}/240`;
+                const url = image.value.trim();
+                imagePreview.classList.toggle('hidden', !url);
+                imagePreview.src = url || '';
+            };
+            text.addEventListener('input', refresh);
+            image.addEventListener('input', refresh);
+            imagePreview.addEventListener('error', () => imagePreview.classList.add('hidden'));
+            refresh();
+        })();
+    </script>
     <style>
         .agreement-launch {
             position: relative;
@@ -283,6 +321,14 @@
         .agreement-primary-button { background: linear-gradient(180deg, #0ea5e9, #0369a1); }
         .agreement-text-button { background: linear-gradient(180deg, #10b981, #047857); box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 6px 13px rgba(4,120,87,.2); }
         .agreement-primary-button:hover, .agreement-text-button:hover { filter: brightness(1.05); transform: translateY(-1px); }
+        .agreement-message-composer { border-top: 1px solid rgba(16,185,129,.18); margin-top: 1.25rem; padding-top: 1.1rem; }
+        .agreement-message-input { min-height: 5.25rem; resize: vertical; }
+        .agreement-phone-preview { background: linear-gradient(180deg,#f2f3f7,#fff); border: 1px solid #d7dce4; border-radius: 1.2rem; margin-top: 1rem; overflow: hidden; padding: .75rem; }
+        .agreement-phone-preview-bar { align-items:center; color:#7b8493; display:flex; font-size:.7rem; justify-content:space-between; letter-spacing:.02em; margin:0 0 .65rem; }
+        .agreement-phone-preview-bar strong { color:#485261; font-size:.72rem; }
+        .agreement-phone-preview img { border-radius:.8rem; display:block; max-height:13rem; object-fit:cover; width:100%; }
+        .agreement-message-bubble { background:#0b84ff; border-radius:1.05rem 1.05rem .3rem 1.05rem; color:white; font-size:.82rem; line-height:1.45; margin-left:auto; max-width:94%; padding:.7rem .8rem; white-space:pre-wrap; word-break:break-word; }
+        .agreement-preview-note { color:#7b8493; font-size:.68rem; line-height:1.35; margin:.55rem .1rem 0; }
         .agreement-revoke-link { color: #b91c1c; font-size: .8rem; }
         .agreement-details { background: rgba(255,255,255,.66); border: 1px solid rgba(203,213,225,.85); border-radius: 1rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.85); padding: .1rem 1rem; }
         .agreement-details summary { color: #0369a1; cursor: pointer; font-size: .84rem; font-weight: 700; list-style: none; padding: .85rem 0; }
