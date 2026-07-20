@@ -10,6 +10,7 @@ use App\Services\Billing\AgreementStripeCheckoutService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -55,7 +56,7 @@ class AgreementProposalController extends Controller
         if ($agreement->acceptance) {
             return redirect()->route('proposals.show', ['token' => $token])->with('status', 'This exact agreement version was already accepted.');
         }
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'signer_legal_name' => ['required', 'string', 'max:255'],
             'signer_title' => ['required', 'string', 'max:255'],
             'signer_email' => ['required', 'email', 'max:255'],
@@ -68,6 +69,11 @@ class AgreementProposalController extends Controller
             'accepted_termination' => ['accepted'],
             'electronic_consent' => ['accepted'],
         ]);
+        if ($validator->fails()) {
+            throw (new ValidationException($validator))
+                ->redirectTo(route('proposals.show', ['token' => $token]).'#acceptance');
+        }
+        $validated = $validator->validated();
         if (mb_strtolower(trim((string) $validated['electronic_signature_value'])) !== mb_strtolower(trim((string) $validated['signer_legal_name']))) {
             throw ValidationException::withMessages(['electronic_signature_value' => 'Type the signer’s full legal name exactly as entered above.']);
         }

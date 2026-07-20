@@ -270,6 +270,16 @@ test('acceptance binds every confirmation and authorizes a billing order without
     expect(AgreementAcceptance::query()->where('agreement_id', $agreement->id)->count())->toBe(1);
 });
 
+test('invalid public acceptance returns to the agreement form instead of the post-only endpoint', function (): void {
+    $sent = sentAgreement(agreementTenant());
+    $url = 'http://evergrove.test/proposals/'.$sent['token'];
+
+    $this->post($url.'/unlock', ['password' => $sent['password']])->assertRedirect();
+    $this->post($url.'/accept', acceptancePayload(['electronic_consent' => null]))
+        ->assertRedirect($url.'#acceptance')
+        ->assertSessionHasErrors('electronic_consent');
+});
+
 test('acceptance is rejected unless every checkbox and typed signature match', function (): void {
     $sent = sentAgreement(agreementTenant());
     $url = 'http://evergrove.test/proposals/'.$sent['token'];
