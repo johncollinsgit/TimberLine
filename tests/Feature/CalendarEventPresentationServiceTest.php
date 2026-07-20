@@ -51,4 +51,5 @@ test('all ecommerce templates carry independent fulfillment and calendar present
     ['square_order_to_google_calendar', 'square'],
     ['squarespace_order_to_google_calendar', 'squarespace'],
     ['wix_order_to_google_calendar', 'wix'],
+    ['woocommerce_order_to_google_calendar', 'woocommerce'],
 ]);

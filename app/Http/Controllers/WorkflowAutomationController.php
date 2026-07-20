@@ -242,6 +242,7 @@ class WorkflowAutomationController extends Controller
         try {
             $url = $service->buildConnectUrl($this->tenantId($request), $request->user(), $provider, [
                 'shop_domain' => $request->input('shop_domain'),
+                'store_url' => $request->input('store_url'),
             ]);
 
             return redirect()->away($url);
@@ -258,6 +259,15 @@ class WorkflowAutomationController extends Controller
             return redirect((string) $result['return_path'])->with('toast', ['style' => 'success', 'message' => str($provider)->headline().' connected and ready to test.']);
         } catch (AutomationWorkflowException $exception) {
             return redirect()->route('workflows.connections')->with('toast', ['style' => 'warning', 'message' => $exception->getMessage()]);
+        }
+    }
+
+    public function woocommerceKeyCallback(Request $request, CommerceWorkflowConnectionService $service)
+    {
+        try {
+            return response()->json($service->handleWooCommerceKeyCallback($request));
+        } catch (AutomationWorkflowException $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
         }
     }
 

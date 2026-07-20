@@ -155,6 +155,13 @@ return [
         'required_permission' => env('WIX_REQUIRED_PERMISSION', 'Read Orders'),
     ],
 
+    'woocommerce' => [
+        'app_name' => env('WOOCOMMERCE_APP_NAME', 'Everbranch Order Calendar'),
+        'redirect_uri' => env('WOOCOMMERCE_AUTH_RETURN_URI', $workflowCommerceRedirect('woocommerce')),
+        'callback_uri' => env('WOOCOMMERCE_AUTH_CALLBACK_URI', $workflowCommerceRedirect('woocommerce')),
+        'api_version' => env('WOOCOMMERCE_API_VERSION', 'wc/v3'),
+    ],
+
     'quickbooks' => [
         'client_id' => env('QUICKBOOKS_CLIENT_ID'),
         'client_secret' => env('QUICKBOOKS_CLIENT_SECRET'),

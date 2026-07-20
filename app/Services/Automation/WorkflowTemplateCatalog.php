@@ -34,7 +34,7 @@ class WorkflowTemplateCatalog
     {
         $template = $this->template($templateKey);
         $sourceProvider = (string) $template['trigger_provider'];
-        $commerceProvider = in_array($sourceProvider, ['shopify', 'square', 'squarespace', 'wix'], true);
+        $commerceProvider = in_array($sourceProvider, ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'], true);
 
         return [
             'template_key' => $templateKey,

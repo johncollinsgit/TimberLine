@@ -202,6 +202,14 @@ test('commerce templates fail readiness until provider registration and customer
     config()->set('services.wix.required_permission', 'Read Orders');
     $checks = app(WorkflowAutomationReadinessService::class)->evaluate()['checks'];
     expect(data_get($checks, 'wix_order_connector.ready'))->toBeTrue();
+
+    config()->set('automation_workflows.templates.woocommerce_order_to_google_calendar.launchable', true);
+    config()->set('services.woocommerce.app_name', 'Everbranch Order Calendar');
+    config()->set('services.woocommerce.redirect_uri', 'https://app.example.com/workflows/connections/woocommerce/callback');
+    config()->set('services.woocommerce.callback_uri', 'https://app.example.com/workflows/connections/woocommerce/callback');
+    config()->set('services.woocommerce.api_version', 'wc/v3');
+    $checks = app(WorkflowAutomationReadinessService::class)->evaluate()['checks'];
+    expect(data_get($checks, 'woocommerce_order_connector.ready'))->toBeTrue();
 });
 
 test('squarespace oauth uses offline least privilege access and rotates refresh tokens', function (): void {
@@ -288,4 +296,57 @@ test('wix installation binds an app instance to the tenant without exposing cred
         ->and($connection->external_account_label)->toBe('Harbor Wix Shop')
         ->and(data_get($connection->metadata, 'site_url'))->toBe('https://harbor-wix.example')
         ->and($connection->toArray())->not->toHaveKeys(['access_token', 'refresh_token', 'external_account_secret']);
+});
+
+test('woocommerce app auth stores generated api keys as a tenant safe reusable connection', function (): void {
+    [$tenant, $user] = commerceWorkflowTenant('woocommerce-connect');
+    config()->set('services.woocommerce.app_name', 'Everbranch Order Calendar');
+    config()->set('services.woocommerce.redirect_uri', 'https://app.example.com/workflows/connections/woocommerce/callback');
+    config()->set('services.woocommerce.callback_uri', 'https://app.example.com/workflows/connections/woocommerce/callback');
+    config()->set('services.woocommerce.api_version', 'wc/v3');
+
+    $connect = $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
+        ->post(route('workflows.connections.commerce.connect', 'woocommerce'), ['store_url' => 'https://harbor.example'])
+        ->assertRedirect();
+    parse_str((string) parse_url((string) $connect->headers->get('Location'), PHP_URL_QUERY), $authorization);
+    expect($authorization['app_name'] ?? null)->toBe('Everbranch Order Calendar')
+        ->and($authorization['scope'] ?? null)->toBe('read')
+        ->and($authorization['return_url'] ?? null)->toBe('https://app.example.com/workflows/connections/woocommerce/callback')
+        ->and($authorization['callback_url'] ?? null)->toBe('https://app.example.com/workflows/connections/woocommerce/callback');
+
+    $state = (string) ($authorization['user_id'] ?? '');
+    $this->postJson(route('workflows.connections.woocommerce.callback'), [
+        'key_id' => 42,
+        'user_id' => $state,
+        'consumer_key' => 'ck_woocommerce',
+        'consumer_secret' => 'cs_woocommerce',
+        'key_permissions' => 'read',
+    ])->assertOk()->assertJsonPath('ok', true);
+
+    $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
+        ->get(route('workflows.connections.commerce.callback', ['provider' => 'woocommerce', 'success' => 1, 'user_id' => $state]))
+        ->assertRedirect(route('workflows.connections'));
+
+    $connection = IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->where('provider', 'woocommerce')->firstOrFail();
+    expect($connection->external_account_secret)->toBe('https://harbor.example')
+        ->and($connection->external_account_label)->toBe('harbor.example')
+        ->and($connection->access_token)->toBe('ck_woocommerce')
+        ->and($connection->refresh_token)->toBe('cs_woocommerce')
+        ->and(data_get($connection->metadata, 'key_id'))->toBe('42')
+        ->and($connection->toArray())->not->toHaveKeys(['access_token', 'refresh_token', 'external_account_secret']);
+
+    Http::fake(['https://harbor.example/wp-json/wc/v3/orders*' => Http::response([], 200, ['X-WP-TotalPages' => '1'])]);
+    $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
+        ->post(route('workflows.connections.commerce.test', ['provider' => 'woocommerce', 'connection' => $connection]))
+        ->assertRedirect();
+    Http::assertSent(fn (\Illuminate\Http\Client\Request $request): bool => $request->url() === 'https://harbor.example/wp-json/wc/v3/orders?per_page=1&orderby=modified&order=desc'
+        && $request->hasHeader('Authorization', 'Basic '.base64_encode('ck_woocommerce:cs_woocommerce')));
+
+    $this->postJson(route('workflows.connections.woocommerce.callback'), [
+        'user_id' => $state,
+        'consumer_key' => 'ck_replay',
+        'consumer_secret' => 'cs_replay',
+        'key_permissions' => 'read',
+    ])->assertStatus(422);
+    expect(IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->where('provider', 'woocommerce')->count())->toBe(1);
 });

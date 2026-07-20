@@ -10,7 +10,7 @@
     $asanaConnected = (bool) ($asanaConnection['oauth_connected'] ?? false) || (bool) ($asanaConnection['token_ready'] ?? false);
     $googleConnected = (bool) ($googleConnection['connected'] ?? false);
     $sourceProvider = (string) ($trigger['provider'] ?? 'asana');
-    $commerceSource = in_array($sourceProvider, ['shopify', 'square', 'squarespace', 'wix'], true);
+    $commerceSource = in_array($sourceProvider, ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'], true);
     $commerceSourceOptions = (array) ($commerceSourceOptions ?? []);
     $sourceLabel = data_get($providers, $sourceProvider.'.label', str($sourceProvider)->headline());
     $selectedTriggerConnectionId = (int) ($trigger['connection_id'] ?? 0);

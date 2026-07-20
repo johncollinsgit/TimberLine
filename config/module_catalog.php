@@ -1200,7 +1200,7 @@ $catalog = [
                 'best_for' => 'Small businesses that schedule fulfillment, pickup, delivery, production, or client work from Asana or a connected store.',
                 'what_you_need' => [
                     'A Google Calendar account with a writable calendar.',
-                    'An Asana account today; additional commerce sources appear only after their live connection and runtime gates pass.',
+                    'An Asana, Shopify, Square, Squarespace, Wix, or WooCommerce source account once that connector has passed its live runtime gates.',
                 ],
                 'next_step' => 'Add Order Calendar, connect the two accounts, preview how events will look, then publish the first tested workflow.',
                 'setup_steps' => [

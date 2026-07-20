@@ -19,6 +19,7 @@ return [
         'square' => ['label' => 'Square', 'accent' => 'zinc', 'initials' => 'Sq', 'state' => 'beta'],
         'squarespace' => ['label' => 'Squarespace', 'accent' => 'zinc', 'initials' => 'Ss', 'state' => 'beta'],
         'wix' => ['label' => 'Wix', 'accent' => 'violet', 'initials' => 'W', 'state' => 'beta'],
+        'woocommerce' => ['label' => 'WooCommerce', 'accent' => 'sky', 'initials' => 'Wc', 'state' => 'beta'],
     ],
 
     'templates' => [
@@ -71,6 +72,16 @@ return [
             'action_event' => 'Create or update event',
             'driver' => 'commerce_order_google_calendar',
             'launchable' => (bool) env('AUTOMATION_WIX_ORDER_CALENDAR_ENABLED', false),
+        ],
+        'woocommerce_order_to_google_calendar' => [
+            'name' => 'WooCommerce orders to Google Calendar',
+            'description' => 'Send WooCommerce orders from a WordPress store to an operations calendar.',
+            'trigger_provider' => 'woocommerce',
+            'trigger_event' => 'New or updated order',
+            'action_provider' => 'google_calendar',
+            'action_event' => 'Create or update event',
+            'driver' => 'commerce_order_google_calendar',
+            'launchable' => (bool) env('AUTOMATION_WOOCOMMERCE_ORDER_CALENDAR_ENABLED', false),
         ],
     ],
 

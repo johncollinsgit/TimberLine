@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 
 class CommerceWorkflowConnectionService
 {
-    public const PROVIDERS = ['shopify', 'square', 'squarespace', 'wix'];
+    public const PROVIDERS = ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'];
 
     /** @return array<string,mixed> */
     public function status(int $tenantId, string $provider): array
@@ -62,6 +62,7 @@ class CommerceWorkflowConnectionService
             'provider' => $provider,
             'return_path' => route('workflows.connections', absolute: false),
             'shop_domain' => $provider === 'shopify' ? $this->shopDomain((string) ($options['shop_domain'] ?? '')) : null,
+            'store_url' => $provider === 'woocommerce' ? $this->woocommerceStoreUrl((string) ($options['store_url'] ?? '')) : null,
         ];
         Cache::store($this->cacheStore())->put($this->stateKey($state), $payload, now()->addMinutes(10));
 
@@ -70,6 +71,7 @@ class CommerceWorkflowConnectionService
             'square' => $this->squareAuthorizationUrl($state),
             'squarespace' => $this->squarespaceAuthorizationUrl($state),
             'wix' => $this->wixInstallUrl($state),
+            'woocommerce' => $this->woocommerceAuthorizationUrl($state, (string) $payload['store_url']),
         };
     }
 
@@ -77,6 +79,10 @@ class CommerceWorkflowConnectionService
     public function handleCallback(string $provider, Request $request): array
     {
         $this->assertProvider($provider);
+        if ($provider === 'woocommerce') {
+            return $this->handleWooCommerceReturn($request);
+        }
+
         $state = trim((string) $request->query('state', $request->query('token', '')));
         $statePayload = $state !== '' ? Cache::store($this->cacheStore())->pull($this->stateKey($state)) : null;
         if (! is_array($statePayload)
@@ -130,6 +136,59 @@ class CommerceWorkflowConnectionService
         return ['connection' => $connection, 'return_path' => (string) ($statePayload['return_path'] ?? route('workflows.connections', absolute: false))];
     }
 
+    /** @return array{ok:bool} */
+    public function handleWooCommerceKeyCallback(Request $request): array
+    {
+        $state = trim((string) $request->input('user_id', ''));
+        $statePayload = $state !== '' ? Cache::store($this->cacheStore())->pull($this->stateKey($state)) : null;
+        if (! is_array($statePayload) || (string) ($statePayload['provider'] ?? '') !== 'woocommerce') {
+            throw new AutomationWorkflowException('The WooCommerce connection request expired or was already used.');
+        }
+
+        $returnPath = (string) ($statePayload['return_path'] ?? route('workflows.connections', absolute: false));
+        try {
+            $consumerKey = trim((string) $request->input('consumer_key', ''));
+            $consumerSecret = trim((string) $request->input('consumer_secret', ''));
+            $permissions = strtolower(trim((string) $request->input('key_permissions', '')));
+            $storeUrl = $this->woocommerceStoreUrl((string) ($statePayload['store_url'] ?? ''));
+            if ($consumerKey === '' || $consumerSecret === '' || ! str_contains($permissions, 'read')) {
+                throw new AutomationWorkflowException('WooCommerce did not return a readable API key. Start the connection again and approve read access.');
+            }
+
+            $host = (string) parse_url($storeUrl, PHP_URL_HOST);
+            IntegrationConnection::query()->forAllTenants()->updateOrCreate(
+                ['tenant_id' => (int) $statePayload['tenant_id'], 'provider' => 'woocommerce', 'external_account_id' => $this->accountHash($storeUrl)],
+                [
+                    'external_account_secret' => $storeUrl,
+                    'external_account_label' => $host !== '' ? $host : 'WooCommerce store',
+                    'status' => IntegrationConnection::STATUS_CONNECTED,
+                    'access_token' => $consumerKey,
+                    'refresh_token' => $consumerSecret,
+                    'token_type' => 'Basic',
+                    'expires_at' => null,
+                    'scopes' => [$permissions],
+                    'metadata' => array_filter([
+                        'store_url' => $storeUrl,
+                        'key_id' => $this->nullableString($request->input('key_id')),
+                        'legacy_coexistence' => true,
+                    ]),
+                    'connected_by_user_id' => (int) $statePayload['user_id'],
+                    'connected_at' => now(),
+                    'last_synced_at' => now(),
+                    'last_error_code' => null,
+                    'last_error_message' => null,
+                    'last_error_at' => null,
+                ]
+            );
+            $this->storeWooCommerceResult($state, true, 'WooCommerce connected and ready to test.', $returnPath);
+        } catch (AutomationWorkflowException $exception) {
+            $this->storeWooCommerceResult($state, false, $exception->getMessage(), $returnPath);
+            throw $exception;
+        }
+
+        return ['ok' => true];
+    }
+
     public function test(IntegrationConnection $connection): array
     {
         $provider = (string) $connection->provider;
@@ -139,6 +198,7 @@ class CommerceWorkflowConnectionService
             'square' => $this->squareRequest($accessToken)->get(rtrim((string) config('services.square.api_base', 'https://connect.squareup.com'), '/').'/v2/merchants/me'),
             'squarespace' => $this->squarespaceRequest($accessToken)->get(rtrim((string) config('services.squarespace.api_base', 'https://api.squarespace.com'), '/').'/1.0/authorization/website'),
             'wix' => Http::withToken((string) $this->wixAccessToken($connection))->acceptJson()->get(rtrim((string) config('services.wix.api_base', 'https://www.wixapis.com'), '/').'/site-properties/v4/properties'),
+            'woocommerce' => $this->woocommerceRequest($connection)->get($this->woocommerceEndpoint($connection, '/orders'), ['per_page' => 1, 'orderby' => 'modified', 'order' => 'desc']),
             default => throw new AutomationWorkflowException('Unsupported commerce provider.'),
         };
         if ($response->failed() || ($provider === 'shopify' && filled($response->json('errors')))) {
@@ -181,6 +241,9 @@ class CommerceWorkflowConnectionService
         if ((string) $connection->provider === 'wix') {
             return $this->wixAccessToken($connection);
         }
+        if ((string) $connection->provider === 'woocommerce') {
+            return trim((string) $connection->access_token);
+        }
         if ($connection->isExpired()) {
             throw new AutomationWorkflowException(Str::headline((string) $connection->provider).' access expired and cannot be refreshed. Reconnect the account.');
         }
@@ -221,6 +284,12 @@ class CommerceWorkflowConnectionService
             return filled(config('services.shopify.automation_oauth_client_id'))
                 && filled(config('services.shopify.automation_oauth_client_secret'))
                 && filled(config('services.shopify.automation_redirect_uri'));
+        }
+        if ($provider === 'woocommerce') {
+            return filled(config('services.woocommerce.app_name'))
+                && filled(config('services.woocommerce.redirect_uri'))
+                && filled(config('services.woocommerce.callback_uri'))
+                && filled(config('services.woocommerce.api_version'));
         }
         $required = $provider === 'wix'
             ? ['app_id', 'client_secret', 'install_url']
@@ -394,6 +463,43 @@ class CommerceWorkflowConnectionService
         return (string) config('services.wix.install_url').$separator.http_build_query(['state' => $state, 'redirectUrl' => config('services.wix.redirect_uri')]);
     }
 
+    protected function woocommerceAuthorizationUrl(string $state, string $storeUrl): string
+    {
+        return rtrim($storeUrl, '/').'/wc-auth/v1/authorize?'.http_build_query([
+            'app_name' => config('services.woocommerce.app_name', 'Everbranch Order Calendar'),
+            'scope' => 'read',
+            'user_id' => $state,
+            'return_url' => config('services.woocommerce.redirect_uri'),
+            'callback_url' => config('services.woocommerce.callback_uri'),
+        ]);
+    }
+
+    /** @return array{connection:IntegrationConnection|null,return_path:string} */
+    protected function handleWooCommerceReturn(Request $request): array
+    {
+        $state = trim((string) $request->query('user_id', $request->query('state', '')));
+        if ($state === '') {
+            throw new AutomationWorkflowException('The WooCommerce connection response was missing its state. Start again from Connections.');
+        }
+        if ((string) $request->query('success', '1') === '0') {
+            Cache::store($this->cacheStore())->forget($this->stateKey($state));
+            throw new AutomationWorkflowException('WooCommerce did not authorize this connection.');
+        }
+
+        $result = Cache::store($this->cacheStore())->pull($this->woocommerceResultKey($state));
+        if (! is_array($result)) {
+            throw new AutomationWorkflowException('WooCommerce approved the connection, but Everbranch has not received the store keys yet. Wait a moment, then test the connection.');
+        }
+        if (! (bool) ($result['ok'] ?? false)) {
+            throw new AutomationWorkflowException((string) ($result['message'] ?? 'WooCommerce connection failed.'));
+        }
+
+        return [
+            'connection' => null,
+            'return_path' => (string) ($result['return_path'] ?? route('workflows.connections', absolute: false)),
+        ];
+    }
+
     protected function verifyShopifyCallback(Request $request): void
     {
         $params = $request->query();
@@ -538,6 +644,35 @@ class CommerceWorkflowConnectionService
             ]);
     }
 
+    protected function woocommerceRequest(IntegrationConnection $connection)
+    {
+        [$consumerKey, $consumerSecret] = $this->woocommerceCredentials($connection);
+
+        return Http::acceptJson()->withBasicAuth($consumerKey, $consumerSecret)
+            ->timeout(20)
+            ->retry(2, 250, throw: false);
+    }
+
+    /** @return array{0:string,1:string} */
+    protected function woocommerceCredentials(IntegrationConnection $connection): array
+    {
+        $consumerKey = trim((string) $connection->access_token);
+        $consumerSecret = trim((string) $connection->refresh_token);
+        if ($consumerKey === '' || $consumerSecret === '') {
+            throw new AutomationWorkflowException('WooCommerce needs to be reconnected.');
+        }
+
+        return [$consumerKey, $consumerSecret];
+    }
+
+    protected function woocommerceEndpoint(IntegrationConnection $connection, string $path): string
+    {
+        $storeUrl = $this->woocommerceStoreUrl((string) (data_get($connection->metadata, 'store_url') ?: $connection->external_account_secret));
+        $version = trim((string) config('services.woocommerce.api_version', 'wc/v3'), '/');
+
+        return rtrim($storeUrl, '/').'/wp-json/'.$version.'/'.ltrim($path, '/');
+    }
+
     protected function tokenExpiry(array $token): ?\DateTimeInterface
     {
         if (filled($token['access_token_expires_at'] ?? null) && is_numeric($token['access_token_expires_at'])) {
@@ -562,6 +697,20 @@ class CommerceWorkflowConnectionService
     protected function stateKey(string $state): string
     {
         return 'workflow_commerce_oauth_state:'.hash('sha256', $state);
+    }
+
+    protected function woocommerceResultKey(string $state): string
+    {
+        return 'workflow_woocommerce_auth_result:'.hash('sha256', $state);
+    }
+
+    protected function storeWooCommerceResult(string $state, bool $ok, string $message, string $returnPath): void
+    {
+        Cache::store($this->cacheStore())->put($this->woocommerceResultKey($state), [
+            'ok' => $ok,
+            'message' => $message,
+            'return_path' => $returnPath,
+        ], now()->addMinutes(10));
     }
 
     protected function cacheStore(): string
@@ -596,6 +745,22 @@ class CommerceWorkflowConnectionService
         }
 
         return $shop;
+    }
+
+    protected function woocommerceStoreUrl(string $storeUrl): string
+    {
+        $storeUrl = trim($storeUrl);
+        if ($storeUrl !== '' && ! str_contains($storeUrl, '://')) {
+            $storeUrl = 'https://'.$storeUrl;
+        }
+        $parts = parse_url($storeUrl);
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower(trim((string) ($parts['host'] ?? ''), '.'));
+        if ($scheme !== 'https' || $host === '' || filter_var($storeUrl, FILTER_VALIDATE_URL) === false) {
+            throw new AutomationWorkflowException('Enter a valid HTTPS WooCommerce store URL.');
+        }
+
+        return 'https://'.$host.(isset($parts['port']) ? ':'.(int) $parts['port'] : '');
     }
 
     protected function successfulJson($response, string $message): array

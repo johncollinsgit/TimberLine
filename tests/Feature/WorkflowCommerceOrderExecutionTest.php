@@ -488,3 +488,87 @@ test('wix orders use app instance access and create all day pickup events', func
         && $request['end']['date'] === '2026-07-28'
         && str_contains((string) $request['location'], 'Market counter'));
 });
+
+test('woocommerce orders create configurable calendar events with encrypted api key credentials', function (): void {
+    $tenant = commerceExecutionTenant('woocommerce-commerce-execution');
+    $workflow = commerceExecutionWorkflow($tenant, 'woocommerce_order_to_google_calendar');
+    config()->set('services.woocommerce.api_version', 'wc/v3');
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'woocommerce',
+        'external_account_id' => 'woocommerce-account-hash',
+        'external_account_secret' => 'https://harbor.example',
+        'external_account_label' => 'harbor.example',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'ck_woocommerce',
+        'refresh_token' => 'cs_woocommerce',
+        'metadata' => ['store_url' => 'https://harbor.example'],
+        'connected_at' => now(),
+    ]);
+
+    Http::fake(function (Request $request) {
+        if (str_starts_with($request->url(), 'https://harbor.example/wp-json/wc/v3/orders')) {
+            return Http::response([[
+                'id' => 1042,
+                'number' => '1042',
+                'status' => 'processing',
+                'currency' => 'USD',
+                'total' => '118.50',
+                'date_created_gmt' => '2026-07-18T14:00:00',
+                'date_modified_gmt' => '2026-07-18T17:00:00',
+                'billing' => ['first_name' => 'Alex', 'last_name' => 'Rivera', 'email' => 'alex@example.com', 'phone' => '555-0100'],
+                'shipping' => ['first_name' => 'Alex', 'last_name' => 'Rivera', 'address_1' => '77 Cedar St', 'city' => 'Burlington', 'state' => 'VT', 'postcode' => '05401', 'country' => 'US'],
+                'line_items' => [['name' => 'Market bundle', 'quantity' => 3]],
+                'shipping_lines' => [['method_title' => 'Local delivery']],
+                'customer_note' => 'Ring the bell',
+                'meta_data' => [['key' => 'delivery_date', 'value' => '2026-07-25T15:30:00Z']],
+            ]], 200, ['X-WP-TotalPages' => '1']);
+        }
+        if ($request->method() === 'POST' && str_contains($request->url(), 'googleapis.com/calendar/v3')) {
+            return Http::response(['id' => 'woocommerce-calendar-event']);
+        }
+
+        return Http::response(['error' => 'unexpected request'], 500);
+    });
+
+    $result = app(AutomationWorkflowEngine::class)->runDefinition('workflow:'.$workflow->id, [
+        'enabled' => true,
+        'tenant_id' => $tenant->id,
+        'automation_workflow_id' => $workflow->id,
+        'required_module' => 'workflow_automations',
+        'driver' => 'commerce_order_google_calendar',
+        'trigger' => ['provider' => 'woocommerce', 'connection_id' => $connection->id, 'schedule_source' => 'delivery'],
+        'action' => [
+            'calendar_id' => 'delivery-calendar',
+            'timezone' => 'America/New_York',
+            'event_time_mode' => 'fixed_time',
+            'default_start_time' => '10:00',
+            'default_duration_minutes' => 60,
+            'presentation' => [
+                'title_template' => '{{source}} #{{order_number}} - {{customer_name}}',
+                'description_fields' => ['items', 'total', 'status'],
+                'location_source' => 'shipping_address',
+                'availability' => 'busy',
+                'visibility' => 'private',
+                'reminders' => 'none',
+                'cancelled_order_behavior' => 'mark_cancelled',
+            ],
+        ],
+        'credentials' => ['google_calendar_access_token' => 'google-access-token'],
+    ]);
+
+    expect($result['ok'])->toBeTrue()
+        ->and(data_get($result, 'counts.created'))->toBe(1)
+        ->and($connection->fresh()->toArray())->not->toHaveKeys(['access_token', 'refresh_token', 'external_account_secret']);
+
+    Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://harbor.example/wp-json/wc/v3/orders')
+        && $request->hasHeader('Authorization', 'Basic '.base64_encode('ck_woocommerce:cs_woocommerce'))
+        && $request['modified_after'] !== null);
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'googleapis.com/calendar/v3')
+        && $request['summary'] === 'WooCommerce #1042 - Alex Rivera'
+        && $request['start']['dateTime'] === '2026-07-25T10:00:00-04:00'
+        && $request['end']['dateTime'] === '2026-07-25T11:00:00-04:00'
+        && $request['location'] === 'Alex Rivera, 77 Cedar St, Burlington, VT, 05401, US'
+        && $request['visibility'] === 'private'
+        && $request['reminders']['useDefault'] === false);
+});

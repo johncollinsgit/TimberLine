@@ -21,6 +21,7 @@ class WorkflowAutomationReadinessService
         $squareEnabled = (bool) config('automation_workflows.templates.square_order_to_google_calendar.launchable', false);
         $squarespaceEnabled = (bool) config('automation_workflows.templates.squarespace_order_to_google_calendar.launchable', false);
         $wixEnabled = (bool) config('automation_workflows.templates.wix_order_to_google_calendar.launchable', false);
+        $woocommerceEnabled = (bool) config('automation_workflows.templates.woocommerce_order_to_google_calendar.launchable', false);
         $schedulerAge = $this->scheduler->minutesSinceHeartbeat();
         $queueAt = $this->queueHeartbeatAt();
         $schemaReady = collect([
@@ -51,7 +52,8 @@ class WorkflowAutomationReadinessService
                     && (! $shopifyEnabled || $this->validRedirect(config('services.shopify.automation_redirect_uri')))
                     && (! $squareEnabled || $this->validRedirect(config('services.square.redirect_uri')))
                     && (! $squarespaceEnabled || $this->validRedirect(config('services.squarespace.redirect_uri')))
-                    && (! $wixEnabled || $this->validRedirect(config('services.wix.redirect_uri'))),
+                    && (! $wixEnabled || $this->validRedirect(config('services.wix.redirect_uri')))
+                    && (! $woocommerceEnabled || ($this->validRedirect(config('services.woocommerce.redirect_uri')) && $this->validRedirect(config('services.woocommerce.callback_uri')))),
                 'Enabled provider callback URLs are absolute HTTPS URLs.',
                 'Register and configure absolute HTTPS callback URLs for every enabled provider.'
             ),
@@ -100,6 +102,17 @@ class WorkflowAutomationReadinessService
                 ),
                 $wixEnabled ? 'The Wix app-instance connector is registered with order-read permission.' : 'The Wix order connector remains safely feature-gated.',
                 'Register the Wix app, install URL, Read Orders permission, callback, and commerce driver before enabling its template.'
+            ),
+            'woocommerce_order_connector' => $this->check(
+                ! $woocommerceEnabled || (
+                    filled(config('services.woocommerce.app_name'))
+                    && $this->validRedirect(config('services.woocommerce.redirect_uri'))
+                    && $this->validRedirect(config('services.woocommerce.callback_uri'))
+                    && filled(config('services.woocommerce.api_version'))
+                    && filled(config('automation_workflows.drivers.commerce_order_google_calendar'))
+                ),
+                $woocommerceEnabled ? 'The WooCommerce app-auth connector is registered for read-only order access.' : 'The WooCommerce order connector remains safely feature-gated.',
+                'Configure WooCommerce app auth name, HTTPS return and callback URLs, API version, and commerce driver before enabling its template.'
             ),
             'scheduler_heartbeat' => $this->check(
                 $schedulerAge !== null && $schedulerAge <= 10,

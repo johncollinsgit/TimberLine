@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class CommerceOrderSourceService
 {
-    public const LIVE_PROVIDERS = ['shopify', 'square', 'squarespace', 'wix'];
+    public const LIVE_PROVIDERS = ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'];
 
     public function __construct(protected CommerceWorkflowConnectionService $connections) {}
 
@@ -35,6 +35,7 @@ class CommerceOrderSourceService
             'square' => $this->fetchSquare($connection, $modifiedSince, $pollLimit, $maxOrders, $locationIds),
             'squarespace' => $this->fetchSquarespace($connection, $modifiedSince, $maxOrders),
             'wix' => $this->fetchWix($connection, $modifiedSince, $pollLimit, $maxOrders),
+            'woocommerce' => $this->fetchWooCommerce($connection, $modifiedSince, $pollLimit, $maxOrders),
         };
     }
 
@@ -258,6 +259,51 @@ GRAPHQL;
         return $orders;
     }
 
+    /** @return array<int,array<string,mixed>> */
+    protected function fetchWooCommerce(IntegrationConnection $connection, CarbonImmutable $modifiedSince, int $pollLimit, int $maxOrders): array
+    {
+        $consumerKey = $this->connections->accessToken($connection);
+        $consumerSecret = trim((string) $connection->refresh_token);
+        if ($consumerKey === '' || $consumerSecret === '') {
+            throw new AutomationWorkflowException('WooCommerce needs to be reconnected.');
+        }
+
+        $storeUrl = $this->woocommerceStoreUrl($connection);
+        $endpoint = rtrim($storeUrl, '/').'/wp-json/'.trim((string) config('services.woocommerce.api_version', 'wc/v3'), '/').'/orders';
+        $page = 1;
+        $orders = [];
+        $pageSize = min(100, max(1, $pollLimit));
+
+        do {
+            $response = Http::acceptJson()->withBasicAuth($consumerKey, $consumerSecret)
+                ->timeout(25)->retry(2, 300, throw: false)
+                ->get($endpoint, [
+                    'per_page' => $pageSize,
+                    'page' => $page,
+                    'orderby' => 'modified',
+                    'order' => 'asc',
+                    'modified_after' => $modifiedSince->utc()->format('Y-m-d\TH:i:s'),
+                ]);
+            $payload = $this->decode($response, 'WooCommerce orders fetch failed.');
+            $rows = array_values(array_filter($payload, 'is_array'));
+            foreach ($rows as $order) {
+                $updatedAt = $this->date((string) ($order['date_modified_gmt'] ?? $order['date_modified'] ?? ''));
+                if ($updatedAt !== null && $updatedAt->lt($modifiedSince)) {
+                    continue;
+                }
+                $orders[] = $this->normalizeWooCommerce($order, $storeUrl);
+                if (count($orders) >= $maxOrders) {
+                    break 2;
+                }
+            }
+
+            $totalPages = max(1, (int) ($response->header('X-WP-TotalPages') ?: 1));
+            $page++;
+        } while ($page <= $totalPages);
+
+        return $orders;
+    }
+
     /** @return array<string,mixed> */
     protected function normalizeShopify(array $order, string $shop): array
     {
@@ -426,6 +472,45 @@ GRAPHQL;
         ];
     }
 
+    /** @return array<string,mixed> */
+    protected function normalizeWooCommerce(array $order, string $storeUrl): array
+    {
+        $shipping = (array) ($order['shipping'] ?? []);
+        $billing = (array) ($order['billing'] ?? []);
+        $metadata = array_values(array_filter((array) ($order['meta_data'] ?? []), 'is_array'));
+        $status = strtolower(trim((string) ($order['status'] ?? '')));
+        $cancelled = in_array($status, ['cancelled', 'canceled', 'refunded', 'failed'], true);
+        $id = trim((string) ($order['id'] ?? ''));
+
+        return [
+            'source_id' => $id,
+            'order_number' => trim((string) ($order['number'] ?? $id)),
+            'updated_at' => (string) ($order['date_modified_gmt'] ?? $order['date_modified'] ?? ''),
+            'schedule' => [
+                'order_created' => $order['date_created_gmt'] ?? $order['date_created'] ?? null,
+                'fulfillment' => $order['date_completed_gmt'] ?? $order['date_paid_gmt'] ?? null,
+                'delivery' => $this->metadataDate($metadata, ['delivery', 'deliver']),
+                'pickup' => $this->metadataDate($metadata, ['pickup', 'pick up', 'collection']),
+            ],
+            'source' => 'WooCommerce',
+            'customer_name' => trim(implode(' ', array_filter([$billing['first_name'] ?? $shipping['first_name'] ?? null, $billing['last_name'] ?? $shipping['last_name'] ?? null]))),
+            'customer_email' => trim((string) ($billing['email'] ?? '')),
+            'customer_phone' => trim((string) ($billing['phone'] ?? '')),
+            'items' => $this->woocommerceItems((array) ($order['line_items'] ?? [])),
+            'total' => $this->money($order['total'] ?? null, $order['currency'] ?? null),
+            'status' => $cancelled ? 'Cancelled' : Str::headline($status),
+            'notes' => trim((string) ($order['customer_note'] ?? '')),
+            'source_url' => $id !== '' ? rtrim($storeUrl, '/').'/wp-admin/post.php?post='.$id.'&action=edit' : rtrim($storeUrl, '/'),
+            'shipping_address' => $this->woocommerceAddress($shipping),
+            'billing_address' => $this->woocommerceAddress($billing),
+            'pickup_location' => trim(implode(', ', array_filter([
+                data_get($order, 'shipping_lines.0.method_title'),
+                $this->metadataText($metadata, ['pickup location', 'collection location']),
+            ]))),
+            'cancelled' => $cancelled,
+        ];
+    }
+
     protected function shopifyItems(array $items): string
     {
         return collect($items)->filter(fn (mixed $item): bool => is_array($item))->map(fn (array $item): string => max(1, (int) ($item['quantity'] ?? 1)).' × '.trim((string) ($item['name'] ?? 'Item')))->implode(', ');
@@ -451,6 +536,11 @@ GRAPHQL;
 
             return max(1, (int) ($item['quantity'] ?? 1)).' × '.trim($name);
         })->implode(', ');
+    }
+
+    protected function woocommerceItems(array $items): string
+    {
+        return collect($items)->filter(fn (mixed $item): bool => is_array($item))->map(fn (array $item): string => max(1, (int) ($item['quantity'] ?? 1)).' × '.trim((string) ($item['name'] ?? 'Item')))->implode(', ');
     }
 
     protected function shopifyAddress(array $address): string
@@ -489,6 +579,15 @@ GRAPHQL;
         ])));
     }
 
+    protected function woocommerceAddress(array $address): string
+    {
+        return trim(implode(', ', array_filter([
+            trim(implode(' ', array_filter([$address['first_name'] ?? null, $address['last_name'] ?? null]))),
+            $address['company'] ?? null, $address['address_1'] ?? null, $address['address_2'] ?? null,
+            $address['city'] ?? null, $address['state'] ?? null, $address['postcode'] ?? null, $address['country'] ?? null,
+        ])));
+    }
+
     protected function formDate(array $fields, array $needles): ?string
     {
         foreach ($fields as $field) {
@@ -514,6 +613,29 @@ GRAPHQL;
             }
             $value = trim((string) ($attribute['value'] ?? ''));
             if ($this->date($value) !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    protected function metadataDate(array $metadata, array $needles): ?string
+    {
+        $value = $this->metadataText($metadata, $needles);
+
+        return $value !== null && $this->date($value) !== null ? $value : null;
+    }
+
+    protected function metadataText(array $metadata, array $needles): ?string
+    {
+        foreach ($metadata as $field) {
+            $key = Str::lower((string) ($field['key'] ?? ''));
+            if (! collect($needles)->contains(fn (string $needle): bool => str_contains($key, $needle))) {
+                continue;
+            }
+            $value = trim((string) ($field['value'] ?? ''));
+            if ($value !== '') {
                 return $value;
             }
         }
@@ -564,5 +686,15 @@ GRAPHQL;
 
         $apiMessage = trim((string) data_get($json, 'errors.0.detail', data_get($json, 'errors.0.message', data_get($json, 'error.message', ''))));
         throw new AutomationWorkflowException($message.' (HTTP '.$response->status().($apiMessage !== '' ? ': '.Str::limit($apiMessage, 300) : '').')');
+    }
+
+    protected function woocommerceStoreUrl(IntegrationConnection $connection): string
+    {
+        $storeUrl = trim((string) (data_get($connection->metadata, 'store_url') ?: $connection->external_account_secret));
+        if ($storeUrl === '') {
+            throw new AutomationWorkflowException('The WooCommerce connection is missing its store URL. Reconnect WooCommerce.');
+        }
+
+        return rtrim($storeUrl, '/');
     }
 }
