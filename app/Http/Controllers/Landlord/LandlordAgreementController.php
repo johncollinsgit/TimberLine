@@ -7,9 +7,11 @@ use App\Models\Agreement;
 use App\Models\Tenant;
 use App\Services\Agreements\AgreementManagementService;
 use App\Services\Agreements\AgreementTerminationService;
+use App\Mail\AgreementProposalMail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -83,10 +85,22 @@ class LandlordAgreementController extends Controller
 
     public function send(Request $request, Agreement $agreement, AgreementManagementService $management): RedirectResponse
     {
-        $data = $request->validate(['password' => ['nullable', 'string', 'min:10', 'max:255'], 'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:90']]);
+        $data = $request->validate([
+            'password' => ['nullable', 'string', 'min:10', 'max:255'],
+            'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'recipient_email' => ['nullable', 'email:rfc,dns', 'max:255'],
+        ]);
         $access = $management->send($agreement->load('currentVersion'), $request->user()?->id, $data['password'] ?? null, (int) ($data['expires_in_days'] ?? 14));
 
-        return redirect()->route('landlord.agreements.show', $agreement)->with('proposal_access', ['url' => $access['url'], 'password' => $access['password']])->with('status', 'Proposal access was rotated. Copy the password now; it is never shown again.');
+        $recipient = strtolower(trim((string) ($data['recipient_email'] ?? '')));
+        if ($recipient !== '') {
+            Mail::to($recipient)->send(new AgreementProposalMail($access['agreement'], $access['url'], $access['password']));
+            $access['agreement']->forceFill(['recipient_email' => $recipient, 'email_sent_at' => now()])->save();
+        }
+
+        return redirect()->route('landlord.agreements.show', $agreement)
+            ->with('proposal_access', ['url' => $access['url'], 'password' => $access['password']])
+            ->with('status', $recipient !== '' ? 'Agreement email sent to '.$recipient.'. Copy the access details now; the password is never shown again.' : 'Proposal access was rotated. Copy the password now; it is never shown again.');
     }
 
     public function revoke(Request $request, Agreement $agreement, AgreementManagementService $management): RedirectResponse

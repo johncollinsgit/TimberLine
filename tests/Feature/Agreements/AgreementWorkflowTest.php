@@ -12,6 +12,7 @@ use App\Services\Agreements\AgreementTerminationService;
 use App\Services\Billing\AgreementBillingActivationGuard;
 use App\Services\Billing\TenantBillingReceiptLedger;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function (): void {
@@ -342,4 +343,24 @@ test('landlord agreement management is host locked and operator only', function 
     $this->actingAs($admin)->get($landlordUrl)->assertOk()->assertSeeText('Agreements');
     $this->actingAs($admin)->get('http://wrong.theeverbranch.com/landlord/agreements')->assertNotFound();
     $this->actingAs($manager)->get($landlordUrl)->assertForbidden();
+});
+
+test('landlord can email a secure agreement to its customer from the agreement screen', function (): void {
+    Mail::fake();
+    $tenant = agreementTenant('collins-electric');
+    $agreement = app(AgreementManagementService::class)->prepareCollinsElectric($tenant, null);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+    $host = app('router')->getRoutes()->getByName('landlord.agreements.send')?->getDomain() ?: 'app.theeverbranch.com';
+    config()->set('tenancy.landlord.primary_host', $host);
+    config()->set('tenancy.landlord.hosts', [$host]);
+
+    $this->actingAs($admin)->post('http://'.$host.'/landlord/agreements/'.$agreement->id.'/send', [
+        'recipient_email' => 'collinselectric91@gmail.com',
+        'expires_in_days' => 14,
+    ])->assertRedirect();
+
+    expect($agreement->fresh()->status)->toBe('sent')
+        ->and($agreement->fresh()->recipient_email)->toBe('collinselectric91@gmail.com')
+        ->and($agreement->fresh()->email_sent_at)->not->toBeNull();
+    Mail::assertSent(\App\Mail\AgreementProposalMail::class, fn ($mail): bool => $mail->hasTo('collinselectric91@gmail.com'));
 });
