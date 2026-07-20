@@ -434,6 +434,17 @@ return [
             'relay_payout_verified' => (bool) env('EVERBRANCH_STRIPE_RELAY_PAYOUT_VERIFIED', false),
             'live_webhook_verified' => (bool) env('EVERBRANCH_STRIPE_LIVE_WEBHOOK_VERIFIED', false),
         ],
+        // Customer-to-tenant payments are deliberately separate from Everbranch's
+        // own tenant invoices. This lane remains closed until both the global gate
+        // and an explicit tenant allowlist entry are enabled.
+        'tenant_payments' => [
+            'enabled' => (bool) env('EVERBRANCH_TENANT_PAYMENTS_ENABLED', false),
+            'tenant_slugs' => array_values(array_filter(array_map('trim', explode(',', (string) env('EVERBRANCH_TENANT_PAYMENTS_TENANT_SLUGS', ''))))),
+            'connect_webhooks_verified' => (bool) env('EVERBRANCH_STRIPE_CONNECT_WEBHOOKS_VERIFIED', false),
+            'platform_fee_bps' => min(10000, max(0, (int) env('EVERBRANCH_TENANT_PAYMENTS_PLATFORM_FEE_BPS', 0))),
+            'automatic_tax_enabled' => (bool) env('EVERBRANCH_TENANT_PAYMENTS_TAX_ENABLED', false),
+            'tax_decision_confirmed' => (bool) env('EVERBRANCH_TENANT_PAYMENTS_TAX_DECISION_CONFIRMED', false),
+        ],
         'provider_priority' => ['stripe', 'braintree'],
         'providers' => [
             'stripe' => [
