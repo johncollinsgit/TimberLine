@@ -55,9 +55,11 @@
                                     placeholder="Recipient email"
                                     class="w-full rounded-lg border-zinc-300 text-sm"><input name="password"
                                     placeholder="Optional 10+ character password"
-                                    class="w-full rounded-lg border-zinc-300 text-sm"><input name="expires_in_days"
-                                    type="number" min="1" max="90" value="14"
-                                    class="w-full rounded-lg border-zinc-300 text-sm"><button
+                                    class="w-full rounded-lg border-zinc-300 text-sm"><label for="agreement-email-expires"
+                                    class="block text-xs font-medium text-zinc-700">Link expires after (days)</label><input
+                                    id="agreement-email-expires" name="expires_in_days" type="number" min="1" max="90" value="14"
+                                    aria-describedby="agreement-email-expires-help"
+                                    class="w-full rounded-lg border-zinc-300 text-sm"><p id="agreement-email-expires-help" class="text-xs text-zinc-500">Choose 1–90 days. The secure link stops working after this time.</p><button
                                     class="w-full rounded-lg bg-zinc-950 px-3 py-2 text-sm font-semibold text-white">Send
                                     agreement email</button>
                                 <p class="text-xs text-zinc-500">Sending rotates the secure link and password, then
@@ -66,7 +68,9 @@
                             <form method="post" action="{{ route('landlord.agreements.send-text', $agreement) }}" class="mt-3 space-y-2 border-t border-zinc-100 pt-3">
                                 @csrf
                                 <input id="agreement-recipient-phone" name="recipient_phone" type="tel" inputmode="tel" autocomplete="tel" value="{{ old('recipient_phone', $agreement->recipient_phone) }}" required placeholder="Recipient mobile number" class="w-full rounded-lg border-zinc-300 text-sm">
-                                <input name="expires_in_days" type="number" min="1" max="90" value="14" class="w-full rounded-lg border-zinc-300 text-sm">
+                                <label for="agreement-text-expires" class="block text-xs font-medium text-zinc-700">Link expires after (days)</label>
+                                <input id="agreement-text-expires" name="expires_in_days" type="number" min="1" max="90" value="14" aria-describedby="agreement-text-expires-help" class="w-full rounded-lg border-zinc-300 text-sm">
+                                <p id="agreement-text-expires-help" class="text-xs text-zinc-500">Choose 1–90 days. The secure link stops working after this time.</p>
                                 <button class="w-full rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800">Text agreement link + code</button>
                                 <p class="text-xs text-zinc-500">Use this only for the person the agreement is made for. It sends the secure link and one-time access code together.</p>
                             </form>
