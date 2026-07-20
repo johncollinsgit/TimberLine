@@ -5,11 +5,12 @@
 ])
 
 @php
-    $brandAssets = (array) config('everbranch.brand_assets', []);
-    $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-    $brandLogoPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
-    $brandLogoSrc = $logoSrc ?: asset($brandLogoPath).'?v='.$brandAssetVersion;
-    $productName = config('everbranch.product_name', 'Everbranch');
+    $tenant = request()->attributes->get('current_tenant');
+    $brandPresentation = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
+        $tenant instanceof \App\Models\Tenant ? $tenant : null
+    );
+    $brandLogoSrc = $logoSrc ?: (string) $brandPresentation['icon_url'];
+    $productName = (string) $brandPresentation['display_name'];
 @endphp
 
 @if($sidebar)

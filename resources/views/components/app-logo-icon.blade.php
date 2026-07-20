@@ -1,11 +1,13 @@
 @php
-  $brandAssets = (array) config('everbranch.brand_assets', []);
-  $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-  $brandLogoPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
+  $tenant = request()->attributes->get('current_tenant');
+  $brandPresentation = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
+      $tenant instanceof \App\Models\Tenant ? $tenant : null
+  );
+  $brandLogoSrc = (string) $brandPresentation['icon_url'];
 @endphp
 
 <img
-  src="{{ asset($brandLogoPath) }}?v={{ $brandAssetVersion }}"
-  alt="{{ config('everbranch.product_name', 'Everbranch') }}"
+  src="{{ $brandLogoSrc }}"
+  alt="{{ $brandPresentation['display_name'] }}"
   {{ $attributes->merge(['class' => 'object-contain']) }}
 />

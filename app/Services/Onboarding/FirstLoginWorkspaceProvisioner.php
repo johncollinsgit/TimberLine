@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantBlueprintProfileService;
+use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -29,6 +30,7 @@ class FirstLoginWorkspaceProvisioner
         private readonly TenantSetupStatusService $setupStatusService,
         private readonly TenantOnboardingBlueprintStore $blueprintStore,
         private readonly TenantModuleCatalogService $moduleCatalogService,
+        private readonly TenantBrandProfileService $brandProfileService,
     ) {}
 
     /**
@@ -81,6 +83,8 @@ class FirstLoginWorkspaceProvisioner
                     'updated_at' => now(),
                 ],
             ]);
+
+            $this->brandProfileService->ensureForTenant($tenant, $user);
 
             $profile = $this->commercialService->assignTenantPlan(
                 tenantId: $tenantId,

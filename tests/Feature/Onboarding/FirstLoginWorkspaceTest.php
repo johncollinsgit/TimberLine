@@ -64,6 +64,11 @@ test('first-login workspace flow creates a trades workspace and lands the user i
         'operating_mode' => 'direct',
     ]);
 
+    $this->assertDatabaseHas('tenant_brand_profiles', [
+        'tenant_id' => $tenant->id,
+        'display_name' => 'Collins Upstate Electric',
+    ]);
+
     // Module picks are recorded as interests only — never auto-enabled.
     $this->assertDatabaseMissing('tenant_module_states', [
         'tenant_id' => $tenant->id,

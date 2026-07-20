@@ -15,7 +15,25 @@
     'workspaceLabel' => 'Unified workspace',
 ])
 
-<div class="app-shell {{ $showSidebar ? 'app-shell--with-sidebar' : 'app-shell--no-sidebar' }}">
+@php
+    $shellTenant = request()->attributes->get('current_tenant');
+    $neutralTenantSurface = request()->routeIs('agreements.*', 'proposals.*', 'billing.*', 'payments.*', 'invoices.*')
+        || request()->is('agreements*', 'proposals*', 'billing*', 'payments*', 'invoices*');
+    $tenantPresentation = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
+        ! $neutralTenantSurface && $shellTenant instanceof \App\Models\Tenant ? $shellTenant : null
+    );
+    $tenantThemeStyle = ! $neutralTenantSurface && $shellTenant instanceof \App\Models\Tenant
+        ? '--tenant-primary: '.$tenantPresentation['primary_color'].';--tenant-accent: '.$tenantPresentation['accent_color'].';--tenant-surface: '.$tenantPresentation['surface_color'].';--tenant-text: '.$tenantPresentation['text_color'].';'
+        : '';
+@endphp
+<div
+    class="app-shell {{ $showSidebar ? 'app-shell--with-sidebar' : 'app-shell--no-sidebar' }} {{ ! $neutralTenantSurface && $shellTenant instanceof \App\Models\Tenant ? 'mf-tenant-themed' : '' }}"
+    data-tenant-theme="{{ $tenantPresentation['theme_key'] }}"
+    data-tenant-decor="{{ $tenantPresentation['decor_preset'] }}"
+    data-tenant-display="{{ $tenantPresentation['display_style'] }}"
+    data-tenant-corners="{{ $tenantPresentation['corner_style'] }}"
+    style="{{ $tenantThemeStyle }}"
+>
     @if($showSidebar)
         <aside class="app-shell-sidebar">
             <x-app-sidebar
