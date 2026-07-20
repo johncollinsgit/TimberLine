@@ -24,6 +24,8 @@ Set and deploy with these values:
 - `TENANCY_LANDLORD_PRIMARY_HOST=app.theeverbranch.com`
 - `TENANCY_LANDLORD_HOSTS=app.theeverbranch.com`
 - `AUTH_FLAGSHIP_HOSTS=app.theeverbranch.com,theeverbranch.com`
+- `SESSION_SHARE_CANONICAL_SUBDOMAINS=true`
+- `SESSION_DOMAIN=theeverbranch.com`
 - `GOOGLE_REDIRECT_URI=https://app.theeverbranch.com/auth/google/callback`
 - `GOOGLE_GBP_REDIRECT_URI=https://app.theeverbranch.com/marketing/candle-cash/google-business/callback`
 
@@ -65,7 +67,10 @@ Operational requirements:
    - `php artisan route:clear`
    - `php artisan route:cache` (if your environment uses route cache)
    - `php artisan queue:restart`
-4. Confirm health endpoint on canonical landlord host (`/up`).
+4. Reload an authenticated canonical host once so the browser receives the
+   canonical-domain session cookie, then verify switching between landlord and
+   tenant hosts does not render `/login`.
+5. Confirm health endpoint on canonical landlord host (`/up`).
 
 ## 7) External System Updates (Required)
 - Shopify Partner Dashboard:

@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Tenant;
+
 test('tenancy config defaults to canonical-only runtime host model', function (): void {
     config()->set('tenancy.domains.canonical.base_domain', 'theeverbranch.com');
     config()->set('tenancy.domains.canonical.public_host', 'theeverbranch.com');
@@ -16,7 +18,7 @@ test('tenancy config defaults to canonical-only runtime host model', function ()
         ->and(config('tenancy.domains.tenant_base_domains'))->toBe(['theeverbranch.com']);
 });
 
-test('session cookie defaults remain host-only for cutover safety', function (): void {
+test('session cookie defaults remain host-only outside production', function (): void {
     expect(config('session.domain'))->toBeNull()
         ->and(config('session.path'))->toBe('/')
         ->and(config('session.http_only'))->toBeTrue()
@@ -33,4 +35,19 @@ test('session domain is not configured as a broad wildcard', function (): void {
     $domain = trim((string) (config('session.domain') ?? ''));
 
     expect($domain === '' || ! str_starts_with($domain, '.'))->toBeTrue();
+});
+
+test('canonical session cookies are valid across trusted Everbranch subdomains', function (): void {
+    config()->set('session.domain', 'theeverbranch.com');
+    Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+
+    foreach (['app.theeverbranch.com', 'modern-forestry.theeverbranch.com'] as $host) {
+        $response = $this->get("https://{$host}/login")->assertOk();
+        $sessionCookie = collect($response->headers->getCookies())
+            ->first(fn ($cookie): bool => $cookie->getName() === config('session.cookie'));
+
+        expect($sessionCookie)->not->toBeNull()
+            ->and($sessionCookie->getDomain())->toBe('theeverbranch.com')
+            ->and($sessionCookie->isHttpOnly())->toBeTrue();
+    }
 });
