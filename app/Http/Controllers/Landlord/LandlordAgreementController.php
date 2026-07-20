@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -115,23 +116,62 @@ class LandlordAgreementController extends Controller
     public function sendText(Request $request, Agreement $agreement, AgreementManagementService $management, TwilioSmsService $sms): RedirectResponse
     {
         $data = $request->validate([
-            'recipient_phone' => ['required', 'string', 'max:40'],
+            'recipient_phone' => ['required', 'string', 'max:255'],
             'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:90'],
         ]);
-        $phone = trim((string) $data['recipient_phone']);
-        abort_unless((bool) preg_match('/\d{10,}/', preg_replace('/\D+/', '', $phone) ?? ''), 422, 'Enter a valid recipient phone number.');
+        $recipients = collect(explode(',', (string) $data['recipient_phone']))
+            ->map(fn (string $phone): string => trim($phone))
+            ->filter()
+            ->unique(fn (string $phone): string => (string) preg_replace('/\D+/', '', $phone))
+            ->values();
+
+        if ($recipients->isEmpty()) {
+            throw ValidationException::withMessages(['recipient_phone' => 'Enter at least one mobile number.']);
+        }
+
+        if ($recipients->count() > 10) {
+            throw ValidationException::withMessages(['recipient_phone' => 'Send to no more than 10 people at a time.']);
+        }
+
+        $invalidRecipients = $recipients->filter(fn (string $phone): bool => ! preg_match('/\d{10,}/', (string) preg_replace('/\D+/', '', $phone)));
+        if ($invalidRecipients->isNotEmpty()) {
+            throw ValidationException::withMessages(['recipient_phone' => 'Each recipient must have a valid mobile number. Separate multiple numbers with commas.']);
+        }
 
         $access = $management->send($agreement->load('currentVersion'), $request->user()?->id, null, (int) ($data['expires_in_days'] ?? 14));
         $message = 'Everbranch agreement for '.$agreement->tenant->name.': '.$access['url'].' Access code: '.$access['password'];
-        $result = $sms->sendSms($phone, $message, ['tenant_id' => $agreement->tenant_id, 'source_type' => 'agreement', 'source_id' => $agreement->id]);
-        if (! ($result['success'] ?? false)) {
-            return back()->with('status_error', 'Agreement link was created, but the text could not be sent: '.trim((string) ($result['error_message'] ?? 'unknown provider error')));
+        $sent = [];
+        $failed = [];
+
+        foreach ($recipients as $phone) {
+            $result = $sms->sendSms($phone, $message, ['tenant_id' => $agreement->tenant_id, 'source_type' => 'agreement', 'source_id' => $agreement->id]);
+            if ($result['success'] ?? false) {
+                $sent[] = $phone;
+            } else {
+                $failed[] = ['phone' => $phone, 'error' => trim((string) ($result['error_message'] ?? 'unknown provider error'))];
+            }
         }
 
-        $access['agreement']->forceFill(['recipient_phone' => $phone, 'sms_sent_at' => now()])->save();
-        $access['agreement']->events()->create(['tenant_id' => $agreement->tenant_id, 'agreement_version_id' => $access['agreement']->current_version_id, 'actor_user_id' => $request->user()?->id, 'event_type' => 'agreement_text_sent', 'metadata' => ['recipient_phone' => $phone, 'purpose' => 'agreement_delivery']]);
+        if ($sent !== []) {
+            $access['agreement']->forceFill(['recipient_phone' => implode(', ', $sent), 'sms_sent_at' => now()])->save();
+            $access['agreement']->events()->create(['tenant_id' => $agreement->tenant_id, 'agreement_version_id' => $access['agreement']->current_version_id, 'actor_user_id' => $request->user()?->id, 'event_type' => 'agreement_text_sent', 'metadata' => ['recipient_phones' => $sent, 'failed_recipients' => $failed, 'purpose' => 'agreement_delivery']]);
+        }
 
-        return redirect()->route('landlord.agreements.show', $agreement)->with('status', 'Agreement link and access code were texted to '.$phone.'.');
+        if ($sent === []) {
+            return back()->with('status_error', 'Agreement link was created, but no texts could be sent: '.collect($failed)->pluck('error')->unique()->implode('; '));
+        }
+
+        $message = 'Agreement link and access code were texted to '.count($sent).' '.str('recipient')->plural(count($sent)).'.';
+        if ($failed !== []) {
+            $message .= ' '.count($failed).' '.str('recipient')->plural(count($failed)).' could not be reached.';
+        }
+
+        $response = redirect()->route('landlord.agreements.show', $agreement)->with('status', $message);
+        if ($failed !== []) {
+            $response->with('status_error', 'Could not text '.collect($failed)->pluck('phone')->implode(', ').'.');
+        }
+
+        return $response;
     }
 
     public function notes(Request $request, Agreement $agreement, AgreementManagementService $management): RedirectResponse
