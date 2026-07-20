@@ -51,7 +51,7 @@
                         @endif @if (!in_array($agreement->status, ['active', 'accepted', 'termination_pending', 'terminated']))
                             <form method="post" action="{{ route('landlord.agreements.send', $agreement) }}"
                                 class="mt-4 space-y-2">@csrf<input name="recipient_email" type="email"
-                                    value="{{ old('recipient_email', $agreement->recipient_email) }}" required
+                                    value="{{ old('recipient_email', $agreement->recipient_email ?: $ownerEmail) }}" required
                                     placeholder="Customer email"
                                     class="w-full rounded-lg border-zinc-300 text-sm"><input name="password"
                                     placeholder="Optional 10+ character password"
@@ -70,23 +70,6 @@
                                         link</button></form>
                             @endif
                         @endif
-            </section>
-            <section class="rounded-2xl border border-zinc-200 bg-white p-5">
-                <h2 class="font-semibold">Text a customer</h2>
-                <p class="mt-2 text-xs text-zinc-500">Select an Everbranch customer record. This is limited to the transactional agreement link.</p>
-                @if (!in_array($agreement->status, ['active', 'accepted', 'termination_pending', 'terminated']))
-                    <form method="post" action="{{ route('landlord.agreements.send-sms', $agreement) }}" class="mt-3 space-y-2">
-                        @csrf
-                        <select name="marketing_profile_id" required class="w-full rounded-lg border-zinc-300 text-sm">
-                            <option value="">Select Everbranch customer</option>
-                            @foreach ($customerContacts as $contact)
-                                <option value="{{ $contact->id }}">{{ trim($contact->first_name.' '.$contact->last_name) ?: $contact->email }} · {{ $contact->phone }}</option>
-                            @endforeach
-                        </select>
-                        <input name="expires_in_days" type="number" min="1" max="90" value="14" class="w-full rounded-lg border-zinc-300 text-sm">
-                        <button class="w-full rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800">Text secure agreement link</button>
-                    </form>
-                @endif
             </section>
             <section class="rounded-2xl border border-zinc-200 bg-white p-5">
                 <h2 class="font-semibold">Acceptance</h2>

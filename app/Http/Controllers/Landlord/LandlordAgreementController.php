@@ -5,8 +5,6 @@ namespace App\Http\Controllers\Landlord;
 use App\Http\Controllers\Controller;
 use App\Models\Agreement;
 use App\Models\Tenant;
-use App\Models\MarketingProfile;
-use App\Services\Marketing\TwilioSmsService;
 use App\Services\Agreements\AgreementManagementService;
 use App\Services\Agreements\AgreementTerminationService;
 use App\Mail\AgreementProposalMail;
@@ -60,7 +58,7 @@ class LandlordAgreementController extends Controller
         return view('landlord.agreements.show', [
             'agreement' => $agreement->load(['tenant', 'currentVersion', 'versions', 'acceptance', 'events', 'termination', 'billingOrders.receipts', 'tenant.billingReceipts']),
             'proposalUrl' => filled($agreement->public_token_encrypted) ? $management->publicUrl((string) $agreement->public_token_encrypted) : null,
-            'customerContacts' => MarketingProfile::query()->forTenant($agreement->tenant_id)->whereNull('merged_into_profile_id')->whereNotNull('phone')->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'email', 'phone', 'accepts_sms_marketing', 'sms_opted_out_at']),
+            'ownerEmail' => $agreement->tenant->users()->wherePivot('role', 'owner')->orderBy('users.id')->value('users.email'),
         ]);
     }
 
@@ -111,25 +109,6 @@ class LandlordAgreementController extends Controller
         $management->revoke($agreement, $request->user()?->id);
 
         return back()->with('status', 'Proposal access revoked.');
-    }
-
-    public function sendSms(Request $request, Agreement $agreement, AgreementManagementService $management, TwilioSmsService $sms): RedirectResponse
-    {
-        $data = $request->validate(['marketing_profile_id' => ['required', 'integer'], 'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:90']]);
-        $contact = MarketingProfile::query()->forTenant($agreement->tenant_id)->findOrFail((int) $data['marketing_profile_id']);
-        abort_unless(filled($contact->phone), 422, 'This customer needs a phone number.');
-        $access = $management->send($agreement->load('currentVersion'), $request->user()?->id, null, (int) ($data['expires_in_days'] ?? 14));
-        $result = $sms->sendSms((string) ($contact->normalized_phone ?: $contact->phone), 'Everbranch agreement for '.$agreement->tenant->name.': '.$access['url'].' Password was sent separately by email.', ['tenant_id' => $agreement->tenant_id]);
-        if (! ($result['success'] ?? false)) { return back()->with('status_error', 'Agreement link was created, but SMS could not be sent.'); }
-        $access['agreement']->forceFill(['recipient_phone' => (string) ($contact->normalized_phone ?: $contact->phone), 'sms_sent_at' => now()])->save();
-        $access['agreement']->events()->create([
-            'tenant_id' => $agreement->tenant_id,
-            'agreement_version_id' => $access['agreement']->current_version_id,
-            'actor_user_id' => $request->user()?->id,
-            'event_type' => 'transactional_sms_delivery_authorized',
-            'metadata' => ['marketing_profile_id' => $contact->id, 'phone' => (string) ($contact->normalized_phone ?: $contact->phone), 'purpose' => 'agreement_link'],
-        ]);
-        return redirect()->route('landlord.agreements.show', $agreement)->with('status', 'Agreement link texted to '.$contact->phone.'.');
     }
 
     public function notes(Request $request, Agreement $agreement, AgreementManagementService $management): RedirectResponse
