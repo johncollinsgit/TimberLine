@@ -44,7 +44,9 @@ class LandlordAgreementController extends Controller
     {
         $data = $request->validate($this->pricingRules());
         $tenant = Tenant::query()->findOrFail((int) $data['tenant_id']);
-        $agreement = $management->prepareFrontYardFoods($tenant, $request->user()?->id, $this->cents($data['implementation_amount'] ?? null), $this->cents($data['due_on_acceptance'] ?? null), $this->cents($data['due_before_launch'] ?? null), $data['additional_scope'] ?? null);
+        $agreement = $data['template_key'] === Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES
+            ? $management->prepareCollinsElectric($tenant, $request->user()?->id, $this->cents($data['onboarding_amount'] ?? null) ?? 29900, $this->cents($data['launch_partner_amount'] ?? null) ?? 5900, $this->cents($data['standard_amount'] ?? null) ?? 14900, $data['additional_scope'] ?? null)
+            : $management->prepareFrontYardFoods($tenant, $request->user()?->id, $this->cents($data['implementation_amount'] ?? null), $this->cents($data['due_on_acceptance'] ?? null), $this->cents($data['due_before_launch'] ?? null), $data['additional_scope'] ?? null);
 
         return redirect()->route('landlord.agreements.show', $agreement)->with('status', 'Agreement draft prepared.');
     }
@@ -70,7 +72,11 @@ class LandlordAgreementController extends Controller
         abort_if($agreement->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION, 409, 'Sandbox validation agreements cannot version the client agreement.');
         abort_if(in_array($agreement->status, ['accepted', 'active', 'termination_pending', 'terminated'], true), 409);
         $data = $request->validate($this->pricingRules(false));
-        $management->prepareFrontYardFoods($agreement->tenant, $request->user()?->id, $this->cents($data['implementation_amount'] ?? null), $this->cents($data['due_on_acceptance'] ?? null), $this->cents($data['due_before_launch'] ?? null), $data['additional_scope'] ?? null);
+        if ($agreement->template_key === Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES) {
+            $management->prepareCollinsElectric($agreement->tenant, $request->user()?->id, $this->cents($data['onboarding_amount'] ?? null) ?? 29900, $this->cents($data['launch_partner_amount'] ?? null) ?? 5900, $this->cents($data['standard_amount'] ?? null) ?? 14900, $data['additional_scope'] ?? null);
+        } else {
+            $management->prepareFrontYardFoods($agreement->tenant, $request->user()?->id, $this->cents($data['implementation_amount'] ?? null), $this->cents($data['due_on_acceptance'] ?? null), $this->cents($data['due_before_launch'] ?? null), $data['additional_scope'] ?? null);
+        }
 
         return redirect()->route('landlord.agreements.show', $agreement)->with('status', 'A new immutable version was created when content changed.');
     }
@@ -155,12 +161,17 @@ class LandlordAgreementController extends Controller
     protected function pricingRules(bool $withTenant = true): array
     {
         $rules = [
+            'template_key' => ['nullable', Rule::in([Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES])],
             'implementation_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'due_on_acceptance' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'due_before_launch' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'additional_scope' => ['nullable', 'string', 'max:20000'],
+            'onboarding_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
+            'launch_partner_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
+            'standard_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
         ];
         if ($withTenant) {
+            $rules['template_key'] = ['required', Rule::in([Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES])];
             $rules['tenant_id'] = ['required', 'integer', 'exists:tenants,id'];
         }
 

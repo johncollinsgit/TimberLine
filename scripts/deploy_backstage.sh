@@ -88,7 +88,7 @@ fi
 echo "== verify live health =="
 HEALTH_URL="${DEPLOY_HEALTH_URL:-https://app.theeverbranch.com/up}"
 HEALTHY=false
-for attempt in 1 2 3 4 5; do
+for attempt in $(seq 1 15); do
   if curl --fail --silent --show-error --max-time 15 "$HEALTH_URL" >/dev/null; then
     HEALTHY=true
     break

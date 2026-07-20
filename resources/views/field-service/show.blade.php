@@ -19,6 +19,7 @@
                         </div>
                         <h1 class="mt-1 text-3xl font-semibold text-zinc-950">{{ $job->title }}</h1>
                         <p class="mt-1 text-sm text-zinc-600">{{ $job->customer_name ?: 'Customer not named' }}</p>
+                        @if($job->equipment)<p class="mt-1 text-sm"><a href="{{ route('field-service.equipment.show', $job->equipment) }}" class="font-semibold text-emerald-800">Equipment: {{ $job->equipment->name }}</a></p>@endif
                     </div>
                     @if($canProgress)
                         <div class="flex flex-wrap gap-2">

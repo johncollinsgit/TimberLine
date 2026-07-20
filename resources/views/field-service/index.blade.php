@@ -27,6 +27,8 @@
                 <h1 class="text-3xl font-semibold text-zinc-950">Field Service</h1>
                 <div class="mt-4 flex flex-wrap gap-3">
                     <a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-primary">Calendar</a>
+                    @if($equipmentMaintenanceEnabled ?? false)<a href="{{ route('field-service.equipment.index') }}" class="fb-btn fb-btn-secondary">Equipment</a>@endif
+                    <a href="{{ route('field-service.payroll-hours') }}" class="fb-btn fb-btn-secondary">Payroll hours</a>
                     <a href="{{ route('field-service.index', ['view' => 'list']) }}" class="fb-btn fb-btn-secondary">List</a>
                     <a href="#reminders" class="fb-btn fb-btn-secondary">Reminder setup</a>
                 </div>

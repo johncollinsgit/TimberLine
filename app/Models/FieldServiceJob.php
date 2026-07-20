@@ -15,6 +15,7 @@ class FieldServiceJob extends Model
     protected $fillable = [
         'tenant_id',
         'marketing_profile_id',
+        'customer_equipment_id',
         'assigned_user_id',
         'title',
         'status',
@@ -48,6 +49,7 @@ class FieldServiceJob extends Model
     protected $casts = [
         'tenant_id' => 'integer',
         'marketing_profile_id' => 'integer',
+        'customer_equipment_id' => 'integer',
         'assigned_user_id' => 'integer',
         'scheduled_for' => 'datetime',
         'scheduled_end_at' => 'datetime',
@@ -67,6 +69,11 @@ class FieldServiceJob extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(MarketingProfile::class, 'marketing_profile_id');
+    }
+
+    public function equipment(): BelongsTo
+    {
+        return $this->belongsTo(CustomerEquipment::class, 'customer_equipment_id');
     }
 
     public function assignedUser(): BelongsTo
@@ -104,6 +111,11 @@ class FieldServiceJob extends Model
     public function financialDocuments(): HasMany
     {
         return $this->hasMany(FieldServiceFinancialDocument::class);
+    }
+
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(FieldServiceTimeEntry::class);
     }
 
     public function assets(): BelongsToMany

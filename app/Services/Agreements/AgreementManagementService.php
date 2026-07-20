@@ -15,11 +15,25 @@ class AgreementManagementService
 {
     public function __construct(
         protected FrontYardFoodsAgreementTemplate $frontYardTemplate,
+        protected CollinsElectricAgreementTemplate $collinsElectricTemplate,
         protected SupplementalWorkAgreementTemplate $supplementalTemplate,
         protected AgreementDocumentRenderer $renderer,
         protected AgreementEventRecorder $events,
         protected LandlordOperatorActionAuditService $audit,
     ) {}
+
+    public function prepareCollinsElectric(
+        Tenant $tenant,
+        ?int $actorUserId,
+        int $onboardingAmountCents = 29900,
+        int $launchPartnerAmountCents = 5900,
+        int $standardAmountCents = 14900,
+        ?string $additionalScope = null,
+    ): Agreement {
+        $payload = $this->collinsElectricTemplate->build($onboardingAmountCents, $launchPartnerAmountCents, $standardAmountCents, $additionalScope);
+
+        return $this->prepareClientAgreement($tenant, $actorUserId, Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES, $payload);
+    }
 
     public function prepareFrontYardFoods(
         Tenant $tenant,
@@ -31,11 +45,18 @@ class AgreementManagementService
     ): Agreement {
         $payload = $this->frontYardTemplate->build($implementationAmountCents, $dueOnAcceptanceCents, $dueBeforeLaunchCents, $additionalScope);
 
-        return DB::transaction(function () use ($tenant, $actorUserId, $payload): Agreement {
+        return $this->prepareClientAgreement($tenant, $actorUserId, Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, $payload);
+    }
+
+    /** @param array<string,mixed> $payload */
+    protected function prepareClientAgreement(Tenant $tenant, ?int $actorUserId, string $templateKey, array $payload): Agreement
+    {
+
+        return DB::transaction(function () use ($tenant, $actorUserId, $templateKey, $payload): Agreement {
             $agreement = Agreement::query()
                 ->forTenant($tenant)
                 ->where('agreement_type', Agreement::TYPE_FRONT_YARD_CLIENT_SERVICES)
-                ->where('template_key', Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES)
+                ->where('template_key', $templateKey)
                 ->whereNull('parent_agreement_id')
                 ->latest('id')
                 ->lockForUpdate()
@@ -45,7 +66,7 @@ class AgreementManagementService
                 $agreement = Agreement::query()->create([
                     'tenant_id' => (int) $tenant->id,
                     'agreement_type' => (string) $payload['agreement_type'],
-                    'template_key' => Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES,
+                    'template_key' => $templateKey,
                     'title' => (string) $payload['title'],
                     'status' => 'draft',
                     'created_by' => $actorUserId,
@@ -220,7 +241,17 @@ class AgreementManagementService
         if (! in_array($parent->status, ['active', 'termination_pending'], true)) {
             throw new InvalidArgumentException('Only an accepted agreement can receive an amendment.');
         }
-        $payload = $this->frontYardTemplate->build($implementationAmountCents, additionalScope: $additionalScope);
+        if ($parent->template_key === Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES) {
+            $cards = collect((array) $parent->currentVersion?->pricing_payload['cards'])->keyBy('key');
+            $payload = $this->collinsElectricTemplate->build(
+                (int) data_get($cards->get('everbranch_onboarding'), 'amount_cents', 29900),
+                (int) data_get($cards->get('everbranch_launch_partner'), 'amount_cents', 5900),
+                (int) data_get($cards->get('everbranch_standard'), 'amount_cents', 14900),
+                $additionalScope,
+            );
+        } else {
+            $payload = $this->frontYardTemplate->build($implementationAmountCents, additionalScope: $additionalScope);
+        }
 
         return DB::transaction(function () use ($parent, $actorUserId, $payload): Agreement {
             $amendment = Agreement::query()->create([

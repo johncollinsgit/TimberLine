@@ -25,6 +25,8 @@
                 <nav class="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1" aria-label="Field Service view">
                     <a href="{{ route('field-service.calendar') }}" class="rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-950 shadow-sm">Calendar</a>
                     <a href="{{ route('field-service.index', ['view' => 'list']) }}" class="rounded-md px-4 py-2 text-sm font-semibold text-zinc-600">List</a>
+                    @if($equipmentMaintenanceEnabled ?? false)<a href="{{ route('field-service.equipment.index') }}" class="rounded-md px-4 py-2 text-sm font-semibold text-zinc-600">Equipment</a>@endif
+                    <a href="{{ route('field-service.payroll-hours') }}" class="rounded-md px-4 py-2 text-sm font-semibold text-zinc-600">Payroll hours</a>
                 </nav>
             </header>
 
