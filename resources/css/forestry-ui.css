@@ -5497,6 +5497,16 @@ body.mf-app-shell {
   position: relative;
 }
 
+.mf-admin-subnav-icon {
+  color: var(--fb-brand-2);
+  flex: 0 0 auto;
+}
+
+.mf-admin-subnav-link-active .mf-admin-subnav-icon,
+.mf-admin-subnav-link:hover .mf-admin-subnav-icon {
+  color: currentColor;
+}
+
 .mf-admin-subnav-link:hover {
   background: rgba(18, 60, 67, 0.05);
   border-color: rgba(18, 60, 67, 0.1);
