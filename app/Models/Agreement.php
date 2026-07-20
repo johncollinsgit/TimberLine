@@ -36,6 +36,7 @@ class Agreement extends Model
             'access_revoked_at' => 'datetime',
             'sent_at' => 'datetime',
             'email_sent_at' => 'datetime',
+            'sms_sent_at' => 'datetime',
             'first_viewed_at' => 'datetime',
             'last_viewed_at' => 'datetime',
             'effective_at' => 'datetime',
