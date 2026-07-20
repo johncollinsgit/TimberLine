@@ -88,7 +88,7 @@
                             <div class="agreement-message-composer">
                                 <div class="flex items-center justify-between gap-3"><label class="agreement-field-label" for="agreement-message-intro">Text message <span>edit before sending</span></label><span id="agreement-message-count" class="text-xs text-zinc-500"></span></div>
                                 <textarea id="agreement-message-intro" name="message_intro" rows="3" maxlength="240" class="agreement-input agreement-message-input" data-default-message="Hi! {{ $agreement->tenant->name }}: your Everbranch workspace is ready." placeholder="Hi! {{ $agreement->tenant->name }}: your Everbranch workspace is ready.">{{ old('message_intro', $agreement->agreement_sms_message) }}</textarea>
-                                <p class="mt-2 text-xs leading-5 text-zinc-500">Use <code>{{ '{{tenant_name}}' }}</code> to insert the workspace name. The secure link and one-time code are always added separately.</p>
+                                <p class="mt-2 text-xs leading-5 text-zinc-500">Use <code>&#123;&#123;tenant_name&#125;&#125;</code> to insert the workspace name. The secure link and one-time code are always added separately.</p>
                                 <label class="agreement-field-label mt-4" for="agreement-message-image">Optional image <span>sends as MMS</span></label>
                                 <input id="agreement-message-image" name="image_url" type="url" inputmode="url" value="{{ old('image_url', $agreement->agreement_mms_image_url) }}" placeholder="https://…/service-card.jpg" class="agreement-input">
                                 <p class="mt-2 text-xs leading-5 text-zinc-500">Paste a public image URL. You can see it before it is sent; remove the URL to send a normal text only.</p>
@@ -255,9 +255,10 @@
             const count = document.getElementById('agreement-message-count');
             if (!text || !image || !preview || !imagePreview || !count) return;
             const tenant = @json($agreement->tenant->name);
+            const tenantToken = String.fromCharCode(123, 123) + 'tenant_name' + String.fromCharCode(125, 125);
             const placeholderLink = 'https://evergrovesoftware.com/a/{{ $agreement->id }}/••••••••••••••••';
             const refresh = () => {
-                const intro = (text.value.trim() || text.dataset.defaultMessage).replaceAll('{{tenant_name}}', tenant);
+                const intro = (text.value.trim() || text.dataset.defaultMessage).replaceAll(tenantToken, tenant);
                 preview.textContent = intro + ' Open, approve & pay: ' + placeholderLink + ' Code: ••••••••••';
                 count.textContent = `${intro.length}/240`;
                 const url = image.value.trim();

@@ -6,11 +6,11 @@
     <path d="m125 50-23 66h28l-17 50 49-70h-29l19-46h-27Z" fill="url(#bolt)" stroke="#FFFFFF" stroke-linejoin="round" stroke-width="3"/>
     <path d="M0 190c56-13 150-13 230 0" fill="none" stroke="#2580FF" stroke-linecap="round" stroke-width="6"/>
   </g>
-  <g fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" text-anchor="start">
-    <text x="286" y="110" font-size="78" font-weight="800" letter-spacing="10">COLLINS</text>
-    <text x="291" y="164" fill="#75BDFF" font-size="35" font-weight="800" letter-spacing="15">UPSTATE</text>
-    <path d="M292 191h112m232 0h112" stroke="#B3C7E6" stroke-width="3"/>
-    <text x="420" y="203" font-size="25" font-weight="700" letter-spacing="9">ELECTRIC</text>
-    <text x="290" y="252" fill="#C6D7EF" font-size="17" font-weight="700" letter-spacing="3">RESIDENTIAL · COMMERCIAL · RELIABLE POWER</text>
+  <g fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" text-anchor="middle">
+    <text x="520" y="110" font-size="78" font-weight="800" letter-spacing="10">COLLINS</text>
+    <text x="520" y="164" fill="#75BDFF" font-size="35" font-weight="800" letter-spacing="15">UPSTATE</text>
+    <path d="M294 191h110m232 0h110" stroke="#B3C7E6" stroke-width="3"/>
+    <text x="520" y="203" font-size="25" font-weight="700" letter-spacing="9">ELECTRIC</text>
+    <text x="520" y="252" fill="#C6D7EF" font-size="17" font-weight="700" letter-spacing="3">RESIDENTIAL · COMMERCIAL · RELIABLE POWER</text>
   </g>
 </svg>
