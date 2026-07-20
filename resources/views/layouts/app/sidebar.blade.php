@@ -45,7 +45,7 @@
   ]);
   $showDataTools = $canAccessOps && ! $isLandlordShell;
   $hrefDashboard = $isLandlordShell ? route('landlord.dashboard') : route('dashboard');
-  $workspaceLabel = ($isLandlordShell || $isNeutralTenantSurface) ? (string) ($workspace['label'] ?? 'Unified workspace') : (string) $tenantBrand['display_name'];
+  $workspaceLabel = (string) ($workspace['label'] ?? 'Unified workspace');
   $workspaceSubtitle = (string) ($workspace['subtitle'] ?? 'One product surface that adapts to the tenant in front of it.');
   $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search or ask what you want to do...');
   $consoleSwitches = collect((array) ($navigationShell['console_switches'] ?? []))

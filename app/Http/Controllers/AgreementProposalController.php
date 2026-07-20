@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Agreement;
 use App\Services\Agreements\AgreementAcceptanceService;
+use App\Services\Agreements\AgreementManagementService;
 use App\Services\Agreements\AgreementProposalAccessService;
 use App\Services\Billing\AgreementStripeCheckoutService;
 use Illuminate\Http\RedirectResponse;
@@ -14,6 +16,18 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class AgreementProposalController extends Controller
 {
+    public function short(int $agreement, string $signature, AgreementManagementService $management, AgreementProposalAccessService $access): RedirectResponse
+    {
+        $proposal = Agreement::query()->withoutGlobalScopes()->findOrFail($agreement);
+        abort_unless($management->hasValidShortPublicSignature($proposal, $signature), 404);
+
+        $token = (string) $proposal->public_token_encrypted;
+        abort_if($token === '', 404);
+        $access->resolve($token);
+
+        return redirect()->to($management->publicUrl($token));
+    }
+
     public function show(Request $request, string $token, AgreementProposalAccessService $access): View
     {
         $agreement = $access->resolve($token);

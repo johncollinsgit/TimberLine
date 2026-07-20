@@ -178,7 +178,7 @@ class AgreementManagementService
         });
     }
 
-    /** @return array{agreement:Agreement,password:string,url:string} */
+    /** @return array{agreement:Agreement,password:string,url:string,short_url:string} */
     public function send(Agreement $agreement, ?int $actorUserId, ?string $password = null, int $expiresInDays = 14): array
     {
         if (! $agreement->currentVersion) {
@@ -188,7 +188,7 @@ class AgreementManagementService
             throw new InvalidArgumentException('Accepted or terminated agreements cannot be resent. Create an amendment.');
         }
 
-        $password = trim((string) $password) ?: Str::password(16, symbols: false);
+        $password = trim((string) $password) ?: Str::password(10, symbols: false);
         if (mb_strlen($password) < 10) {
             throw new InvalidArgumentException('Proposal passwords must contain at least 10 characters.');
         }
@@ -213,7 +213,12 @@ class AgreementManagementService
             'password_rotated' => true,
         ]);
 
-        return ['agreement' => $agreement, 'password' => $password, 'url' => $this->publicUrl($token)];
+        return [
+            'agreement' => $agreement,
+            'password' => $password,
+            'url' => $this->publicUrl($token),
+            'short_url' => $this->shortPublicUrl($agreement),
+        ];
     }
 
     public function revoke(Agreement $agreement, ?int $actorUserId): Agreement
@@ -294,6 +299,28 @@ class AgreementManagementService
         $scheme = app()->environment('local', 'testing') ? 'http' : 'https';
 
         return $scheme.'://'.$host.'/proposals/'.$token;
+    }
+
+    public function shortPublicUrl(Agreement $agreement): string
+    {
+        $host = strtolower(trim((string) config('evergrove.canonical_host', 'evergrovesoftware.com')));
+        $scheme = app()->environment('local', 'testing') ? 'http' : 'https';
+
+        return $scheme.'://'.$host.'/a/'.$agreement->id.'/'.$this->shortPublicSignature($agreement);
+    }
+
+    public function hasValidShortPublicSignature(Agreement $agreement, string $signature): bool
+    {
+        return hash_equals($this->shortPublicSignature($agreement), trim($signature));
+    }
+
+    protected function shortPublicSignature(Agreement $agreement): string
+    {
+        return substr(hash_hmac('sha256', implode('|', [
+            'agreement-short-link',
+            (string) $agreement->id,
+            (string) $agreement->public_token_hash,
+        ]), (string) config('app.key')), 0, 16);
     }
 
     public function createSupplementalWork(Agreement $parent, ?int $actorUserId, string $description, int $amountCents, ?float $approvedHours = null): Agreement

@@ -3,16 +3,16 @@
 namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
+use App\Mail\AgreementProposalMail;
 use App\Models\Agreement;
 use App\Models\Tenant;
 use App\Services\Agreements\AgreementManagementService;
 use App\Services\Agreements\AgreementTerminationService;
-use App\Mail\AgreementProposalMail;
 use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -59,7 +59,7 @@ class LandlordAgreementController extends Controller
     {
         return view('landlord.agreements.show', [
             'agreement' => $agreement->load(['tenant', 'currentVersion', 'versions', 'acceptance', 'events', 'termination', 'billingOrders.receipts', 'tenant.billingReceipts']),
-            'proposalUrl' => filled($agreement->public_token_encrypted) ? $management->publicUrl((string) $agreement->public_token_encrypted) : null,
+            'proposalUrl' => filled($agreement->public_token_encrypted) ? $management->shortPublicUrl($agreement) : null,
             'ownerEmail' => $agreement->tenant->users()->wherePivot('role', 'owner')->orderBy('users.id')->value('users.email'),
         ]);
     }
@@ -97,12 +97,12 @@ class LandlordAgreementController extends Controller
 
         $recipient = strtolower(trim((string) ($data['recipient_email'] ?? '')));
         if ($recipient !== '') {
-            Mail::to($recipient)->send(new AgreementProposalMail($access['agreement'], $access['url'], $access['password']));
+            Mail::to($recipient)->send(new AgreementProposalMail($access['agreement'], $access['short_url'], $access['password']));
             $access['agreement']->forceFill(['recipient_email' => $recipient, 'email_sent_at' => now()])->save();
         }
 
         return redirect()->route('landlord.agreements.show', $agreement)
-            ->with('proposal_access', ['url' => $access['url'], 'password' => $access['password']])
+            ->with('proposal_access', ['url' => $access['short_url'], 'password' => $access['password']])
             ->with('status', $recipient !== '' ? 'Agreement email sent to '.$recipient.'. Copy the access details now; the password is never shown again.' : 'Proposal access was rotated. Copy the password now; it is never shown again.');
     }
 
@@ -139,7 +139,7 @@ class LandlordAgreementController extends Controller
         }
 
         $access = $management->send($agreement->load('currentVersion'), $request->user()?->id, null, (int) ($data['expires_in_days'] ?? 14));
-        $message = 'Everbranch agreement for '.$agreement->tenant->name.': '.$access['url'].' Access code: '.$access['password'];
+        $message = 'Hi! '.$agreement->tenant->name.': your Everbranch workspace is ready. Open, approve & pay: '.$access['short_url'].' Code: '.$access['password'];
         $sent = [];
         $failed = [];
 

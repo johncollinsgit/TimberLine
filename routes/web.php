@@ -200,6 +200,12 @@ Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms
 Route::get('/integrations/quickbooks/disconnected', [QuickBooksConnectionController::class, 'disconnected'])
     ->name('integrations.quickbooks.disconnected');
 
+Route::get('/a/{agreement}/{signature}', [AgreementProposalController::class, 'short'])
+    ->middleware([EnsureEvergroveProposalHost::class, 'throttle:60,1'])
+    ->whereNumber('agreement')
+    ->where('signature', '[a-f0-9]{16}')
+    ->name('proposals.short');
+
 Route::middleware([EnsureEvergroveProposalHost::class])->prefix('proposals/{token}')->name('proposals.')->group(function (): void {
     Route::get('/', [AgreementProposalController::class, 'show'])->name('show');
     Route::post('/unlock', [AgreementProposalController::class, 'unlock'])->middleware('throttle:10,1')->name('unlock');

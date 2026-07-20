@@ -9,9 +9,9 @@ use App\Models\TenantBillingReceipt;
 use App\Models\User;
 use App\Services\Agreements\AgreementManagementService;
 use App\Services\Agreements\AgreementTerminationService;
-use App\Services\Marketing\TwilioSmsService;
 use App\Services\Billing\AgreementBillingActivationGuard;
 use App\Services\Billing\TenantBillingReceiptLedger;
+use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -152,6 +152,20 @@ test('proposal access is evergrove host locked password protected and secret saf
     $this->assertDatabaseHas('agreement_events', ['agreement_id' => $agreement->id, 'event_type' => 'password_failed']);
 });
 
+test('short agreement link redirects to the current password-protected proposal', function (): void {
+    $sent = sentAgreement(agreementTenant());
+    $management = app(AgreementManagementService::class);
+    $shortUrl = $management->shortPublicUrl($sent['agreement']);
+    $invalidUrl = substr($shortUrl, 0, -1).(str_ends_with($shortUrl, 'a') ? 'b' : 'a');
+
+    $this->get($shortUrl)->assertRedirect($sent['url']);
+    $this->get($invalidUrl)->assertNotFound();
+
+    $management->send($sent['agreement']->fresh(['currentVersion']), null, 'ReplacementPass123');
+
+    $this->get($shortUrl)->assertNotFound();
+});
+
 test('operator can text one agreement link to comma separated distinct recipients', function (): void {
     $tenant = agreementTenant('collins-electric');
     $agreement = app(AgreementManagementService::class)->prepareFrontYardFoods($tenant, null);
@@ -161,7 +175,10 @@ test('operator can text one agreement link to comma separated distinct recipient
     $twilio->shouldReceive('sendSms')
         ->twice()
         ->withArgs(fn (string $phone, string $message, array $options): bool => in_array($phone, ['(864) 640-6642', '(931) 703-0915'], true)
-            && str_contains($message, 'Access code:')
+            && str_contains($message, 'workspace is ready')
+            && str_contains($message, 'evergrove.test/a/'.$agreement->id.'/')
+            && ! str_contains($message, '/proposals/')
+            && str_contains($message, 'Code:')
             && $options['tenant_id'] === $tenant->id)
         ->andReturn([
             'success' => true,
