@@ -38,7 +38,7 @@
                 @endif
             </section>
             <section class="rounded-2xl border border-zinc-200 bg-white p-5">
-                <h2 class="font-semibold">Send to customer</h2>
+                <h2 class="font-semibold">Send agreement</h2>
                 <p class="mt-2 text-sm text-zinc-600">
                     {{ $agreement->access_revoked_at ? 'Revoked' : ($agreement->access_expires_at ? 'Expires ' . $agreement->access_expires_at->toDayDateTimeString() : 'Not sent') }}
                 </p>
@@ -52,7 +52,7 @@
                             <form method="post" action="{{ route('landlord.agreements.send', $agreement) }}"
                                 class="mt-4 space-y-2">@csrf<input name="recipient_email" type="email"
                                     value="{{ old('recipient_email', $agreement->recipient_email ?: $ownerEmail) }}" required
-                                    placeholder="Customer email"
+                                    placeholder="Recipient email"
                                     class="w-full rounded-lg border-zinc-300 text-sm"><input name="password"
                                     placeholder="Optional 10+ character password"
                                     class="w-full rounded-lg border-zinc-300 text-sm"><input name="expires_in_days"
@@ -62,6 +62,13 @@
                                     agreement email</button>
                                 <p class="text-xs text-zinc-500">Sending rotates the secure link and password, then
                                     emails both to the recipient.</p>
+                            </form>
+                            <form method="post" action="{{ route('landlord.agreements.send-text', $agreement) }}" class="mt-3 space-y-2 border-t border-zinc-100 pt-3">
+                                @csrf
+                                <input name="recipient_phone" type="tel" value="{{ old('recipient_phone', $agreement->recipient_phone) }}" required placeholder="Recipient mobile number" class="w-full rounded-lg border-zinc-300 text-sm">
+                                <input name="expires_in_days" type="number" min="1" max="90" value="14" class="w-full rounded-lg border-zinc-300 text-sm">
+                                <button class="w-full rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800">Text agreement link + code</button>
+                                <p class="text-xs text-zinc-500">Use this only for the person the agreement is made for. It sends the secure link and one-time access code together.</p>
                             </form>
                             @if (!$agreement->access_revoked_at && $agreement->sent_at)
                                 <form method="post" action="{{ route('landlord.agreements.revoke', $agreement) }}"

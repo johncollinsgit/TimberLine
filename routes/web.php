@@ -270,6 +270,7 @@ $landlordRoutes = static function (): void {
     Route::get('/landlord/agreements/{agreement}/edit', [LandlordAgreementController::class, 'edit'])->name('agreements.edit');
     Route::post('/landlord/agreements/{agreement}/versions', [LandlordAgreementController::class, 'version'])->name('agreements.version');
     Route::post('/landlord/agreements/{agreement}/send', [LandlordAgreementController::class, 'send'])->name('agreements.send');
+    Route::post('/landlord/agreements/{agreement}/send-text', [LandlordAgreementController::class, 'sendText'])->name('agreements.send-text');
     Route::post('/landlord/agreements/{agreement}/revoke', [LandlordAgreementController::class, 'revoke'])->name('agreements.revoke');
     Route::post('/landlord/agreements/{agreement}/notes', [LandlordAgreementController::class, 'notes'])->name('agreements.notes');
     Route::post('/landlord/agreements/{agreement}/amendments', [LandlordAgreementController::class, 'amendment'])->name('agreements.amendment');
