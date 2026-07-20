@@ -6,6 +6,13 @@
 - Nathan Collins is the business owner. `collinselectric91@gmail.com` is provisioned as the active, verified tenant owner until Nathan supplies a different verified identity.
 - John Collins has admin access for implementation and mobile testing.
 - Preserve John's other workspace memberships. Collins access must never be inferred from his email or from membership in another tenant.
+- Future customer workspaces must explicitly grant `johncollinsemail@gmail.com` implementation-admin access during provisioning so John can build, support, and test them without a second login. This is an explicit membership requirement, not an email-based tenant-ownership shortcut.
+
+## Launch status
+
+- The Collins Electric core launch was approved on 2026-07-20. The business profile, guided import, final production blueprint, owner/admin roles, Work 2.0 entitlement, field-service calendar, reporting, private documents, estimator drafts, and iOS photo-upload path are ready.
+- Historical QuickBooks data remains available read-only. Scheduled synchronization is paused until verified production Intuit client credentials are configured and the connection is reauthorized. Existing imported records must not be deleted or rewritten while it is paused.
+- Billing and SMS remain separately gated and disabled. They do not block use of the core workspace.
 
 ## Access model
 
