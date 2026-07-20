@@ -38,6 +38,14 @@ class FieldServiceJobTransitionService
                 'archived_at' => in_array($status, ['canceled', 'history'], true) ? ($job->archived_at ?? $now) : null,
             ])->save();
 
+            if ($action === 'complete' && $job->equipment) {
+                $equipment = $job->equipment;
+                $equipment->forceFill([
+                    'last_serviced_at' => $now->toDateString(),
+                    'next_service_due_at' => $now->copy()->addDays(max(1, (int) $equipment->maintenance_interval_days))->toDateString(),
+                ])->save();
+            }
+
             $body = match ($action) {
                 'start' => 'Started work on this job.',
                 'resume' => 'Resumed work on this job.',

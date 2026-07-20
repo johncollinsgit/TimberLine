@@ -8,6 +8,7 @@ use App\Models\FieldServiceJobPhoto;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
+use App\Models\FieldServiceTimeEntry;
 use App\Models\FieldServiceVehicle;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
@@ -23,6 +24,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FieldServiceController extends Controller
 {
@@ -99,6 +101,7 @@ class FieldServiceController extends Controller
             'readiness' => $jobs->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
             'profile' => $profile,
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
+            'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
         ]);
     }
 
@@ -146,6 +149,7 @@ class FieldServiceController extends Controller
             'readiness' => $all->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
             'profile' => $this->profiles->forTenant($tenant),
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
+            'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
         ]);
     }
 
@@ -161,6 +165,8 @@ class FieldServiceController extends Controller
             'assignedUser',
             'participants:id,name,email',
             'tasks.assignedUser',
+            'equipment',
+            'timeEntries.user',
             'materials',
             'photos.uploadedBy',
             'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
@@ -183,7 +189,84 @@ class FieldServiceController extends Controller
                 'update_progress' => $this->fieldServiceAccess->canUpdateProgress($request->user(), $tenant, $job),
                 'create_task' => $this->fieldServiceAccess->canCreateTask($request->user(), $tenant, $job),
             ],
+            'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
         ]);
+    }
+
+    public function payrollHours(Request $request): View
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $canManage = $this->fieldServiceAccess->canManageJobs($request->user(), $tenant);
+        $entries = FieldServiceTimeEntry::query()->forTenantId((int) $tenant->id)
+            ->with(['user:id,name,email', 'job:id,title', 'reviewedBy:id,name'])
+            ->when(! $canManage, fn ($query) => $query->where('user_id', $request->user()->id))
+            ->orderByDesc('work_date')->latest('id')->limit(250)->get();
+
+        return view('field-service.payroll-hours', [
+            'tenant' => $tenant, 'entries' => $entries, 'canManage' => $canManage,
+            'team' => $tenant->users()->orderBy('name')->get(['users.id', 'users.name', 'users.email']),
+            'jobs' => FieldServiceJob::query()->forTenantId((int) $tenant->id)->whereNotIn('operational_status', ['canceled', 'history'])->latest('id')->limit(250)->get(['id', 'title']),
+        ]);
+    }
+
+    public function storeTimeEntry(Request $request): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $canManage = $this->fieldServiceAccess->canManageJobs($request->user(), $tenant);
+        $data = $request->validate([
+            'field_service_job_id' => ['nullable', 'integer'], 'user_id' => ['nullable', 'integer'], 'work_date' => ['required', 'date'],
+            'started_at' => ['required', 'date_format:H:i'], 'ended_at' => ['required', 'date_format:H:i', 'after:started_at'],
+            'break_minutes' => ['nullable', 'integer', 'min:0', 'max:720'], 'notes' => ['nullable', 'string', 'max:3000'],
+        ]);
+        $userId = $canManage && filled($data['user_id'] ?? null) ? (int) $data['user_id'] : (int) $request->user()->id;
+        abort_unless($tenant->users()->whereKey($userId)->exists(), 422);
+        $jobId = $this->validatedTenantJobId($tenant, $data['field_service_job_id'] ?? null);
+        $start = \Carbon\Carbon::createFromFormat('H:i', (string) $data['started_at']);
+        $end = \Carbon\Carbon::createFromFormat('H:i', (string) $data['ended_at']);
+        $break = (int) ($data['break_minutes'] ?? 0);
+        $duration = $start->diffInMinutes($end) - $break;
+        if ($duration <= 0) {
+            return back()->withErrors(['break_minutes' => 'Break time must be shorter than the work period.'])->withInput();
+        }
+
+        FieldServiceTimeEntry::query()->create([
+            'tenant_id' => (int) $tenant->id, 'field_service_job_id' => $jobId, 'user_id' => $userId,
+            'work_date' => $data['work_date'], 'started_at' => $data['started_at'], 'ended_at' => $data['ended_at'],
+            'break_minutes' => $break, 'duration_minutes' => $duration, 'status' => 'submitted', 'notes' => $data['notes'] ?? null,
+        ]);
+
+        return back()->with('status', 'Hours submitted for manager review.');
+    }
+
+    public function reviewTimeEntry(Request $request, FieldServiceTimeEntry $timeEntry): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless((int) $timeEntry->tenant_id === (int) $tenant->id, 404);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        $data = $request->validate(['status' => ['required', 'string', 'in:approved,rejected']]);
+        $timeEntry->forceFill(['status' => $data['status'], 'reviewed_by_user_id' => $request->user()->id, 'reviewed_at' => now()])->save();
+
+        return back()->with('status', 'Hours marked '.$data['status'].'.');
+    }
+
+    public function exportTimeEntries(Request $request): StreamedResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        $entries = FieldServiceTimeEntry::query()->forTenantId((int) $tenant->id)->with(['user:id,name,email', 'job:id,title'])->where('status', 'approved')->orderBy('work_date')->orderBy('id')->get();
+
+        return response()->streamDownload(function () use ($entries): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['work_date', 'employee', 'employee_email', 'job', 'start', 'end', 'break_minutes', 'hours', 'status', 'notes']);
+            foreach ($entries as $entry) {
+                fputcsv($handle, [$entry->work_date?->toDateString(), $entry->user?->name, $entry->user?->email, $entry->job?->title, $entry->started_at, $entry->ended_at, $entry->break_minutes, number_format($entry->duration_minutes / 60, 2, '.', ''), $entry->status, $entry->notes]);
+            }
+            fclose($handle);
+        }, 'collins-electric-approved-payroll-hours.csv', ['Content-Type' => 'text/csv']);
     }
 
     public function storeJob(Request $request): RedirectResponse
@@ -506,6 +589,11 @@ class FieldServiceController extends Controller
         $module = (array) (($resolved['modules'] ?? [])['field_service'] ?? []);
 
         abort_unless((bool) ($module['enabled'] ?? false), 403);
+    }
+
+    protected function moduleEnabled(Tenant $tenant, string $moduleKey): bool
+    {
+        return (bool) data_get($this->moduleAccessResolver->resolveForTenant((int) $tenant->id, [$moduleKey]), 'modules.'.$moduleKey.'.enabled', false);
     }
 
     /**

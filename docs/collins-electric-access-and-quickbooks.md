@@ -12,7 +12,8 @@
 
 - The Collins Electric core launch was approved on 2026-07-20. The business profile, guided import, final production blueprint, owner/admin roles, Work 2.0 entitlement, field-service calendar, reporting, private documents, estimator drafts, and iOS photo-upload path are ready.
 - Historical QuickBooks data remains available read-only. Scheduled synchronization is paused until verified production Intuit client credentials are configured and the connection is reauthorized. Existing imported records must not be deleted or rewritten while it is paused.
-- Billing and SMS remain separately gated and disabled. They do not block use of the core workspace.
+- The Collins launch-partner agreement is prepared as an unsigned draft with editable defaults of $299 once, $59/month for six cycles, and $149/month beginning in cycle seven. Acceptance and collection remain blocked until the operator sends the immutable proposal and live Stripe readiness passes.
+- SMS is requested/enabled for Collins, but delivery remains fail-closed until the tenant sender/provider, quiet hours, opt-out ingestion, and delivery test are verified. This does not block the core workspace.
 
 ## Access model
 
@@ -39,10 +40,18 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 - Job posts should support team mentions and preserve an activity history.
 - Team members need upcoming-job reminders by text after consent, provider, and delivery controls are verified.
 - Owner/admin users need a controlled reminder for employees when hours are due.
-- SMS remains disabled until provider readiness, employee consent, quiet hours, opt-out handling, and delivery logs are proven.
+- SMS delivery remains blocked until provider readiness, employee/customer consent, quiet hours, opt-out handling, and delivery logs are proven.
 - Nathan needs customer, job, calendar, assignment, notes, photos, and communication workflows before financial enhancements.
 - `Field Service` is Collins' canonical Work experience. Do not restore separate visible `work_core` and `field_service` Branches. The old Work URLs remain compatibility aliases only.
 - Job comments, tasks, participants, mentions, and photos are tenant-owned. SMS notifications remain suppressed unless the employee has a tenant-specific verified phone and operational opt-in and the Collins sender passes its delivery smoke test.
+- Collins confirmed on 2026-07-20 that written SMS consent is held for its customers. Import that evidence only through `collins-electric:import-written-sms-consent --confirm-written-consent --source-reference="..."`; the command creates per-customer consent evidence, skips profiles without a phone, and preserves explicit opt-outs.
+
+## Equipment maintenance and payroll hours
+
+- `equipment_maintenance` is an explicit audited Collins entitlement layered on Field Service. Equipment belongs to a tenant-scoped customer and records type, name, manufacturer, model, serial number, installation date, assigned technician, service interval, last service, next due date, status, and notes.
+- The daily 09:05 maintenance scan creates one idempotent field-service job and task for equipment due within 30 days. The job is visible in the calendar/list and its notes, technician, tasks, and photos are the service record. Completing the job advances the next due date from the completion date.
+- Maintenance customer SMS uses the canonical consent and delivery ledger. It requires recorded SMS consent, a usable phone, no opt-out, an enabled reminder setting, and a verified Collins provider/sender. Assigned-team SMS separately requires a tenant-member verified phone and operational opt-in.
+- Payroll hours are job-linked work-date, start/end, unpaid-break, employee, notes, review status, reviewer, and approved CSV export records. Everbranch does not calculate wages/overtime, withhold taxes, classify workers, file payroll returns, or remit payroll.
 
 ## Work 2.0 pilot guardrails
 
@@ -83,6 +92,8 @@ php artisan field-service:reconcile-lifecycle --tenant=collins-electric --dry-ru
 php artisan field-service:reconcile-lifecycle --tenant=collins-electric
 php artisan quickbooks:sync-enabled --tenant=collins-electric
 php artisan quickbooks:sync-enabled --tenant=collins-electric --full
+php artisan field-service:scan-equipment-maintenance --tenant=collins-electric
+php artisan collins-electric:import-written-sms-consent --confirm-written-consent --source-reference="Written consent file retained by Collins Electric; owner confirmed 2026-07-20."
 ```
 
 Run the full dry-run audit first, review aggregate counts and errors, take a database backup, then run the snapshot and live sync. Run the live sync a second time and confirm stable row counts with no duplicates.

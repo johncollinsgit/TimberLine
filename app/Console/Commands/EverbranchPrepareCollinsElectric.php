@@ -7,6 +7,7 @@ use App\Models\FieldServiceReminderSetting;
 use App\Models\Tenant;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
+use App\Services\Agreements\AgreementManagementService;
 use App\Services\Onboarding\TenantOnboardingBlueprintStore;
 use App\Services\Onboarding\TenantSetupStatusService;
 use App\Services\Tenancy\LandlordCommercialConfigService;
@@ -20,6 +21,9 @@ class EverbranchPrepareCollinsElectric extends Command
 {
     protected $signature = 'everbranch:prepare-collins-electric
         {--john-email=johncollinsemail@gmail.com : Admin user to attach for mobile testing}
+        {--onboarding-price=299 : One-time completed launch foundation and onboarding price in dollars}
+        {--launch-partner-price=59 : Monthly price for the first six billing cycles in dollars}
+        {--standard-price=149 : Monthly price beginning with billing cycle seven in dollars}
         {--seed-demo-job : Create a sample electrician job when none exist}';
 
     protected $description = 'Prepare the guided Collins Electric launch workspace and attach John for mobile testing.';
@@ -28,11 +32,20 @@ class EverbranchPrepareCollinsElectric extends Command
         LandlordCommercialConfigService $commercialService,
         TenantSetupStatusService $setupStatusService,
         TenantBlueprintProfileService $blueprintService,
-        TenantOnboardingBlueprintStore $blueprintStore
+        TenantOnboardingBlueprintStore $blueprintStore,
+        AgreementManagementService $agreements,
     ): int {
         $johnEmail = strtolower(trim((string) $this->option('john-email')));
         if (! filter_var($johnEmail, FILTER_VALIDATE_EMAIL)) {
             $this->error('Invalid --john-email value.');
+
+            return self::FAILURE;
+        }
+
+        $prices = collect(['onboarding' => $this->option('onboarding-price'), 'launch_partner' => $this->option('launch-partner-price'), 'standard' => $this->option('standard-price')])
+            ->map(fn ($value) => is_numeric($value) && (float) $value >= 0 ? (int) round((float) $value * 100) : null);
+        if ($prices->contains(null)) {
+            $this->error('Agreement prices must be non-negative dollar amounts.');
 
             return self::FAILURE;
         }
@@ -86,6 +99,15 @@ class EverbranchPrepareCollinsElectric extends Command
                 source: 'collins_electric_guided_launch',
                 actorId: (int) $user->id
             );
+            $commercialService->setTenantModuleState((int) $tenant->id, 'equipment_maintenance', true, 'configured', (int) $user->id);
+            $commercialService->setTenantModuleEntitlement((int) $tenant->id, 'equipment_maintenance', [
+                'availability_status' => 'available',
+                'enabled_status' => 'enabled',
+                'billing_status' => 'custom_contract',
+                'entitlement_source' => 'collins_electric_launch_partner',
+                'notes' => 'Collins Electric generator maintenance launch module. SMS remains separately gated by verified provider and consent readiness.',
+                'metadata' => ['launch_scope' => 'collins_electric', 'sms_requires_verified_readiness' => true],
+            ], (int) $user->id);
 
             $setupStatus = $setupStatusService->forTenant($tenant);
             $setupStatusPayload = $this->setupStatusPayload($setupStatus);
@@ -125,19 +147,25 @@ class EverbranchPrepareCollinsElectric extends Command
                 ],
             ], (int) $user->id, ['source' => 'collins_electric_guided_launch']);
 
-            FieldServiceReminderSetting::query()->updateOrCreate(
+            $reminders = FieldServiceReminderSetting::query()->firstOrCreate(
                 ['tenant_id' => (int) $tenant->id],
                 [
-                    'enabled' => false,
+                    'enabled' => true,
                     'channel' => 'sms',
                     'cadence' => 'daily',
                     'send_time' => '08:00',
                     'timezone' => 'America/New_York',
                     'provider_status' => 'not_verified',
                     'customer_copy' => 'Reminder: we have upcoming electrical work scheduled with Collins Electric.',
-                    'internal_notes' => 'Do not enable SMS sends until Twilio/provider readiness and consent are verified.',
+                    'internal_notes' => 'SMS requested for Collins Electric. Do not enable sends until provider, sender, consent, opt-out, quiet-hours, and delivery readiness are verified.',
                 ]
             );
+            $reminders->forceFill([
+                'enabled' => true,
+                'channel' => 'sms',
+                'customer_copy' => $reminders->customer_copy ?: 'Reminder: we have upcoming electrical work scheduled with Collins Electric.',
+                'internal_notes' => 'SMS requested for Collins Electric. Sending remains blocked until provider, sender, consent, opt-out, quiet-hours, and delivery readiness are verified.',
+            ])->save();
 
             if ((bool) $this->option('seed-demo-job') && $tenant->fieldServiceJobs()->count() === 0) {
                 FieldServiceJob::query()->create([
@@ -162,15 +190,36 @@ class EverbranchPrepareCollinsElectric extends Command
                 'tenant_slug' => (string) $tenant->slug,
                 'user_id' => (int) $user->id,
                 'user_email' => (string) $user->email,
+                'actor_id' => (int) $user->id,
+                'sms_provider_status' => (string) $reminders->provider_status,
             ];
         });
+
+        $tenant = Tenant::query()->findOrFail((int) $result['tenant_id']);
+        $agreement = $agreements->prepareCollinsElectric(
+            $tenant,
+            (int) $result['actor_id'],
+            (int) $prices['onboarding'],
+            (int) $prices['launch_partner'],
+            (int) $prices['standard'],
+        );
+        $result['agreement_id'] = (int) $agreement->id;
+        $result['agreement_status'] = (string) $agreement->status;
+        $result['agreement_version'] = (int) $agreement->currentVersion?->version_number;
 
         $this->line('tenant_id='.$result['tenant_id']);
         $this->line('tenant_slug='.$result['tenant_slug']);
         $this->line('user_id='.$result['user_id']);
         $this->line('user_email='.$result['user_email']);
         $this->line('role=admin');
-        $this->line('sms_provider_status=not_verified');
+        $this->line('sms_requested=enabled');
+        $this->line('sms_provider_status='.$result['sms_provider_status']);
+        $this->line('equipment_maintenance=enabled');
+        $this->line('agreement_id='.$result['agreement_id']);
+        $this->line('agreement_status='.$result['agreement_status']);
+        $this->line('agreement_version='.$result['agreement_version']);
+        $this->line('agreement_recipient=collinselectric91@gmail.com');
+        $this->line('agreement_delivery=draft_only_not_sent');
 
         return self::SUCCESS;
     }
@@ -178,7 +227,7 @@ class EverbranchPrepareCollinsElectric extends Command
     /** @return array<string,mixed> */
     protected function setupStatusPayload(TenantSetupStatus $status): array
     {
-        $requiredModules = ['customers', 'field_service', 'billing', 'messaging', 'reporting', 'uploads', 'quickbooks'];
+        $requiredModules = ['customers', 'field_service', 'equipment_maintenance', 'billing', 'messaging', 'reporting', 'uploads', 'quickbooks'];
         $moduleInterests = array_values(array_unique([
             ...array_values(array_filter((array) $status->module_interests, 'is_string')),
             ...$requiredModules,
@@ -202,7 +251,7 @@ class EverbranchPrepareCollinsElectric extends Command
             'module_interests' => $moduleInterests,
             'mobile_interest' => 'ios',
             'plan_interest' => 'starter',
-            'billing_lane_interest' => 'manual_invoice',
+            'billing_lane_interest' => 'stripe_direct',
             'implementation_help_interest' => true,
             'commercial_review_status' => $commercialReviewed ? 'reviewed' : 'waiting_on_everbranch',
             'landlord_review_status' => $landlordReviewed ? 'reviewed' : 'waiting_on_everbranch',

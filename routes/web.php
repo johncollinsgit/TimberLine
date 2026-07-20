@@ -10,6 +10,7 @@ use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
 use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
+use App\Http\Controllers\EquipmentMaintenanceController;
 use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\GlobalSearchController;
@@ -706,6 +707,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', [FieldServiceController::class, 'index'])->name('index');
             Route::get('/calendar', [FieldServiceController::class, 'calendar'])->name('calendar');
+            Route::get('/payroll-hours', [FieldServiceController::class, 'payrollHours'])->name('payroll-hours');
+            Route::post('/payroll-hours', [FieldServiceController::class, 'storeTimeEntry'])->name('payroll-hours.store');
+            Route::post('/payroll-hours/{timeEntry}/review', [FieldServiceController::class, 'reviewTimeEntry'])->name('payroll-hours.review');
+            Route::get('/payroll-hours-export', [FieldServiceController::class, 'exportTimeEntries'])->name('payroll-hours.export');
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
@@ -715,6 +720,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/materials', [FieldServiceController::class, 'storeMaterial'])->name('materials.store');
             Route::post('/reminders', [FieldServiceController::class, 'updateReminderSettings'])->name('reminders.update');
             Route::post('/vehicles', [FieldServiceController::class, 'storeVehicle'])->name('vehicles.store');
+        });
+
+    Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access', 'module:equipment_maintenance'])
+        ->prefix('field-service/equipment')
+        ->name('field-service.equipment.')
+        ->group(function (): void {
+            Route::get('/', [EquipmentMaintenanceController::class, 'index'])->name('index');
+            Route::post('/', [EquipmentMaintenanceController::class, 'store'])->name('store');
+            Route::get('/{equipment}', [EquipmentMaintenanceController::class, 'show'])->name('show');
+            Route::post('/{equipment}/service-jobs', [EquipmentMaintenanceController::class, 'storeServiceJob'])->name('service-jobs.store');
         });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])

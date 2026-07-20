@@ -40,7 +40,7 @@ test('collins electric prep command creates guided workspace and john mobile adm
         ->and(data_get($blueprint->payload, 'selected_modules'))->not->toContain('quickbooks');
 
     $reminders = FieldServiceReminderSetting::query()->where('tenant_id', $tenant->id)->firstOrFail();
-    expect($reminders->enabled)->toBeFalse()
+    expect($reminders->enabled)->toBeTrue()
         ->and($reminders->provider_status)->toBe('not_verified');
 
     Sanctum::actingAs($john, ['mobile:read']);

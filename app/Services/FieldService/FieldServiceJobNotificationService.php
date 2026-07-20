@@ -3,6 +3,7 @@
 namespace App\Services\FieldService;
 
 use App\Jobs\SendFieldServicePushNotification;
+use App\Models\CustomerEquipment;
 use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
@@ -11,13 +12,14 @@ use App\Models\FieldServiceReminderSetting;
 use App\Models\Tenant;
 use App\Models\TenantMemberPreference;
 use App\Models\User;
+use App\Services\Marketing\MarketingDirectMessagingService;
 use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class FieldServiceJobNotificationService
 {
-    public function __construct(protected TwilioSmsService $sms) {}
+    public function __construct(protected TwilioSmsService $sms, protected MarketingDirectMessagingService $directMessaging) {}
 
     /** @param array<int,int> $mentionedUserIds @return array<string,int> */
     public function notifyComment(FieldServiceJob $job, FieldServiceJobNote $note, User $actor, array $mentionedUserIds): array
@@ -81,6 +83,67 @@ class FieldServiceJobNotificationService
             'Upcoming job '.$label,
             $job->title.' is scheduled '.$label.'.'
         );
+    }
+
+    /** @return array<string,int> */
+    public function notifyMaintenanceDue(FieldServiceJob $job, CustomerEquipment $equipment): array
+    {
+        $recipients = $this->recipients($job, []);
+        $eventKey = (string) $job->external_id;
+        $body = $equipment->name.' for '.$job->customer_name.' is due '.$equipment->next_service_due_at?->format('M j, Y').'.';
+        $summary = $this->notifyRecipients($job, $recipients, 'equipment_maintenance_due', $eventKey, 'Equipment maintenance due', $body);
+        $reminders = FieldServiceReminderSetting::query()->forTenantId((int) $job->tenant_id)->first();
+        $smsReady = $reminders?->enabled === true && $reminders?->provider_status === 'verified';
+
+        foreach ($recipients as $user) {
+            $preference = TenantMemberPreference::query()->forTenantId((int) $job->tenant_id)->where('user_id', $user->id)->first();
+            if (! $smsReady || ! $preference?->operational_sms_enabled || ! $preference?->operational_sms_opted_in_at || ! $preference?->phone_verified_at || blank($preference?->phone)) {
+                $summary['sms_blocked']++;
+
+                continue;
+            }
+            $notification = FieldServiceJobNotification::query()->firstOrCreate([
+                'tenant_id' => (int) $job->tenant_id, 'user_id' => (int) $user->id, 'channel' => 'sms', 'event_key' => $eventKey,
+            ], [
+                'field_service_job_id' => (int) $job->id, 'event_type' => 'equipment_maintenance_due', 'status' => 'pending',
+                'metadata' => $this->metadata($job, 'Equipment maintenance due', $body),
+            ]);
+            if (! $notification->wasRecentlyCreated) {
+                continue;
+            }
+            $result = $this->sms->sendSms((string) $preference->phone, 'Collins Electric: '.$body.' Reply STOP to opt out.', ['tenant_id' => (int) $job->tenant_id]);
+            $sent = (bool) ($result['success'] ?? false);
+            $notification->forceFill([
+                'status' => $sent ? 'sent' : 'failed', 'provider_message_id' => $result['provider_message_id'] ?? null,
+                'failure_code' => $sent ? null : ($result['error_code'] ?? 'send_failed'), 'sent_at' => $sent ? now() : null,
+            ])->save();
+            $summary[$sent ? 'sms_sent' : 'sms_blocked']++;
+        }
+
+        $summary['customer_sms_sent'] = 0;
+        $summary['customer_sms_blocked'] = 0;
+        $customer = $equipment->customer;
+        if (! $smsReady || ! $customer || ! $customer->accepts_sms_marketing || $customer->sms_opted_out_at || (blank($customer->phone) && blank($customer->normalized_phone))) {
+            $summary['customer_sms_blocked']++;
+
+            return $summary;
+        }
+        $customerResult = $this->directMessaging->send('sms', [[
+            'profile_id' => (int) $customer->id,
+            'name' => trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')),
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+            'normalized_phone' => $customer->normalized_phone,
+            'source_type' => 'equipment_maintenance',
+        ]], 'Collins Electric: '.$equipment->name.' maintenance is due '.$equipment->next_service_due_at?->format('M j, Y').'. Reply STOP to opt out.', [
+            'tenant_id' => (int) $job->tenant_id,
+            'batch_id' => 'equipment-maintenance-'.$eventKey,
+            'source_label' => 'equipment_maintenance_due',
+        ]);
+        $summary['customer_sms_sent'] += (int) ($customerResult['sent'] ?? 0);
+        $summary['customer_sms_blocked'] += (int) ($customerResult['skipped'] ?? 0) + (int) ($customerResult['failed'] ?? 0);
+
+        return $summary;
     }
 
     /** @param Collection<int,User> $recipients @return array<string,int> */

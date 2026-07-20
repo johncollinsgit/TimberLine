@@ -175,3 +175,8 @@ Schedule::command('field-service:send-upcoming-reminders')
     ->everyFifteenMinutes()
     ->withoutOverlapping(20)
     ->runInBackground();
+
+Schedule::command('field-service:scan-equipment-maintenance')
+    ->dailyAt('09:05')
+    ->withoutOverlapping(30)
+    ->runInBackground();

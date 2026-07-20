@@ -35,7 +35,7 @@
 
     <section>
         <div class="flex items-end justify-between gap-4">
-            <div><h2 class="text-xl font-semibold text-zinc-950">Pricing and authorization</h2><p class="mt-1 text-sm text-zinc-600">Each card is a separate cost. Shopify and Everbranch are never combined into one price.</p></div>
+            <div><h2 class="text-xl font-semibold text-zinc-950">Pricing and authorization</h2><p class="mt-1 text-sm text-zinc-600">{{ filled($pricing['shopify_plan_disclosure'] ?? null) ? 'Each card is a separate cost. Shopify and Everbranch are never combined into one price.' : 'Each card identifies who charges it, when it applies, and whether Everbranch may collect it.' }}</p></div>
         </div>
         <div class="mt-6 space-y-7">
             @foreach((array) ($pricing['cost_categories'] ?? []) as $categoryKey => $category)
@@ -63,7 +63,7 @@
             @endforeach
         </div>
         <div class="mt-4 space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
-            <p><strong>Shopify plan:</strong> {{ $pricing['shopify_plan_disclosure'] ?? '' }}</p>
+            @if(filled($pricing['shopify_plan_disclosure'] ?? null))<p><strong>Shopify plan:</strong> {{ $pricing['shopify_plan_disclosure'] }}</p>@endif
             <p><strong>Taxes and receipts:</strong> {{ $pricing['tax_disclosure'] ?? '' }}</p>
         </div>
     </section>
