@@ -9,6 +9,7 @@ use App\Models\TenantBillingReceipt;
 use App\Models\User;
 use App\Services\Agreements\AgreementManagementService;
 use App\Services\Agreements\AgreementTerminationService;
+use App\Services\Marketing\TwilioSmsService;
 use App\Services\Billing\AgreementBillingActivationGuard;
 use App\Services\Billing\TenantBillingReceiptLedger;
 use Illuminate\Support\Facades\Hash;
@@ -149,6 +150,40 @@ test('proposal access is evergrove host locked password protected and secret saf
         ->assertSee('electronic_signature_value', false)
         ->assertSeeText('will not sell, share, or use Front Yard Foods data');
     $this->assertDatabaseHas('agreement_events', ['agreement_id' => $agreement->id, 'event_type' => 'password_failed']);
+});
+
+test('operator can text one agreement link to comma separated distinct recipients', function (): void {
+    $tenant = agreementTenant('collins-electric');
+    $agreement = app(AgreementManagementService::class)->prepareFrontYardFoods($tenant, null);
+    $operator = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')
+        ->twice()
+        ->withArgs(fn (string $phone, string $message, array $options): bool => in_array($phone, ['(864) 640-6642', '(931) 703-0915'], true)
+            && str_contains($message, 'Access code:')
+            && $options['tenant_id'] === $tenant->id)
+        ->andReturn([
+            'success' => true,
+            'provider' => 'twilio',
+            'provider_message_id' => 'sms-test',
+            'status' => 'sent',
+        ]);
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $this->actingAs($operator)
+        ->post('https://app.theeverbranch.com/landlord/agreements/'.$agreement->id.'/send-text', [
+            'recipient_phone' => '(864) 640-6642, 8646406642, (931) 703-0915',
+            'expires_in_days' => 14,
+        ])
+        ->assertRedirect(route('landlord.agreements.show', $agreement))
+        ->assertSessionHas('status', 'Agreement link and access code were texted to 2 recipients.');
+
+    $agreement->refresh();
+    $event = $agreement->events()->where('event_type', 'agreement_text_sent')->firstOrFail();
+    expect($agreement->recipient_phone)->toBe('(864) 640-6642, (931) 703-0915')
+        ->and($agreement->sms_sent_at)->not->toBeNull()
+        ->and(data_get($event->metadata, 'recipient_phones'))->toBe(['(864) 640-6642', '(931) 703-0915']);
 });
 
 test('front yard first checkout agreement can leave implementation pricing to a separate work order', function (): void {
