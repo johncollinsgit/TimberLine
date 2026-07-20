@@ -202,7 +202,7 @@ class UnifiedAppNavigationService
             }
         }
 
-        $items[] = ['key' => 'backstage-wiki', 'icon' => 'book-open', 'href' => route('wiki.index'), 'label' => 'Workspace Guide', 'current' => request()->routeIs('wiki.*')];
+        $items[] = ['key' => 'backstage-wiki', 'icon' => 'map', 'href' => route('wiki.index'), 'label' => 'Workspace Guide', 'current' => request()->routeIs('wiki.*')];
 
         $items = $this->normalizeNavigationItems($items);
 
@@ -683,12 +683,14 @@ class UnifiedAppNavigationService
             return [
                 [
                     'key' => 'workspace-overview',
+                    'icon' => 'book-open-text',
                     'label' => 'Workspace Overview',
                     'href' => route('wiki.article', ['slug' => 'workspace-overview']),
                     'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'workspace-overview',
                 ],
                 [
                     'key' => 'customers-and-jobs',
+                    'icon' => 'users',
                     'label' => 'Customers & Jobs',
                     'href' => route('wiki.article', ['slug' => 'customers-and-jobs']),
                     'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'customers-and-jobs',
@@ -699,12 +701,14 @@ class UnifiedAppNavigationService
         return [
             [
                 'key' => 'wholesale-processes',
+                'icon' => 'book-open-text',
                 'label' => 'Wholesale Processes',
                 'href' => route('wiki.wholesale-processes'),
                 'current' => request()->routeIs('wiki.wholesale-processes') || request()->is('wiki/article/wholesale*'),
             ],
             [
                 'key' => 'market-room-process',
+                'icon' => 'map',
                 'label' => 'Market Room Guide',
                 'href' => route('wiki.article', ['slug' => 'market-room']),
                 'current' => request()->routeIs('wiki.article') && request()->route('slug') === 'market-room',

@@ -178,7 +178,7 @@
                     <summary class="mf-admin-group-summary {{ $groupIsCurrent ? 'is-current-group' : '' }}">
                       <span class="mf-admin-group-main">
                         <span class="mf-leaf-icon-badge" aria-hidden="true">
-                          <x-brand.leaf-icon />
+                          <flux:icon :icon="(string) ($item['icon'] ?? 'squares-2x2')" class="size-3.5" />
                         </span>
                         <span class="mf-nav-label">{{ $item['label'] }}</span>
                       </span>
@@ -193,6 +193,7 @@
                           class="mf-admin-subnav-link {{ ! empty($subItem['current']) ? 'mf-admin-subnav-link-active' : '' }}"
                           @if(! empty($subItem['current'])) aria-current="page" @endif
                         >
+                          <flux:icon :icon="(string) ($subItem['icon'] ?? 'chevron-right')" class="mf-admin-subnav-icon size-3.5" aria-hidden="true" />
                           <span>{{ $subItem['label'] ?? 'Section' }}</span>
                         </a>
                       @endforeach
@@ -206,9 +207,9 @@
                     @if(! empty($item['current'])) data-current="data-current" aria-current="page" @endif
                     class="mf-transition mf-nav-item {{ ! empty($item['current']) ? 'mf-active-pill' : '' }}"
                   >
-                    <span class="mf-nav-item-copy">
-                      <span class="mf-leaf-icon-badge" aria-hidden="true">
-                        <x-brand.leaf-icon />
+                      <span class="mf-nav-item-copy">
+                        <span class="mf-leaf-icon-badge" aria-hidden="true">
+                          <flux:icon :icon="(string) ($item['icon'] ?? 'squares-2x2')" class="size-3.5" />
                       </span>
                       <span class="mf-nav-label">{{ $item['label'] }}</span>
                     </span>
@@ -221,7 +222,7 @@
                 <summary class="mf-admin-group-summary {{ $wikiSectionsActive ? 'is-current-group' : '' }}">
                   <span class="mf-admin-group-main">
                     <span class="mf-leaf-icon-badge" aria-hidden="true">
-                      <x-brand.leaf-icon />
+                      <flux:icon icon="book-open-text" class="size-3.5" />
                     </span>
                     <span class="mf-nav-label">Wiki Sections</span>
                   </span>
@@ -236,6 +237,7 @@
                       class="mf-admin-subnav-link {{ $wikiSection['current'] ? 'mf-admin-subnav-link-active' : '' }}"
                       @if($wikiSection['current']) aria-current="page" @endif
                     >
+                      <flux:icon :icon="(string) ($wikiSection['icon'] ?? 'book-open-text')" class="mf-admin-subnav-icon size-3.5" aria-hidden="true" />
                       <span>{{ $wikiSection['label'] }}</span>
                     </a>
                   @endforeach
