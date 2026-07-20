@@ -65,7 +65,7 @@
                             </form>
                             <form method="post" action="{{ route('landlord.agreements.send-text', $agreement) }}" class="mt-3 space-y-2 border-t border-zinc-100 pt-3">
                                 @csrf
-                                <input name="recipient_phone" type="tel" value="{{ old('recipient_phone', $agreement->recipient_phone) }}" required placeholder="Recipient mobile number" class="w-full rounded-lg border-zinc-300 text-sm">
+                                <input id="agreement-recipient-phone" name="recipient_phone" type="tel" inputmode="tel" autocomplete="tel" value="{{ old('recipient_phone', $agreement->recipient_phone) }}" required placeholder="Recipient mobile number" class="w-full rounded-lg border-zinc-300 text-sm">
                                 <input name="expires_in_days" type="number" min="1" max="90" value="14" class="w-full rounded-lg border-zinc-300 text-sm">
                                 <button class="w-full rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800">Text agreement link + code</button>
                                 <p class="text-xs text-zinc-500">Use this only for the person the agreement is made for. It sends the secure link and one-time access code together.</p>
@@ -204,4 +204,20 @@
             </div>
         </section>
     </div>
+    <script>
+        (() => {
+            const field = document.getElementById('agreement-recipient-phone');
+            if (!field) return;
+            const format = (value) => {
+                let digits = value.replace(/\D/g, '');
+                if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+                digits = digits.slice(0, 10);
+                if (digits.length < 4) return digits;
+                if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+                return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+            };
+            field.value = format(field.value);
+            field.addEventListener('input', () => { field.value = format(field.value); });
+        })();
+    </script>
 </x-app-layout>
