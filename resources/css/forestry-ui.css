@@ -10688,11 +10688,82 @@ body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb
 .mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell {
   background:
     radial-gradient(circle at 40% 0%, rgba(20, 100, 232, 0.18), transparent 30%),
-    linear-gradient(180deg, #f7fbff, #edf4fc) !important;
+    linear-gradient(180deg, #08295a, #031735) !important;
+  border-color: rgba(147, 197, 253, 0.2) !important;
+  color: #f8fbff;
 }
 
-.dark .mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell {
-  background:
-    radial-gradient(circle at 40% 0%, rgba(20, 100, 232, 0.23), transparent 30%),
-    linear-gradient(180deg, #061d42, #04132c) !important;
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell :where(a[href], button, summary),
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell .mf-nav-label,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell .mf-admin-group-chevron {
+  color: #f8fbff;
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-group-balanced [data-flux-sidebar-group-heading],
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-group-balanced :is(h2, h3, h4) {
+  color: rgba(219, 234, 254, 0.78);
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-group-balanced > .space-y-1 {
+  background: rgba(2, 20, 53, 0.26);
+  border-color: rgba(147, 197, 253, 0.12);
+  box-shadow: none;
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell [data-flux-sidebar-item]:hover,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-group-summary:hover,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-subnav-link:hover {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(147, 197, 253, 0.24);
+  color: #ffffff;
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell [data-flux-sidebar-item][data-current],
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-active-pill [data-flux-sidebar-item],
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-group[open] > .mf-admin-group-summary,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-group-summary.is-current-group {
+  background: rgba(37, 99, 235, 0.24);
+  border-color: rgba(147, 197, 253, 0.28);
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-leaf-icon-badge {
+  background: rgba(5, 31, 70, 0.78);
+  border-color: rgba(191, 219, 254, 0.38);
+  box-shadow: 0 8px 18px -14px rgba(0, 0, 0, 0.8);
+  color: #dbeafe;
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-nav-item[data-current] .mf-leaf-icon-badge,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-nav-item:hover .mf-leaf-icon-badge,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-group[open] > .mf-admin-group-summary .mf-leaf-icon-badge {
+  background: #1677ff;
+  border-color: #93c5fd;
+  color: #ffffff;
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-subnav-link,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-subnav-icon {
+  color: rgba(219, 234, 254, 0.86);
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-footer {
+  background: transparent;
+  border-top-color: rgba(147, 197, 253, 0.16);
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-user-menu-trigger {
+  background: rgba(7, 38, 82, 0.74);
+  border-color: rgba(191, 219, 254, 0.28);
+  border-radius: 1.15rem;
+  box-shadow: 0 14px 28px -24px rgba(0, 0, 0, 0.85);
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-user-menu-trigger:hover,
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-user-menu-trigger:focus-visible {
+  background: rgba(14, 54, 109, 0.96);
+  border-color: rgba(191, 219, 254, 0.52);
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] :is(.mf-user-menu-name, .mf-user-menu-email, .mf-user-menu-caret) {
+  color: #f8fbff;
 }
