@@ -3,13 +3,14 @@
 namespace App\Http\Middleware;
 
 use App\Support\Tenancy\HostTenantContext;
-use App\Support\Tenancy\SessionCookieDomain;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnforceCanonicalRuntimeHost
 {
+    protected ?string $applicationSessionDomain = null;
+
     public function handle(Request $request, Closure $next): Response
     {
         $host = $this->normalizeHost((string) $request->getHost());
@@ -26,7 +27,8 @@ class EnforceCanonicalRuntimeHost
         // *.theeverbranch.com, which browsers will reject on this unrelated
         // host. This runs before StartSession and resets the setting on every
         // request, which matters for long-lived PHP workers.
-        config(['session.domain' => $this->isEvergroveHost($host) ? null : $this->applicationSessionDomain()]);
+        $this->applicationSessionDomain ??= config('session.domain');
+        config(['session.domain' => $this->isEvergroveHost($host) ? null : $this->applicationSessionDomain]);
 
         if ($this->allowLocalDevHost($host) || in_array($host, $this->allowedExactHosts(), true)) {
             return $next($request);
@@ -131,20 +133,6 @@ class EnforceCanonicalRuntimeHost
             $this->normalizeHost((string) config('evergrove.canonical_host', '')),
             ...array_map(fn (mixed $candidate): ?string => $this->normalizeHost((string) $candidate), (array) config('evergrove.hosts', [])),
         ]), true);
-    }
-
-    protected function applicationSessionDomain(): ?string
-    {
-        $shareCanonicalSubdomains = filter_var(
-            env('SESSION_SHARE_CANONICAL_SUBDOMAINS', env('APP_ENV') === 'production'),
-            FILTER_VALIDATE_BOOL,
-        );
-
-        return SessionCookieDomain::resolve(
-            env('SESSION_DOMAIN'),
-            env('TENANCY_CANONICAL_BASE_DOMAIN'),
-            $shareCanonicalSubdomains,
-        );
     }
 
     protected function allowLocalDevHost(string $host): bool
