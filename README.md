@@ -39,6 +39,8 @@
 - Existing Modern Forestry importer history is backfilled from the related order first and the installed Shopify store second. New importer code must pass `tenant_id` from the resolved OAuth/store context when it creates records.
 - `/wiki` is the active tenant's Workspace Guide. Modern Forestry retains its production/wholesale operating wiki. Other tenants receive the reusable Everbranch guide baseline plus tenant-specific content stored under that tenant's own guide namespace.
 - A multi-workspace user may switch tenants without signing in again, but every import and guide query must switch with the selected workspace. Never use `johncollinsemail@gmail.com`, another email, or shared authentication as a data-ownership shortcut.
+- `johncollinsemail@gmail.com` is the primary builder/operator account. Preserve its explicit admin memberships for Modern Forestry, Collins Electric, and Front Yard Foods plus its separately authorized Everbranch Admin access. Any future workspace John is expected to build or operate must attach this account explicitly during provisioning; never infer tenant access from the email address alone.
+- Canonical production web sessions use the exact `theeverbranch.com` cookie domain so an already authenticated, authorized user can move between `app.theeverbranch.com` and tenant subdomains without another login. Every destination still resolves the selected tenant from that user's explicit membership and keeps landlord authorization separate.
 
 ## Collins Electric Guided Launch + QuickBooks Discovery (2026-07-13)
 

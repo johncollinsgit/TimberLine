@@ -213,7 +213,7 @@ test('landlord tenant controls and provisioning wizard stay landlord only', func
 test('platform admin attached to Modern Forestry can switch between operator and tenant consoles', function (): void {
     $tenant = everbranchAccessLaneTenant('modern-forestry', 'Modern Forestry', 'production', 'reviewed');
     $user = User::factory()->platformAdmin()->create([
-        'email' => 'johncollinemail@gmail.com',
+        'email' => 'johncollinsemail@gmail.com',
     ]);
     $user->tenants()->attach((int) $tenant->id, ['role' => 'admin']);
 
@@ -228,7 +228,7 @@ test('platform admin attached to Modern Forestry can switch between operator and
         ->get('http://app.theeverbranch.com/landlord')
         ->assertOk()
         ->assertSee('Switch Console')
-        ->assertSee('johncollinemail@gmail.com')
+        ->assertSee('johncollinsemail@gmail.com')
         ->assertSee('Everbranch Admin')
         ->assertSee('Operator console')
         ->assertSee('Modern Forestry')
@@ -238,7 +238,7 @@ test('platform admin attached to Modern Forestry can switch between operator and
         ->get('http://modern-forestry.theeverbranch.com/dashboard?tenant=modern-forestry')
         ->assertOk()
         ->assertSee('Switch Console')
-        ->assertSee('johncollinemail@gmail.com')
+        ->assertSee('johncollinsemail@gmail.com')
         ->assertSee('Modern Forestry')
         ->assertSee('Tenant console')
         ->assertSee('Everbranch Admin')

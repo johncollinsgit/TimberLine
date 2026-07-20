@@ -1,6 +1,17 @@
 <?php
 
+use App\Support\Tenancy\SessionCookieDomain;
 use Illuminate\Support\Str;
+
+$shareCanonicalSubdomains = filter_var(
+    env('SESSION_SHARE_CANONICAL_SUBDOMAINS', env('APP_ENV') === 'production'),
+    FILTER_VALIDATE_BOOL
+);
+$sessionDomain = SessionCookieDomain::resolve(
+    env('SESSION_DOMAIN'),
+    env('TENANCY_CANONICAL_BASE_DOMAIN'),
+    $shareCanonicalSubdomains
+);
 
 return [
 
@@ -156,7 +167,7 @@ return [
     |
     */
 
-    'domain' => env('SESSION_DOMAIN'),
+    'domain' => $sessionDomain,
 
     /*
     |--------------------------------------------------------------------------

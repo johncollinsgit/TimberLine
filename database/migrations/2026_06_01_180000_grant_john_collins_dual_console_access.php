@@ -23,7 +23,7 @@ return new class extends Migration
             return;
         }
 
-        $email = 'johncollinemail@gmail.com';
+        $email = 'johncollinsemail@gmail.com';
         $now = now();
 
         $userId = DB::table('users')->where('email', $email)->value('id');
