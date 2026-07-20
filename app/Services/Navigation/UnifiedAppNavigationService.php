@@ -25,7 +25,7 @@ class UnifiedAppNavigationService
         protected TenantExperienceProfileService $experienceProfileService,
         protected TenantModuleAccessResolver $moduleAccessResolver,
         protected TenantHostBuilder $tenantHostBuilder,
-        protected TenantBrandProfileService $brandProfileService,
+        protected ?TenantBrandProfileService $brandProfileService = null,
     ) {}
 
     /**
@@ -210,7 +210,7 @@ class UnifiedAppNavigationService
         $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
         $items = $this->orderedItems($items, $preferredSidebarOrder);
 
-        $canCustomizeWorkspace = $this->brandProfileService->userCanCustomize($user, $tenant);
+        $canCustomizeWorkspace = $this->brandProfileService()->userCanCustomize($user, $tenant);
         $adminSubItems = $canAccessOps ? $this->adminSubItems($isAdmin, $tenant, $canCustomizeWorkspace) : [];
         $marketingSubGroups = $canAccessMarketing ? $this->marketingSubGroups() : [];
         $birthdaySubGroups = $canAccessMarketing ? $this->birthdaySubGroups() : [];
@@ -489,6 +489,11 @@ class UnifiedAppNavigationService
         ];
 
         return $legacyMap[$normalized] ?? $normalized;
+    }
+
+    protected function brandProfileService(): TenantBrandProfileService
+    {
+        return $this->brandProfileService ??= app(TenantBrandProfileService::class);
     }
 
     /**
