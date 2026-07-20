@@ -118,6 +118,8 @@ class LandlordAgreementController extends Controller
         $data = $request->validate([
             'recipient_phone' => ['required', 'string', 'max:255'],
             'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'message_intro' => ['nullable', 'string', 'max:240'],
+            'image_url' => ['nullable', 'url:http,https', 'max:2048'],
         ]);
         $recipients = collect(explode(',', (string) $data['recipient_phone']))
             ->map(fn (string $phone): string => trim($phone))
@@ -139,12 +141,21 @@ class LandlordAgreementController extends Controller
         }
 
         $access = $management->send($agreement->load('currentVersion'), $request->user()?->id, null, (int) ($data['expires_in_days'] ?? 14));
-        $message = 'Hi! '.$agreement->tenant->name.': your Everbranch workspace is ready. Open, approve & pay: '.$access['short_url'].' Code: '.$access['password'];
+        $intro = trim((string) ($data['message_intro'] ?? ''));
+        $intro = $intro !== '' ? str_replace('{{tenant_name}}', $agreement->tenant->name, $intro) : 'Hi! '.$agreement->tenant->name.': your Everbranch workspace is ready.';
+        $imageUrl = trim((string) ($data['image_url'] ?? ''));
+        $message = $intro.' Open, approve & pay: '.$access['short_url'].' Code: '.$access['password'];
         $sent = [];
         $failed = [];
 
         foreach ($recipients as $phone) {
-            $result = $sms->sendSms($phone, $message, ['tenant_id' => $agreement->tenant_id, 'source_type' => 'agreement', 'source_id' => $agreement->id]);
+            $result = $sms->sendSms($phone, $message, [
+                'tenant_id' => $agreement->tenant_id,
+                'source_type' => 'agreement',
+                'source_id' => $agreement->id,
+                'send_as_mms' => $imageUrl !== '',
+                'media_url' => $imageUrl ?: null,
+            ]);
             if ($result['success'] ?? false) {
                 $sent[] = $phone;
             } else {
@@ -153,7 +164,12 @@ class LandlordAgreementController extends Controller
         }
 
         if ($sent !== []) {
-            $access['agreement']->forceFill(['recipient_phone' => implode(', ', $sent), 'sms_sent_at' => now()])->save();
+            $access['agreement']->forceFill([
+                'recipient_phone' => implode(', ', $sent),
+                'sms_sent_at' => now(),
+                'agreement_sms_message' => $intro,
+                'agreement_mms_image_url' => $imageUrl ?: null,
+            ])->save();
             $access['agreement']->events()->create(['tenant_id' => $agreement->tenant_id, 'agreement_version_id' => $access['agreement']->current_version_id, 'actor_user_id' => $request->user()?->id, 'event_type' => 'agreement_text_sent', 'metadata' => ['recipient_phones' => $sent, 'failed_recipients' => $failed, 'purpose' => 'agreement_delivery']]);
         }
 
