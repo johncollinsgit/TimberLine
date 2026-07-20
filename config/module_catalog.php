@@ -565,7 +565,7 @@ $catalog = [
             ],
             'capabilities' => ['everbranch_billing.customer_invoices', 'everbranch_billing.stripe_connect'],
             'mobile' => [
-                'status' => 'coming_soon',
+                'status' => 'hidden',
                 'display_name' => 'Everbranch Billing',
                 'renderer' => 'list',
                 'entry_screen' => 'billing.index',
