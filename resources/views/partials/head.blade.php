@@ -4,7 +4,13 @@
 
 @php
     $authTenantPresentation = $authTenantPresentation ?? [];
-    $appMetaName = (string) ($app_name ?? $authTenantPresentation['app_name'] ?? config('everbranch.product_name', 'Everbranch'));
+    $headTenant = $currentTenant ?? request()->attributes->get('current_tenant');
+    $isNeutralTenantSurface = request()->routeIs('agreements.*', 'proposals.*', 'billing.*', 'payments.*', 'invoices.*')
+        || request()->is('agreements*', 'proposals*', 'billing*', 'payments*', 'invoices*');
+    $headBrand = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
+        ! $isNeutralTenantSurface && $headTenant instanceof \App\Models\Tenant ? $headTenant : null
+    );
+    $appMetaName = (string) ($app_name ?? $authTenantPresentation['app_name'] ?? $headBrand['display_name'] ?? config('everbranch.product_name', 'Everbranch'));
     $resolvedTitle = trim((string) ($title ?? ''));
     $brandAssets = (array) ($brand_assets ?? config('everbranch.brand_assets', []));
     $mfAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
@@ -13,7 +19,9 @@
         : $appMetaName;
     $mfDescription = trim((string) ($description ?? config('product_surfaces.promo.summary', 'Everbranch unifies production, shipping, and customer growth in one place.')));
     $mfOgImage = asset((string) ($brandAssets['og_image'] ?? 'og-image.png')).'?v='.$mfAssetVersion;
-    $mfFaviconSvg = asset((string) ($brandAssets['favicon_svg'] ?? 'brand/everbranch-favicon.svg')).'?v='.$mfAssetVersion;
+    $mfFaviconSvg = ! $isNeutralTenantSurface && $headTenant instanceof \App\Models\Tenant
+        ? (string) $headBrand['icon_url']
+        : asset((string) ($brandAssets['favicon_svg'] ?? 'brand/everbranch-favicon.svg')).'?v='.$mfAssetVersion;
     $mfFaviconPng = asset((string) ($brandAssets['favicon_png'] ?? 'favicon.png')).'?v='.$mfAssetVersion;
     $mfFaviconIco = asset((string) ($brandAssets['favicon_ico'] ?? 'favicon.ico')).'?v='.$mfAssetVersion;
     $mfAppleTouchIcon = asset((string) ($brandAssets['apple_touch_icon'] ?? 'apple-touch-icon.png')).'?v='.$mfAssetVersion;

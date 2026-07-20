@@ -9,7 +9,6 @@
   $wideLayout = !empty($prefs['wide_layout']);
   $compactTables = !empty($prefs['compact_tables']);
 @endphp
-<body data-mf-theme="everbranch" class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }}">
 @php
   $user = auth()->user();
   $isAdmin = $user?->isAdmin() ?? true;
@@ -32,18 +31,31 @@
   $latestRun = $opsAttention['latest_run'] ?? null;
   $shellContext = (string) ($navigationShell['shell_context'] ?? 'tenant');
   $isLandlordShell = $shellContext === 'landlord';
+  $isNeutralTenantSurface = request()->routeIs('agreements.*', 'proposals.*', 'billing.*', 'payments.*', 'invoices.*')
+      || request()->is('agreements*', 'proposals*', 'billing*', 'payments*', 'invoices*');
+  $activeTenant = $navigationShell['tenant'] ?? null;
+  $tenantBrand = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
+      ($isLandlordShell || $isNeutralTenantSurface) ? null : ($activeTenant instanceof \App\Models\Tenant ? $activeTenant : null)
+  );
+  $tenantThemeStyle = implode('', [
+      '--tenant-primary: '.e((string) $tenantBrand['primary_color']).';',
+      '--tenant-accent: '.e((string) $tenantBrand['accent_color']).';',
+      '--tenant-surface: '.e((string) $tenantBrand['surface_color']).';',
+      '--tenant-text: '.e((string) $tenantBrand['text_color']).';',
+  ]);
   $showDataTools = $canAccessOps && ! $isLandlordShell;
   $hrefDashboard = $isLandlordShell ? route('landlord.dashboard') : route('dashboard');
-  $workspaceLabel = (string) ($workspace['label'] ?? 'Unified workspace');
+  $workspaceLabel = ($isLandlordShell || $isNeutralTenantSurface) ? (string) ($workspace['label'] ?? 'Unified workspace') : (string) $tenantBrand['display_name'];
   $workspaceSubtitle = (string) ($workspace['subtitle'] ?? 'One product surface that adapts to the tenant in front of it.');
   $commandPlaceholder = (string) ($workspace['command_placeholder'] ?? 'Search or ask what you want to do...');
   $consoleSwitches = collect((array) ($navigationShell['console_switches'] ?? []))
       ->filter(fn (mixed $switch): bool => is_array($switch) && trim((string) ($switch['href'] ?? '')) !== '')
       ->values();
-  $brandAssets = (array) config('everbranch.brand_assets', []);
-  $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-  $brandMarkSrc = asset((string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg')).'?v='.$brandAssetVersion;
-  $brandWordmark = trim((string) config('everbranch.product_name', 'Everbranch'));
+  $brandMarkSrc = (string) $tenantBrand['icon_url'];
+  $brandLightLogoSrc = (string) $tenantBrand['light_logo_url'];
+  $brandDarkLogoSrc = (string) $tenantBrand['dark_logo_url'];
+  $brandHasFullLogo = ! $isLandlordShell && ! $isNeutralTenantSurface && (bool) ($tenantBrand['has_light_logo'] ?? false);
+  $brandWordmark = trim((string) $tenantBrand['display_name']);
   $assistantHref = route('shopify.embedded.assistant', absolute: false);
   $footerUserName = trim((string) ($user?->name ?? '')) !== ''
       ? trim((string) $user?->name)
@@ -63,7 +75,7 @@
       default => null,
   };
   $marketingActive = request()->routeIs('marketing.*') || request()->is('marketing*');
-  $adminActive = request()->routeIs('admin.*') || request()->is('admin*');
+  $adminActive = request()->routeIs('admin.*', 'tenant.brand.*') || request()->is('admin*');
   $childMenuOpenState = [
       'administration' => $adminActive,
       'marketing' => $marketingActive,
@@ -77,6 +89,15 @@
       $topbarContextPills[] = strtoupper((string) ($experienceProfile['channel_type'] ?? 'direct'));
   }
 @endphp
+<body
+  data-mf-theme="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'everbranch' : $tenantBrand['theme_key'] }}"
+  data-tenant-theme="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'everbranch' : $tenantBrand['theme_key'] }}"
+  data-tenant-decor="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'none' : $tenantBrand['decor_preset'] }}"
+  data-tenant-display="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'classic' : $tenantBrand['display_style'] }}"
+  data-tenant-corners="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'soft' : $tenantBrand['corner_style'] }}"
+  style="{{ ($isLandlordShell || $isNeutralTenantSurface) ? '' : $tenantThemeStyle }}"
+  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }}"
+>
 
 <div class="min-h-screen flex">
 
@@ -98,14 +119,13 @@
             class="mf-transition mf-sidebar-brand-lockup"
             aria-label="{{ $isLandlordShell ? 'Open Everbranch Admin home' : 'Open workspace home' }}"
           >
-            <img
-              src="{{ $brandMarkSrc }}"
-              alt="{{ config('everbranch.product_name', 'Everbranch') }}"
-              class="mf-sidebar-brand-mark-image"
-              loading="eager"
-              decoding="async"
-            />
-            <span class="mf-sidebar-brand-wordmark">{{ $brandWordmark }}</span>
+            @if($brandHasFullLogo)
+              <img src="{{ $brandLightLogoSrc }}" alt="{{ $brandWordmark }}" class="mf-sidebar-brand-mark-image mf-sidebar-brand-mark-image--full mf-sidebar-brand-mark-image--light" loading="eager" decoding="async" />
+              <img src="{{ $brandDarkLogoSrc }}" alt="" aria-hidden="true" class="mf-sidebar-brand-mark-image mf-sidebar-brand-mark-image--full mf-sidebar-brand-mark-image--dark" loading="eager" decoding="async" />
+            @else
+              <img src="{{ $brandMarkSrc }}" alt="{{ $brandWordmark }}" class="mf-sidebar-brand-mark-image" loading="eager" decoding="async" />
+              <span class="mf-sidebar-brand-wordmark">{{ $brandWordmark }}</span>
+            @endif
           </a>
           <button
             type="button"

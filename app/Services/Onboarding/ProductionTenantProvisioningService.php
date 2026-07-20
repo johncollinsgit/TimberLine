@@ -7,6 +7,7 @@ use App\Models\TenantOnboardingBlueprint;
 use App\Models\TenantOnboardingBlueprintProvisioning;
 use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
+use App\Services\Tenancy\TenantBrandProfileService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -18,9 +19,9 @@ class ProductionTenantProvisioningService
 
     public function __construct(
         protected OnboardingBlueprintService $blueprintService,
-        protected LandlordCommercialConfigService $commercialConfigService
-    ) {
-    }
+        protected LandlordCommercialConfigService $commercialConfigService,
+        protected TenantBrandProfileService $brandProfileService,
+    ) {}
 
     /**
      * Provision a fresh production tenant from a finalized onboarding blueprint snapshot.
@@ -149,6 +150,8 @@ class ProductionTenantProvisioningService
                     'role' => 'admin',
                 ],
             ]);
+
+            $this->brandProfileService->ensureForTenant($tenant, $actor);
 
             $templateKey = trim((string) ($validated['template_key'] ?? ''));
             if ($templateKey !== '') {

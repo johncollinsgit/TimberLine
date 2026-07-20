@@ -76,6 +76,11 @@ class Tenant extends Model
         return $this->hasOne(TenantEmailSetting::class);
     }
 
+    public function brandProfile(): HasOne
+    {
+        return $this->hasOne(TenantBrandProfile::class);
+    }
+
     public function accessProfile(): HasOne
     {
         return $this->hasOne(TenantAccessProfile::class);

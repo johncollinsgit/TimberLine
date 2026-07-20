@@ -8,9 +8,9 @@ use App\Http\Controllers\ClientProjectController;
 use App\Http\Controllers\ClientProjectTicketController;
 use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
+use App\Http\Controllers\EquipmentMaintenanceController;
 use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
-use App\Http\Controllers\EquipmentMaintenanceController;
 use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\GlobalSearchController;
@@ -82,6 +82,7 @@ use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\SubscriptionPublicController;
 use App\Http\Controllers\SubscriptionStorefrontController;
 use App\Http\Controllers\TenantAgreementController;
+use App\Http\Controllers\TenantBrandController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
@@ -579,6 +580,14 @@ Route::prefix('signup/classes/{tenant:slug}')
     });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::middleware(['tenant.access', 'role:admin'])->prefix('workspace/brand')->name('tenant.brand.')->group(function (): void {
+        Route::get('/', [TenantBrandController::class, 'edit'])->name('edit');
+        Route::put('/', [TenantBrandController::class, 'update'])->name('update');
+        Route::post('/assets/{slot}', [TenantBrandController::class, 'upload'])->name('assets.upload');
+        Route::post('/reset', [TenantBrandController::class, 'reset'])->name('reset');
+        Route::get('/kit/{asset}', [TenantBrandController::class, 'downloadKit'])->name('kit.download');
+    });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])->prefix('agreements')->name('agreements.')->group(function (): void {
         Route::get('/', [TenantAgreementController::class, 'index'])->name('index');

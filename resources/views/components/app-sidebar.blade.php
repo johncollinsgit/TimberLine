@@ -13,16 +13,18 @@
     if (is_array($homeItem)) {
         $brandHref = (string) ($homeItem['href'] ?? '#');
     }
-    $productName = config('everbranch.product_name', 'Everbranch');
-    $brandAssets = (array) config('everbranch.brand_assets', []);
-    $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-    $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
+    $tenant = request()->attributes->get('current_tenant');
+    $brandPresentation = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
+        $tenant instanceof \App\Models\Tenant ? $tenant : null
+    );
+    $productName = (string) $brandPresentation['display_name'];
+    $brandMarkUrl = (string) $brandPresentation['icon_url'];
 @endphp
 
 <nav class="app-sidebar app-sidebar-panel" aria-label="App navigation">
     <a href="{{ $brandHref }}" class="app-sidebar-brand app-sidebar-brand-link">
         <img
-            src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}"
+            src="{{ $brandMarkUrl }}"
             alt="{{ $productName }}"
             class="app-sidebar-brand-mark"
             loading="eager"

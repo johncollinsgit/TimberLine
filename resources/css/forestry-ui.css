@@ -5219,6 +5219,25 @@ body.mf-app-shell {
   width: 1.9rem;
 }
 
+.mf-sidebar-brand-mark-image--full {
+  height: 2.45rem;
+  max-width: min(11rem, 100%);
+  object-position: left center;
+  width: auto;
+}
+
+.mf-sidebar-brand-mark-image--dark {
+  display: none;
+}
+
+.dark .mf-sidebar-brand-mark-image--light {
+  display: none;
+}
+
+.dark .mf-sidebar-brand-mark-image--dark {
+  display: block;
+}
+
 .mf-sidebar-brand-wordmark {
   color: inherit;
   font-size: 1rem;
@@ -10571,4 +10590,99 @@ body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb
   .fb-plan-compare__price {
     font-size: 1.2rem;
   }
+}
+
+/* Tenant workspace theming is deliberately scoped to signed-in app shells.
+   Landlord, agreement, payment, legal, and other neutral Everbranch surfaces
+   never receive these overrides. */
+.mf-tenant-themed {
+  --eb-page-background: var(--tenant-surface);
+  --eb-surface: var(--tenant-surface);
+  --eb-surface-subtle: color-mix(in srgb, var(--tenant-surface) 94%, var(--tenant-primary));
+  --eb-surface-muted: color-mix(in srgb, var(--tenant-surface) 89%, var(--tenant-primary));
+  --eb-surface-strong: color-mix(in srgb, var(--tenant-surface) 82%, var(--tenant-primary));
+  --eb-border: color-mix(in srgb, var(--tenant-primary) 16%, var(--tenant-surface));
+  --eb-text-primary: var(--tenant-text);
+  --eb-text-secondary: color-mix(in srgb, var(--tenant-text) 78%, var(--tenant-surface));
+  --eb-text-muted: color-mix(in srgb, var(--tenant-text) 60%, var(--tenant-surface));
+  --eb-accent: var(--tenant-accent);
+  --eb-brand: var(--tenant-primary);
+  --eb-focus-ring: color-mix(in srgb, var(--tenant-accent) 30%, transparent);
+  --eb-shadow-sm: 0 10px 26px -20px color-mix(in srgb, var(--tenant-primary) 24%, transparent);
+  --eb-shadow-md: 0 16px 36px -26px color-mix(in srgb, var(--tenant-primary) 28%, transparent);
+}
+
+.dark .mf-tenant-themed {
+  --eb-page-background: color-mix(in srgb, var(--tenant-primary) 84%, #040912);
+  --eb-surface: color-mix(in srgb, var(--tenant-primary) 68%, #0b1220);
+  --eb-surface-subtle: color-mix(in srgb, var(--tenant-primary) 76%, #07101c);
+  --eb-surface-muted: color-mix(in srgb, var(--tenant-primary) 84%, #050b14);
+  --eb-surface-strong: color-mix(in srgb, var(--tenant-primary) 61%, #12203a);
+  --eb-border: color-mix(in srgb, var(--tenant-accent) 36%, #ffffff);
+  --eb-text-primary: #f6f9ff;
+  --eb-text-secondary: #d3deee;
+  --eb-text-muted: #a8b8cf;
+}
+
+.mf-tenant-themed[data-tenant-corners="standard"] {
+  --eb-radius-lg: 0.72rem;
+  --eb-radius-md: 0.5rem;
+  --eb-radius-sm: 0.38rem;
+}
+
+.mf-tenant-themed[data-tenant-corners="sharp"] {
+  --eb-radius-lg: 0.18rem;
+  --eb-radius-md: 0.12rem;
+  --eb-radius-sm: 0.08rem;
+}
+
+.mf-tenant-themed[data-tenant-display="technical"] {
+  --eb-font-display: "SF Pro Display", "Arial Narrow", Inter, sans-serif;
+}
+
+.mf-tenant-themed[data-tenant-display="editorial"] {
+  --eb-font-display: Georgia, "Times New Roman", serif;
+}
+
+.mf-tenant-themed[data-tenant-display="bold"] {
+  --eb-font-display: "SF Pro Display", Inter, sans-serif;
+}
+
+.mf-tenant-themed[data-tenant-decor="signal"] .mf-app-main::before,
+.mf-tenant-themed[data-tenant-decor="dawn"] .mf-app-main::before,
+.mf-tenant-themed[data-tenant-decor="grid"] .mf-app-main::before {
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: -1;
+}
+
+.mf-tenant-themed[data-tenant-decor="signal"] .mf-app-main::before {
+  background:
+    radial-gradient(circle at 89% 4%, color-mix(in srgb, var(--tenant-accent) 18%, transparent), transparent 27%),
+    linear-gradient(135deg, transparent 55%, color-mix(in srgb, var(--tenant-primary) 7%, transparent));
+}
+
+.mf-tenant-themed[data-tenant-decor="dawn"] .mf-app-main::before {
+  background: radial-gradient(circle at 86% 5%, color-mix(in srgb, var(--tenant-accent) 20%, transparent), transparent 31%);
+}
+
+.mf-tenant-themed[data-tenant-decor="grid"] .mf-app-main::before {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--tenant-primary) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tenant-primary) 5%, transparent) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell {
+  background:
+    radial-gradient(circle at 40% 0%, rgba(20, 100, 232, 0.18), transparent 30%),
+    linear-gradient(180deg, #f7fbff, #edf4fc) !important;
+}
+
+.dark .mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-sidebar-theme-shell {
+  background:
+    radial-gradient(circle at 40% 0%, rgba(20, 100, 232, 0.23), transparent 30%),
+    linear-gradient(180deg, #061d42, #04132c) !important;
 }

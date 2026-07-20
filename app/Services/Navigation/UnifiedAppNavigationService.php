@@ -7,6 +7,7 @@ use App\Models\ShopifyImportRun;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
+use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Support\Birthdays\BirthdaySectionRegistry;
@@ -23,7 +24,8 @@ class UnifiedAppNavigationService
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
         protected TenantExperienceProfileService $experienceProfileService,
         protected TenantModuleAccessResolver $moduleAccessResolver,
-        protected TenantHostBuilder $tenantHostBuilder
+        protected TenantHostBuilder $tenantHostBuilder,
+        protected TenantBrandProfileService $brandProfileService,
     ) {}
 
     /**
@@ -208,7 +210,8 @@ class UnifiedAppNavigationService
         $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
         $items = $this->orderedItems($items, $preferredSidebarOrder);
 
-        $adminSubItems = $canAccessOps ? $this->adminSubItems($isAdmin, $tenant) : [];
+        $canCustomizeWorkspace = $this->brandProfileService->userCanCustomize($user, $tenant);
+        $adminSubItems = $canAccessOps ? $this->adminSubItems($isAdmin, $tenant, $canCustomizeWorkspace) : [];
         $marketingSubGroups = $canAccessMarketing ? $this->marketingSubGroups() : [];
         $birthdaySubGroups = $canAccessMarketing ? $this->birthdaySubGroups() : [];
 
@@ -288,6 +291,7 @@ class UnifiedAppNavigationService
             'console_switches' => $this->consoleSwitches($user, null, true),
             'shell_context' => 'landlord',
         ];
+
     }
 
     /**
@@ -490,21 +494,32 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array<string,mixed>>
      */
-    protected function adminSubItems(bool $isAdmin, ?Tenant $tenant = null): array
+    protected function adminSubItems(bool $isAdmin, ?Tenant $tenant = null, bool $canCustomizeWorkspace = false): array
     {
-        $adminActive = request()->routeIs('admin.*') || request()->is('admin*');
+        $adminActive = request()->routeIs('admin.*', 'tenant.brand.*') || request()->is('admin*');
         $adminTab = is_string(request()->query('tab')) ? (string) request()->query('tab') : '';
 
         if (! $this->isFlagshipTenant($tenant)) {
-            return $isAdmin ? [[
+            $items = $isAdmin ? [[
                 'key' => 'users',
                 'label' => 'Team Access',
                 'href' => route('admin.index', ['tab' => 'users']),
                 'current' => $adminActive && $adminTab === 'users',
             ]] : [];
+
+            if ($canCustomizeWorkspace && Route::has('tenant.brand.edit')) {
+                $items[] = [
+                    'key' => 'customize-workspace',
+                    'label' => 'Customize workspace',
+                    'href' => route('tenant.brand.edit'),
+                    'current' => request()->routeIs('tenant.brand.*'),
+                ];
+            }
+
+            return $items;
         }
 
-        return [
+        $items = [
             [
                 'key' => 'master-data',
                 'label' => 'Data Manager',
@@ -536,6 +551,17 @@ class UnifiedAppNavigationService
                 'current' => $adminActive && $adminTab === 'catalog',
             ],
         ];
+
+        if ($canCustomizeWorkspace && Route::has('tenant.brand.edit')) {
+            $items[] = [
+                'key' => 'customize-workspace',
+                'label' => 'Customize workspace',
+                'href' => route('tenant.brand.edit'),
+                'current' => request()->routeIs('tenant.brand.*'),
+            ];
+        }
+
+        return $items;
     }
 
     /**

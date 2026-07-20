@@ -4,9 +4,11 @@
 ])
 
 @php
-    $brandAssets = (array) config('everbranch.brand_assets', []);
-    $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-    $brandMarkUrl = asset('brand/everbranch-mark.png').'?v='.$brandAssetVersion;
+    $tenant = request()->attributes->get('current_tenant');
+    $presentation = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
+        $tenant instanceof \App\Models\Tenant ? $tenant : null
+    );
+    $brandMarkUrl = (string) ($presentation['icon_url'] ?? asset('brand/everbranch-mark.png'));
 @endphp
 
 <span
