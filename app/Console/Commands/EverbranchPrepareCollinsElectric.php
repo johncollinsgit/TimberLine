@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceReminderSetting;
 use App\Models\Tenant;
+use App\Models\TenantSetupStatus;
 use App\Models\User;
 use App\Services\Onboarding\TenantOnboardingBlueprintStore;
 use App\Services\Onboarding\TenantSetupStatusService;
@@ -87,26 +88,8 @@ class EverbranchPrepareCollinsElectric extends Command
             );
 
             $setupStatus = $setupStatusService->forTenant($tenant);
-            $setupStatus->forceFill([
-                'business_profile_status' => 'in_progress',
-                'import_path' => 'csv',
-                'csv_manual_status' => 'requested',
-                'module_interests' => ['customers', 'field_service', 'billing', 'messaging', 'reporting', 'uploads', 'quickbooks'],
-                'mobile_interest' => 'ios',
-                'plan_interest' => 'starter',
-                'billing_lane_interest' => 'manual_invoice',
-                'implementation_help_interest' => true,
-                'commercial_review_status' => 'waiting_on_everbranch',
-                'landlord_review_status' => 'waiting_on_everbranch',
-                'next_recommended_action' => 'Map QuickBooks export, Apple photo workflow, SMS readiness, and electrician field-service calendar before client handoff.',
-                'commercial_next_action' => 'Guided launch partner setup: no billing and no SMS sends until verified.',
-                'internal_notes' => trim(implode("\n", [
-                    'Collins Electric guided launch workspace.',
-                    'QuickBooks is concierge CSV/XLSX import, not live OAuth sync.',
-                    'Apple Photos starts as manual job photo import/upload.',
-                    'SMS reminders are setup intent only until provider/delivery smoke test passes.',
-                ])),
-            ])->save();
+            $setupStatusPayload = $this->setupStatusPayload($setupStatus);
+            $setupStatus->forceFill($setupStatusPayload)->save();
 
             $blueprint = $blueprintService->blueprintFromInput([
                 'business_template' => 'electrician',
@@ -118,26 +101,8 @@ class EverbranchPrepareCollinsElectric extends Command
             $blueprint['blueprint_reviewed_by'] = (int) $user->id;
             $blueprint['blueprint_reviewed_at'] = now()->toIso8601String();
             $blueprintService->applyBlueprint($tenant, $profile->refresh(), $setupStatus->refresh(), $blueprint, 'production', true);
-            $setupStatus->refresh()->forceFill([
-                'business_profile_status' => 'in_progress',
-                'import_path' => 'csv',
-                'csv_manual_status' => 'requested',
-                'module_interests' => ['customers', 'field_service', 'billing', 'messaging', 'reporting', 'uploads', 'quickbooks'],
-                'mobile_interest' => 'ios',
-                'plan_interest' => 'starter',
-                'billing_lane_interest' => 'manual_invoice',
-                'implementation_help_interest' => true,
-                'commercial_review_status' => 'waiting_on_everbranch',
-                'landlord_review_status' => 'waiting_on_everbranch',
-                'next_recommended_action' => 'Map QuickBooks export, Apple photo workflow, SMS readiness, and electrician field-service calendar before client handoff.',
-                'commercial_next_action' => 'Guided launch partner setup: no billing and no SMS sends until verified.',
-                'internal_notes' => trim(implode("\n", [
-                    'Collins Electric guided launch workspace.',
-                    'QuickBooks is concierge CSV/XLSX import, not live OAuth sync.',
-                    'Apple Photos starts as manual job photo import/upload.',
-                    'SMS reminders are setup intent only until provider/delivery smoke test passes.',
-                ])),
-            ])->save();
+            $setupStatus = $setupStatus->refresh();
+            $setupStatus->forceFill($setupStatusPayload)->save();
 
             $blueprintStore->finalize((int) $tenant->id, [
                 'rail' => 'direct',
@@ -208,5 +173,48 @@ class EverbranchPrepareCollinsElectric extends Command
         $this->line('sms_provider_status=not_verified');
 
         return self::SUCCESS;
+    }
+
+    /** @return array<string,mixed> */
+    protected function setupStatusPayload(TenantSetupStatus $status): array
+    {
+        $requiredModules = ['customers', 'field_service', 'billing', 'messaging', 'reporting', 'uploads', 'quickbooks'];
+        $moduleInterests = array_values(array_unique([
+            ...array_values(array_filter((array) $status->module_interests, 'is_string')),
+            ...$requiredModules,
+        ]));
+        $landlordReviewed = (string) $status->landlord_review_status === 'reviewed';
+        $commercialReviewed = (string) $status->commercial_review_status === 'reviewed';
+
+        $defaultNextAction = 'Map QuickBooks export, Apple photo workflow, SMS readiness, and electrician field-service calendar before client handoff.';
+        $defaultCommercialAction = 'Guided launch partner setup: no billing and no SMS sends until verified.';
+        $defaultNotes = trim(implode("\n", [
+            'Collins Electric guided launch workspace.',
+            'QuickBooks is concierge CSV/XLSX import, not live OAuth sync.',
+            'Apple Photos starts as manual job photo import/upload.',
+            'SMS reminders are setup intent only until provider/delivery smoke test passes.',
+        ]));
+
+        return [
+            'business_profile_status' => (string) $status->business_profile_status === 'ready' ? 'ready' : 'in_progress',
+            'import_path' => 'csv',
+            'csv_manual_status' => (string) $status->csv_manual_status === 'ready' ? 'ready' : 'requested',
+            'module_interests' => $moduleInterests,
+            'mobile_interest' => 'ios',
+            'plan_interest' => 'starter',
+            'billing_lane_interest' => 'manual_invoice',
+            'implementation_help_interest' => true,
+            'commercial_review_status' => $commercialReviewed ? 'reviewed' : 'waiting_on_everbranch',
+            'landlord_review_status' => $landlordReviewed ? 'reviewed' : 'waiting_on_everbranch',
+            'next_recommended_action' => $landlordReviewed && filled($status->next_recommended_action)
+                ? (string) $status->next_recommended_action
+                : $defaultNextAction,
+            'commercial_next_action' => $commercialReviewed && filled($status->commercial_next_action)
+                ? (string) $status->commercial_next_action
+                : $defaultCommercialAction,
+            'internal_notes' => ($landlordReviewed || $commercialReviewed) && filled($status->internal_notes)
+                ? (string) $status->internal_notes
+                : $defaultNotes,
+        ];
     }
 }

@@ -49,6 +49,44 @@ test('collins electric prep command creates guided workspace and john mobile adm
         ->assertJsonFragment(['slug' => 'collins-electric']);
 });
 
+test('collins electric prep command preserves an approved launch review', function (): void {
+    $this->artisan('everbranch:prepare-collins-electric')->assertSuccessful();
+
+    $tenant = Tenant::query()->where('slug', 'collins-electric')->firstOrFail();
+    $john = User::query()->where('email', 'johncollinsemail@gmail.com')->firstOrFail();
+    $status = $tenant->setupStatus()->firstOrFail();
+    $reviewedAt = now()->subMinute();
+    $status->forceFill([
+        'business_profile_status' => 'ready',
+        'csv_manual_status' => 'ready',
+        'landlord_review_status' => 'reviewed',
+        'commercial_review_status' => 'reviewed',
+        'reviewed_by' => (int) $john->id,
+        'reviewed_at' => $reviewedAt,
+        'commercial_reviewed_by' => (int) $john->id,
+        'commercial_reviewed_at' => $reviewedAt,
+        'next_recommended_action' => 'Core launch approved.',
+        'commercial_next_action' => 'Billing remains separately gated.',
+        'internal_notes' => 'Verified launch evidence.',
+        'module_interests' => ['custom_future_module'],
+    ])->save();
+
+    $this->artisan('everbranch:prepare-collins-electric')->assertSuccessful();
+
+    $status->refresh();
+    expect($status->business_profile_status)->toBe('ready')
+        ->and($status->csv_manual_status)->toBe('ready')
+        ->and($status->landlord_review_status)->toBe('reviewed')
+        ->and($status->commercial_review_status)->toBe('reviewed')
+        ->and($status->reviewed_by)->toBe((int) $john->id)
+        ->and($status->commercial_reviewed_by)->toBe((int) $john->id)
+        ->and($status->next_recommended_action)->toBe('Core launch approved.')
+        ->and($status->commercial_next_action)->toBe('Billing remains separately gated.')
+        ->and($status->internal_notes)->toBe('Verified launch evidence.')
+        ->and($status->module_interests)->toContain('custom_future_module')
+        ->and($status->module_interests)->toContain('field_service');
+});
+
 test('collins electric keeps electrician workspace navigation and rejects plant inventory', function (): void {
     $this->artisan('everbranch:prepare-collins-electric --seed-demo-job')
         ->assertSuccessful();
