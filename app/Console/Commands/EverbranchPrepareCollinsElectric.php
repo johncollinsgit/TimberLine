@@ -2,9 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Agreement;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceReminderSetting;
 use App\Models\Tenant;
+use App\Models\TenantAccessAddon;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
 use App\Services\Agreements\AgreementManagementService;
@@ -108,6 +110,22 @@ class EverbranchPrepareCollinsElectric extends Command
                 'notes' => 'Collins Electric generator maintenance launch module. SMS remains separately gated by verified provider and consent readiness.',
                 'metadata' => ['launch_scope' => 'collins_electric', 'sms_requires_verified_readiness' => true],
             ], (int) $user->id);
+            TenantAccessAddon::withoutGlobalScopes()->updateOrCreate(
+                ['tenant_id' => (int) $tenant->id, 'addon_key' => 'messaging_usage'],
+                [
+                    'enabled' => true,
+                    'source' => 'collins_electric_launch_partner_agreement',
+                    'metadata' => [
+                        'billing_mode' => 'postpaid_invoice',
+                        'included_units' => ['sms' => 250, 'email' => 1000],
+                        'overage_rates_micros' => ['sms' => 50000, 'email' => 5000],
+                        'pricing_version' => 'collins-electric-2026-07-20-v2',
+                        'invoice_timing' => 'monthly_in_arrears',
+                        'agreement_template_key' => Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES,
+                        'activation_requirement' => 'accepted_collins_electric_agreement',
+                    ],
+                ]
+            );
 
             $setupStatus = $setupStatusService->forTenant($tenant);
             $setupStatusPayload = $this->setupStatusPayload($setupStatus);
@@ -164,7 +182,9 @@ class EverbranchPrepareCollinsElectric extends Command
                 'enabled' => true,
                 'channel' => 'sms',
                 'customer_copy' => $reminders->customer_copy ?: 'Reminder: we have upcoming electrical work scheduled with Collins Electric.',
-                'internal_notes' => 'SMS requested for Collins Electric. Sending remains blocked until provider, sender, consent, opt-out, quiet-hours, and delivery readiness are verified.',
+                'internal_notes' => $reminders->provider_status === 'verified' && filled($reminders->internal_notes)
+                    ? (string) $reminders->internal_notes
+                    : 'SMS requested for Collins Electric. Sending remains blocked until provider, sender, consent, opt-out, quiet-hours, and delivery readiness are verified.',
             ])->save();
 
             if ((bool) $this->option('seed-demo-job') && $tenant->fieldServiceJobs()->count() === 0) {
@@ -214,6 +234,8 @@ class EverbranchPrepareCollinsElectric extends Command
         $this->line('role=admin');
         $this->line('sms_requested=enabled');
         $this->line('sms_provider_status='.$result['sms_provider_status']);
+        $this->line('messaging_allowance=250_sms_segments,1000_emails_per_calendar_month');
+        $this->line('messaging_overage=0.05_per_sms_segment,0.005_per_email_monthly_in_arrears');
         $this->line('equipment_maintenance=enabled');
         $this->line('agreement_id='.$result['agreement_id']);
         $this->line('agreement_status='.$result['agreement_status']);

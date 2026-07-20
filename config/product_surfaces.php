@@ -293,12 +293,12 @@ return [
             'sms' => [
                 'name' => 'SMS',
                 'price_display' => '+$99/mo + $99 setup',
-                'summary' => 'A private business number, shared messaging workspace, and 1,000 monthly SMS segments. Additional segments are $0.025 each.',
+                'summary' => 'A private business number, shared messaging workspace, and 1,000 monthly SMS segments. Additional segments are $0.05 each.',
             ],
             'messaging' => [
                 'name' => 'Messaging',
                 'price_display' => '+$19.99/mo',
-                'summary' => 'A shared customer inbox with 5,000 monthly emails. Additional email is $1.50 per 1,000.',
+                'summary' => 'A shared customer inbox with 5,000 monthly emails. Additional email is $5 per 1,000.',
             ],
             'order_calendar' => [
                 'name' => 'Order Calendar',

@@ -180,3 +180,11 @@ Schedule::command('field-service:scan-equipment-maintenance')
     ->dailyAt('09:05')
     ->withoutOverlapping(30)
     ->runInBackground();
+
+// Accepted contract allowances reset by calendar month. Once a period closes,
+// create one auditable Stripe invoice for any metered overage and link it back
+// to the immutable usage periods so retries cannot bill the same usage twice.
+Schedule::command('messaging:invoice-closed-usage', ['--send' => true])
+    ->dailyAt('09:15')
+    ->withoutOverlapping(30)
+    ->runInBackground();

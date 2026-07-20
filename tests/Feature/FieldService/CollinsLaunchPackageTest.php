@@ -33,9 +33,14 @@ test('collins agreement is immutable idempotent and contains priced field operat
         ->and($cards['everbranch_onboarding']['amount_cents'])->toBe(29900)
         ->and($cards['everbranch_launch_partner']['amount_cents'])->toBe(5900)
         ->and($cards['everbranch_standard']['amount_cents'])->toBe(14900)
+        ->and($cards['included_messaging']['amount_cents'])->toBe(0)
+        ->and($cards['sms_overage']['amount_micros'])->toBe(50000)
+        ->and($cards['email_overage']['amount_micros'])->toBe(5000)
         ->and($first->currentVersion->rendered_content)->toContain('Work already completed')
         ->and($first->currentVersion->rendered_content)->toContain('Payroll-hours tracking')
         ->and($first->currentVersion->rendered_content)->toContain('Equipment maintenance')
+        ->and($first->currentVersion->rendered_content)->toContain('$0.05 per segment')
+        ->and($first->currentVersion->rendered_content)->toContain('$0.005 per email')
         ->and($first->currentVersion->rendered_content)->toContain('collinselectric91@gmail.com')
         ->and($first->status)->toBe('draft');
 });
@@ -96,6 +101,31 @@ test('written consent import opts in phone customers with evidence and preserves
     expect($eligible->fresh()->accepts_sms_marketing)->toBeTrue()
         ->and($optedOut->fresh()->accepts_sms_marketing)->toBeFalse()
         ->and(MarketingConsentEvent::query()->where('marketing_profile_id', $eligible->id)->where('source_type', 'written_consent_import')->exists())->toBeTrue();
+});
+
+test('refreshing the Collins launch package preserves verified SMS evidence and contract pricing', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+    FieldServiceReminderSetting::query()->create([
+        'tenant_id' => $tenant->id,
+        'enabled' => true,
+        'channel' => 'sms',
+        'provider_status' => 'verified',
+        'internal_notes' => 'Verified toll-free sender and delivery audit retained.',
+    ]);
+
+    $this->artisan('everbranch:prepare-collins-electric')->assertSuccessful();
+
+    $reminder = FieldServiceReminderSetting::query()->where('tenant_id', $tenant->id)->sole();
+    $contract = \App\Models\TenantAccessAddon::withoutGlobalScopes()
+        ->where('tenant_id', $tenant->id)
+        ->where('addon_key', 'messaging_usage')
+        ->sole();
+    expect($reminder->provider_status)->toBe('verified')
+        ->and($reminder->internal_notes)->toBe('Verified toll-free sender and delivery audit retained.')
+        ->and(data_get($contract->metadata, 'included_units.sms'))->toBe(250)
+        ->and(data_get($contract->metadata, 'included_units.email'))->toBe(1000)
+        ->and(data_get($contract->metadata, 'overage_rates_micros.sms'))->toBe(50000)
+        ->and(data_get($contract->metadata, 'overage_rates_micros.email'))->toBe(5000);
 });
 
 /** @return array{0:Tenant,1:User} */

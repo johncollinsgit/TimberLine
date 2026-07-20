@@ -13,6 +13,7 @@ class TenantMessagingUsagePeriod extends Model
     protected $fillable = [
         'tenant_id', 'channel', 'period_start', 'period_end', 'included_units',
         'used_units', 'reserved_units', 'provider_cost_micros', 'buyer_charge_micros',
+        'tenant_direct_invoice_id', 'invoiced_at',
     ];
 
     protected $casts = [
@@ -24,6 +25,8 @@ class TenantMessagingUsagePeriod extends Model
         'reserved_units' => 'integer',
         'provider_cost_micros' => 'integer',
         'buyer_charge_micros' => 'integer',
+        'tenant_direct_invoice_id' => 'integer',
+        'invoiced_at' => 'datetime',
     ];
 
     public function tenant(): BelongsTo

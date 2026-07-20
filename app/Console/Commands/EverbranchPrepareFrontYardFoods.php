@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Agreement;
 use App\Models\ClassEnrollment;
 use App\Models\ClassReminder;
 use App\Models\ClassSchedulingSetting;
@@ -9,6 +10,7 @@ use App\Models\FieldServiceJob;
 use App\Models\MarketingProfile;
 use App\Models\ScheduledClass;
 use App\Models\Tenant;
+use App\Models\TenantAccessAddon;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
 use App\Services\Agreements\AgreementManagementService;
@@ -119,6 +121,22 @@ class EverbranchPrepareFrontYardFoods extends Command
                     'metadata' => ['demo' => true, 'live_sms_enabled' => false],
                 ], (int) $john->id);
                 $commercial->setTenantModuleState((int) $tenant->id, 'messaging', true, 'configured', (int) $john->id);
+                TenantAccessAddon::withoutGlobalScopes()->updateOrCreate(
+                    ['tenant_id' => (int) $tenant->id, 'addon_key' => 'messaging_usage'],
+                    [
+                        'enabled' => true,
+                        'source' => 'front_yard_foods_launch_partner_agreement',
+                        'metadata' => [
+                            'billing_mode' => 'postpaid_invoice',
+                            'included_units' => ['sms' => 250, 'email' => 1000],
+                            'overage_rates_micros' => ['sms' => 50000, 'email' => 5000],
+                            'pricing_version' => 'front-yard-foods-2026-07-20-v2',
+                            'invoice_timing' => 'monthly_in_arrears',
+                            'agreement_template_key' => Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES,
+                            'activation_requirement' => 'accepted_front_yard_foods_agreement',
+                        ],
+                    ]
+                );
 
                 $setup = $setupStatuses->forTenant($tenant);
                 $setup->forceFill([
@@ -190,6 +208,8 @@ class EverbranchPrepareFrontYardFoods extends Command
             $this->line($key.'='.$value);
         }
         $this->line('sms_delivery=blocked_until_provider_and_consent_ready');
+        $this->line('messaging_allowance=250_sms_segments,1000_emails_per_calendar_month');
+        $this->line('messaging_overage=0.05_per_sms_segment,0.005_per_email_monthly_in_arrears');
 
         return self::SUCCESS;
     }

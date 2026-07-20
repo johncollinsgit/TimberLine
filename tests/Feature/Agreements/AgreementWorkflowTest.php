@@ -77,6 +77,9 @@ test('front yard agreement pricing stays separate configurable and idempotent', 
         ->and($cards['everbranch_launch_partner']['amount_cents'])->toBe(5900)
         ->and($cards['everbranch_standard']['amount_cents'])->toBe(14900)
         ->and($cards['shopify_implementation']['amount_cents'])->toBe(125000)
+        ->and($cards['included_messaging']['amount_cents'])->toBe(0)
+        ->and($cards['sms_overage']['amount_micros'])->toBe(50000)
+        ->and($cards['email_overage']['amount_micros'])->toBe(5000)
         ->and($cards['out_of_scope']['amount_cents'])->toBe(5000)
         ->and($first->currentVersion->subscription_payload['pricing_model'])->toBe('agreement_specific')
         ->and($first->currentVersion->subscription_payload['billing_lane'])->toBe('stripe_direct')
@@ -174,7 +177,7 @@ test('acceptance binds every confirmation and authorizes a billing order without
         ->and($authorization->billing_lane)->toBe('stripe_direct')
         ->and($authorization->provider)->toBe('stripe')
         ->and($authorization->provider_subscription_id)->toBeNull()
-        ->and($authorization->authorized_line_items)->toHaveCount(3)
+        ->and($authorization->authorized_line_items)->toHaveCount(5)
         ->and(TenantBillingOrder::query()->where('agreement_id', $agreement->id)->value('status'))->toBe('authorized')
         ->and(TenantBillingOrder::query()->where('agreement_id', $agreement->id)->value('provider_checkout_session_id'))->toBeNull();
     Storage::disk('local')->assertExists((string) $agreement->acceptance->snapshot_path);

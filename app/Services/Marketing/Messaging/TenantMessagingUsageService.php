@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing\Messaging;
 
+use App\Models\Agreement;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantMessagingCreditAccount;
 use App\Models\TenantMessagingLedgerEntry;
@@ -52,11 +53,11 @@ class TenantMessagingUsageService
             }
             $includedAvailable = max(0, $period->included_units - $period->used_units - $period->reserved_units);
             $chargedUnits = max(0, $units - $includedAvailable);
-            $rate = $this->buyerRate($channel);
+            $rate = $this->buyerRate($tenantId, $channel);
             $amount = $chargedUnits * $rate;
             $providerCost = $units * $this->providerCost($provider, $channel);
 
-            if ($amount > $credit->availableMicros()) {
+            if ($amount > $credit->availableMicros() && ! $this->postpaidAuthorizedForChannel($tenantId, $channel)) {
                 throw new RuntimeException('Messaging credit is too low for this send. Add prepaid credit and try again.');
             }
 
@@ -74,7 +75,7 @@ class TenantMessagingUsageService
                 'units' => $units,
                 'amount_micros' => $amount,
                 'provider_cost_micros' => $providerCost,
-                'pricing_version' => (string) config('marketing.messaging.platform.pricing_version'),
+                'pricing_version' => $this->pricingVersion($tenantId),
                 'idempotency_key' => 'reserve:'.$idempotencyKey,
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
@@ -229,8 +230,50 @@ class TenantMessagingUsageService
             'reserved_units' => (int) ($period?->reserved_units ?? 0),
             'credit_balance_micros' => (int) ($credit?->balance_micros ?? 0),
             'credit_available_micros' => (int) ($credit?->availableMicros() ?? 0),
-            'pricing_version' => (string) config('marketing.messaging.platform.pricing_version'),
+            'billing_mode' => $this->billingMode($tenantId),
+            'overage_rate_micros' => $this->buyerRate($tenantId, $channel),
+            'pricing_version' => $this->pricingVersion($tenantId),
         ];
+    }
+
+    public function hasUsageContract(int $tenantId): bool
+    {
+        return $this->activeUsageContract($tenantId) !== null;
+    }
+
+    public function postpaidAuthorized(int $tenantId): bool
+    {
+        if ($this->billingMode($tenantId) !== 'postpaid_invoice') {
+            return false;
+        }
+
+        return $this->postpaidAgreement($tenantId) !== null;
+    }
+
+    public function postpaidAuthorizedForChannel(int $tenantId, string $channel): bool
+    {
+        return $this->postpaidAuthorized($tenantId)
+            && is_numeric(data_get($this->activeUsageContract($tenantId)?->metadata, 'overage_rates_micros.'.strtolower(trim($channel))));
+    }
+
+    public function postpaidAgreement(int $tenantId): ?Agreement
+    {
+        $templateKey = trim((string) data_get($this->activeUsageContract($tenantId)?->metadata, 'agreement_template_key'));
+        if (! in_array($templateKey, [
+            Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES,
+            Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES,
+        ], true)) {
+            return null;
+        }
+
+        return Agreement::withoutGlobalScopes()
+            ->with(['acceptance', 'currentVersion'])
+            ->where('tenant_id', $tenantId)
+            ->where('template_key', $templateKey)
+            ->whereIn('status', ['active', 'termination_pending'])
+            ->whereNotNull('accepted_at')
+            ->latest('id')
+            ->first();
     }
 
     public function settledEntry(int $tenantId, string $idempotencyKey): ?TenantMessagingLedgerEntry
@@ -314,6 +357,12 @@ class TenantMessagingUsageService
 
     protected function includedUnits(int $tenantId, string $channel): int
     {
+        $contract = $this->activeUsageContract($tenantId);
+        $contractAllowance = data_get($contract?->metadata, 'included_units.'.$channel);
+        if (is_numeric($contractAllowance)) {
+            return max(0, (int) $contractAllowance);
+        }
+
         $addons = TenantAccessAddon::query()
             ->where('tenant_id', $tenantId)
             ->where('enabled', true)
@@ -329,9 +378,39 @@ class TenantMessagingUsageService
         return $channel === 'sms' && in_array('sms', $addons, true) ? 1000 : 0;
     }
 
-    protected function buyerRate(string $channel): int
+    protected function buyerRate(int $tenantId, string $channel): int
     {
+        $contractRate = data_get($this->activeUsageContract($tenantId)?->metadata, 'overage_rates_micros.'.$channel);
+        if (is_numeric($contractRate)) {
+            return max(0, (int) $contractRate);
+        }
+
         return (int) config("marketing.messaging.platform.buyer_rates_micros.{$channel}", 0);
+    }
+
+    protected function billingMode(int $tenantId): string
+    {
+        return strtolower(trim((string) data_get($this->activeUsageContract($tenantId)?->metadata, 'billing_mode', 'prepaid_credit')));
+    }
+
+    protected function pricingVersion(int $tenantId): string
+    {
+        return trim((string) data_get(
+            $this->activeUsageContract($tenantId)?->metadata,
+            'pricing_version',
+            config('marketing.messaging.platform.pricing_version')
+        ));
+    }
+
+    protected function activeUsageContract(int $tenantId): ?TenantAccessAddon
+    {
+        return TenantAccessAddon::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where('addon_key', 'messaging_usage')
+            ->where('enabled', true)
+            ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+            ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>', now()))
+            ->first();
     }
 
     protected function providerCost(string $provider, string $channel): int
