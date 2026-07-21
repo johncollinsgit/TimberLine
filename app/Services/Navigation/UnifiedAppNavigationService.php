@@ -243,7 +243,17 @@ class UnifiedAppNavigationService
     {
         $items = [
             ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')],
-            ['key' => 'workspaces', 'icon' => 'building-office-2', 'href' => route('landlord.tenants.index'), 'label' => 'Workspaces', 'current' => $request->routeIs('landlord.tenants.*')],
+            [
+                'key' => 'workspaces',
+                'icon' => 'building-office-2',
+                'href' => route('landlord.tenants.index'),
+                'label' => 'Workspaces',
+                'current' => $request->routeIs('landlord.tenants.*') || $request->routeIs('landlord.transactions.*'),
+                'children' => [
+                    ['key' => 'workspace-directory', 'icon' => 'building-office-2', 'href' => route('landlord.tenants.index'), 'label' => 'All workspaces', 'current' => $request->routeIs('landlord.tenants.*')],
+                    ['key' => 'workspace-transactions', 'icon' => 'arrows-right-left', 'href' => route('landlord.transactions.index'), 'label' => 'Transactions', 'current' => $request->routeIs('landlord.transactions.*')],
+                ],
+            ],
             ['key' => 'access-requests', 'icon' => 'inbox', 'href' => route('landlord.onboarding.intake'), 'label' => 'Access Requests', 'current' => $request->routeIs('landlord.onboarding.intake')],
             ['key' => 'setup-reviews', 'icon' => 'clipboard-document-check', 'href' => route('landlord.onboarding.journey'), 'label' => 'Setup Reviews', 'current' => $request->routeIs('landlord.onboarding.journey') || $request->routeIs('landlord.onboarding.wizard')],
             ['key' => 'features', 'icon' => 'squares-plus', 'href' => route('landlord.commercial.index'), 'label' => 'Features', 'current' => $request->routeIs('landlord.commercial.*')],

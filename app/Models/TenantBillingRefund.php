@@ -2,22 +2,20 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class TenantBillingReceipt extends Model
+class TenantBillingRefund extends Model
 {
-    use HasTenantScope;
+    public const STATUSES = ['pending', 'succeeded', 'failed', 'canceled'];
 
     protected $guarded = [];
 
     protected function casts(): array
     {
         return [
-            'provider_calculated_tax' => 'boolean', 'billing_period_starts_at' => 'datetime',
-            'billing_period_ends_at' => 'datetime', 'billed_at' => 'datetime', 'paid_at' => 'datetime',
+            'amount_cents' => 'integer',
+            'processed_at' => 'datetime',
             'metadata' => 'array',
         ];
     }
@@ -27,9 +25,9 @@ class TenantBillingReceipt extends Model
         return $this->belongsTo(Tenant::class);
     }
 
-    public function authorization(): BelongsTo
+    public function receipt(): BelongsTo
     {
-        return $this->belongsTo(SubscriptionAuthorization::class, 'subscription_authorization_id');
+        return $this->belongsTo(TenantBillingReceipt::class, 'tenant_billing_receipt_id');
     }
 
     public function billingOrder(): BelongsTo
@@ -42,8 +40,8 @@ class TenantBillingReceipt extends Model
         return $this->belongsTo(TenantDirectInvoice::class, 'tenant_direct_invoice_id');
     }
 
-    public function refunds(): HasMany
+    public function requestedBy(): BelongsTo
     {
-        return $this->hasMany(TenantBillingRefund::class);
+        return $this->belongsTo(User::class, 'requested_by_user_id');
     }
 }
