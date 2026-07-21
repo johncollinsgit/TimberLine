@@ -17,8 +17,8 @@
 
 @php
     $shellTenant = request()->attributes->get('current_tenant');
-    $neutralTenantSurface = request()->routeIs('agreements.*', 'proposals.*', 'billing.*', 'payments.*', 'invoices.*')
-        || request()->is('agreements*', 'proposals*', 'billing*', 'payments*', 'invoices*');
+    $neutralTenantSurface = request()->routeIs('proposals.*', 'billing.*', 'payments.*', 'invoices.*')
+        || request()->is('proposals*', 'billing*', 'payments*', 'invoices*');
     $tenantPresentation = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
         ! $neutralTenantSurface && $shellTenant instanceof \App\Models\Tenant ? $shellTenant : null
     );

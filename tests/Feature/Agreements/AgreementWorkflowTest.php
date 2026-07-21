@@ -326,7 +326,11 @@ test('tenant agreements are financially permissioned tenant scoped and hide inte
     $ownerB = User::factory()->create(['role' => 'admin', 'is_active' => true]);
     $ownerB->tenants()->attach($tenantB->id, ['role' => 'owner']);
 
-    $this->actingAs($ownerA)->get('http://tenant-a.theeverbranch.com/agreements?tenant=tenant-a')->assertOk()->assertSeeText('User Agreements')->assertDontSeeText('PRIVATE LANDLORD NOTE');
+    $this->actingAs($ownerA)->get('http://tenant-a.theeverbranch.com/agreements?tenant=tenant-a')
+        ->assertOk()
+        ->assertSeeText('User Agreements')
+        ->assertDontSeeText('PRIVATE LANDLORD NOTE')
+        ->assertDontSee('data-tenant-theme="everbranch"', false);
     $this->actingAs($ownerB)->get('http://tenant-b.theeverbranch.com/agreements/'.$sent['agreement']->id.'?tenant=tenant-b')->assertNotFound();
 });
 

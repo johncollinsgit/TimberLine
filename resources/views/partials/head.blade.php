@@ -5,8 +5,8 @@
 @php
     $authTenantPresentation = $authTenantPresentation ?? [];
     $headTenant = $currentTenant ?? request()->attributes->get('current_tenant');
-    $isNeutralTenantSurface = request()->routeIs('agreements.*', 'proposals.*', 'billing.*', 'payments.*', 'invoices.*')
-        || request()->is('agreements*', 'proposals*', 'billing*', 'payments*', 'invoices*');
+    $isNeutralTenantSurface = request()->routeIs('proposals.*', 'billing.*', 'payments.*', 'invoices.*')
+        || request()->is('proposals*', 'billing*', 'payments*', 'invoices*');
     $headBrand = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
         ! $isNeutralTenantSurface && $headTenant instanceof \App\Models\Tenant ? $headTenant : null
     );
