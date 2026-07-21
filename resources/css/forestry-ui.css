@@ -5411,10 +5411,22 @@ body.mf-app-shell {
   border-color: rgba(18, 60, 67, 0.12);
 }
 
-.mf-admin-group[open] > .mf-admin-group-summary,
 .mf-admin-group-summary.is-current-group {
-  background: rgba(18, 60, 67, 0.06);
-  border-color: rgba(18, 60, 67, 0.12);
+  background: rgba(18, 60, 67, 0.08);
+  border-color: rgba(18, 60, 67, 0.16);
+  position: relative;
+}
+
+.mf-admin-group-summary.is-current-group::before {
+  background: linear-gradient(180deg, var(--fb-brand-2), var(--fb-accent));
+  border-radius: 999px;
+  content: '';
+  height: 1.34rem;
+  left: 0.32rem;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
 }
 
 .mf-admin-group-main {
@@ -5457,14 +5469,12 @@ body.mf-app-shell {
 }
 
 .mf-admin-group-summary.is-current-group .mf-leaf-icon-badge,
-.mf-admin-group[open] > .mf-admin-group-summary .mf-leaf-icon-badge,
 .mf-nav-item[data-current] .mf-leaf-icon-badge,
-.mf-nav-item:hover .mf-leaf-icon-badge,
 .mf-shell-search:hover .mf-shell-search-icon,
 .mf-shell-search:focus-visible .mf-shell-search-icon {
-  background: linear-gradient(180deg, rgba(18, 60, 67, 0.96), rgba(30, 90, 99, 0.96));
-  border-color: rgba(18, 60, 67, 0.32);
-  color: #ffffff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(236, 244, 242, 0.96));
+  border: 2px solid var(--fb-brand-2);
+  color: var(--fb-brand-2);
 }
 
 .mf-admin-group-chevron {
