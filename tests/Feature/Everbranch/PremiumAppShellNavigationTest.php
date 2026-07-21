@@ -94,6 +94,8 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertSeeText('Features')
         ->assertSeeText('Custom Requests')
         ->assertSeeText('Plan / Billing Readiness')
+        ->assertSee('data-sidebar-key="invoices"', false)
+        ->assertSee('href="'.route('landlord.invoices.index').'"', false)
         ->assertSeeText('Shopify Readiness')
         ->assertSeeText('System Readiness')
         ->assertSee('Search or ask what you want to do...', false)

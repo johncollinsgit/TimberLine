@@ -26,6 +26,7 @@ class TenantDirectInvoice extends Model
     protected function casts(): array
     {
         return [
+            'customer_phone' => 'encrypted',
             'billing_address' => 'array',
             'line_items' => 'array',
             'metadata' => 'array',

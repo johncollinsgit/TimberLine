@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-07-21 - Invoice Management and SMS Reminders
+
+### What Changed
+- Added a persistent `Invoices` link to the landlord left sidebar for direct-invoice creation, filtering, and management.
+- Added an optional encrypted billing-phone field to invoice drafts and a compact `Text reminder` action on eligible open direct invoices in both invoice detail and the Stripe transaction ledger.
+- Made reminders use a freshly retrieved Stripe-hosted invoice URL and amount due, identify Everbranch, include STOP instructions, require an operator confirmation of billing-text consent, respect known SMS opt-outs, and record idempotent messaging/audit evidence without storing the full phone in reminder metadata.
+
+### Guardrails
+- A reminder is blocked unless Stripe currently reports the invoice as open with a positive amount remaining and a secure hosted invoice URL.
+- Reminder delivery does not mark an invoice paid, increase Payments received, charge a customer, or change plans, modules, or entitlements.
+
 ## 2026-07-21 - Stripe-Confirmed Transaction Truth
 
 ### What Changed

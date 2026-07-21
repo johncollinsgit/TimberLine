@@ -21,6 +21,17 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   a fresh release, build/test preparation before activation, compatible
   migrations, atomic activation, then queue restart. Retain an audited
   emergency path only.
+- Local verification nuance: `composer test` starts with the repository-wide
+  `pint --parallel --test` gate and may stop on inherited legacy style debt
+  before Pest starts. For a scoped change, run
+  `composer exec pint -- --dirty --test` to prove every changed PHP file is
+  clean, then run the full suite directly with
+  `php -d memory_limit=512M ./vendor/bin/pest`. Do not run a bulk formatter or
+  stage unrelated style rewrites just to clear the baseline. The GitHub
+  `linter` workflow currently runs `composer lint` in its disposable runner,
+  so a green result means formatting completed there, not necessarily that the
+  checked-out tree began globally clean; the PHP-version test jobs and the
+  main-branch test/build deploy gate remain mandatory.
 
 ## Agreement and Billing-Lane Guardrails (2026-07-16)
 
@@ -29,7 +40,7 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - Tenant “User Agreements” must re-resolve current tenant membership and financial access. Never expose `internal_notes`, token/password fields, raw IP, user agent, or internal audit references.
 - Agreement acceptance is not billing activation. Shopify App Store merchants use `shopify_app_pricing`; direct/non-Shopify customers may use `stripe_direct`. Never charge one subscription through both providers and never route a Shopify App Store merchant around Shopify billing.
 - Pricing is agreement-specific and may be à la carte. Preserve exact authorized line items, content/version hashes, provider plan/subscription references, and provider-confirmed tax/receipt values. Do not derive tax locally.
-- The landlord Transactions surface is a compact Stripe activity ledger. Its primary source is the configured Stripe account's Payment Intents API (cached for 30 seconds, with an operator refresh action); `TenantBillingReceipt::stripeActivityRecorded()` is the signed-webhook fallback and must exclude validation-only and wrong-mode records. Incomplete activity stays visible with a neutral amount/status, while only succeeded Payment Intents with a positive provider `amount_received` may increase “Payments received.”
+- The landlord Transactions surface is a compact Stripe activity ledger. Its primary source is the configured Stripe account's Payment Intents API (cached for 30 seconds, with an operator refresh action); `TenantBillingReceipt::stripeActivityRecorded()` is the signed-webhook fallback and must exclude validation-only and wrong-mode records. Incomplete activity stays visible with a neutral amount/status, while only succeeded Payment Intents with a positive provider `amount_received` may increase “Payments received.” Open direct-invoice reminder actions must resolve a tenant-scoped local invoice, re-retrieve its current Stripe invoice, require open status plus positive amount remaining plus an HTTPS hosted URL, require explicit operator confirmation of billing-SMS consent, block known opt-outs, use messaging-ledger idempotency, and avoid full phone numbers in audit/reminder metadata.
 - Any future checkout or entitlement activation must pass `AgreementBillingActivationGuard` or an equally strict pre-check requiring exact accepted version, approved lane, verified active provider subscription, and audited fulfillment. Defaults stay disabled until provider evidence exists.
 
 ## Front Yard Foods Scheduling Guardrails (2026-07-15)
@@ -142,7 +153,7 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - `/api/mobile/v1/modern-forestry/home` is the slowest mobile endpoint on cold cache. It now serves a local shell first and defers full Shopify-backed refresh; continue moving the app toward stale-while-revalidate bootstrap so bag, product, and shop navigation do not feel blocked by Home.
 - Home boot rule: do not add root-level iOS startup tasks that wait on Candle Cash cleanup, checkout recovery, or session-linked bag repair. Keep reward-release and bag-repair work scoped to explicit Bag / checkout actions, or Home can look frozen even when the regression is unrelated to Home itself.
 - `/api/mobile/v1/modern-forestry/products/{handle}` uses short server-side caching for repeat product detail access.
-- Production deploy warning: GitHub Actions can fail during `vite build` with exit code 137 under memory pressure. For backend-only PHP changes, a manual SSH deploy without rebuilding assets is acceptable, followed by `optimize:clear`, config/route/view cache rebuilds, `queue:restart`, and nginx/php-fpm reload when available. A failed asset build can leave the API feeling degraded or inconsistent until caches/processes are reset.
+- Historical deploy warning: GitHub Actions previously failed during `vite build` with exit code 137 under memory pressure. Production has since been resized and routine manual SSH deployment is retired. Keep the GitHub main-branch test/build gate and Forge atomic release path; use the audited emergency path only when explicitly approved.
 
 ## Everbranch Readiness Operating Rule (2026-05-21)
 
@@ -779,7 +790,7 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Landlord reporting may expose catalog-derived MRR, tenant/user/activity totals, tenant mix/growth, and per-tenant users/Branch readiness only through landlord-authorized payloads. Do not add portfolio information to normal tenant bootstrap.
 - Every mobile-store Branch needs a purpose icon and useful owned-state product/setup copy. Do not restore generic Share actions, inert summaries, or client-only availability decisions.
 - Mobile billing is a US-only, system-browser Stripe handoff behind existing checkout and lifecycle flags. Keep non-US purchase CTAs closed, maintain idempotent webhook/audit behavior, and recheck Apple/Google rules immediately before submission.
-- Landlord direct Stripe invoices live at `/landlord/invoices` and are only for approved Everbranch service or Evergrove implementation/supplemental/milestone work. Keep them behind `EVERBRANCH_STRIPE_INVOICING_ENABLED` plus tenant allowlisting, reject Shopify/third-party pass-through lines, mirror Stripe-confirmed totals/tax/receipt links, and never let invoice payment mutate module entitlements.
+- Landlord direct Stripe invoices live at `/landlord/invoices` and are only for approved Everbranch service or Evergrove implementation/supplemental/milestone work. Keep invoice sending behind `EVERBRANCH_STRIPE_INVOICING_ENABLED` plus tenant allowlisting, reject Shopify/third-party pass-through lines, mirror Stripe-confirmed totals/tax/receipt links, and never let invoice payment or reminders mutate module entitlements. Store billing phones encrypted; SMS reminders must use Stripe's freshly verified hosted invoice URL and current amount due, consent confirmation, opt-out checks, idempotency, and landlord audit evidence.
 - New-module work is incomplete until the catalog declaration, tenant scoping, entitlement checks, provider/schema, supported actions, backend/client tests, phone screenshots, and relevant READMEs are updated. The exact checklist is in `docs/architecture/everbranch-mobile-platform.md`.
 
 ## QuickBooks Branch + Financial Access Rule (2026-07-13)

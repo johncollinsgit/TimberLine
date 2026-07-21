@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Models\TenantDirectInvoice;
 use App\Services\Billing\DirectInvoiceManagementService;
+use App\Services\Billing\DirectInvoiceSmsReminderService;
 use App\Services\Billing\DirectStripeInvoiceService;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -91,6 +93,27 @@ class LandlordDirectInvoiceController extends Controller
         return back()->with((bool) $result['ok'] ? 'status' : 'status_error', (bool) $result['ok'] ? 'Stripe invoice voided. The audit trail remains available.' : (string) $result['message']);
     }
 
+    public function remindBySms(Request $request, Tenant $tenant, TenantDirectInvoice $invoice, DirectInvoiceSmsReminderService $reminders): RedirectResponse
+    {
+        Gate::authorize('manage-landlord-commercial');
+        $data = $request->validate([
+            'customer_phone' => ['required', 'string', 'max:40'],
+            'consent_confirmed' => ['accepted'],
+            'idempotency_key' => ['required', 'uuid'],
+        ], [
+            'consent_confirmed.accepted' => 'Confirm that the customer agreed to receive this billing text.',
+        ]);
+        $result = $reminders->send(
+            $this->scoped($tenant, $invoice),
+            (string) $data['customer_phone'],
+            (string) $data['idempotency_key'],
+            true,
+            $request->user()?->id,
+        );
+
+        return back()->with((bool) $result['ok'] ? 'status' : 'status_error', (string) $result['message']);
+    }
+
     protected function scoped(Tenant $tenant, TenantDirectInvoice $invoice): TenantDirectInvoice
     {
         abort_unless((int) $invoice->tenant_id === (int) $tenant->id, 404);
@@ -104,6 +127,7 @@ class LandlordDirectInvoiceController extends Controller
         return [
             'customer_name' => ['required', 'string', 'max:190'],
             'customer_email' => ['required', 'email:rfc', 'max:254'],
+            'customer_phone' => ['nullable', 'string', 'max:40'],
             'billing_address.line1' => ['required', 'string', 'max:190'],
             'billing_address.line2' => ['nullable', 'string', 'max:190'],
             'billing_address.city' => ['required', 'string', 'max:100'],
@@ -127,6 +151,9 @@ class LandlordDirectInvoiceController extends Controller
     {
         $validator = Validator::make($request->all(), $this->rules());
         $validator->after(function ($validator) use ($request): void {
+            if (filled($request->input('customer_phone')) && app(MarketingIdentityNormalizer::class)->toE164((string) $request->input('customer_phone')) === null) {
+                $validator->errors()->add('customer_phone', 'Enter a valid 10-digit US phone number.');
+            }
             foreach ((array) $request->input('lines', []) as $index => $line) {
                 if (! is_array($line) || ! is_numeric($line['unit_amount'] ?? null)) {
                     continue;
