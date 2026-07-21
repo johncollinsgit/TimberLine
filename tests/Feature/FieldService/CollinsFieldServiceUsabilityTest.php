@@ -4,6 +4,9 @@ use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServicePriceBookItem;
 use App\Models\FieldServiceTask;
+use App\Models\FieldServiceTaskEvent;
+use App\Models\IntegrationConnection;
+use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantMemberPreference;
@@ -182,7 +185,7 @@ test('work 2 my day and task APIs are role aware and tenant scoped', function ()
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/my-day')
-        ->assertOk()->assertJsonPath('contract_version', 4)->assertJsonPath('today_jobs.0.id', $job->id)
+        ->assertOk()->assertJsonPath('contract_version', 5)->assertJsonPath('today_jobs.0.id', $job->id)
         ->assertJsonPath('viewer.capabilities.manage_jobs', false);
     $taskId = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks', [
         'title' => 'Verify voltage', 'assigned_user_id' => $member->id, 'priority' => 'high',
@@ -216,4 +219,81 @@ test('work 2 notifications remain tenant and user scoped', function (): void {
 
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/notifications/'.$notificationId.'/read')->assertNotFound();
+});
+
+test('field service v6 supports multiple assignees assigned task feeds and idempotent handoffs', function (): void {
+    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Shared panel replacement',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $job->participants()->attach($other->id, ['tenant_id' => $tenant->id, 'role' => 'member', 'following' => true]);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $taskId = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks', [
+        'title' => 'Finish and verify panel',
+        'assignee_ids' => [$member->id, $other->id],
+        'priority' => 'urgent',
+    ])->assertCreated()
+        ->assertJsonCount(2, 'task.assignees')
+        ->json('task_id');
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/tasks?scope=assigned_to_me&status=open')
+        ->assertOk()
+        ->assertJsonPath('contract_version', 6)
+        ->assertJsonPath('tasks.0.id', $taskId)
+        ->assertJsonCount(2, 'tasks.0.assignees');
+    $handoffUrl = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks/'.$taskId.'/handoff';
+    $this->withHeader('Idempotency-Key', 'handoff-'.$taskId)
+        ->postJson($handoffUrl, ['assignee_ids' => [$other->id], 'note' => 'Waiting on final torque check.'])
+        ->assertOk()->assertJsonPath('replayed', false)->assertJsonPath('task.status', 'waiting')->assertJsonCount(1, 'task.assignees');
+    $this->withHeader('Idempotency-Key', 'handoff-'.$taskId)
+        ->postJson($handoffUrl, ['assignee_ids' => [$other->id], 'note' => 'Waiting on final torque check.'])
+        ->assertOk()->assertJsonPath('replayed', true);
+
+    expect(FieldServiceTaskEvent::query()->forTenantId($tenant->id)->where('field_service_task_id', $taskId)->count())->toBe(1)
+        ->and(FieldServiceTask::query()->findOrFail($taskId)->assigned_user_id)->toBe($other->id);
+});
+
+test('my day exposes cash home metrics only to financial owners and keeps all assigned tasks available', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $now = now();
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'quickbooks',
+        'external_account_id' => 'home-metrics-fixture',
+        'status' => IntegrationConnection::STATUS_DISCONNECTED,
+    ]);
+    QuickBooksReportingSnapshot::query()->create([
+        'tenant_id' => $tenant->id,
+        'integration_connection_id' => $connection->id,
+        'range_key' => 'home:cash:month',
+        'period_start' => $now->copy()->startOfMonth()->toDateString(),
+        'period_end' => $now->toDateString(),
+        'metrics' => ['accounting_method' => 'Cash', 'total_income' => 12500.25, 'total_expenses' => 4300.75],
+        'observed_at' => now(),
+    ]);
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Completed service call',
+        'status' => 'complete',
+        'operational_status' => 'complete',
+        'completed_at' => now(),
+    ]);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/my-day?period=month')
+        ->assertOk()
+        ->assertJsonPath('owner_metrics.money_in', 12500.25)
+        ->assertJsonPath('owner_metrics.money_spent', 4300.75)
+        ->assertJsonPath('owner_metrics.finished_jobs', 1);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/my-day?period=month')
+        ->assertOk()->assertJsonPath('owner_metrics', null);
 });

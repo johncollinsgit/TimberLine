@@ -8,6 +8,7 @@ use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobNotification;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceTask;
+use App\Models\FieldServiceTaskEvent;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\TenantMemberPreference;
@@ -19,6 +20,7 @@ use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
 use App\Services\FieldService\FieldServiceJobTransitionService;
 use App\Services\FieldService\FieldServiceMyDayService;
+use App\Services\FieldService\FieldServiceTaskAssignmentService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetAuditService;
@@ -62,7 +64,7 @@ class EverbranchMobileFieldServiceController extends Controller
             abort_unless($access->canManageJobs($user, $tenant), 403);
 
             return response()->json([
-                'contract_version' => 5, 'bucket' => 'potential', 'view' => 'list',
+                'contract_version' => 6, 'bucket' => 'potential', 'view' => 'list',
                 'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
                 'candidates' => $candidates->pending($tenant)->map(fn ($candidate): array => [
                     'id' => (int) $candidate->id, 'title' => $candidate->title, 'customer' => $candidate->customer_name,
@@ -115,7 +117,7 @@ class EverbranchMobileFieldServiceController extends Controller
                 ->orderByDesc('last_financial_activity_at')->orderByDesc('updated_at')->limit(50)->get();
 
             return response()->json([
-                'contract_version' => 4, 'profile' => $profiles->forTenant($tenant),
+                'contract_version' => 6, 'profile' => $profiles->forTenant($tenant),
                 'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
                 'view' => 'calendar', 'filter' => $filter, 'month' => $month->format('Y-m'),
                 'days' => $scheduled->groupBy(fn (FieldServiceJob $job): string => $job->scheduled_for?->toDateString() ?? '')
@@ -132,7 +134,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $jobs = $page->getCollection();
 
         return response()->json([
-            'contract_version' => 5, 'profile' => $profiles->forTenant($tenant), 'bucket' => $bucket,
+            'contract_version' => 6, 'profile' => $profiles->forTenant($tenant), 'bucket' => $bucket,
             'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
             'view' => 'list', 'filter' => $filter,
             'jobs' => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values(),
@@ -141,14 +143,14 @@ class EverbranchMobileFieldServiceController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess, FieldServiceJobReadinessService $readiness, FieldServiceWorkProfileService $profiles): JsonResponse
+    public function show(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess, FieldServiceJobReadinessService $readiness, FieldServiceWorkProfileService $profiles, FieldServiceTaskAssignmentService $assignments): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
         $owner = $financialAccess->allows($user, $tenantModel);
         $job->load([
-            'assignedUser:id,name,email', 'participants:id,name,email', 'tasks.assignedUser:id,name', 'tasks.createdBy:id,name', 'tasks.completedBy:id,name',
+            'assignedUser:id,name,email', 'participants:id,name,email', 'tasks.assignedUser:id,name', 'tasks.assignees:id,name,email', 'tasks.events.actor:id,name', 'tasks.createdBy:id,name', 'tasks.completedBy:id,name',
             'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit',
             'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
             'assets' => fn ($assets) => $assets->when(! $owner, fn ($query) => $query->where('visibility', 'team'))->latest('captured_at')->latest('id'),
@@ -181,11 +183,14 @@ class EverbranchMobileFieldServiceController extends Controller
             'blocked_reason' => $job->blocked_reason,
             'materials' => $job->materials->map(fn ($material): array => ['id' => (int) $material->id, 'name' => $material->name, 'quantity' => (float) $material->quantity, 'unit' => $material->unit, 'status' => $material->status, 'pulled_quantity' => (float) $material->pulled_quantity, 'loaded_quantity' => (float) $material->loaded_quantity, 'used_quantity' => (float) $material->used_quantity])->values(),
             'tasks' => $job->tasks->sortBy(['sort_order', 'due_at'])->map(fn (FieldServiceTask $task): array => [
-                'id' => (int) $task->id, 'title' => $task->title, 'description' => $task->description,
-                'status' => $task->status, 'priority' => $task->priority ?: 'normal', 'due_at' => $task->due_at?->toIso8601String(),
-                'assigned_user_id' => $task->assigned_user_id, 'assigned_to' => $task->assignedUser?->name,
+                ...$assignments->payload($task),
+                'can_update' => $access->canUpdateTask($user, $tenantModel, $job, $task),
                 'created_by' => $task->createdBy?->name, 'completed_by' => $task->completedBy?->name,
-                'completed_at' => $task->completed_at?->toIso8601String(),
+                'events' => $task->events->sortByDesc('id')->take(20)->map(fn ($event): array => [
+                    'id' => (int) $event->id, 'type' => $event->event_type, 'from_status' => $event->from_status,
+                    'to_status' => $event->to_status, 'note' => $event->note, 'actor' => $event->actor?->name,
+                    'created_at' => $event->created_at?->toIso8601String(),
+                ])->values(),
             ])->values(),
             'photos' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'documents' => $job->assets->reject(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
@@ -200,9 +205,61 @@ class EverbranchMobileFieldServiceController extends Controller
 
     public function myDay(Request $request, FieldServiceMyDayService $myDay): JsonResponse
     {
-        $validated = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'period' => ['nullable', 'in:today,week,month'],
+        ]);
 
-        return response()->json($myDay->build($this->tenant($request), $this->user($request), $validated['date'] ?? null));
+        return response()->json($myDay->build(
+            $this->tenant($request),
+            $this->user($request),
+            $validated['date'] ?? null,
+            (string) ($validated['period'] ?? 'month'),
+        ));
+    }
+
+    public function tasks(Request $request, FieldServiceAccessService $access, FieldServiceTaskAssignmentService $assignments): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $user = $this->user($request);
+        $validated = $request->validate([
+            'scope' => ['nullable', 'in:assigned_to_me'],
+            'status' => ['nullable', 'in:open,in_progress,waiting,done,all'],
+            'cursor' => ['nullable', 'string', 'max:1000'],
+            'limit' => ['nullable', 'integer', 'min:10', 'max:50'],
+        ]);
+        $status = (string) ($validated['status'] ?? 'open');
+        $now = now();
+        $query = FieldServiceTask::query()->forTenantId((int) $tenant->id)
+            ->select('field_service_tasks.*')
+            ->selectRaw('case when due_at is not null and due_at < ? then 0 else 1 end as overdue_rank', [$now])
+            ->selectRaw("case when priority = 'urgent' then 0 else 1 end as urgent_rank")
+            ->selectRaw('case when due_at is null then 1 else 0 end as no_due_rank')
+            ->with(['job:id,tenant_id,title,operational_status,scheduled_for', 'assignedUser:id,name,email', 'assignees:id,name,email'])
+            ->whereHas('job', function (Builder $jobs) use ($access, $user, $tenant): void {
+                $access->scopeVisibleJobs($jobs, $user, $tenant);
+            })
+            ->where(fn (Builder $assigned) => $assigned->where('assigned_user_id', (int) $user->id)
+                ->orWhereHas('assignees', fn (Builder $assignees) => $assignees->whereKey((int) $user->id)));
+        if ($status === 'open') {
+            $query->where('status', '!=', 'done');
+        } elseif ($status !== 'all') {
+            $query->where('status', $status);
+        }
+        $page = $query->orderBy('overdue_rank')->orderBy('urgent_rank')
+            ->orderBy('no_due_rank')->orderBy('due_at')->orderBy('id')
+            ->cursorPaginate((int) ($validated['limit'] ?? 30), ['*'], 'cursor', $validated['cursor'] ?? null);
+
+        return response()->json([
+            'contract_version' => 6,
+            'scope' => 'assigned_to_me',
+            'tasks' => $page->getCollection()->map(fn (FieldServiceTask $task): array => [
+                ...$assignments->payload($task),
+                'job_title' => $task->job?->title,
+                'destination' => ['kind' => 'field_service_job', 'id' => (int) $task->field_service_job_id, 'tab' => 'tasks'],
+            ])->values(),
+            'next_cursor' => $page->nextCursor()?->encode(),
+        ]);
     }
 
     public function storeJob(Request $request, FieldServiceAccessService $access, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications): JsonResponse
@@ -317,58 +374,148 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'photos' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
     }
 
-    public function storeTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications): JsonResponse
+    public function storeTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications, FieldServiceTaskAssignmentService $assignments): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless($access->canCreateTask($user, $tenantModel, $job), 403);
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string', 'max:2000'],
-            'assigned_user_id' => ['nullable', 'integer'], 'due_at' => ['nullable', 'date'], 'priority' => ['nullable', 'in:low,normal,high,urgent'],
+            'assigned_user_id' => ['nullable', 'integer'], 'assignee_ids' => ['nullable', 'array', 'max:50'],
+            'assignee_ids.*' => ['integer'], 'due_at' => ['nullable', 'date'], 'priority' => ['nullable', 'in:low,normal,high,urgent'],
         ]);
-        $assigned = $this->tenantUserId($tenantModel, $validated['assigned_user_id'] ?? null);
-        if (! $access->canManageJobs($user, $tenantModel) && $assigned !== null && $assigned !== (int) $user->id) {
+        $requestedIds = array_key_exists('assignee_ids', $validated)
+            ? (array) $validated['assignee_ids']
+            : array_filter([$validated['assigned_user_id'] ?? null]);
+        $assignedIds = $assignments->tenantUserIds($tenantModel, $requestedIds);
+        if (! $access->canManageJobs($user, $tenantModel) && $assignedIds->contains(fn (int $id): bool => $id !== (int) $user->id)) {
             abort(403, 'Team members can only assign new tasks to themselves.');
         }
         $task = FieldServiceTask::query()->create([
             'tenant_id' => (int) $tenantModel->id, 'field_service_job_id' => (int) $job->id,
-            'assigned_user_id' => $assigned, 'created_by_user_id' => (int) $user->id,
+            'assigned_user_id' => $assignedIds->first(), 'created_by_user_id' => (int) $user->id,
             'title' => $validated['title'], 'description' => $validated['description'] ?? null,
             'status' => 'open', 'priority' => $validated['priority'] ?? 'normal', 'due_at' => $validated['due_at'] ?? null,
         ]);
-        if ($assigned && $assigned !== (int) $user->id) {
-            $notifications->notifyJobEvent($job, $user, 'task_assigned', 'New task: '.$task->title, 'task-created:'.$task->id, [$assigned]);
+        $assignments->sync($task, $tenantModel, $user, $assignedIds->all());
+        $notifyIds = $assignedIds->reject(fn (int $id): bool => $id === (int) $user->id)->all();
+        if ($notifyIds !== []) {
+            $notifications->notifyJobEvent($job, $user, 'task_assigned', 'New task: '.$task->title, 'task-created:'.$task->id, $notifyIds);
         }
 
-        return response()->json(['ok' => true, 'task_id' => (int) $task->id], 201);
+        return response()->json(['ok' => true, 'task_id' => (int) $task->id, 'task' => $assignments->payload($task)], 201);
     }
 
-    public function updateTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceTask $task, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications): JsonResponse
+    public function updateTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceTask $task, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications, FieldServiceTaskAssignmentService $assignments): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canUpdateTask($user, $tenantModel, $job, $task), 403);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id
+            && (int) $task->tenant_id === (int) $tenantModel->id
+            && (int) $task->field_service_job_id === (int) $job->id
+            && $access->canUpdateTask($user, $tenantModel, $job, $task), 403);
         $validated = $request->validate([
-            'status' => ['sometimes', 'in:open,in_progress,blocked,done'], 'title' => ['sometimes', 'string', 'max:255'],
+            'status' => ['sometimes', 'in:open,in_progress,waiting,blocked,done'], 'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string', 'max:2000'], 'priority' => ['sometimes', 'in:low,normal,high,urgent'],
-            'due_at' => ['sometimes', 'nullable', 'date'], 'assigned_user_id' => ['sometimes', 'nullable', 'integer'], 'sort_order' => ['sometimes', 'integer', 'min:0'],
+            'due_at' => ['sometimes', 'nullable', 'date'], 'assigned_user_id' => ['sometimes', 'nullable', 'integer'],
+            'assignee_ids' => ['sometimes', 'array', 'max:50'], 'assignee_ids.*' => ['integer'],
+            'sort_order' => ['sometimes', 'integer', 'min:0'],
         ]);
+        if (($validated['status'] ?? null) === 'blocked') {
+            $validated['status'] = 'waiting';
+        }
         if (! $access->canManageJobs($user, $tenantModel)) {
             $validated = array_intersect_key($validated, ['status' => true]);
-        } elseif (array_key_exists('assigned_user_id', $validated)) {
-            $validated['assigned_user_id'] = $this->tenantUserId($tenantModel, $validated['assigned_user_id']);
         }
-        $previousAssignee = $task->assigned_user_id;
+        $previousAssignees = $task->assignees()->pluck('users.id')->map(fn ($id): int => (int) $id);
+        $requestedIds = null;
+        if ($access->canManageJobs($user, $tenantModel) && array_key_exists('assignee_ids', $validated)) {
+            $requestedIds = (array) $validated['assignee_ids'];
+        } elseif ($access->canManageJobs($user, $tenantModel) && array_key_exists('assigned_user_id', $validated)) {
+            $requestedIds = array_filter([$validated['assigned_user_id']]);
+        }
+        unset($validated['assignee_ids'], $validated['assigned_user_id']);
         $status = $validated['status'] ?? $task->status;
         $task->forceFill($validated + [
             'completed_at' => $status === 'done' ? ($task->completed_at ?? now()) : null,
             'completed_by_user_id' => $status === 'done' ? (int) $user->id : null,
         ])->save();
-        if ($task->assigned_user_id && (int) $task->assigned_user_id !== (int) $previousAssignee && (int) $task->assigned_user_id !== (int) $user->id) {
-            $notifications->notifyJobEvent($job, $user, 'task_assigned', 'Task assigned: '.$task->title, 'task-assigned:'.$task->id.':'.$task->updated_at?->timestamp, [(int) $task->assigned_user_id]);
+        if ($requestedIds !== null) {
+            $assignments->sync($task, $tenantModel, $user, $requestedIds);
+            $newIds = $task->assignees->pluck('id')->map(fn ($id): int => (int) $id);
+            $notifyIds = $newIds->diff($previousAssignees)->reject(fn (int $id): bool => $id === (int) $user->id)->all();
+            if ($notifyIds !== []) {
+                $notifications->notifyJobEvent($job, $user, 'task_assigned', 'Task assigned: '.$task->title, 'task-assigned:'.$task->id.':'.$task->updated_at?->timestamp, $notifyIds);
+            }
         }
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'task' => $assignments->payload($task)]);
+    }
+
+    public function handoffTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceTask $task, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications, FieldServiceTaskAssignmentService $assignments): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id
+            && (int) $task->tenant_id === (int) $tenantModel->id
+            && (int) $task->field_service_job_id === (int) $job->id, 404);
+        $validated = $request->validate([
+            'assignee_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'assignee_ids.*' => ['integer'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'idempotency_key' => ['nullable', 'string', 'max:120'],
+        ]);
+        $idempotencyKey = trim((string) ($request->header('Idempotency-Key') ?: ($validated['idempotency_key'] ?? '')));
+        abort_if($idempotencyKey === '', 422, 'An Idempotency-Key header is required.');
+        $existing = FieldServiceTaskEvent::query()->forTenantId((int) $tenantModel->id)
+            ->where('idempotency_key', $idempotencyKey)->first();
+        if ($existing) {
+            abort_unless((int) $existing->field_service_task_id === (int) $task->id
+                && (int) $existing->actor_user_id === (int) $user->id, 403);
+
+            return response()->json([
+                'ok' => true,
+                'replayed' => true,
+                'task' => $assignments->payload($task->fresh()),
+                'event_id' => (int) $existing->id,
+            ]);
+        }
+        abort_unless($access->canUpdateTask($user, $tenantModel, $job, $task), 403);
+        $recipientIds = $assignments->tenantUserIds($tenantModel, (array) $validated['assignee_ids']);
+        abort_if($recipientIds->count() !== count(array_unique(array_map('intval', (array) $validated['assignee_ids']))), 422, 'Every recipient must be an active workspace member.');
+
+        if (! $access->canManageJobs($user, $tenantModel)) {
+            $allowed = $job->participants()->pluck('users.id')->map(fn ($id): int => (int) $id);
+            if ($job->assigned_user_id) {
+                $allowed->push((int) $job->assigned_user_id);
+            }
+            $managers = $tenantModel->users()->wherePivot('membership_active', true)->get()
+                ->filter(fn (User $member): bool => in_array(strtolower((string) $member->pivot?->role), ['owner', 'tenant_owner', 'admin', 'manager'], true))
+                ->pluck('id')->map(fn ($id): int => (int) $id);
+            $allowed = $allowed->merge($managers)->unique();
+            abort_if($recipientIds->diff($allowed)->isNotEmpty(), 403, 'Hand off only to this job’s crew, lead, or a manager.');
+        }
+
+        $result = $assignments->handoff(
+            $task,
+            $job,
+            $tenantModel,
+            $user,
+            $recipientIds->all(),
+            $validated['note'] ?? null,
+            $idempotencyKey,
+        );
+        $notifyIds = $recipientIds->reject(fn (int $id): bool => $id === (int) $user->id)->all();
+        if (! $result['replayed'] && $notifyIds !== []) {
+            $notifications->notifyJobEvent($job, $user, 'task_handoff', 'Waiting on you: '.$task->title, 'task-handoff:'.$result['event']->id, $notifyIds);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'replayed' => (bool) $result['replayed'],
+            'task' => $assignments->payload($result['task']),
+            'event_id' => (int) $result['event']->id,
+        ]);
     }
 
     public function updateJob(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications): JsonResponse

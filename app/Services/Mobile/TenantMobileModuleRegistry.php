@@ -28,7 +28,7 @@ class TenantMobileModuleRegistry
     ) {}
 
     /** @return array<int,array<string,mixed>> */
-    public function manifest(int $tenantId): array
+    public function manifest(int $tenantId, ?User $user = null, ?string $appVersion = null): array
     {
         $definitions = (array) config('module_catalog.modules', []);
         $mobileDefinitions = collect($definitions)
@@ -38,13 +38,25 @@ class TenantMobileModuleRegistry
         $states = (array) ($this->accessResolver->resolveForTenant($tenantId, array_keys($mobileDefinitions))['modules'] ?? []);
 
         return collect($mobileDefinitions)
-            ->map(function (array $definition, string $moduleKey) use ($states): ?array {
+            ->map(function (array $definition, string $moduleKey) use ($states, $user, $tenantId, $appVersion): ?array {
                 $state = is_array($states[$moduleKey] ?? null) ? (array) $states[$moduleKey] : [];
                 if (! ($state['enabled'] ?? false)) {
                     return null;
                 }
                 if ($moduleKey === 'work_core' && (bool) data_get($states, 'field_service.enabled', false)) {
                     return null;
+                }
+                $minVersion = (string) data_get($definition, 'mobile.min_app_version', '1.0.0');
+                if (filled($appVersion) && version_compare((string) $appVersion, $minVersion, '<')) {
+                    return null;
+                }
+                $roles = array_values(array_filter(array_map(fn ($role): string => strtolower(trim((string) $role)), (array) data_get($definition, 'mobile.roles', []))));
+                if ($user instanceof User && $roles !== []) {
+                    $tenant = Tenant::query()->find($tenantId);
+                    $role = $tenant ? $this->fieldServiceAccess->role($user, $tenant) : '';
+                    if (! in_array($role, $roles, true) && $user->role !== 'platform_admin') {
+                        return null;
+                    }
                 }
 
                 return [
@@ -55,7 +67,7 @@ class TenantMobileModuleRegistry
                     'renderer' => (string) data_get($definition, 'mobile.renderer', 'list'),
                     'entry_screen' => (string) data_get($definition, 'mobile.entry_screen', 'index'),
                     'contract_version' => (int) data_get($definition, 'mobile.contract_version', self::CONTRACT_VERSION),
-                    'min_app_version' => (string) data_get($definition, 'mobile.min_app_version', '1.0.0'),
+                    'min_app_version' => $minVersion,
                     'navigation' => [
                         'group' => (string) data_get($definition, 'mobile.navigation.group', 'work'),
                         'icon' => (string) data_get($definition, 'mobile.navigation.icon', 'grid-2x2'),

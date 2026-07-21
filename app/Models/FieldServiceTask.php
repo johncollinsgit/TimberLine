@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FieldServiceTask extends Model
 {
@@ -54,5 +56,17 @@ class FieldServiceTask extends Model
     public function completedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'completed_by_user_id');
+    }
+
+    public function assignees(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'field_service_task_assignees')
+            ->withPivot(['tenant_id', 'assigned_by_user_id'])
+            ->withTimestamps();
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(FieldServiceTaskEvent::class);
     }
 }

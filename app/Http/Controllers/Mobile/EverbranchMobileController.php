@@ -65,7 +65,8 @@ class EverbranchMobileController extends Controller
         $user = $this->user($request);
         $storePayload = $catalog->tenantStorePayload((int) $tenant->id, 'mobile');
         $role = $this->tenantRole($user, $tenant);
-        $manifest = collect($mobileModules->manifest((int) $tenant->id))->values()->all();
+        $appVersion = trim((string) ($request->header('X-Everbranch-App-Version') ?: $request->query('app_version', '')));
+        $manifest = collect($mobileModules->manifest((int) $tenant->id, $user, $appVersion !== '' ? $appVersion : null))->values()->all();
         $fieldOperations = (array) ($moduleAccess->resolveForTenant((int) $tenant->id, ['field_service', 'time_tracking', 'team_communication', 'field_inventory', 'fleet', 'documents', 'quickbooks'])['modules'] ?? []);
 
         return response()->json([

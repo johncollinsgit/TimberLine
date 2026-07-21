@@ -143,6 +143,7 @@ return [
             'communication_label' => 'Job Notes',
             'upload_label' => 'Job Photos / Receipts',
             'starter_modules' => ['customers', 'jobs', 'tasks', 'assignments', 'estimates', 'parts', 'invoices', 'photos', 'reports'],
+            'recommended_modules' => ['field_service', 'time_tracking', 'team_communication', 'field_inventory', 'fleet', 'documents', 'quickbooks'],
             'work_management_modules' => ['jobs', 'tasks', 'assignments', 'photos'],
             'wants_project_workspace' => true,
             'wants_task_management' => true,

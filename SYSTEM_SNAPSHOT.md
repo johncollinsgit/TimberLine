@@ -1,5 +1,14 @@
 # SYSTEM SNAPSHOT
 
+## Reusable Field Operations v6 (2026-07-21)
+
+- Field-service tasks now keep a backward-compatible primary assignee plus tenant-scoped multi-assignee and task-event records. A shared task has one completion state; handoff replaces responsibility, marks the task `waiting`, records an idempotent event/note, and notifies the new responsible people.
+- Mobile Field Service contract v6 and My Day v5 expose canonical `assignees[]`, an assigned-to-me cursor feed, and role-filtered task mutations. Employees may hand off only to the job crew, lead, or a manager; owners/managers retain workspace-wide assignment authority.
+- Owner Home and the web Work surface expose Today, Monday-to-now This Week, and calendar-month cash-basis QuickBooks Money In/Money Spent plus Finished Jobs. Snapshots refresh on the queue and disconnected/stale states remain quiet. Financial values never enter employee payloads.
+- Onboarding uses explicit `baseline_auto`, `template_recommended`, `integration_required`, `operator_only`, and `internal_only` activation policies. Electrician templates recommend Field Service, Time Tracking, Team Communication, Field Inventory, Fleet, Documents, and QuickBooks; only included baseline modules activate automatically.
+- Mobile module bootstrap can enforce role declarations and `min_app_version` when the client reports `X-Everbranch-App-Version`. Everbranch 2.2.0 is the first client for Field Service contract v6.
+- `php artisan everbranch:prepare-app-review-workspace --password=...` idempotently prepares the fictional, tenant-isolated Apple review workspace. Production execution additionally requires `--force-production`; the password is never printed or committed.
+
 ## Operator Structure and Atomic Release Snapshot (2026-07-21)
 
 ### System map

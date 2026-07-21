@@ -62,7 +62,9 @@ class FieldServiceAccessService
         }
 
         return $this->canUpdateProgress($user, $tenant, $job)
-            && ($task->assigned_user_id === null || (int) $task->assigned_user_id === (int) $user->id);
+            && ($task->assigned_user_id === null
+                || (int) $task->assigned_user_id === (int) $user->id
+                || $task->assignees()->whereKey((int) $user->id)->exists());
     }
 
     /** @return array<string,bool> */
@@ -89,7 +91,9 @@ class FieldServiceAccessService
         return $query->where(function (Builder $visible) use ($user): void {
             $visible->where('assigned_user_id', (int) $user->id)
                 ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey((int) $user->id))
-                ->orWhereHas('tasks', fn (Builder $tasks) => $tasks->where('assigned_user_id', (int) $user->id))
+                ->orWhereHas('tasks', fn (Builder $tasks) => $tasks
+                    ->where('assigned_user_id', (int) $user->id)
+                    ->orWhereHas('assignees', fn (Builder $assignees) => $assignees->whereKey((int) $user->id)))
                 ->orWhereHas('notes.mentions', fn (Builder $mentions) => $mentions->whereKey((int) $user->id));
         });
     }

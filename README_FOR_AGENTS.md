@@ -159,6 +159,13 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 ## Everbranch Readiness Operating Rule (2026-05-21)
 
+### Field operations v6 rule (2026-07-21)
+
+- Preserve `field_service_tasks.assigned_user_id` for one compatibility release, but use `field_service_task_assignees` and `FieldServiceTaskAssignmentService` as the canonical multi-person responsibility path.
+- Task handoffs must be tenant-scoped, idempotent, recorded in `field_service_task_events`, and limited for employees to job participants, the lead, or workspace managers.
+- Owner Home financial values come from cash-basis QuickBooks reporting snapshots through `FieldServiceOwnerHomeMetricsService`. Never calculate them on the client or return them to non-financial roles.
+- Add onboarding behavior through `TenantModuleActivationPolicyService` and the canonical module catalog. Recommendations do not install paid, beta, internal, or integration-dependent modules.
+
 - Everbranch is the product/platform brand.
 - Modern Forestry is the flagship tenant and must remain stable; do not treat Modern Forestry-specific code as generic platform capability unless that generalization is explicitly implemented and tested.
 - Product display labels live in `config/everbranch.php`; prefer those labels over new hardcoded platform-brand strings.
@@ -811,3 +818,4 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - QuickBooks `PrivateNote` content is owner/admin-only. Team members may receive operational customer memos and work-line descriptions, but not financial reports, amounts, receivables, P&L wages, contract labor, price-book costs, billing controls, or integration credentials.
 - Dashboard ranges are `1d`, `1w`, `1m`, `30d`, and `ytd`; `1m` means current calendar month and is the default. QuickBooks reports retain their requested report period and must not be relabeled to match a dashboard filter.
 - Collins-specific ownership and workflow notes belong in `docs/collins-electric-access-and-quickbooks.md`; shared connector behavior belongs in canonical services/config/tests.
+- Apple review data is created only through `everbranch:prepare-app-review-workspace`; it uses the `everbranch-review` tenant and fictional contacts/work. Never place reviewer passwords in source, logs, screenshots, or deployment output.

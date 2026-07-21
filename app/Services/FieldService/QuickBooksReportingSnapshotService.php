@@ -17,10 +17,12 @@ class QuickBooksReportingSnapshotService
         QuickBooksOnlineClient $client,
         string $rangeKey,
         CarbonInterface $start,
-        CarbonInterface $end
+        CarbonInterface $end,
+        string $accountingMethod = 'Accrual',
     ): QuickBooksReportingSnapshot {
+        $accountingMethod = strcasecmp($accountingMethod, 'cash') === 0 ? 'Cash' : 'Accrual';
         $payload = $client->report('ProfitAndLoss', [
-            'accounting_method' => 'Accrual',
+            'accounting_method' => $accountingMethod,
             'start_date' => $start->toDateString(),
             'end_date' => $end->toDateString(),
         ]);
@@ -36,8 +38,9 @@ class QuickBooksReportingSnapshotService
             [
                 'integration_connection_id' => (int) $connection->id,
                 'metrics' => [
-                    'accounting_method' => 'Accrual',
+                    'accounting_method' => $accountingMethod,
                     'total_income' => $this->namedTotal($rows, ['total income', 'total revenue']),
+                    'total_expenses' => $this->namedTotal($rows, ['total expenses', 'total expense']),
                     'net_income' => $this->namedTotal($rows, ['net income']),
                     'account_lines' => array_values(array_filter($rows, fn (array $row): bool => $row['row_type'] === 'data')),
                     'mapping_suggestions' => $this->mappingSuggestions($rows),

@@ -8,6 +8,7 @@ use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Tenancy\TenantFinancialAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
@@ -17,10 +18,13 @@ class FieldServiceMyDayService
         protected FieldServiceAccessService $access,
         protected FieldServiceJobReadinessService $readiness,
         protected FieldServiceWorkProfileService $profiles,
+        protected FieldServiceTaskAssignmentService $assignments,
+        protected FieldServiceOwnerHomeMetricsService $ownerMetrics,
+        protected TenantFinancialAccess $financialAccess,
     ) {}
 
     /** @return array<string,mixed> */
-    public function build(Tenant $tenant, User $user, ?string $date = null): array
+    public function build(Tenant $tenant, User $user, ?string $date = null, string $period = 'month'): array
     {
         $timezone = FieldServiceReminderSetting::query()->forTenantId((int) $tenant->id)->value('timezone') ?: config('app.timezone');
         $day = $date ? Carbon::createFromFormat('Y-m-d', $date, $timezone)->startOfDay() : now($timezone)->startOfDay();
@@ -36,14 +40,19 @@ class FieldServiceMyDayService
         $upcoming = (clone $base)->whereBetween('scheduled_for', [$end->copy()->addSecond(), $upcomingEnd])
             ->whereNotIn('operational_status', ['complete', 'canceled', 'history'])->orderBy('scheduled_for')->limit(20)->get();
         $tasks = FieldServiceTask::query()->forTenantId((int) $tenant->id)
-            ->with(['job:id,tenant_id,title,operational_status,scheduled_for', 'assignedUser:id,name'])
+            ->with(['job:id,tenant_id,title,operational_status,scheduled_for', 'assignedUser:id,name', 'assignees:id,name,email'])
             ->where('status', '!=', 'done')
             ->whereHas('job', function (Builder $jobs) use ($user, $tenant): void {
                 $this->access->scopeVisibleJobs($jobs, $user, $tenant);
             })
-            ->when(! $this->access->canViewAllJobs($user, $tenant), fn (Builder $query) => $query->where(fn (Builder $assigned) => $assigned->whereNull('assigned_user_id')->orWhere('assigned_user_id', $user->id)))
-            ->where(fn (Builder $due) => $due->whereNull('due_at')->orWhere('due_at', '<=', $upcomingEnd))
-            ->orderByRaw('due_at is null')->orderBy('due_at')->limit(30)->get();
+            ->where(fn (Builder $assigned) => $assigned
+                ->where('assigned_user_id', $user->id)
+                ->orWhereHas('assignees', fn (Builder $assignees) => $assignees->whereKey((int) $user->id)))
+            ->orderByRaw('case when due_at is not null and due_at < ? then 0 else 1 end', [now()])
+            ->orderByRaw("case when priority = 'urgent' then 0 else 1 end")
+            ->orderByRaw('due_at is null')->orderBy('due_at')->orderBy('id')->limit(31)->get();
+        $tasksHaveMore = $tasks->count() > 30;
+        $tasks = $tasks->take(30)->values();
         $attention = collect();
         if ($this->access->canViewAllJobs($user, $tenant)) {
             $attention = (clone $base)->whereIn('operational_status', ['needs_details', 'blocked'])
@@ -55,7 +64,7 @@ class FieldServiceMyDayService
             ->with('job:id,tenant_id,title')->latest()->limit(20)->get();
 
         return [
-            'contract_version' => 4,
+            'contract_version' => 5,
             'date' => $day->toDateString(),
             'timezone' => $timezone,
             'profile' => $this->profiles->forTenant($tenant),
@@ -70,11 +79,14 @@ class FieldServiceMyDayService
             'today_jobs' => $today->map(fn (FieldServiceJob $job): array => $this->job($job))->values(),
             'upcoming_jobs' => $upcoming->map(fn (FieldServiceJob $job): array => $this->job($job))->values(),
             'tasks' => $tasks->map(fn (FieldServiceTask $task): array => [
-                'id' => (int) $task->id, 'job_id' => (int) $task->field_service_job_id, 'job_title' => $task->job?->title,
-                'title' => $task->title, 'description' => $task->description, 'status' => $task->status,
-                'priority' => $task->priority ?: 'normal', 'due_at' => $task->due_at?->toIso8601String(), 'assigned_to' => $task->assignedUser?->name,
+                ...$this->assignments->payload($task),
+                'job_title' => $task->job?->title,
                 'destination' => ['kind' => 'field_service_job', 'id' => (int) $task->field_service_job_id, 'tab' => 'tasks'],
             ])->values(),
+            'tasks_have_more' => $tasksHaveMore,
+            'owner_metrics' => $this->financialAccess->allows($user, $tenant)
+                ? $this->ownerMetrics->build($tenant, $period)
+                : null,
             'attention' => $attention->map(fn (FieldServiceJob $job): array => $this->job($job))->values(),
             'notifications' => $notifications->map(fn (FieldServiceJobNotification $notification): array => [
                 'id' => (int) $notification->id, 'event_type' => $notification->event_type, 'read' => (bool) $notification->read_at,
