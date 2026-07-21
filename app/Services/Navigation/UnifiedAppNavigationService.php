@@ -260,6 +260,7 @@ class UnifiedAppNavigationService
             ['key' => 'custom-requests', 'icon' => 'chat-bubble-left-right', 'href' => route('landlord.custom-module-requests.index'), 'label' => 'Custom Requests', 'current' => $request->routeIs('landlord.custom-module-requests.*')],
             ['key' => 'tickets', 'icon' => 'lifebuoy', 'href' => route('landlord.support-tickets.index'), 'label' => 'Tickets', 'current' => $request->routeIs('landlord.support-tickets.*')],
             ['key' => 'plan-billing-readiness', 'icon' => 'credit-card', 'href' => route('landlord.commercial-intent.index'), 'label' => 'Plan / Billing Readiness', 'current' => $request->routeIs('landlord.commercial-intent.*')],
+            ['key' => 'invoices', 'icon' => 'document-text', 'href' => route('landlord.invoices.index'), 'label' => 'Invoices', 'current' => $request->routeIs('landlord.invoices.*')],
             ['key' => 'agreements', 'icon' => 'document-check', 'href' => route('landlord.agreements.index'), 'label' => 'Agreements', 'current' => $request->routeIs('landlord.agreements.*')],
             ['key' => 'shopify-readiness', 'icon' => 'shopping-bag', 'href' => route('landlord.readiness').'#shopify-app-readiness', 'label' => 'Shopify Readiness', 'current' => false],
             ['key' => 'system-readiness', 'icon' => 'shield-check', 'href' => route('landlord.readiness'), 'label' => 'System Readiness', 'current' => $request->routeIs('landlord.readiness')],

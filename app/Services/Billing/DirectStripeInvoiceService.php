@@ -102,6 +102,9 @@ class DirectStripeInvoiceService
             'metadata[tenant_slug]' => (string) $invoice->tenant->slug,
             'metadata[source]' => 'everbranch_direct_invoice',
         ];
+        if (filled($invoice->customer_phone)) {
+            $payload['phone'] = (string) $invoice->customer_phone;
+        }
         if (filled($address['line2'] ?? null)) {
             $payload['address[line2]'] = (string) $address['line2'];
         }

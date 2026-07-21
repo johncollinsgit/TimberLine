@@ -98,6 +98,21 @@ test('incoming activity excludes receipts without signed Stripe paid evidence', 
 
 test('Stripe account activity is the primary ledger source and matches an incomplete provider payment', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Front Yard Foods', 'slug' => 'front-yard-foods']);
+    TenantDirectInvoice::query()->create([
+        'tenant_id' => $tenant->id,
+        'status' => 'open',
+        'currency' => 'USD',
+        'customer_name' => 'Laura',
+        'customer_email' => 'laura@frontyardfoods.com',
+        'customer_phone' => '+18645550199',
+        'billing_address' => [],
+        'authorization_reference' => 'FYF-105',
+        'line_items' => [['description' => 'Payment for Invoice', 'amount_cents' => 10500]],
+        'authorized_subtotal_cents' => 10500,
+        'provider_amount_due_cents' => 10500,
+        'provider_invoice_id' => 'in_front_yard_open',
+        'provider_payment_intent_id' => 'pi_front_yard_incomplete',
+    ]);
     StripeWebhookEvent::query()->create([
         'event_id' => 'evt_stale_local', 'event_type' => 'invoice.paid', 'status' => 'processed',
         'tenant_id' => $tenant->id, 'processed_at' => now(),
@@ -127,7 +142,8 @@ test('Stripe account activity is the primary ledger source and matches an incomp
             'status' => 'requires_payment_method',
             'description' => 'Payment for Invoice',
             'receipt_email' => 'laura@frontyardfoods.com',
-            'customer' => null,
+            'customer' => ['id' => 'cus_laura', 'object' => 'customer', 'name' => 'Laura', 'email' => 'laura@frontyardfoods.com', 'phone' => '+18645550199'],
+            'invoice' => ['id' => 'in_front_yard_open', 'object' => 'invoice', 'hosted_invoice_url' => 'https://invoice.stripe.test/in_front_yard_open'],
             'latest_charge' => null,
             'created' => now()->timestamp,
             'livemode' => false,
@@ -140,11 +156,13 @@ test('Stripe account activity is the primary ledger source and matches an incomp
         ->get('http://app.theeverbranch.com/landlord/transactions')
         ->assertOk();
     $response
-        ->assertSeeText('pi_front_yard_incomplete')
+        ->assertSeeText('in_front_yard_open')
         ->assertSeeText('Payment for Invoice')
         ->assertSeeText('laura@frontyardfoods.com')
         ->assertSeeText('Incomplete')
         ->assertSeeText('$105.00')
+        ->assertSeeText('Text reminder')
+        ->assertSee('+18645550199', false)
         ->assertDontSeeText('STALE-358')
         ->assertDontSeeText('$358.00');
 

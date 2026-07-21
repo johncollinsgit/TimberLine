@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\OperatorRecurringCost;
 use App\Models\TenantBillingReceipt;
 use App\Models\TenantBillingRefund;
+use App\Models\TenantDirectInvoice;
 use App\Services\Billing\LandlordTransactionRefundService;
 use App\Services\Billing\StripeAccountTransactionFeedService;
 use DomainException;
@@ -104,6 +105,7 @@ class LandlordTransactionController extends Controller
     private function stripePaymentIntentRows(Collection $intents): Collection
     {
         $paymentIntentIds = $intents->pluck('payment_intent_id')->filter()->unique()->values();
+        $providerInvoiceIds = $intents->pluck('invoice_id')->filter()->unique()->values();
         $receipts = TenantBillingReceipt::query()
             ->with(['refunds:id,tenant_billing_receipt_id,status,amount_cents', 'billingOrder:id,provider_payment_intent_id', 'directInvoice:id,provider_payment_intent_id'])
             ->where(function ($query) use ($paymentIntentIds): void {
@@ -113,11 +115,22 @@ class LandlordTransactionController extends Controller
             ->orderBy('id')
             ->get()
             ->keyBy(fn (TenantBillingReceipt $receipt): string => trim((string) ($receipt->billingOrder?->provider_payment_intent_id ?? $receipt->directInvoice?->provider_payment_intent_id)));
+        $directInvoices = TenantDirectInvoice::query()
+            ->where(function ($query) use ($paymentIntentIds, $providerInvoiceIds): void {
+                $query->whereIn('provider_payment_intent_id', $paymentIntentIds)
+                    ->orWhereIn('provider_invoice_id', $providerInvoiceIds);
+            })
+            ->get();
+        $directInvoicesByIntent = $directInvoices->filter(fn (TenantDirectInvoice $invoice): bool => filled($invoice->provider_payment_intent_id))->keyBy('provider_payment_intent_id');
+        $directInvoicesByInvoice = $directInvoices->filter(fn (TenantDirectInvoice $invoice): bool => filled($invoice->provider_invoice_id))->keyBy('provider_invoice_id');
 
-        return $intents->map(function (array $intent) use ($receipts): array {
+        return $intents->map(function (array $intent) use ($receipts, $directInvoicesByIntent, $directInvoicesByInvoice): array {
             $reference = trim((string) ($intent['invoice_id'] ?? '')) ?: (string) $intent['payment_intent_id'];
             /** @var TenantBillingReceipt|null $receipt */
             $receipt = $receipts->get((string) $intent['payment_intent_id']);
+            /** @var TenantDirectInvoice|null $directInvoice */
+            $directInvoice = $directInvoicesByIntent->get((string) $intent['payment_intent_id'])
+                ?? $directInvoicesByInvoice->get((string) ($intent['invoice_id'] ?? ''));
             $localRefunded = $receipt
                 ? (int) $receipt->refunds->whereIn('status', ['pending', 'succeeded'])->sum('amount_cents')
                 : 0;
@@ -128,7 +141,7 @@ class LandlordTransactionController extends Controller
                 'key' => 'stripe-'.$intent['payment_intent_id'],
                 'direction' => 'incoming',
                 'kind' => 'payment',
-                'title' => 'Stripe payment',
+                'title' => $directInvoice ? 'Invoice payment' : 'Stripe payment',
                 'counterparty' => (string) $intent['customer'],
                 'reference' => $reference,
                 'status' => (string) $intent['status'],
@@ -139,7 +152,13 @@ class LandlordTransactionController extends Controller
                 'occurred_at' => $intent['occurred_at'],
                 'items' => [['label' => (string) $intent['description'], 'amount_cents' => (int) $intent['amount_cents']]],
                 'payment_method' => (string) $intent['payment_method'],
-                'receipt_url' => $intent['receipt_url'],
+                'receipt_url' => $intent['receipt_url'] ?: $intent['invoice_url'],
+                'reminder' => $directInvoice && ! (bool) $intent['received'] && in_array((string) $directInvoice->status, ['open', 'payment_failed'], true) ? [
+                    'eligible' => true,
+                    'tenant_id' => (int) $directInvoice->tenant_id,
+                    'invoice_id' => (int) $directInvoice->id,
+                    'phone' => (string) ($intent['customer_phone'] ?: $directInvoice->customer_phone),
+                ] : null,
                 'refund' => $receipt ? [
                     'eligible' => (bool) $intent['received'] && strtolower((string) $receipt->status) === 'paid' && $remaining > 0,
                     'remaining_cents' => $remaining,
@@ -217,6 +236,7 @@ class LandlordTransactionController extends Controller
                     'remaining_cents' => max(0, (int) $receipt->total_amount_cents - $refunded),
                     'receipt_id' => $receipt->id,
                 ],
+                'reminder' => null,
             ];
         });
     }
@@ -242,6 +262,7 @@ class LandlordTransactionController extends Controller
                 'payment_method' => 'Stripe',
                 'note' => $refund->note,
                 'refund' => null,
+                'reminder' => null,
             ];
         });
     }
@@ -267,6 +288,7 @@ class LandlordTransactionController extends Controller
                 'payment_method' => '—',
                 'note' => $cost->notes,
                 'refund' => null,
+                'reminder' => null,
             ];
         });
     }

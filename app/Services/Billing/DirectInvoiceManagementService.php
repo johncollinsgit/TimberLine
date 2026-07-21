@@ -5,12 +5,16 @@ namespace App\Services\Billing;
 use App\Models\Tenant;
 use App\Models\TenantDirectInvoice;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class DirectInvoiceManagementService
 {
-    public function __construct(protected LandlordOperatorActionAuditService $audit) {}
+    public function __construct(
+        protected LandlordOperatorActionAuditService $audit,
+        protected MarketingIdentityNormalizer $identityNormalizer,
+    ) {}
 
     /** @param array<string,mixed> $input */
     public function createDraft(Tenant $tenant, array $input, ?int $actorId): TenantDirectInvoice
@@ -95,6 +99,7 @@ class DirectInvoiceManagementService
             'currency' => 'USD',
             'customer_name' => trim((string) $input['customer_name']),
             'customer_email' => strtolower(trim((string) $input['customer_email'])),
+            'customer_phone' => $this->identityNormalizer->toE164($input['customer_phone'] ?? null),
             'billing_address' => [
                 'line1' => trim((string) data_get($input, 'billing_address.line1')),
                 'line2' => trim((string) data_get($input, 'billing_address.line2')) ?: null,
@@ -134,6 +139,7 @@ class DirectInvoiceManagementService
             'tenant_id' => (int) $invoice->tenant_id,
             'status' => (string) $invoice->status,
             'customer_email' => (string) $invoice->customer_email,
+            'customer_phone_present' => filled($invoice->customer_phone),
             'days_until_due' => (int) $invoice->days_until_due,
             'authorization_reference' => (string) $invoice->authorization_reference,
             'line_items' => (array) $invoice->line_items,

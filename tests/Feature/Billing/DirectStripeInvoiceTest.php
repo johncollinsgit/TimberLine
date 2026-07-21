@@ -9,6 +9,7 @@ use App\Models\TenantCommercialOverride;
 use App\Models\TenantDirectInvoice;
 use App\Models\User;
 use App\Services\Billing\DirectInvoiceManagementService;
+use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -32,6 +33,7 @@ function directInvoicePayload(array $overrides = []): array
     return array_replace_recursive([
         'customer_name' => 'Acme Candle Co',
         'customer_email' => 'billing@acme.example',
+        'customer_phone' => '(864) 555-0100',
         'billing_address' => ['line1' => '10 Main Street', 'line2' => '', 'city' => 'Greenville', 'state' => 'SC', 'postal_code' => '29601', 'country' => 'US'],
         'days_until_due' => 30,
         'authorization_reference' => 'Accepted implementation agreement v1',
@@ -66,6 +68,8 @@ test('landlord creates a tenant-scoped draft while Shopify and third-party lines
     $invoice = TenantDirectInvoice::query()->sole();
     expect($invoice->tenant_id)->toBe($tenant->id)
         ->and($invoice->authorized_subtotal_cents)->toBe(25000)
+        ->and($invoice->customer_phone)->toBe('+18645550100')
+        ->and(\Illuminate\Support\Facades\DB::table('tenant_direct_invoices')->where('id', $invoice->id)->value('customer_phone'))->not->toBe('+18645550100')
         ->and($invoice->status)->toBe('draft')
         ->and($invoice->provider_invoice_id)->toBeNull()
         ->and($invoice->line_items[0]['tax_treatment'])->toBe('stripe_determined');
@@ -144,6 +148,7 @@ test('sending uses only the stored snapshot and creates a Stripe hosted invoice 
         $data = $request->data();
         if (str_ends_with($request->url(), '/v1/customers')) {
             expect($data['email'])->toBe('billing@acme.example')
+                ->and($data['phone'])->toBe('+18645550100')
                 ->and($data['metadata[tenant_id]'])->toBe((string) $invoice->tenant_id);
 
             return Http::response(['id' => 'cus_direct']);
@@ -183,6 +188,119 @@ test('sending uses only the stored snapshot and creates a Stripe hosted invoice 
         ->and($invoice->provider_invoice_id)->toBe('in_direct')
         ->and($invoice->hosted_invoice_url)->toBe('https://invoice.stripe.test/in_direct')
         ->and($invoice->authorized_subtotal_cents)->toBe(25000);
+});
+
+test('operator can send one consent-confirmed SMS reminder for an invoice Stripe still reports open', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $invoice = createDirectInvoice($tenant, $admin);
+    $invoice->forceFill([
+        'status' => 'open',
+        'provider_invoice_id' => 'in_sms_open',
+        'provider_invoice_number' => 'EB-105',
+        'provider_amount_due_cents' => 10500,
+        'hosted_invoice_url' => 'https://invoice.stripe.test/stale-url',
+    ])->save();
+    Http::fake(['https://stripe.test/v1/invoices/in_sms_open' => Http::response([
+        'id' => 'in_sms_open',
+        'object' => 'invoice',
+        'status' => 'open',
+        'number' => 'EB-105',
+        'currency' => 'usd',
+        'amount_due' => 10500,
+        'amount_remaining' => 10500,
+        'hosted_invoice_url' => 'https://invoice.stripe.test/current-secure-url',
+    ])]);
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')->once()->withArgs(function (string $phone, string $message, array $options) use ($invoice, $tenant): bool {
+        return $phone === '+18645550100'
+            && str_contains($message, 'Everbranch:')
+            && str_contains($message, 'EB-105')
+            && str_contains($message, 'USD 105.00')
+            && str_contains($message, 'https://invoice.stripe.test/current-secure-url')
+            && str_contains($message, 'Reply STOP')
+            && $options['tenant_id'] === $tenant->id
+            && $options['source_id'] === $invoice->id
+            && $options['idempotency_key'] === 'direct-invoice-reminder:'.$invoice->id.':550e8400-e29b-41d4-a716-446655440000';
+    })->andReturn([
+        'success' => true,
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_invoice_reminder',
+        'status' => 'sent',
+    ]);
+    app()->instance(TwilioSmsService::class, $twilio);
+    $payload = [
+        'customer_phone' => '(864) 555-0100',
+        'consent_confirmed' => '1',
+        'idempotency_key' => '550e8400-e29b-41d4-a716-446655440000',
+    ];
+
+    $this->actingAs($admin)->post(route('landlord.invoices.reminders.sms', [$tenant, $invoice]), $payload)
+        ->assertRedirect()
+        ->assertSessionHas('status', 'Invoice reminder text sent.');
+    $this->actingAs($admin)->post(route('landlord.invoices.reminders.sms', [$tenant, $invoice]), $payload)
+        ->assertRedirect()
+        ->assertSessionHas('status', 'This invoice reminder was already processed.');
+
+    $fresh = $invoice->fresh();
+    expect($fresh->customer_phone)->toBe('+18645550100')
+        ->and(data_get($fresh->metadata, 'sms_reminder_count'))->toBe(1)
+        ->and(data_get($fresh->metadata, 'last_sms_reminder_phone_last_four'))->toBe('0100')
+        ->and(data_get($fresh->metadata, 'sms_invoice_reminders.0.status'))->toBe('sent')
+        ->and(LandlordOperatorAction::query()->where('action_type', 'tenant_billing.direct_invoice.sms_reminder')->where('status', 'success')->exists())->toBeTrue();
+});
+
+test('invoice reminder requires consent and fails closed when Stripe no longer reports an amount due', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $invoice = createDirectInvoice($tenant, $admin);
+    $invoice->forceFill(['status' => 'open', 'provider_invoice_id' => 'in_sms_paid'])->save();
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldNotReceive('sendSms');
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $this->actingAs($admin)->post(route('landlord.invoices.reminders.sms', [$tenant, $invoice]), [
+        'customer_phone' => '(864) 555-0100',
+        'idempotency_key' => '550e8400-e29b-41d4-a716-446655440001',
+    ])->assertSessionHasErrors('consent_confirmed');
+    Http::fake(['https://stripe.test/v1/invoices/in_sms_paid' => Http::response([
+        'id' => 'in_sms_paid',
+        'object' => 'invoice',
+        'status' => 'paid',
+        'amount_due' => 0,
+        'amount_remaining' => 0,
+        'hosted_invoice_url' => 'https://invoice.stripe.test/in_sms_paid',
+    ])]);
+    $this->actingAs($admin)->post(route('landlord.invoices.reminders.sms', [$tenant, $invoice]), [
+        'customer_phone' => '(864) 555-0100',
+        'consent_confirmed' => '1',
+        'idempotency_key' => '550e8400-e29b-41d4-a716-446655440002',
+    ])->assertSessionHas('status_error', 'Stripe no longer reports this invoice as open with an amount due. No text was sent.');
+});
+
+test('invoice reminder blocks a phone number already recorded as opted out', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $invoice = createDirectInvoice($tenant, $admin);
+    $invoice->forceFill(['status' => 'open', 'provider_invoice_id' => 'in_sms_opted_out'])->save();
+    app(\App\Services\Marketing\MessagingContactChannelStateService::class)->markSmsUnsubscribed(
+        $tenant->id,
+        null,
+        '+18645550100',
+        'customer_reply_stop',
+    );
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldNotReceive('sendSms');
+    app()->instance(TwilioSmsService::class, $twilio);
+    Http::fake();
+
+    $this->actingAs($admin)->post(route('landlord.invoices.reminders.sms', [$tenant, $invoice]), [
+        'customer_phone' => '(864) 555-0100',
+        'consent_confirmed' => '1',
+        'idempotency_key' => '550e8400-e29b-41d4-a716-446655440003',
+    ])->assertSessionHas('status_error', 'This phone number has opted out of text messages.');
+
+    Http::assertNothingSent();
 });
 
 test('invoice sending stays disabled without its separate flag and never calls Stripe', function (): void {

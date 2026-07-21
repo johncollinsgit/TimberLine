@@ -39,7 +39,7 @@ class StripeAccountTransactionFeedService
                 $remaining = $maximum - count($transactions);
                 $parameters = [
                     'limit' => min(100, $remaining),
-                    'expand' => ['data.customer', 'data.latest_charge'],
+                    'expand' => ['data.customer', 'data.latest_charge', 'data.invoice'],
                 ];
                 if ($startingAfter !== null) {
                     $parameters['starting_after'] = $startingAfter;
@@ -81,6 +81,7 @@ class StripeAccountTransactionFeedService
         $status = strtolower(trim((string) ($intent['status'] ?? 'unknown')));
         $charge = is_array($intent['latest_charge'] ?? null) ? $intent['latest_charge'] : [];
         $customer = is_array($intent['customer'] ?? null) ? $intent['customer'] : [];
+        $invoice = is_array($intent['invoice'] ?? null) ? $intent['invoice'] : [];
         $amountRefunded = max(0, (int) ($charge['amount_refunded'] ?? 0));
         $amountReceived = max(0, (int) ($intent['amount_received'] ?? 0));
         $amount = max(0, (int) ($intent['amount'] ?? 0));
@@ -91,14 +92,17 @@ class StripeAccountTransactionFeedService
             $received && $amountRefunded > 0 => 'partially_refunded',
             default => $status,
         };
-        $customerLabel = trim((string) ($customer['name'] ?? ''))
-            ?: trim((string) ($customer['email'] ?? $intent['receipt_email'] ?? ''))
-            ?: (is_string($intent['customer'] ?? null) ? (string) $intent['customer'] : 'Stripe customer');
+        $customerName = trim((string) ($customer['name'] ?? ''));
+        $customerEmail = trim((string) ($customer['email'] ?? $intent['receipt_email'] ?? ''));
+        $customerLabel = $customerName !== '' && $customerEmail !== ''
+            ? $customerName.' · '.$customerEmail
+            : ($customerName ?: $customerEmail ?: (is_string($intent['customer'] ?? null) ? (string) $intent['customer'] : 'Stripe customer'));
         $paymentMethod = data_get($charge, 'payment_method_details.type');
 
         return [
             'payment_intent_id' => trim((string) ($intent['id'] ?? '')),
-            'invoice_id' => is_string($intent['invoice'] ?? null) ? (string) $intent['invoice'] : null,
+            'invoice_id' => trim((string) ($invoice['id'] ?? (is_string($intent['invoice'] ?? null) ? $intent['invoice'] : ''))) ?: null,
+            'invoice_url' => $this->safeUrl($invoice['hosted_invoice_url'] ?? null),
             'status' => $displayStatus,
             'status_label' => $this->statusLabel($displayStatus),
             'received' => $received,
@@ -108,6 +112,7 @@ class StripeAccountTransactionFeedService
             'currency' => strtoupper(trim((string) ($intent['currency'] ?? 'USD'))),
             'description' => trim((string) ($intent['description'] ?? '')) ?: 'Stripe payment',
             'customer' => $customerLabel,
+            'customer_phone' => trim((string) ($customer['phone'] ?? '')) ?: null,
             'payment_method' => filled($paymentMethod) ? str((string) $paymentMethod)->replace('_', ' ')->headline()->toString() : '—',
             'occurred_at' => is_numeric($intent['created'] ?? null) ? Carbon::createFromTimestamp((int) $intent['created']) : now(),
             'receipt_url' => $this->safeUrl($charge['receipt_url'] ?? null),

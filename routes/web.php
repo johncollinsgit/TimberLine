@@ -25,9 +25,9 @@ use App\Http\Controllers\Landlord\LandlordDirectInvoiceController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
+use App\Http\Controllers\Landlord\LandlordSupportTicketController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
-use App\Http\Controllers\Landlord\LandlordSupportTicketController;
 use App\Http\Controllers\Landlord\LandlordTransactionController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
@@ -291,6 +291,7 @@ $landlordRoutes = static function (): void {
     Route::get('/landlord/tenants/{tenant}/invoices/{invoice}/edit', [LandlordDirectInvoiceController::class, 'edit'])->name('invoices.edit');
     Route::put('/landlord/tenants/{tenant}/invoices/{invoice}', [LandlordDirectInvoiceController::class, 'update'])->name('invoices.update');
     Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/send', [LandlordDirectInvoiceController::class, 'send'])->name('invoices.send');
+    Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/reminders/sms', [LandlordDirectInvoiceController::class, 'remindBySms'])->name('invoices.reminders.sms');
     Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/void', [LandlordDirectInvoiceController::class, 'void'])->name('invoices.void');
     Route::get('/landlord/agreements/create', [LandlordAgreementController::class, 'create'])->name('agreements.create');
     Route::post('/landlord/agreements', [LandlordAgreementController::class, 'store'])->name('agreements.store');
