@@ -17,6 +17,11 @@ class PublicLegalController extends Controller
         return $this->page($request, 'terms');
     }
 
+    public function support(Request $request): View
+    {
+        return $this->page($request, 'support');
+    }
+
     protected function page(Request $request, string $document): View
     {
         $host = strtolower($request->getHost());
@@ -30,7 +35,9 @@ class PublicLegalController extends Controller
             'document' => $document,
             'brandName' => $isEvergrove ? 'Evergrove Software' : 'Everbranch',
             'brandAssets' => (array) config($isEvergrove ? 'evergrove.brand_assets' : 'everbranch.brand_assets', []),
-            'contactEmail' => (string) config('evergrove.contact_email', 'hello@evergrovesoftware.com'),
+            'contactEmail' => $isEvergrove
+                ? (string) config('evergrove.contact_email', 'hello@evergrovesoftware.com')
+                : (string) config('everbranch.support_email', 'support@theeverbranch.com'),
             'homeUrl' => $isEvergrove ? 'https://evergrovesoftware.com' : 'https://theeverbranch.com',
         ]);
     }

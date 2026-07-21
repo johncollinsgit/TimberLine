@@ -1,6 +1,12 @@
 @php
-    $isPrivacy = ($document ?? 'privacy') === 'privacy';
-    $title = $isPrivacy ? 'Privacy Policy' : 'Terms of Use and End-User License Agreement';
+    $document = $document ?? 'privacy';
+    $isPrivacy = $document === 'privacy';
+    $isSupport = $document === 'support';
+    $title = match ($document) {
+        'support' => 'Everbranch Support',
+        'terms' => 'Terms of Use and End-User License Agreement',
+        default => 'Privacy Policy',
+    };
     $effectiveDate = 'July 11, 2026';
     $brandAssets = is_array($brandAssets ?? null) ? $brandAssets : [];
     $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
@@ -21,9 +27,10 @@
         <a href="{{ $homeUrl }}" class="eg-legal-brand" aria-label="{{ $brandName }} home">
             <img src="{{ $lockup }}" alt="{{ $brandName }}" />
         </a>
-        <nav aria-label="Legal pages">
+        <nav aria-label="Support and legal pages">
+            <a href="{{ route('legal.support') }}" @if($isSupport) aria-current="page" @endif>Support</a>
             <a href="{{ route('legal.privacy') }}" @if($isPrivacy) aria-current="page" @endif>Privacy</a>
-            <a href="{{ route('legal.terms') }}" @unless($isPrivacy) aria-current="page" @endunless>Terms</a>
+            <a href="{{ route('legal.terms') }}" @if(!$isPrivacy && !$isSupport) aria-current="page" @endif>Terms</a>
             <a href="{{ $homeUrl }}">Home</a>
         </nav>
     </header>
@@ -32,7 +39,11 @@
         <header class="eg-legal-intro">
             <p class="eg-kicker">Everbranch by Evergrove Software</p>
             <h1>{{ $title }}</h1>
-            <p>Effective {{ $effectiveDate }}</p>
+            @if($isSupport)
+                <p>Help for Everbranch workspace owners, managers, and field teams.</p>
+            @else
+                <p>Effective {{ $effectiveDate }}</p>
+            @endif
         </header>
 
         @if($isPrivacy)
@@ -80,6 +91,32 @@
             <section>
                 <h2>Children and policy changes</h2>
                 <p>Everbranch is a business service and is not directed to children under 13. We may update this policy as the product or applicable requirements change. Material changes will be identified by a revised effective date and, when appropriate, an in-product or email notice.</p>
+            </section>
+        @elseif($isSupport)
+            <section>
+                <h2>Get help</h2>
+                <p>The fastest way to reach us is inside Everbranch. Open <strong>Account</strong>, choose <strong>Help and support</strong>, and create a ticket. Your ticket keeps the issue and replies together without exposing another workspace's information.</p>
+                <p>If you cannot sign in, email <a href="mailto:{{ $contactEmail }}?subject=Everbranch%20support">{{ $contactEmail }}</a>. Include your workspace name, the device you are using, and a short description of what happened. Do not send passwords, verification codes, or full payment information.</p>
+            </section>
+
+            <section>
+                <h2>Common requests</h2>
+                <ul>
+                    <li><strong>Sign-in or invitation help:</strong> tell us the email address that received the workspace invitation and the workspace you are trying to join.</li>
+                    <li><strong>Jobs, time, photos, or messages:</strong> include the job name and the action you were trying to complete.</li>
+                    <li><strong>QuickBooks connection:</strong> a workspace owner can disconnect the integration or ask us to remove stored connection data.</li>
+                    <li><strong>Privacy, export, or deletion:</strong> use <strong>Account → Request account deletion</strong> in the app, or email us from the address on your account.</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>Before contacting support</h2>
+                <p>Confirm that Everbranch is up to date, reopen the app, and check that your phone has an internet connection. If an action was queued while offline, leave the app open briefly after reconnecting so it can finish syncing.</p>
+            </section>
+
+            <section>
+                <h2>Safety and emergencies</h2>
+                <p>Everbranch organizes field work but is not an emergency service. For an immediate safety, electrical, medical, or other emergency, follow your employer's safety procedure and contact the appropriate emergency service.</p>
             </section>
         @else
             <section>
@@ -136,6 +173,7 @@
 
     <footer class="eg-legal-footer">
         <span>&copy; {{ now()->year }} Evergrove Software</span>
+        <a href="{{ route('legal.support') }}">Support</a>
         <a href="{{ route('legal.privacy') }}">Privacy</a>
         <a href="{{ route('legal.terms') }}">Terms</a>
     </footer>

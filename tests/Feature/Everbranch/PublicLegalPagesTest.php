@@ -15,6 +15,16 @@ test('everbranch legal pages are public and disclose the quickbooks integration 
         ->assertSee('does not process payments');
 });
 
+test('everbranch support page is public and provides app and account help', function () {
+    $this->get('http://theeverbranch.com/support')
+        ->assertOk()
+        ->assertSee('Everbranch Support')
+        ->assertSee('Account')
+        ->assertSee('Help and support')
+        ->assertSee('Request account deletion')
+        ->assertSee('support@theeverbranch.com');
+});
+
 test('evergrove hosts receive the evergrove legal presentation', function () {
     config()->set('evergrove.hosts', ['evergrovesoftware.com']);
 
