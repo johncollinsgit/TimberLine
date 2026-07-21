@@ -1,7 +1,7 @@
 import "../bootstrap";
 import axios from "axios";
 import "@glideapps/glide-data-grid/dist/index.css";
-import { CompactSelection, DataEditor, GridCell, GridCellKind, GridColumn, GridSelection, Item } from "@glideapps/glide-data-grid";
+import { CustomCell, CustomRenderer, DataEditor, GridCell, GridCellKind, GridColumn, Item, roundedRect } from "@glideapps/glide-data-grid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -10,12 +10,43 @@ type Row = {
     id: number; kind: "job" | "candidate"; url?: string; title: string; customer?: string; status: string;
     priority?: string; scheduled_for?: string; lead_id?: number; lead?: string; crew?: string[];
     vehicles?: { id: number; name: string }[]; hours?: number; source?: string; amount?: number | null;
-    balance?: number | null; updated_at?: string;
+    balance?: number | null; updated_at?: string; customer_email?: string; customer_phone?: string;
+    description?: string; service_address?: string; blocked_reason?: string;
 };
 type Options = { team: { id: number; name: string }[]; vehicles: { id: number; name: string; identifier?: string }[]; statuses: string[] };
 type Meta = { bucket: Bucket; page: number; last_page: number; total: number };
 type Props = { endpoint: string; updateTemplate: string; candidateTemplate: string; canManage: boolean };
 type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
+type OpenCell = CustomCell<{ kind: "open-job" }>;
+
+const openColumn: GridColumn & { id: string } = { id: "open", title: "", width: 92 };
+const openCellRenderer: CustomRenderer<OpenCell> = {
+    kind: GridCellKind.Custom,
+    isMatch: (cell): cell is OpenCell => cell.data.kind === "open-job",
+    needsHover: true,
+    draw: ({ ctx, rect, theme, hoverAmount, overrideCursor }) => {
+        const x = rect.x + 10;
+        const y = rect.y + 8;
+        const width = rect.width - 20;
+        const height = rect.height - 16;
+        overrideCursor?.("pointer");
+        ctx.save();
+        ctx.beginPath();
+        roundedRect(ctx, x, y, width, height, 7);
+        ctx.fillStyle = hoverAmount > 0 ? "#dcecff" : "#eef6ff";
+        ctx.fill();
+        ctx.strokeStyle = hoverAmount > 0 ? "#5b9cff" : "#8bb9ff";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = "#0b1b36";
+        ctx.font = `600 ${theme.baseFontFull}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Open", rect.x + rect.width / 2, rect.y + rect.height / 2 + 0.5);
+        ctx.restore();
+        return true;
+    },
+};
 
 const allColumns: (GridColumn & { id: string })[] = [
     { id: "status", title: "Status", width: 125 }, { id: "title", title: "Job", width: 250 },
@@ -54,6 +85,13 @@ function display(key: string, row: Row): string {
     return value == null || value === "" ? "—" : String(value).replaceAll("_", " ");
 }
 
+function dateTimeLocalValue(value?: string): string {
+    if (!value) return "";
+    const date = new Date(value);
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 16);
+}
+
 function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canManage }: Props) {
     const [bucket, setBucket] = useState<Bucket>("current");
     const [rows, setRows] = useState<Row[]>([]);
@@ -69,13 +107,25 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     const [reload, setReload] = useState(0);
     const [visible, setVisible] = useState<string[]>(defaultVisible);
     const [columnsOpen, setColumnsOpen] = useState(false);
-    const [selection, setSelection] = useState<GridSelection>({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
     const [candidate, setCandidate] = useState<Row | null>(null);
+    const [openedJobId, setOpenedJobId] = useState<number | null>(null);
     const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
     const [gridRef, size] = useSize();
-    const columns = useMemo(() => allColumns.filter(column => visible.includes(column.id)), [visible]);
+    const columns = useMemo(() => [openColumn, ...allColumns.filter(column => visible.includes(column.id))], [visible]);
+    const openedJob = openedJobId === null ? null : rows.find(row => row.kind === "job" && row.id === openedJobId) || null;
 
     useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
+    useEffect(() => {
+        if (openedJobId === null) return;
+        const previousOverflow = document.body.style.overflow;
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpenedJobId(null); };
+        document.body.style.overflow = "hidden";
+        window.addEventListener("keydown", closeOnEscape);
+        return () => { document.body.style.overflow = previousOverflow; window.removeEventListener("keydown", closeOnEscape); };
+    }, [openedJobId]);
+    useEffect(() => {
+        if (openedJobId !== null && !rows.some(row => row.kind === "job" && row.id === openedJobId)) setOpenedJobId(null);
+    }, [openedJobId, rows]);
     useEffect(() => {
         const controller = new AbortController();
         const timer = window.setTimeout(async () => {
@@ -84,7 +134,6 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
                 const response = await axios.get(endpoint, { signal: controller.signal, params: { bucket, q: q || undefined, sort, dir, page, per_page: 50 } });
                 setRows(Array.isArray(response.data.rows) ? response.data.rows : []);
                 setMeta(response.data.meta); setOptions(response.data.options || { team: [], vehicles: [], statuses: [] });
-                setSelection({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
             } catch (failure) {
                 if (!axios.isCancel(failure)) setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "Could not load work." : "Could not load work.");
             } finally { if (!controller.signal.aborted) setLoading(false); }
@@ -95,8 +144,10 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     const persist = useCallback(async (row: Row, patch: Record<string, unknown>) => {
         if (!canManage || row.kind !== "job") return;
         const previous = rows;
+        const optimisticPatch = { ...patch };
+        if (typeof patch.operational_status === "string") optimisticPatch.status = patch.operational_status;
         setSaveState("Saving…");
-        setRows(current => current.map(item => item.id === row.id ? { ...item, ...patch } : item));
+        setRows(current => current.map(item => item.id === row.id ? { ...item, ...optimisticPatch } : item));
         try {
             await axios.patch(updateTemplate.replace(/\/0$/, `/${row.id}`), patch);
             setSaveState("Saved"); window.setTimeout(() => setSaveState(""), 1600);
@@ -109,6 +160,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     const getCellContent = useCallback(([col, rowIndex]: Item): GridCell => {
         const row = rows[rowIndex]; const column = columns[col];
         if (!row || !column) return { kind: GridCellKind.Text, data: "", displayData: "", readonly: true, allowOverlay: false };
+        if (column.id === "open") return { kind: GridCellKind.Custom, data: { kind: "open-job" }, copyData: "Open", readonly: true, allowOverlay: false, cursor: "pointer" };
         const value = display(column.id, row);
         return { kind: GridCellKind.Text, data: value === "—" ? "" : value, displayData: value, readonly: !canManage || row.kind !== "job" || !editable.has(column.id), allowOverlay: canManage && row.kind === "job" && editable.has(column.id) };
     }, [canManage, columns, rows]);
@@ -135,17 +187,9 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
 
     const clickCell = useCallback(([col, rowIndex]: Item) => {
         const row = rows[rowIndex]; const key = columns[col]?.id;
-        if (!row || (row.kind === "job" && editable.has(key) && canManage)) return;
-        if (row.kind === "candidate") setCandidate(row); else if (row.url) window.location.assign(row.url);
-    }, [canManage, columns, rows]);
-
-    async function bulkStatus(status: string) {
-        const selected = selection.rows.toArray().map(index => rows[index]).filter(row => row?.kind === "job");
-        if (!selected.length) return;
-        setSaveState(`Updating ${selected.length} jobs…`);
-        try { await Promise.all(selected.map(row => axios.patch(updateTemplate.replace(/\/0$/, `/${row.id}`), { operational_status: status }))); setReload(value => value + 1); setSaveState("Saved"); }
-        catch { setSaveState("Save failed"); setError("One or more jobs could not be updated."); }
-    }
+        if (!row || key !== "open") return;
+        if (row.kind === "candidate") setCandidate(row); else setOpenedJobId(row.id);
+    }, [columns, rows]);
 
     function saveView() {
         const name = window.prompt("Name this view"); if (!name?.trim()) return;
@@ -185,7 +229,6 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3">
             <select defaultValue="" onChange={event => applyView(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Saved views</option>{views.map(view => <option key={view.name}>{view.name}</option>)}</select>
             <button onClick={saveView} className="min-h-11 rounded-xl border border-zinc-300 px-4 text-sm font-semibold">Save this view</button>
-            {canManage && selection.rows.length > 0 ? <><span className="ml-2 text-sm text-zinc-600">{selection.rows.length} selected</span><select defaultValue="" onChange={event => { if (event.target.value) void bulkStatus(event.target.value); }} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Set status…</option>{options.statuses.map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></> : null}
             <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket} item${meta.total === 1 ? "" : "s"}`)}</span>
         </div>
 
@@ -193,10 +236,94 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button onClick={() => setError("")} className="ml-3 font-semibold underline">Dismiss</button></div> : null}
 
         <div ref={gridRef} className="min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} gridSelection={selection} onGridSelectionChange={setSelection} rowMarkers={canManage ? "checkbox-visible" : "number"} width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
+            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={clickCell} cellActivationBehavior="single-click" customRenderers={[openCellRenderer]} freezeColumns={1} rowMarkers="none" width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
         </div>
 
         <div className="flex items-center justify-between"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Previous</button><span className="text-sm text-zinc-600">Page {meta.page} of {Math.max(1, meta.last_page)}</span><button disabled={page >= meta.last_page} onClick={() => setPage(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next</button></div>
+
+        {openedJob ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/55 p-3 backdrop-blur-[2px] sm:p-6" onMouseDown={() => setOpenedJobId(null)}>
+            <section role="dialog" aria-modal="true" aria-labelledby="work-job-dialog-title" onMouseDown={event => event.stopPropagation()} className="flex max-h-[calc(100vh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]">
+                <header className="flex flex-wrap items-center gap-3 border-b border-zinc-200 bg-zinc-50 px-5 py-3 sm:px-7">
+                    <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-blue-950 ring-1 ring-inset ring-blue-200">{openedJob.status.replaceAll("_", " ")}</span>
+                    <span className="text-sm text-zinc-500">{openedJob.source || "Everbranch"}</span>
+                    <div className="ml-auto flex items-center gap-2">
+                        {openedJob.url ? <a href={openedJob.url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-950 hover:bg-blue-100">Full job page ↗</a> : null}
+                        <button type="button" onClick={() => setOpenedJobId(null)} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-white text-xl text-zinc-700 hover:bg-zinc-100" aria-label="Close job">×</button>
+                    </div>
+                </header>
+
+                <div className="overflow-y-auto px-5 py-6 sm:px-7 sm:py-7">
+                    <div className="border-b border-zinc-200 pb-6">
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-800">Work item #{openedJob.id}</div>
+                        <h2 id="work-job-dialog-title" className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">{openedJob.title}</h2>
+                        <p className="mt-2 text-base text-zinc-600">{openedJob.customer || "Customer not named"}</p>
+                    </div>
+
+                    <div className="grid gap-x-8 gap-y-5 border-b border-zinc-200 py-6 md:grid-cols-2">
+                        <label className="grid gap-2 sm:grid-cols-[7rem_1fr] sm:items-center">
+                            <span className="text-sm font-semibold text-zinc-700">Status</span>
+                            <select value={openedJob.status} disabled={!canManage} onChange={event => void persist(openedJob, { operational_status: event.target.value })} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-950 disabled:bg-zinc-100">
+                                {options.statuses.map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
+                            </select>
+                        </label>
+                        <label className="grid gap-2 sm:grid-cols-[7rem_1fr] sm:items-center">
+                            <span className="text-sm font-semibold text-zinc-700">Assignee</span>
+                            <select value={openedJob.lead_id || ""} disabled={!canManage} onChange={event => { const person = options.team.find(member => member.id === Number(event.target.value)); void persist(openedJob, { assigned_user_id: person?.id || null, lead: person?.name || "" }); }} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-950 disabled:bg-zinc-100">
+                                <option value="">Unassigned</option>
+                                {options.team.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+                            </select>
+                        </label>
+                        <label className="grid gap-2 sm:grid-cols-[7rem_1fr] sm:items-center">
+                            <span className="text-sm font-semibold text-zinc-700">Schedule</span>
+                            <input type="datetime-local" value={dateTimeLocalValue(openedJob.scheduled_for)} disabled={!canManage} onChange={event => void persist(openedJob, { scheduled_for: event.target.value || null })} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-950 disabled:bg-zinc-100" />
+                        </label>
+                        <label className="grid gap-2 sm:grid-cols-[7rem_1fr] sm:items-center">
+                            <span className="text-sm font-semibold text-zinc-700">Priority</span>
+                            <select value={openedJob.priority || "normal"} disabled={!canManage} onChange={event => void persist(openedJob, { priority: event.target.value })} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-medium capitalize text-zinc-950 disabled:bg-zinc-100">
+                                {['low', 'normal', 'high', 'urgent'].map(priority => <option key={priority}>{priority}</option>)}
+                            </select>
+                        </label>
+                    </div>
+
+                    {openedJob.blocked_reason ? <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><span className="font-semibold">Blocked:</span> {openedJob.blocked_reason}</div> : null}
+
+                    <div className="grid gap-6 py-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]">
+                        <div className="space-y-6">
+                            <section>
+                                <h3 className="text-sm font-semibold text-zinc-950">Description</h3>
+                                <div className="mt-2 min-h-28 whitespace-pre-wrap rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-700">{openedJob.description || "No description has been added."}</div>
+                            </section>
+                            <section>
+                                <h3 className="text-sm font-semibold text-zinc-950">Crew and equipment</h3>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {(openedJob.crew || []).map(person => <span key={person} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 ring-1 ring-inset ring-emerald-200">{person}</span>)}
+                                    {(openedJob.vehicles || []).map(vehicle => <span key={vehicle.id} className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-950 ring-1 ring-inset ring-blue-200">{vehicle.name}</span>)}
+                                    {(openedJob.crew || []).length === 0 && (openedJob.vehicles || []).length === 0 ? <span className="text-sm text-zinc-500">No crew or vehicles assigned.</span> : null}
+                                </div>
+                            </section>
+                        </div>
+
+                        <aside className="space-y-4">
+                            <section className="rounded-xl border border-zinc-200 p-4">
+                                <h3 className="text-sm font-semibold text-zinc-950">Customer and site</h3>
+                                <div className="mt-3 space-y-2 text-sm text-zinc-700">
+                                    <div className="font-medium text-zinc-950">{openedJob.customer || "Customer not named"}</div>
+                                    {openedJob.customer_phone ? <div>{openedJob.customer_phone}</div> : null}
+                                    {openedJob.customer_email ? <div className="break-all">{openedJob.customer_email}</div> : null}
+                                    <div>{openedJob.service_address || "Service address not added"}</div>
+                                </div>
+                            </section>
+                            <section className="grid grid-cols-2 gap-3">
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Hours</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("hours", openedJob)}</div></div>
+                                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Updated</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("updated_at", openedJob)}</div></div>
+                                {openedJob.amount != null ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Amount</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("amount", openedJob)}</div></div> : null}
+                                {openedJob.balance != null ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Balance</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("balance", openedJob)}</div></div> : null}
+                            </section>
+                        </aside>
+                    </div>
+                </div>
+            </section>
+        </div> : null}
 
         {candidate ? <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setCandidate(null)}><aside onClick={event => event.stopPropagation()} className="h-full w-full max-w-lg overflow-y-auto bg-white p-6 shadow-2xl"><button onClick={() => setCandidate(null)} className="min-h-11 text-sm font-semibold text-zinc-600">← Back to potential work</button><div className="mt-6 text-xs font-semibold uppercase tracking-widest text-emerald-700">QuickBooks {candidate.source}</div><h2 className="mt-2 text-2xl font-semibold text-zinc-950">{candidate.title}</h2><p className="mt-2 text-zinc-600">{candidate.customer || "Customer not linked"}</p><div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-xl bg-zinc-100 p-4"><div className="text-xs text-zinc-500">Amount</div><div className="mt-1 font-semibold">{display("amount", candidate)}</div></div><div className="rounded-xl bg-zinc-100 p-4"><div className="text-xs text-zinc-500">Balance</div><div className="mt-1 font-semibold">{display("balance", candidate)}</div></div></div><div className="mt-8 grid gap-3"><button onClick={() => void reviewCandidate("create_job")} className="min-h-12 rounded-xl bg-zinc-950 px-4 font-semibold text-white">Create Job</button><button onClick={() => void reviewCandidate("link")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold">Link to Existing Job</button><button onClick={() => void reviewCandidate("dismiss")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold text-zinc-600">Dismiss</button></div></aside></div> : null}
     </div>;

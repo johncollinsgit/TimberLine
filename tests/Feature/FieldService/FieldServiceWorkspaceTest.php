@@ -25,6 +25,32 @@ test('base workspace tenant can open the field service start page', function ():
         ->assertDontSeeText('Pour Lists');
 });
 
+test('work grid data includes the summary used by the job popup', function (): void {
+    [$tenant, $user] = fieldServiceTenantAndUser();
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Generator service',
+        'status' => 'open',
+        'operational_status' => 'active',
+        'customer_name' => 'Nathan Collins',
+        'customer_email' => 'nathan@example.com',
+        'customer_phone' => '864-555-0100',
+        'description' => 'Inspect the transfer switch and test the generator.',
+        'service_address_line_1' => '100 Main Street',
+        'service_city' => 'Greenville',
+        'service_state' => 'SC',
+        'service_postal_code' => '29601',
+    ]);
+
+    $this->actingAs($user)
+        ->getJson(route('field-service.jobs.data', ['bucket' => 'current']))
+        ->assertOk()
+        ->assertJsonPath('rows.0.title', 'Generator service')
+        ->assertJsonPath('rows.0.customer_email', 'nathan@example.com')
+        ->assertJsonPath('rows.0.description', 'Inspect the transfer switch and test the generator.')
+        ->assertJsonPath('rows.0.service_address', '100 Main Street, Greenville SC 29601');
+});
+
 test('field service creates a tenant scoped customer job task and material', function (): void {
     [$tenant, $user] = fieldServiceTenantAndUser();
 
