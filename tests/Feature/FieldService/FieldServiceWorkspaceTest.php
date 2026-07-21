@@ -18,10 +18,10 @@ test('base workspace tenant can open the field service start page', function ():
     $this->actingAs($user)
         ->get(route('field-service.index', ['tenant' => $tenant->slug]))
         ->assertOk()
-        ->assertSeeText('Field Service')
-        ->assertSeeText('Add a customer job')
+        ->assertSeeText('Work')
+        ->assertSeeText('Find, sort, assign, and update field work')
         ->assertSeeText('Create job')
-        ->assertSeeText('Materials and parts')
+        ->assertSee('field-service-jobs-grid', false)
         ->assertDontSeeText('Pour Lists');
 });
 

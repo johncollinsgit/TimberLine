@@ -111,7 +111,8 @@ class FieldServiceJobNotificationService
             if (! $notification->wasRecentlyCreated) {
                 continue;
             }
-            $result = $this->sms->sendSms((string) $preference->phone, 'Collins Electric: '.$body.' Reply STOP to opt out.', ['tenant_id' => (int) $job->tenant_id]);
+            $brand = (string) (Tenant::query()->whereKey((int) $job->tenant_id)->value('name') ?: 'Everbranch');
+            $result = $this->sms->sendSms((string) $preference->phone, $brand.': '.$body.' Reply STOP to opt out.', ['tenant_id' => (int) $job->tenant_id]);
             $sent = (bool) ($result['success'] ?? false);
             $notification->forceFill([
                 'status' => $sent ? 'sent' : 'failed', 'provider_message_id' => $result['provider_message_id'] ?? null,
@@ -128,6 +129,7 @@ class FieldServiceJobNotificationService
 
             return $summary;
         }
+        $brand = (string) (Tenant::query()->whereKey((int) $job->tenant_id)->value('name') ?: 'Everbranch');
         $customerResult = $this->directMessaging->send('sms', [[
             'profile_id' => (int) $customer->id,
             'name' => trim(($customer->first_name ?? '').' '.($customer->last_name ?? '')),
@@ -135,7 +137,7 @@ class FieldServiceJobNotificationService
             'phone' => $customer->phone,
             'normalized_phone' => $customer->normalized_phone,
             'source_type' => 'equipment_maintenance',
-        ]], 'Collins Electric: '.$equipment->name.' maintenance is due '.$equipment->next_service_due_at?->format('M j, Y').'. Reply STOP to opt out.', [
+        ]], $brand.': '.$equipment->name.' maintenance is due '.$equipment->next_service_due_at?->format('M j, Y').'. Reply STOP to opt out.', [
             'tenant_id' => (int) $job->tenant_id,
             'batch_id' => 'equipment-maintenance-'.$eventKey,
             'source_label' => 'equipment_maintenance_due',

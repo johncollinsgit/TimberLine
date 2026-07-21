@@ -6,6 +6,7 @@ use App\Models\FieldServiceJob;
 use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceTimeEntry;
+use App\Models\FieldServiceTimeSession;
 use App\Models\MarketingConsentEvent;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Services\Agreements\AgreementManagementService;
 use App\Services\FieldService\EquipmentMaintenanceScheduler;
 use App\Services\FieldService\FieldServiceJobTransitionService;
+use App\Services\FieldService\FieldServiceTimeClockService;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -84,6 +86,20 @@ test('payroll hours submit review and export remain tenant and manager scoped', 
 
     $this->actingAs($user)->post(route('field-service.payroll-hours.review', ['tenant' => $tenant->slug, 'timeEntry' => $entry]), ['status' => 'approved'])->assertRedirect();
     expect($entry->fresh()->status)->toBe('approved');
+
+    $clock = app(FieldServiceTimeClockService::class);
+    $clock->start($tenant, $user, $job, '77777777-7777-4777-8777-777777777777');
+    $this->travel(2)->hours();
+    $session = $clock->stop($tenant, $user, '88888888-8888-4888-8888-888888888888', 'Timer work');
+    $this->actingAs($user)->post(route('field-service.payroll-timers.review', ['tenant' => $tenant->slug, 'timeSession' => $session]), [
+        'status' => 'approved',
+        'clocked_in_at' => $session->clocked_in_at->toDateTimeString(),
+        'clocked_out_at' => $session->clocked_out_at->toDateTimeString(),
+        'break_minutes' => 0,
+        'clock_out_notes' => 'Timer work corrected',
+    ])->assertRedirect();
+    expect(FieldServiceTimeSession::query()->findOrFail($session->id)->status)->toBe('approved');
+
     $this->actingAs($user)->get(route('field-service.payroll-hours.export', ['tenant' => $tenant->slug]))->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
 });
 

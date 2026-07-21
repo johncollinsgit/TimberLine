@@ -108,6 +108,15 @@ on 2026-07-21: Forge release `73789933`, commit `c272464…`, `/ready` HTTP 200.
 
 ### Work 2.0 Collins pilot (2026-07-14)
 
+#### Field Operations v3 reusable upgrade (2026-07-21)
+
+- Mobile bootstrap contract v3 supplies role-aware primary navigation. Managers receive Home, Work, Customers, Team, and More; field employees receive Home, Work, Clock In/Out, Messages, and Account. Entitlements, not tenant-name checks, control the reusable `time_tracking`, `team_communication`, `field_inventory`, `fleet`, `documents`, and `quickbooks` capabilities inside one Field Agent experience.
+- Field Service contract v5 divides Work into Current, Potential, and Past. Potential work is owner-reviewed QuickBooks estimates plus unlinked open-invoice candidates. The web Work surface uses Glide Data Grid for whole-row opening, search, sorting, saved personal views, visibility controls, pagination, bulk selection, and optimistic inline edits.
+- The server-authoritative clock permits one active session per tenant employee and supports idempotent start, break, resume, and stop actions. Manual entries remain valid and approved time is the payroll source. Job summaries include permission-filtered hours, active time, vehicles, material readiness, source context, and owner-only financial context.
+- Team communication provides tenant-scoped company, job, and direct channels with idempotent messages and read state. Employee invitations are tenant-bound, single-use, expire after seven days, and preserve an existing user's explicit role when accepted.
+- Job assets use the private disk selected by `WORKSPACE_ASSET_DISK`, with optimized images and thumbnails. Existing local assets remain readable during migration. Mobile clients may initialize signed direct uploads on a compatible private object-storage disk; local storage continues to use authenticated multipart uploads.
+- Deploy additively: merge through the protected `main` workflow, let migrations run before enabling `experience_version=3`, then stage web, TestFlight, and Android internal builds. Do not run destructive resets or bypass the GitHub test/build gate. Verify `/up` and `/ready` after the Forge atomic release.
+
 - Field Service contract v4 upgrades the existing jobs, participants, tasks, notes, assets, and QuickBooks lifecycle rather than introducing a parallel WorkOrder or universal-task system.
 - Work profiles are tenant-derived: `trades`, `professional`, `retail_production`, and `generic`. Only entitled trades tenants with `field_service.metadata.experience_version=2` receive the complete Work 2.0 renderer; Collins is the first pilot and all other tenants retain their current surfaces.
 - Collins Home is role-aware My Day. Workers receive participating jobs, due tasks, upcoming work, and unread updates. Managers receive team schedule plus blocked/unassigned/missing-detail queues. Owners/admins receive those operational views plus guarded reporting and Estimator destinations.

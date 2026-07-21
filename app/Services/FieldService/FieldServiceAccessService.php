@@ -14,7 +14,12 @@ class FieldServiceAccessService
     {
         $tenantId = $tenant instanceof Tenant ? (int) $tenant->id : $tenant;
 
-        return strtolower(trim((string) ($user->tenants()->whereKey($tenantId)->first()?->pivot?->role ?? '')));
+        $membership = $user->tenants()->whereKey($tenantId)->first();
+        if (! $membership || $membership->pivot?->membership_active === false || (int) $membership->pivot?->membership_active === 0) {
+            return '';
+        }
+
+        return strtolower(trim((string) ($membership->pivot?->role ?? '')));
     }
 
     public function canViewAllJobs(User $user, Tenant|int $tenant): bool

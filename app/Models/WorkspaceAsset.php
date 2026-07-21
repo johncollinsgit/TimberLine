@@ -13,6 +13,7 @@ class WorkspaceAsset extends Model
     protected $fillable = [
         'tenant_id', 'uploaded_by_user_id', 'source', 'external_id', 'visibility', 'storage_disk',
         'storage_path', 'file_name', 'mime_type', 'file_size', 'checksum', 'caption', 'tags',
+        'thumbnail_disk', 'thumbnail_path',
         'search_text', 'metadata', 'captured_at',
     ];
 

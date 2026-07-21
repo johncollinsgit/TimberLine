@@ -12,6 +12,7 @@ export default defineConfig(() => ({
         'resources/js/app.js',
         'resources/js/admin/master-data-grid.tsx',
         'resources/js/marketing/customers-grid.tsx',
+        'resources/js/field-service/jobs-grid.tsx',
         'resources/js/shopify/dashboard.tsx',
       ],
       refresh: true,

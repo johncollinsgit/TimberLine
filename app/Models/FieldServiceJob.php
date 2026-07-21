@@ -118,6 +118,23 @@ class FieldServiceJob extends Model
         return $this->hasMany(FieldServiceTimeEntry::class);
     }
 
+    public function timeSessions(): HasMany
+    {
+        return $this->hasMany(FieldServiceTimeSession::class);
+    }
+
+    public function vehicles(): BelongsToMany
+    {
+        return $this->belongsToMany(FieldServiceVehicle::class, 'field_service_job_vehicle_assignments')
+            ->withPivot(['tenant_id', 'assigned_by_user_id'])
+            ->withTimestamps();
+    }
+
+    public function teamChannel(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TeamChannel::class);
+    }
+
     public function assets(): BelongsToMany
     {
         return $this->belongsToMany(WorkspaceAsset::class, 'field_service_job_workspace_asset')

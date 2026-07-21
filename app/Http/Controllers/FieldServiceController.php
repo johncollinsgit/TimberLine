@@ -9,7 +9,9 @@ use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceTimeEntry;
+use App\Models\FieldServiceTimeSession;
 use App\Models\FieldServiceVehicle;
+use App\Models\FieldServiceWorkCandidate;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
@@ -17,9 +19,12 @@ use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
 use App\Services\FieldService\FieldServiceJobTransitionService;
+use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
+use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,9 +47,6 @@ class FieldServiceController extends Controller
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         $profile = $this->profiles->forTenant($tenant);
-        if ((int) ($profile['experience_version'] ?? 1) >= 2 && $request->query('view') !== 'list') {
-            return redirect()->route('field-service.calendar');
-        }
         $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
         $jobQuery = FieldServiceJob::query()
@@ -103,6 +105,143 @@ class FieldServiceController extends Controller
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
         ]);
+    }
+
+    public function jobsData(Request $request, TenantFinancialAccess $financialAccess, FieldServiceWorkCandidateService $candidates): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $user = $request->user();
+        $validated = $request->validate([
+            'bucket' => ['nullable', 'in:current,potential,past'], 'q' => ['nullable', 'string', 'max:160'],
+            'sort' => ['nullable', 'in:status,scheduled_for,priority,customer,title,hours,updated_at'], 'dir' => ['nullable', 'in:asc,desc'],
+            'status' => ['nullable', 'array'], 'status.*' => ['string', 'max:40'], 'assignee_id' => ['nullable', 'integer'],
+            'vehicle_id' => ['nullable', 'integer'], 'per_page' => ['nullable', 'integer', 'min:20', 'max:100'], 'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $bucket = (string) ($validated['bucket'] ?? 'current');
+        $owner = $financialAccess->allows($user, $tenant);
+        if ($bucket === 'potential') {
+            abort_unless($this->fieldServiceAccess->canManageJobs($user, $tenant), 403);
+            $rows = $candidates->pending($tenant)->map(fn ($candidate): array => [
+                'id' => (int) $candidate->id, 'kind' => 'candidate', 'title' => $candidate->title, 'customer' => $candidate->customer_name,
+                'status' => 'potential', 'source' => $candidate->source_type, 'amount' => (float) ($candidate->amount ?? 0),
+                'balance' => (float) ($candidate->balance ?? 0), 'updated_at' => $candidate->updated_at?->toIso8601String(),
+                'review_url' => route('mobile.v1.workspace.field-service.work-candidates.review', ['tenant' => $tenant->slug, 'candidate' => $candidate->id], false),
+            ])->values();
+
+            return response()->json(['rows' => $rows, 'meta' => ['bucket' => $bucket, 'page' => 1, 'last_page' => 1, 'total' => $rows->count()], 'options' => $this->gridOptions($tenant)]);
+        }
+
+        $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
+            ->with(['assignedUser:id,name', 'participants:id,name', 'vehicles:id,tenant_id,name,identifier'])
+            ->withSum(['timeEntries as manual_minutes' => fn ($entries) => $entries->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
+            ->withSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds')
+            ->withSum('financialDocuments as financial_total', 'total_amount')->withSum('financialDocuments as financial_balance', 'balance');
+        $this->fieldServiceAccess->scopeVisibleJobs($query, $user, $tenant);
+        $query->whereIn('operational_status', $bucket === 'past' ? ['complete', 'canceled', 'history'] : ['needs_details', 'scheduled', 'active', 'blocked']);
+        if (($validated['status'] ?? []) !== []) {
+            $query->whereIn('operational_status', $validated['status']);
+        }
+        if (filled($validated['assignee_id'] ?? null)) {
+            $query->where('assigned_user_id', (int) $validated['assignee_id']);
+        }
+        if (filled($validated['vehicle_id'] ?? null)) {
+            $query->whereHas('vehicles', fn ($vehicles) => $vehicles->whereKey((int) $validated['vehicle_id']));
+        }
+        $search = trim((string) ($validated['q'] ?? ''));
+        if ($search !== '') {
+            $like = '%'.$search.'%';
+            $query->where(fn ($jobs) => $jobs->where('title', 'like', $like)->orWhere('customer_name', 'like', $like)->orWhere('service_address_line_1', 'like', $like)->orWhere('service_city', 'like', $like));
+        }
+        $sort = (string) ($validated['sort'] ?? 'status');
+        $dir = (string) ($validated['dir'] ?? 'asc');
+        if ($sort === 'status') {
+            $query->orderByRaw("case operational_status when 'blocked' then 0 when 'active' then 1 when 'scheduled' then 2 when 'needs_details' then 3 else 4 end ".($dir === 'desc' ? 'desc' : 'asc'))->orderByRaw('scheduled_for is null')->orderBy('scheduled_for');
+        } else {
+            $column = match ($sort) {
+                'scheduled_for' => 'scheduled_for', 'priority' => 'priority', 'customer' => 'customer_name', 'title' => 'title', 'hours' => 'timer_seconds', default => 'updated_at'
+            };
+            $query->orderBy($column, $dir);
+        }
+        $page = $query->orderBy('id')->paginate((int) ($validated['per_page'] ?? 50));
+
+        return response()->json([
+            'rows' => $page->getCollection()->map(fn (FieldServiceJob $job): array => $this->gridRow($job, $tenant, $owner))->values(),
+            'meta' => ['bucket' => $bucket, 'page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total()],
+            'options' => $this->gridOptions($tenant),
+        ]);
+    }
+
+    public function updateJobGrid(Request $request, FieldServiceJob $job): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless((int) $job->tenant_id === (int) $tenant->id && $this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        $validated = $request->validate([
+            'operational_status' => ['sometimes', 'in:needs_details,scheduled,active,blocked,complete,canceled'],
+            'scheduled_for' => ['sometimes', 'nullable', 'date'], 'priority' => ['sometimes', 'in:low,normal,high,urgent'],
+            'assigned_user_id' => ['sometimes', 'nullable', 'integer'], 'participant_user_ids' => ['sometimes', 'array', 'max:50'], 'participant_user_ids.*' => ['integer'],
+            'vehicle_ids' => ['sometimes', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
+        ]);
+        if (array_key_exists('assigned_user_id', $validated)) {
+            $validated['assigned_user_id'] = filled($validated['assigned_user_id']) ? $tenant->users()->whereKey((int) $validated['assigned_user_id'])->value('users.id') : null;
+        }
+        $job->fill(collect($validated)->only(['scheduled_for', 'priority', 'assigned_user_id'])->all())->save();
+        if (filled($validated['operational_status'] ?? null)) {
+            $status = $validated['operational_status'];
+            $job->forceFill([
+                'operational_status' => $status, 'status_source' => 'manual',
+                'started_at' => $status === 'active' ? ($job->started_at ?? now()) : $job->started_at,
+                'completed_at' => $status === 'complete' ? ($job->completed_at ?? now()) : null,
+                'canceled_at' => $status === 'canceled' ? ($job->canceled_at ?? now()) : null,
+                'blocked_reason' => $status === 'blocked' ? ($job->blocked_reason ?: 'Blocked from jobs grid') : null,
+            ])->save();
+        }
+        if (array_key_exists('participant_user_ids', $validated)) {
+            $ids = $tenant->users()->whereIn('users.id', $validated['participant_user_ids'])->pluck('users.id')->map(fn ($id): int => (int) $id);
+            $job->participants()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'role' => 'member', 'following' => true]])->all());
+        }
+        if (array_key_exists('vehicle_ids', $validated)) {
+            $ids = FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->whereIn('id', $validated['vehicle_ids'])->pluck('id')->map(fn ($id): int => (int) $id);
+            $job->vehicles()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'assigned_by_user_id' => (int) $request->user()->id]])->all());
+        }
+
+        return response()->json(['ok' => true, 'saved_at' => now()->toIso8601String()]);
+    }
+
+    public function reviewWorkCandidate(Request $request, FieldServiceWorkCandidate $candidate, FieldServiceWorkCandidateService $candidates): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        $validated = $request->validate(['action' => ['required', 'in:create_job,link,dismiss'], 'job_id' => ['nullable', 'integer', 'required_if:action,link']]);
+        if ($validated['action'] === 'dismiss') {
+            $candidates->dismiss($tenant, $request->user(), $candidate);
+
+            return response()->json(['ok' => true]);
+        }
+        if ($validated['action'] === 'link') {
+            $job = FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail((int) $validated['job_id']);
+            $candidates->link($tenant, $request->user(), $candidate, $job);
+        } else {
+            $job = $candidates->createJob($tenant, $request->user(), $candidate);
+        }
+
+        return response()->json(['ok' => true, 'url' => route('field-service.jobs.show', ['job' => $job, 'back' => 'grid'])]);
+    }
+
+    /** @return array<string,mixed> */
+    protected function gridRow(FieldServiceJob $job, Tenant $tenant, bool $owner): array
+    {
+        $seconds = ((int) ($job->manual_minutes ?? 0) * 60) + (int) ($job->timer_seconds ?? 0);
+
+        return ['id' => (int) $job->id, 'kind' => 'job', 'url' => route('field-service.jobs.show', ['job' => $job, 'back' => 'grid']), 'title' => $job->title, 'customer' => $job->customer_name, 'status' => $job->operational_status, 'priority' => $job->priority ?: 'normal', 'scheduled_for' => $job->scheduled_for?->toIso8601String(), 'lead_id' => $job->assigned_user_id, 'lead' => $job->assignedUser?->name, 'crew' => $job->participants->pluck('name')->values(), 'vehicles' => $job->vehicles->map(fn ($vehicle): array => ['id' => (int) $vehicle->id, 'name' => $vehicle->name])->values(), 'hours' => round($seconds / 3600, 2), 'source' => $job->external_source ?: 'Everbranch', 'amount' => $owner ? (float) ($job->financial_total ?? 0) : null, 'balance' => $owner ? (float) ($job->financial_balance ?? 0) : null, 'updated_at' => $job->updated_at?->toIso8601String()];
+    }
+
+    /** @return array<string,mixed> */
+    protected function gridOptions(Tenant $tenant): array
+    {
+        return ['team' => $tenant->users()->wherePivot('membership_active', true)->orderBy('name')->get(['users.id', 'users.name'])->map(fn ($user): array => ['id' => (int) $user->id, 'name' => $user->name])->values(), 'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'identifier']), 'statuses' => ['blocked', 'active', 'scheduled', 'needs_details', 'complete', 'canceled']];
     }
 
     public function calendar(Request $request): View
@@ -202,9 +341,13 @@ class FieldServiceController extends Controller
             ->with(['user:id,name,email', 'job:id,title', 'reviewedBy:id,name'])
             ->when(! $canManage, fn ($query) => $query->where('user_id', $request->user()->id))
             ->orderByDesc('work_date')->latest('id')->limit(250)->get();
+        $timerSessions = FieldServiceTimeSession::query()->forTenantId((int) $tenant->id)
+            ->with(['user:id,name,email', 'job:id,title'])
+            ->when(! $canManage, fn ($query) => $query->where('user_id', $request->user()->id))
+            ->orderByDesc('clocked_in_at')->limit(250)->get();
 
         return view('field-service.payroll-hours', [
-            'tenant' => $tenant, 'entries' => $entries, 'canManage' => $canManage,
+            'tenant' => $tenant, 'entries' => $entries, 'timerSessions' => $timerSessions, 'canManage' => $canManage,
             'team' => $tenant->users()->orderBy('name')->get(['users.id', 'users.name', 'users.email']),
             'jobs' => FieldServiceJob::query()->forTenantId((int) $tenant->id)->whereNotIn('operational_status', ['canceled', 'history'])->latest('id')->limit(250)->get(['id', 'title']),
         ]);
@@ -252,21 +395,62 @@ class FieldServiceController extends Controller
         return back()->with('status', 'Hours marked '.$data['status'].'.');
     }
 
+    public function reviewTimerSession(Request $request, FieldServiceTimeSession $timeSession): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless((int) $timeSession->tenant_id === (int) $tenant->id, 404);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        $data = $request->validate([
+            'status' => ['required', 'in:submitted,approved,rejected'],
+            'clocked_in_at' => ['required', 'date'],
+            'clocked_out_at' => ['required', 'date', 'after:clocked_in_at'],
+            'break_minutes' => ['required', 'integer', 'min:0', 'max:720'],
+            'clock_out_notes' => ['nullable', 'string', 'max:3000'],
+        ]);
+        $startedAt = \Carbon\Carbon::parse($data['clocked_in_at']);
+        $endedAt = \Carbon\Carbon::parse($data['clocked_out_at']);
+        $breakSeconds = (int) $data['break_minutes'] * 60;
+        $duration = max(0, $startedAt->diffInSeconds($endedAt) - $breakSeconds);
+        if ($duration === 0) {
+            return back()->withErrors(['break_minutes' => 'Break time must be shorter than the timer period.']);
+        }
+        $reviewed = in_array($data['status'], ['approved', 'rejected'], true);
+        $timeSession->breaks()->whereNull('ended_at')->update(['ended_at' => $endedAt, 'duration_seconds' => 0]);
+        $timeSession->forceFill([
+            'active_user_key' => null,
+            'status' => $data['status'],
+            'clocked_in_at' => $startedAt,
+            'clocked_out_at' => $endedAt,
+            'break_seconds' => $breakSeconds,
+            'duration_seconds' => $duration,
+            'clock_out_notes' => $data['clock_out_notes'] ?? null,
+            'reviewed_by_user_id' => $reviewed ? $request->user()->id : null,
+            'reviewed_at' => $reviewed ? now() : null,
+        ])->save();
+
+        return back()->with('status', 'Timer session marked '.$data['status'].'.');
+    }
+
     public function exportTimeEntries(Request $request): StreamedResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
         $entries = FieldServiceTimeEntry::query()->forTenantId((int) $tenant->id)->with(['user:id,name,email', 'job:id,title'])->where('status', 'approved')->orderBy('work_date')->orderBy('id')->get();
+        $timerSessions = FieldServiceTimeSession::query()->forTenantId((int) $tenant->id)->with(['user:id,name,email', 'job:id,title'])->where('status', 'approved')->orderBy('clocked_in_at')->orderBy('id')->get();
 
-        return response()->streamDownload(function () use ($entries): void {
+        return response()->streamDownload(function () use ($entries, $timerSessions): void {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['work_date', 'employee', 'employee_email', 'job', 'start', 'end', 'break_minutes', 'hours', 'status', 'notes']);
+            fputcsv($handle, ['work_date', 'employee', 'employee_email', 'job', 'start', 'end', 'break_minutes', 'hours', 'status', 'notes', 'source']);
             foreach ($entries as $entry) {
-                fputcsv($handle, [$entry->work_date?->toDateString(), $entry->user?->name, $entry->user?->email, $entry->job?->title, $entry->started_at, $entry->ended_at, $entry->break_minutes, number_format($entry->duration_minutes / 60, 2, '.', ''), $entry->status, $entry->notes]);
+                fputcsv($handle, [$entry->work_date?->toDateString(), $entry->user?->name, $entry->user?->email, $entry->job?->title, $entry->started_at, $entry->ended_at, $entry->break_minutes, number_format($entry->duration_minutes / 60, 2, '.', ''), $entry->status, $entry->notes, 'manual']);
+            }
+            foreach ($timerSessions as $session) {
+                fputcsv($handle, [$session->clocked_in_at?->toDateString(), $session->user?->name, $session->user?->email, $session->job?->title, $session->clocked_in_at?->format('H:i'), $session->clocked_out_at?->format('H:i'), number_format($session->break_seconds / 60, 0, '.', ''), number_format($session->duration_seconds / 3600, 2, '.', ''), $session->status, $session->clock_out_notes, 'timer']);
             }
             fclose($handle);
-        }, 'collins-electric-approved-payroll-hours.csv', ['Content-Type' => 'text/csv']);
+        }, Str::slug((string) $tenant->name).'-approved-payroll-hours.csv', ['Content-Type' => 'text/csv']);
     }
 
     public function storeJob(Request $request): RedirectResponse

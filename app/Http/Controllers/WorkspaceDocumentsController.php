@@ -69,13 +69,14 @@ class WorkspaceDocumentsController extends Controller
         return back()->with('status', 'Documents uploaded.');
     }
 
-    public function download(Request $request, Tenant $tenant, WorkspaceAsset $asset, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit): StreamedResponse
+    public function download(Request $request, Tenant $tenant, WorkspaceAsset $asset, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit, WorkspaceAssetService $assets): StreamedResponse
     {
         $this->authorizeAsset($request, $tenant, $asset, $financialAccess);
-        abort_unless(Storage::disk($asset->storage_disk)->exists($asset->storage_path), 404);
+        $disk = $assets->readableDisk($asset);
+        abort_unless($disk, 404);
         $audit->record($tenant, $asset, $request->user(), 'downloaded');
 
-        return Storage::disk($asset->storage_disk)->download($asset->storage_path, $asset->file_name, [
+        return Storage::disk($disk)->download($asset->storage_path, $asset->file_name, [
             'Content-Type' => $asset->mime_type ?: 'application/octet-stream',
             'Cache-Control' => 'private, no-store',
         ]);
@@ -102,6 +103,9 @@ class WorkspaceDocumentsController extends Controller
         abort_unless($owner || (int) $asset->uploaded_by_user_id === (int) $request->user()->id, 403);
         $audit->record($tenant, $asset, $request->user(), 'deleted', ['checksum' => $asset->checksum, 'file_name' => $asset->file_name]);
         Storage::disk($asset->storage_disk)->delete($asset->storage_path);
+        if ($asset->thumbnail_disk && $asset->thumbnail_path) {
+            Storage::disk($asset->thumbnail_disk)->delete($asset->thumbnail_path);
+        }
         $asset->delete();
 
         return back()->with('status', 'Document deleted.');
