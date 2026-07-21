@@ -28,6 +28,8 @@ test('app review workspace command creates an idempotent fictional field operati
         ->and(FieldServiceJob::query()->forTenantId($tenant->id)->count())->toBe(2)
         ->and(FieldServiceTask::query()->forTenantId($tenant->id)->sole()->assignees()->count())->toBe(2)
         ->and(FieldServiceWorkCandidate::query()->forTenantId($tenant->id)->count())->toBe(1)
+        ->and(data_get($tenant->fresh()->accessProfile->metadata, 'tenant_blueprint.business_template'))->toBe('electrician')
+        ->and(data_get($tenant->moduleEntitlements()->where('module_key', 'field_service')->value('metadata'), 'experience_version'))->toBe(3)
         ->and($tenant->moduleEntitlements()->where('enabled_status', 'enabled')->count())->toBe(7);
 });
 
