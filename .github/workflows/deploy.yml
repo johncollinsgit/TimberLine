@@ -110,40 +110,17 @@ jobs:
     steps:
       - name: Validate deployment secrets
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          FORGE_DEPLOY_HOOK_URL: ${{ secrets.FORGE_DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
-          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
-            if [ -z "${!var}" ]; then
-              echo "::error::Missing required secret: $var"
-              exit 1
-            fi
-          done
+          if [ -z "$FORGE_DEPLOY_HOOK_URL" ]; then
+            echo "::error::Missing required production secret: FORGE_DEPLOY_HOOK_URL"
+            exit 1
+          fi
 
-      - name: Configure SSH
+      - name: Trigger Forge atomic release
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          FORGE_DEPLOY_HOOK_URL: ${{ secrets.FORGE_DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-
-      - name: Deploy over SSH
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          DEPLOY_REF: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "set -euo pipefail; cd '$DEPLOY_PATH'; git fetch origin main; git reset --hard; git clean -fd; git checkout -B main '$DEPLOY_REF'; APP_DIR='$DEPLOY_PATH' DEPLOY_REF='$DEPLOY_REF' bash '$DEPLOY_PATH/scripts/deploy_backstage.sh'"
+          curl --fail --silent --show-error --max-time 30 --request POST "$FORGE_DEPLOY_HOOK_URL"
