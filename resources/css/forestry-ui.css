@@ -10699,6 +10699,31 @@ body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb
   --eb-font-display: "SF Pro Display", Inter, sans-serif;
 }
 
+/* Team access actions use light, high-contrast treatments across tenant themes. */
+.team-access-primary-action {
+  background: color-mix(in srgb, var(--fb-accent) 14%, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--fb-accent) 42%, #ffffff);
+  color: var(--fb-text) !important;
+}
+
+.team-access-primary-action:hover,
+.team-access-primary-action:focus-visible {
+  background: color-mix(in srgb, var(--fb-accent) 24%, #ffffff);
+  border-color: color-mix(in srgb, var(--fb-accent) 58%, #ffffff);
+}
+
+.team-access-remove-action {
+  background: #fff4f3;
+  border: 1px solid #f6c7c3;
+  color: #9f2018 !important;
+}
+
+.team-access-remove-action:hover,
+.team-access-remove-action:focus-visible {
+  background: #ffe9e7;
+  border-color: #e9a7a1;
+}
+
 .mf-tenant-themed[data-tenant-decor="signal"] .mf-app-main::before,
 .mf-tenant-themed[data-tenant-decor="dawn"] .mf-app-main::before,
 .mf-tenant-themed[data-tenant-decor="grid"] .mf-app-main::before {
