@@ -21,6 +21,17 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   a fresh release, build/test preparation before activation, compatible
   migrations, atomic activation, then queue restart. Retain an audited
   emergency path only.
+- Local verification nuance: `composer test` starts with the repository-wide
+  `pint --parallel --test` gate and may stop on inherited legacy style debt
+  before Pest starts. For a scoped change, run
+  `composer exec pint -- --dirty --test` to prove every changed PHP file is
+  clean, then run the full suite directly with
+  `php -d memory_limit=512M ./vendor/bin/pest`. Do not run a bulk formatter or
+  stage unrelated style rewrites just to clear the baseline. The GitHub
+  `linter` workflow currently runs `composer lint` in its disposable runner,
+  so a green result means formatting completed there, not necessarily that the
+  checked-out tree began globally clean; the PHP-version test jobs and the
+  main-branch test/build deploy gate remain mandatory.
 
 ## Agreement and Billing-Lane Guardrails (2026-07-16)
 
@@ -142,7 +153,7 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - `/api/mobile/v1/modern-forestry/home` is the slowest mobile endpoint on cold cache. It now serves a local shell first and defers full Shopify-backed refresh; continue moving the app toward stale-while-revalidate bootstrap so bag, product, and shop navigation do not feel blocked by Home.
 - Home boot rule: do not add root-level iOS startup tasks that wait on Candle Cash cleanup, checkout recovery, or session-linked bag repair. Keep reward-release and bag-repair work scoped to explicit Bag / checkout actions, or Home can look frozen even when the regression is unrelated to Home itself.
 - `/api/mobile/v1/modern-forestry/products/{handle}` uses short server-side caching for repeat product detail access.
-- Production deploy warning: GitHub Actions can fail during `vite build` with exit code 137 under memory pressure. For backend-only PHP changes, a manual SSH deploy without rebuilding assets is acceptable, followed by `optimize:clear`, config/route/view cache rebuilds, `queue:restart`, and nginx/php-fpm reload when available. A failed asset build can leave the API feeling degraded or inconsistent until caches/processes are reset.
+- Historical deploy warning: GitHub Actions previously failed during `vite build` with exit code 137 under memory pressure. Production has since been resized and routine manual SSH deployment is retired. Keep the GitHub main-branch test/build gate and Forge atomic release path; use the audited emergency path only when explicitly approved.
 
 ## Everbranch Readiness Operating Rule (2026-05-21)
 
