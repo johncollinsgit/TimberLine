@@ -8,6 +8,7 @@ use App\Models\TenantDirectInvoice;
 use App\Services\Billing\DirectInvoiceManagementService;
 use App\Services\Billing\DirectInvoiceSmsReminderService;
 use App\Services\Billing\DirectStripeInvoiceService;
+use App\Services\Billing\TenantInvoiceBillingProfileService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,8 +25,14 @@ class LandlordDirectInvoiceController extends Controller
         Gate::authorize('manage-landlord-commercial');
         $tenantId = $request->integer('tenant_id');
         $status = strtolower(trim((string) $request->query('status')));
-        $invoices = TenantDirectInvoice::query()->with('tenant')
-            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+        $baseQuery = TenantDirectInvoice::query()->with('tenant')
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
+        $summary = [
+            'sent' => (clone $baseQuery)->whereNotIn('status', ['draft', 'sending'])->count(),
+            'awaiting' => (clone $baseQuery)->whereIn('status', ['open', 'payment_failed'])->count(),
+            'paid' => (clone $baseQuery)->where('status', 'paid')->count(),
+        ];
+        $invoices = $baseQuery
             ->when($status !== '', fn ($query) => $query->where('status', $status))
             ->latest('id')->paginate(25)->withQueryString();
 
@@ -34,22 +41,36 @@ class LandlordDirectInvoiceController extends Controller
             'tenants' => Tenant::query()->orderBy('name')->get(['id', 'name']),
             'tenantId' => $tenantId,
             'status' => $status,
+            'summary' => $summary,
         ]);
     }
 
-    public function create(Tenant $tenant): View
+    public function create(Tenant $tenant, TenantInvoiceBillingProfileService $billingProfiles): View
     {
         Gate::authorize('manage-landlord-commercial');
 
-        return view('landlord.invoices.form', ['tenant' => $tenant, 'invoice' => new TenantDirectInvoice]);
+        $defaults = $billingProfiles->defaultsFor($tenant);
+
+        return view('landlord.invoices.form', [
+            'tenant' => $tenant,
+            'invoice' => new TenantDirectInvoice($defaults),
+            'billingProfileComplete' => (bool) $defaults['has_saved_profile'],
+        ]);
     }
 
-    public function store(Request $request, Tenant $tenant, DirectInvoiceManagementService $management): RedirectResponse
+    public function store(Request $request, Tenant $tenant, DirectInvoiceManagementService $management, TenantInvoiceBillingProfileService $billingProfiles, DirectStripeInvoiceService $stripe): RedirectResponse
     {
         Gate::authorize('manage-landlord-commercial');
         $invoice = $management->createDraft($tenant, $this->validated($request), $request->user()?->id);
+        $billingProfiles->remember($tenant, $invoice);
 
-        return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with('status', 'Invoice draft created. Review it before sending.');
+        if ($request->boolean('send_now')) {
+            $result = $stripe->send($invoice, $request->user()?->id);
+
+            return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with((bool) $result['ok'] ? 'status' : 'status_error', (bool) $result['ok'] ? 'Invoice emailed to '.$invoice->customer_email.'.' : (string) $result['message']);
+        }
+
+        return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with('status', 'Invoice draft saved.');
     }
 
     public function show(Tenant $tenant, TenantDirectInvoice $invoice, DirectStripeInvoiceService $stripe): View
@@ -66,15 +87,22 @@ class LandlordDirectInvoiceController extends Controller
         $invoice = $this->scoped($tenant, $invoice);
         abort_unless($invoice->isEditable(), 409, 'Only an unsent draft can be edited.');
 
-        return view('landlord.invoices.form', ['tenant' => $tenant, 'invoice' => $invoice]);
+        return view('landlord.invoices.form', ['tenant' => $tenant, 'invoice' => $invoice, 'billingProfileComplete' => true]);
     }
 
-    public function update(Request $request, Tenant $tenant, TenantDirectInvoice $invoice, DirectInvoiceManagementService $management): RedirectResponse
+    public function update(Request $request, Tenant $tenant, TenantDirectInvoice $invoice, DirectInvoiceManagementService $management, TenantInvoiceBillingProfileService $billingProfiles, DirectStripeInvoiceService $stripe): RedirectResponse
     {
         Gate::authorize('manage-landlord-commercial');
         $invoice = $management->updateDraft($this->scoped($tenant, $invoice), $this->validated($request), $request->user()?->id);
+        $billingProfiles->remember($tenant, $invoice);
 
-        return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with('status', 'Invoice draft updated.');
+        if ($request->boolean('send_now')) {
+            $result = $stripe->send($invoice, $request->user()?->id);
+
+            return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with((bool) $result['ok'] ? 'status' : 'status_error', (bool) $result['ok'] ? 'Invoice emailed to '.$invoice->customer_email.'.' : (string) $result['message']);
+        }
+
+        return redirect()->route('landlord.invoices.show', [$tenant, $invoice])->with('status', 'Invoice draft saved.');
     }
 
     public function send(Request $request, Tenant $tenant, TenantDirectInvoice $invoice, DirectStripeInvoiceService $stripe): RedirectResponse

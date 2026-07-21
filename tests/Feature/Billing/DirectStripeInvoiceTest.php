@@ -81,6 +81,51 @@ test('landlord creates a tenant-scoped draft while Shopify and third-party lines
     expect(LandlordOperatorAction::query()->where('action_type', 'tenant_billing.direct_invoice.create')->where('tenant_id', $tenant->id)->exists())->toBeTrue();
 });
 
+test('new invoice prepopulates and then remembers the workspace billing contact', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+        'metadata' => ['admin' => ['primary_contact_email' => 'owner@acme.example']],
+    ]);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+
+    $this->actingAs($admin)->get(route('landlord.invoices.create', $tenant))
+        ->assertOk()
+        ->assertSee('owner@acme.example')
+        ->assertSee('One-time setup');
+
+    $this->actingAs($admin)->post(route('landlord.invoices.store', $tenant), directInvoicePayload([
+        'customer_name' => 'Acme Billing',
+        'customer_email' => 'accounts@acme.example',
+    ]))->assertRedirect();
+
+    expect(data_get($tenant->accessProfile->fresh()->metadata, 'billing_contact.customer_email'))->toBe('accounts@acme.example')
+        ->and(data_get($tenant->accessProfile->fresh()->metadata, 'billing_contact.billing_address.city'))->toBe('Greenville');
+
+    $this->actingAs($admin)->get(route('landlord.invoices.create', $tenant))
+        ->assertOk()
+        ->assertSee('accounts@acme.example')
+        ->assertSee('Saved billing profile');
+});
+
+test('invoice desk provides a workspace chooser and clear history actions', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $invoice = createDirectInvoice($tenant, $admin);
+    $invoice->forceFill(['status' => 'open'])->save();
+
+    $this->actingAs($admin)->get(route('landlord.invoices.index'))
+        ->assertOk()
+        ->assertSee('Create an invoice')
+        ->assertSee('Choose a workspace client')
+        ->assertSee('Awaiting payment')
+        ->assertSee('View invoice')
+        ->assertSee(route('landlord.invoices.show', [$tenant, $invoice]), false);
+});
+
 test('landlord can show a standard rate and a separate discount on a direct invoice', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
