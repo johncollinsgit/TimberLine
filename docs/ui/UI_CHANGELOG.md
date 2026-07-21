@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-07-21 - Collins Work Resources, Customers, and Navigation Completion
+
+### What Changed
+- Added a functional Inventory & Work Vans workspace for warehouse stock, reorder levels, unit cost, van loading/unloading, job/van/employee deployment, onboard stock, job consumption, and recent movement history.
+- Added a tenant-level Customers destination backed by canonical customer profiles, plus direct `Text customer` and `Email customer` actions. Texting reuses the consent-aware Everbranch composer; email opens the device mail client and is explicitly untracked.
+- Pinned Settings immediately above Workspace Guide while keeping User Agreements and Account Help above it.
+- Preserved the Work grid's explicit frozen Open control, single-click editing, compact job overlay, Collins theme, readable Account Help hero, and aligned high-contrast Team Access actions.
+
+### Guardrails
+- Resource writes are manager/admin-only, transactional, quantity-safe, and tenant-scoped. Members see only deployments for participating jobs.
+- Customers resolve from tenant-owned profiles, including QuickBooks imports. Wholesale applications remain isolated to the configured wholesale workspace.
+- SMS remains blocked by missing phone, consent, opt-out, provider, and delivery-readiness controls; `mailto:` does not create delivery history.
+
 ## 2026-07-21 - Flat Business Pricing Homepage Message
 
 ### What Changed

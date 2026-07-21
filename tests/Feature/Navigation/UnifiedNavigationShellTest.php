@@ -71,6 +71,39 @@ test('account help uses a readable light support hero', function () {
         ->assertDontSee('from-zinc-950', false);
 });
 
+test('tenant settings stays immediately above workspace guide', function () {
+    $tenant = Tenant::query()->create(['name' => 'Ordered Tenant', 'slug' => 'ordered-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'ui_preferences' => ['sidebar_order' => ['administration', 'account-help', 'home']],
+    ]);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $html = $this->actingAs($user)
+        ->get(route('dashboard', ['tenant' => $tenant->slug]))
+        ->assertOk()
+        ->getContent();
+
+    $agreements = strpos($html, 'data-sidebar-key="user-agreements"');
+    $help = strpos($html, 'data-sidebar-key="account-help"');
+    $settings = strpos($html, 'data-sidebar-key="administration"');
+    $guide = strpos($html, 'data-sidebar-key="wiki-sections"');
+
+    expect($agreements)->not->toBeFalse()
+        ->and($help)->not->toBeFalse()
+        ->and($settings)->not->toBeFalse()
+        ->and($guide)->not->toBeFalse()
+        ->and($agreements)->toBeLessThan($settings)
+        ->and($help)->toBeLessThan($settings)
+        ->and($settings)->toBeLessThan($guide);
+});
+
 test('marketing modules route opens marketing hub and only marks Features active', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Navigation Tenant',

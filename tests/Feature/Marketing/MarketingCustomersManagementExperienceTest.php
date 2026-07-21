@@ -4,9 +4,9 @@ use App\Models\CustomerExternalProfile;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
+use App\Models\MarketingProfileWishlistItem;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
-use App\Models\MarketingProfileWishlistItem;
 use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\User;
@@ -1204,6 +1204,11 @@ test('customers index row links to detail page and detail renders canonical iden
     $this->actingAs($admin)
         ->get($showUrl)
         ->assertOk()
+        ->assertSeeText('Text customer')
+        ->assertSeeText('Email customer')
+        ->assertSee('href="mailto:riley.carter@example.com"', false)
+        ->assertSee(route('marketing.messages.send', ['profile_id' => $profile->id]), false)
+        ->assertSeeText('is not tracked by Everbranch')
         ->assertSeeText('Identity + Address Update')
         ->assertSeeText('External Enrichment (Read-Only)')
         ->assertSeeText('riley.carter@example.com')
@@ -1254,7 +1259,7 @@ test('customer detail prefers native review projections while keeping legacy gro
         'provider' => 'backstage',
         'integration' => 'native',
         'store_key' => 'retail',
-        'external_customer_id' => 'profile:' . $profile->id,
+        'external_customer_id' => 'profile:'.$profile->id,
         'external_review_id' => 'native-pref-1',
         'rating' => 5,
         'title' => 'Native-first projection',

@@ -131,9 +131,9 @@ class UnifiedAppNavigationService
 
             if ($fieldServiceEnabled && Route::has('field-service.index')) {
                 $fieldServiceChildren = [
-                    ['key' => 'field-service-jobs', 'icon' => 'briefcase', 'href' => route('field-service.index'), 'label' => 'Jobs', 'current' => request()->routeIs('field-service.*')],
-                    ['key' => 'field-service-materials', 'icon' => 'archive-box', 'href' => route('field-service.index').'#materials', 'label' => 'Materials', 'current' => false],
-                    ['key' => 'field-service-vehicles', 'icon' => 'truck', 'href' => route('field-service.index').'#vehicles', 'label' => 'Work vans', 'current' => false],
+                    ['key' => 'field-service-jobs', 'icon' => 'briefcase', 'href' => route('field-service.index'), 'label' => 'Jobs', 'current' => request()->routeIs('field-service.index', 'field-service.jobs.*', 'field-service.work-candidates.*')],
+                    ['key' => 'field-service-materials', 'icon' => 'archive-box', 'href' => route('field-service.resources').'#inventory', 'label' => 'Inventory', 'current' => false],
+                    ['key' => 'field-service-vehicles', 'icon' => 'truck', 'href' => route('field-service.resources').'#vans', 'label' => 'Work vans', 'current' => false],
                 ];
 
                 $workItems[] = [
@@ -143,6 +143,16 @@ class UnifiedAppNavigationService
                     'label' => 'Work',
                     'current' => request()->routeIs('field-service.*'),
                     'children' => $fieldServiceChildren,
+                ];
+            }
+
+            if ($customersEnabled && Route::has('marketing.customers')) {
+                $workItems[] = [
+                    'key' => 'customers',
+                    'icon' => 'users',
+                    'href' => route('marketing.customers'),
+                    'label' => 'Customers',
+                    'current' => request()->routeIs('marketing.customers*'),
                 ];
             }
 
@@ -166,16 +176,6 @@ class UnifiedAppNavigationService
             $opsItems = $workItems;
 
             if ($this->isFrontYardFoodsTenant($tenant)) {
-                if ($customersEnabled && Route::has('marketing.customers')) {
-                    $opsItems[] = [
-                        'key' => 'front-yard-customers',
-                        'icon' => 'users',
-                        'href' => route('marketing.customers'),
-                        'label' => 'Customers',
-                        'current' => request()->routeIs('marketing.customers*'),
-                    ];
-                }
-
                 if ($messagingRelevant && Route::has('marketing.messages')) {
                     $opsItems[] = [
                         'key' => 'front-yard-messaging',
@@ -211,6 +211,7 @@ class UnifiedAppNavigationService
         $prefs = is_array($user?->ui_preferences ?? null) ? $user->ui_preferences : [];
         $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
         $items = $this->orderedItems($items, $preferredSidebarOrder);
+        $items = $this->pinTenantSettingsLast($items);
 
         $canCustomizeWorkspace = $this->brandProfileService()->userCanCustomize($user, $tenant);
         $adminSubItems = $canAccessOps ? $this->adminSubItems($isAdmin, $tenant, $canCustomizeWorkspace) : [];
@@ -480,6 +481,31 @@ class UnifiedAppNavigationService
 
                 return $item;
             })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Workspace Guide is rendered after these items by the tenant shell. Keep
+     * Settings immediately above it while preserving the preferred order of
+     * every other tenant navigation item.
+     *
+     * @param  array<int,array<string,mixed>>  $items
+     * @return array<int,array<string,mixed>>
+     */
+    protected function pinTenantSettingsLast(array $items): array
+    {
+        $settings = collect($items)->first(
+            fn (array $item): bool => (string) ($item['key'] ?? '') === 'administration'
+        );
+
+        if (! is_array($settings)) {
+            return $items;
+        }
+
+        return collect($items)
+            ->reject(fn (array $item): bool => (string) ($item['key'] ?? '') === 'administration')
+            ->push($settings)
             ->values()
             ->all();
     }

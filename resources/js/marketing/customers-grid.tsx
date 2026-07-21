@@ -67,6 +67,7 @@ type RowData = {
 type RootDataset = {
     endpoint: string;
     addCustomerUrl: string;
+    messageCustomerUrl: string;
     initialFilters: FilterState;
     sortOptions: SortOption[];
 };
@@ -242,6 +243,7 @@ function parseRootDataset(root: HTMLElement): RootDataset {
     return {
         endpoint: root.dataset.endpoint || "/marketing/customers/data",
         addCustomerUrl: root.dataset.addCustomerUrl || "/marketing/customers/create",
+        messageCustomerUrl: root.dataset.messageCustomerUrl || "",
         initialFilters: {
             search: initialFilters.search || "",
             sort: initialFilters.sort || "updated_at",
@@ -566,6 +568,11 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        {props.messageCustomerUrl !== "" ? (
+                            <a href={props.messageCustomerUrl} className={buttonClass()}>
+                                Text a customer
+                            </a>
+                        ) : null}
                         <a href={props.addCustomerUrl} className={primaryButtonClass()}>
                             Add Customer
                         </a>

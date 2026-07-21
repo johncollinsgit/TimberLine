@@ -29,10 +29,34 @@
                     <h2 class="text-xl font-semibold text-zinc-950">{{ $name !== '' ? $name : 'Unnamed profile' }}</h2>
                     <div class="mt-1 text-xs text-zinc-500">Marketing Profile #{{ $profile->id }}</div>
                 </div>
-                <a href="{{ route('marketing.customers') }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
-                    Back to Customers
-                </a>
+                <div class="flex flex-wrap justify-end gap-2">
+                    @if(auth()->user()?->canAccessMarketing())
+                        @if(filled($profile->phone) || filled($profile->normalized_phone))
+                            <a href="{{ route('marketing.messages.send', ['profile_id' => $profile->id]) }}" class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-950 hover:bg-blue-100">
+                                Text customer
+                            </a>
+                        @else
+                            <span aria-disabled="true" title="Add a phone number before texting this customer." class="inline-flex cursor-not-allowed rounded-full border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-500">
+                                Text unavailable
+                            </span>
+                        @endif
+                    @endif
+                    @if(filled($profile->email))
+                        <a href="mailto:{{ $profile->email }}" title="Opens your email app; this message is not tracked by Everbranch." class="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-950 hover:bg-blue-100">
+                            Email customer
+                        </a>
+                    @else
+                        <span aria-disabled="true" title="Add an email address before emailing this customer." class="inline-flex cursor-not-allowed rounded-full border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-500">
+                            Email unavailable
+                        </span>
+                    @endif
+                    <a href="{{ route('marketing.customers') }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+                        Back to Customers
+                    </a>
+                </div>
             </div>
+
+            <p class="mt-3 text-xs text-zinc-500">Texts use Everbranch consent and delivery controls. Email opens your device email app and is not tracked by Everbranch.</p>
 
             <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">

@@ -5,6 +5,8 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingMessageGroup;
 use App\Models\MarketingProfile;
 use App\Models\MarketingShortLink;
+use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
@@ -51,6 +53,46 @@ test('admin and marketing manager can access messaging wizard and delivery log',
     $this->actingAs($manager)
         ->get(route('marketing.messages.send'))
         ->assertForbidden();
+});
+
+test('customer link prefills only a profile owned by the active tenant', function () {
+    $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-customer-messages']);
+    $otherTenant = Tenant::query()->create(['name' => 'Other Workspace', 'slug' => 'other-customer-messages']);
+    foreach ([$tenant, $otherTenant] as $workspace) {
+        TenantAccessProfile::query()->create([
+            'tenant_id' => $workspace->id,
+            'plan_key' => 'base',
+            'operating_mode' => 'direct',
+            'source' => 'test',
+        ]);
+    }
+    $user = User::factory()->create(['role' => 'admin', 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Nate',
+        'last_name' => 'Customer',
+        'phone' => '+18645550123',
+        'normalized_phone' => '+18645550123',
+        'accepts_sms_marketing' => true,
+    ]);
+    $foreignProfile = MarketingProfile::query()->create([
+        'tenant_id' => $otherTenant->id,
+        'first_name' => 'Foreign',
+        'last_name' => 'Customer',
+        'phone' => '+18645550124',
+        'normalized_phone' => '+18645550124',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('marketing.messages.send', ['tenant' => $tenant->slug, 'profile_id' => $profile->id]))
+        ->assertOk()
+        ->assertSeeText('Who are we texting?')
+        ->assertSee('Nate Customer');
+
+    $this->actingAs($user)
+        ->get(route('marketing.messages.send', ['tenant' => $tenant->slug, 'profile_id' => $foreignProfile->id]))
+        ->assertNotFound();
 });
 
 test('single-customer wizard flow creates direct sms delivery records', function () {
@@ -241,7 +283,7 @@ test('future send_at queues direct send job instead of sending immediately', fun
             return false;
         }
 
-        if (!($job->delay instanceof \DateTimeInterface)) {
+        if (! ($job->delay instanceof \DateTimeInterface)) {
             return false;
         }
 
