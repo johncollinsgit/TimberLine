@@ -1,5 +1,60 @@
 # SYSTEM SNAPSHOT
 
+## Operator Structure and Atomic Release Snapshot (2026-07-21)
+
+### System map
+
+- **Platform host:** `app.theeverbranch.com` is the landlord/operator console.
+  It is distinct from tenant workspaces even when the same authenticated user
+  can switch contexts without logging in again.
+- **Tenant boundary:** every tenant-facing read or mutation resolves the active
+  tenant from explicit membership and host/session context. Builder/operator
+  access for `johncollinsemail@gmail.com` is an explicit membership requirement,
+  never an email-based ownership shortcut.
+- **Landlord navigation:** Home is the command center; **Workspaces** contains
+  the workspace directory and **Transactions**. Transactions is also linked
+  directly from Home for fast access. The ledger shows incoming Stripe-confirmed
+  payments and outgoing confirmed refunds, itemized by workspace and source.
+- **Billing safety:** agreements, versions, acceptances, and payment evidence
+  are append-only. Refund requests are explicit, idempotent provider actions;
+  they do not alter entitlements merely because a local record changes.
+- **Health contract:** `/up` is liveness. `/ready` boots Laravel, verifies
+  required configuration, performs a MySQL query and cache round trip, then
+  returns only status and active release ID. It fails closed with HTTP 503.
+
+### Release posture
+
+- Production Forge site: `backstage.theforestrystudio.com` site record on
+  server `129.212.138.111`, serving the Everbranch production application.
+- Forge zero-downtime releases are enabled. Each release builds in a new
+  release directory, uses shared `.env` and `storage`, caches config/views,
+  runs compatible migrations, activates atomically, then restarts queues.
+  Forge retains prior releases for rollback and checks the public
+  `https://app.theeverbranch.com/ready` endpoint after deployment.
+- The first verified atomic release activated Forge release `73786709` for
+  application commit `933bb5ff60b5b76dcf1118a28e5194d4c79274b3`; `/ready` and
+  `/up` both returned HTTP 200 afterward.
+- **Transition state:** direct Forge push deployment is disabled. GitHub
+  Actions still runs the test/build gate and temporarily deploys through the
+  established SSH workflow. Switch that final step to the Forge deploy hook
+  only after `FORGE_DEPLOY_HOOK_URL` is stored as a protected GitHub production
+  secret and the hook workflow has passed a harmless release smoke test.
+- Normal release rules: additive/backward-compatible migrations only; build
+  before activation; never use in-place `git reset`, `git clean`, cache clears,
+  or public asset replacement as a standard deploy; use an audited emergency
+  path only. Major changes later require a low-traffic window and confirmed
+  backup.
+
+### Source-of-truth reading order
+
+1. `SYSTEM_SNAPSHOT.md` — current structure and production posture.
+2. `README_FOR_AGENTS.md` and `AGENTS.md` — guardrails and implementation
+   rules.
+3. `docs/operations/forge-atomic-release-runbook.md` — exact Forge release,
+   rollback, and verification procedure.
+4. Relevant domain runbook under `docs/operations/` or `docs/architecture/`.
+5. `docs/ui/UI_SYSTEM.md` and `docs/ui/UI_CHANGELOG.md` before UI changes.
+
 ## Agreements and Provider-Neutral Billing Authorization (2026-07-16)
 
 - Everbranch now has tenant-scoped agreements, immutable versions/content hashes, password-protected Evergrove proposal links, electronic acceptance evidence, permanent HTML snapshots, subscription authorizations, append-only events, termination/export tracking, and provider-confirmed receipt mirrors.
