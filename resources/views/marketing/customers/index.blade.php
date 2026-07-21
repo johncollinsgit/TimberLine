@@ -11,15 +11,6 @@
 
 <x-layouts::app :title="'Customers'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
-        <x-marketing.partials.section-shell
-            :section="$section"
-            :sections="$sections"
-            title="Customers"
-            description="Manage canonical customer profiles linked across Shopify, Growave enrichment, Square, wholesale, event, and manual sources."
-            hint-title="How this index works"
-            hint-text="Canonical profiles are source-of-truth. External provider records enrich customer context without replacing identity ownership."
-        />
-
         <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Total Customers</div>
