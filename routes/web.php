@@ -13,6 +13,7 @@ use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
 use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\FieldServiceEstimatorController;
+use App\Http\Controllers\FieldServiceResourcesController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
@@ -765,6 +766,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('field-service.')
         ->group(function (): void {
             Route::get('/', [FieldServiceController::class, 'index'])->name('index');
+            Route::get('/resources', [FieldServiceResourcesController::class, 'index'])->name('resources');
+            Route::post('/resources/inventory', [FieldServiceResourcesController::class, 'storeItem'])->name('resources.inventory.store');
+            Route::post('/resources/inventory/{item}/adjust', [FieldServiceResourcesController::class, 'adjustItem'])->name('resources.inventory.adjust');
+            Route::post('/resources/vans/{vehicle}/stock', [FieldServiceResourcesController::class, 'transferVehicleStock'])->name('resources.vans.stock');
+            Route::post('/resources/deployments', [FieldServiceResourcesController::class, 'deployCrew'])->name('resources.deployments.store');
+            Route::post('/resources/deployments/use-stock', [FieldServiceResourcesController::class, 'consumeVehicleStock'])->name('resources.deployments.use-stock');
             Route::get('/jobs-data', [FieldServiceController::class, 'jobsData'])->name('jobs.data');
             Route::patch('/jobs/{job}', [FieldServiceController::class, 'updateJobGrid'])->name('jobs.update');
             Route::post('/work-candidates/{candidate}/review', [FieldServiceController::class, 'reviewWorkCandidate'])->name('work-candidates.review');

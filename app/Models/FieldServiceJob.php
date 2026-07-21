@@ -130,6 +130,11 @@ class FieldServiceJob extends Model
             ->withTimestamps();
     }
 
+    public function vehicleCrewAssignments(): HasMany
+    {
+        return $this->hasMany(FieldServiceJobVehicleCrew::class);
+    }
+
     public function teamChannel(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(TeamChannel::class);

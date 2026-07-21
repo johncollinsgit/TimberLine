@@ -44,6 +44,7 @@
                 id="marketing-customers-grid"
                 data-endpoint="{{ data_get($customerGrid, 'endpoint') }}"
                 data-add-customer-url="{{ route('marketing.customers.create') }}"
+                data-message-customer-url="{{ auth()->user()?->canAccessMarketing() ? route('marketing.messages.send') : '' }}"
                 data-initial-filters='@json(data_get($customerGrid, "filters", []))'
                 data-sort-options='@json(data_get($customerGrid, "sort_options", []))'
                 class="space-y-4"

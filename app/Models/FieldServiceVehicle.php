@@ -6,6 +6,7 @@ use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FieldServiceVehicle extends Model
 {
@@ -33,5 +34,15 @@ class FieldServiceVehicle extends Model
         return $this->belongsToMany(FieldServiceJob::class, 'field_service_job_vehicle_assignments')
             ->withPivot(['tenant_id', 'assigned_by_user_id'])
             ->withTimestamps();
+    }
+
+    public function stocks(): HasMany
+    {
+        return $this->hasMany(FieldServiceVehicleStock::class);
+    }
+
+    public function crewAssignments(): HasMany
+    {
+        return $this->hasMany(FieldServiceJobVehicleCrew::class);
     }
 }

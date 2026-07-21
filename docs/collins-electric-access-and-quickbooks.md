@@ -45,6 +45,10 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 - `Field Service` is Collins' canonical Work experience. Do not restore separate visible `work_core` and `field_service` Branches. The old Work URLs remain compatibility aliases only.
 - Job comments, tasks, participants, mentions, and photos are tenant-owned. SMS notifications remain suppressed unless the employee has a tenant-specific verified phone and operational opt-in and the Collins sender passes its delivery smoke test.
 - Collins confirmed on 2026-07-20 that written SMS consent is held for its customers. Import that evidence only through `collins-electric:import-written-sms-consent --confirm-written-consent --source-reference="..."`; the command creates per-customer consent evidence, skips profiles without a phone, and preserves explicit opt-outs.
+- Collins inventory uses tenant-owned catalog items for warehouse quantity, reorder level, unit, SKU, and cost. Van stock is a separate tenant-owned quantity; loading and unloading move stock between those two locations without changing QuickBooks.
+- A deployment connects one active job, one work van, and one or more active Collins members. The selected employees also become job participants. Members may see only deployments attached to jobs they are authorized to view; owner/admin/manager users manage assignments.
+- Material recorded as used on a job is deducted from the assigned van, added to the job's material usage, and written to the inventory movement history in one transaction. Insufficient van or warehouse stock must fail without a partial change.
+- The Customers link searches Collins-owned `MarketingProfile` records, including identities created by the read-only QuickBooks import. It must never include wholesale applications or another workspace's profiles. `Text customer` opens the Everbranch composer with that tenant-owned profile preselected and retains consent/provider/opt-out gates. `Email customer` opens the device mail client and is not an Everbranch-tracked email delivery.
 
 ## Equipment maintenance and payroll hours
 

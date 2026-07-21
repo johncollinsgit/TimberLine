@@ -722,7 +722,7 @@ class FieldServiceController extends Controller
             'notes' => $validated['notes'] ?? null,
         ]);
 
-        return back()->with('status', 'Vehicle added.');
+        return back()->withFragment('vans')->with('status', 'Vehicle added.');
     }
 
     public function storePhoto(Request $request, FieldServiceJob $job): RedirectResponse
