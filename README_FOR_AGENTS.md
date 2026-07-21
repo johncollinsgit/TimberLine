@@ -12,9 +12,10 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   Do not leave a newer operating rule buried only in a pull-request description.
 - Production now has a Forge zero-downtime site with shared `storage`, retained
   releases, and a `/ready` health check. The GitHub test/build gate is still
-  mandatory. The hook-based GitHub-to-Forge handoff is pending the protected
-  `FORGE_DEPLOY_HOOK_URL` production secret; until that change is merged, the
-  existing GitHub Actions SSH deploy remains the active automated trigger.
+  mandatory. Its post-gate production action is a Forge deploy-hook POST using
+  the protected `FORGE_DEPLOY_HOOK_URL` production secret; Forge then performs
+  the atomic release. The first automatic hook release was Forge release
+  `73789933` for commit `c272464…` and passed `/ready` on 2026-07-21.
 - Never run `git reset --hard`, `git clean`, in-place frontend replacement, or
   cache-clearing as a normal production deploy. The approved Forge runbook uses
   a fresh release, build/test preparation before activation, compatible
@@ -44,8 +45,9 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - MySQL lives on the same droplet (`DB_CONNECTION=mysql`). The scheduler cron (`schedule:run` every minute) is installed directly in the forge crontab and IS active, even though Forge's UI scheduler toggle looks off.
 - The Forge production site tracks `main` and is configured for zero-downtime
   releases. Direct Forge push-to-deploy is intentionally off so a change cannot
-  bypass the GitHub Actions test/build gate. The current GitHub SSH path is a
-  temporary transition mechanism until the post-gate Forge hook is enabled.
+  bypass the GitHub Actions test/build gate. GitHub deploys only by posting to
+  the protected Forge hook after that gate succeeds; routine SSH deployment is
+  retired and available only as explicitly approved emergency recovery.
 - Prod is a Laravel-managed Forge server (server ID `1165565`, VPC "Laravel Managed", created Feb 20 2026): Laravel provisions and bills the underlying DO droplet, so it does NOT appear in John's own DigitalOcean account. Resize/scale prod through Forge (or Laravel billing), not the DO console.
 - ⚠️ TRAP: a second, identically-named "Backstage" droplet (`134.209.43.25`) sits in John's personal DO account (`johncollinsemail@gmail.com`, GitHub login). It is a blank, never-provisioned box serving nothing (root-SSH verified 2026-07-06), billing ~$12/mo since Feb; it is NOT production. Always confirm the target IP is `129.212.138.111` before any prod infra action.
 - Prod was resized to 8 GB RAM / 4 vCPU on 2026-07-06 (fixes the earlier `vite build` exit-137 OOM). Resize a Laravel VPS via Forge → Settings → General → Size, not the DigitalOcean console.

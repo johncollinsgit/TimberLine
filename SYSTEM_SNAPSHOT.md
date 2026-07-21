@@ -34,11 +34,13 @@
 - The first verified atomic release activated Forge release `73786709` for
   application commit `933bb5ff60b5b76dcf1118a28e5194d4c79274b3`; `/ready` and
   `/up` both returned HTTP 200 afterward.
-- **Transition state:** direct Forge push deployment is disabled. GitHub
-  Actions still runs the test/build gate and temporarily deploys through the
-  established SSH workflow. Switch that final step to the Forge deploy hook
-  only after `FORGE_DEPLOY_HOOK_URL` is stored as a protected GitHub production
-  secret and the hook workflow has passed a harmless release smoke test.
+- **Automated release state:** direct Forge push deployment is disabled. GitHub
+  Actions runs the mandatory test/build gate, then posts to the protected
+  `FORGE_DEPLOY_HOOK_URL`; Forge creates and atomically activates the release.
+  The first complete automatic run activated Forge release `73789933` for
+  commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
+  200 with that commit as the active release ID. Routine SSH deployment is
+  retired to an explicitly approved emergency-only recovery path.
 - Normal release rules: additive/backward-compatible migrations only; build
   before activation; never use in-place `git reset`, `git clean`, cache clears,
   or public asset replacement as a standard deploy; use an audited emergency

@@ -50,21 +50,21 @@ part of the release process.
 
 ## GitHub Actions handoff
 
+The handoff is complete.
+
 1. The `main` GitHub Actions workflow runs Composer install, frontend build,
    and Pest before production deployment.
-2. Store the existing Forge deploy-hook URL as the protected GitHub production
-   secret `FORGE_DEPLOY_HOOK_URL`. Never commit or print that URL.
-3. Merge the hook-based deploy workflow. Its only production action after a
-   successful gate is a POST to that secret URL.
-4. Trigger a harmless release and verify the Forge deployment record,
-   `/ready`, `/up`, authenticated landlord Home, a tenant switch, and a
-   read-only tenant page.
-5. Retain the legacy SSH job only as an explicitly approved, audited emergency
-   recovery path. It must not be the routine deployment mechanism.
+2. After the gate succeeds, it POSTs to the protected GitHub production secret
+   `FORGE_DEPLOY_HOOK_URL`. Never commit or print that URL.
+3. Forge creates the release and runs the deployment script above. The first
+   fully automatic run activated Forge release `73789933` for commit
+   `c272464230f4c83366f8d57a635ac4c38876c5c8` on 2026-07-21; `/ready` returned
+   HTTP 200 with that commit as its active release ID.
+4. The legacy SSH job is retired to an explicitly approved, audited emergency
+   recovery path. It is not a routine deployment mechanism.
 
-Until step 3 is complete, the existing GitHub Actions SSH deployment remains
-the automated transition path. Do not turn Forge direct push-to-deploy on; it
-would bypass the test/build gate.
+Do not turn Forge direct push-to-deploy on: it would bypass the GitHub
+test/build gate.
 
 ## Readiness and rollback
 

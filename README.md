@@ -22,14 +22,15 @@ short operational map. `README_FOR_AGENTS.md` and `AGENTS.md` contain the
 non-negotiable guardrails; `docs/operations/forge-atomic-release-runbook.md`
 is the release procedure.
 
-### Release transition
+### Production release path
 
 The Forge production site now uses zero-downtime release directories, shared
 storage, retained prior releases, and `/ready` health checks. The GitHub
-Actions test/build gate remains the required gate for `main`. Until the Forge
-deployment-hook secret is installed in the GitHub production environment,
-Actions still use the legacy SSH deployment job; do not mistake Forge's manual
-atomic-release readiness for completion of that final trigger handoff.
+Actions test/build gate is the required gate for `main`; after it passes,
+GitHub posts to the protected Forge deploy hook and Forge performs the atomic
+release. Direct Forge push-to-deploy remains off so no source push can bypass
+the gate. The first end-to-end automatic Forge release completed successfully
+on 2026-07-21: Forge release `73789933`, commit `c272464…`, `/ready` HTTP 200.
 
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
