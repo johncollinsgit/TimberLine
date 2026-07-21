@@ -1,5 +1,36 @@
 # Modern Forestry Backstage
 
+## Current Everbranch Structure and Release State (2026-07-21)
+
+Everbranch is a Laravel multi-workspace platform. The canonical production
+operator surface is `https://app.theeverbranch.com/landlord`; tenant workspaces
+remain isolated by explicit membership and selected workspace context.
+
+- **Landlord:** Home, Workspaces (including the itemized Transactions ledger),
+  support Tickets, agreements, commercial controls, and operational readiness.
+- **Tenant workspace:** tenant-scoped navigation, customers, work, agreements,
+  messages, branded workspace settings, and enabled Branches.
+- **Billing:** Stripe-confirmed agreement and invoice activity is recorded in a
+  landlord-only transaction ledger. Refunds are explicit, provider-confirmed,
+  idempotent actions; a refund is never inferred from a local status change.
+- **Health:** `/up` is a lightweight liveness endpoint and `/ready` verifies a
+  Laravel boot, database query, cache round trip, required configuration, and
+  reports the active release identifier.
+
+Read [SYSTEM_SNAPSHOT.md](SYSTEM_SNAPSHOT.md) before broad changes. It is the
+short operational map. `README_FOR_AGENTS.md` and `AGENTS.md` contain the
+non-negotiable guardrails; `docs/operations/forge-atomic-release-runbook.md`
+is the release procedure.
+
+### Release transition
+
+The Forge production site now uses zero-downtime release directories, shared
+storage, retained prior releases, and `/ready` health checks. The GitHub
+Actions test/build gate remains the required gate for `main`. Until the Forge
+deployment-hook secret is installed in the GitHub production environment,
+Actions still use the legacy SSH deployment job; do not mistake Forge's manual
+atomic-release readiness for completion of that final trigger handoff.
+
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
 - Status: direct invoices are production-ready pending live gates after an internal paid Stripe sandbox invoice smoke test. Live customer invoicing remains blocked until production secrets, webhook signing, Relay payout verification, tax/accounting approval, production mail, and first-tenant allowlisting pass. Evidence: `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.

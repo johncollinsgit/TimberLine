@@ -1,5 +1,24 @@
 # Forestry Backstage Guardrails
 
+## Required Orientation and Release Safety (2026-07-21)
+
+- Read `SYSTEM_SNAPSHOT.md`, then `README_FOR_AGENTS.md`, before broad work.
+  Update those documents and the relevant runbook/changelog when your change
+  alters current system structure or operating practice.
+- Production is `app.theeverbranch.com` on Forge server `129.212.138.111`.
+  `/up` is liveness; `/ready` is the deploy readiness endpoint and exposes the
+  active release ID only after Laravel, database, cache, and required config
+  checks pass.
+- Forge is configured for zero-downtime release directories with shared
+  `storage`, retained releases, and a readiness health check. Keep the GitHub
+  test/build gate as the release authority. Do not enable direct push-to-deploy
+  because it bypasses that gate.
+- During the hook-transition period, GitHub Actions still uses the legacy SSH
+  job. Do not modify that workflow to call Forge until the protected production
+  `FORGE_DEPLOY_HOOK_URL` secret is present. Once the hook workflow is live,
+  do not reintroduce normal-use `git reset`, `git clean`, live-directory asset
+  replacement, or broad cache clearing to production deployments.
+
 - Treat `config/module_catalog.php` as the canonical source of truth for plans, modules, capabilities, visibility, billing mode, and CTA routing. Legacy `commercial.php` and `entitlements.php` are compatibility layers only.
 - Use `TenantModuleAccessResolver`, `TenantExperienceProfileService`, `UnifiedAppNavigationService`, `UnifiedDashboardService`, and `TenantModuleCatalogService` instead of adding new ad hoc plan, channel, or module checks.
 - Tenant-facing mutations must verify tenant scope on the server. Never trust client-provided tenant, module, store, host, or channel identifiers without resolving them against current tenant/store context.
