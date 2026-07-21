@@ -12,11 +12,13 @@ use App\Services\Billing\TenantInvoiceBillingProfileService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Throwable;
 
 class LandlordDirectInvoiceController extends Controller
 {
@@ -78,7 +80,12 @@ class LandlordDirectInvoiceController extends Controller
         Gate::authorize('manage-landlord-commercial');
         $invoice = $this->scoped($tenant, $invoice)->load('receipts');
 
-        return view('landlord.invoices.show', ['tenant' => $tenant, 'invoice' => $invoice, 'stripeAvailable' => $stripe->availableFor($invoice)]);
+        return view('landlord.invoices.show', [
+            'tenant' => $tenant,
+            'invoice' => $invoice,
+            'stripeAvailable' => $stripe->availableFor($invoice),
+            'history' => $this->history($invoice),
+        ]);
     }
 
     public function edit(Tenant $tenant, TenantDirectInvoice $invoice): View
@@ -147,6 +154,64 @@ class LandlordDirectInvoiceController extends Controller
         abort_unless((int) $invoice->tenant_id === (int) $tenant->id, 404);
 
         return $invoice;
+    }
+
+    /** @return array<int,array{at:Carbon,label:string,detail:?string,kind:string}> */
+    protected function history(TenantDirectInvoice $invoice): array
+    {
+        $events = [
+            $this->historyEvent($invoice->created_at, 'Draft created', 'Invoice prepared for '.$invoice->customer_email, 'draft'),
+            $this->historyEvent($invoice->finalized_at, 'Invoice finalized', 'Stripe prepared the invoice for delivery.', 'email'),
+            $this->historyEvent($invoice->sent_at, 'Invoice email sent', 'Sent to '.$invoice->customer_email, 'email'),
+            $this->historyEvent($invoice->paid_at, 'Payment received', 'Stripe confirmed payment.', 'payment'),
+            $this->historyEvent($invoice->voided_at, 'Invoice voided', 'The invoice was voided; its history remains available.', 'void'),
+            $this->historyEvent($invoice->refunded_at, 'Payment refunded', 'Stripe recorded a refund.', 'refund'),
+        ];
+        if ($invoice->failed_at) {
+            $events[] = $this->historyEvent($invoice->failed_at, $invoice->status === 'payment_failed' ? 'Payment issue reported' : 'Invoice send failed', null, 'issue');
+        }
+        foreach ((array) data_get($invoice->metadata, 'sms_invoice_reminders', []) as $reminder) {
+            if (! is_array($reminder)) {
+                continue;
+            }
+            $sent = ($reminder['status'] ?? null) === 'sent';
+            $phoneLastFour = trim((string) ($reminder['phone_last_four'] ?? ''));
+            $events[] = $this->historyEvent(
+                $reminder['completed_at'] ?? $reminder['requested_at'] ?? null,
+                $sent ? 'Payment reminder text sent' : 'Payment reminder text not sent',
+                $phoneLastFour !== '' ? 'Phone ending in '.$phoneLastFour : null,
+                $sent ? 'sms' : 'issue',
+            );
+        }
+        foreach ($invoice->receipts as $receipt) {
+            $events[] = $this->historyEvent($receipt->paid_at, 'Receipt recorded', 'Stripe confirmed payment receipt'.($receipt->invoice_number ? ' '.$receipt->invoice_number : '').'.', 'payment');
+        }
+
+        return collect($events)
+            ->filter()
+            ->sortByDesc(fn (array $event): int => $event['at']->getTimestamp())
+            ->values()
+            ->all();
+    }
+
+    /** @return array{at:Carbon,label:string,detail:?string,kind:string}|null */
+    protected function historyEvent(mixed $at, string $label, ?string $detail, string $kind): ?array
+    {
+        $date = $this->historyDate($at);
+
+        return $date ? ['at' => $date, 'label' => $label, 'detail' => $detail, 'kind' => $kind] : null;
+    }
+
+    protected function historyDate(mixed $value): ?Carbon
+    {
+        if (! $value) {
+            return null;
+        }
+        try {
+            return Carbon::parse($value);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /** @return array<string,mixed> */

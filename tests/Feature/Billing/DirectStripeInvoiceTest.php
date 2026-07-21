@@ -126,6 +126,28 @@ test('invoice desk provides a workspace chooser and clear history actions', func
         ->assertSee(route('landlord.invoices.show', [$tenant, $invoice]), false);
 });
 
+test('invoice detail shows a dated delivery and payment history', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $invoice = createDirectInvoice($tenant, $admin);
+    $invoice->forceFill([
+        'status' => 'open',
+        'sent_at' => now()->subHour(),
+        'metadata' => ['sms_invoice_reminders' => [[
+            'status' => 'sent',
+            'completed_at' => now()->subMinutes(30)->toIso8601String(),
+            'phone_last_four' => '0100',
+        ]]],
+    ])->save();
+
+    $this->actingAs($admin)->get(route('landlord.invoices.show', [$tenant, $invoice]))
+        ->assertOk()
+        ->assertSee('Delivery &amp; payment history', false)
+        ->assertSee('Invoice email sent')
+        ->assertSee('Payment reminder text sent')
+        ->assertSee('Phone ending in 0100');
+});
+
 test('landlord can show a standard rate and a separate discount on a direct invoice', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
