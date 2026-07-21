@@ -17,7 +17,7 @@
       <button
         type="button"
         wire:click="toggleInvite"
-        class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--fb-brand)] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--fb-brand-2)] focus:outline-none focus:ring-2 focus:ring-[var(--fb-brand)] focus:ring-offset-2"
+        class="team-access-primary-action inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[var(--fb-accent)] focus:ring-offset-2"
       >
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path stroke-linecap="round" d="M12 5v14M5 12h14" />
@@ -62,7 +62,7 @@
             type="submit"
             wire:loading.attr="disabled"
             wire:target="inviteMember"
-            class="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--fb-brand)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--fb-brand-2)] disabled:cursor-wait disabled:opacity-60"
+            class="team-access-primary-action inline-flex h-10 items-center justify-center rounded-lg px-5 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60"
           >
             <span wire:loading.remove wire:target="inviteMember">Send invite</span>
             <span wire:loading wire:target="inviteMember">Adding…</span>
@@ -123,7 +123,7 @@
                 wire:click="approveRequest({{ $accessRequest->id }})"
                 wire:loading.attr="disabled"
                 wire:target="approveRequest({{ $accessRequest->id }})"
-                class="inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-[var(--fb-brand)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--fb-brand-2)] disabled:cursor-wait disabled:opacity-60 sm:flex-none"
+                class="team-access-primary-action inline-flex h-10 flex-1 items-center justify-center rounded-lg px-4 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 sm:flex-none"
               >
                 <span wire:loading.remove wire:target="approveRequest({{ $accessRequest->id }})">Approve</span>
                 <span wire:loading wire:target="approveRequest({{ $accessRequest->id }})">Approving…</span>
@@ -154,7 +154,7 @@
           $membershipRole = in_array($membershipRole, $assignableRoles, true) ? $membershipRole : 'member';
           $memberInitials = collect(preg_split('/\s+/', trim((string) $member->name)) ?: [])->filter()->take(2)->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->join('');
         @endphp
-        <div class="grid gap-4 px-5 py-4 transition hover:bg-[var(--fb-surface-muted)] sm:px-7 lg:grid-cols-[minmax(0,1.3fr)_minmax(12rem,0.65fr)_auto] lg:items-center" wire:key="team-member-{{ $member->id }}">
+        <div class="grid gap-4 px-5 py-4 transition hover:bg-[var(--fb-surface-muted)] sm:px-7 lg:grid-cols-[minmax(0,1fr)_minmax(15rem,0.5fr)_9rem_10rem] lg:items-center" wire:key="team-member-{{ $member->id }}">
           <div class="flex min-w-0 items-center gap-3">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--fb-brand)] text-xs font-bold text-white" aria-hidden="true">{{ $memberInitials ?: '?' }}</div>
             <div class="min-w-0">
@@ -183,11 +183,18 @@
             </select>
           </div>
 
-          <div class="flex items-center justify-between gap-3 lg:justify-end">
+          <div class="flex min-h-9 items-center lg:justify-start">
             <span class="inline-flex items-center gap-1.5 text-xs font-medium {{ $member->is_active ? 'text-emerald-700' : 'text-amber-700' }}">
               <span class="h-2 w-2 rounded-full {{ $member->is_active ? 'bg-emerald-500' : 'bg-amber-500' }}" aria-hidden="true"></span>
               {{ $member->is_active ? 'Active' : 'Activation pending' }}
             </span>
+          </div>
+
+          <div @class([
+            'min-h-9 items-center lg:justify-start',
+            'flex' => (int) $member->id !== (int) auth()->id(),
+            'hidden lg:flex' => (int) $member->id === (int) auth()->id(),
+          ])>
             @if((int) $member->id !== (int) auth()->id())
               <button
                 type="button"
@@ -195,7 +202,7 @@
                 wire:confirm="Remove this person from the workspace? Their Everbranch account will not be deleted."
                 wire:loading.attr="disabled"
                 wire:target="removeAccess({{ $member->id }})"
-                class="inline-flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+                class="team-access-remove-action inline-flex h-9 w-full items-center justify-center rounded-lg px-3 text-xs font-semibold transition disabled:opacity-60"
               >
                 Remove access
               </button>
