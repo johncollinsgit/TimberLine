@@ -235,7 +235,34 @@ class FieldServiceController extends Controller
     {
         $seconds = ((int) ($job->manual_minutes ?? 0) * 60) + (int) ($job->timer_seconds ?? 0);
 
-        return ['id' => (int) $job->id, 'kind' => 'job', 'url' => route('field-service.jobs.show', ['job' => $job, 'back' => 'grid']), 'title' => $job->title, 'customer' => $job->customer_name, 'status' => $job->operational_status, 'priority' => $job->priority ?: 'normal', 'scheduled_for' => $job->scheduled_for?->toIso8601String(), 'lead_id' => $job->assigned_user_id, 'lead' => $job->assignedUser?->name, 'crew' => $job->participants->pluck('name')->values(), 'vehicles' => $job->vehicles->map(fn ($vehicle): array => ['id' => (int) $vehicle->id, 'name' => $vehicle->name])->values(), 'hours' => round($seconds / 3600, 2), 'source' => $job->external_source ?: 'Everbranch', 'amount' => $owner ? (float) ($job->financial_total ?? 0) : null, 'balance' => $owner ? (float) ($job->financial_balance ?? 0) : null, 'updated_at' => $job->updated_at?->toIso8601String()];
+        return [
+            'id' => (int) $job->id,
+            'kind' => 'job',
+            'url' => route('field-service.jobs.show', ['job' => $job, 'back' => 'grid']),
+            'title' => $job->title,
+            'customer' => $job->customer_name,
+            'customer_email' => $job->customer_email,
+            'customer_phone' => $job->customer_phone,
+            'description' => $job->description,
+            'service_address' => trim(implode(', ', array_filter([
+                $job->service_address_line_1,
+                $job->service_address_line_2,
+                trim(implode(' ', array_filter([$job->service_city, $job->service_state, $job->service_postal_code]))),
+            ]))),
+            'status' => $job->operational_status,
+            'blocked_reason' => $job->blocked_reason,
+            'priority' => $job->priority ?: 'normal',
+            'scheduled_for' => $job->scheduled_for?->toIso8601String(),
+            'lead_id' => $job->assigned_user_id,
+            'lead' => $job->assignedUser?->name,
+            'crew' => $job->participants->pluck('name')->values(),
+            'vehicles' => $job->vehicles->map(fn ($vehicle): array => ['id' => (int) $vehicle->id, 'name' => $vehicle->name])->values(),
+            'hours' => round($seconds / 3600, 2),
+            'source' => $job->external_source ?: 'Everbranch',
+            'amount' => $owner ? (float) ($job->financial_total ?? 0) : null,
+            'balance' => $owner ? (float) ($job->financial_balance ?? 0) : null,
+            'updated_at' => $job->updated_at?->toIso8601String(),
+        ];
     }
 
     /** @return array<string,mixed> */
