@@ -203,6 +203,7 @@ Route::get('/', function (
 
 Route::get('/privacy', [PublicLegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms');
+Route::get('/support', [PublicLegalController::class, 'support'])->name('legal.support');
 Route::get('/ready', ProductionReadinessController::class)->name('production.ready');
 Route::get('/integrations/quickbooks/disconnected', [QuickBooksConnectionController::class, 'disconnected'])
     ->name('integrations.quickbooks.disconnected');
