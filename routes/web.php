@@ -28,6 +28,7 @@ use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Landlord\LandlordSupportTicketController;
+use App\Http\Controllers\Landlord\LandlordTransactionController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
@@ -235,6 +236,10 @@ $landlordRoutes = static function (): void {
         ->name('dashboard');
     Route::post('/landlord/operator-costs', [LandlordTenantDirectoryController::class, 'storeRecurringCost'])
         ->name('operator-costs.store');
+    Route::get('/landlord/transactions', [LandlordTransactionController::class, 'index'])
+        ->name('transactions.index');
+    Route::post('/landlord/transactions/{receipt}/refund', [LandlordTransactionController::class, 'refund'])
+        ->name('transactions.refund');
     Route::get('/landlord/readiness', LandlordSelfServiceReadinessController::class)
         ->name('readiness');
     Route::get('/landlord/developer', LandlordDeveloperDashboardController::class)
