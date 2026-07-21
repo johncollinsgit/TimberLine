@@ -298,6 +298,7 @@ $landlordRoutes = static function (): void {
     Route::get('/landlord/tenants/{tenant}/invoices/{invoice}', [LandlordDirectInvoiceController::class, 'show'])->name('invoices.show');
     Route::get('/landlord/tenants/{tenant}/invoices/{invoice}/edit', [LandlordDirectInvoiceController::class, 'edit'])->name('invoices.edit');
     Route::put('/landlord/tenants/{tenant}/invoices/{invoice}', [LandlordDirectInvoiceController::class, 'update'])->name('invoices.update');
+    Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/deliver', [LandlordDirectInvoiceController::class, 'deliver'])->name('invoices.deliver');
     Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/send', [LandlordDirectInvoiceController::class, 'send'])->name('invoices.send');
     Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/reminders/sms', [LandlordDirectInvoiceController::class, 'remindBySms'])->name('invoices.reminders.sms');
     Route::post('/landlord/tenants/{tenant}/invoices/{invoice}/void', [LandlordDirectInvoiceController::class, 'void'])->name('invoices.void');
@@ -957,12 +958,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('admin.import-runs');
 
         // Optional direct module routes
-        Route::get('/admin/users', AdminUsersIndex::class)->name('admin.users');
-        Route::get('/admin/wholesale/applications', [WholesaleApplicationInboxController::class, 'index'])->name('admin.wholesale.applications');
-        Route::get('/admin/wholesale/applications/{accessRequest}', [WholesaleApplicationInboxController::class, 'show'])->name('admin.wholesale.applications.show');
-        Route::post('/admin/wholesale/applications/{accessRequest}/approve', [WholesaleApplicationInboxController::class, 'approve'])->name('admin.wholesale.applications.approve');
-        Route::post('/admin/wholesale/applications/{accessRequest}/reject', [WholesaleApplicationInboxController::class, 'reject'])->name('admin.wholesale.applications.reject');
-        Route::post('/admin/wholesale/applications/{accessRequest}/resend-activation', [WholesaleApplicationInboxController::class, 'resendActivation'])->name('admin.wholesale.applications.resend-activation');
+        Route::get('/admin/users', AdminUsersIndex::class)->middleware('tenant.access')->name('admin.users');
+        Route::middleware('tenant.access')->group(function (): void {
+            Route::get('/admin/wholesale/applications', [WholesaleApplicationInboxController::class, 'index'])->name('admin.wholesale.applications');
+            Route::get('/admin/wholesale/applications/{accessRequest}', [WholesaleApplicationInboxController::class, 'show'])->name('admin.wholesale.applications.show');
+            Route::post('/admin/wholesale/applications/{accessRequest}/approve', [WholesaleApplicationInboxController::class, 'approve'])->name('admin.wholesale.applications.approve');
+            Route::post('/admin/wholesale/applications/{accessRequest}/reject', [WholesaleApplicationInboxController::class, 'reject'])->name('admin.wholesale.applications.reject');
+            Route::post('/admin/wholesale/applications/{accessRequest}/resend-activation', [WholesaleApplicationInboxController::class, 'resendActivation'])->name('admin.wholesale.applications.resend-activation');
+        });
         Route::get('/admin/catalog/scents', AdminScentsCrud::class)->name('admin.catalog.scents');
         Route::get('/admin/catalog/costs', AdminCostsCrud::class)->name('admin.catalog.costs');
         Route::get('/admin/catalog/sizes', AdminSizesCrud::class)->name('admin.catalog.sizes');

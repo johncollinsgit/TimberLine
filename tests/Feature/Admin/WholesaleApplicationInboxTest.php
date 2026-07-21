@@ -40,6 +40,7 @@ test('admin can browse the wholesale application inbox', function (): void {
         'name' => 'Modern Forestry Wholesale',
         'slug' => 'modern-forestry',
     ]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
 
     $template = FormTemplate::query()->create([
         'key' => 'wholesale_application',
@@ -60,6 +61,7 @@ test('admin can browse the wholesale application inbox', function (): void {
 
     $accessRequest = CustomerAccessRequest::query()->create([
         'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
         'status' => 'pending',
         'name' => 'Jane Buyer',
         'email' => 'jane@example.com',
@@ -74,6 +76,17 @@ test('admin can browse the wholesale application inbox', function (): void {
             'website' => 'https://jane-shop.example.com',
             'agreement' => true,
         ],
+    ]);
+
+    CustomerAccessRequest::query()->create([
+        'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_PLATFORM_ACCESS,
+        'status' => 'pending',
+        'name' => 'Platform Applicant',
+        'email' => 'platform@example.com',
+        'company' => 'Everbranch Customer',
+        'requested_tenant_slug' => 'modern-forestry',
+        'tenant_id' => (int) $tenant->id,
     ]);
 
     FormSubmission::query()->create([
@@ -104,19 +117,23 @@ test('admin can browse the wholesale application inbox', function (): void {
     ]);
 
     $this->actingAs($admin)
+        ->withSession(['tenant_id' => $tenant->id])
         ->get(route('admin.wholesale.applications'))
         ->assertOk()
         ->assertSeeText('Review applications in one place')
         ->assertSee('Jane Buyer')
-        ->assertSee('Jane Shop');
+        ->assertSee('Jane Shop')
+        ->assertDontSee('Platform Applicant')
+        ->assertDontSee('Everbranch Customer');
 
     $this->actingAs($admin)
+        ->withSession(['tenant_id' => $tenant->id])
         ->get(route('admin.wholesale.applications.show', $accessRequest))
         ->assertOk()
         ->assertSeeText('Application details')
         ->assertSee('jane@example.com')
         ->assertSee('Greenville')
-        ->assertSeeText('Open approval workspace');
+        ->assertDontSeeText('Open approval workspace');
 });
 
 test('admin can approve wholesale application directly from the inbox detail page', function (): void {
@@ -187,9 +204,11 @@ test('admin can approve wholesale application directly from the inbox detail pag
         'name' => 'Modern Forestry Wholesale',
         'slug' => 'modern-forestry',
     ]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
 
     $accessRequest = CustomerAccessRequest::query()->create([
         'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
         'status' => 'pending',
         'name' => 'Approve Me',
         'email' => 'approve-me@example.com',
@@ -199,6 +218,7 @@ test('admin can approve wholesale application directly from the inbox detail pag
     ]);
 
     $this->actingAs($admin)
+        ->withSession(['tenant_id' => $tenant->id])
         ->post(route('admin.wholesale.applications.approve', $accessRequest), [
             'decision_note' => 'Looks good.',
         ])
@@ -224,9 +244,11 @@ test('admin can reject wholesale application directly from the inbox detail page
         'name' => 'Modern Forestry Wholesale',
         'slug' => 'modern-forestry',
     ]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
 
     $accessRequest = CustomerAccessRequest::query()->create([
         'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
         'status' => 'pending',
         'name' => 'Reject Me',
         'email' => 'reject-me@example.com',
@@ -236,6 +258,7 @@ test('admin can reject wholesale application directly from the inbox detail page
     ]);
 
     $this->actingAs($admin)
+        ->withSession(['tenant_id' => $tenant->id])
         ->post(route('admin.wholesale.applications.reject', $accessRequest), [
             'rejection_note' => 'Not the right fit.',
         ])

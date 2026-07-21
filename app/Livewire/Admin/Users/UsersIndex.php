@@ -3,11 +3,18 @@
 namespace App\Livewire\Admin\Users;
 
 use App\Models\CustomerAccessRequest;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\ApprovalPasswordSetupNotification;
 use App\Services\Onboarding\CustomerAccessApprovalService;
+use App\Support\Tenancy\TenantContext;
+use App\Support\Tenancy\TenantHostBuilder;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -16,31 +23,23 @@ class UsersIndex extends Component
 {
     use WithPagination;
 
-    public string $search = '';
-    public string $sort = 'name';
-    public string $dir = 'asc';
-    public int $perPage = 25;
-    public bool $showCreate = false;
+    public ?int $tenantId = null;
 
-    public array $create = [
+    public string $search = '';
+
+    public string $sort = 'name';
+
+    public string $dir = 'asc';
+
+    public int $perPage = 25;
+
+    public bool $showInvite = false;
+
+    public array $invite = [
         'name' => '',
         'email' => '',
-        'password' => '',
-        'role' => 'admin',
-        'is_active' => true,
+        'role' => 'member',
     ];
-
-    public bool $showEdit = false;
-    public ?int $editingId = null;
-    public array $edit = [];
-    public string $newPassword = '';
-    public array $editAccessRequest = [];
-    public string $accessDecisionNote = '';
-    public string $accessRejectionNote = '';
-    public ?int $approvedAccessRequestId = null;
-
-    public bool $showDelete = false;
-    public ?int $deletingId = null;
 
     protected $queryString = [
         'search' => ['except' => ''],
@@ -49,6 +48,45 @@ class UsersIndex extends Component
         'perPage' => ['except' => 25],
     ];
 
+    public function mount(): void
+    {
+        $actor = auth()->user();
+        abort_unless($actor instanceof User, 403);
+
+        $candidateIds = [
+            app(TenantContext::class)->id(),
+            request()->attributes->get('current_tenant_id'),
+            request()->attributes->get('host_tenant_id'),
+            request()->hasSession() ? request()->session()->get('tenant_id') : null,
+        ];
+
+        foreach ($candidateIds as $candidateId) {
+            if (! is_numeric($candidateId) || (int) $candidateId <= 0) {
+                continue;
+            }
+
+            if ($actor->tenants()->whereKey((int) $candidateId)->exists()) {
+                $this->tenantId = (int) $candidateId;
+                break;
+            }
+        }
+
+        if ($this->tenantId === null) {
+            $this->tenantId = $actor->tenants()->orderBy('tenants.name')->value('tenants.id');
+        }
+
+        abort_unless($this->tenantId !== null, 403, 'A workspace is required to manage team access.');
+        app(TenantContext::class)->set($this->tenantId);
+        $this->assertTenantAdmin();
+    }
+
+    public function hydrate(): void
+    {
+        if ($this->tenantId !== null) {
+            app(TenantContext::class)->set($this->tenantId);
+        }
+    }
+
     public function updatedSearch(): void
     {
         $this->resetPage();
@@ -56,6 +94,10 @@ class UsersIndex extends Component
 
     public function setSort(string $field): void
     {
+        if (! in_array($field, ['name', 'email'], true)) {
+            return;
+        }
+
         if ($this->sort === $field) {
             $this->dir = $this->dir === 'asc' ? 'desc' : 'asc';
         } else {
@@ -64,403 +106,269 @@ class UsersIndex extends Component
         }
     }
 
-    public function openCreate(): void
+    public function toggleInvite(): void
     {
-        $this->showCreate = !$this->showCreate;
+        $this->showInvite = ! $this->showInvite;
+        $this->resetValidation();
     }
 
-    public function create(): void
+    public function inviteMember(): void
     {
-        $data = validator($this->create, [
+        $this->assertTenantAdmin();
+        $tenant = $this->currentTenant();
+
+        $data = validator($this->invite, [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8'],
-            'role' => ['required', 'in:admin,manager,pouring,marketing_manager'],
-            'is_active' => ['boolean'],
+            'email' => ['required', 'email', 'max:255'],
+            'role' => ['required', Rule::in($this->assignableRoles())],
         ])->validate();
 
-        User::query()->create([
-            'name' => trim($data['name']),
-            'email' => strtolower(trim($data['email'])),
-            'password' => Hash::make($data['password']),
-            'role' => $data['role'],
-            'is_active' => (bool) ($data['is_active'] ?? true),
-            'requested_via' => 'admin',
-            'approval_requested_at' => (bool) ($data['is_active'] ?? true) ? null : now(),
-            'approved_at' => (bool) ($data['is_active'] ?? true) ? now() : null,
-            'approved_by' => (bool) ($data['is_active'] ?? true) ? auth()->id() : null,
-        ]);
+        $email = strtolower(trim((string) $data['email']));
+        $user = User::query()->where('email', $email)->first();
+        $wasCreated = $user === null;
+        $wasInactive = $user !== null && ! (bool) $user->is_active;
 
-        $this->reset('create');
-        $this->create['role'] = 'admin';
-        $this->create['is_active'] = true;
-        $this->dispatch('toast', ['message' => 'User created.', 'style' => 'success']);
-    }
+        if ($user === null) {
+            $user = User::query()->create([
+                'name' => trim((string) $data['name']),
+                'email' => $email,
+                'password' => Hash::make(Str::password(32)),
+                'role' => 'member',
+                'is_active' => true,
+                'requested_via' => 'workspace_invite',
+                'approved_at' => now(),
+                'approved_by' => auth()->id(),
+            ]);
+        } elseif ($user->tenants()->whereKey((int) $tenant->id)->exists()) {
+            $this->addError('invite.email', 'This person already has access to this workspace.');
 
-    public function openEdit(int $id): void
-    {
-        \Log::info('Admin Users openEdit', ['id' => $id]);
-        $user = User::query()->findOrFail($id);
-        $this->editingId = $id;
-        $this->edit = [
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => $user->role ?? 'admin',
-            'is_active' => (bool) $user->is_active,
-        ];
-        $this->editAccessRequest = $this->accessRequestPayload($user);
-        $this->accessDecisionNote = (string) ($this->editAccessRequest['decision_note'] ?? '');
-        $this->accessRejectionNote = '';
-        $this->approvedAccessRequestId = $this->latestApprovedAccessRequest($user)?->id;
-        $this->newPassword = '';
-        $this->showEdit = true;
-    }
-
-    public function save(): void
-    {
-        if (!$this->editingId) {
             return;
+        } else {
+            $user->forceFill([
+                'name' => trim((string) $data['name']),
+                'is_active' => true,
+                'approved_at' => $user->approved_at ?? now(),
+                'approved_by' => $user->approved_by ?? auth()->id(),
+            ])->save();
         }
 
-        $user = User::query()->findOrFail($this->editingId);
+        $user->tenants()->syncWithoutDetaching([
+            (int) $tenant->id => ['role' => (string) $data['role']],
+        ]);
 
-        $data = validator($this->edit, [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $this->editingId],
-            'role' => ['required', 'in:admin,manager,pouring,marketing_manager'],
-            'is_active' => ['boolean'],
-        ])->validate();
-
-        $payload = [
-            'name' => trim($data['name']),
-            'email' => strtolower(trim($data['email'])),
-            'role' => $data['role'],
-            'is_active' => (bool) ($data['is_active'] ?? true),
-        ];
-
-        if ($payload['is_active']) {
-            $payload['approved_at'] = now();
-            $payload['approved_by'] = auth()->id();
-            if (empty($this->edit['requested_via'] ?? null)) {
-                $payload['requested_via'] = 'admin';
+        $activationSent = false;
+        if ($wasCreated || $wasInactive) {
+            try {
+                Notification::send($user, new ApprovalPasswordSetupNotification(
+                    $user,
+                    app(TenantHostBuilder::class)->hostForSlug((string) $tenant->slug)
+                ));
+                $activationSent = true;
+            } catch (Throwable $e) {
+                report($e);
             }
         }
 
-        if ($this->newPassword !== '') {
-            if (strlen($this->newPassword) < 8) {
-                throw ValidationException::withMessages([
-                    'newPassword' => 'Password must be at least 8 characters.',
+        $this->invite = ['name' => '', 'email' => '', 'role' => 'member'];
+        $this->showInvite = false;
+        $this->dispatch('toast', [
+            'message' => ($wasCreated || $wasInactive)
+                ? ($activationSent ? 'Team member added and activation email sent.' : 'Team member added. The activation email could not be sent.')
+                : 'Existing Everbranch user added to this workspace.',
+            'style' => ($wasCreated || $wasInactive) && ! $activationSent ? 'warning' : 'success',
+        ]);
+    }
+
+    public function approveRequest(int $requestId): void
+    {
+        $this->assertTenantAdmin();
+        $request = $this->platformRequestForTenant($requestId, 'pending');
+
+        try {
+            $approved = app(CustomerAccessApprovalService::class)->approve(
+                (int) $request->id,
+                (int) auth()->id()
+            );
+
+            if ($approved->user_id) {
+                $this->currentTenant()->users()->syncWithoutDetaching([
+                    (int) $approved->user_id => ['role' => 'member'],
                 ]);
             }
-            $payload['password'] = Hash::make($this->newPassword);
-        }
 
-        $wasInactive = !$user->is_active;
-
-        User::query()->whereKey($this->editingId)->update($payload);
-
-        $this->persistAccessRequestEdits($user);
-
-        $emailSent = false;
-        if ($wasInactive && $payload['is_active']) {
-            $fresh = User::query()->find($this->editingId);
-            if ($fresh) {
-                try {
-                    $fresh->notify(new ApprovalPasswordSetupNotification($fresh, $this->preferredHostForUser($fresh)));
-                    $emailSent = true;
-                } catch (Throwable $e) {
-                    report($e);
-                }
-
-                $this->syncWholesaleApprovalIfPossible($fresh, 'admin.users.save');
-            }
-        }
-
-        $this->showEdit = false;
-        $this->editingId = null;
-        $this->editAccessRequest = [];
-        $this->accessDecisionNote = '';
-        $this->accessRejectionNote = '';
-        $this->approvedAccessRequestId = null;
-        $this->dispatch('toast', [
-            'message' => ($wasInactive && $payload['is_active'])
-                ? ($emailSent ? 'User updated and approval email sent.' : 'User updated. Approval email could not be sent.')
-                : 'User updated.',
-            'style' => ($wasInactive && $payload['is_active'] && !$emailSent) ? 'warning' : 'success',
-        ]);
-    }
-
-    public function openDelete(int $id): void
-    {
-        $this->deletingId = $id;
-        $this->showDelete = true;
-    }
-
-    public function destroy(): void
-    {
-        if (!$this->deletingId) {
-            return;
-        }
-        if (auth()->id() === $this->deletingId) {
-            $this->dispatch('toast', ['message' => 'You cannot delete your own account.', 'style' => 'warning']);
-            $this->showDelete = false;
-            return;
-        }
-
-        User::query()->whereKey($this->deletingId)->delete();
-        $this->showDelete = false;
-        $this->dispatch('toast', ['message' => 'User deleted.', 'style' => 'success']);
-    }
-
-    public function approve(int $id): void
-    {
-        $this->assertApprovalActor();
-
-        $user = User::query()->findOrFail($id);
-        $success = false;
-        $emailSent = false;
-        $request = $this->latestPendingAccessRequest($user);
-
-        try {
-            if ($request) {
-                app(CustomerAccessApprovalService::class)->approve((int) $request->id, (int) auth()->id(), $this->accessDecisionNote);
-                $success = true;
-            } else {
-                $wasInactive = !$user->is_active;
-                if ($wasInactive) {
-                    $user->forceFill([
-                        'is_active' => true,
-                        'approved_at' => now(),
-                        'approved_by' => auth()->id(),
-                    ])->save();
-
-                    try {
-                        $user->notify(new ApprovalPasswordSetupNotification($user, $this->preferredHostForUser($user)));
-                        $emailSent = true;
-                    } catch (Throwable $e) {
-                        report($e);
-                    }
-
-                    $this->syncWholesaleApprovalIfPossible($user, 'admin.users.approve');
-                    $success = true;
-                }
-            }
+            $this->dispatch('toast', ['message' => 'Access approved. The person can now use this workspace.', 'style' => 'success']);
         } catch (Throwable $e) {
             report($e);
+            $this->dispatch('toast', ['message' => 'Approval failed. Please try again.', 'style' => 'warning']);
         }
-
-        $this->dispatch('toast', [
-            'message' => $success
-                ? ($emailSent || $request !== null ? 'Approval processed.' : 'Approval processed. Approval email could not be sent.')
-                : 'Approval failed. See logs for details.',
-            'style' => $success ? (($request === null && ! $emailSent) ? 'warning' : 'success') : 'warning',
-        ]);
     }
 
-    public function rejectAccessRequest(int $userId): void
+    public function rejectRequest(int $requestId): void
     {
-        $this->assertApprovalActor();
-
-        $user = User::query()->findOrFail($userId);
-        $request = $this->latestPendingAccessRequest($user);
-        if (! $request) {
-            $this->dispatch('toast', ['message' => 'No pending access request found for this user.', 'style' => 'warning']);
-
-            return;
-        }
+        $this->assertTenantAdmin();
+        $request = $this->platformRequestForTenant($requestId, 'pending');
 
         try {
-            app(CustomerAccessApprovalService::class)->reject((int) $request->id, (int) auth()->id(), $this->accessRejectionNote);
-            $this->dispatch('toast', ['message' => 'Access request rejected.', 'style' => 'success']);
-        } catch (Throwable $e) {
-            report($e);
-            $this->dispatch('toast', ['message' => 'Reject failed. See logs for details.', 'style' => 'warning']);
-        }
-    }
-
-    public function resendAccessActivation(int $userId): void
-    {
-        $this->assertApprovalActor();
-
-        $user = User::query()->findOrFail($userId);
-        $request = $this->latestApprovedAccessRequest($user);
-        if (! $request) {
-            $this->dispatch('toast', ['message' => 'No approved access request found for this user.', 'style' => 'warning']);
-
-            return;
-        }
-
-        try {
-            app(CustomerAccessApprovalService::class)->resendActivation((int) $request->id, (int) auth()->id(), $this->accessDecisionNote);
-            $this->dispatch('toast', ['message' => 'Activation email resent.', 'style' => 'success']);
-        } catch (Throwable $e) {
-            report($e);
-            $this->dispatch('toast', ['message' => 'Resend failed. See logs for details.', 'style' => 'warning']);
-        }
-    }
-
-    protected function latestPendingAccessRequest(User $user): ?CustomerAccessRequest
-    {
-        if (!\Schema::hasTable('customer_access_requests')) {
-            return null;
-        }
-
-        return CustomerAccessRequest::query()
-            ->where('email', strtolower(trim((string) $user->email)))
-            ->where('status', 'pending')
-            ->orderByDesc('id')
-            ->first();
-    }
-
-    protected function accessRequestPayload(User $user): array
-    {
-        $request = $this->latestPendingAccessRequest($user);
-        if (! $request) {
-            return [];
-        }
-
-        return [
-            'id' => (int) $request->id,
-            'intent' => (string) $request->intent,
-            'company' => (string) ($request->company ?? ''),
-            'requested_tenant_slug' => (string) ($request->requested_tenant_slug ?? ''),
-            'message' => (string) ($request->message ?? ''),
-            'decision_note' => (string) ($request->decision_note ?? ''),
-        ];
-    }
-
-    protected function persistAccessRequestEdits(User $user): void
-    {
-        if (!\Schema::hasTable('customer_access_requests')) {
-            return;
-        }
-
-        $id = $this->editAccessRequest['id'] ?? null;
-        if (! is_numeric($id) || (int) $id <= 0) {
-            return;
-        }
-
-        $payload = [
-            'company' => trim((string) ($this->editAccessRequest['company'] ?? '')),
-            'requested_tenant_slug' => trim((string) ($this->editAccessRequest['requested_tenant_slug'] ?? '')),
-            'message' => trim((string) ($this->editAccessRequest['message'] ?? '')),
-        ];
-
-        CustomerAccessRequest::query()
-            ->whereKey((int) $id)
-            ->where('status', 'pending')
-            ->update([
-                'company' => $payload['company'] !== '' ? $payload['company'] : null,
-                'requested_tenant_slug' => $payload['requested_tenant_slug'] !== '' ? strtolower($payload['requested_tenant_slug']) : null,
-                'message' => $payload['message'] !== '' ? $payload['message'] : null,
-                'decision_note' => $this->accessDecisionNote !== '' ? $this->accessDecisionNote : null,
-            ]);
-    }
-
-    protected function preferredHostForUser(User $user): ?string
-    {
-        $request = $this->latestPendingAccessRequest($user) ?? $this->latestApprovedAccessRequest($user);
-        if (! $request) {
-            return null;
-        }
-
-        $slug = strtolower(trim((string) ($request->requested_tenant_slug ?? '')));
-        if ($slug === '') {
-            return null;
-        }
-
-        return app(\App\Support\Tenancy\TenantHostBuilder::class)->hostForSlug($slug);
-    }
-
-    protected function latestApprovedAccessRequest(User $user): ?CustomerAccessRequest
-    {
-        if (! \Schema::hasTable('customer_access_requests')) {
-            return null;
-        }
-
-        return CustomerAccessRequest::query()
-            ->where('email', strtolower(trim((string) $user->email)))
-            ->where('status', 'approved')
-            ->orderByDesc('id')
-            ->first();
-    }
-
-    protected function syncWholesaleApprovalIfPossible(User $user, string $source): void
-    {
-        $request = $this->latestApprovedAccessRequest($user);
-        if (! $request) {
-            return;
-        }
-
-        try {
-            app(CustomerAccessApprovalService::class)->syncShopifyWholesaleCustomer(
-                user: $user,
-                request: $request,
-                actorUserId: (int) (auth()->id() ?: 0),
-                source: $source
+            app(CustomerAccessApprovalService::class)->reject(
+                (int) $request->id,
+                (int) auth()->id()
             );
+
+            $this->dispatch('toast', ['message' => 'Access request rejected and removed from the queue.', 'style' => 'success']);
         } catch (Throwable $e) {
+            report($e);
+            $this->dispatch('toast', ['message' => 'Rejection failed. Please try again.', 'style' => 'warning']);
         }
     }
 
-    protected function assertApprovalActor(): void
+    public function updateMemberRole(int $userId, string $role): void
     {
-        $actor = auth()->user();
-        abort_unless($actor && ($actor->role ?? 'admin') === 'admin', 403);
+        $this->assertTenantAdmin();
+        validator(['role' => $role], ['role' => ['required', Rule::in($this->assignableRoles())]])->validate();
+
+        $tenant = $this->currentTenant();
+        $member = $this->tenantMember($userId);
+        $currentRole = strtolower(trim((string) $member->pivot->role));
+
+        if (in_array($currentRole, ['owner', 'admin'], true)
+            && ! in_array($role, ['owner', 'admin'], true)
+            && $this->administratorCount() <= 1) {
+            $this->dispatch('toast', ['message' => 'Assign another administrator before changing the last administrator.', 'style' => 'warning']);
+
+            return;
+        }
+
+        $tenant->users()->updateExistingPivot($userId, ['role' => $role]);
+        $this->dispatch('toast', ['message' => 'Workspace role updated.', 'style' => 'success']);
+    }
+
+    public function removeAccess(int $userId): void
+    {
+        $this->assertTenantAdmin();
+        $member = $this->tenantMember($userId);
+
+        if ((int) auth()->id() === $userId) {
+            $this->dispatch('toast', ['message' => 'You cannot remove your own workspace access.', 'style' => 'warning']);
+
+            return;
+        }
+
+        $role = strtolower(trim((string) $member->pivot->role));
+        if (in_array($role, ['owner', 'admin'], true) && $this->administratorCount() <= 1) {
+            $this->dispatch('toast', ['message' => 'The workspace must keep at least one administrator.', 'style' => 'warning']);
+
+            return;
+        }
+
+        $this->currentTenant()->users()->detach($userId);
+        $this->dispatch('toast', ['message' => 'Workspace access removed. The user account was not deleted.', 'style' => 'success']);
     }
 
     public function render()
     {
-        $pendingUsers = User::query()
-            ->where('is_active', false)
-            ->orderBy('approval_requested_at', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->limit(50)
-            ->get();
+        $tenant = $this->currentTenant();
+        $pendingRequests = collect();
 
-        $pendingAccessRequests = [];
-        if (\Schema::hasTable('customer_access_requests') && $pendingUsers->isNotEmpty()) {
-            $emails = $pendingUsers
-                ->pluck('email')
-                ->map(static fn ($value): string => strtolower(trim((string) $value)))
-                ->filter()
-                ->values()
-                ->all();
-
-            $rows = CustomerAccessRequest::query()
-                ->whereIn('email', $emails)
+        if (Schema::hasTable('customer_access_requests')) {
+            $pendingRequests = $this->platformRequestsForTenant()
                 ->where('status', 'pending')
-                ->orderByDesc('id')
+                ->with('user:id,name,email,is_active')
+                ->orderBy('created_at')
+                ->limit(50)
                 ->get();
-
-            foreach ($rows as $row) {
-                $email = strtolower(trim((string) $row->email));
-                if ($email === '' || array_key_exists($email, $pendingAccessRequests)) {
-                    continue;
-                }
-
-                $pendingAccessRequests[$email] = [
-                    'id' => (int) $row->id,
-                    'intent' => (string) $row->intent,
-                    'company' => (string) ($row->company ?? ''),
-                    'requested_tenant_slug' => (string) ($row->requested_tenant_slug ?? ''),
-                ];
-            }
         }
 
-        $users = User::query()
-            ->when($this->search !== '', function ($query) {
-                $query->where('name', 'like', '%' . $this->search . '%')
-                    ->orWhere('email', 'like', '%' . $this->search . '%')
-                    ->orWhere('role', 'like', '%' . $this->search . '%');
+        $members = User::query()
+            ->whereHas('tenants', fn (Builder $query): Builder => $query->where('tenants.id', (int) $tenant->id))
+            ->with(['tenants' => fn ($query) => $query->where('tenants.id', (int) $tenant->id)])
+            ->when($this->search !== '', function (Builder $query): void {
+                $query->where(function (Builder $search): void {
+                    $search->where('name', 'like', '%'.$this->search.'%')
+                        ->orWhere('email', 'like', '%'.$this->search.'%');
+                });
             })
             ->orderBy($this->sort, $this->dir)
             ->paginate($this->perPage);
 
         return view('livewire.admin.users.index', [
-            'users' => $users,
-            'pendingUsers' => $pendingUsers,
-            'pendingAccessRequests' => $pendingAccessRequests,
+            'tenant' => $tenant,
+            'members' => $members,
+            'pendingRequests' => $pendingRequests,
+            'memberCount' => $tenant->users()->count(),
+            'administratorCount' => $this->administratorCount(),
+            'assignableRoles' => $this->assignableRoles(),
         ])->layout('layouts.app');
+    }
+
+    protected function currentTenant(): Tenant
+    {
+        abort_unless($this->tenantId !== null, 403);
+
+        $tenant = Tenant::query()->find($this->tenantId);
+        abort_unless($tenant instanceof Tenant, 404);
+
+        return $tenant;
+    }
+
+    protected function assertTenantAdmin(): void
+    {
+        $actor = auth()->user();
+        abort_unless($actor instanceof User && $this->tenantId !== null, 403);
+
+        $membership = $actor->tenants()->whereKey($this->tenantId)->first();
+        abort_unless($membership instanceof Tenant, 403);
+
+        $role = strtolower(trim((string) ($membership->pivot->role ?? '')));
+        abort_unless($actor->isAdmin() || in_array($role, ['owner', 'admin'], true), 403);
+    }
+
+    protected function tenantMember(int $userId): User
+    {
+        $member = $this->currentTenant()->users()->whereKey($userId)->first();
+        abort_unless($member instanceof User, 404);
+
+        return $member;
+    }
+
+    protected function administratorCount(): int
+    {
+        return $this->currentTenant()->users()
+            ->wherePivotIn('role', ['owner', 'admin'])
+            ->count();
+    }
+
+    protected function platformRequestForTenant(int $requestId, ?string $status = null): CustomerAccessRequest
+    {
+        abort_unless(Schema::hasTable('customer_access_requests'), 404);
+
+        $request = $this->platformRequestsForTenant()
+            ->when($status !== null, fn (Builder $query): Builder => $query->where('status', $status))
+            ->whereKey($requestId)
+            ->first();
+
+        abort_unless($request instanceof CustomerAccessRequest, 404);
+
+        return $request;
+    }
+
+    protected function platformRequestsForTenant(): Builder
+    {
+        $tenant = $this->currentTenant();
+
+        return CustomerAccessRequest::query()
+            ->platformAccess()
+            ->where(function (Builder $query) use ($tenant): void {
+                $query->where('tenant_id', (int) $tenant->id)
+                    ->orWhere(function (Builder $legacy) use ($tenant): void {
+                        $legacy->whereNull('tenant_id')
+                            ->where('requested_tenant_slug', (string) $tenant->slug);
+                    });
+            });
+    }
+
+    /** @return array<int,string> */
+    protected function assignableRoles(): array
+    {
+        return ['admin', 'manager', 'member'];
     }
 }

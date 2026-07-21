@@ -257,6 +257,122 @@ test('sending uses only the stored snapshot and creates a Stripe hosted invoice 
         ->and($invoice->authorized_subtotal_cents)->toBe(25000);
 });
 
+test('operator can deliver a draft by consent-confirmed text without emailing it', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $invoice = createDirectInvoice($tenant, $admin);
+
+    Http::fake(function (Request $request) {
+        if ($request->method() === 'GET' && str_ends_with($request->url(), '/v1/invoices/in_text_delivery')) {
+            return Http::response([
+                'id' => 'in_text_delivery', 'object' => 'invoice', 'status' => 'open', 'number' => 'EB-TEXT-1',
+                'currency' => 'usd', 'amount_due' => 25000, 'amount_remaining' => 25000,
+                'hosted_invoice_url' => 'https://invoice.stripe.test/in_text_delivery',
+            ]);
+        }
+        if (str_ends_with($request->url(), '/v1/customers')) {
+            return Http::response(['id' => 'cus_text_delivery']);
+        }
+        if (str_ends_with($request->url(), '/v1/invoices')) {
+            return Http::response(['id' => 'in_text_delivery']);
+        }
+        if (str_ends_with($request->url(), '/v1/invoiceitems')) {
+            return Http::response(['id' => 'ii_text_delivery']);
+        }
+        if (str_ends_with($request->url(), '/finalize')) {
+            return Http::response([
+                'id' => 'in_text_delivery', 'status' => 'open', 'number' => 'EB-TEXT-1',
+                'total' => 25000, 'amount_due' => 25000,
+                'hosted_invoice_url' => 'https://invoice.stripe.test/in_text_delivery',
+            ]);
+        }
+
+        return Http::response(['error' => ['message' => 'Unexpected request']], 500);
+    });
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')->once()->withArgs(function (string $phone, string $message, array $options) use ($invoice): bool {
+        return $phone === '+18645550100'
+            && str_contains($message, 'invoice EB-TEXT-1')
+            && str_contains($message, 'is ready')
+            && str_contains($message, 'https://invoice.stripe.test/in_text_delivery')
+            && str_contains($message, 'Reply STOP')
+            && $options['source_type'] === 'direct_invoice_delivery'
+            && $options['idempotency_key'] === 'direct-invoice-initial_delivery:'.$invoice->id.':550e8400-e29b-41d4-a716-446655440010';
+    })->andReturn(['success' => true, 'provider' => 'twilio', 'provider_message_id' => 'SM_text_delivery', 'status' => 'sent']);
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $this->actingAs($admin)->post(route('landlord.invoices.deliver', [$tenant, $invoice]), [
+        'delivery' => 'text',
+        'customer_phone' => '(864) 555-0100',
+        'consent_confirmed' => '1',
+        'idempotency_key' => '550e8400-e29b-41d4-a716-446655440010',
+    ])->assertRedirect()->assertSessionHas('status', 'Invoice sent by text with Stripe’s secure payment link.');
+
+    $fresh = $invoice->fresh();
+    expect($fresh->status)->toBe('open')
+        ->and($fresh->provider_invoice_id)->toBe('in_text_delivery')
+        ->and($fresh->finalized_at)->not->toBeNull()
+        ->and($fresh->sent_at)->toBeNull()
+        ->and(data_get($fresh->metadata, 'sms_invoice_reminders.0.purpose'))->toBe('initial_delivery')
+        ->and(LandlordOperatorAction::query()->where('action_type', 'tenant_billing.direct_invoice.prepare_text')->exists())->toBeTrue()
+        ->and(LandlordOperatorAction::query()->where('action_type', 'tenant_billing.direct_invoice.sms_delivery')->exists())->toBeTrue();
+    Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/send'));
+});
+
+test('operator can deliver a draft by email and consent-confirmed text together', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $invoice = createDirectInvoice($tenant, $admin);
+
+    Http::fake(function (Request $request) {
+        if ($request->method() === 'GET' && str_ends_with($request->url(), '/v1/invoices/in_multi_delivery')) {
+            return Http::response([
+                'id' => 'in_multi_delivery', 'object' => 'invoice', 'status' => 'open', 'number' => 'EB-BOTH-1',
+                'currency' => 'usd', 'amount_due' => 25000, 'amount_remaining' => 25000,
+                'hosted_invoice_url' => 'https://invoice.stripe.test/in_multi_delivery',
+            ]);
+        }
+        if (str_ends_with($request->url(), '/v1/customers')) {
+            return Http::response(['id' => 'cus_multi_delivery']);
+        }
+        if (str_ends_with($request->url(), '/v1/invoices')) {
+            return Http::response(['id' => 'in_multi_delivery']);
+        }
+        if (str_ends_with($request->url(), '/v1/invoiceitems')) {
+            return Http::response(['id' => 'ii_multi_delivery']);
+        }
+        if (str_ends_with($request->url(), '/finalize')) {
+            return Http::response(['id' => 'in_multi_delivery', 'status' => 'open', 'number' => 'EB-BOTH-1', 'total' => 25000, 'amount_due' => 25000]);
+        }
+        if (str_ends_with($request->url(), '/send')) {
+            return Http::response([
+                'id' => 'in_multi_delivery', 'status' => 'open', 'number' => 'EB-BOTH-1',
+                'total' => 25000, 'amount_due' => 25000,
+                'hosted_invoice_url' => 'https://invoice.stripe.test/in_multi_delivery',
+            ]);
+        }
+
+        return Http::response(['error' => ['message' => 'Unexpected request']], 500);
+    });
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')->once()->andReturn([
+        'success' => true, 'provider' => 'twilio', 'provider_message_id' => 'SM_multi_delivery', 'status' => 'sent',
+    ]);
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $this->actingAs($admin)->post(route('landlord.invoices.deliver', [$tenant, $invoice]), [
+        'delivery' => 'email_and_text',
+        'customer_phone' => '(864) 555-0100',
+        'consent_confirmed' => '1',
+        'idempotency_key' => '550e8400-e29b-41d4-a716-446655440011',
+    ])->assertRedirect()->assertSessionHas('status', 'Invoice emailed to billing@acme.example and sent by text.');
+
+    expect($invoice->fresh()->status)->toBe('open')
+        ->and($invoice->fresh()->sent_at)->not->toBeNull()
+        ->and(data_get($invoice->fresh()->metadata, 'sms_invoice_reminders.0.purpose'))->toBe('initial_delivery');
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/send'));
+});
+
 test('operator can send one consent-confirmed SMS reminder for an invoice Stripe still reports open', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
@@ -376,6 +492,16 @@ test('invoice sending stays disabled without its separate flag and never calls S
     $invoice = createDirectInvoice($tenant, $admin);
     config()->set('commercial.billing_readiness.direct_invoicing.enabled', false);
     Http::fake();
+
+    $this->actingAs($admin)->get(route('landlord.invoices.show', [$tenant, $invoice]))
+        ->assertOk()
+        ->assertSeeText('Deliver invoice')
+        ->assertSeeText('Email invoice')
+        ->assertSeeText('Text invoice')
+        ->assertSeeText('Email + text')
+        ->assertSeeText('Live invoice delivery is still gated.')
+        ->assertSee('name="delivery" value="text"', false)
+        ->assertSee('name="delivery" value="email_and_text"', false);
 
     $this->actingAs($admin)->post(route('landlord.invoices.send', [$tenant, $invoice]))->assertRedirect()->assertSessionHas('status_error');
     expect($invoice->fresh()->status)->toBe('draft');

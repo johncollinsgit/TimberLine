@@ -8,9 +8,12 @@ use Livewire\Component;
 class AdminHome extends Component
 {
     public string $tab = 'users';
+
     /** @var array<int,array{key:string,label:string,description:string}> */
     public array $masterDataResources = [];
+
     public string $masterDataActiveResource = 'scents';
+
     public string $masterDataBaseEndpoint = '';
 
     public function mount(): void
@@ -30,7 +33,11 @@ class AdminHome extends Component
         $isManager = $user?->isManager() ?? false;
         $isAdmin = $user?->isAdmin() ?? true;
 
-        if (!$isAdmin && $isManager && $this->tab === 'users') {
+        if ($isAdmin && $this->tab === 'users' && ! $user?->tenants()->exists()) {
+            $this->tab = 'master-data';
+        }
+
+        if (! $isAdmin && $isManager && $this->tab === 'users') {
             $this->tab = 'imports';
         }
 

@@ -17,6 +17,8 @@ class WholesaleApplicationInboxController extends Controller
 {
     public function index(Request $request): View
     {
+        $this->assertWholesaleWorkspace($request);
+
         $search = trim((string) $request->query('search', ''));
         $status = strtolower(trim((string) $request->query('status', 'pending')));
         $tenantSlug = $this->wholesaleTenantSlug();
@@ -24,6 +26,7 @@ class WholesaleApplicationInboxController extends Controller
         $tenantAliases = $this->wholesaleApplicationTenantAliases();
 
         $applications = CustomerAccessRequest::query()
+            ->wholesaleApplications()
             ->with([
                 'formSubmission.form:id,name,slug',
                 'user:id,name,email,is_active',
@@ -77,6 +80,7 @@ class WholesaleApplicationInboxController extends Controller
 
     public function show(CustomerAccessRequest $accessRequest): View
     {
+        $this->assertWholesaleWorkspace(request());
         $this->assertWholesaleRequest($accessRequest);
 
         $accessRequest->load([
@@ -99,6 +103,7 @@ class WholesaleApplicationInboxController extends Controller
         CustomerAccessRequest $accessRequest,
         CustomerAccessApprovalService $approvalService
     ): RedirectResponse {
+        $this->assertWholesaleWorkspace($request);
         $this->assertWholesaleRequest($accessRequest);
 
         $validated = $request->validate([
@@ -133,6 +138,7 @@ class WholesaleApplicationInboxController extends Controller
         CustomerAccessRequest $accessRequest,
         CustomerAccessApprovalService $approvalService
     ): RedirectResponse {
+        $this->assertWholesaleWorkspace($request);
         $this->assertWholesaleRequest($accessRequest);
 
         $validated = $request->validate([
@@ -167,6 +173,7 @@ class WholesaleApplicationInboxController extends Controller
         CustomerAccessRequest $accessRequest,
         CustomerAccessApprovalService $approvalService
     ): RedirectResponse {
+        $this->assertWholesaleWorkspace($request);
         $this->assertWholesaleRequest($accessRequest);
 
         $validated = $request->validate([
@@ -258,6 +265,7 @@ class WholesaleApplicationInboxController extends Controller
         $tenantAliases = $this->wholesaleApplicationTenantAliases();
 
         return CustomerAccessRequest::query()
+            ->wholesaleApplications()
             ->where('status', $status)
             ->where(function ($query) use ($tenant, $tenantAliases): void {
                 if ($tenant instanceof Tenant) {
@@ -280,12 +288,26 @@ class WholesaleApplicationInboxController extends Controller
         $tenant = $this->wholesaleTenant();
 
         abort_unless(
-            ($tenant instanceof Tenant && (int) $accessRequest->tenant_id === (int) $tenant->id)
+            $accessRequest->isWholesaleApplication()
+                && (($tenant instanceof Tenant && (int) $accessRequest->tenant_id === (int) $tenant->id)
                 || ($accessRequest->tenant_id === null && in_array(
                     (string) $accessRequest->requested_tenant_slug,
                     $this->wholesaleApplicationTenantAliases(),
                     true
-                )),
+                ))),
+            404
+        );
+    }
+
+    protected function assertWholesaleWorkspace(Request $request): void
+    {
+        $wholesaleTenant = $this->wholesaleTenant();
+        $currentTenantId = $request->attributes->get('current_tenant_id');
+
+        abort_unless(
+            $wholesaleTenant instanceof Tenant
+                && is_numeric($currentTenantId)
+                && (int) $currentTenantId === (int) $wholesaleTenant->id,
             404
         );
     }

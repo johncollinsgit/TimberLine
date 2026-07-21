@@ -92,26 +92,19 @@ test('non-admin users cannot perform approve/reject/resend actions', function ()
     Notification::fake();
 
     $manager = User::factory()->create(['role' => 'manager', 'is_active' => true]);
-    $pending = User::factory()->create([
-        'email' => 'ops-unauth@example.com',
-        'role' => 'manager',
-        'is_active' => false,
-        'requested_via' => 'customer_production',
-    ]);
-
-    CustomerAccessRequest::query()->create([
+    $request = CustomerAccessRequest::query()->create([
         'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_PLATFORM_ACCESS,
         'status' => 'pending',
-        'name' => $pending->name,
-        'email' => $pending->email,
+        'name' => 'Unauthorized Manager',
+        'email' => 'ops-unauth@example.com',
         'requested_tenant_slug' => 'acme',
-        'user_id' => (int) $pending->id,
     ]);
 
-    Livewire::actingAs($manager)->test(UsersIndex::class)->call('approve', (int) $pending->id);
+    $service = app(CustomerAccessApprovalService::class);
 
-    $pending->refresh();
-    expect((bool) $pending->is_active)->toBeFalse();
+    expect(fn () => $service->approve((int) $request->id, (int) $manager->id))
+        ->toThrow(DomainException::class);
     Notification::assertNothingSent();
 });
 
@@ -279,8 +272,11 @@ test('admin surface routes through Livewire component for approval actions', fun
         throw new \RuntimeException('Unexpected Shopify request during approval test.');
     });
 
+    $tenant = Tenant::query()->create(['name' => 'Acme', 'slug' => 'acme']);
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-    $this->actingAs($admin)->get(route('admin.users'))->assertOk();
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
+    app(\App\Support\Tenancy\TenantContext::class)->set((int) $tenant->id);
+    $this->actingAs($admin)->withSession(['tenant_id' => $tenant->id])->get(route('admin.users'))->assertOk();
 
     $user = User::factory()->create([
         'email' => 'ops-livewire@example.com',
@@ -291,22 +287,21 @@ test('admin surface routes through Livewire component for approval actions', fun
 
     CustomerAccessRequest::query()->create([
         'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_PLATFORM_ACCESS,
         'status' => 'pending',
         'name' => $user->name,
         'email' => $user->email,
         'requested_tenant_slug' => 'acme',
+        'tenant_id' => $tenant->id,
         'user_id' => (int) $user->id,
     ]);
 
     Livewire::actingAs($admin)->test(UsersIndex::class)
-        ->call('approve', (int) $user->id);
+        ->call('approveRequest', (int) CustomerAccessRequest::query()->where('email', $user->email)->value('id'));
 
     $user->refresh();
     expect((bool) $user->is_active)->toBeTrue();
-    expect($shopifyRequests)->toHaveCount(2);
-    $shopifyQueryList = collect($shopifyRequests)->pluck('query')->join("\n");
-    expect($shopifyQueryList)->toContain('FindWholesaleCustomerByEmail');
-    expect($shopifyQueryList)->toContain('UpsertWholesaleCustomer');
+    expect($shopifyRequests)->toBeEmpty();
 });
 
 test('approval still completes when Shopify sync fails', function (): void {
@@ -363,6 +358,7 @@ test('approval still completes when Shopify sync fails', function (): void {
     $approver = User::factory()->create(['role' => 'admin', 'is_active' => true]);
     $accessRequest = CustomerAccessRequest::query()->create([
         'intent' => 'production',
+        'application_kind' => CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
         'status' => 'pending',
         'name' => 'Ops Failure',
         'email' => 'ops-failure@example.com',
