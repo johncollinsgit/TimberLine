@@ -7,6 +7,7 @@ use App\Models\AgreementAcceptance;
 use App\Models\SubscriptionAuthorization;
 use App\Services\Billing\AgreementBillingOrderService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
+use App\Services\Operations\OperatorAlertService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class AgreementAcceptanceService
         protected AgreementEventRecorder $events,
         protected LandlordOperatorActionAuditService $audit,
         protected AgreementBillingOrderService $billingOrders,
+        protected OperatorAlertService $operatorAlerts,
     ) {}
 
     /** @param array<string,mixed> $input */
@@ -124,6 +126,10 @@ class AgreementAcceptanceService
                 $this->events->record($locked, 'accepted', $request->user()?->id, ['content_hash' => $locked->currentVersion->content_hash, 'evidence_hash' => $evidenceHash], $locked->currentVersion);
                 $this->audit->record((int) $locked->tenant_id, $request->user()?->id, 'agreement.accept', targetType: 'agreement', targetId: $locked->id, afterState: [
                     'status' => 'active', 'version_id' => $locked->currentVersion->id, 'content_hash' => $locked->currentVersion->content_hash, 'subscription_status' => 'authorized_pending_provider',
+                ]);
+                $this->operatorAlerts->notify('agreement.accepted', "Everbranch: {$locked->tenant->name} accepted {$locked->title}.", [
+                    'dedupe_key' => 'agreement-accepted:'.$locked->id.':'.$locked->currentVersion->id,
+                    'tenant_id' => (int) $locked->tenant_id, 'target_type' => 'agreement', 'target_id' => (int) $locked->id,
                 ]);
 
                 return $acceptance;

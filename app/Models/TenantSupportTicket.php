@@ -13,12 +13,12 @@ class TenantSupportTicket extends Model
 
     protected $fillable = [
         'tenant_id', 'created_by_user_id', 'assigned_to_user_id', 'subject',
-        'category', 'priority', 'status', 'last_activity_at',
+        'category', 'priority', 'status', 'source_type', 'dedupe_key', 'resolution_summary', 'resolved_at', 'metadata', 'last_activity_at',
     ];
 
     protected function casts(): array
     {
-        return ['tenant_id' => 'integer', 'created_by_user_id' => 'integer', 'assigned_to_user_id' => 'integer', 'last_activity_at' => 'datetime'];
+        return ['tenant_id' => 'integer', 'created_by_user_id' => 'integer', 'assigned_to_user_id' => 'integer', 'last_activity_at' => 'datetime', 'resolved_at' => 'datetime', 'metadata' => 'array'];
     }
 
     public function tenant(): BelongsTo

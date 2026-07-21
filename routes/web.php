@@ -27,6 +27,7 @@ use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
+use App\Http\Controllers\Landlord\LandlordSupportTicketController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
@@ -83,6 +84,7 @@ use App\Http\Controllers\SubscriptionPublicController;
 use App\Http\Controllers\SubscriptionStorefrontController;
 use App\Http\Controllers\TenantAgreementController;
 use App\Http\Controllers\TenantBrandController;
+use App\Http\Controllers\TenantSupportTicketController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
@@ -231,6 +233,8 @@ $landlordHosts = array_values(array_unique(array_filter($landlordHosts, static f
 $landlordRoutes = static function (): void {
     Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
         ->name('dashboard');
+    Route::post('/landlord/operator-costs', [LandlordTenantDirectoryController::class, 'storeRecurringCost'])
+        ->name('operator-costs.store');
     Route::get('/landlord/readiness', LandlordSelfServiceReadinessController::class)
         ->name('readiness');
     Route::get('/landlord/developer', LandlordDeveloperDashboardController::class)
@@ -260,6 +264,16 @@ $landlordRoutes = static function (): void {
         ->name('service-inquiries.index');
     Route::get('/landlord/messages', [LandlordServiceInquiryController::class, 'index'])
         ->name('messages.index');
+    Route::get('/landlord/tickets', [LandlordSupportTicketController::class, 'index'])
+        ->name('support-tickets.index');
+    Route::get('/landlord/tickets/{ticket}', [LandlordSupportTicketController::class, 'show'])
+        ->name('support-tickets.show');
+    Route::post('/landlord/tickets/{ticket}/reply', [LandlordSupportTicketController::class, 'reply'])
+        ->name('support-tickets.reply');
+    Route::patch('/landlord/tickets/{ticket}', [LandlordSupportTicketController::class, 'update'])
+        ->name('support-tickets.update');
+    Route::post('/landlord/bud-settings/{setting}/review', [LandlordSupportTicketController::class, 'reviewBud'])
+        ->name('bud-settings.review');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
     Route::get('/landlord/agreements', [LandlordAgreementController::class, 'index'])->name('agreements.index');
@@ -704,6 +718,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->post('/start/setup-status', [CustomerStartHereController::class, 'updateSetupStatus'])
         ->name('app.setup-status.update');
+
+    Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access'])
+        ->prefix('account-help')
+        ->name('account-help.')
+        ->group(function (): void {
+            Route::get('/', [TenantSupportTicketController::class, 'index'])->name('index');
+            Route::post('/', [TenantSupportTicketController::class, 'store'])->name('store');
+            Route::get('/tickets/{ticket}', [TenantSupportTicketController::class, 'show'])->name('show');
+            Route::post('/tickets/{ticket}/reply', [TenantSupportTicketController::class, 'reply'])->name('reply');
+            Route::post('/bud/request', [TenantSupportTicketController::class, 'requestBud'])->name('bud.request');
+            Route::post('/bud/ask', [TenantSupportTicketController::class, 'askBud'])->name('bud.ask');
+        });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->prefix('client/projects')

@@ -10736,9 +10736,9 @@ body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb
 .mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-nav-item[data-current] .mf-leaf-icon-badge,
 .mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-nav-item:hover .mf-leaf-icon-badge,
 .mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-group[open] > .mf-admin-group-summary .mf-leaf-icon-badge {
-  background: #1677ff;
-  border-color: #93c5fd;
-  color: #ffffff;
+  background: rgba(5, 31, 70, 0.82);
+  border: 2px solid #60a5fa;
+  color: #eff6ff;
 }
 
 .mf-tenant-themed[data-tenant-theme="collins-upstate-electric"] .mf-admin-subnav-link,

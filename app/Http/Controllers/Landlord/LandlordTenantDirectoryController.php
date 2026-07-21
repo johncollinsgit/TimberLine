@@ -14,11 +14,13 @@ use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantModuleState;
 use App\Models\TenantOnboardingJourneyEvent;
+use App\Models\OperatorRecurringCost;
 use App\Models\User;
 use App\Services\Forms\TenantFormProvisioningService;
 use App\Services\Onboarding\OnboardingJourneyDiagnosticsService;
 use App\Services\Onboarding\OnboardingJourneyEventPresenter;
 use App\Services\Onboarding\TenantSetupStatusService;
+use App\Services\Operations\OperatorDashboardService;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\LandlordTenantOperationsService;
@@ -53,7 +55,7 @@ class LandlordTenantDirectoryController extends Controller
         'settings',
     ];
 
-    public function dashboard(OnboardingJourneyDiagnosticsService $journeyDiagnostics): View
+    public function dashboard(OnboardingJourneyDiagnosticsService $journeyDiagnostics, OperatorDashboardService $operatorDashboard): View
     {
         $tenants = $this->tenantDirectoryRows();
         $tenantIds = $tenants
@@ -86,7 +88,25 @@ class LandlordTenantDirectoryController extends Controller
                 ->take(6)
                 ->values(),
             'onboardingTriage' => $onboardingTriage,
+            'operatorSnapshot' => $operatorDashboard->snapshot(),
         ]);
+    }
+
+    public function storeRecurringCost(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'vendor' => ['required', 'string', 'max:80'],
+            'amount' => ['required', 'numeric', 'min:0', 'max:100000'],
+            'cadence' => ['required', 'in:weekly,monthly,annual'],
+            'source' => ['nullable', 'in:manual,gmail_receipt,invoice'],
+            'receipt_reference' => ['nullable', 'string', 'max:255'],
+        ]);
+        OperatorRecurringCost::query()->create([
+            'vendor' => $data['vendor'], 'amount_cents' => (int) round(((float) $data['amount']) * 100),
+            'cadence' => $data['cadence'], 'source' => $data['source'] ?? 'manual',
+            'receipt_reference' => $data['receipt_reference'] ?? null, 'effective_on' => now()->toDateString(), 'active' => true,
+        ]);
+        return redirect()->route('landlord.dashboard')->with('status', 'Recurring cost added to the weekly break-even view.');
     }
 
     public function index(Request $request, OnboardingJourneyDiagnosticsService $journeyDiagnostics): View

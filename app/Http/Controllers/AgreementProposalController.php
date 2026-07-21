@@ -56,24 +56,36 @@ class AgreementProposalController extends Controller
         if ($agreement->acceptance) {
             return redirect()->route('proposals.show', ['token' => $token])->with('status', 'This exact agreement version was already accepted.');
         }
+        $confirmations = ['authorized_to_bind', 'accepted_scope', 'accepted_pricing', 'accepted_subscription', 'accepted_hourly_rate', 'accepted_termination', 'electronic_consent'];
         $validator = Validator::make($request->all(), [
             'signer_legal_name' => ['required', 'string', 'max:255'],
             'signer_title' => ['required', 'string', 'max:255'],
             'signer_email' => ['required', 'email', 'max:255'],
             'electronic_signature_value' => ['required', 'string', 'max:255'],
-            'authorized_to_bind' => ['accepted'],
-            'accepted_scope' => ['accepted'],
-            'accepted_pricing' => ['accepted'],
-            'accepted_subscription' => ['accepted'],
-            'accepted_hourly_rate' => ['accepted'],
-            'accepted_termination' => ['accepted'],
-            'electronic_consent' => ['accepted'],
+            'agreement_confirmation' => ['sometimes', 'accepted'],
+            ...array_fill_keys($confirmations, ['sometimes', 'accepted']),
         ]);
+        $validator->after(function ($validator) use ($request, $confirmations): void {
+            $legacyAccepted = collect($confirmations)->every(fn (string $key): bool => in_array($request->input($key), [true, 1, '1', 'on', 'yes'], true));
+            if (! $request->boolean('agreement_confirmation') && ! $legacyAccepted) {
+                $legacyFieldsSubmitted = collect($confirmations)->contains(fn (string $key): bool => $request->has($key));
+                if ($legacyFieldsSubmitted) {
+                    collect($confirmations)
+                        ->reject(fn (string $key): bool => in_array($request->input($key), [true, 1, '1', 'on', 'yes'], true))
+                        ->each(fn (string $key) => $validator->errors()->add($key, 'This agreement confirmation is required.'));
+                } else {
+                    $validator->errors()->add('agreement_confirmation', 'Please confirm that you have read and agree to the complete agreement.');
+                }
+            }
+        });
         if ($validator->fails()) {
             throw (new ValidationException($validator))
                 ->redirectTo(route('proposals.show', ['token' => $token]).'#acceptance');
         }
         $validated = $validator->validated();
+        foreach ($confirmations as $confirmation) {
+            $validated[$confirmation] = true;
+        }
         if (mb_strtolower(trim((string) $validated['electronic_signature_value'])) !== mb_strtolower(trim((string) $validated['signer_legal_name']))) {
             throw ValidationException::withMessages(['electronic_signature_value' => 'Type the signer’s full legal name exactly as entered above.']);
         }
