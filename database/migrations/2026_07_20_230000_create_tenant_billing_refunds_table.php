@@ -8,6 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // A prior interrupted production release created this table but did not
+        // record the migration. Treat an existing table as an already-created
+        // base and let the follow-up reconciliation migration verify indexes.
+        if (Schema::hasTable('tenant_billing_refunds')) {
+            return;
+        }
+
         Schema::create('tenant_billing_refunds', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->restrictOnDelete();

@@ -7,6 +7,7 @@ use App\Models\TenantDirectInvoice;
 use App\Models\User;
 use App\Services\Billing\LandlordTransactionRefundService;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Http;
 
 test('landlord can review itemized workspace payment activity from the transactions submenu', function (): void {
@@ -67,4 +68,20 @@ test('a Stripe payment refund is idempotent and appears as an outgoing ledger re
     $same = app(LandlordTransactionRefundService::class)->refund($receipt, 2500, 'requested_by_customer', 'Nate requested a partial refund.', '3bb456cb-09cc-44ce-a1b9-5b407e594f4d', $operator);
     expect($same->id)->toBe($refund->id);
     Http::assertSentCount(1);
+});
+
+test('refund schema migrations tolerate a pre-existing refunds table and retain idempotency indexes', function (): void {
+    expect(Schema::hasIndex('tenant_billing_refunds', ['provider_refund_id'], 'unique'))->toBeTrue()
+        ->and(Schema::hasIndex('tenant_billing_refunds', ['idempotency_key'], 'unique'))->toBeTrue();
+
+    Schema::drop('tenant_billing_refunds');
+    Schema::create('tenant_billing_refunds', function ($table): void {
+        $table->id();
+    });
+
+    $baseMigration = require database_path('migrations/2026_07_20_230000_create_tenant_billing_refunds_table.php');
+    $baseMigration->up();
+
+    expect(Schema::hasTable('tenant_billing_refunds'))->toBeTrue()
+        ->and(Schema::hasColumn('tenant_billing_refunds', 'id'))->toBeTrue();
 });
