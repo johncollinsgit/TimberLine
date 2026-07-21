@@ -13,11 +13,12 @@
   `storage`, retained releases, and a readiness health check. Keep the GitHub
   test/build gate as the release authority. Do not enable direct push-to-deploy
   because it bypasses that gate.
-- During the hook-transition period, GitHub Actions still uses the legacy SSH
-  job. Do not modify that workflow to call Forge until the protected production
-  `FORGE_DEPLOY_HOOK_URL` secret is present. Once the hook workflow is live,
-  do not reintroduce normal-use `git reset`, `git clean`, live-directory asset
-  replacement, or broad cache clearing to production deployments.
+- GitHub Actions posts to the protected production `FORGE_DEPLOY_HOOK_URL`
+  only after its test/build gate passes; Forge then activates the atomic
+  release. This was verified by automatic Forge release `73789933` for commit
+  `c272464…` on 2026-07-21. Do not reintroduce normal-use `git reset`,
+  `git clean`, live-directory asset replacement, or broad cache clearing to
+  production deployments.
 
 - Treat `config/module_catalog.php` as the canonical source of truth for plans, modules, capabilities, visibility, billing mode, and CTA routing. Legacy `commercial.php` and `entitlements.php` are compatibility layers only.
 - Use `TenantModuleAccessResolver`, `TenantExperienceProfileService`, `UnifiedAppNavigationService`, `UnifiedDashboardService`, and `TenantModuleCatalogService` instead of adding new ad hoc plan, channel, or module checks.
