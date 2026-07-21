@@ -73,6 +73,15 @@ class EverbranchPrepareAppReviewWorkspace extends Command
                     'approved_at' => now(),
                 ]
             );
+            // These fixed identities are reserved for Apple's fictional review
+            // workspace. Never retain a historical membership that could expose
+            // a real tenant such as Collins to an external reviewer.
+            $owner->tenants()->sync([
+                (int) $tenant->id => ['role' => 'admin', 'membership_active' => true],
+            ]);
+            $employee->tenants()->sync([
+                (int) $tenant->id => ['role' => 'member', 'membership_active' => true],
+            ]);
             $tenant->users()->syncWithoutDetaching([
                 (int) $owner->id => ['role' => 'admin', 'membership_active' => true],
                 (int) $employee->id => ['role' => 'member', 'membership_active' => true],
@@ -80,7 +89,11 @@ class EverbranchPrepareAppReviewWorkspace extends Command
 
             TenantAccessProfile::query()->updateOrCreate(
                 ['tenant_id' => (int) $tenant->id],
-                ['plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'apple_app_review', 'metadata' => ['account_mode' => 'demo', 'fictional_data_only' => true]]
+                ['plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'apple_app_review', 'metadata' => [
+                    'account_mode' => 'demo',
+                    'fictional_data_only' => true,
+                    'tenant_blueprint' => ['business_template' => 'electrician'],
+                ]]
             );
             foreach (['field_service', 'time_tracking', 'team_communication', 'field_inventory', 'fleet', 'documents', 'quickbooks'] as $moduleKey) {
                 TenantModuleState::query()->updateOrCreate(
@@ -89,7 +102,10 @@ class EverbranchPrepareAppReviewWorkspace extends Command
                 );
                 TenantModuleEntitlement::query()->updateOrCreate(
                     ['tenant_id' => (int) $tenant->id, 'module_key' => $moduleKey],
-                    ['availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'included', 'entitlement_source' => 'apple_app_review', 'metadata' => ['review_fixture' => true], 'created_by' => $owner->id, 'updated_by' => $owner->id]
+                    ['availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'included', 'entitlement_source' => 'apple_app_review', 'metadata' => array_filter([
+                        'review_fixture' => true,
+                        'experience_version' => $moduleKey === 'field_service' ? 3 : null,
+                    ], static fn (mixed $value): bool => $value !== null), 'created_by' => $owner->id, 'updated_by' => $owner->id]
                 );
             }
 
