@@ -84,6 +84,7 @@ class LandlordDirectInvoiceController extends Controller
             'tenant' => $tenant,
             'invoice' => $invoice,
             'stripeAvailable' => $stripe->availableFor($invoice),
+            'stripeBlocker' => $stripe->blockerFor($invoice),
             'history' => $this->history($invoice),
         ]);
     }
@@ -118,6 +119,51 @@ class LandlordDirectInvoiceController extends Controller
         $result = $stripe->send($this->scoped($tenant, $invoice), $request->user()?->id);
 
         return back()->with((bool) $result['ok'] ? 'status' : 'status_error', (bool) $result['ok'] ? 'Stripe emailed the invoice to the customer.' : (string) $result['message']);
+    }
+
+    public function deliver(Request $request, Tenant $tenant, TenantDirectInvoice $invoice, DirectStripeInvoiceService $stripe, DirectInvoiceSmsReminderService $texts): RedirectResponse
+    {
+        Gate::authorize('manage-landlord-commercial');
+        $data = $request->validate([
+            'delivery' => ['required', Rule::in(['email', 'text', 'email_and_text'])],
+            'customer_phone' => ['required_if:delivery,text,email_and_text', 'nullable', 'string', 'max:40'],
+            'consent_confirmed' => ['required_if:delivery,text,email_and_text', 'nullable', 'accepted'],
+            'idempotency_key' => ['required_if:delivery,text,email_and_text', 'nullable', 'uuid'],
+        ], [
+            'consent_confirmed.accepted' => 'Confirm that the customer agreed to receive this billing text.',
+        ]);
+        $invoice = $this->scoped($tenant, $invoice);
+        $delivery = (string) $data['delivery'];
+        $includesEmail = in_array($delivery, ['email', 'email_and_text'], true);
+        $includesText = in_array($delivery, ['text', 'email_and_text'], true);
+
+        $stripeResult = $includesEmail
+            ? $stripe->send($invoice, $request->user()?->id)
+            : $stripe->prepareForText($invoice, $request->user()?->id);
+        if (! (bool) $stripeResult['ok']) {
+            return back()->with('status_error', (string) $stripeResult['message']);
+        }
+        if (! $includesText) {
+            return back()->with('status', 'Invoice emailed to '.$invoice->customer_email.'.');
+        }
+
+        $textResult = $texts->send(
+            $invoice->fresh(),
+            (string) $data['customer_phone'],
+            (string) $data['idempotency_key'],
+            true,
+            $request->user()?->id,
+            'initial_delivery',
+        );
+        if (! (bool) $textResult['ok']) {
+            $prefix = $includesEmail ? 'The invoice email was sent, but the text was not sent: ' : '';
+
+            return back()->with('status_error', $prefix.(string) $textResult['message']);
+        }
+
+        return back()->with('status', $includesEmail
+            ? 'Invoice emailed to '.$invoice->customer_email.' and sent by text.'
+            : 'Invoice sent by text with Stripe’s secure payment link.');
     }
 
     public function void(Request $request, Tenant $tenant, TenantDirectInvoice $invoice, DirectStripeInvoiceService $stripe): RedirectResponse
@@ -175,10 +221,13 @@ class LandlordDirectInvoiceController extends Controller
                 continue;
             }
             $sent = ($reminder['status'] ?? null) === 'sent';
+            $initialDelivery = ($reminder['purpose'] ?? null) === 'initial_delivery';
             $phoneLastFour = trim((string) ($reminder['phone_last_four'] ?? ''));
             $events[] = $this->historyEvent(
                 $reminder['completed_at'] ?? $reminder['requested_at'] ?? null,
-                $sent ? 'Payment reminder text sent' : 'Payment reminder text not sent',
+                $initialDelivery
+                    ? ($sent ? 'Invoice link text sent' : 'Invoice link text not sent')
+                    : ($sent ? 'Payment reminder text sent' : 'Payment reminder text not sent'),
                 $phoneLastFour !== '' ? 'Phone ending in '.$phoneLastFour : null,
                 $sent ? 'sms' : 'issue',
             );

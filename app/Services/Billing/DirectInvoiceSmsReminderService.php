@@ -22,20 +22,21 @@ class DirectInvoiceSmsReminderService
     ) {}
 
     /** @return array{ok:bool,message:string} */
-    public function send(TenantDirectInvoice $invoice, string $phone, string $idempotencyKey, bool $consentConfirmed, ?int $actorId): array
+    public function send(TenantDirectInvoice $invoice, string $phone, string $idempotencyKey, bool $consentConfirmed, ?int $actorId, string $purpose = 'reminder'): array
     {
+        $purpose = $purpose === 'initial_delivery' ? 'initial_delivery' : 'reminder';
         $normalizedPhone = $this->identityNormalizer->toE164($phone);
         if ($normalizedPhone === null) {
-            return $this->failed($invoice, $actorId, $idempotencyKey, 'Enter a valid 10-digit US phone number.');
+            return $this->failed($invoice, $actorId, $idempotencyKey, 'Enter a valid 10-digit US phone number.', purpose: $purpose);
         }
         if (! $consentConfirmed) {
-            return $this->failed($invoice, $actorId, $idempotencyKey, 'Confirm that the customer agreed to receive this billing text.');
+            return $this->failed($invoice, $actorId, $idempotencyKey, 'Confirm that the customer agreed to receive this billing text.', purpose: $purpose);
         }
         if ($this->channelStates->resolveSmsStatus((int) $invoice->tenant_id, null, $normalizedPhone) === 'unsubscribed') {
-            return $this->failed($invoice, $actorId, $idempotencyKey, 'This phone number has opted out of text messages.');
+            return $this->failed($invoice, $actorId, $idempotencyKey, 'This phone number has opted out of text messages.', purpose: $purpose);
         }
         if (! in_array((string) $invoice->status, ['open', 'payment_failed'], true) || ! str_starts_with((string) $invoice->provider_invoice_id, 'in_')) {
-            return $this->failed($invoice, $actorId, $idempotencyKey, 'Only an open Stripe invoice can receive a payment reminder.');
+            return $this->failed($invoice, $actorId, $idempotencyKey, 'Only an open Stripe invoice can be delivered by text.', purpose: $purpose);
         }
 
         try {
@@ -44,12 +45,12 @@ class DirectInvoiceSmsReminderService
             $amountRemaining = max(0, (int) ($providerInvoice['amount_remaining'] ?? $providerInvoice['amount_due'] ?? 0));
             $hostedUrl = $this->safeUrl($providerInvoice['hosted_invoice_url'] ?? null);
             if ($providerStatus !== 'open' || $amountRemaining < 1 || $hostedUrl === null) {
-                return $this->failed($invoice, $actorId, $idempotencyKey, 'Stripe no longer reports this invoice as open with an amount due. No text was sent.');
+                return $this->failed($invoice, $actorId, $idempotencyKey, 'Stripe no longer reports this invoice as open with an amount due. No text was sent.', purpose: $purpose);
             }
 
-            $claim = $this->claim($invoice, $idempotencyKey, $normalizedPhone);
+            $claim = $this->claim($invoice, $idempotencyKey, $normalizedPhone, $purpose);
             if (! $claim) {
-                return ['ok' => true, 'message' => 'This invoice reminder was already processed.'];
+                return ['ok' => true, 'message' => $purpose === 'initial_delivery' ? 'This invoice text was already processed.' : 'This invoice reminder was already processed.'];
             }
 
             $name = trim((string) $invoice->customer_name);
@@ -57,24 +58,26 @@ class DirectInvoiceSmsReminderService
             $number = trim((string) ($providerInvoice['number'] ?? $invoice->provider_invoice_number)) ?: 'your invoice';
             $currency = strtoupper(trim((string) ($providerInvoice['currency'] ?? $invoice->currency ?? 'USD')));
             $amount = number_format($amountRemaining / 100, 2);
-            $message = "Everbranch: Hi {$firstName}, this is a reminder that invoice {$number} for {$currency} {$amount} is awaiting payment. View and pay securely: {$hostedUrl} Reply STOP to unsubscribe.";
+            $message = $purpose === 'initial_delivery'
+                ? "Everbranch: Hi {$firstName}, invoice {$number} for {$currency} {$amount} is ready. View and pay securely: {$hostedUrl} Reply STOP to unsubscribe."
+                : "Everbranch: Hi {$firstName}, this is a reminder that invoice {$number} for {$currency} {$amount} is awaiting payment. View and pay securely: {$hostedUrl} Reply STOP to unsubscribe.";
             $result = $this->sms->sendSms($normalizedPhone, $message, [
                 'tenant_id' => (int) $invoice->tenant_id,
-                'source_type' => 'direct_invoice_reminder',
-                'ledger_source_type' => 'direct_invoice_reminder',
+                'source_type' => $purpose === 'initial_delivery' ? 'direct_invoice_delivery' : 'direct_invoice_reminder',
+                'ledger_source_type' => $purpose === 'initial_delivery' ? 'direct_invoice_delivery' : 'direct_invoice_reminder',
                 'source_id' => (int) $invoice->id,
-                'idempotency_key' => 'direct-invoice-reminder:'.$invoice->id.':'.$idempotencyKey,
+                'idempotency_key' => 'direct-invoice-'.$purpose.':'.$invoice->id.':'.$idempotencyKey,
             ]);
             $ok = (bool) ($result['success'] ?? false);
             $this->completeClaim($invoice, $idempotencyKey, $normalizedPhone, $result, $ok);
             $this->audit->record(
                 (int) $invoice->tenant_id,
                 $actorId,
-                'tenant_billing.direct_invoice.sms_reminder',
+                $purpose === 'initial_delivery' ? 'tenant_billing.direct_invoice.sms_delivery' : 'tenant_billing.direct_invoice.sms_reminder',
                 status: $ok ? 'success' : 'failed',
                 targetType: 'tenant_direct_invoice',
                 targetId: $invoice->id,
-                context: $this->auditContext($invoice, $idempotencyKey, $normalizedPhone),
+                context: $this->auditContext($invoice, $idempotencyKey, $normalizedPhone, $purpose),
                 confirmation: ['billing_sms_consent_confirmed' => true],
                 result: [
                     'provider' => $result['provider'] ?? null,
@@ -86,12 +89,12 @@ class DirectInvoiceSmsReminderService
             $errorMessage = trim((string) ($result['error_message'] ?? '')) ?: 'The text message could not be sent.';
 
             return $ok
-                ? ['ok' => true, 'message' => 'Invoice reminder text sent.']
+                ? ['ok' => true, 'message' => $purpose === 'initial_delivery' ? 'Invoice text sent.' : 'Invoice reminder text sent.']
                 : ['ok' => false, 'message' => $errorMessage];
         } catch (Throwable $exception) {
             $this->completeClaim($invoice, $idempotencyKey, $normalizedPhone, ['error_code' => 'reminder_exception'], false);
 
-            return $this->failed($invoice, $actorId, $idempotencyKey, 'The reminder could not be sent. Stripe or messaging is currently unavailable.', $normalizedPhone, $exception->getMessage());
+            return $this->failed($invoice, $actorId, $idempotencyKey, 'The invoice text could not be sent. Stripe or messaging is currently unavailable.', $normalizedPhone, $exception->getMessage(), $purpose);
         }
     }
 
@@ -116,9 +119,9 @@ class DirectInvoiceSmsReminderService
         return $payload;
     }
 
-    protected function claim(TenantDirectInvoice $invoice, string $idempotencyKey, string $phone): bool
+    protected function claim(TenantDirectInvoice $invoice, string $idempotencyKey, string $phone, string $purpose): bool
     {
-        return DB::transaction(function () use ($invoice, $idempotencyKey, $phone): bool {
+        return DB::transaction(function () use ($invoice, $idempotencyKey, $phone, $purpose): bool {
             $locked = TenantDirectInvoice::query()->whereKey($invoice->id)->lockForUpdate()->firstOrFail();
             $metadata = (array) $locked->metadata;
             $reminders = array_values((array) ($metadata['sms_invoice_reminders'] ?? []));
@@ -128,6 +131,7 @@ class DirectInvoiceSmsReminderService
             $reminders[] = [
                 'key' => $idempotencyKey,
                 'status' => 'sending',
+                'purpose' => $purpose,
                 'requested_at' => now()->toIso8601String(),
                 'phone_last_four' => substr($phone, -4),
             ];
@@ -172,27 +176,28 @@ class DirectInvoiceSmsReminderService
     }
 
     /** @return array{ok:bool,message:string} */
-    protected function failed(TenantDirectInvoice $invoice, ?int $actorId, string $idempotencyKey, string $message, ?string $phone = null, ?string $detail = null): array
+    protected function failed(TenantDirectInvoice $invoice, ?int $actorId, string $idempotencyKey, string $message, ?string $phone = null, ?string $detail = null, string $purpose = 'reminder'): array
     {
         $this->audit->record(
             (int) $invoice->tenant_id,
             $actorId,
-            'tenant_billing.direct_invoice.sms_reminder',
+            $purpose === 'initial_delivery' ? 'tenant_billing.direct_invoice.sms_delivery' : 'tenant_billing.direct_invoice.sms_reminder',
             status: 'failed',
             targetType: 'tenant_direct_invoice',
             targetId: $invoice->id,
-            context: [...$this->auditContext($invoice, $idempotencyKey, $phone), 'error' => $detail ?? $message],
+            context: [...$this->auditContext($invoice, $idempotencyKey, $phone, $purpose), 'error' => $detail ?? $message],
         );
 
         return ['ok' => false, 'message' => $message];
     }
 
     /** @return array<string,mixed> */
-    protected function auditContext(TenantDirectInvoice $invoice, string $idempotencyKey, ?string $phone): array
+    protected function auditContext(TenantDirectInvoice $invoice, string $idempotencyKey, ?string $phone, string $purpose): array
     {
         return [
             'provider_invoice_id' => (string) $invoice->provider_invoice_id,
             'idempotency_key' => $idempotencyKey,
+            'purpose' => $purpose,
             'phone_last_four' => $phone ? substr($phone, -4) : null,
             'phone_hash' => $phone ? hash('sha256', $phone) : null,
         ];

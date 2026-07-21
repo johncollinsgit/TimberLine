@@ -1,13 +1,10 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between gap-4">
+        <div>
             <div>
                 <h1 class="text-xl font-semibold">Wholesale Applications</h1>
                 <p class="mt-1 text-sm text-zinc-600">Simple review inbox for Modern Forestry Wholesale applications.</p>
             </div>
-            <a href="{{ route('admin.users') }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
-                Open user approvals
-            </a>
         </div>
     </x-slot>
 

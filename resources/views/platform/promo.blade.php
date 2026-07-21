@@ -121,6 +121,11 @@
                                 <p class="fb-section-kicker">Small-business work, finally in one place</p>
                                 <h1>{{ $headline }}</h1>
                                 <p>{{ $summary }}</p>
+                                <div class="fb-flat-pricing-callout" aria-label="Everbranch flat business pricing">
+                                    <span>One flat price for the business</span>
+                                    <strong>No per-user fees.</strong>
+                                    <small>Your monthly price does not climb one seat at a time.</small>
+                                </div>
                                 <div class="fb-hero-cta">
                                     <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Become a launch partner with Everbranch</a>
                                     <a href="#everbranch-public" class="fb-btn fb-btn-secondary" data-public-tab-jump="workflows">See Everbranch in action</a>

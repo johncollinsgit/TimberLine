@@ -1,6 +1,9 @@
 @php
     $positiveSubtotalCents = (int) collect($invoice->line_items)->sum(fn ($line) => max(0, (int) ($line['amount_cents'] ?? 0)));
     $discountCents = abs((int) collect($invoice->line_items)->sum(fn ($line) => min(0, (int) ($line['amount_cents'] ?? 0))));
+    $canDeliver = $invoice->isEditable()
+        || $invoice->status === 'send_failed'
+        || ($invoice->status === 'open' && filled($invoice->provider_invoice_id) && blank($invoice->sent_at));
 @endphp
 <x-app-layout><x-slot name="header"><div class="flex items-center justify-between"><div><a href="{{ route('landlord.invoices.index') }}" class="mb-2 inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:underline"><span aria-hidden="true">←</span> Back to invoice desk</a><h1 class="text-xl font-semibold text-zinc-900">{{ $invoice->provider_invoice_number ?: 'Invoice draft #'.$invoice->id }}</h1><p class="mt-1 text-sm text-zinc-600">{{ $tenant->name }} · {{ str_replace('_', ' ', ucfirst($invoice->status)) }}</p></div><a href="{{ route('landlord.invoices.index', ['tenant_id' => $tenant->id]) }}" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">This client’s invoices</a></div></x-slot>
 <div class="mx-auto max-w-4xl space-y-5">
@@ -9,6 +12,36 @@
     <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white"><table class="min-w-full divide-y divide-zinc-200 text-sm"><thead class="bg-zinc-50 text-left text-xs uppercase text-zinc-500"><tr><th class="px-4 py-3">Description</th><th class="px-4 py-3">Category</th><th class="px-4 py-3 text-right">Amount</th></tr></thead><tbody class="divide-y divide-zinc-100">@foreach($invoice->line_items as $line)@php($isDiscount = ($line['category'] ?? null) === 'discount' || (int) ($line['amount_cents'] ?? 0) < 0)<tr><td class="px-4 py-4 {{ $isDiscount ? 'text-emerald-800' : '' }}">{{ $line['description'] }} @if(($line['quantity'] ?? 1) > 1)<span class="text-zinc-500">× {{ $line['quantity'] }}</span>@endif @if(!$isDiscount && ($line['quantity'] ?? 1) > 1 && isset($line['unit_amount_cents']))<span class="text-zinc-500">at ${{ number_format($line['unit_amount_cents'] / 100, 2) }}</span>@endif</td><td class="px-4 py-4 {{ $isDiscount ? 'font-medium text-emerald-700' : 'text-zinc-600' }}">{{ str_replace('_', ' ', $line['category']) }}</td><td class="px-4 py-4 text-right font-medium {{ $isDiscount ? 'text-emerald-700' : '' }}">{{ $isDiscount ? '−' : '' }}${{ number_format(abs((int) $line['amount_cents']) / 100, 2) }}</td></tr>@endforeach</tbody></table></section>
     <section class="rounded-2xl border border-zinc-200 bg-white p-5"><h2 class="font-semibold">Payment and receipt</h2><div class="mt-3 flex flex-wrap gap-3">@if($invoice->hosted_invoice_url)<a href="{{ $invoice->hosted_invoice_url }}" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Open Stripe invoice</a>@endif @if($invoice->invoice_pdf_url)<a href="{{ $invoice->invoice_pdf_url }}" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Invoice PDF</a>@endif</div><p class="mt-3 text-sm text-zinc-600">Stripe is the payment authority. ACH remains unpaid until Stripe confirms settlement. This invoice never changes Everbranch module access.</p></section>
     <section class="rounded-2xl border border-zinc-200 bg-white p-5"><div class="flex items-baseline justify-between gap-3"><div><h2 class="font-semibold">Delivery &amp; payment history</h2><p class="mt-1 text-sm text-zinc-600">A dated record of invoice emails, reminder texts, and payment activity.</p></div><span class="text-sm text-zinc-500">{{ count($history) }} events</span></div><ol class="mt-5 space-y-4 border-l border-zinc-200 pl-5">@forelse($history as $event)<li class="relative"><span class="absolute -left-[1.8rem] top-1.5 h-3 w-3 rounded-full {{ in_array($event['kind'], ['issue', 'void'], true) ? 'bg-amber-500' : ($event['kind'] === 'payment' ? 'bg-emerald-600' : 'bg-blue-600') }} ring-4 ring-white"></span><div class="flex flex-wrap items-baseline justify-between gap-2"><div class="font-medium text-zinc-900">{{ $event['label'] }}</div><time datetime="{{ $event['at']->toIso8601String() }}" class="text-xs text-zinc-500" title="{{ $event['at']->format('M j, Y g:i A T') }}">{{ $event['at']->format('M j, Y g:i A') }}</time></div>@if($event['detail'])<p class="mt-0.5 text-sm text-zinc-600">{{ $event['detail'] }}</p>@endif</li>@empty<li class="text-sm text-zinc-500">No delivery or payment activity has been recorded yet.</li>@endforelse</ol></section>
+    @if($canDeliver)
+        <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm" aria-labelledby="invoice-delivery-title">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div><h2 id="invoice-delivery-title" class="font-semibold text-zinc-950">Deliver invoice</h2><p class="mt-1 text-sm text-zinc-600">Choose email, text, or both. Text delivery always uses Stripe’s secure hosted payment link.</p></div>
+                <span class="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">No automatic charge</span>
+            </div>
+            <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                <form method="post" action="{{ route('landlord.invoices.deliver', [$tenant, $invoice]) }}" class="flex flex-col rounded-xl border border-zinc-200 p-4">
+                    @csrf
+                    <input type="hidden" name="delivery" value="email">
+                    <div class="font-semibold text-zinc-950">Email</div>
+                    <p class="mt-1 flex-1 text-sm text-zinc-600">Stripe emails the invoice and secure payment link to {{ $invoice->customer_email }}.</p>
+                    <button class="mt-4 rounded-lg bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45" @disabled(!$stripeAvailable)>Email invoice</button>
+                </form>
+                <form method="post" action="{{ route('landlord.invoices.deliver', [$tenant, $invoice]) }}" class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                    @csrf
+                    <input type="hidden" name="idempotency_key" value="{{ \Illuminate\Support\Str::uuid() }}">
+                    <div class="font-semibold text-blue-950">Text delivery</div>
+                    <p class="mt-1 text-sm text-blue-900">Enter the customer’s phone and confirm billing-text consent before sending.</p>
+                    <label class="mt-3 block text-sm font-medium text-blue-950">Customer phone<input required name="customer_phone" type="tel" autocomplete="tel" maxlength="40" placeholder="(864) 555-0100" value="{{ old('customer_phone', $invoice->customer_phone) }}" class="mt-1 block w-full rounded-lg border-blue-300 bg-white"></label>
+                    <label class="mt-3 flex items-start gap-2 text-xs leading-5 text-blue-950"><input required type="checkbox" name="consent_confirmed" value="1" class="mt-0.5 rounded border-blue-300"><span>I confirm this customer expressly agreed to receive billing texts at this number. Messages identify Everbranch and include STOP instructions.</span></label>
+                    <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                        <button name="delivery" value="text" class="rounded-lg border border-blue-700 bg-white px-4 py-2.5 text-sm font-semibold text-blue-900 disabled:cursor-not-allowed disabled:opacity-45" @disabled(!$stripeAvailable)>Text invoice</button>
+                        <button name="delivery" value="email_and_text" class="rounded-lg bg-blue-800 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45" @disabled(!$stripeAvailable)>Email + text</button>
+                    </div>
+                </form>
+            </div>
+            <p class="mt-3 text-xs leading-5 text-zinc-500">Text-only delivery finalizes a non-auto-advancing Stripe invoice to create the hosted link; it does not email the customer or charge a payment method.</p>
+        </section>
+    @endif
     @if(in_array($invoice->status, ['open', 'payment_failed'], true) && filled($invoice->provider_invoice_id))
         <section class="rounded-2xl border border-blue-200 bg-blue-50 p-5">
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -24,6 +57,6 @@
             </form>
         </section>
     @endif
-    <div class="flex flex-wrap justify-end gap-3">@if($invoice->isEditable())<a href="{{ route('landlord.invoices.edit', [$tenant, $invoice]) }}" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Edit draft</a><form method="post" action="{{ route('landlord.invoices.send', [$tenant, $invoice]) }}">@csrf<button class="rounded-lg bg-zinc-950 px-4 py-2 text-sm font-semibold text-white" @disabled(!$stripeAvailable)>Email invoice</button></form>@elseif($invoice->status === 'send_failed')<form method="post" action="{{ route('landlord.invoices.send', [$tenant, $invoice]) }}">@csrf<button class="rounded-lg bg-zinc-950 px-4 py-2 text-sm font-semibold text-white" @disabled(!$stripeAvailable)>Retry invoice email</button></form>@endif @if(in_array($invoice->status, ['open','payment_failed','uncollectible'], true))<form method="post" action="{{ route('landlord.invoices.void', [$tenant, $invoice]) }}">@csrf<button class="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700">Void invoice</button></form>@endif</div>
-    @unless($stripeAvailable)<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">Stripe invoice sending is disabled or this workspace is not allowlisted. The draft is safe and no customer has been charged.</div>@endunless
+    <div class="flex flex-wrap justify-end gap-3">@if($invoice->isEditable())<a href="{{ route('landlord.invoices.edit', [$tenant, $invoice]) }}" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Edit draft</a>@endif @if(in_array($invoice->status, ['open','payment_failed','uncollectible'], true))<form method="post" action="{{ route('landlord.invoices.void', [$tenant, $invoice]) }}">@csrf<button class="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700">Void invoice</button></form>@endif</div>
+    @unless($stripeAvailable)<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><div class="font-semibold">Live invoice delivery is still gated.</div><p class="mt-1">{{ $stripeBlocker ?: 'Stripe invoice delivery is not ready.' }} The draft is safe and no customer has been charged.</p><p class="mt-2 text-xs leading-5">Before going live, verify the Stripe live webhook, tax decision, Relay payout destination, tenant allowlist, and the messaging sender used for text delivery.</p></div>@endunless
 </div></x-app-layout>

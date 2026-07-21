@@ -70,4 +70,14 @@ class CustomerAccessRequest extends Model
     {
         return $query->where('application_kind', self::KIND_WHOLESALE_APPLICATION);
     }
+
+    public function scopePlatformAccess(Builder $query): Builder
+    {
+        return $query->where('application_kind', self::KIND_PLATFORM_ACCESS);
+    }
+
+    public function isWholesaleApplication(): bool
+    {
+        return (string) $this->application_kind === self::KIND_WHOLESALE_APPLICATION;
+    }
 }

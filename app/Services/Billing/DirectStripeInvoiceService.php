@@ -16,12 +16,31 @@ class DirectStripeInvoiceService
     /** @return array{ok:bool,message:?string} */
     public function send(TenantDirectInvoice $invoice, ?int $actorId): array
     {
+        return $this->deliver($invoice, $actorId, true);
+    }
+
+    /** @return array{ok:bool,message:?string} */
+    public function prepareForText(TenantDirectInvoice $invoice, ?int $actorId): array
+    {
+        return $this->deliver($invoice, $actorId, false);
+    }
+
+    /** @return array{ok:bool,message:?string} */
+    protected function deliver(TenantDirectInvoice $invoice, ?int $actorId, bool $email): array
+    {
         $invoice->loadMissing('tenant');
         if ($blocker = $this->readinessBlocker($invoice)) {
             return ['ok' => false, 'message' => $blocker];
         }
-        if (! in_array($invoice->status, ['draft', 'send_failed'], true)) {
-            return ['ok' => false, 'message' => 'Only a draft or failed invoice can be sent.'];
+        $canPrepare = in_array($invoice->status, ['draft', 'send_failed'], true);
+        $canEmailPrepared = $email
+            && $invoice->status === 'open'
+            && filled($invoice->provider_invoice_id)
+            && blank($invoice->sent_at);
+        if (! $canPrepare && ! $canEmailPrepared) {
+            return ['ok' => false, 'message' => $email
+                ? 'Only a draft, failed invoice, or unsent open invoice can be emailed.'
+                : 'Only a draft or failed invoice can be prepared for text delivery.'];
         }
 
         $invoice->forceFill(['status' => 'sending', 'failed_at' => null])->save();
@@ -36,18 +55,50 @@ class DirectStripeInvoiceService
             }
             $invoice->forceFill(['provider_invoice_id' => $providerInvoiceId])->save();
 
-            $this->createInvoiceItems($invoice, $customerId, $providerInvoiceId);
-            $finalized = $this->stripeCall('post', '/v1/invoices/'.urlencode($providerInvoiceId).'/finalize', ['auto_advance' => 'false'], 'direct-invoice-'.$invoice->id.'-finalize-v1');
-            $invoice->forceFill(['finalized_at' => now(), 'status' => 'open'])->save();
-            $sent = $this->stripeCall('post', '/v1/invoices/'.urlencode($providerInvoiceId).'/send', [], 'direct-invoice-'.$invoice->id.'-send-v1');
-            $this->applyProviderInvoice($invoice, $sent !== [] ? $sent : $finalized, 'open');
-            $invoice->forceFill(['sent_at' => now()])->save();
-            $this->audit->record((int) $invoice->tenant_id, $actorId, 'tenant_billing.direct_invoice.send', targetType: 'tenant_direct_invoice', targetId: $invoice->id, context: ['provider_invoice_id' => $providerInvoiceId, 'automatic_tax_enabled' => $this->automaticTaxEnabled()]);
+            if (blank($invoice->finalized_at)) {
+                $this->createInvoiceItems($invoice, $customerId, $providerInvoiceId);
+                $finalized = $this->stripeCall('post', '/v1/invoices/'.urlencode($providerInvoiceId).'/finalize', ['auto_advance' => 'false'], 'direct-invoice-'.$invoice->id.'-finalize-v1');
+                $this->applyProviderInvoice($invoice, $finalized, 'open');
+                $invoice->forceFill(['finalized_at' => now(), 'status' => 'open'])->save();
+            }
+
+            if ($email) {
+                $sent = $this->stripeCall('post', '/v1/invoices/'.urlencode($providerInvoiceId).'/send', [], 'direct-invoice-'.$invoice->id.'-send-v1');
+                $this->applyProviderInvoice($invoice, $sent, 'open');
+                $invoice->forceFill(['sent_at' => now()])->save();
+            } else {
+                $invoice->forceFill(['status' => 'open'])->save();
+            }
+
+            $this->audit->record(
+                (int) $invoice->tenant_id,
+                $actorId,
+                $email ? 'tenant_billing.direct_invoice.send' : 'tenant_billing.direct_invoice.prepare_text',
+                targetType: 'tenant_direct_invoice',
+                targetId: $invoice->id,
+                context: [
+                    'provider_invoice_id' => $providerInvoiceId,
+                    'delivery_channel' => $email ? 'email' : 'text',
+                    'automatic_tax_enabled' => $this->automaticTaxEnabled(),
+                ],
+            );
 
             return ['ok' => true, 'message' => null];
         } catch (\Throwable $exception) {
             $invoice->forceFill(['status' => 'send_failed', 'failed_at' => now(), 'metadata' => [...(array) $invoice->metadata, 'last_send_error' => $exception->getMessage()]])->save();
-            $this->audit->record((int) $invoice->tenant_id, $actorId, 'tenant_billing.direct_invoice.send', status: 'failed', targetType: 'tenant_direct_invoice', targetId: $invoice->id, context: ['provider_invoice_id' => $invoice->provider_invoice_id, 'error' => $exception->getMessage()]);
+            $this->audit->record(
+                (int) $invoice->tenant_id,
+                $actorId,
+                $email ? 'tenant_billing.direct_invoice.send' : 'tenant_billing.direct_invoice.prepare_text',
+                status: 'failed',
+                targetType: 'tenant_direct_invoice',
+                targetId: $invoice->id,
+                context: [
+                    'provider_invoice_id' => $invoice->provider_invoice_id,
+                    'delivery_channel' => $email ? 'email' : 'text',
+                    'error' => $exception->getMessage(),
+                ],
+            );
 
             return ['ok' => false, 'message' => $exception->getMessage()];
         }
@@ -77,6 +128,11 @@ class DirectStripeInvoiceService
     public function availableFor(TenantDirectInvoice $invoice): bool
     {
         return $this->readinessBlocker($invoice->loadMissing('tenant')) === null;
+    }
+
+    public function blockerFor(TenantDirectInvoice $invoice): ?string
+    {
+        return $this->readinessBlocker($invoice->loadMissing('tenant'));
     }
 
     protected function syncCustomer(TenantDirectInvoice $invoice): string

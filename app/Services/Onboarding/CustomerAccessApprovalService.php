@@ -28,7 +28,7 @@ class CustomerAccessApprovalService
     public function approve(int $requestId, int $actorUserId, ?string $decisionNote = null): CustomerAccessRequest
     {
         $actor = $this->actorOrFail($actorUserId);
-        $this->assertActorAuthorized($actor);
+        $this->assertActorAuthorized($actor, $this->requestOrFail($requestId));
 
         $decisionNote = $this->normalizeNote($decisionNote);
 
@@ -130,15 +130,17 @@ class CustomerAccessApprovalService
         });
 
         if ($result['should_send']) {
-            try {
-                $this->syncShopifyWholesaleCustomer(
-                    user: $result['user'],
-                    request: $result['request'],
-                    actorUserId: $actorUserId,
-                    source: 'customer_access_request.approve'
-                );
-            } catch (\Throwable) {
-                // Keep the approval path moving; storefront access remains blocked until the tag is applied.
+            if ($result['request']->isWholesaleApplication()) {
+                try {
+                    $this->syncShopifyWholesaleCustomer(
+                        user: $result['user'],
+                        request: $result['request'],
+                        actorUserId: $actorUserId,
+                        source: 'customer_access_request.approve'
+                    );
+                } catch (\Throwable) {
+                    // Keep the wholesale approval path moving; storefront access remains blocked until the tag is applied.
+                }
             }
 
             $this->sendActivationEmail(
@@ -163,6 +165,10 @@ class CustomerAccessApprovalService
         int $actorUserId,
         string $source
     ): array {
+        if (! $request->isWholesaleApplication()) {
+            throw new DomainException('Shopify wholesale sync is only available for wholesale applications.');
+        }
+
         try {
             $result = $this->shopifyWholesaleCustomerApprovalService->syncByEmail((string) $user->email, [
                 'name' => (string) ($request->name ?: $user->name),
@@ -226,7 +232,7 @@ class CustomerAccessApprovalService
     public function reject(int $requestId, int $actorUserId, ?string $rejectionNote = null): CustomerAccessRequest
     {
         $actor = $this->actorOrFail($actorUserId);
-        $this->assertActorAuthorized($actor);
+        $this->assertActorAuthorized($actor, $this->requestOrFail($requestId));
 
         $rejectionNote = $this->normalizeNote($rejectionNote);
 
@@ -281,7 +287,7 @@ class CustomerAccessApprovalService
     public function resendActivation(int $requestId, int $actorUserId, ?string $decisionNote = null, int $throttleSeconds = 60): CustomerAccessRequest
     {
         $actor = $this->actorOrFail($actorUserId);
-        $this->assertActorAuthorized($actor);
+        $this->assertActorAuthorized($actor, $this->requestOrFail($requestId));
 
         $decisionNote = $this->normalizeNote($decisionNote);
         $throttleSeconds = max(5, min(600, $throttleSeconds));
@@ -491,11 +497,37 @@ class CustomerAccessApprovalService
         return $actor;
     }
 
-    protected function assertActorAuthorized(User $actor): void
+    protected function requestOrFail(int $requestId): CustomerAccessRequest
     {
-        if (! $actor->isAdmin()) {
-            throw new DomainException('Not authorized to approve customer access requests.');
+        $request = CustomerAccessRequest::query()->find($requestId);
+        if (! $request) {
+            throw new DomainException('Access request not found.');
         }
+
+        return $request;
+    }
+
+    protected function assertActorAuthorized(User $actor, CustomerAccessRequest $request): void
+    {
+        if ($actor->isAdmin()) {
+            return;
+        }
+
+        $tenantId = is_numeric($request->tenant_id) && (int) $request->tenant_id > 0
+            ? (int) $request->tenant_id
+            : Tenant::query()
+                ->where('slug', strtolower(trim((string) $request->requested_tenant_slug)))
+                ->value('id');
+
+        $membershipRole = $tenantId
+            ? $actor->tenants()->whereKey((int) $tenantId)->value('tenant_user.role')
+            : null;
+
+        if (in_array(strtolower(trim((string) $membershipRole)), ['owner', 'admin'], true)) {
+            return;
+        }
+
+        throw new DomainException('Not authorized to approve customer access requests.');
     }
 
     protected function resolveTenant(?CustomerAccessRequest $request, ?string $tenantSlug): ?Tenant

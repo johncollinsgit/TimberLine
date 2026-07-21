@@ -1,5 +1,36 @@
 # UI Changelog
 
+## 2026-07-21 - Flat Business Pricing Homepage Message
+
+### What Changed
+- Added a prominent homepage hero callout explaining that Everbranch plans use one flat business price with no per-user fees.
+- Clarified that the monthly price does not increase one seat at a time while retaining the existing config-driven launch-tier prices and plan cards.
+
+### What Did Not Change
+- No plan limits, prices, billing, checkout, subscriptions, entitlements, tenant access, or module availability changed.
+
+## 2026-07-21 - Tenant-Scoped Team Access Redesign
+
+### What Changed
+- Rebuilt Team Access around the active workspace: a compact workspace summary, one-step invite flow, direct approve/reject controls with visible loading states, searchable member rows, and inline role changes.
+- Replaced global user deletion with `Remove access`, which detaches only the current workspace membership and preserves the person's Everbranch account and other workspace memberships.
+- Added readable white-on-brand primary controls and removed legacy production roles and wholesale application details from the tenant team surface.
+
+### Guardrails
+- Team Access queries only current-tenant memberships and `platform_access` requests addressed to that tenant. A rejected request disappears from the pending queue immediately and cannot retain an Approve action.
+- Wholesale application queries, routes, and Shopify synchronization now require `wholesale_application` records in the configured wholesale workspace; the wholesale inbox no longer links into Team Access.
+
+## 2026-07-21 - Invoice Email and Text Delivery Choices
+
+### What Changed
+- Replaced the single draft-send action with explicit `Email invoice`, `Text invoice`, and `Email + text` controls in the landlord invoice detail view.
+- Text-only delivery finalizes a non-auto-advancing Stripe invoice to obtain its secure hosted link, then uses the existing consent-confirmed, opt-out-aware, idempotent SMS pipeline.
+- Delivery history distinguishes an initial invoice-link text from a later payment-reminder text.
+
+### Guardrails
+- All three actions remain disabled until direct Stripe invoicing and tenant allowlisting are ready; text delivery also requires an entered phone number and express billing-text consent.
+- Finalizing or delivering an invoice does not charge a saved payment method, mark it paid, increase received-payment totals, or change plans, modules, or entitlements.
+
 ## 2026-07-21 - Invoice Management and SMS Reminders
 
 ### What Changed
