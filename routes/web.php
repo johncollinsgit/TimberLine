@@ -786,6 +786,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
             Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
             Route::post('/jobs/{job}/tasks', [FieldServiceController::class, 'storeTask'])->name('tasks.store');
+            Route::patch('/jobs/{job}/tasks/{task}', [FieldServiceController::class, 'updateTask'])->name('tasks.update');
+            Route::post('/jobs/{job}/tasks/{task}/handoff', [FieldServiceController::class, 'handoffTask'])->name('tasks.handoff');
             Route::post('/jobs/{job}/photos', [FieldServiceController::class, 'storePhoto'])->name('photos.store');
             Route::post('/materials', [FieldServiceController::class, 'storeMaterial'])->name('materials.store');
             Route::post('/reminders', [FieldServiceController::class, 'updateReminderSettings'])->name('reminders.update');

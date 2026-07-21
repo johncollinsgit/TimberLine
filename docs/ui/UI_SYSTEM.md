@@ -26,6 +26,8 @@ Transform Everbranch into a premium, calm, high-trust software experience with o
 - Accent system is restrained forest/navy with calm green support tones.
 - Avoid noisy gradients, glow-heavy effects, or busy icon clutter.
 - Keep strong spacing rhythm and scan-friendly section structure.
+- Field Operations Home puts period financial facts first for authorized owners, primary operating actions next, and the signed-in person’s assigned tasks at the bottom.
+- Multi-assignee task controls must show named people, a single shared status, and an explicit handoff action with a waiting note; do not hide responsibility changes behind generic editing.
 - Public/auth/admin/embedded must feel like one product family.
 
 ## Feature Metadata

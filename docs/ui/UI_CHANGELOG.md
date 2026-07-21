@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-07-21 - Field Operations Owner Metrics and Task Handoffs
+
+### What Changed
+- Added compact Today, This Week, and This Month owner metrics for QuickBooks Money In, Money Spent, and Finished Jobs at the top of Work.
+- Added a bottom-of-page My Assigned Tasks list ordered by overdue, urgent, due date, and undated work.
+- Replaced the single-person task picker with multi-select responsibility, shared status editing, and a clear “Hand off next step” surface that records what the recipient is waiting on.
+
+### Guardrails
+- Financial cards are omitted for employees and other non-financial roles.
+- Employee handoffs are limited to job participants, the lead, or a workspace manager; every mutation remains tenant-scoped and idempotent.
+
 ## 2026-07-21 - Collins Work Resources, Customers, and Navigation Completion
 
 ### What Changed

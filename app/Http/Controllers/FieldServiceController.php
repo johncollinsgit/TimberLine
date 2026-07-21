@@ -19,6 +19,8 @@ use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
 use App\Services\FieldService\FieldServiceJobTransitionService;
+use App\Services\FieldService\FieldServiceOwnerHomeMetricsService;
+use App\Services\FieldService\FieldServiceTaskAssignmentService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\Tenancy\TenantFinancialAccess;
@@ -40,9 +42,10 @@ class FieldServiceController extends Controller
         protected FieldServiceJobTransitionService $transitions,
         protected FieldServiceJobNotificationService $notifications,
         protected FieldServiceWorkProfileService $profiles,
+        protected FieldServiceTaskAssignmentService $taskAssignments,
     ) {}
 
-    public function index(Request $request): View|RedirectResponse
+    public function index(Request $request, TenantFinancialAccess $financialAccess, FieldServiceOwnerHomeMetricsService $homeMetrics): View|RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
@@ -86,6 +89,20 @@ class FieldServiceController extends Controller
         $team = $tenant->users()
             ->orderBy('name')
             ->get(['users.id', 'users.name', 'users.email']);
+        $period = $request->validate(['period' => ['nullable', 'in:today,week,month']])['period'] ?? 'month';
+        $taskQuery = FieldServiceTask::query()->forTenantId((int) $tenant->id)
+            ->with(['job:id,tenant_id,title,operational_status', 'assignees:id,name,email'])
+            ->where('status', '!=', 'done')
+            ->where(fn ($assigned) => $assigned->where('assigned_user_id', (int) $request->user()->id)
+                ->orWhereHas('assignees', fn ($assignees) => $assignees->whereKey((int) $request->user()->id)))
+            ->whereHas('job', function ($jobs) use ($request, $tenant): void {
+                $this->fieldServiceAccess->scopeVisibleJobs($jobs, $request->user(), $tenant);
+            });
+        $assignedTaskTotal = (clone $taskQuery)->count();
+        $assignedTasks = $taskQuery
+            ->orderByRaw('case when due_at is not null and due_at < ? then 0 else 1 end', [now()])
+            ->orderByRaw("case when priority = 'urgent' then 0 else 1 end")
+            ->orderByRaw('due_at is null')->orderBy('due_at')->orderBy('id')->limit(50)->get();
 
         $reminderSetting = FieldServiceReminderSetting::query()->firstOrCreate(
             ['tenant_id' => (int) $tenant->id],
@@ -104,6 +121,9 @@ class FieldServiceController extends Controller
             'profile' => $profile,
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
+            'ownerMetrics' => $financialAccess->allows($request->user(), $tenant) ? $homeMetrics->build($tenant, $period) : null,
+            'assignedTasks' => $assignedTasks,
+            'assignedTaskTotal' => $assignedTaskTotal,
         ]);
     }
 
@@ -331,6 +351,8 @@ class FieldServiceController extends Controller
             'assignedUser',
             'participants:id,name,email',
             'tasks.assignedUser',
+            'tasks.assignees:id,name,email',
+            'tasks.events.actor:id,name',
             'equipment',
             'timeEntries.user',
             'materials',
@@ -355,6 +377,9 @@ class FieldServiceController extends Controller
                 'update_progress' => $this->fieldServiceAccess->canUpdateProgress($request->user(), $tenant, $job),
                 'create_task' => $this->fieldServiceAccess->canCreateTask($request->user(), $tenant, $job),
             ],
+            'taskUpdateIds' => $job->tasks
+                ->filter(fn (FieldServiceTask $task): bool => $this->fieldServiceAccess->canUpdateTask($request->user(), $tenant, $job, $task))
+                ->pluck('id')->map(fn ($id): int => (int) $id)->all(),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
         ]);
     }
@@ -511,7 +536,8 @@ class FieldServiceController extends Controller
 
         $assignedUserId = $this->validatedTenantUserId($tenant, $validated['assigned_user_id'] ?? null);
 
-        DB::transaction(function () use ($tenant, $validated, $assignedUserId): void {
+        $actor = $request->user();
+        DB::transaction(function () use ($tenant, $validated, $assignedUserId, $actor): void {
             $profile = $this->findOrCreateCustomer($tenant, $validated);
 
             $job = FieldServiceJob::query()->create([
@@ -552,13 +578,16 @@ class FieldServiceController extends Controller
 
             $firstTask = trim((string) ($validated['first_task'] ?? ''));
             if ($firstTask !== '') {
-                FieldServiceTask::query()->create([
+                $firstTaskModel = FieldServiceTask::query()->create([
                     'tenant_id' => (int) $tenant->id,
                     'field_service_job_id' => (int) $job->id,
                     'assigned_user_id' => $assignedUserId,
                     'title' => $firstTask,
                     'status' => 'open',
                 ]);
+                if ($assignedUserId && $actor) {
+                    $this->taskAssignments->sync($firstTaskModel, $tenant, $actor, [$assignedUserId]);
+                }
             }
 
             $firstMaterial = trim((string) ($validated['first_material'] ?? ''));
@@ -586,15 +615,25 @@ class FieldServiceController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'assigned_user_id' => ['nullable', 'integer'],
+            'assignee_ids' => ['nullable', 'array', 'max:50'],
+            'assignee_ids.*' => ['integer'],
             'due_at' => ['nullable', 'date'],
             'description' => ['nullable', 'string', 'max:3000'],
             'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
         ]);
 
-        FieldServiceTask::query()->create([
+        $requestedIds = array_key_exists('assignee_ids', $validated)
+            ? (array) $validated['assignee_ids']
+            : array_filter([$validated['assigned_user_id'] ?? null]);
+        $assigneeIds = $this->taskAssignments->tenantUserIds($tenant, $requestedIds);
+        if (! $this->fieldServiceAccess->canManageJobs($request->user(), $tenant)
+            && $assigneeIds->contains(fn (int $id): bool => $id !== (int) $request->user()->id)) {
+            abort(403, 'Team members can only assign new tasks to themselves.');
+        }
+        $task = FieldServiceTask::query()->create([
             'tenant_id' => (int) $tenant->id,
             'field_service_job_id' => (int) $job->id,
-            'assigned_user_id' => $this->validatedTenantUserId($tenant, $validated['assigned_user_id'] ?? null),
+            'assigned_user_id' => $assigneeIds->first(),
             'created_by_user_id' => $request->user()?->id,
             'title' => (string) $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -602,8 +641,65 @@ class FieldServiceController extends Controller
             'status' => 'open',
             'due_at' => $validated['due_at'] ?? null,
         ]);
+        $this->taskAssignments->sync($task, $tenant, $request->user(), $assigneeIds->all());
+        $notifyIds = $assigneeIds->reject(fn (int $id): bool => $id === (int) $request->user()->id)->all();
+        if ($notifyIds !== []) {
+            $this->notifications->notifyJobEvent($job, $request->user(), 'task_assigned', 'New task: '.$task->title, 'web-task-created:'.$task->id, $notifyIds);
+        }
 
         return back()->with('status', 'Task added.');
+    }
+
+    public function updateTask(Request $request, FieldServiceJob $job, FieldServiceTask $task): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless((int) $job->tenant_id === (int) $tenant->id
+            && (int) $task->tenant_id === (int) $tenant->id
+            && (int) $task->field_service_job_id === (int) $job->id
+            && $this->fieldServiceAccess->canUpdateTask($request->user(), $tenant, $job, $task), 403);
+        $validated = $request->validate(['status' => ['required', 'in:open,in_progress,waiting,done']]);
+        $task->forceFill([
+            'status' => $validated['status'],
+            'completed_at' => $validated['status'] === 'done' ? ($task->completed_at ?? now()) : null,
+            'completed_by_user_id' => $validated['status'] === 'done' ? (int) $request->user()->id : null,
+        ])->save();
+
+        return back()->with('status', 'Task updated.');
+    }
+
+    public function handoffTask(Request $request, FieldServiceJob $job, FieldServiceTask $task): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless((int) $job->tenant_id === (int) $tenant->id
+            && (int) $task->tenant_id === (int) $tenant->id
+            && (int) $task->field_service_job_id === (int) $job->id
+            && $this->fieldServiceAccess->canUpdateTask($request->user(), $tenant, $job, $task), 403);
+        $validated = $request->validate([
+            'assignee_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'assignee_ids.*' => ['integer'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'idempotency_key' => ['required', 'string', 'max:120'],
+        ]);
+        $recipientIds = $this->taskAssignments->tenantUserIds($tenant, (array) $validated['assignee_ids']);
+        abort_if($recipientIds->isEmpty(), 422, 'Choose an active workspace member.');
+        if (! $this->fieldServiceAccess->canManageJobs($request->user(), $tenant)) {
+            $allowed = $job->participants()->pluck('users.id')->push($job->assigned_user_id)->filter()->map(fn ($id): int => (int) $id);
+            $managers = $tenant->users()->wherePivot('membership_active', true)->get()
+                ->filter(fn (User $member): bool => in_array(strtolower((string) $member->pivot?->role), ['owner', 'tenant_owner', 'admin', 'manager'], true))
+                ->pluck('id')->map(fn ($id): int => (int) $id);
+            abort_if($recipientIds->diff($allowed->merge($managers)->unique())->isNotEmpty(), 403, 'Hand off only to this job’s crew, lead, or a manager.');
+        }
+        $result = $this->taskAssignments->handoff($task, $job, $tenant, $request->user(), $recipientIds->all(), $validated['note'] ?? null, $validated['idempotency_key']);
+        if (! $result['replayed']) {
+            $notifyIds = $recipientIds->reject(fn (int $id): bool => $id === (int) $request->user()->id)->all();
+            if ($notifyIds !== []) {
+                $this->notifications->notifyJobEvent($job, $request->user(), 'task_handoff', 'Waiting on you: '.$task->title, 'web-task-handoff:'.$result['event']->id, $notifyIds);
+            }
+        }
+
+        return back()->with('status', $result['replayed'] ? 'Task handoff already recorded.' : 'Task handed off.');
     }
 
     public function transitionJob(Request $request, FieldServiceJob $job): RedirectResponse

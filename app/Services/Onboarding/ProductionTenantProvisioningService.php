@@ -8,6 +8,7 @@ use App\Models\TenantOnboardingBlueprintProvisioning;
 use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
 use App\Services\Tenancy\TenantBrandProfileService;
+use App\Services\Tenancy\TenantModuleActivationPolicyService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -21,6 +22,7 @@ class ProductionTenantProvisioningService
         protected OnboardingBlueprintService $blueprintService,
         protected LandlordCommercialConfigService $commercialConfigService,
         protected TenantBrandProfileService $brandProfileService,
+        protected TenantModuleActivationPolicyService $activationPolicies,
     ) {}
 
     /**
@@ -123,6 +125,10 @@ class ProductionTenantProvisioningService
 
             $metadata = is_array($profile->metadata ?? null) ? (array) $profile->metadata : [];
             $metadata['account_mode'] = 'production';
+            $activationDecisions = $this->activationPolicies->forTemplate(
+                (string) ($validated['template_key'] ?? ''),
+                $planKey,
+            )->all();
             $metadata['onboarding'] = array_replace(
                 is_array($metadata['onboarding'] ?? null) ? (array) $metadata['onboarding'] : [],
                 [
@@ -132,6 +138,11 @@ class ProductionTenantProvisioningService
                     'desired_outcome_first' => $validated['desired_outcome_first'] ?? null,
                     'setup_preferences' => is_array($validated['setup_preferences'] ?? null) ? (array) $validated['setup_preferences'] : [],
                     'mobile_intent' => is_array($validated['mobile_intent'] ?? null) ? (array) $validated['mobile_intent'] : [],
+                    'module_activation' => [
+                        'policy_version' => 1,
+                        'decisions' => $activationDecisions,
+                        'note' => 'Only baseline plan modules activate automatically. Recommendations and integration-dependent modules require operator approval and readiness checks.',
+                    ],
                     'provisioned_from' => [
                         'policy' => self::PROVISIONING_POLICY,
                         'source_blueprint_id' => (int) $finalBlueprint->id,
@@ -218,6 +229,10 @@ class ProductionTenantProvisioningService
                 'desired_outcome_first' => $validated['desired_outcome_first'] ?? null,
                 'setup_preferences' => is_array($validated['setup_preferences'] ?? null) ? (array) $validated['setup_preferences'] : [],
                 'mobile_intent' => is_array($validated['mobile_intent'] ?? null) ? (array) $validated['mobile_intent'] : [],
+                'module_activation' => $this->activationPolicies->forTemplate(
+                    (string) ($validated['template_key'] ?? ''),
+                    $operatingMode === 'direct' ? 'base' : (string) config('entitlements.default_plan', 'starter'),
+                )->values()->all(),
                 'tenant_creation_policy' => (string) ($validated['tenant_creation_policy'] ?? ''),
             ],
             'not_copied' => [
