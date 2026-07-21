@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobNotification;
+use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceTask;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
@@ -18,6 +19,7 @@ use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
 use App\Services\FieldService\FieldServiceJobTransitionService;
 use App\Services\FieldService\FieldServiceMyDayService;
+use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
@@ -35,28 +37,68 @@ class EverbranchMobileFieldServiceController extends Controller
 {
     public function __construct(protected TenantMobileModuleRegistry $modules) {}
 
-    public function index(Request $request, FieldServiceAccessService $access, FieldServiceWorkProfileService $profiles, FieldServiceJobReadinessService $readiness): JsonResponse
+    public function index(Request $request, FieldServiceAccessService $access, FieldServiceWorkProfileService $profiles, FieldServiceJobReadinessService $readiness, TenantFinancialAccess $financialAccess, FieldServiceWorkCandidateService $candidates): JsonResponse
     {
         $tenant = $this->tenant($request);
         $user = $this->user($request);
         $validated = $request->validate([
             'view' => ['nullable', 'in:calendar,list'],
             'filter' => ['nullable', 'in:mine,active,quotes,history'],
+            'bucket' => ['nullable', 'in:current,potential,past'],
             'month' => ['nullable', 'date_format:Y-m'],
             'q' => ['nullable', 'string', 'max:160'],
+            'sort' => ['nullable', 'in:status,scheduled_for,priority,customer,title,hours,updated_at'],
+            'direction' => ['nullable', 'in:asc,desc'],
+            'cursor' => ['nullable', 'string', 'max:1000'],
+            'limit' => ['nullable', 'integer', 'min:10', 'max:50'],
         ]);
-        $view = (string) ($validated['view'] ?? 'calendar');
+        $bucket = (string) ($validated['bucket'] ?? match ($validated['filter'] ?? null) {
+            'history' => 'past', 'quotes' => 'potential', default => 'current'
+        });
+        $view = (string) ($validated['view'] ?? (array_key_exists('bucket', $validated) ? 'list' : 'calendar'));
         $filter = (string) ($validated['filter'] ?? ($access->canViewAllJobs($user, $tenant) ? 'active' : 'mine'));
+        $owner = $financialAccess->allows($user, $tenant);
+        if ($bucket === 'potential') {
+            abort_unless($access->canManageJobs($user, $tenant), 403);
+
+            return response()->json([
+                'contract_version' => 5, 'bucket' => 'potential', 'view' => 'list',
+                'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
+                'candidates' => $candidates->pending($tenant)->map(fn ($candidate): array => [
+                    'id' => (int) $candidate->id, 'title' => $candidate->title, 'customer' => $candidate->customer_name,
+                    'source' => $candidate->source, 'source_type' => $candidate->source_type,
+                    'amount' => $candidate->amount === null ? null : (float) $candidate->amount,
+                    'balance' => $candidate->balance === null ? null : (float) $candidate->balance,
+                    'description' => $candidate->description, 'updated_at' => $candidate->updated_at?->toIso8601String(),
+                ])->values(),
+                'counts' => $this->counts($tenant, $user, $access),
+            ]);
+        }
         $month = Carbon::createFromFormat('Y-m', (string) ($validated['month'] ?? now()->format('Y-m')))->startOfMonth();
         $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
-            ->with(['assignedUser:id,name', 'participants:id,name'])
+            ->with([
+                'assignedUser:id,name', 'participants:id,name', 'vehicles:id,tenant_id,name,identifier,status',
+                'materials:id,tenant_id,field_service_job_id,quantity,pulled_quantity,loaded_quantity,used_quantity,status',
+                'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
+            ])
             ->withCount([
                 'tasks', 'notes',
+                'timeSessions as running_timers_count' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused']),
                 'assets as photos_count' => fn ($assets) => $assets->where('mime_type', 'like', 'image/%'),
                 'assets as documents_count' => fn ($assets) => $assets->where('mime_type', 'not like', 'image/%'),
-            ]);
+            ])
+            ->withSum(['timeEntries as manual_minutes' => fn ($entries) => $entries->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
+            ->withSum(['timeEntries as viewer_manual_minutes' => fn ($entries) => $entries->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
+            ->withSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds')
+            ->withSum(['timeSessions as viewer_timer_seconds' => fn ($sessions) => $sessions->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_seconds')
+            ->withSum('financialDocuments as financial_total', 'total_amount')
+            ->withSum('financialDocuments as financial_balance', 'balance');
         $access->scopeVisibleJobs($query, $user, $tenant);
-        $this->applyFilter($query, $filter, $user);
+        if ($bucket === 'past') {
+            $query->whereIn('operational_status', ['complete', 'canceled', 'history']);
+        } else {
+            $this->applyFilter($query, $filter, $user);
+        }
         $search = trim((string) ($validated['q'] ?? ''));
         if ($search !== '') {
             $like = '%'.$search.'%';
@@ -77,20 +119,24 @@ class EverbranchMobileFieldServiceController extends Controller
                 'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
                 'view' => 'calendar', 'filter' => $filter, 'month' => $month->format('Y-m'),
                 'days' => $scheduled->groupBy(fn (FieldServiceJob $job): string => $job->scheduled_for?->toDateString() ?? '')
-                    ->map(fn ($jobs) => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness))->values())->all(),
-                'unscheduled' => $unscheduled->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness))->values(),
+                    ->map(fn ($jobs) => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values())->all(),
+                'unscheduled' => $unscheduled->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values(),
                 'counts' => $this->counts($tenant, $user, $access),
             ]);
         }
 
-        $jobs = $query->orderByRaw('scheduled_for is null')
-            ->orderBy('scheduled_for')->orderByDesc('last_financial_activity_at')->orderByDesc('updated_at')->limit(100)->get();
+        $sort = (string) ($validated['sort'] ?? 'status');
+        $direction = (string) ($validated['direction'] ?? 'asc');
+        $this->applySort($query, $sort, $direction);
+        $page = $query->cursorPaginate((int) ($validated['limit'] ?? 30), ['*'], 'cursor', $validated['cursor'] ?? null);
+        $jobs = $page->getCollection();
 
         return response()->json([
-            'contract_version' => 4, 'profile' => $profiles->forTenant($tenant),
+            'contract_version' => 5, 'profile' => $profiles->forTenant($tenant), 'bucket' => $bucket,
             'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
             'view' => 'list', 'filter' => $filter,
-            'jobs' => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness))->values(),
+            'jobs' => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values(),
+            'next_cursor' => $page->nextCursor()?->encode(),
             'counts' => $this->counts($tenant, $user, $access),
         ]);
     }
@@ -103,14 +149,25 @@ class EverbranchMobileFieldServiceController extends Controller
         $owner = $financialAccess->allows($user, $tenantModel);
         $job->load([
             'assignedUser:id,name,email', 'participants:id,name,email', 'tasks.assignedUser:id,name', 'tasks.createdBy:id,name', 'tasks.completedBy:id,name',
+            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit',
+            'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
             'assets' => fn ($assets) => $assets->when(! $owner, fn ($query) => $query->where('visibility', 'team'))->latest('captured_at')->latest('id'),
             'notes' => fn ($notes) => $notes->when(! $owner, fn ($query) => $query->where(fn ($visibility) => $visibility->whereNull('metadata->visibility')->orWhere('metadata->visibility', '!=', 'owner')))->latest('noted_at'),
             'notes.createdBy:id,name', 'notes.mentions:id,name',
             'financialDocuments' => fn ($documents) => $documents->when(! $owner, fn ($query) => $query->whereRaw('1 = 0'))->orderByDesc('transaction_date'),
         ]);
+        $job->loadCount(['tasks', 'notes', 'timeSessions as running_timers_count' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])]);
+        $job->loadSum(['timeEntries as manual_minutes' => fn ($entries) => $entries->whereIn('status', ['submitted', 'approved'])], 'duration_minutes');
+        $job->loadSum(['timeEntries as viewer_manual_minutes' => fn ($entries) => $entries->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_minutes');
+        $job->loadSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
+        $job->loadSum(['timeSessions as viewer_timer_seconds' => fn ($sessions) => $sessions->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
+        if ($owner) {
+            $job->loadSum('financialDocuments as financial_total', 'total_amount');
+            $job->loadSum('financialDocuments as financial_balance', 'balance');
+        }
 
         return response()->json(['job' => [
-            ...$this->summary($job, $readiness),
+            ...$this->summary($job, $readiness, $owner, (int) $user->id),
             'description' => $job->description,
             'customer_phone' => $job->customer_phone,
             'lock_box_code' => $job->lock_box_code,
@@ -122,6 +179,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'completed_at' => $job->completed_at?->toIso8601String(),
             'canceled_at' => $job->canceled_at?->toIso8601String(),
             'blocked_reason' => $job->blocked_reason,
+            'materials' => $job->materials->map(fn ($material): array => ['id' => (int) $material->id, 'name' => $material->name, 'quantity' => (float) $material->quantity, 'unit' => $material->unit, 'status' => $material->status, 'pulled_quantity' => (float) $material->pulled_quantity, 'loaded_quantity' => (float) $material->loaded_quantity, 'used_quantity' => (float) $material->used_quantity])->values(),
             'tasks' => $job->tasks->sortBy(['sort_order', 'due_at'])->map(fn (FieldServiceTask $task): array => [
                 'id' => (int) $task->id, 'title' => $task->title, 'description' => $task->description,
                 'status' => $task->status, 'priority' => $task->priority ?: 'normal', 'due_at' => $task->due_at?->toIso8601String(),
@@ -162,6 +220,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'service_postal_code' => ['nullable', 'string', 'max:40'], 'service_country' => ['nullable', 'string', 'max:80'],
             'lock_box_code' => ['nullable', 'string', 'max:120'], 'assigned_user_id' => ['nullable', 'integer'],
             'participant_user_ids' => ['nullable', 'array', 'max:50'], 'participant_user_ids.*' => ['integer'],
+            'vehicle_ids' => ['nullable', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
         ]);
         $profile = null;
         if (is_numeric($validated['customer_id'] ?? null)) {
@@ -193,6 +252,8 @@ class EverbranchMobileFieldServiceController extends Controller
         ]);
         $ids = $tenant->users()->whereIn('users.id', (array) ($validated['participant_user_ids'] ?? []))->pluck('users.id')->map(fn ($id): int => (int) $id);
         $job->participants()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'role' => 'member', 'following' => true]])->all());
+        $vehicleIds = \App\Models\FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->whereIn('id', (array) ($validated['vehicle_ids'] ?? []))->pluck('id')->map(fn ($id): int => (int) $id);
+        $job->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'assigned_by_user_id' => (int) $user->id]])->all());
         $job->load('participants');
         $job->forceFill(['operational_status' => $readiness->forJob($job)['ready'] ? 'scheduled' : 'needs_details'])->save();
         $notifications->notifyJobEvent($job, $user, 'assigned', 'You were assigned to '.$job->title.'.', 'job-created:'.$job->id, $ids->push($assigned)->filter()->all());
@@ -325,10 +386,11 @@ class EverbranchMobileFieldServiceController extends Controller
             'priority' => ['sometimes', 'in:low,normal,high,urgent'], 'scheduled_for' => ['sometimes', 'nullable', 'date'],
             'scheduled_end_at' => ['sometimes', 'nullable', 'date'], 'assigned_user_id' => ['sometimes', 'nullable', 'integer'],
             'participant_user_ids' => ['sometimes', 'array', 'max:50'], 'participant_user_ids.*' => ['integer'],
+            'vehicle_ids' => ['sometimes', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
             'operational_status' => ['sometimes', 'in:active,scheduled,blocked,complete,quote,canceled,history'],
         ]);
         $before = $job->only(['scheduled_for', 'scheduled_end_at', 'assigned_user_id']);
-        $job->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'operational_status'])->all());
+        $job->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'vehicle_ids', 'operational_status'])->all());
         if (array_key_exists('assigned_user_id', $validated)) {
             $job->assigned_user_id = is_numeric($validated['assigned_user_id']) ? $tenantModel->users()->whereKey((int) $validated['assigned_user_id'])->value('users.id') : null;
         }
@@ -340,6 +402,10 @@ class EverbranchMobileFieldServiceController extends Controller
             $ids = $tenantModel->users()->whereIn('users.id', $validated['participant_user_ids'])->pluck('users.id')->map(fn ($id): int => (int) $id);
             $job->participants()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'role' => 'member', 'following' => true]])->all());
         }
+        if (array_key_exists('vehicle_ids', $validated)) {
+            $vehicleIds = \App\Models\FieldServiceVehicle::query()->forTenantId((int) $tenantModel->id)->whereIn('id', $validated['vehicle_ids'])->pluck('id')->map(fn ($id): int => (int) $id);
+            $job->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'assigned_by_user_id' => (int) $user->id]])->all());
+        }
         if (filled($validated['operational_status'] ?? null)) {
             $lifecycle->setManualStatus($job, (string) $validated['operational_status']);
         } elseif ($job->status_source !== 'manual' && in_array($job->operational_status, ['active', 'scheduled', 'needs_details'], true)) {
@@ -348,11 +414,28 @@ class EverbranchMobileFieldServiceController extends Controller
         }
 
         $changed = collect(['scheduled_for', 'scheduled_end_at', 'assigned_user_id'])->contains(fn (string $key): bool => (string) ($before[$key] ?? '') !== (string) $job->{$key});
-        if ($changed || array_key_exists('participant_user_ids', $validated)) {
+        if ($changed || array_key_exists('participant_user_ids', $validated) || array_key_exists('vehicle_ids', $validated)) {
             $notifications->notifyJobEvent($job, $user, 'schedule_changed', 'Schedule or team assignment changed for '.$job->title.'.', 'job-updated:'.$job->id.':'.$job->updated_at?->timestamp);
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    public function updateMaterial(Request $request, string $tenant, FieldServiceJob $job, FieldServiceMaterial $material, FieldServiceAccessService $access): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $material->tenant_id === (int) $tenantModel->id && (int) $material->field_service_job_id === (int) $job->id, 404);
+        abort_unless($access->canUpdateProgress($user, $tenantModel, $job), 403);
+        $validated = $request->validate([
+            'status' => ['sometimes', 'in:needed,pulled,loaded,used'],
+            'pulled_quantity' => ['sometimes', 'numeric', 'min:0', 'max:999999'],
+            'loaded_quantity' => ['sometimes', 'numeric', 'min:0', 'max:999999'],
+            'used_quantity' => ['sometimes', 'numeric', 'min:0', 'max:999999'],
+        ]);
+        $material->forceFill($validated)->save();
+
+        return response()->json(['ok' => true, 'material' => ['id' => (int) $material->id, 'status' => $material->status, 'pulled_quantity' => (float) $material->pulled_quantity, 'loaded_quantity' => (float) $material->loaded_quantity, 'used_quantity' => (float) $material->used_quantity]]);
     }
 
     public function team(Request $request): JsonResponse
@@ -426,7 +509,7 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function downloadAsset(Request $request, string $tenant, WorkspaceAsset $asset, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit): StreamedResponse
+    public function downloadAsset(Request $request, string $tenant, WorkspaceAsset $asset, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit, WorkspaceAssetService $assets): StreamedResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
@@ -436,10 +519,11 @@ class EverbranchMobileFieldServiceController extends Controller
         } elseif ($asset->jobs()->exists()) {
             abort_unless($asset->jobs()->get()->contains(fn (FieldServiceJob $job): bool => $access->canAccessJob($user, $tenantModel, $job)), 403);
         }
-        abort_unless(Storage::disk($asset->storage_disk)->exists($asset->storage_path), 404);
+        $disk = $assets->readableDisk($asset);
+        abort_unless($disk, 404);
         $audit->record($tenantModel, $asset, $user, 'downloaded', ['surface' => 'everbranch_mobile']);
 
-        return Storage::disk($asset->storage_disk)->download($asset->storage_path, $asset->file_name);
+        return Storage::disk($disk)->download($asset->storage_path, $asset->file_name);
     }
 
     protected function applyFilter(Builder $query, string $filter, User $user): void
@@ -450,6 +534,24 @@ class EverbranchMobileFieldServiceController extends Controller
             'history' => $query->whereIn('operational_status', ['complete', 'canceled', 'history']),
             default => $query->whereIn('operational_status', ['active', 'scheduled', 'needs_details', 'blocked']),
         };
+    }
+
+    protected function applySort(Builder $query, string $sort, string $direction): void
+    {
+        if ($sort === 'status') {
+            $query->orderByRaw("case operational_status when 'blocked' then 0 when 'active' then 1 when 'scheduled' then 2 when 'needs_details' then 3 else 4 end ".($direction === 'desc' ? 'desc' : 'asc'))
+                ->orderByRaw('scheduled_for is null')->orderBy('scheduled_for')->orderByDesc('updated_at');
+        } else {
+            $column = match ($sort) {
+                'scheduled_for' => 'scheduled_for', 'priority' => 'priority', 'customer' => 'customer_name',
+                'title' => 'title', 'hours' => 'timer_seconds', default => 'updated_at',
+            };
+            $query->orderBy($column, $direction);
+            if ($sort === 'hours') {
+                $query->orderBy('manual_minutes', $direction);
+            }
+        }
+        $query->orderBy('id');
     }
 
     /** @return array<string,int> */
@@ -467,8 +569,15 @@ class EverbranchMobileFieldServiceController extends Controller
     }
 
     /** @return array<string,mixed> */
-    protected function summary(FieldServiceJob $job, FieldServiceJobReadinessService $readiness): array
+    protected function summary(FieldServiceJob $job, FieldServiceJobReadinessService $readiness, bool $owner = false, ?int $viewerId = null): array
     {
+        $activeSessions = $job->relationLoaded('timeSessions') ? $job->timeSessions : collect();
+        $liveSeconds = $activeSessions->sum(fn ($session): int => max(0, (int) $session->clocked_in_at?->diffInSeconds(now()) - (int) $session->break_seconds));
+        $viewerLiveSeconds = $viewerId === null ? 0 : $activeSessions->where('user_id', $viewerId)->sum(fn ($session): int => max(0, (int) $session->clocked_in_at?->diffInSeconds(now()) - (int) $session->break_seconds));
+        $allSeconds = ((int) ($job->manual_minutes ?? 0) * 60) + (int) ($job->timer_seconds ?? 0) + $liveSeconds;
+        $viewerSeconds = ((int) ($job->viewer_manual_minutes ?? 0) * 60) + (int) ($job->viewer_timer_seconds ?? 0) + $viewerLiveSeconds;
+        $materials = $job->relationLoaded('materials') ? $job->materials : collect();
+
         return [
             'id' => (int) $job->id, 'title' => (string) $job->title, 'customer' => (string) $job->customer_name,
             'status' => (string) ($job->operational_status ?: $job->status), 'priority' => (string) ($job->priority ?: 'normal'),
@@ -476,6 +585,11 @@ class EverbranchMobileFieldServiceController extends Controller
             'last_activity_at' => $job->last_financial_activity_at?->toIso8601String() ?: $job->updated_at?->toIso8601String(),
             'address' => trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_city, $job->service_state]))),
             'lead' => $job->assignedUser?->name, 'participants' => $job->participants->pluck('name')->values(),
+            'vehicles' => $job->relationLoaded('vehicles') ? $job->vehicles->map(fn ($vehicle): array => ['id' => (int) $vehicle->id, 'name' => $vehicle->name, 'identifier' => $vehicle->identifier])->values() : [],
+            'hours' => ['total' => round(($owner ? $allSeconds : $viewerSeconds) / 3600, 2), 'running' => round(($owner ? $liveSeconds : $viewerLiveSeconds) / 3600, 2), 'running_timer_count' => $owner ? (int) ($job->running_timers_count ?? 0) : $activeSessions->where('user_id', $viewerId)->count()],
+            'material_readiness' => ['total' => $materials->count(), 'needed' => $materials->where('status', 'needed')->count(), 'ready' => $materials->filter(fn ($material): bool => in_array($material->status, ['loaded', 'used'], true) || (float) $material->loaded_quantity >= (float) $material->quantity)->count()],
+            'source' => $job->external_source ?: 'everbranch',
+            'financial' => $owner ? ['total' => (float) ($job->financial_total ?? 0), 'balance' => (float) ($job->financial_balance ?? 0)] : null,
             'readiness' => $readiness->forJob($job),
             'blocked_reason' => $job->blocked_reason,
             'counts' => ['tasks' => (int) ($job->tasks_count ?? 0), 'photos' => (int) ($job->photos_count ?? 0), 'documents' => (int) ($job->documents_count ?? 0), 'updates' => (int) ($job->notes_count ?? 0)],

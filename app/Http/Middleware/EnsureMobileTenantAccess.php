@@ -20,6 +20,7 @@ class EnsureMobileTenantAccess
         abort_if($token === '', 404);
 
         $tenant = $user->tenants()
+            ->wherePivot('membership_active', true)
             ->where(function ($query) use ($token): void {
                 $query->where('tenants.slug', $token);
                 if (ctype_digit($token)) {

@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 
 class TenantMobileModuleRegistry
 {
-    public const CONTRACT_VERSION = 2;
+    public const CONTRACT_VERSION = 3;
 
     public function __construct(
         protected TenantModuleAccessResolver $accessResolver,

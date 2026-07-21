@@ -293,7 +293,9 @@ test('mobile workspace bootstrap is membership scoped and entitlement driven', f
         ->assertOk()
         ->assertJsonPath('workspace.id', $tenant->id)
         ->assertJsonPath('permissions.manage_billing', true)
-        ->assertJsonPath('contract_version', 2);
+        ->assertJsonPath('contract_version', 3)
+        ->assertJsonPath('primary_navigation.0.key', 'home')
+        ->assertJsonPath('primary_navigation.1.key', 'work');
 
     $keys = collect($response->json('modules'))->pluck('module_key');
     expect($keys)->toContain('customers', 'field_service')

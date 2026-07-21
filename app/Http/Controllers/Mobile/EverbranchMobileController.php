@@ -59,12 +59,14 @@ class EverbranchMobileController extends Controller
         TenantMobileModuleRegistry $mobileModules,
         TenantModuleCatalogService $catalog,
         FieldServiceWorkProfileService $workProfiles,
+        TenantModuleAccessResolver $moduleAccess,
     ): JsonResponse {
         $tenant = $this->tenant($request);
         $user = $this->user($request);
         $storePayload = $catalog->tenantStorePayload((int) $tenant->id, 'mobile');
         $role = $this->tenantRole($user, $tenant);
         $manifest = collect($mobileModules->manifest((int) $tenant->id))->values()->all();
+        $fieldOperations = (array) ($moduleAccess->resolveForTenant((int) $tenant->id, ['field_service', 'time_tracking', 'team_communication', 'field_inventory', 'fleet', 'documents', 'quickbooks'])['modules'] ?? []);
 
         return response()->json([
             'contract_version' => TenantMobileModuleRegistry::CONTRACT_VERSION,
@@ -79,6 +81,7 @@ class EverbranchMobileController extends Controller
             'branding' => $this->brandingPayload($tenant, $role),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'work_profile' => $workProfiles->forTenant($tenant),
+            'primary_navigation' => $this->primaryNavigation($role, $fieldOperations),
             'dashboard' => $dashboard->forRequest($request, $user),
             'workspace_insights' => $this->workspaceInsights($tenant, count($manifest)),
             'branches' => $manifest,
@@ -572,6 +575,40 @@ class EverbranchMobileController extends Controller
             'owner', 'tenant_owner' => 'admin',
             default => $role !== '' ? $role : 'member',
         };
+    }
+
+    /** @param array<string,array<string,mixed>> $modules
+     * @return array<int,array<string,mixed>>
+     */
+    protected function primaryNavigation(string $role, array $modules): array
+    {
+        $enabled = fn (string $key): bool => (bool) data_get($modules, $key.'.enabled', false);
+        if (! $enabled('field_service')) {
+            return [
+                ['key' => 'home', 'label' => 'Home', 'icon' => 'house'],
+                ['key' => 'work', 'label' => 'Work', 'icon' => 'briefcase-business'],
+                ['key' => 'search', 'label' => 'Search', 'icon' => 'search'],
+                ['key' => 'account', 'label' => 'Account', 'icon' => 'user-round'],
+                ['key' => 'more', 'label' => 'More', 'icon' => 'ellipsis'],
+            ];
+        }
+        if (in_array($role, ['admin', 'manager'], true)) {
+            return [
+                ['key' => 'home', 'label' => 'Home', 'icon' => 'house'],
+                ['key' => 'work', 'label' => 'Work', 'icon' => 'briefcase-business'],
+                ['key' => 'customers', 'label' => 'Customers', 'icon' => 'users-round'],
+                ['key' => 'team', 'label' => 'Team', 'icon' => 'messages-square'],
+                ['key' => 'more', 'label' => 'More', 'icon' => 'ellipsis'],
+            ];
+        }
+
+        return array_values(array_filter([
+            ['key' => 'home', 'label' => 'Home', 'icon' => 'house'],
+            ['key' => 'work', 'label' => 'Work', 'icon' => 'briefcase-business'],
+            $enabled('time_tracking') ? ['key' => 'clock', 'label' => 'Clock In/Out', 'icon' => 'clock'] : null,
+            $enabled('team_communication') ? ['key' => 'messages', 'label' => 'Messages', 'icon' => 'messages-square'] : null,
+            ['key' => 'account', 'label' => 'Account', 'icon' => 'user-round'],
+        ]));
     }
 
     protected function canManageBilling(User $user, Tenant $tenant): bool

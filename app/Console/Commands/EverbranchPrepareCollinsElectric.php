@@ -110,6 +110,17 @@ class EverbranchPrepareCollinsElectric extends Command
                 'notes' => 'Collins Electric generator maintenance launch module. SMS remains separately gated by verified provider and consent readiness.',
                 'metadata' => ['launch_scope' => 'collins_electric', 'sms_requires_verified_readiness' => true],
             ], (int) $user->id);
+            foreach (['time_tracking', 'team_communication', 'field_inventory', 'fleet', 'documents'] as $moduleKey) {
+                $commercialService->setTenantModuleState((int) $tenant->id, $moduleKey, true, 'configured', (int) $user->id);
+                $commercialService->setTenantModuleEntitlement((int) $tenant->id, $moduleKey, [
+                    'availability_status' => 'available',
+                    'enabled_status' => 'enabled',
+                    'billing_status' => 'custom_contract',
+                    'entitlement_source' => 'collins_electric_launch_partner',
+                    'notes' => 'Enabled as a reusable Field Agent capability for the Collins guided launch.',
+                    'metadata' => ['launch_scope' => 'collins_electric', 'present_as_field_agent_experience' => true],
+                ], (int) $user->id);
+            }
             TenantAccessAddon::withoutGlobalScopes()->updateOrCreate(
                 ['tenant_id' => (int) $tenant->id, 'addon_key' => 'messaging_usage'],
                 [
@@ -249,7 +260,7 @@ class EverbranchPrepareCollinsElectric extends Command
     /** @return array<string,mixed> */
     protected function setupStatusPayload(TenantSetupStatus $status): array
     {
-        $requiredModules = ['customers', 'field_service', 'equipment_maintenance', 'billing', 'messaging', 'reporting', 'uploads', 'quickbooks'];
+        $requiredModules = ['customers', 'field_service', 'time_tracking', 'team_communication', 'field_inventory', 'fleet', 'equipment_maintenance', 'billing', 'messaging', 'reporting', 'uploads', 'documents', 'quickbooks'];
         $moduleInterests = array_values(array_unique([
             ...array_values(array_filter((array) $status->module_interests, 'is_string')),
             ...$requiredModules,

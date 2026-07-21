@@ -1,11 +1,16 @@
 <?php
 
+use App\Http\Controllers\Mobile\EverbranchMobileAssetUploadController;
 use App\Http\Controllers\Mobile\EverbranchMobileAuthController;
 use App\Http\Controllers\Mobile\EverbranchMobileClassSchedulingController;
 use App\Http\Controllers\Mobile\EverbranchMobileController;
+use App\Http\Controllers\Mobile\EverbranchMobileEmployeeController;
 use App\Http\Controllers\Mobile\EverbranchMobileEstimatorController;
 use App\Http\Controllers\Mobile\EverbranchMobileFieldServiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileLandlordController;
+use App\Http\Controllers\Mobile\EverbranchMobileTeamController;
+use App\Http\Controllers\Mobile\EverbranchMobileTimeClockController;
+use App\Http\Controllers\Mobile\EverbranchMobileWorkCandidateController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
@@ -27,6 +32,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
         Route::patch('/account/preferences', [EverbranchMobileController::class, 'updatePreferences'])->middleware('abilities:mobile:write')->name('account.preferences.update');
         Route::post('/account/push-device', [EverbranchMobileController::class, 'registerPushDevice'])->middleware('abilities:mobile:write')->name('account.push-device.register');
         Route::delete('/account/push-device', [EverbranchMobileController::class, 'unregisterPushDevice'])->middleware('abilities:mobile:write')->name('account.push-device.unregister');
+        Route::post('/employee-invitations/accept', [EverbranchMobileEmployeeController::class, 'accept'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('employee-invitations.accept');
 
         Route::prefix('/landlord')->group(function (): void {
             Route::get('/bootstrap', [EverbranchMobileLandlordController::class, 'bootstrap'])->middleware('abilities:mobile:read')->name('landlord.bootstrap');
@@ -59,8 +65,27 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/class-scheduling/classes/{scheduledClass}', [EverbranchMobileClassSchedulingController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('scheduledClass')->name('workspace.class-scheduling.show');
                 Route::post('/class-scheduling/enrollments/{enrollment}/reminders', [EverbranchMobileClassSchedulingController::class, 'storeReminder'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('enrollment')->name('workspace.class-scheduling.reminders.store');
                 Route::get('/field-service/my-day', [EverbranchMobileFieldServiceController::class, 'myDay'])->middleware('abilities:mobile:read')->name('workspace.field-service.my-day');
+                Route::get('/field-service/clock/current', [EverbranchMobileTimeClockController::class, 'current'])->middleware('abilities:mobile:read')->name('workspace.field-service.clock.current');
+                Route::post('/field-service/clock/start', [EverbranchMobileTimeClockController::class, 'start'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.start');
+                Route::post('/field-service/clock/pause', [EverbranchMobileTimeClockController::class, 'pause'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.pause');
+                Route::post('/field-service/clock/resume', [EverbranchMobileTimeClockController::class, 'resume'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.resume');
+                Route::post('/field-service/clock/stop', [EverbranchMobileTimeClockController::class, 'stop'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.stop');
+                Route::get('/field-service/channels', [EverbranchMobileTeamController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.channels.index');
+                Route::get('/field-service/work-candidates', [EverbranchMobileWorkCandidateController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.work-candidates.index');
+                Route::post('/field-service/work-candidates/{candidate}/review', [EverbranchMobileWorkCandidateController::class, 'review'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('candidate')->name('workspace.field-service.work-candidates.review');
+                Route::post('/field-service/uploads/initialize', [EverbranchMobileAssetUploadController::class, 'initialize'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.field-service.uploads.initialize');
+                Route::post('/field-service/uploads/complete', [EverbranchMobileAssetUploadController::class, 'complete'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.field-service.uploads.complete');
+                Route::post('/field-service/channels/job', [EverbranchMobileTeamController::class, 'createJobChannel'])->middleware('abilities:mobile:write')->name('workspace.field-service.channels.job');
+                Route::post('/field-service/channels/direct', [EverbranchMobileTeamController::class, 'createDirectChannel'])->middleware('abilities:mobile:write')->name('workspace.field-service.channels.direct');
+                Route::get('/field-service/channels/{channel}', [EverbranchMobileTeamController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('channel')->name('workspace.field-service.channels.show');
+                Route::post('/field-service/channels/{channel}/messages', [EverbranchMobileTeamController::class, 'store'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('channel')->name('workspace.field-service.channels.messages.store');
                 Route::post('/field-service/jobs', [EverbranchMobileFieldServiceController::class, 'storeJob'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.field-service.jobs.store');
                 Route::get('/field-service/team', [EverbranchMobileFieldServiceController::class, 'team'])->middleware('abilities:mobile:read')->name('workspace.field-service.team');
+                Route::get('/employees', [EverbranchMobileEmployeeController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.employees.index');
+                Route::post('/employees/invitations', [EverbranchMobileEmployeeController::class, 'invite'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.employees.invitations.store');
+                Route::post('/employees/invitations/{invitation}/resend', [EverbranchMobileEmployeeController::class, 'resend'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->whereNumber('invitation')->name('workspace.employees.invitations.resend');
+                Route::delete('/employees/invitations/{invitation}', [EverbranchMobileEmployeeController::class, 'revoke'])->middleware('abilities:mobile:write')->whereNumber('invitation')->name('workspace.employees.invitations.revoke');
+                Route::patch('/employees/{employee}', [EverbranchMobileEmployeeController::class, 'update'])->middleware('abilities:mobile:write')->whereNumber('employee')->name('workspace.employees.update');
                 Route::get('/field-service/preferences', [EverbranchMobileFieldServiceController::class, 'preferences'])->middleware('abilities:mobile:read')->name('workspace.field-service.preferences');
                 Route::patch('/field-service/preferences', [EverbranchMobileFieldServiceController::class, 'updatePreferences'])->middleware('abilities:mobile:write')->name('workspace.field-service.preferences.update');
                 Route::get('/field-service/jobs/{job}', [EverbranchMobileFieldServiceController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('job')->name('workspace.field-service.jobs.show');
@@ -70,6 +95,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/field-service/jobs/{job}/photos', [EverbranchMobileFieldServiceController::class, 'uploadPhotos'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('job')->name('workspace.field-service.jobs.photos');
                 Route::post('/field-service/jobs/{job}/tasks', [EverbranchMobileFieldServiceController::class, 'storeTask'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->name('workspace.field-service.jobs.tasks');
                 Route::patch('/field-service/jobs/{job}/tasks/{task}', [EverbranchMobileFieldServiceController::class, 'updateTask'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('task')->name('workspace.field-service.jobs.tasks.update');
+                Route::patch('/field-service/jobs/{job}/materials/{material}', [EverbranchMobileFieldServiceController::class, 'updateMaterial'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('material')->name('workspace.field-service.jobs.materials.update');
                 Route::get('/field-service/assets/{asset}', [EverbranchMobileFieldServiceController::class, 'downloadAsset'])->middleware('abilities:mobile:read')->whereNumber('asset')->name('workspace.field-service.assets.show');
                 Route::get('/field-service/notifications', [EverbranchMobileFieldServiceController::class, 'notifications'])->middleware('abilities:mobile:read')->name('workspace.field-service.notifications.index');
                 Route::post('/field-service/notifications/read-all', [EverbranchMobileFieldServiceController::class, 'readAllNotifications'])->middleware('abilities:mobile:write')->name('workspace.field-service.notifications.read-all');

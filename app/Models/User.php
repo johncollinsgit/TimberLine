@@ -107,7 +107,7 @@ class User extends Authenticatable
     public function tenants(): BelongsToMany
     {
         return $this->belongsToMany(Tenant::class, 'tenant_user')
-            ->withPivot(['role'])
+            ->withPivot(['role', 'membership_active'])
             ->withTimestamps();
     }
 

@@ -1,0 +1,208 @@
+import "../bootstrap";
+import axios from "axios";
+import "@glideapps/glide-data-grid/dist/index.css";
+import { CompactSelection, DataEditor, GridCell, GridCellKind, GridColumn, GridSelection, Item } from "@glideapps/glide-data-grid";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+
+type Bucket = "current" | "potential" | "past";
+type Row = {
+    id: number; kind: "job" | "candidate"; url?: string; title: string; customer?: string; status: string;
+    priority?: string; scheduled_for?: string; lead_id?: number; lead?: string; crew?: string[];
+    vehicles?: { id: number; name: string }[]; hours?: number; source?: string; amount?: number | null;
+    balance?: number | null; updated_at?: string;
+};
+type Options = { team: { id: number; name: string }[]; vehicles: { id: number; name: string; identifier?: string }[]; statuses: string[] };
+type Meta = { bucket: Bucket; page: number; last_page: number; total: number };
+type Props = { endpoint: string; updateTemplate: string; candidateTemplate: string; canManage: boolean };
+type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
+
+const allColumns: (GridColumn & { id: string })[] = [
+    { id: "status", title: "Status", width: 125 }, { id: "title", title: "Job", width: 250 },
+    { id: "customer", title: "Customer", width: 180 }, { id: "scheduled_for", title: "Schedule", width: 170 },
+    { id: "lead", title: "Lead", width: 150 }, { id: "crew", title: "Crew", width: 190 },
+    { id: "vehicles", title: "Vehicles", width: 175 }, { id: "hours", title: "Hours", width: 95 },
+    { id: "priority", title: "Priority", width: 110 }, { id: "source", title: "Source", width: 110 },
+    { id: "amount", title: "Amount", width: 120 }, { id: "balance", title: "Balance", width: 120 },
+    { id: "updated_at", title: "Updated", width: 140 },
+];
+const editable = new Set(["status", "scheduled_for", "lead", "priority", "vehicles"]);
+const defaultVisible = allColumns.map(column => column.id);
+
+function useSize() {
+    const ref = useRef<HTMLDivElement | null>(null);
+    const [size, setSize] = useState({ width: 0, height: 570 });
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const observer = new ResizeObserver(() => setSize({ width: el.clientWidth, height: Math.max(570, el.clientHeight) }));
+        observer.observe(el);
+        setSize({ width: el.clientWidth, height: Math.max(570, el.clientHeight) });
+        return () => observer.disconnect();
+    }, []);
+    return [ref, size] as const;
+}
+
+function display(key: string, row: Row): string {
+    const value = row[key as keyof Row];
+    if (key === "scheduled_for") return row.scheduled_for ? new Date(row.scheduled_for).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Unscheduled";
+    if (key === "updated_at") return row.updated_at ? new Date(row.updated_at).toLocaleDateString() : "—";
+    if (key === "vehicles") return row.vehicles?.map(vehicle => vehicle.name).join(", ") || "—";
+    if (key === "crew") return row.crew?.join(", ") || "—";
+    if (key === "hours") return `${Number(row.hours || 0).toFixed(2)}h`;
+    if (key === "amount" || key === "balance") return value == null ? "—" : Number(value).toLocaleString(undefined, { style: "currency", currency: "USD" });
+    return value == null || value === "" ? "—" : String(value).replaceAll("_", " ");
+}
+
+function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canManage }: Props) {
+    const [bucket, setBucket] = useState<Bucket>("current");
+    const [rows, setRows] = useState<Row[]>([]);
+    const [options, setOptions] = useState<Options>({ team: [], vehicles: [], statuses: [] });
+    const [meta, setMeta] = useState<Meta>({ bucket: "current", page: 1, last_page: 1, total: 0 });
+    const [q, setQ] = useState("");
+    const [sort, setSort] = useState("status");
+    const [dir, setDir] = useState<"asc" | "desc">("asc");
+    const [page, setPage] = useState(1);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [saveState, setSaveState] = useState("");
+    const [reload, setReload] = useState(0);
+    const [visible, setVisible] = useState<string[]>(defaultVisible);
+    const [columnsOpen, setColumnsOpen] = useState(false);
+    const [selection, setSelection] = useState<GridSelection>({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
+    const [candidate, setCandidate] = useState<Row | null>(null);
+    const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
+    const [gridRef, size] = useSize();
+    const columns = useMemo(() => allColumns.filter(column => visible.includes(column.id)), [visible]);
+
+    useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
+    useEffect(() => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            setLoading(true); setError("");
+            try {
+                const response = await axios.get(endpoint, { signal: controller.signal, params: { bucket, q: q || undefined, sort, dir, page, per_page: 50 } });
+                setRows(Array.isArray(response.data.rows) ? response.data.rows : []);
+                setMeta(response.data.meta); setOptions(response.data.options || { team: [], vehicles: [], statuses: [] });
+                setSelection({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
+            } catch (failure) {
+                if (!axios.isCancel(failure)) setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "Could not load work." : "Could not load work.");
+            } finally { if (!controller.signal.aborted) setLoading(false); }
+        }, 220);
+        return () => { window.clearTimeout(timer); controller.abort(); };
+    }, [bucket, dir, endpoint, page, q, reload, sort]);
+
+    const persist = useCallback(async (row: Row, patch: Record<string, unknown>) => {
+        if (!canManage || row.kind !== "job") return;
+        const previous = rows;
+        setSaveState("Saving…");
+        setRows(current => current.map(item => item.id === row.id ? { ...item, ...patch } : item));
+        try {
+            await axios.patch(updateTemplate.replace(/\/0$/, `/${row.id}`), patch);
+            setSaveState("Saved"); window.setTimeout(() => setSaveState(""), 1600);
+        } catch (failure) {
+            setRows(previous); setSaveState("Save failed");
+            setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "The edit could not be saved." : "The edit could not be saved.");
+        }
+    }, [canManage, rows, updateTemplate]);
+
+    const getCellContent = useCallback(([col, rowIndex]: Item): GridCell => {
+        const row = rows[rowIndex]; const column = columns[col];
+        if (!row || !column) return { kind: GridCellKind.Text, data: "", displayData: "", readonly: true, allowOverlay: false };
+        const value = display(column.id, row);
+        return { kind: GridCellKind.Text, data: value === "—" ? "" : value, displayData: value, readonly: !canManage || row.kind !== "job" || !editable.has(column.id), allowOverlay: canManage && row.kind === "job" && editable.has(column.id) };
+    }, [canManage, columns, rows]);
+
+    const editCell = useCallback((cell: Item, next: GridCell) => {
+        if (next.kind !== GridCellKind.Text) return;
+        const [col, rowIndex] = cell; const row = rows[rowIndex]; const key = columns[col]?.id; const value = next.data.trim();
+        if (!row || !key) return;
+        if (key === "status") void persist(row, { operational_status: value.toLowerCase().replaceAll(" ", "_") });
+        if (key === "priority") void persist(row, { priority: value.toLowerCase() });
+        if (key === "scheduled_for") void persist(row, { scheduled_for: value === "" ? null : value });
+        if (key === "lead") {
+            const person = options.team.find(member => member.name.toLowerCase() === value.toLowerCase());
+            if (!person && value !== "") { setError("Type an employee name exactly as shown in Team."); return; }
+            void persist(row, { assigned_user_id: person?.id || null, lead: person?.name || "" });
+        }
+        if (key === "vehicles") {
+            const names = value.split(",").map(name => name.trim().toLowerCase()).filter(Boolean);
+            const matches = options.vehicles.filter(vehicle => names.includes(vehicle.name.toLowerCase()));
+            if (matches.length !== names.length) { setError("Enter vehicle names exactly, separated by commas."); return; }
+            void persist(row, { vehicle_ids: matches.map(vehicle => vehicle.id), vehicles: matches });
+        }
+    }, [columns, options.team, options.vehicles, persist, rows]);
+
+    const clickCell = useCallback(([col, rowIndex]: Item) => {
+        const row = rows[rowIndex]; const key = columns[col]?.id;
+        if (!row || (row.kind === "job" && editable.has(key) && canManage)) return;
+        if (row.kind === "candidate") setCandidate(row); else if (row.url) window.location.assign(row.url);
+    }, [canManage, columns, rows]);
+
+    async function bulkStatus(status: string) {
+        const selected = selection.rows.toArray().map(index => rows[index]).filter(row => row?.kind === "job");
+        if (!selected.length) return;
+        setSaveState(`Updating ${selected.length} jobs…`);
+        try { await Promise.all(selected.map(row => axios.patch(updateTemplate.replace(/\/0$/, `/${row.id}`), { operational_status: status }))); setReload(value => value + 1); setSaveState("Saved"); }
+        catch { setSaveState("Save failed"); setError("One or more jobs could not be updated."); }
+    }
+
+    function saveView() {
+        const name = window.prompt("Name this view"); if (!name?.trim()) return;
+        const next = [...views.filter(view => view.name !== name.trim()), { name: name.trim(), bucket, sort, dir, q, columns: visible }];
+        setViews(next); localStorage.setItem("everbranch-field-views", JSON.stringify(next));
+    }
+
+    function applyView(name: string) {
+        const view = views.find(item => item.name === name); if (!view) return;
+        setBucket(view.bucket); setSort(view.sort); setDir(view.dir); setQ(view.q); setVisible(view.columns);
+    }
+
+    async function reviewCandidate(action: "create_job" | "link" | "dismiss") {
+        if (!candidate) return;
+        const jobId = action === "link" ? window.prompt("Enter the existing job ID") : null;
+        if (action === "link" && !jobId) return;
+        try {
+            const response = await axios.post(candidateTemplate.replace(/\/0\/review$/, `/${candidate.id}/review`), { action, job_id: jobId ? Number(jobId) : undefined });
+            setCandidate(null); setReload(value => value + 1);
+            if (response.data.url && action === "create_job") window.location.assign(response.data.url);
+        } catch (failure) { setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "Candidate review failed." : "Candidate review failed."); }
+    }
+
+    return <div className="space-y-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="inline-flex w-fit rounded-xl border border-zinc-200 bg-white p-1">
+                {(["current", "potential", "past"] as Bucket[]).map(item => <button key={item} onClick={() => setBucket(item)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold capitalize ${bucket === item ? "bg-zinc-950 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}>{item}</button>)}
+            </div>
+            <div className="flex flex-1 flex-wrap justify-end gap-2">
+                <input type="search" value={q} onChange={event => setQ(event.target.value)} placeholder="Search jobs, customers, addresses" className="min-h-11 min-w-[260px] flex-1 rounded-xl border border-zinc-300 bg-white px-4 text-sm xl:max-w-md" />
+                <select value={sort} onChange={event => setSort(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm"><option value="status">Sort: active now</option><option value="scheduled_for">Schedule</option><option value="priority">Priority</option><option value="customer">Customer</option><option value="title">Job</option><option value="hours">Hours</option><option value="updated_at">Last update</option></select>
+                <button onClick={() => setDir(value => value === "asc" ? "desc" : "asc")} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold">{dir === "asc" ? "Ascending" : "Descending"}</button>
+                <button onClick={() => setColumnsOpen(value => !value)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold">Columns</button>
+            </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3">
+            <select defaultValue="" onChange={event => applyView(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Saved views</option>{views.map(view => <option key={view.name}>{view.name}</option>)}</select>
+            <button onClick={saveView} className="min-h-11 rounded-xl border border-zinc-300 px-4 text-sm font-semibold">Save this view</button>
+            {canManage && selection.rows.length > 0 ? <><span className="ml-2 text-sm text-zinc-600">{selection.rows.length} selected</span><select defaultValue="" onChange={event => { if (event.target.value) void bulkStatus(event.target.value); }} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Set status…</option>{options.statuses.map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></> : null}
+            <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket} item${meta.total === 1 ? "" : "s"}`)}</span>
+        </div>
+
+        {columnsOpen ? <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-3">{allColumns.map(column => <label key={column.id} className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm"><input type="checkbox" checked={visible.includes(column.id)} onChange={() => setVisible(current => current.includes(column.id) ? current.filter(key => key !== column.id) : [...current, column.id])} />{column.title}</label>)}</div> : null}
+        {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button onClick={() => setError("")} className="ml-3 font-semibold underline">Dismiss</button></div> : null}
+
+        <div ref={gridRef} className="min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} gridSelection={selection} onGridSelectionChange={setSelection} rowMarkers={canManage ? "checkbox-visible" : "number"} width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
+        </div>
+
+        <div className="flex items-center justify-between"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Previous</button><span className="text-sm text-zinc-600">Page {meta.page} of {Math.max(1, meta.last_page)}</span><button disabled={page >= meta.last_page} onClick={() => setPage(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next</button></div>
+
+        {candidate ? <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setCandidate(null)}><aside onClick={event => event.stopPropagation()} className="h-full w-full max-w-lg overflow-y-auto bg-white p-6 shadow-2xl"><button onClick={() => setCandidate(null)} className="min-h-11 text-sm font-semibold text-zinc-600">← Back to potential work</button><div className="mt-6 text-xs font-semibold uppercase tracking-widest text-emerald-700">QuickBooks {candidate.source}</div><h2 className="mt-2 text-2xl font-semibold text-zinc-950">{candidate.title}</h2><p className="mt-2 text-zinc-600">{candidate.customer || "Customer not linked"}</p><div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-xl bg-zinc-100 p-4"><div className="text-xs text-zinc-500">Amount</div><div className="mt-1 font-semibold">{display("amount", candidate)}</div></div><div className="rounded-xl bg-zinc-100 p-4"><div className="text-xs text-zinc-500">Balance</div><div className="mt-1 font-semibold">{display("balance", candidate)}</div></div></div><div className="mt-8 grid gap-3"><button onClick={() => void reviewCandidate("create_job")} className="min-h-12 rounded-xl bg-zinc-950 px-4 font-semibold text-white">Create Job</button><button onClick={() => void reviewCandidate("link")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold">Link to Existing Job</button><button onClick={() => void reviewCandidate("dismiss")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold text-zinc-600">Dismiss</button></div></aside></div> : null}
+    </div>;
+}
+
+const root = document.getElementById("field-service-jobs-grid");
+if (root) {
+    createRoot(root).render(<FieldServiceGrid endpoint={root.dataset.endpoint || ""} updateTemplate={root.dataset.updateTemplate || ""} candidateTemplate={root.dataset.candidateTemplate || ""} canManage={root.dataset.canManage === "1"} />);
+}

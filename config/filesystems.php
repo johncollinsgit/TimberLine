@@ -2,6 +2,8 @@
 
 return [
 
+    'workspace_asset_disk' => env('WORKSPACE_ASSET_DISK', 'local'),
+
     /*
     |--------------------------------------------------------------------------
     | Default Filesystem Disk

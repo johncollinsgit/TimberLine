@@ -86,6 +86,7 @@ use App\Http\Controllers\SubscriptionPublicController;
 use App\Http\Controllers\SubscriptionStorefrontController;
 use App\Http\Controllers\TenantAgreementController;
 use App\Http\Controllers\TenantBrandController;
+use App\Http\Controllers\TenantEmployeeInvitationController;
 use App\Http\Controllers\TenantSupportTicketController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
@@ -218,6 +219,13 @@ Route::middleware([EnsureEvergroveProposalHost::class])->prefix('proposals/{toke
     Route::post('/checkout', [AgreementProposalController::class, 'checkout'])->middleware('throttle:5,1')->name('checkout');
     Route::get('/download', [AgreementProposalController::class, 'download'])->middleware('throttle:20,1')->name('download');
 });
+
+Route::get('/join-team', [TenantEmployeeInvitationController::class, 'show'])
+    ->middleware('throttle:30,1')
+    ->name('employee-invitations.show');
+Route::post('/join-team', [TenantEmployeeInvitationController::class, 'accept'])
+    ->middleware(['auth', 'verified', 'throttle:20,1'])
+    ->name('employee-invitations.accept');
 
 $landlordHosts = collect((array) config('tenancy.landlord.hosts', []))
     ->map(static fn (mixed $host): ?string => $normalizeHost($host))
@@ -756,10 +764,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('field-service.')
         ->group(function (): void {
             Route::get('/', [FieldServiceController::class, 'index'])->name('index');
+            Route::get('/jobs-data', [FieldServiceController::class, 'jobsData'])->name('jobs.data');
+            Route::patch('/jobs/{job}', [FieldServiceController::class, 'updateJobGrid'])->name('jobs.update');
+            Route::post('/work-candidates/{candidate}/review', [FieldServiceController::class, 'reviewWorkCandidate'])->name('work-candidates.review');
             Route::get('/calendar', [FieldServiceController::class, 'calendar'])->name('calendar');
             Route::get('/payroll-hours', [FieldServiceController::class, 'payrollHours'])->name('payroll-hours');
             Route::post('/payroll-hours', [FieldServiceController::class, 'storeTimeEntry'])->name('payroll-hours.store');
             Route::post('/payroll-hours/{timeEntry}/review', [FieldServiceController::class, 'reviewTimeEntry'])->name('payroll-hours.review');
+            Route::post('/payroll-timers/{timeSession}/review', [FieldServiceController::class, 'reviewTimerSession'])->name('payroll-timers.review');
             Route::get('/payroll-hours-export', [FieldServiceController::class, 'exportTimeEntries'])->name('payroll-hours.export');
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
