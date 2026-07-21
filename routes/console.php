@@ -145,6 +145,12 @@ Schedule::command('marketing:send-modern-forestry-scent-quiz-report')
     ->withoutOverlapping(120)
     ->runInBackground();
 
+Schedule::command('operator:send-weekly-snapshot')
+    ->weeklyOn(1, '08:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
 Schedule::command('marketing:send-modern-forestry-bag-reminders', [
     '--tenant' => 1,
     '--limit' => 100,

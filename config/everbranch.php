@@ -27,6 +27,8 @@ $defaultBrandAssetVersion = (static function (): string {
 })();
 
 return [
+    'operator_alert_phone' => env('EVERBRANCH_OPERATOR_ALERT_PHONE', '8646165468'),
+    'operator_report_email' => env('EVERBRANCH_OPERATOR_REPORT_EMAIL', 'johncollinsemail@gmail.com'),
     'product_name' => env('EVERBRANCH_PRODUCT_NAME', 'Everbranch'),
     'company_name' => env('EVERBRANCH_COMPANY_NAME', 'Evergrove'),
     'ecosystem_name' => env('EVERBRANCH_ECOSYSTEM_NAME', 'Evergrove'),

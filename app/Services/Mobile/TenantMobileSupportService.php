@@ -7,11 +7,15 @@ use App\Models\TenantSupportTicket;
 use App\Models\TenantSupportTicketMessage;
 use App\Models\User;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
+use App\Services\Operations\OperatorAlertService;
 use Illuminate\Support\Facades\DB;
 
 class TenantMobileSupportService
 {
-    public function __construct(protected LandlordOperatorActionAuditService $audit) {}
+    public function __construct(
+        protected LandlordOperatorActionAuditService $audit,
+        protected OperatorAlertService $alerts,
+    ) {}
 
     /** @return array<string,mixed> */
     public function index(int $tenantId): array
@@ -44,6 +48,9 @@ class TenantMobileSupportService
                 'category' => $input['category'],
                 'priority' => $input['priority'],
                 'status' => 'open',
+                'source_type' => $input['source_type'] ?? 'account_help',
+                'dedupe_key' => $input['dedupe_key'] ?? null,
+                'metadata' => $input['metadata'] ?? null,
                 'last_activity_at' => now(),
             ]);
             TenantSupportTicketMessage::withoutGlobalScopes()->create(['tenant_support_ticket_id' => $ticket->id, 'tenant_id' => (int) $tenant->id, 'user_id' => (int) $user->id, 'author_context' => 'tenant', 'body' => $input['body']]);
@@ -51,6 +58,12 @@ class TenantMobileSupportService
             return $ticket;
         });
         $this->audit->record((int) $tenant->id, (int) $user->id, 'tenant.support_ticket.created', targetType: 'tenant_support_ticket', targetId: $ticket->id, context: ['surface' => 'everbranch_mobile'], afterState: ['status' => 'open', 'priority' => $ticket->priority]);
+        $this->alerts->notify('support_ticket.created', sprintf('Everbranch: %s ticket from %s — %s', strtoupper((string) $ticket->priority), $tenant->name, str($ticket->subject)->limit(90)), [
+            'dedupe_key' => 'support-ticket:'.$ticket->id,
+            'tenant_id' => (int) $tenant->id,
+            'target_type' => 'tenant_support_ticket',
+            'target_id' => (int) $ticket->id,
+        ]);
 
         return $this->show((int) $tenant->id, (int) $ticket->id);
     }
@@ -91,20 +104,44 @@ class TenantMobileSupportService
     {
         $ticket = TenantSupportTicket::withoutGlobalScopes()->findOrFail($ticketId);
         $before = ['status' => $ticket->status, 'priority' => $ticket->priority, 'assigned_to_user_id' => $ticket->assigned_to_user_id];
-        $ticket->forceFill(array_filter([
+        $status = $input['status'] ?? null;
+        $changes = array_filter([
             'status' => $input['status'] ?? null,
             'priority' => $input['priority'] ?? null,
             'assigned_to_user_id' => ($input['assign_to_me'] ?? false) ? (int) $actor->id : null,
             'last_activity_at' => now(),
-        ], fn (mixed $value, string $key): bool => $key === 'assigned_to_user_id' ? (bool) ($input['assign_to_me'] ?? false) : $value !== null, ARRAY_FILTER_USE_BOTH))->save();
+            'resolution_summary' => $input['resolution_summary'] ?? null,
+        ], fn (mixed $value, string $key): bool => $key === 'assigned_to_user_id' ? (bool) ($input['assign_to_me'] ?? false) : $value !== null, ARRAY_FILTER_USE_BOTH);
+        if ($status !== null) {
+            $changes['resolved_at'] = in_array($status, ['resolved', 'closed'], true) ? now() : null;
+        }
+        $ticket->forceFill($changes)->save();
         $this->audit->record((int) $ticket->tenant_id, (int) $actor->id, 'tenant.support_ticket.triaged', targetType: 'tenant_support_ticket', targetId: $ticket->id, context: ['surface' => 'everbranch_mobile_landlord'], beforeState: $before, afterState: ['status' => $ticket->status, 'priority' => $ticket->priority, 'assigned_to_user_id' => $ticket->assigned_to_user_id]);
 
         return $this->landlordShow((int) $ticket->id);
     }
 
+    /** @param array<int,array<string,mixed>> $transcript */
+    public function createBudEscalation(Tenant $tenant, User $user, string $question, string $reply, string $confidence, array $transcript = []): array
+    {
+        $key = 'bud:'.sha1($tenant->id.'|'.$user->id.'|'.mb_strtolower(trim($question)));
+        $existing = TenantSupportTicket::withoutGlobalScopes()->where('dedupe_key', $key)->first();
+        if ($existing) return $this->show((int) $tenant->id, (int) $existing->id);
+
+        return $this->create($tenant, $user, [
+            'subject' => 'Bud needs follow-up: '.str($question)->squish()->limit(82),
+            'category' => 'help',
+            'priority' => 'normal',
+            'body' => "Bud could not answer this confidently:\n\n".$question."\n\nBud summary:\n".$reply,
+            'source_type' => 'bud_escalation',
+            'dedupe_key' => $key,
+            'metadata' => ['question' => $question, 'bud_summary' => $reply, 'confidence' => $confidence, 'transcript' => $transcript],
+        ]);
+    }
+
     /** @return array<string,mixed> */
     protected function summary(TenantSupportTicket $ticket): array
     {
-        return ['id' => (int) $ticket->id, 'tenant_id' => (int) $ticket->tenant_id, 'subject' => (string) $ticket->subject, 'category' => (string) $ticket->category, 'priority' => (string) $ticket->priority, 'status' => (string) $ticket->status, 'creator' => $ticket->creator?->name, 'assignee' => $ticket->assignee?->name, 'messages_count' => (int) ($ticket->messages_count ?? $ticket->messages->count()), 'last_activity_at' => optional($ticket->last_activity_at)->toIso8601String()];
+        return ['id' => (int) $ticket->id, 'tenant_id' => (int) $ticket->tenant_id, 'subject' => (string) $ticket->subject, 'category' => (string) $ticket->category, 'priority' => (string) $ticket->priority, 'status' => (string) $ticket->status, 'source_type' => (string) $ticket->source_type, 'resolution_summary' => $ticket->resolution_summary, 'resolved_at' => optional($ticket->resolved_at)->toIso8601String(), 'creator' => $ticket->creator?->name, 'assignee' => $ticket->assignee?->name, 'messages_count' => (int) ($ticket->messages_count ?? $ticket->messages->count()), 'last_activity_at' => optional($ticket->last_activity_at)->toIso8601String()];
     }
 }
