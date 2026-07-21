@@ -64,6 +64,7 @@ use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
 use App\Http\Controllers\PlantInventoryController;
 use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\PlatformProductPagesController;
+use App\Http\Controllers\ProductionReadinessController;
 use App\Http\Controllers\PublicBudConversationController;
 use App\Http\Controllers\PublicClassSignupController;
 use App\Http\Controllers\PublicLegalController;
@@ -200,6 +201,7 @@ Route::get('/', function (
 
 Route::get('/privacy', [PublicLegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms');
+Route::get('/ready', ProductionReadinessController::class)->name('production.ready');
 Route::get('/integrations/quickbooks/disconnected', [QuickBooksConnectionController::class, 'disconnected'])
     ->name('integrations.quickbooks.disconnected');
 

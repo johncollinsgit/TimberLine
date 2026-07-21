@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'release_id' => env('RELEASE_ID', 'unknown'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
