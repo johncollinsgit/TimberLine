@@ -31,6 +31,10 @@ GitHub posts to the protected Forge deploy hook and Forge performs the atomic
 release. Direct Forge push-to-deploy remains off so no source push can bypass
 the gate. The first end-to-end automatic Forge release completed successfully
 on 2026-07-21: Forge release `73789933`, commit `c272464…`, `/ready` HTTP 200.
+The Collins operations pass was production-verified on 2026-07-21 through
+`Deploy Production` run `29856463126`: merged commit
+`a99fa84f910cef0545918e23f807e8452e999033`, `/up` HTTP 200, and `/ready`
+HTTP 200 reporting that exact release identifier.
 
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
