@@ -10,6 +10,7 @@ use App\Models\TenantBillingReceipt;
 use App\Models\TenantBillingSubscription;
 use App\Models\TenantCommercialOverride;
 use App\Models\TenantDirectInvoice;
+use App\Models\User;
 use App\Services\Agreements\AgreementManagementService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -161,6 +162,15 @@ test('sandbox checkout records isolated Stripe evidence without commercial activ
         ->and(TenantCommercialOverride::withoutGlobalScopes()->count())->toBe($beforeOverrideCount)
         ->and(TenantBillingSubscription::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count())->toBe(0)
         ->and($tenant->users()->count())->toBe($beforeMembershipCount);
+
+    $operator = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $this->actingAs($operator)
+        ->get('http://app.theeverbranch.com/landlord/transactions')
+        ->assertOk()
+        ->assertDontSeeText('in_validation')
+        ->assertDontSeeText('Everbranch one-time setup')
+        ->assertDontSeeText('Everbranch Launch Partner service')
+        ->assertDontSeeText('Everbranch ongoing service');
 
     config()->set('services.stripe.secret', 'sk_live_validation');
     expect(app(\App\Services\Billing\AgreementStripeCheckoutService::class)->availableFor($order->fresh()))->toBeFalse()

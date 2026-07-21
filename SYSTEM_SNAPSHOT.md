@@ -18,6 +18,13 @@
 - **Billing safety:** agreements, versions, acceptances, and payment evidence
   are append-only. Refund requests are explicit, idempotent provider actions;
   they do not alter entitlements merely because a local record changes.
+- **Transaction truth:** the landlord ledger reads Payment Intents from the
+  configured Stripe account as its primary activity source, including incomplete
+  attempts, and caches that read for 30 seconds. If Stripe is unavailable it
+  falls back to same-mode, processed signed-webhook receipts while excluding
+  sandbox-validation artifacts. “Payments received” includes only succeeded
+  intents with a positive provider `amount_received`; displayed local line items
+  reconcile to the Stripe-confirmed subtotal.
 - **Health contract:** `/up` is liveness. `/ready` boots Laravel, verifies
   required configuration, performs a MySQL query and cache round trip, then
   returns only status and active release ID. It fails closed with HTTP 503.

@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-07-21 - Stripe-Confirmed Transaction Truth
+
+### What Changed
+- Replaced the tall transaction cards with a compact, horizontally scrollable spreadsheet-style ledger showing date, status, type, customer/workspace, payment method, itemization, reference, amount, and actions.
+- Made the configured Stripe account's Payment Intents API the primary ledger source, with a 30-second cache and a manual refresh control; processed signed-webhook receipts remain the fallback if Stripe cannot be reached.
+- Kept real incomplete Stripe attempts visible with a neutral amount and explicit status while limiting “Payments received” to succeeded intents with a positive provider-reported amount received.
+- Excluded validation-only agreement payments, wrong-mode activity, manually labeled receipts, and non-Stripe rows from the Stripe activity count and incoming ledger.
+- Reconciled displayed line items to the confirmed Stripe subtotal, excluding future agreement phases and preventing direct-invoice quantities from being counted twice.
+
+### What Did Not Change
+- Local invoice mirrors remain preserved for fallback and refund linkage; this change does not delete records, charge customers, issue refunds, or alter entitlements.
+
 ## 2026-07-16 - Secure Agreements, Pricing Cards, and Provider Receipts
 
 ### What Changed
