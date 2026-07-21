@@ -1,7 +1,7 @@
 import "../bootstrap";
 import axios from "axios";
 import "@glideapps/glide-data-grid/dist/index.css";
-import { CompactSelection, DataEditor, GridCell, GridCellKind, GridColumn, GridSelection, Item } from "@glideapps/glide-data-grid";
+import { CustomCell, CustomRenderer, DataEditor, GridCell, GridCellKind, GridColumn, Item, roundedRect } from "@glideapps/glide-data-grid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -16,6 +16,36 @@ type Options = { team: { id: number; name: string }[]; vehicles: { id: number; n
 type Meta = { bucket: Bucket; page: number; last_page: number; total: number };
 type Props = { endpoint: string; updateTemplate: string; candidateTemplate: string; canManage: boolean };
 type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
+type OpenCell = CustomCell<{ kind: "open-job" }>;
+
+const openColumn: GridColumn & { id: string } = { id: "open", title: "", width: 92 };
+const openCellRenderer: CustomRenderer<OpenCell> = {
+    kind: GridCellKind.Custom,
+    isMatch: (cell): cell is OpenCell => cell.data.kind === "open-job",
+    needsHover: true,
+    draw: ({ ctx, rect, theme, hoverAmount, overrideCursor }) => {
+        const x = rect.x + 10;
+        const y = rect.y + 8;
+        const width = rect.width - 20;
+        const height = rect.height - 16;
+        overrideCursor?.("pointer");
+        ctx.save();
+        ctx.beginPath();
+        roundedRect(ctx, x, y, width, height, 7);
+        ctx.fillStyle = hoverAmount > 0 ? "#dcecff" : "#eef6ff";
+        ctx.fill();
+        ctx.strokeStyle = hoverAmount > 0 ? "#5b9cff" : "#8bb9ff";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = "#0b1b36";
+        ctx.font = `600 ${theme.baseFontFull}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Open", rect.x + rect.width / 2, rect.y + rect.height / 2 + 0.5);
+        ctx.restore();
+        return true;
+    },
+};
 
 const allColumns: (GridColumn & { id: string })[] = [
     { id: "status", title: "Status", width: 125 }, { id: "title", title: "Job", width: 250 },
@@ -69,11 +99,10 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     const [reload, setReload] = useState(0);
     const [visible, setVisible] = useState<string[]>(defaultVisible);
     const [columnsOpen, setColumnsOpen] = useState(false);
-    const [selection, setSelection] = useState<GridSelection>({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
     const [candidate, setCandidate] = useState<Row | null>(null);
     const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
     const [gridRef, size] = useSize();
-    const columns = useMemo(() => allColumns.filter(column => visible.includes(column.id)), [visible]);
+    const columns = useMemo(() => [openColumn, ...allColumns.filter(column => visible.includes(column.id))], [visible]);
 
     useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
     useEffect(() => {
@@ -84,7 +113,6 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
                 const response = await axios.get(endpoint, { signal: controller.signal, params: { bucket, q: q || undefined, sort, dir, page, per_page: 50 } });
                 setRows(Array.isArray(response.data.rows) ? response.data.rows : []);
                 setMeta(response.data.meta); setOptions(response.data.options || { team: [], vehicles: [], statuses: [] });
-                setSelection({ columns: CompactSelection.empty(), rows: CompactSelection.empty() });
             } catch (failure) {
                 if (!axios.isCancel(failure)) setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "Could not load work." : "Could not load work.");
             } finally { if (!controller.signal.aborted) setLoading(false); }
@@ -109,6 +137,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     const getCellContent = useCallback(([col, rowIndex]: Item): GridCell => {
         const row = rows[rowIndex]; const column = columns[col];
         if (!row || !column) return { kind: GridCellKind.Text, data: "", displayData: "", readonly: true, allowOverlay: false };
+        if (column.id === "open") return { kind: GridCellKind.Custom, data: { kind: "open-job" }, copyData: "Open", readonly: true, allowOverlay: false, cursor: "pointer" };
         const value = display(column.id, row);
         return { kind: GridCellKind.Text, data: value === "—" ? "" : value, displayData: value, readonly: !canManage || row.kind !== "job" || !editable.has(column.id), allowOverlay: canManage && row.kind === "job" && editable.has(column.id) };
     }, [canManage, columns, rows]);
@@ -135,17 +164,9 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
 
     const clickCell = useCallback(([col, rowIndex]: Item) => {
         const row = rows[rowIndex]; const key = columns[col]?.id;
-        if (!row || (row.kind === "job" && editable.has(key) && canManage)) return;
+        if (!row || key !== "open") return;
         if (row.kind === "candidate") setCandidate(row); else if (row.url) window.location.assign(row.url);
-    }, [canManage, columns, rows]);
-
-    async function bulkStatus(status: string) {
-        const selected = selection.rows.toArray().map(index => rows[index]).filter(row => row?.kind === "job");
-        if (!selected.length) return;
-        setSaveState(`Updating ${selected.length} jobs…`);
-        try { await Promise.all(selected.map(row => axios.patch(updateTemplate.replace(/\/0$/, `/${row.id}`), { operational_status: status }))); setReload(value => value + 1); setSaveState("Saved"); }
-        catch { setSaveState("Save failed"); setError("One or more jobs could not be updated."); }
-    }
+    }, [columns, rows]);
 
     function saveView() {
         const name = window.prompt("Name this view"); if (!name?.trim()) return;
@@ -185,7 +206,6 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3">
             <select defaultValue="" onChange={event => applyView(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Saved views</option>{views.map(view => <option key={view.name}>{view.name}</option>)}</select>
             <button onClick={saveView} className="min-h-11 rounded-xl border border-zinc-300 px-4 text-sm font-semibold">Save this view</button>
-            {canManage && selection.rows.length > 0 ? <><span className="ml-2 text-sm text-zinc-600">{selection.rows.length} selected</span><select defaultValue="" onChange={event => { if (event.target.value) void bulkStatus(event.target.value); }} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Set status…</option>{options.statuses.map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}</select></> : null}
             <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket} item${meta.total === 1 ? "" : "s"}`)}</span>
         </div>
 
@@ -193,7 +213,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button onClick={() => setError("")} className="ml-3 font-semibold underline">Dismiss</button></div> : null}
 
         <div ref={gridRef} className="min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} gridSelection={selection} onGridSelectionChange={setSelection} rowMarkers={canManage ? "checkbox-visible" : "number"} width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
+            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={clickCell} cellActivationBehavior="single-click" customRenderers={[openCellRenderer]} freezeColumns={1} rowMarkers="none" width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
         </div>
 
         <div className="flex items-center justify-between"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Previous</button><span className="text-sm text-zinc-600">Page {meta.page} of {Math.max(1, meta.last_page)}</span><button disabled={page >= meta.last_page} onClick={() => setPage(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next</button></div>
