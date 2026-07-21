@@ -3,7 +3,7 @@
     $storedLines = old('lines', $editing ? $invoice->line_items : [['category' => 'evergrove_implementation', 'description' => '', 'quantity' => 1, 'unit_amount' => '']]);
     $address = old('billing_address', $editing ? $invoice->billing_address : ['country' => 'US']);
 @endphp
-<x-app-layout><x-slot name="header"><div><h1 class="text-xl font-semibold text-zinc-900">{{ $editing ? 'Edit invoice draft' : 'New invoice' }} — {{ $tenant->name }}</h1><p class="mt-1 text-sm text-zinc-600">The recipient is this workspace client, not one of their customers.</p></div></x-slot>
+<x-app-layout><x-slot name="header"><div><a href="{{ route('landlord.invoices.index') }}" class="mb-2 inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:underline"><span aria-hidden="true">←</span> Back to invoice desk</a><h1 class="text-xl font-semibold text-zinc-900">{{ $editing ? 'Edit invoice draft' : 'New invoice' }} — {{ $tenant->name }}</h1><p class="mt-1 text-sm text-zinc-600">The recipient is this workspace client, not one of their customers.</p></div></x-slot>
 <form method="post" action="{{ $editing ? route('landlord.invoices.update', [$tenant, $invoice]) : route('landlord.invoices.store', $tenant) }}" class="mx-auto max-w-4xl space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">@csrf @if($editing)@method('put')@endif
     @if($errors->any())<div class="rounded-lg bg-red-50 p-3 text-sm text-red-800">{{ $errors->first() }}</div>@endif
     <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">Only Everbranch service and Evergrove implementation work belong here. Shopify plans, Shopify fees, and paid third-party apps must be billed by their own providers.</div>
@@ -31,7 +31,7 @@
     </span><span class="ml-4 shrink-0 text-lg font-semibold">Total <span id="invoice-total">$0.00</span></span></div>
     <p class="text-xs text-zinc-500">Stripe receives only the saved server-side snapshot. Shopify plans, Shopify processing fees, and third-party app subscriptions stay out of these lines.</p>
     <label class="block text-sm font-medium">Invoice memo<textarea name="memo" rows="3" maxlength="1000" class="mt-1 block w-full rounded-lg border-zinc-300">{{ old('memo', $invoice->memo) }}</textarea></label><label class="block text-sm font-medium">Invoice footer<textarea name="footer" rows="2" maxlength="1000" class="mt-1 block w-full rounded-lg border-zinc-300">{{ old('footer', $invoice->footer) }}</textarea></label>
-    <div class="flex flex-wrap justify-end gap-3"><a href="{{ route('landlord.invoices.index', ['tenant_id' => $tenant->id]) }}" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Cancel</a><button name="send_now" value="0" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Save draft</button><button name="send_now" value="1" class="rounded-lg bg-zinc-950 px-5 py-2 text-sm font-semibold text-white">Send invoice</button></div>
+    <div class="flex flex-wrap justify-end gap-3"><a href="{{ route('landlord.invoices.index') }}" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Cancel</a><button name="send_now" value="0" class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Save draft</button><button name="send_now" value="1" class="rounded-lg bg-zinc-950 px-5 py-2 text-sm font-semibold text-white">Send invoice</button></div>
 </form>
 <script>
     document.getElementById('add-invoice-line')?.addEventListener('click', () => {
