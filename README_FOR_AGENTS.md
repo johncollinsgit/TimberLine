@@ -21,17 +21,19 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   a fresh release, build/test preparation before activation, compatible
   migrations, atomic activation, then queue restart. Retain an audited
   emergency path only.
-- Local verification nuance: `composer test` starts with the repository-wide
-  `pint --parallel --test` gate and may stop on inherited legacy style debt
-  before Pest starts. For a scoped change, run
-  `composer exec pint -- --dirty --test` to prove every changed PHP file is
-  clean, then run the full suite directly with
-  `php -d memory_limit=512M ./vendor/bin/pest`. Do not run a bulk formatter or
-  stage unrelated style rewrites just to clear the baseline. The GitHub
-  `linter` workflow currently runs `composer lint` in its disposable runner,
-  so a green result means formatting completed there, not necessarily that the
-  checked-out tree began globally clean; the PHP-version test jobs and the
-  main-branch test/build deploy gate remain mandatory.
+- CI is deliberately split by purpose. Pull requests run a real Pint `--test`
+  check only on changed PHP files plus one full PHP 8.4 asset-build/test gate;
+  superseded runs are canceled. PHP 8.5 runs nightly and on pull requests that
+  change Composer or PHPUnit compatibility inputs. A push to `main` does not
+  repeat the pull-request workflow: the production workflow tests the exact
+  merge commit in parallel, builds assets, and only then calls Forge. Composer
+  and npm downloads are cached and Node installs use `npm ci`.
+- Local verification for a scoped change is
+  `composer exec pint -- --dirty --test`, followed by
+  `php -d memory_limit=1G ./vendor/bin/pest --parallel --compact`. The parallel
+  suite is the supported fast path. Do not bulk-format inherited style debt or
+  stage unrelated rewrites. Check Actions at coarse milestones instead of
+  continuously polling it; canceled superseded runs are expected.
 
 ## Agreement and Billing-Lane Guardrails (2026-07-16)
 

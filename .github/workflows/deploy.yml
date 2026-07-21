@@ -47,12 +47,25 @@ jobs:
         with:
           php-version: "8.4"
           tools: composer:v2
+          coverage: none
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
+
+      - name: Locate Composer cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-8.4-composer-
 
       - name: Verify test prerequisites (fail loudly)
         run: |
@@ -88,8 +101,8 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
-      - name: Run tests
-        run: php -d memory_limit=1G ./vendor/bin/pest
+      - name: Run tests in parallel
+        run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
 
   deploy:
     name: Deploy

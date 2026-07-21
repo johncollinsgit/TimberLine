@@ -48,6 +48,12 @@
   commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
+- **Optimized CI posture:** pull requests run changed-file Pint plus one cached,
+  parallel PHP 8.4 build/test gate, and superseded runs cancel automatically.
+  PHP 8.5 compatibility runs nightly and whenever dependency/runtime inputs
+  change. The `main` push skips duplicate PR workflows, but the production
+  workflow still rebuilds and runs the full parallel suite against the exact
+  merge commit before it can call the protected Forge hook.
 - Normal release rules: additive/backward-compatible migrations only; build
   before activation; never use in-place `git reset`, `git clean`, cache clears,
   or public asset replacement as a standard deploy; use an audited emergency
