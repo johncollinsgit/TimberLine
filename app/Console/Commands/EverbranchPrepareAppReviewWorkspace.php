@@ -73,6 +73,15 @@ class EverbranchPrepareAppReviewWorkspace extends Command
                     'approved_at' => now(),
                 ]
             );
+            // These fixed identities are reserved for Apple's fictional review
+            // workspace. Never retain a historical membership that could expose
+            // a real tenant such as Collins to an external reviewer.
+            $owner->tenants()->sync([
+                (int) $tenant->id => ['role' => 'admin', 'membership_active' => true],
+            ]);
+            $employee->tenants()->sync([
+                (int) $tenant->id => ['role' => 'member', 'membership_active' => true],
+            ]);
             $tenant->users()->syncWithoutDetaching([
                 (int) $owner->id => ['role' => 'admin', 'membership_active' => true],
                 (int) $employee->id => ['role' => 'member', 'membership_active' => true],
