@@ -73,7 +73,7 @@
                         <li><a href="#overview" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Overview</a></li>
                         <li><a href="#owner-intake" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Owner intake</a></li>
                         <li><a href="#onboarding-triage" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Onboarding triage</a></li>
-                        <li><a href="#recent-tenants" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Recent tenants</a></li>
+                        <li><a href="#recent-tenants" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Workspace switcher</a></li>
                     </ul>
                 </nav>
             </header>
@@ -265,8 +265,8 @@
                 <section id="recent-tenants" class="space-y-4 scroll-mt-36">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h3 class="text-lg font-semibold text-zinc-950">Recent tenants</h3>
-                            <p class="text-sm text-zinc-600">Most recently created tenant records on landlord host.</p>
+                            <h3 class="text-lg font-semibold text-zinc-950">Workspace switcher <span class="text-sm font-medium text-zinc-500">· Recent tenants</span></h3>
+                            <p class="text-sm text-zinc-600">Jump directly to a workspace—no internal IDs, raw status, or creation details.</p>
                         </div>
                         <a
                             href="{{ route('landlord.tenants.index') }}"
@@ -289,7 +289,7 @@
                                 @if (collect($recent_tenants)->isEmpty()) disabled @endif
                             >
                                 @foreach ($recent_tenants as $row)
-                                    <option value="{{ $row['id'] }}">{{ $row['name'] }} ({{ $row['slug'] }})</option>
+                                    <option value="{{ $row['id'] }}">{{ $row['name'] }}</option>
                                 @endforeach
                             </select>
                             <button
@@ -305,40 +305,15 @@
                         @enderror
                     </div>
 
-                    <div class="overflow-hidden rounded-xl border border-zinc-200">
-                        <table class="w-full divide-y divide-zinc-200 text-sm">
-                            <thead class="bg-zinc-50 text-left text-xs uppercase tracking-[0.12em] text-zinc-600">
-                                <tr>
-                                    <th class="px-4 py-3">Tenant</th>
-                                    <th class="px-4 py-3">Slug</th>
-                                    <th class="px-4 py-3">Status</th>
-                                    <th class="px-4 py-3">Created</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-zinc-200 bg-white">
-                                @forelse ($recent_tenants as $row)
-                                    <tr class="text-zinc-700">
-                                        <td class="px-4 py-3">
-                                            <a
-                                                href="{{ route('landlord.tenants.show', ['tenant' => $row['id']]) }}"
-                                                class="font-semibold text-zinc-900 hover:text-zinc-600"
-                                            >
-                                                {{ $row['name'] }}
-                                            </a>
-                                        </td>
-                                        <td class="px-4 py-3 font-mono text-xs">{{ $row['slug'] }}</td>
-                                        <td class="px-4 py-3">{{ $row['status_label'] }}</td>
-                                        <td class="px-4 py-3">{{ $row['created_at'] ?? 'n/a' }}</td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="4" class="px-4 py-5 text-sm text-zinc-600">
-                                            No tenants found.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
+                    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        @forelse ($recent_tenants as $row)
+                            <a href="{{ route('landlord.tenants.show', ['tenant' => $row['id']]) }}" class="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50/40">
+                                <span class="font-semibold text-zinc-950">{{ $row['name'] }}</span>
+                                <span class="text-sm font-semibold text-emerald-800">Open →</span>
+                            </a>
+                        @empty
+                            <div class="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-5 text-sm text-zinc-600 sm:col-span-2 xl:col-span-3">No workspaces found.</div>
+                        @endforelse
                     </div>
                 </section>
             </div>
