@@ -206,8 +206,6 @@ class UnifiedAppNavigationService
             $items[] = ['key' => 'account-help', 'icon' => 'lifebuoy', 'href' => route('account-help.index'), 'label' => 'Account Help', 'current' => request()->routeIs('account-help.*')];
         }
 
-        $items[] = ['key' => 'backstage-wiki', 'icon' => 'map', 'href' => route('wiki.index'), 'label' => 'Workspace Guide', 'current' => request()->routeIs('wiki.*')];
-
         $items = $this->normalizeNavigationItems($items);
 
         $prefs = is_array($user?->ui_preferences ?? null) ? $user->ui_preferences : [];

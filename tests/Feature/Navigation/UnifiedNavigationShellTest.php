@@ -46,7 +46,29 @@ test('unified shell keeps modules hidden when there is no tenant context', funct
         ->get(route('dashboard'))
         ->assertOk()
         ->assertDontSee('data-sidebar-key="modules"', false)
-        ->assertSeeText('Workspace Guide');
+        ->assertSeeText('Workspace Guide')
+        ->assertSee('data-sidebar-key="wiki-sections"', false)
+        ->assertDontSee('data-sidebar-key="backstage-wiki"', false)
+        ->assertDontSeeText('Wiki Sections');
+});
+
+test('account help uses a readable light support hero', function () {
+    $tenant = Tenant::query()->create(['name' => 'Support Tenant', 'slug' => 'support-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create(['role' => 'admin']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $this->actingAs($user)
+        ->get(route('account-help.index'))
+        ->assertOk()
+        ->assertSeeText('What do you need help with?')
+        ->assertSee('from-blue-50', false)
+        ->assertDontSee('from-zinc-950', false);
 });
 
 test('marketing modules route opens marketing hub and only marks Features active', function () {

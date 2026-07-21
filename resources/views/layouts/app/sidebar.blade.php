@@ -31,8 +31,8 @@
   $latestRun = $opsAttention['latest_run'] ?? null;
   $shellContext = (string) ($navigationShell['shell_context'] ?? 'tenant');
   $isLandlordShell = $shellContext === 'landlord';
-  $isNeutralTenantSurface = request()->routeIs('agreements.*', 'proposals.*', 'billing.*', 'payments.*', 'invoices.*')
-      || request()->is('agreements*', 'proposals*', 'billing*', 'payments*', 'invoices*');
+  $isNeutralTenantSurface = request()->routeIs('proposals.*', 'billing.*', 'payments.*', 'invoices.*')
+      || request()->is('proposals*', 'billing*', 'payments*', 'invoices*');
   $activeTenant = $navigationShell['tenant'] ?? null;
   $tenantBrand = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
       ($isLandlordShell || $isNeutralTenantSurface) ? null : ($activeTenant instanceof \App\Models\Tenant ? $activeTenant : null)
@@ -224,7 +224,7 @@
                     <span class="mf-leaf-icon-badge" aria-hidden="true">
                       <flux:icon icon="book-open-text" class="size-3.5" />
                     </span>
-                    <span class="mf-nav-label">Wiki Sections</span>
+                    <span class="mf-nav-label">Workspace Guide</span>
                   </span>
                   <flux:icon.chevron-right class="mf-admin-group-chevron size-3" />
                 </summary>
