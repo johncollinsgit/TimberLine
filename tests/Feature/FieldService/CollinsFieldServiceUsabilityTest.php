@@ -14,6 +14,7 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Services\FieldService\FieldServiceJobLifecycleService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
+use App\Services\Mobile\TenantMobileModuleRegistry;
 use Laravel\Sanctum\Sanctum;
 
 function usabilityWorkspace(): array
@@ -130,9 +131,13 @@ test('estimator is draft only and owner restricted', function (): void {
     ]);
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    expect(collect(app(TenantMobileModuleRegistry::class)->manifest((int) $tenant->id, $member, '2.2.0'))->pluck('module_key'))
+        ->not->toContain('estimator');
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/estimator')->assertForbidden();
 
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    expect(collect(app(TenantMobileModuleRegistry::class)->manifest((int) $tenant->id, $owner, '2.2.0'))->pluck('module_key'))
+        ->toContain('estimator');
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/estimator')
         ->assertOk()->assertJsonPath('catalog.0.id', $item->id);
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/estimator/drafts', [

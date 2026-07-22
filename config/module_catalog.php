@@ -1295,6 +1295,7 @@ $catalog = [
                 'entry_screen' => 'estimator.index',
                 'contract_version' => 3,
                 'min_app_version' => '1.3.0',
+                'roles' => ['owner', 'tenant_owner', 'admin'],
                 'navigation' => ['group' => 'work', 'icon' => 'calculator', 'position' => 30],
                 'actions' => ['view', 'create_draft', 'edit_draft'],
             ],
