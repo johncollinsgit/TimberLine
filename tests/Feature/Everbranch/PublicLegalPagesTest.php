@@ -22,7 +22,7 @@ test('everbranch support page is public and provides app and account help', func
         ->assertSee('Account')
         ->assertSee('Help and support')
         ->assertSee('Request account deletion')
-        ->assertSee('support@theeverbranch.com');
+        ->assertSee('john@evergrovesoftware.com');
 });
 
 test('evergrove hosts receive the evergrove legal presentation', function () {

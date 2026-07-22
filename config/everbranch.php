@@ -32,7 +32,7 @@ return [
     'product_name' => env('EVERBRANCH_PRODUCT_NAME', 'Everbranch'),
     'company_name' => env('EVERBRANCH_COMPANY_NAME', 'Evergrove'),
     'ecosystem_name' => env('EVERBRANCH_ECOSYSTEM_NAME', 'Evergrove'),
-    'support_email' => env('EVERBRANCH_SUPPORT_EMAIL', 'support@theeverbranch.com'),
+    'support_email' => env('EVERBRANCH_SUPPORT_EMAIL', 'john@evergrovesoftware.com'),
     'bud' => [
         'support_email' => env('EVERBRANCH_BUD_SUPPORT_EMAIL', 'johncollinsemail@gmail.com'),
     ],
