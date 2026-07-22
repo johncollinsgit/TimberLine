@@ -37,7 +37,7 @@ class PublicLegalController extends Controller
             'brandAssets' => (array) config($isEvergrove ? 'evergrove.brand_assets' : 'everbranch.brand_assets', []),
             'contactEmail' => $isEvergrove
                 ? (string) config('evergrove.contact_email', 'hello@evergrovesoftware.com')
-                : (string) config('everbranch.support_email', 'support@theeverbranch.com'),
+                : (string) config('everbranch.support_email', 'john@evergrovesoftware.com'),
             'homeUrl' => $isEvergrove ? 'https://evergrovesoftware.com' : 'https://theeverbranch.com',
         ]);
     }

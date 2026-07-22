@@ -127,7 +127,7 @@ class WorkspaceAssetService
         }
 
         $response = Http::withHeaders([
-            'User-Agent' => 'Everbranch/2.0 (+https://theeverbranch.com; support@theeverbranch.com)',
+            'User-Agent' => 'Everbranch/2.0 (+https://theeverbranch.com; john@evergrovesoftware.com)',
         ])->timeout(30)->retry(2, 250)->get($url)->throw();
         $bytes = $response->body();
         abort_if($bytes === '' || strlen($bytes) > 25 * 1024 * 1024, 422, 'The remote image is empty or too large.');
