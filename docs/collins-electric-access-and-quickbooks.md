@@ -21,7 +21,7 @@ Owner/admin users may access operational data, QuickBooks connection health, imp
 
 Team members are operational users. They may access customers, jobs, service addresses, lock-box codes, calendars, job assignments, tasks, job posts/notes, photos, mentions, and job communication. They must not receive financial reports, document totals, receivables, profit-and-loss data, wage totals, price-book costs, billing controls, or integration credentials.
 
-Field-service routes permit tenant members because the surface is operational. Financial data remains in separate models and must only be exposed from an owner/admin guarded controller or mobile contract. Do not add financial fields to the general job payload.
+Field-service routes permit active tenant members because the surface is operational. Collins sets `member_job_visibility=all_operational`, so employees may browse every current and past operational job; edits, lifecycle changes, and task completion remain assignment-based. Financial data remains in separate models and must only be exposed from an owner/admin guarded controller or contract. Do not add financial fields to the general job payload.
 
 Members can see only jobs where they are the lead assignee, a participant/follower, a task assignee, or an explicitly mentioned teammate. Owners, admins, managers, and platform operators may see the tenant-wide operational list. This relationship check is a server boundary, not a client filter.
 
@@ -43,6 +43,12 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 - SMS delivery remains blocked until provider readiness, employee/customer consent, quiet hours, opt-out handling, and delivery logs are proven.
 - Nathan needs customer, job, calendar, assignment, notes, photos, and communication workflows before financial enhancements.
 - `Field Service` is Collins' canonical Work experience. Do not restore separate visible `work_core` and `field_service` Branches. The old Work URLs remain compatibility aliases only.
+- QuickBooks invoices and estimates create owner/admin-only Job Drafts, not automatic employee-visible jobs. Nathan reviews operational details and uses Publish Job or Link to Existing Job. Archive/restore changes only the draft and survives later sync; the accounting document stays immutable.
+- Job Draft and employee payloads must omit invoice/estimate labels, source identifiers, document numbers, amounts, balances, receivables, private notes, and dollar-formatted values. Existing generated titles containing “Invoice” may be normalized only when they were not manually renamed.
+- Import service addresses in this order: QuickBooks shipping address, QuickBooks billing address, then the existing tenant customer address. Publishing copies the structured address to the job.
+- Jobs carry an external project manager name, company, phone, and email entered by Nathan. Employees receive a Project Manager card with direct Call and Text actions plus explicit Apple Maps and Google Maps links for the service address.
+- Send to Office targets one active owner/admin/manager, idempotently reassigns the task, marks it waiting, records history, and notifies the selected office person. New tasks may target an office person directly.
+- Drawings are PDF files selected from iOS Files or Documents, limited to 25 MB, stored as authenticated tenant/job assets, audited, and team-visible by default. All authorized Collins employees may view them; team visibility is not public access.
 - Job comments, tasks, participants, mentions, and photos are tenant-owned. SMS notifications remain suppressed unless the employee has a tenant-specific verified phone and operational opt-in and the Collins sender passes its delivery smoke test.
 - Collins confirmed on 2026-07-20 that written SMS consent is held for its customers. Import that evidence only through `collins-electric:import-written-sms-consent --confirm-written-consent --source-reference="..."`; the command creates per-customer consent evidence, skips profiles without a phone, and preserves explicit opt-outs.
 - Collins inventory uses tenant-owned catalog items for warehouse quantity, reorder level, unit, SKU, and cost. Van stock is a separate tenant-owned quantity; loading and unloading move stock between those two locations without changing QuickBooks.
@@ -59,10 +65,10 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 
 ## Work 2.0 pilot guardrails
 
-- Collins is the first `trades` Work 2.0 pilot. Enable it only through `field_service` entitlement metadata `experience_version=2`; do not infer it from the Collins slug in application code.
+- Collins is the first `trades` Field Operations v7 tenant. Enable it through `field_service` entitlement metadata `experience_version=3`, `field_service_contract_version=7`, and `member_job_visibility=all_operational`; do not infer reusable runtime behavior from the Collins slug.
 - The canonical job statuses are `quote`, `needs_details`, `scheduled`, `active`, `blocked`, `complete`, `canceled`, and `history`. A blocked transition requires a reason. Lead technicians and participants may progress their own jobs; cancellation/reopen, assignments, and job editing remain manager/admin actions.
 - Ready for field means schedule + service address + work description + customer phone/email + at least one lead/participant. Readiness is computed, never a second mutable status flag.
-- My Day is role-aware and tenant-scoped. Nathan, John, and Collins managers see team attention queues; members see only participating work. Financial payloads continue through the separate owner/admin financial gate.
+- My Day is role-aware and tenant-scoped. Nathan, John, and Collins managers see team attention queues; active members can browse all operational jobs but My Day remains focused on their assigned schedule and tasks. Financial payloads continue through the separate owner/admin financial gate.
 - Everbranch APNs is dedicated to `com.everbranch.app`. Never reuse Modern Forestry keys or push-device rows. Assignment, schedule, mention, comment, task, status, 24-hour, and 2-hour events may create in-app/push records; operational SMS stays fail-closed.
 - iCloud and Shared Album photos are user-selected through the system picker, resized on device, uploaded sequentially, and stored as authenticated team-visible Everbranch assets. Photos and documents have separate counts and must not render twice.
 
@@ -81,7 +87,7 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 - All Everbranch operational dashboard metrics use the shared `1d`, `1w`, `1m`, `30d`, and `ytd` selector, defaulting to the current calendar month. This does not change the explicit YTD period used by the QuickBooks P&L audit.
 - Owner reporting uses P&L Total Income as the denominator for employee, contract, and combined labor percentages. Supplies, wages, contract labor, and Nathan's owner compensation remain blank until an owner reviews exact QuickBooks account mappings. A monthly owner-adjustment fallback is supported when owner compensation cannot be separated by account.
 - QuickBooks invoices are labeled `work billed`; only Everbranch jobs with `completed_at` are labeled `jobs completed`. Historical pending estimates live in quote aging and do not create current follow-up tasks automatically.
-- The shared `documents` Branch stores authenticated private copies. Team uploads default to team-visible; QuickBooks attachments default to owner-only. One asset can link to several jobs, text/CSV contents and tags are searchable, and upload/link/download/delete activity is audited. Collins' initial QuickBooks sweep returned zero attachments, so an empty Documents screen is expected until the team uploads job photos or files.
+- The shared `documents` Branch stores authenticated tenant-scoped copies. Team uploads—including PDF drawings—default to team-visible; QuickBooks attachments default to owner-only. One asset can link to several jobs, text/CSV contents and tags are searchable, and upload/link/download/delete activity is audited. Collins' initial QuickBooks sweep returned zero attachments, so an empty Documents screen is expected until the team uploads job photos or files.
 - iCloud and Shared Albums remain source pickers, not canonical storage. The iOS system picker copies only user-selected photos into private Everbranch storage and leaves the originals untouched.
 - The shared `estimator` Branch is default-disabled platform-wide but enabled for Collins owner/admin users in draft-only mode. It proposes candidates only from repeated detailed invoice descriptions, excludes broad service items, snapshots approved prices into Everbranch drafts, and never writes estimates back to QuickBooks.
 
@@ -94,6 +100,8 @@ php artisan field-service:sync-quickbooks --tenant=collins-electric --dry-run
 php artisan field-service:sync-quickbooks --tenant=collins-electric
 php artisan field-service:reconcile-lifecycle --tenant=collins-electric --dry-run
 php artisan field-service:reconcile-lifecycle --tenant=collins-electric
+php artisan field-service:normalize-job-drafts collins-electric
+php artisan field-service:normalize-job-drafts collins-electric --apply
 php artisan quickbooks:sync-enabled --tenant=collins-electric
 php artisan quickbooks:sync-enabled --tenant=collins-electric --full
 php artisan field-service:scan-equipment-maintenance --tenant=collins-electric

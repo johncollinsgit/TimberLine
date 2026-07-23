@@ -23,6 +23,7 @@ use App\Services\Mobile\TenantMobileResourceService;
 use App\Services\Mobile\TenantMobileSupportService;
 use App\Services\Search\GlobalSearchCoordinator;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
+use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
@@ -444,7 +445,7 @@ class EverbranchMobileController extends Controller
         });
         $work = $resources->work($tenant, $this->user($request), $query, 8);
         if (($work['kind'] ?? null) !== 'orders') {
-            $results = $results->concat(collect((array) ($work['items'] ?? []))->map(fn (array $item): array => [
+            $results = $results->concat(collect($work['items'] ?? [])->map(fn (array $item): array => [
                 'type' => rtrim((string) $work['kind'], 's'),
                 'title' => $item['title'],
                 'subtitle' => $item['subtitle'] ?? '',
@@ -628,17 +629,21 @@ class EverbranchMobileController extends Controller
     protected function brandingPayload(Tenant $tenant, string $role): array
     {
         $profile = TenantDiscoveryProfile::withoutGlobalScopes()->where('tenant_id', $tenant->id)->first();
-        $name = trim((string) ($profile?->primary_brand_name ?: $tenant->name));
-        $logo = trim((string) ($profile?->primary_logo_url ?? ''));
-        if ($logo === '' && (int) $tenant->id === 1) {
-            $logo = url('/brand/modern-forestry-logo-white.png');
+        $presentation = app(TenantBrandProfileService::class)->presentationFor($tenant);
+        $name = trim((string) ($profile?->primary_brand_name ?: $presentation['display_name'] ?: $tenant->name));
+        $customLogo = trim((string) ($profile?->primary_logo_url ?? ''));
+        if ($customLogo === '' && (int) $tenant->id === 1 && empty($presentation['has_light_logo'])) {
+            $customLogo = url('/brand/modern-forestry-logo-white.png');
         }
 
         return [
+            ...$presentation,
             'display_name' => $name !== '' ? $name : (string) $tenant->name,
-            'logo_url' => $logo !== '' ? $logo : null,
+            'logo_url' => $customLogo !== '' ? $customLogo : $presentation['light_logo_url'],
+            'light_logo_url' => $customLogo !== '' ? $customLogo : $presentation['light_logo_url'],
+            'dark_logo_url' => $customLogo !== '' ? $customLogo : $presentation['dark_logo_url'],
             'logo_alt' => ($name !== '' ? $name : (string) $tenant->name).' logo',
-            'can_manage' => $role === 'admin',
+            'can_manage' => in_array($role, ['admin', 'owner', 'tenant_owner'], true),
         ];
     }
 

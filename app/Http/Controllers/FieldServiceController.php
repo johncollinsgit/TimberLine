@@ -120,6 +120,7 @@ class FieldServiceController extends Controller
             'readiness' => $jobs->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
             'profile' => $profile,
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
+            'canManageJobDrafts' => $financialAccess->allows($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
             'ownerMetrics' => $financialAccess->allows($request->user(), $tenant) ? $homeMetrics->build($tenant, $period) : null,
             'assignedTasks' => $assignedTasks,
@@ -141,11 +142,16 @@ class FieldServiceController extends Controller
         $bucket = (string) ($validated['bucket'] ?? 'current');
         $owner = $financialAccess->allows($user, $tenant);
         if ($bucket === 'potential') {
-            abort_unless($this->fieldServiceAccess->canManageJobs($user, $tenant), 403);
+            abort_unless($owner, 403);
             $rows = $candidates->pending($tenant)->map(fn ($candidate): array => [
                 'id' => (int) $candidate->id, 'kind' => 'candidate', 'title' => $candidate->title, 'customer' => $candidate->customer_name,
-                'status' => 'potential', 'source' => $candidate->source_type, 'amount' => (float) ($candidate->amount ?? 0),
-                'balance' => (float) ($candidate->balance ?? 0), 'updated_at' => $candidate->updated_at?->toIso8601String(),
+                'customer_email' => $candidate->customer_email, 'customer_phone' => $candidate->customer_phone,
+                'description' => $candidate->description, 'status' => 'draft', 'priority' => $candidate->priority ?: 'normal',
+                'scheduled_for' => $candidate->scheduled_for?->toIso8601String(),
+                'service_address' => trim(implode(', ', array_filter([$candidate->service_address_line_1, $candidate->service_address_line_2, trim(implode(' ', array_filter([$candidate->service_city, $candidate->service_state, $candidate->service_postal_code])))]))),
+                'project_manager_name' => $candidate->project_manager_name, 'project_manager_company' => $candidate->project_manager_company,
+                'project_manager_phone' => $candidate->project_manager_phone, 'project_manager_email' => $candidate->project_manager_email,
+                'updated_at' => $candidate->updated_at?->toIso8601String(),
                 'review_url' => route('mobile.v1.workspace.field-service.work-candidates.review', ['tenant' => $tenant->slug, 'candidate' => $candidate->id], false),
             ])->values();
 
@@ -155,8 +161,11 @@ class FieldServiceController extends Controller
         $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
             ->with(['assignedUser:id,name', 'participants:id,name', 'vehicles:id,tenant_id,name,identifier'])
             ->withSum(['timeEntries as manual_minutes' => fn ($entries) => $entries->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
-            ->withSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds')
-            ->withSum('financialDocuments as financial_total', 'total_amount')->withSum('financialDocuments as financial_balance', 'balance');
+            ->withSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
+        if ($owner) {
+            $query->withSum('financialDocuments as financial_total', 'total_amount')
+                ->withSum('financialDocuments as financial_balance', 'balance');
+        }
         $this->fieldServiceAccess->scopeVisibleJobs($query, $user, $tenant);
         $query->whereIn('operational_status', $bucket === 'past' ? ['complete', 'canceled', 'history'] : ['needs_details', 'scheduled', 'active', 'blocked']);
         if (($validated['status'] ?? []) !== []) {
@@ -233,7 +242,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless(app(TenantFinancialAccess::class)->allows($request->user(), $tenant), 403);
         $validated = $request->validate(['action' => ['required', 'in:create_job,link,dismiss'], 'job_id' => ['nullable', 'integer', 'required_if:action,link']]);
         if ($validated['action'] === 'dismiss') {
             $candidates->dismiss($tenant, $request->user(), $candidate);
@@ -263,6 +272,10 @@ class FieldServiceController extends Controller
             'customer' => $job->customer_name,
             'customer_email' => $job->customer_email,
             'customer_phone' => $job->customer_phone,
+            'project_manager_name' => $job->project_manager_name,
+            'project_manager_company' => $job->project_manager_company,
+            'project_manager_phone' => $job->project_manager_phone,
+            'project_manager_email' => $job->project_manager_email,
             'description' => $job->description,
             'service_address' => trim(implode(', ', array_filter([
                 $job->service_address_line_1,
@@ -278,9 +291,11 @@ class FieldServiceController extends Controller
             'crew' => $job->participants->pluck('name')->values(),
             'vehicles' => $job->vehicles->map(fn ($vehicle): array => ['id' => (int) $vehicle->id, 'name' => $vehicle->name])->values(),
             'hours' => round($seconds / 3600, 2),
-            'source' => $job->external_source ?: 'Everbranch',
-            'amount' => $owner ? (float) ($job->financial_total ?? 0) : null,
-            'balance' => $owner ? (float) ($job->financial_balance ?? 0) : null,
+            'source' => $owner ? ($job->external_source ?: 'Everbranch') : null,
+            ...($owner ? [
+                'amount' => (float) ($job->financial_total ?? 0),
+                'balance' => (float) ($job->financial_balance ?? 0),
+            ] : []),
             'updated_at' => $job->updated_at?->toIso8601String(),
         ];
     }
@@ -357,11 +372,13 @@ class FieldServiceController extends Controller
             'timeEntries.user',
             'materials',
             'photos.uploadedBy',
+            'assets' => fn ($assets) => $assets->where('visibility', 'team')->orderByDesc('workspace_assets.created_at'),
             'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
             'notes.createdBy',
             'notes.photos',
         ]);
         $team = $tenant->users()
+            ->wherePivot('membership_active', true)
             ->orderBy('name')
             ->get(['users.id', 'users.name', 'users.email']);
 

@@ -1,12 +1,16 @@
 # SYSTEM SNAPSHOT
 
-## Reusable Field Operations v6 (2026-07-21)
+## Reusable Field Operations v7 / Everbranch 2.3 (2026-07-22)
 
 - Field-service tasks now keep a backward-compatible primary assignee plus tenant-scoped multi-assignee and task-event records. A shared task has one completion state; handoff replaces responsibility, marks the task `waiting`, records an idempotent event/note, and notifies the new responsible people.
-- Mobile Field Service contract v6 and My Day v5 expose canonical `assignees[]`, an assigned-to-me cursor feed, and role-filtered task mutations. Employees may hand off only to the job crew, lead, or a manager; owners/managers retain workspace-wide assignment authority.
+- Mobile Field Service contract v7 and My Day v5 expose canonical `assignees[]`, an assigned-to-me cursor feed, role-filtered mutations, and idempotent Send to Office handoffs to active owner/admin/manager recipients.
+- QuickBooks financial documents remain immutable owner-only evidence. Owner/admin Job Drafts provide edit, archive/restore, publish, and link-to-existing workflows with structured customer/address/schedule/crew/external-PM data, while omitting source numbers, private notes, amounts, and balances from the mobile contract.
+- Reusable `member_job_visibility=all_operational` is enabled for Collins. Every active Collins employee can browse current and past operational jobs, PM contacts, updates, tasks, and team files; edits, progress, and task completion retain assignment-based authorization.
+- PDF drawings upload from Files or Documents with a 25 MB limit into authenticated tenant/job-scoped storage. They default to team visibility, remain audited, and preview inline; QuickBooks attachments remain owner-only unless deliberately reclassified.
+- Job payloads include structured addresses and external PM contacts. Mobile and responsive web offer PM Call/Text, Apple Maps, Google Maps, and Files sections separating Drawings & PDFs from Photos.
 - Owner Home and the web Work surface expose Today, Monday-to-now This Week, and calendar-month cash-basis QuickBooks Money In/Money Spent plus Finished Jobs. Snapshots refresh on the queue and disconnected/stale states remain quiet. Financial values never enter employee payloads.
 - Onboarding uses explicit `baseline_auto`, `template_recommended`, `integration_required`, `operator_only`, and `internal_only` activation policies. Electrician templates recommend Field Service, Time Tracking, Team Communication, Field Inventory, Fleet, Documents, and QuickBooks; only included baseline modules activate automatically.
-- Mobile module bootstrap can enforce role declarations and `min_app_version` when the client reports `X-Everbranch-App-Version`. Everbranch 2.2.0 is the first client for Field Service contract v6.
+- Mobile module bootstrap can enforce role declarations and `min_app_version` when the client reports `X-Everbranch-App-Version`. Everbranch 2.3.0 build 11 is the first client for Field Service contract v7 and consumes canonical `TenantBrandProfile` light/dark branding.
 - `php artisan everbranch:prepare-app-review-workspace --password=...` idempotently prepares the fictional, tenant-isolated Apple review workspace. Production execution additionally requires `--force-production`; the password is never printed or committed.
 
 ## Operator Structure and Atomic Release Snapshot (2026-07-21)

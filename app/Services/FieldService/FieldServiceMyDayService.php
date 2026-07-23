@@ -108,7 +108,13 @@ class FieldServiceMyDayService
         return [
             'id' => (int) $job->id, 'title' => $job->title, 'customer' => $job->customer_name,
             'status' => $job->operational_status ?: $job->status, 'priority' => $job->priority ?: 'normal',
-            'scheduled_for' => $job->scheduled_for?->toIso8601String(), 'address' => trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_city, $job->service_state]))),
+            'scheduled_for' => $job->scheduled_for?->toIso8601String(),
+            'address' => [
+                'line_1' => $job->service_address_line_1, 'line_2' => $job->service_address_line_2,
+                'city' => $job->service_city, 'state' => $job->service_state,
+                'postal_code' => $job->service_postal_code, 'country' => $job->service_country,
+                'formatted' => trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_address_line_2, $job->service_city, $job->service_state, $job->service_postal_code, $job->service_country]))),
+            ],
             'lead' => $job->assignedUser?->name, 'participants' => $job->participants->pluck('name')->values(),
             'readiness' => $this->readiness->forJob($job),
             'destination' => ['kind' => 'field_service_job', 'id' => (int) $job->id],

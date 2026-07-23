@@ -24,13 +24,22 @@ class FieldServiceAccessService
 
     public function canViewAllJobs(User $user, Tenant|int $tenant): bool
     {
-        return in_array($this->role($user, $tenant), ['owner', 'tenant_owner', 'admin', 'manager'], true)
+        $tenantModel = $tenant instanceof Tenant ? $tenant : Tenant::query()->find($tenant);
+        $metadata = $tenantModel
+            ? (array) ($tenantModel->moduleEntitlements()->where('module_key', 'field_service')->value('metadata') ?? [])
+            : [];
+
+        $role = $this->role($user, $tenant);
+
+        return ($role !== '' && data_get($metadata, 'member_job_visibility') === 'all_operational')
+            || in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)
             || $user->role === 'platform_admin';
     }
 
     public function canManageJobs(User $user, Tenant|int $tenant): bool
     {
-        return $this->canViewAllJobs($user, $tenant);
+        return in_array($this->role($user, $tenant), ['owner', 'tenant_owner', 'admin', 'manager'], true)
+            || $user->role === 'platform_admin';
     }
 
     public function canUpdateProgress(User $user, Tenant $tenant, FieldServiceJob $job): bool

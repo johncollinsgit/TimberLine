@@ -15,6 +15,8 @@ use App\Models\User;
 use App\Services\FieldService\FieldServiceJobLifecycleService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
 function usabilityWorkspace(): array
@@ -226,7 +228,7 @@ test('work 2 notifications remain tenant and user scoped', function (): void {
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/notifications/'.$notificationId.'/read')->assertNotFound();
 });
 
-test('field service v6 supports multiple assignees assigned task feeds and idempotent handoffs', function (): void {
+test('field service v7 supports multiple assignees assigned task feeds and idempotent handoffs', function (): void {
     [$tenant, $owner, $member, $other] = usabilityWorkspace();
     $job = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
@@ -249,7 +251,7 @@ test('field service v6 supports multiple assignees assigned task feeds and idemp
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/tasks?scope=assigned_to_me&status=open')
         ->assertOk()
-        ->assertJsonPath('contract_version', 6)
+        ->assertJsonPath('contract_version', 7)
         ->assertJsonPath('tasks.0.id', $taskId)
         ->assertJsonCount(2, 'tasks.0.assignees');
     $handoffUrl = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks/'.$taskId.'/handoff';
@@ -262,6 +264,178 @@ test('field service v6 supports multiple assignees assigned task feeds and idemp
 
     expect(FieldServiceTaskEvent::query()->forTenantId($tenant->id)->where('field_service_task_id', $taskId)->count())->toBe(1)
         ->and(FieldServiceTask::query()->findOrFail($taskId)->assigned_user_id)->toBe($other->id);
+
+    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
+    $officeUrl = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/tasks/'.$taskId.'/send-to-office';
+    $this->withHeader('Idempotency-Key', 'office-'.$taskId)
+        ->postJson($officeUrl, ['office_user_id' => $owner->id, 'note' => 'Please order the inspection.'])
+        ->assertOk()->assertJsonPath('replayed', false)->assertJsonPath('task.status', 'waiting');
+    $this->withHeader('Idempotency-Key', 'office-'.$taskId)
+        ->postJson($officeUrl, ['office_user_id' => $owner->id, 'note' => 'Please order the inspection.'])
+        ->assertOk()->assertJsonPath('replayed', true);
+    expect(FieldServiceTask::query()->findOrFail($taskId)->assigned_user_id)->toBe($owner->id);
+});
+
+test('team visible PDF drawings are tenant scoped audited and readable by every authorized Collins employee', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    TenantModuleEntitlement::query()->forTenantId($tenant->id)->where('module_key', 'field_service')->update(['metadata' => ['member_job_visibility' => 'all_operational']]);
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'assigned_user_id' => $other->id, 'title' => 'Drawing review', 'status' => 'open', 'operational_status' => 'active']);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/files', [
+        'files' => [UploadedFile::fake()->create('panel-drawing.pdf', 1024, 'application/pdf')],
+    ])->assertCreated()->assertJsonPath('files.0.mime_type', 'application/pdf');
+    $asset = \App\Models\WorkspaceAsset::query()->forTenantId($tenant->id)->sole();
+    expect($asset->visibility)->toBe('team')->and($asset->jobs()->whereKey($job->id)->exists())->toBeTrue()
+        ->and(\App\Models\WorkspaceAssetEvent::query()->forTenantId($tenant->id)->where('workspace_asset_id', $asset->id)->where('action', 'uploaded')->exists())->toBeTrue();
+
+    Sanctum::actingAs($other, ['mobile:read']);
+    $this->get('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/assets/'.$asset->id)->assertOk();
+
+    $foreign = Tenant::query()->create(['name' => 'Foreign Electric', 'slug' => 'foreign-electric']);
+    $other->tenants()->attach($foreign->id, ['role' => 'member']);
+    Sanctum::actingAs($other, ['mobile:read']);
+    $this->get('/api/mobile/v1/workspaces/'.$foreign->slug.'/field-service/assets/'.$asset->id)->assertNotFound();
+});
+
+test('field operations v7 lets configured members browse every job without broadening mutations or financial payloads', function (): void {
+    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    TenantModuleEntitlement::query()->forTenantId($tenant->id)->where('module_key', 'field_service')->update([
+        'metadata' => ['member_job_visibility' => 'all_operational', 'field_service_contract_version' => 7],
+    ]);
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id, 'assigned_user_id' => $other->id, 'title' => 'Visible crew job',
+        'status' => 'open', 'operational_status' => 'active', 'customer_name' => 'Casey Customer',
+        'service_address_line_1' => '14 Trade Street', 'service_city' => 'Greenville', 'service_state' => 'SC',
+        'project_manager_name' => 'Pat Builder', 'project_manager_company' => 'Upstate GC', 'project_manager_phone' => '+18645550199',
+    ]);
+    FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'source' => 'quickbooks',
+        'document_type' => 'invoice', 'external_id' => 'all-jobs-finance', 'status' => 'open',
+        'total_amount' => 2400, 'balance' => 900, 'private_note' => 'Never expose this note',
+    ]);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $list = $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list&filter=active')
+        ->assertOk()->assertJsonPath('contract_version', 7)->assertJsonPath('jobs.0.id', $job->id)
+        ->assertJsonPath('jobs.0.address.formatted', '14 Trade Street, Greenville, SC')
+        ->assertJsonPath('jobs.0.project_manager.phone', '+18645550199');
+    expect(json_encode($list->json()))->not->toContain('2400', '900', 'Never expose this note', 'financial_total', 'financial_balance');
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id, ['title' => 'Unauthorized rename'])->assertForbidden();
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'complete'])->assertForbidden();
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
+        ->assertOk()->assertJsonPath('job.financials.0.balance', 900);
+});
+
+test('member and manager mobile surfaces never serialize QuickBooks financial evidence', function (string $role): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $viewer = $role === 'member' ? $member : User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+    if ($role === 'manager') {
+        $viewer->tenants()->attach($tenant->id, ['role' => 'manager']);
+    }
+    TenantModuleEntitlement::query()->forTenantId($tenant->id)->where('module_key', 'field_service')->update([
+        'metadata' => ['member_job_visibility' => 'all_operational', 'field_service_contract_version' => 7],
+    ]);
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id, 'module_key' => 'reporting', 'availability_status' => 'available',
+        'enabled_status' => 'enabled', 'billing_status' => 'included_in_plan', 'entitlement_source' => 'test', 'price_source' => 'catalog',
+    ]);
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id, 'assigned_user_id' => $member->id, 'title' => 'Safe operational title',
+        'customer_name' => 'Safe Customer', 'status' => 'open', 'operational_status' => 'active',
+    ]);
+    FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'source' => 'quickbooks',
+        'document_type' => 'invoice', 'external_id' => 'finance-contract-secret', 'document_number' => 'INV-SECRET-7788',
+        'status' => 'open', 'transaction_date' => now(), 'total_amount' => 9876.54, 'balance' => 8765.43,
+        'private_note' => 'FINANCIAL PRIVATE NOTE MUST NEVER LEAK',
+    ]);
+
+    Sanctum::actingAs($viewer, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug;
+    $responses = [
+        $this->getJson($base.'/bootstrap')->assertOk(),
+        $this->getJson($base.'/work')->assertOk(),
+        $this->getJson($base.'/work/jobs/'.$job->id)->assertOk(),
+        $this->getJson($base.'/field-service?view=list&filter=active')->assertOk(),
+        $this->getJson($base.'/field-service/jobs/'.$job->id)->assertOk(),
+        $this->getJson($base.'/search?q=FINANCIAL%20PRIVATE')->assertOk(),
+        $this->getJson($base.'/modules/reporting')->assertOk(),
+        $this->getJson($base.'/modules/documents')->assertOk(),
+    ];
+    $this->getJson($base.'/field-service/job-drafts')->assertForbidden();
+    $this->getJson($base.'/field-service/work-candidates')->assertForbidden();
+
+    foreach ($responses as $response) {
+        $encoded = json_encode($response->json(), JSON_THROW_ON_ERROR);
+        expect($encoded)->not->toContain(
+            'INV-SECRET-7788',
+            'FINANCIAL PRIVATE NOTE MUST NEVER LEAK',
+            'finance-contract-secret',
+            '9876.54',
+            '8765.43',
+            '$9,876.54',
+            '$8,765.43',
+            'receivable',
+        );
+    }
+})->with(['member', 'manager']);
+
+test('mobile bootstrap uses the canonical Collins light and dark brand presentation', function (): void {
+    [$tenant, $owner] = usabilityWorkspace();
+    $tenant->forceFill(['name' => 'Collins Upstate Electric', 'slug' => 'collins-electric'])->save();
+
+    Sanctum::actingAs($owner, ['mobile:read']);
+    $this->getJson('/api/mobile/v1/workspaces/collins-electric/bootstrap')
+        ->assertOk()
+        ->assertJsonPath('branding.display_name', 'Collins Upstate Electric')
+        ->assertJsonPath('branding.tagline', 'Residential · Commercial · Reliable Power')
+        ->assertJsonPath('branding.theme_key', 'collins-upstate-electric')
+        ->assertJsonPath('branding.primary_color', '#061D42')
+        ->assertJsonPath('branding.accent_color', '#1464E8')
+        ->assertJson(fn ($json) => $json
+            ->whereType('branding.light_logo_url', 'string')
+            ->whereType('branding.dark_logo_url', 'string')
+            ->where('branding.can_manage', true)
+            ->etc());
+});
+
+test('job drafts are owner only editable archivable restorable and publish without accounting fields', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $customer = \App\Models\MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id, 'first_name' => 'Jordan', 'last_name' => 'Customer',
+        'email' => 'jordan@example.com', 'phone' => '864-555-0101', 'address_line_1' => '8 Billing Lane', 'city' => 'Greenville', 'state' => 'SC',
+    ]);
+    FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id, 'marketing_profile_id' => $customer->id, 'source' => 'quickbooks',
+        'document_type' => 'invoice', 'external_id' => 'draft-1', 'document_number' => '981', 'status' => 'open',
+        'total_amount' => 3000, 'balance' => 1000, 'private_note' => 'Accounting only', 'customer_memo' => 'Install service disconnect.',
+        'metadata' => ['quickbooks' => ['service_address' => ['line_1' => '22 Job Site Road', 'line_2' => null, 'city' => 'Greer', 'state' => 'SC', 'postal_code' => '29650', 'country' => 'US']]],
+    ]);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/job-drafts')->assertForbidden();
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $response = $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/job-drafts')
+        ->assertOk()->assertJsonPath('contract_version', 7)->assertJsonPath('job_drafts.0.address.line_1', '22 Job Site Road');
+    expect(json_encode($response->json()))->not->toContain('invoice', '981', '3000', '1000', 'Accounting only', 'source_type');
+    $draftId = (int) $response->json('job_drafts.0.id');
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/job-drafts/'.$draftId, [
+        'title' => 'Main service upgrade', 'project_manager_name' => 'Alex General', 'project_manager_phone' => '+18645550222',
+        'assigned_user_id' => $member->id, 'participant_user_ids' => [$member->id],
+    ])->assertOk()->assertJsonPath('job_draft.title', 'Main service upgrade');
+    $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/job-drafts/'.$draftId)->assertOk()->assertJsonPath('status', 'archived');
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/job-drafts?status=archived')->assertOk()->assertJsonPath('job_drafts.0.id', $draftId);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/job-drafts/'.$draftId.'/restore')->assertOk();
+    $jobId = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/job-drafts/'.$draftId.'/publish')
+        ->assertCreated()->json('destination.id');
+    $job = FieldServiceJob::query()->findOrFail($jobId);
+    expect($job->title)->toBe('Main service upgrade')->and($job->service_address_line_1)->toBe('22 Job Site Road')
+        ->and($job->project_manager_name)->toBe('Alex General')->and($job->participants()->whereKey($member->id)->exists())->toBeTrue();
 });
 
 test('my day exposes cash home metrics only to financial owners and keeps all assigned tasks available', function (): void {

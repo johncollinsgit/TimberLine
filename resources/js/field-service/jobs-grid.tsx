@@ -12,10 +12,11 @@ type Row = {
     vehicles?: { id: number; name: string }[]; hours?: number; source?: string; amount?: number | null;
     balance?: number | null; updated_at?: string; customer_email?: string; customer_phone?: string;
     description?: string; service_address?: string; blocked_reason?: string;
+    project_manager_name?: string; project_manager_company?: string; project_manager_phone?: string; project_manager_email?: string;
 };
 type Options = { team: { id: number; name: string }[]; vehicles: { id: number; name: string; identifier?: string }[]; statuses: string[] };
 type Meta = { bucket: Bucket; page: number; last_page: number; total: number };
-type Props = { endpoint: string; updateTemplate: string; candidateTemplate: string; canManage: boolean };
+type Props = { endpoint: string; updateTemplate: string; candidateTemplate: string; canManage: boolean; canManageDrafts: boolean };
 type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
 type OpenCell = CustomCell<{ kind: "open-job" }>;
 
@@ -59,6 +60,7 @@ const allColumns: (GridColumn & { id: string })[] = [
 ];
 const editable = new Set(["status", "scheduled_for", "lead", "priority", "vehicles"]);
 const defaultVisible = allColumns.map(column => column.id);
+const financialColumns = new Set(["source", "amount", "balance"]);
 
 function useSize() {
     const ref = useRef<HTMLDivElement | null>(null);
@@ -92,7 +94,7 @@ function dateTimeLocalValue(value?: string): string {
     return local.toISOString().slice(0, 16);
 }
 
-function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canManage }: Props) {
+function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canManage, canManageDrafts }: Props) {
     const [bucket, setBucket] = useState<Bucket>("current");
     const [rows, setRows] = useState<Row[]>([]);
     const [options, setOptions] = useState<Options>({ team: [], vehicles: [], statuses: [] });
@@ -111,7 +113,8 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     const [openedJobId, setOpenedJobId] = useState<number | null>(null);
     const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
     const [gridRef, size] = useSize();
-    const columns = useMemo(() => [openColumn, ...allColumns.filter(column => visible.includes(column.id))], [visible]);
+    const availableColumns = useMemo(() => allColumns.filter(column => canManageDrafts && bucket !== "potential" || !financialColumns.has(column.id)), [bucket, canManageDrafts]);
+    const columns = useMemo(() => [openColumn, ...availableColumns.filter(column => visible.includes(column.id))], [availableColumns, visible]);
     const openedJob = openedJobId === null ? null : rows.find(row => row.kind === "job" && row.id === openedJobId) || null;
 
     useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
@@ -216,7 +219,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     return <div className="space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="inline-flex w-fit rounded-xl border border-zinc-200 bg-white p-1">
-                {(["current", "potential", "past"] as Bucket[]).map(item => <button key={item} onClick={() => setBucket(item)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold capitalize ${bucket === item ? "bg-zinc-950 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}>{item}</button>)}
+                {(["current", ...(canManageDrafts ? ["potential"] : []), "past"] as Bucket[]).map(item => <button key={item} onClick={() => setBucket(item)} className={`min-h-11 rounded-lg px-4 text-sm font-semibold ${bucket === item ? "bg-zinc-950 text-white" : "text-zinc-600 hover:bg-zinc-100"}`}>{item === "potential" ? "Job Drafts" : item[0].toUpperCase() + item.slice(1)}</button>)}
             </div>
             <div className="flex flex-1 flex-wrap justify-end gap-2">
                 <input type="search" value={q} onChange={event => setQ(event.target.value)} placeholder="Search jobs, customers, addresses" className="min-h-11 min-w-[260px] flex-1 rounded-xl border border-zinc-300 bg-white px-4 text-sm xl:max-w-md" />
@@ -229,10 +232,10 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3">
             <select defaultValue="" onChange={event => applyView(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Saved views</option>{views.map(view => <option key={view.name}>{view.name}</option>)}</select>
             <button onClick={saveView} className="min-h-11 rounded-xl border border-zinc-300 px-4 text-sm font-semibold">Save this view</button>
-            <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket} item${meta.total === 1 ? "" : "s"}`)}</span>
+            <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket === "potential" ? "job draft" : `${bucket} job`}${meta.total === 1 ? "" : "s"}`)}</span>
         </div>
 
-        {columnsOpen ? <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-3">{allColumns.map(column => <label key={column.id} className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm"><input type="checkbox" checked={visible.includes(column.id)} onChange={() => setVisible(current => current.includes(column.id) ? current.filter(key => key !== column.id) : [...current, column.id])} />{column.title}</label>)}</div> : null}
+        {columnsOpen ? <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-3">{availableColumns.map(column => <label key={column.id} className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm"><input type="checkbox" checked={visible.includes(column.id)} onChange={() => setVisible(current => current.includes(column.id) ? current.filter(key => key !== column.id) : [...current, column.id])} />{column.title}</label>)}</div> : null}
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button onClick={() => setError("")} className="ml-3 font-semibold underline">Dismiss</button></div> : null}
 
         <div ref={gridRef} className="min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
@@ -313,6 +316,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
                                     <div>{openedJob.service_address || "Service address not added"}</div>
                                 </div>
                             </section>
+                            {openedJob.project_manager_name || openedJob.project_manager_phone || openedJob.project_manager_email ? <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-950">Project Manager</h3><div className="mt-3 space-y-2 text-sm text-zinc-700"><div className="font-medium text-zinc-950">{openedJob.project_manager_name || "Not named"}</div>{openedJob.project_manager_company ? <div>{openedJob.project_manager_company}</div> : null}{openedJob.project_manager_phone ? <div><a className="font-semibold text-emerald-800" href={`tel:${openedJob.project_manager_phone}`}>Call</a> · <a className="font-semibold text-emerald-800" href={`sms:${openedJob.project_manager_phone}`}>Text</a> · {openedJob.project_manager_phone}</div> : null}{openedJob.project_manager_email ? <a className="break-all text-emerald-800" href={`mailto:${openedJob.project_manager_email}`}>{openedJob.project_manager_email}</a> : null}</div></section> : null}
                             <section className="grid grid-cols-2 gap-3">
                                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Hours</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("hours", openedJob)}</div></div>
                                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Updated</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("updated_at", openedJob)}</div></div>
@@ -325,11 +329,11 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
             </section>
         </div> : null}
 
-        {candidate ? <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setCandidate(null)}><aside onClick={event => event.stopPropagation()} className="h-full w-full max-w-lg overflow-y-auto bg-white p-6 shadow-2xl"><button onClick={() => setCandidate(null)} className="min-h-11 text-sm font-semibold text-zinc-600">← Back to potential work</button><div className="mt-6 text-xs font-semibold uppercase tracking-widest text-emerald-700">QuickBooks {candidate.source}</div><h2 className="mt-2 text-2xl font-semibold text-zinc-950">{candidate.title}</h2><p className="mt-2 text-zinc-600">{candidate.customer || "Customer not linked"}</p><div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-xl bg-zinc-100 p-4"><div className="text-xs text-zinc-500">Amount</div><div className="mt-1 font-semibold">{display("amount", candidate)}</div></div><div className="rounded-xl bg-zinc-100 p-4"><div className="text-xs text-zinc-500">Balance</div><div className="mt-1 font-semibold">{display("balance", candidate)}</div></div></div><div className="mt-8 grid gap-3"><button onClick={() => void reviewCandidate("create_job")} className="min-h-12 rounded-xl bg-zinc-950 px-4 font-semibold text-white">Create Job</button><button onClick={() => void reviewCandidate("link")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold">Link to Existing Job</button><button onClick={() => void reviewCandidate("dismiss")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold text-zinc-600">Dismiss</button></div></aside></div> : null}
+        {candidate ? <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setCandidate(null)}><aside onClick={event => event.stopPropagation()} className="h-full w-full max-w-lg overflow-y-auto bg-white p-6 shadow-2xl"><button onClick={() => setCandidate(null)} className="min-h-11 text-sm font-semibold text-zinc-600">← Back to Job Drafts</button><div className="mt-6 text-xs font-semibold uppercase tracking-widest text-emerald-700">Job Draft</div><h2 className="mt-2 text-2xl font-semibold text-zinc-950">{candidate.title}</h2><p className="mt-2 text-zinc-600">{candidate.customer || "Customer not linked"}</p><div className="mt-6 space-y-4 rounded-xl bg-zinc-50 p-4 text-sm text-zinc-700">{candidate.service_address ? <div><strong className="block text-zinc-950">Service address</strong>{candidate.service_address}</div> : null}{candidate.description ? <div><strong className="block text-zinc-950">Work description</strong><span className="whitespace-pre-wrap">{candidate.description}</span></div> : null}{candidate.project_manager_name || candidate.project_manager_phone ? <div><strong className="block text-zinc-950">Project Manager</strong>{[candidate.project_manager_name, candidate.project_manager_company, candidate.project_manager_phone].filter(Boolean).join(" · ")}</div> : null}</div><p className="mt-4 text-sm text-zinc-500">Review this operational draft, then publish it for the field team. Accounting stays in the office system.</p><div className="mt-8 grid gap-3"><button onClick={() => void reviewCandidate("create_job")} className="min-h-12 rounded-xl bg-zinc-950 px-4 font-semibold text-white">Publish Job</button><button onClick={() => void reviewCandidate("link")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold">Link to Existing Job</button><button onClick={() => void reviewCandidate("dismiss")} className="min-h-12 rounded-xl border border-zinc-300 px-4 font-semibold text-zinc-600">Archive Draft</button></div></aside></div> : null}
     </div>;
 }
 
 const root = document.getElementById("field-service-jobs-grid");
 if (root) {
-    createRoot(root).render(<FieldServiceGrid endpoint={root.dataset.endpoint || ""} updateTemplate={root.dataset.updateTemplate || ""} candidateTemplate={root.dataset.candidateTemplate || ""} canManage={root.dataset.canManage === "1"} />);
+    createRoot(root).render(<FieldServiceGrid endpoint={root.dataset.endpoint || ""} updateTemplate={root.dataset.updateTemplate || ""} candidateTemplate={root.dataset.candidateTemplate || ""} canManage={root.dataset.canManage === "1"} canManageDrafts={root.dataset.canManageDrafts === "1"} />);
 }

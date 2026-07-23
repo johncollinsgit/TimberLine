@@ -253,6 +253,7 @@ class QuickBooksFieldServiceImportService
                 'postal_code' => (string) data_get($transaction, 'BillAddr.PostalCode', ''),
             ]);
 
+            $serviceAddress = $this->serviceAddress($transaction, $profile);
             $existingDocument = FieldServiceFinancialDocument::query()
                 ->forTenantId((int) $tenant->id)
                 ->where('source', 'quickbooks')
@@ -296,6 +297,7 @@ class QuickBooksFieldServiceImportService
                             'job_link_status' => $job instanceof FieldServiceJob ? 'linked' : 'needs_review',
                             'job_link_reason' => $jobResolution['reason'],
                             'job_evidence' => $evidence['reasons'],
+                            'service_address' => $serviceAddress,
                         ],
                     ],
                 ]
@@ -566,7 +568,7 @@ class QuickBooksFieldServiceImportService
         $externalId = trim((string) ($transaction['Id'] ?? ''));
         $documentNumber = trim((string) ($transaction['DocNumber'] ?? $externalId));
         $customerName = trim((string) data_get($transaction, 'CustomerRef.name', '')) ?: trim($profile->first_name.' '.$profile->last_name);
-        $ship = (array) ($transaction['ShipAddr'] ?? $transaction['BillAddr'] ?? []);
+        $ship = $this->serviceAddress($transaction, $profile);
 
         $job = FieldServiceJob::query()->firstOrNew(
             [
@@ -576,18 +578,24 @@ class QuickBooksFieldServiceImportService
             ]
         );
         $created = ! $job->exists;
+        if ($created) {
+            return ['job' => null, 'created' => false, 'updated' => false, 'reason' => 'job_draft'];
+        }
+        $legacyGeneratedTitle = Str::limit(Str::headline($type).' '.$documentNumber.' · '.$customerName, 255, '');
+        $titleWasGenerated = hash_equals($legacyGeneratedTitle, (string) $job->title);
         $job->forceFill([
             'marketing_profile_id' => (int) $profile->id,
-            'title' => Str::limit(Str::headline($type).' '.$documentNumber.' · '.$customerName, 255, ''),
+            'title' => $titleWasGenerated ? Str::limit($customerName.' job', 255, '') : $job->title,
             'status' => $type === 'estimate' ? 'quoted' : 'open',
             'customer_name' => $customerName,
             'customer_email' => $profile->email,
             'customer_phone' => $profile->phone,
-            'service_address_line_1' => trim((string) ($ship['Line1'] ?? '')) ?: null,
-            'service_address_line_2' => trim((string) ($ship['Line2'] ?? '')) ?: null,
-            'service_city' => trim((string) ($ship['City'] ?? '')) ?: null,
-            'service_state' => trim((string) ($ship['CountrySubDivisionCode'] ?? '')) ?: null,
-            'service_postal_code' => trim((string) ($ship['PostalCode'] ?? '')) ?: null,
+            'service_address_line_1' => $ship['line_1'],
+            'service_address_line_2' => $ship['line_2'],
+            'service_city' => $ship['city'],
+            'service_state' => $ship['state'],
+            'service_postal_code' => $ship['postal_code'],
+            'service_country' => $ship['country'],
             'description' => $this->primaryWorkDescription($transaction),
             'metadata' => [
                 'quickbooks' => [
@@ -602,7 +610,26 @@ class QuickBooksFieldServiceImportService
             ],
         ])->save();
 
-        return ['job' => $job, 'created' => $created, 'updated' => ! $created, 'reason' => implode(',', $evidence['reasons'])];
+        return ['job' => $job, 'created' => false, 'updated' => true, 'reason' => implode(',', $evidence['reasons'])];
+    }
+
+    /** @param array<string,mixed> $transaction
+     * @return array{line_1:?string,line_2:?string,city:?string,state:?string,postal_code:?string,country:?string}
+     */
+    protected function serviceAddress(array $transaction, MarketingProfile $profile): array
+    {
+        $shipping = (array) ($transaction['ShipAddr'] ?? []);
+        $billing = (array) ($transaction['BillAddr'] ?? []);
+        $source = filled($shipping['Line1'] ?? null) ? $shipping : (filled($billing['Line1'] ?? null) ? $billing : []);
+
+        return [
+            'line_1' => trim((string) ($source['Line1'] ?? $profile->address_line_1)) ?: null,
+            'line_2' => trim((string) ($source['Line2'] ?? $profile->address_line_2)) ?: null,
+            'city' => trim((string) ($source['City'] ?? $profile->city)) ?: null,
+            'state' => trim((string) ($source['CountrySubDivisionCode'] ?? $profile->state)) ?: null,
+            'postal_code' => trim((string) ($source['PostalCode'] ?? $profile->postal_code)) ?: null,
+            'country' => trim((string) ($source['Country'] ?? $profile->country)) ?: null,
+        ];
     }
 
     /** @param array<string,mixed> $transaction */
