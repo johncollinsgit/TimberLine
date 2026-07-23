@@ -101,7 +101,7 @@ class AgreementStripeCheckoutService
         }
 
         $response = $this->stripeRequest()->withHeaders([
-            'Idempotency-Key' => 'agreement-order-'.(int) $order->id.'-v1',
+            'Idempotency-Key' => $this->idempotencyKey($order, $payload),
         ])->post($this->apiBase().'/v1/checkout/sessions', $payload);
         $json = is_array($response->json()) ? $response->json() : [];
         if ($response->failed()) {
@@ -123,6 +123,15 @@ class AgreementStripeCheckoutService
         $this->audit->record((int) $order->tenant_id, null, 'tenant_billing.agreement_checkout.create', status: 'success', targetType: 'tenant_billing_order', targetId: $order->id, context: ['stripe_checkout_session_id' => $sessionId, 'mode' => $mode]);
 
         return ['ok' => true, 'url' => $url, 'session_id' => $sessionId, 'message' => null];
+    }
+
+    /** @param array<string, bool|int|string> $payload */
+    protected function idempotencyKey(TenantBillingOrder $order, array $payload): string
+    {
+        ksort($payload);
+        $fingerprint = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+
+        return 'agreement-order-'.(int) $order->id.'-checkout-'.substr($fingerprint, 0, 32);
     }
 
     public function availableFor(TenantBillingOrder $order): bool
