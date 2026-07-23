@@ -607,6 +607,10 @@ Route::get('/mobile/authorize', \App\Http\Controllers\Mobile\EverbranchMobileAut
     ->middleware('throttle:20,1')
     ->name('mobile.everbranch.authorize');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
+Route::get('/workspace-brand-assets/{profile}/{slot}', [TenantBrandController::class, 'asset'])
+    ->whereNumber('profile')
+    ->whereIn('slot', ['light_logo', 'dark_logo', 'icon'])
+    ->name('tenant.brand.assets.show');
 
 Route::prefix('signup/classes/{tenant:slug}')
     ->name('public.classes.')

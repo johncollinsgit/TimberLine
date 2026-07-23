@@ -181,7 +181,10 @@ class QuickBooksFieldServiceSyncService
     /** @param array<string,mixed> $transaction */
     protected function transactionRow(array $transaction, string $type): array
     {
-        $ship = (array) ($transaction['ShipAddr'] ?? $transaction['BillAddr'] ?? []);
+        $ship = (array) ($transaction['ShipAddr'] ?? []);
+        if (blank($ship['Line1'] ?? null)) {
+            $ship = (array) ($transaction['BillAddr'] ?? []);
+        }
         $customer = (array) ($transaction['CustomerRef'] ?? []);
         $docNumber = (string) ($transaction['DocNumber'] ?? $transaction['Id'] ?? '');
         $lineDescriptions = collect((array) ($transaction['Line'] ?? []))

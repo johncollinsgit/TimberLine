@@ -173,6 +173,7 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['job' => [
             ...$this->summary($job, $readiness, $owner, (int) $user->id),
             'description' => $job->description,
+            'customer_email' => $job->customer_email,
             'customer_phone' => $job->customer_phone,
             'lock_box_code' => $job->lock_box_code,
             'address' => $this->addressPayload($job),
@@ -330,8 +331,8 @@ class EverbranchMobileFieldServiceController extends Controller
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless((int) $job->tenant_id === (int) $tenantModel->id, 404);
-        $validated = $request->validate(['action' => ['required', 'in:start,block,resume,complete,cancel,reopen'], 'reason' => ['nullable', 'string', 'max:500', 'required_if:action,block']]);
-        $managerAction = in_array($validated['action'], ['cancel', 'reopen'], true);
+        $validated = $request->validate(['action' => ['required', 'in:start,block,resume,complete,cancel,archive,reopen'], 'reason' => ['nullable', 'string', 'max:500', 'required_if:action,block']]);
+        $managerAction = in_array($validated['action'], ['cancel', 'archive', 'reopen'], true);
         abort_unless($managerAction ? $access->canManageJobs($user, $tenantModel) : $access->canUpdateProgress($user, $tenantModel, $job), 403);
         $result = $transitions->transition($tenantModel, $job, $user, $validated['action'], $validated['reason'] ?? null);
 

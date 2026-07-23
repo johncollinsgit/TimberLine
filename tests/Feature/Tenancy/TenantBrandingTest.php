@@ -4,6 +4,8 @@ use App\Models\Tenant;
 use App\Models\TenantBrandProfile;
 use App\Models\User;
 use App\Services\Tenancy\TenantBrandProfileService;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 function brandTenant(string $name, string $slug): Tenant
@@ -50,6 +52,27 @@ test('tenant owner can open custom workspace controls and the workspace shell re
         ->assertSeeText('Collins launch kit')
         ->assertSee('data-tenant-theme="collins-upstate-electric"', false)
         ->assertSee('Customize workspace', false);
+});
+
+test('uploaded brand marks are served through the application with an opaque hero treatment', function (): void {
+    Storage::fake('public');
+    $tenant = brandTenant('Uploaded Brand', 'uploaded-brand');
+    $user = brandUser($tenant, 'owner');
+    $profile = app(TenantBrandProfileService::class)->ensureForTenant($tenant, $user);
+    app(TenantBrandProfileService::class)->storeLogo(
+        $profile,
+        UploadedFile::fake()->image('solid-logo.png', 900, 300),
+        'light_logo',
+        $user,
+    );
+
+    $presentation = app(TenantBrandProfileService::class)->presentationFor($tenant);
+    expect($presentation['light_logo_url'])->toContain('/workspace-brand-assets/'.$profile->id.'/light_logo');
+    $this->get($presentation['light_logo_url'])->assertOk()->assertHeader('x-content-type-options', 'nosniff');
+    $this->actingAs($user)->get('http://uploaded-brand.theeverbranch.com/workspace/brand')
+        ->assertOk()
+        ->assertSee('tenant-brand-editor__hero-mark', false)
+        ->assertSee('background:#061d42', false);
 });
 
 test('manager membership cannot customize the workspace', function (): void {

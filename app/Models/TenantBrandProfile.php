@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 
 class TenantBrandProfile extends Model
 {
@@ -59,7 +58,7 @@ class TenantBrandProfile extends Model
         }
 
         return $source === 'upload'
-            ? Storage::disk('public')->url($path)
+            ? route('tenant.brand.assets.show', ['profile' => $this->getKey(), 'slot' => $asset])
             : asset(ltrim($path, '/'));
     }
 }

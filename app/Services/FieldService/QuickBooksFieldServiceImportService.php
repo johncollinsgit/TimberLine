@@ -568,8 +568,6 @@ class QuickBooksFieldServiceImportService
         $externalId = trim((string) ($transaction['Id'] ?? ''));
         $documentNumber = trim((string) ($transaction['DocNumber'] ?? $externalId));
         $customerName = trim((string) data_get($transaction, 'CustomerRef.name', '')) ?: trim($profile->first_name.' '.$profile->last_name);
-        $ship = $this->serviceAddress($transaction, $profile);
-
         $job = FieldServiceJob::query()->firstOrNew(
             [
                 'tenant_id' => (int) $tenant->id,
@@ -581,6 +579,7 @@ class QuickBooksFieldServiceImportService
         if ($created) {
             return ['job' => null, 'created' => false, 'updated' => false, 'reason' => 'job_draft'];
         }
+        $ship = $this->serviceAddress($transaction, $profile, $job);
         $legacyGeneratedTitle = Str::limit(Str::headline($type).' '.$documentNumber.' · '.$customerName, 255, '');
         $titleWasGenerated = $type === 'invoice' && hash_equals($legacyGeneratedTitle, (string) $job->title);
         $job->forceFill([
@@ -603,6 +602,7 @@ class QuickBooksFieldServiceImportService
                     'external_id' => $externalId,
                     'document_number' => $documentNumber,
                     'job_evidence' => $evidence['reasons'],
+                    'address_source' => $ship['source'],
                 ],
                 'pipeline_stage' => $type === 'estimate' ? 'quoted' : 'open',
                 'gross_revenue' => is_numeric($transaction['TotalAmt'] ?? null) ? (float) $transaction['TotalAmt'] : null,
@@ -613,22 +613,56 @@ class QuickBooksFieldServiceImportService
         return ['job' => $job, 'created' => false, 'updated' => true, 'reason' => implode(',', $evidence['reasons'])];
     }
 
-    /** @param array<string,mixed> $transaction
-     * @return array{line_1:?string,line_2:?string,city:?string,state:?string,postal_code:?string,country:?string}
+    /**
+     * @param  array<string,mixed>  $transaction
+     * @return array{line_1:?string,line_2:?string,city:?string,state:?string,postal_code:?string,country:?string,source:string}
      */
-    protected function serviceAddress(array $transaction, MarketingProfile $profile): array
+    protected function serviceAddress(array $transaction, MarketingProfile $profile, ?FieldServiceJob $job = null): array
     {
-        $shipping = (array) ($transaction['ShipAddr'] ?? []);
-        $billing = (array) ($transaction['BillAddr'] ?? []);
-        $source = filled($shipping['Line1'] ?? null) ? $shipping : (filled($billing['Line1'] ?? null) ? $billing : []);
+        $candidates = [
+            'quickbooks_ship_address' => (array) ($transaction['ShipAddr'] ?? []),
+        ];
+        if ($job?->exists && filled($job->service_address_line_1)) {
+            $candidates['existing_job_address'] = [
+                'Line1' => $job->service_address_line_1,
+                'Line2' => $job->service_address_line_2,
+                'City' => $job->service_city,
+                'CountrySubDivisionCode' => $job->service_state,
+                'PostalCode' => $job->service_postal_code,
+                'Country' => $job->service_country,
+            ];
+        }
+        $candidates['quickbooks_bill_address'] = (array) ($transaction['BillAddr'] ?? []);
+        $candidates['quickbooks_customer_address'] = [
+            'Line1' => $profile->address_line_1,
+            'Line2' => $profile->address_line_2,
+            'City' => $profile->city,
+            'CountrySubDivisionCode' => $profile->state,
+            'PostalCode' => $profile->postal_code,
+            'Country' => $profile->country,
+        ];
+
+        foreach ($candidates as $source => $address) {
+            $line1 = trim((string) ($address['Line1'] ?? ''));
+            if ($line1 === '') {
+                continue;
+            }
+
+            return [
+                'line_1' => $line1,
+                'line_2' => trim((string) ($address['Line2'] ?? '')) ?: null,
+                'city' => trim((string) ($address['City'] ?? '')) ?: null,
+                'state' => trim((string) ($address['CountrySubDivisionCode'] ?? '')) ?: null,
+                'postal_code' => trim((string) ($address['PostalCode'] ?? '')) ?: null,
+                'country' => trim((string) ($address['Country'] ?? '')) ?: null,
+                'source' => $source,
+            ];
+        }
 
         return [
-            'line_1' => trim((string) ($source['Line1'] ?? $profile->address_line_1)) ?: null,
-            'line_2' => trim((string) ($source['Line2'] ?? $profile->address_line_2)) ?: null,
-            'city' => trim((string) ($source['City'] ?? $profile->city)) ?: null,
-            'state' => trim((string) ($source['CountrySubDivisionCode'] ?? $profile->state)) ?: null,
-            'postal_code' => trim((string) ($source['PostalCode'] ?? $profile->postal_code)) ?: null,
-            'country' => trim((string) ($source['Country'] ?? $profile->country)) ?: null,
+            'line_1' => null, 'line_2' => null, 'city' => null,
+            'state' => null, 'postal_code' => null, 'country' => null,
+            'source' => 'missing',
         ];
     }
 

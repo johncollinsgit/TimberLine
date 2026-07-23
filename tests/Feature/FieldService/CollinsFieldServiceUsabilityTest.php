@@ -178,6 +178,10 @@ test('work 2 readiness and field transitions preserve manager and participant bo
     expect($job->fresh()->blocked_reason)->toBe('Waiting on utility disconnect');
 
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'archive'])
+        ->assertOk()->assertJsonPath('status', 'history');
+    expect($job->fresh()->archived_at)->not->toBeNull();
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'reopen'])->assertOk()->assertJsonPath('status', 'scheduled');
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'cancel'])->assertOk()->assertJsonPath('status', 'canceled');
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'reopen'])->assertOk()->assertJsonPath('status', 'scheduled');
 });

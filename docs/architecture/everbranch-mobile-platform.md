@@ -11,6 +11,9 @@
 ## Field Service Contract v4 / Work 2.0
 
 - Work 2.0 extends the existing Field Service aggregate. It does not add `WorkOrder`, `Appointment`, or a universal task table.
+- Native Work lists may reveal the manager-authorized `archive` transition with a left swipe. The server maps it to `history`, records a lifecycle note, and retains Reopen; clients must not implement archive as deletion or hide the server permission check.
+- Readiness remains server-computed, but clients present missing keys as field-specific setup actions rather than warnings. Managers write those fields through the existing job update endpoint; members receive the same tenant-scoped read model without elevated edit capability.
+- Job-site address import order is usable QuickBooks Ship To, existing confirmed job site, transaction Bill To, then imported customer address. Address fallback is separate from operational-evidence classification.
 - Bootstrap resolves one server-owned profile (`trades`, `professional`, `retail_production`, `generic`) from tenant blueprint metadata. Entitlement metadata controls `experience_version`; Collins is the first version-2 trades pilot.
 - Contract v4 adds profile labels/capabilities, viewer capabilities, readiness, typed destinations, My Day, guarded transitions, task ownership/completion, notification feed/unread state, and separate photo/document counts.
 - Mobile and web use the same readiness, access, lifecycle, and transition services. Clients display permissions but never grant them.
