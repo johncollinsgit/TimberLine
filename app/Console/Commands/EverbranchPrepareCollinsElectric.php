@@ -152,6 +152,19 @@ class EverbranchPrepareCollinsElectric extends Command
             $blueprint['blueprint_reviewed_by'] = (int) $user->id;
             $blueprint['blueprint_reviewed_at'] = now()->toIso8601String();
             $blueprintService->applyBlueprint($tenant, $profile->refresh(), $setupStatus->refresh(), $blueprint, 'production', true);
+            $commercialService->setTenantModuleEntitlement((int) $tenant->id, 'field_service', [
+                'availability_status' => 'available',
+                'enabled_status' => 'enabled',
+                'billing_status' => 'custom_contract',
+                'entitlement_source' => 'collins_electric_launch_partner',
+                'notes' => 'Collins Field Operations 2.3. All active members may read operational jobs; mutations remain role and assignment gated.',
+                'metadata' => [
+                    'launch_scope' => 'collins_electric',
+                    'experience_version' => 3,
+                    'member_job_visibility' => 'all_operational',
+                    'field_service_contract_version' => 7,
+                ],
+            ], (int) $user->id);
             $setupStatus = $setupStatus->refresh();
             $setupStatus->forceFill($setupStatusPayload)->save();
 

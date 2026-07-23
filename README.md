@@ -1,6 +1,6 @@
 # Modern Forestry Backstage
 
-## Current Everbranch Structure and Release State (2026-07-21)
+## Current Everbranch Structure and Release State (2026-07-22)
 
 Everbranch is a Laravel multi-workspace platform. The canonical production
 operator surface is `https://app.theeverbranch.com/landlord`; tenant workspaces
@@ -92,6 +92,16 @@ HTTP 200 reporting that exact release identifier.
 - QuickBooks private invoice notes are owner/admin-only. Operational customer memos and work-line descriptions may support team job context; team members remain blocked from financial reports, amounts, receivables, P&L wages, contract labor, price-book costs, billing, and integration controls.
 - Collins-specific ownership and execution rules live in `docs/collins-electric-access-and-quickbooks.md`. The iOS system picker copies user-selected iCloud/Shared Album photos into authenticated Everbranch assets; it does not crawl albums. SMS reminders remain disabled/not verified until provider readiness, tenant staff consent, quiet hours, opt-out, and delivery logs pass a smoke test.
 
+### Collins Field Operations 2.3 (2026-07-22)
+
+- Field Service contract v7 replaces employee-facing invoice/Potential language with owner/admin-only Job Drafts. QuickBooks remains immutable accounting evidence; the flow is QuickBooks → Job Draft → published job, with archive/restore and link-to-existing actions that never delete or rewrite the source document.
+- Job Draft payloads omit source type, document number, amount, balance, private note, and all other financial fields. Negative contracts cover member and manager bootstrap, generic Work, Search, Reporting, field-service lists/detail, and Documents.
+- Collins enables reusable entitlement metadata `member_job_visibility=all_operational`, so every active employee may browse current and past operational jobs. Job editing, lifecycle changes, and task completion remain assignment/role gated.
+- Jobs and drafts carry structured service addresses plus external project-manager contact fields. Employee job detail offers PM Call/Text, explicit Apple Maps and Google Maps destinations, and an idempotent Send to Office task action.
+- PDF drawings use authenticated tenant/job-scoped storage, a 25 MB limit, audit events, team visibility by default, and inline mobile preview. Team-visible means all authorized company employees can view the file; it does not mean the file is public.
+- Everbranch mobile 2.3.0 build 11 consumes the canonical tenant brand profile, including the Collins navy/white lockup, tagline, palette, and light/dark presentation. App Store metadata is prepared without uploading a build.
+- Deploy through protected `main`, verify `/up` and `/ready`, then run `php artisan field-service:normalize-job-drafts collins-electric` before the same command with `--apply`. Re-sync QuickBooks only while the existing connection remains explicitly authorized for read-only sync.
+
 ## Shared Dashboard Time Windows (2026-07-13)
 
 - Everbranch dashboard statistics use one server-owned range contract: `1d`, `1w`, `1m`, `30d`, and `ytd`.
@@ -112,10 +122,10 @@ HTTP 200 reporting that exact release identifier.
 
 ### Work 2.0 Collins pilot (2026-07-14)
 
-#### Field Operations v3 reusable upgrade (2026-07-21)
+#### Field Operations v7 reusable upgrade (2026-07-22)
 
 - Mobile bootstrap contract v3 supplies role-aware primary navigation. Managers receive Home, Work, Customers, Team, and More; field employees receive Home, Work, Clock In/Out, Messages, and Account. Entitlements, not tenant-name checks, control the reusable `time_tracking`, `team_communication`, `field_inventory`, `fleet`, `documents`, and `quickbooks` capabilities inside one Field Agent experience.
-- Field Service contract v5 divides Work into Current, Potential, and Past. Potential work is owner-reviewed QuickBooks estimates plus unlinked open-invoice candidates. The web Work surface uses Glide Data Grid with a frozen explicit `Open` control, single-click inline editing, search, sorting, saved personal views, visibility controls, and pagination. Clicking a non-editing part of a row does not open the job.
+- Field Service contract v7 divides Work into Current, owner/admin-only Job Drafts, and Past. QuickBooks documents seed operational drafts without exposing invoice terminology or financial fields; archive/restore is separate from immutable accounting evidence. The web Work surface uses Glide Data Grid with a frozen explicit `Open` control, single-click inline editing, search, sorting, saved personal views, visibility controls, and pagination.
 - The shared Field Service resource workspace manages warehouse stock, reorder levels, unit costs, work-van stock, job/van/employee deployments, job material consumption, and a tenant-scoped movement history. Managers perform resource mutations; members see only deployments for jobs they are allowed to access.
 - The tenant Customers destination searches canonical `MarketingProfile` records, including profiles imported from QuickBooks. Customer detail offers consent-aware Everbranch texting and a direct `mailto:` action; device email is not recorded as an Everbranch delivery. Wholesale applications remain isolated in the configured wholesale workspace.
 - The server-authoritative clock permits one active session per tenant employee and supports idempotent start, break, resume, and stop actions. Manual entries remain valid and approved time is the payroll source. Job summaries include permission-filtered hours, active time, vehicles, material readiness, source context, and owner-only financial context.

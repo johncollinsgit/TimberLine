@@ -13,6 +13,7 @@ use App\Models\QuickBooksSourceRecord;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
+use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\QuickBooksDiscoveryAuditService;
 use App\Services\FieldService\QuickBooksFieldServiceImportService;
 use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
@@ -217,34 +218,28 @@ test('quickbooks api sync imports collins electric customers jobs items and reco
     $this->artisan('field-service:sync-quickbooks', ['--tenant' => $tenant->slug])->assertSuccessful();
 
     expect(MarketingProfile::query()->where('tenant_id', $tenant->id)->where('normalized_email', 'bob@example.com')->exists())->toBeTrue()
-        ->and(FieldServiceJob::query()->where('tenant_id', $tenant->id)->where('external_source', 'quickbooks')->count())->toBe(2)
+        ->and(FieldServiceJob::query()->where('tenant_id', $tenant->id)->where('external_source', 'quickbooks')->count())->toBe(0)
         ->and(FieldServiceMaterial::query()->where('tenant_id', $tenant->id)->where('external_source', 'quickbooks')->count())->toBe(0)
         ->and(FieldServicePriceBookItem::query()->where('tenant_id', $tenant->id)->count())->toBe(1)
         ->and(FieldServiceFinancialDocument::query()->where('tenant_id', $tenant->id)->count())->toBe(2)
         ->and(FieldServiceFinancialDocumentLine::query()->where('tenant_id', $tenant->id)->count())->toBe(2)
-        ->and(FieldServiceJobNote::query()->where('tenant_id', $tenant->id)->count())->toBe(4);
-
-    $invoiceJob = FieldServiceJob::query()->where('tenant_id', $tenant->id)->where('external_id', 'quickbooks:invoice:INV-1')->firstOrFail();
-    expect($invoiceJob->service_address_line_1)->toBe('88 Breaker Ave')
-        ->and(data_get($invoiceJob->metadata, 'gross_revenue'))->toBe(1250)
-        ->and(FieldServiceJob::query()->where('tenant_id', $tenant->id)->where('external_id', 'quickbooks:estimate:EST-1')->exists())->toBeTrue();
+        ->and(FieldServiceJobNote::query()->where('tenant_id', $tenant->id)->count())->toBe(0);
 
     $owner = User::factory()->tenantAdmin()->create();
     $member = User::factory()->create(['role' => 'member', 'email_verified_at' => now()]);
     $owner->tenants()->attach($tenant->id, ['role' => 'admin']);
     $member->tenants()->attach($tenant->id, ['role' => 'member']);
-    $invoiceJob->participants()->attach($member->id, [
-        'tenant_id' => $tenant->id,
-        'role' => 'member',
-        'following' => true,
-    ]);
+    $drafts = app(FieldServiceWorkCandidateService::class)->pending($tenant);
+    expect($drafts)->toHaveCount(2)
+        ->and($drafts->firstWhere('external_id', 'INV-1')?->service_address_line_1)->toBe('88 Breaker Ave')
+        ->and($drafts->firstWhere('external_id', 'EST-1')?->service_address_line_1)->toBe('90 Breaker Ave');
+    $invoiceDraft = $drafts->firstWhere('external_id', 'INV-1');
+    $invoiceDraft->forceFill(['title' => 'Outdoor disconnect replacement', 'participant_user_ids' => [$member->id]])->save();
+    $invoiceJob = app(FieldServiceWorkCandidateService::class)->publish($tenant, $owner, $invoiceDraft);
     $search = app(FieldServiceSearchProvider::class);
 
-    expect(FieldServiceJobNote::query()
-        ->where('tenant_id', $tenant->id)
-        ->where('metadata->note_type', 'private_note')
-        ->where('metadata->visibility', 'owner')
-        ->exists())->toBeTrue()
+    expect($invoiceJob->service_address_line_1)->toBe('88 Breaker Ave')
+        ->and($invoiceJob->participants()->whereKey($member->id)->exists())->toBeTrue()
         ->and($search->search('panel labeling', ['tenant_id' => $tenant->id, 'user' => $owner]))->not->toBeEmpty()
         ->and($search->search('panel labeling', ['tenant_id' => $tenant->id, 'user' => $member]))->toBeEmpty()
         ->and($search->search('outdoor disconnect', ['tenant_id' => $tenant->id, 'user' => $member]))->not->toBeEmpty();

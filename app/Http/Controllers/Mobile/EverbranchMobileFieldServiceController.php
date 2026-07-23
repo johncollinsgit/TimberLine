@@ -61,17 +61,17 @@ class EverbranchMobileFieldServiceController extends Controller
         $filter = (string) ($validated['filter'] ?? ($access->canViewAllJobs($user, $tenant) ? 'active' : 'mine'));
         $owner = $financialAccess->allows($user, $tenant);
         if ($bucket === 'potential') {
-            abort_unless($access->canManageJobs($user, $tenant), 403);
+            abort_unless($owner, 403);
 
             return response()->json([
-                'contract_version' => 6, 'bucket' => 'potential', 'view' => 'list',
-                'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
-                'candidates' => $candidates->pending($tenant)->map(fn ($candidate): array => [
-                    'id' => (int) $candidate->id, 'title' => $candidate->title, 'customer' => $candidate->customer_name,
-                    'source' => $candidate->source, 'source_type' => $candidate->source_type,
-                    'amount' => $candidate->amount === null ? null : (float) $candidate->amount,
-                    'balance' => $candidate->balance === null ? null : (float) $candidate->balance,
-                    'description' => $candidate->description, 'updated_at' => $candidate->updated_at?->toIso8601String(),
+                'contract_version' => 7, 'bucket' => 'potential', 'view' => 'list',
+                'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => [...$access->capabilities($user, $tenant), 'manage_job_drafts' => $owner]],
+                'job_drafts' => $candidates->pending($tenant)->map(fn ($candidate): array => [
+                    'id' => (int) $candidate->id, 'title' => $candidate->title,
+                    'customer' => ['name' => $candidate->customer_name, 'email' => $candidate->customer_email, 'phone' => $candidate->customer_phone],
+                    'description' => $candidate->description,
+                    'address' => ['line_1' => $candidate->service_address_line_1, 'line_2' => $candidate->service_address_line_2, 'city' => $candidate->service_city, 'state' => $candidate->service_state, 'postal_code' => $candidate->service_postal_code, 'country' => $candidate->service_country],
+                    'updated_at' => $candidate->updated_at?->toIso8601String(),
                 ])->values(),
                 'counts' => $this->counts($tenant, $user, $access),
             ]);
@@ -92,9 +92,11 @@ class EverbranchMobileFieldServiceController extends Controller
             ->withSum(['timeEntries as manual_minutes' => fn ($entries) => $entries->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
             ->withSum(['timeEntries as viewer_manual_minutes' => fn ($entries) => $entries->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
             ->withSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds')
-            ->withSum(['timeSessions as viewer_timer_seconds' => fn ($sessions) => $sessions->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_seconds')
-            ->withSum('financialDocuments as financial_total', 'total_amount')
-            ->withSum('financialDocuments as financial_balance', 'balance');
+            ->withSum(['timeSessions as viewer_timer_seconds' => fn ($sessions) => $sessions->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
+        if ($owner) {
+            $query->withSum('financialDocuments as financial_total', 'total_amount')
+                ->withSum('financialDocuments as financial_balance', 'balance');
+        }
         $access->scopeVisibleJobs($query, $user, $tenant);
         if ($bucket === 'past') {
             $query->whereIn('operational_status', ['complete', 'canceled', 'history']);
@@ -117,8 +119,8 @@ class EverbranchMobileFieldServiceController extends Controller
                 ->orderByDesc('last_financial_activity_at')->orderByDesc('updated_at')->limit(50)->get();
 
             return response()->json([
-                'contract_version' => 6, 'profile' => $profiles->forTenant($tenant),
-                'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
+                'contract_version' => 7, 'profile' => $profiles->forTenant($tenant),
+                'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => [...$access->capabilities($user, $tenant), 'manage_job_drafts' => $owner]],
                 'view' => 'calendar', 'filter' => $filter, 'month' => $month->format('Y-m'),
                 'days' => $scheduled->groupBy(fn (FieldServiceJob $job): string => $job->scheduled_for?->toDateString() ?? '')
                     ->map(fn ($jobs) => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values())->all(),
@@ -134,8 +136,8 @@ class EverbranchMobileFieldServiceController extends Controller
         $jobs = $page->getCollection();
 
         return response()->json([
-            'contract_version' => 6, 'profile' => $profiles->forTenant($tenant), 'bucket' => $bucket,
-            'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => $access->capabilities($user, $tenant)],
+            'contract_version' => 7, 'profile' => $profiles->forTenant($tenant), 'bucket' => $bucket,
+            'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => [...$access->capabilities($user, $tenant), 'manage_job_drafts' => $owner]],
             'view' => 'list', 'filter' => $filter,
             'jobs' => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values(),
             'next_cursor' => $page->nextCursor()?->encode(),
@@ -173,7 +175,8 @@ class EverbranchMobileFieldServiceController extends Controller
             'description' => $job->description,
             'customer_phone' => $job->customer_phone,
             'lock_box_code' => $job->lock_box_code,
-            'address' => trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_address_line_2, $job->service_city, $job->service_state, $job->service_postal_code]))),
+            'address' => $this->addressPayload($job),
+            'project_manager' => $this->projectManagerPayload($job),
             'lead' => $job->assignedUser ? ['id' => (int) $job->assignedUser->id, 'name' => (string) $job->assignedUser->name] : null,
             'participants' => $job->participants->map(fn (User $member): array => ['id' => (int) $member->id, 'name' => (string) $member->name, 'role' => (string) $member->pivot->role])->values(),
             'scheduled_end_at' => $job->scheduled_end_at?->toIso8601String(),
@@ -251,7 +254,7 @@ class EverbranchMobileFieldServiceController extends Controller
             ->cursorPaginate((int) ($validated['limit'] ?? 30), ['*'], 'cursor', $validated['cursor'] ?? null);
 
         return response()->json([
-            'contract_version' => 6,
+            'contract_version' => 7,
             'scope' => 'assigned_to_me',
             'tasks' => $page->getCollection()->map(fn (FieldServiceTask $task): array => [
                 ...$assignments->payload($task),
@@ -270,6 +273,8 @@ class EverbranchMobileFieldServiceController extends Controller
         $validated = $request->validate([
             'customer_id' => ['nullable', 'integer'], 'customer_name' => ['required_without:customer_id', 'nullable', 'string', 'max:255'],
             'customer_email' => ['nullable', 'email', 'max:255'], 'customer_phone' => ['nullable', 'string', 'max:80'],
+            'project_manager_name' => ['nullable', 'string', 'max:255'], 'project_manager_company' => ['nullable', 'string', 'max:255'],
+            'project_manager_phone' => ['nullable', 'string', 'max:80'], 'project_manager_email' => ['nullable', 'email', 'max:255'],
             'title' => ['required', 'string', 'max:255'], 'description' => ['nullable', 'string', 'max:5000'],
             'priority' => ['nullable', 'in:low,normal,high,urgent'], 'scheduled_for' => ['nullable', 'date'], 'scheduled_end_at' => ['nullable', 'date', 'after_or_equal:scheduled_for'],
             'service_address_line_1' => ['nullable', 'string', 'max:255'], 'service_address_line_2' => ['nullable', 'string', 'max:255'],
@@ -301,6 +306,8 @@ class EverbranchMobileFieldServiceController extends Controller
             'title' => $validated['title'], 'status' => 'open', 'status_source' => 'system', 'priority' => $validated['priority'] ?? 'normal',
             'customer_name' => trim(implode(' ', array_filter([$profile->first_name, $profile->last_name]))) ?: ($validated['customer_name'] ?? null),
             'customer_email' => $validated['customer_email'] ?? $profile->email, 'customer_phone' => $validated['customer_phone'] ?? $profile->phone,
+            'project_manager_name' => $validated['project_manager_name'] ?? null, 'project_manager_company' => $validated['project_manager_company'] ?? null,
+            'project_manager_phone' => $validated['project_manager_phone'] ?? null, 'project_manager_email' => $validated['project_manager_email'] ?? null,
             'description' => $validated['description'] ?? null, 'lock_box_code' => $validated['lock_box_code'] ?? null,
             'service_address_line_1' => $validated['service_address_line_1'] ?? null, 'service_address_line_2' => $validated['service_address_line_2'] ?? null,
             'service_city' => $validated['service_city'] ?? null, 'service_state' => $validated['service_state'] ?? null,
@@ -374,6 +381,17 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'photos' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
     }
 
+    public function uploadFiles(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        $request->validate(['files' => ['required', 'array', 'min:1', 'max:20'], 'files.*' => ['required', 'file', 'mimetypes:application/pdf', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
+        $created = collect($request->file('files', []))->map(fn ($file) => $assets->storeUpload($tenantModel, $user, $file, [(int) $job->id], 'team', $request->string('caption')->toString(), ['drawing', 'pdf']));
+
+        return response()->json(['ok' => true, 'files' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
+    }
+
     public function storeTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications, FieldServiceTaskAssignmentService $assignments): JsonResponse
     {
         $tenantModel = $this->tenant($request);
@@ -388,8 +406,9 @@ class EverbranchMobileFieldServiceController extends Controller
             ? (array) $validated['assignee_ids']
             : array_filter([$validated['assigned_user_id'] ?? null]);
         $assignedIds = $assignments->tenantUserIds($tenantModel, $requestedIds);
-        if (! $access->canManageJobs($user, $tenantModel) && $assignedIds->contains(fn (int $id): bool => $id !== (int) $user->id)) {
-            abort(403, 'Team members can only assign new tasks to themselves.');
+        if (! $access->canManageJobs($user, $tenantModel)) {
+            $officeIds = $this->officeRecipients($tenantModel)->pluck('id')->map(fn ($id): int => (int) $id);
+            abort_if($assignedIds->contains(fn (int $id): bool => $id !== (int) $user->id && ! $officeIds->contains($id)), 403, 'Team members can create tasks for themselves or send them to the office.');
         }
         $task = FieldServiceTask::query()->create([
             'tenant_id' => (int) $tenantModel->id, 'field_service_job_id' => (int) $job->id,
@@ -518,6 +537,31 @@ class EverbranchMobileFieldServiceController extends Controller
         ]);
     }
 
+    public function sendTaskToOffice(Request $request, string $tenant, FieldServiceJob $job, FieldServiceTask $task, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications, FieldServiceTaskAssignmentService $assignments): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id && (int) $task->tenant_id === (int) $tenantModel->id && (int) $task->field_service_job_id === (int) $job->id, 404);
+        $validated = $request->validate(['office_user_id' => ['required', 'integer'], 'note' => ['nullable', 'string', 'max:2000'], 'idempotency_key' => ['nullable', 'string', 'max:120']]);
+        $idempotencyKey = trim((string) ($request->header('Idempotency-Key') ?: ($validated['idempotency_key'] ?? '')));
+        abort_if($idempotencyKey === '', 422, 'An Idempotency-Key header is required.');
+        $officeIds = $this->officeRecipients($tenantModel)->pluck('id')->map(fn ($id): int => (int) $id);
+        abort_unless($officeIds->contains((int) $validated['office_user_id']), 422, 'Choose an active owner, admin, or manager.');
+        $existing = FieldServiceTaskEvent::query()->forTenantId((int) $tenantModel->id)->where('idempotency_key', $idempotencyKey)->first();
+        if ($existing) {
+            abort_unless((int) $existing->field_service_task_id === (int) $task->id && (int) $existing->actor_user_id === (int) $user->id, 403);
+
+            return response()->json(['ok' => true, 'replayed' => true, 'task' => $assignments->payload($task->fresh()), 'event_id' => (int) $existing->id]);
+        }
+        abort_unless($access->canUpdateTask($user, $tenantModel, $job, $task), 403);
+        $result = $assignments->handoff($task, $job, $tenantModel, $user, [(int) $validated['office_user_id']], $validated['note'] ?? null, $idempotencyKey);
+        if (! $result['replayed']) {
+            $notifications->notifyJobEvent($job, $user, 'task_handoff', 'Sent to office: '.$task->title, 'task-office:'.$result['event']->id, [(int) $validated['office_user_id']]);
+        }
+
+        return response()->json(['ok' => true, 'replayed' => (bool) $result['replayed'], 'task' => $assignments->payload($result['task']), 'event_id' => (int) $result['event']->id]);
+    }
+
     public function updateJob(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications): JsonResponse
     {
         $tenantModel = $this->tenant($request);
@@ -527,6 +571,8 @@ class EverbranchMobileFieldServiceController extends Controller
             'title' => ['sometimes', 'string', 'max:255'], 'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'customer_name' => ['sometimes', 'nullable', 'string', 'max:255'], 'customer_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'customer_phone' => ['sometimes', 'nullable', 'string', 'max:80'], 'lock_box_code' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'project_manager_name' => ['sometimes', 'nullable', 'string', 'max:255'], 'project_manager_company' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'project_manager_phone' => ['sometimes', 'nullable', 'string', 'max:80'], 'project_manager_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'service_address_line_1' => ['sometimes', 'nullable', 'string', 'max:255'], 'service_address_line_2' => ['sometimes', 'nullable', 'string', 'max:255'],
             'service_city' => ['sometimes', 'nullable', 'string', 'max:120'], 'service_state' => ['sometimes', 'nullable', 'string', 'max:80'],
             'service_postal_code' => ['sometimes', 'nullable', 'string', 'max:40'], 'service_country' => ['sometimes', 'nullable', 'string', 'max:80'],
@@ -589,7 +635,11 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
 
-        return response()->json(['members' => $tenant->users()->orderBy('name')->get(['users.id', 'users.name', 'users.email'])->map(fn (User $user): array => ['id' => (int) $user->id, 'name' => $user->name, 'email' => $user->email])->values()]);
+        return response()->json(['members' => $tenant->users()->wherePivot('membership_active', true)->orderBy('name')->get(['users.id', 'users.name', 'users.email'])->map(function (User $user): array {
+            $role = strtolower((string) $user->pivot?->role);
+
+            return ['id' => (int) $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $role, 'office_handoff_recipient' => in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)];
+        })->values()]);
     }
 
     public function preferences(Request $request): JsonResponse
@@ -730,7 +780,8 @@ class EverbranchMobileFieldServiceController extends Controller
             'status' => (string) ($job->operational_status ?: $job->status), 'priority' => (string) ($job->priority ?: 'normal'),
             'scheduled_for' => $job->scheduled_for?->toIso8601String(), 'scheduled_end_at' => $job->scheduled_end_at?->toIso8601String(),
             'last_activity_at' => $job->last_financial_activity_at?->toIso8601String() ?: $job->updated_at?->toIso8601String(),
-            'address' => trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_city, $job->service_state]))),
+            'address' => $this->addressPayload($job),
+            'project_manager' => $this->projectManagerPayload($job),
             'lead' => $job->assignedUser?->name, 'participants' => $job->participants->pluck('name')->values(),
             'vehicles' => $job->relationLoaded('vehicles') ? $job->vehicles->map(fn ($vehicle): array => ['id' => (int) $vehicle->id, 'name' => $vehicle->name, 'identifier' => $vehicle->identifier])->values() : [],
             'hours' => ['total' => round(($owner ? $allSeconds : $viewerSeconds) / 3600, 2), 'running' => round(($owner ? $liveSeconds : $viewerLiveSeconds) / 3600, 2), 'running_timer_count' => $owner ? (int) ($job->running_timers_count ?? 0) : $activeSessions->where('user_id', $viewerId)->count()],
@@ -748,6 +799,26 @@ class EverbranchMobileFieldServiceController extends Controller
     protected function assetPayload(WorkspaceAsset $asset, Tenant $tenant): array
     {
         return ['id' => (int) $asset->id, 'name' => $asset->file_name, 'mime_type' => $asset->mime_type, 'caption' => $asset->caption, 'captured_at' => $asset->captured_at?->toIso8601String(), 'url' => route('mobile.v1.workspace.field-service.assets.show', ['tenant' => $tenant->slug, 'asset' => $asset->id], false)];
+    }
+
+    /** @return array<string,?string> */
+    protected function addressPayload(FieldServiceJob $job): array
+    {
+        $formatted = trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_address_line_2, $job->service_city, $job->service_state, $job->service_postal_code, $job->service_country])));
+
+        return ['line_1' => $job->service_address_line_1, 'line_2' => $job->service_address_line_2, 'city' => $job->service_city, 'state' => $job->service_state, 'postal_code' => $job->service_postal_code, 'country' => $job->service_country, 'formatted' => $formatted];
+    }
+
+    /** @return array<string,?string> */
+    protected function projectManagerPayload(FieldServiceJob $job): array
+    {
+        return ['name' => $job->project_manager_name, 'company' => $job->project_manager_company, 'phone' => $job->project_manager_phone, 'email' => $job->project_manager_email];
+    }
+
+    protected function officeRecipients(Tenant $tenant): \Illuminate\Support\Collection
+    {
+        return $tenant->users()->wherePivot('membership_active', true)->get(['users.id', 'users.name', 'users.email'])
+            ->filter(fn (User $member): bool => in_array(strtolower((string) $member->pivot?->role), ['owner', 'tenant_owner', 'admin', 'manager'], true))->values();
     }
 
     /** @return array<string,mixed> */

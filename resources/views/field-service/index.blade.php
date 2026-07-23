@@ -36,6 +36,7 @@
                     data-update-template="{{ route('field-service.jobs.update', ['job' => 0]) }}"
                     data-candidate-template="{{ route('field-service.work-candidates.review', ['candidate' => 0]) }}"
                     data-can-manage="{{ data_get($capabilities ?? [], 'manage_jobs') ? '1' : '0' }}"
+                    data-can-manage-drafts="{{ ($canManageJobDrafts ?? false) ? '1' : '0' }}"
                     class="min-h-[680px]"
                 >
                     <div class="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 text-sm text-zinc-600">Loading the work grid…</div>

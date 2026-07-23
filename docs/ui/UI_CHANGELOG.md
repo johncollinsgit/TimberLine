@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-07-22 - Collins Field Operations 2.3
+
+### What Changed
+- Replaced visible Potential/invoice review language with owner/admin-only Job Drafts and Publish Job, Link to Existing Job, Archive, Archived Drafts, and Restore actions.
+- Added structured job addresses with explicit Apple Maps and Google Maps links, an external Project Manager card with Call/Text/Email, and a clear Send to Office task action.
+- Renamed job Photos to Files and separated team-visible Drawings & PDFs from Photos, including system Files selection, 25 MB validation, authenticated inline preview, and matching Documents upload.
+- Applied canonical Collins Upstate Electric navy/white branding, tagline, color theme, and light/dark lockups to the existing Everbranch mobile Home and header.
+- Enabled all current and past operational jobs for active Collins employees while keeping editing and progress controls assignment-aware.
+
+### Guardrails
+- Employee and manager payloads do not contain QuickBooks document numbers, amounts, balances, receivables, private notes, or dollar-formatted financial evidence.
+- Team-visible PDFs are available to authorized employees inside Collins but are never public assets.
+- App Store metadata is staged for 2.3.0 build 11; no App Store or TestFlight upload is performed by this release preparation.
+
 ## 2026-07-21 - Field Operations Owner Metrics and Task Handoffs
 
 ### What Changed
