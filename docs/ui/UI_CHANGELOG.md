@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-07-23 — Workflow Builder and Step Library Redesign
+
+### What Changed
+
+- Replaced the oversized workflow-template card gallery with a compact three-pane browser: availability/provider filters, scannable template rows, and a trigger-to-action preview.
+- Reworked the workflow editor into a denser dotted canvas with compact step nodes, a stable setup inspector, and restrained status/actions.
+- Added a visible building-block rail and step picker for triggers, actions, flow controls, and utilities. Existing executable app steps open their current configuration fields; Filter, Delay, Paths, Loop, Formatter, Webhook, and Schedule are clearly labeled as upcoming engine capabilities.
+
+### Guardrails
+
+- Existing workflow templates, tenant connections, tests, publishing, scheduling, and module entitlement contracts remain canonical and unchanged.
+- The interface does not present unfinished flow controls or utilities as executable. Connector previews remain visibly distinct from currently available templates.
+- The redesign is shared and tenant-neutral; no Modern Forestry-specific language or behavior was introduced.
+
 ## 2026-07-23 — Reusable Accounting Command Center
 
 ### What Changed
