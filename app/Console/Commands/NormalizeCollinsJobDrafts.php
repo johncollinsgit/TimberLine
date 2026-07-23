@@ -12,7 +12,7 @@ class NormalizeCollinsJobDrafts extends Command
 {
     protected $signature = 'field-service:normalize-job-drafts {tenant=collins-electric} {--apply : Persist safe title and address normalization}';
 
-    protected $description = 'Normalize untouched QuickBooks-generated job titles and seed Job Draft address data.';
+    protected $description = 'Normalize untouched QuickBooks invoice-generated job titles and seed Job Draft address data.';
 
     public function handle(FieldServiceWorkCandidateService $drafts): int
     {
@@ -23,15 +23,20 @@ class NormalizeCollinsJobDrafts extends Command
 
         FieldServiceJob::query()->forTenantId((int) $tenant->id)
             ->where('external_source', 'quickbooks')
-            ->where(function ($query): void {
-                $query->whereRaw('lower(title) like ?', ['%invoice%'])->orWhereRaw('lower(title) like ?', ['%estimate%']);
-            })
+            ->whereRaw('lower(title) like ?', ['%invoice%'])
             ->with('financialDocuments:id,tenant_id,field_service_job_id,document_type,document_number,external_id,metadata')
             ->orderBy('id')->each(function (FieldServiceJob $job) use ($apply, &$changed): void {
                 $name = trim((string) $job->customer_name);
-                $document = $job->financialDocuments->first();
-                $legacyTitle = Str::limit(Str::headline((string) $document?->document_type).' '.((string) ($document?->document_number ?: $document?->external_id)).' · '.$name, 255, '');
-                if (! hash_equals($legacyTitle, (string) $job->title)) {
+                $document = $job->financialDocuments->first(function ($candidate) use ($job, $name): bool {
+                    if (strtolower((string) $candidate->document_type) !== 'invoice') {
+                        return false;
+                    }
+
+                    $legacyTitle = Str::limit('Invoice '.((string) ($candidate->document_number ?: $candidate->external_id)).' · '.$name, 255, '');
+
+                    return hash_equals($legacyTitle, (string) $job->title);
+                });
+                if ($document === null) {
                     return;
                 }
                 $title = Str::limit(($name !== '' ? $name : 'Customer').' job', 255, '');
