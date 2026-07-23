@@ -7,6 +7,7 @@ use App\Models\CustomerAccessRequest;
 use App\Models\FormSubmission;
 use App\Models\IntegrationHealthEvent;
 use App\Models\LandlordOperatorAction;
+use App\Models\LandlordProspect;
 use App\Models\MarketingProfile;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
@@ -194,9 +195,9 @@ class LandlordTenantDirectoryController extends Controller
         Request $request,
         LandlordCommercialConfigService $commercialService,
         TenantSetupStatusService $setupStatusService,
-        TenantBlueprintProfileService $blueprintService
-    ): RedirectResponse
-    {
+        TenantBlueprintProfileService $blueprintService,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
         $blueprintOptions = $blueprintService->formOptions();
         $operatingModeKeys = array_keys((array) ($blueprintOptions['operating_modes'] ?? []));
 
@@ -208,6 +209,7 @@ class LandlordTenantDirectoryController extends Controller
         ], $blueprintService->validationRules(), [
             'role' => ['required', 'string', 'in:'.implode(',', array_keys($this->tenantRoleOptions()))],
             'status' => ['required', 'string', 'in:'.implode(',', array_keys($this->tenantStatusOptions()))],
+            'prospect_id' => ['nullable', 'integer', 'exists:landlord_prospects,id'],
         ]));
 
         $requestedSlug = trim((string) ($validated['slug'] ?? ''));
@@ -215,11 +217,22 @@ class LandlordTenantDirectoryController extends Controller
         $tenantId = null;
         $operatingMode = (string) ($validated['operating_mode'] ?? $validated['tenant_type'] ?? $this->defaultTenantType());
         $accountMode = (string) ($validated['account_mode'] ?? 'production');
+        $prospectId = isset($validated['prospect_id']) ? (int) $validated['prospect_id'] : null;
+
+        if ($prospectId) {
+            $existingConversion = LandlordProspect::query()->find($prospectId);
+            if ($existingConversion?->converted_tenant_id) {
+                return redirect()
+                    ->route('landlord.tenants.show', ['tenant' => (int) $existingConversion->converted_tenant_id, 'tab' => 'overview'])
+                    ->with('status', 'This prospect is already an Everbranch customer.');
+            }
+        }
+
         $blueprint = $blueprintService->blueprintFromInput(array_merge($validated, [
             'operating_mode' => $operatingMode,
         ]));
 
-        DB::transaction(function () use ($validated, $slug, $commercialService, $request, $setupStatusService, $blueprintService, $blueprint, $operatingMode, $accountMode, &$tenantId): void {
+        DB::transaction(function () use ($validated, $slug, $commercialService, $request, $setupStatusService, $blueprintService, $blueprint, $operatingMode, $accountMode, $prospectId, $auditService, &$tenantId): void {
             $tenant = Tenant::query()->create([
                 'name' => trim((string) $validated['name']),
                 'slug' => $slug,
@@ -268,6 +281,39 @@ class LandlordTenantDirectoryController extends Controller
 
             $setupStatus = $setupStatusService->forTenant($tenant);
             $blueprintService->applyBlueprint($tenant, $profile->refresh(), $setupStatus, $blueprint, $accountMode);
+
+            if ($prospectId) {
+                $prospect = LandlordProspect::query()->lockForUpdate()->find($prospectId);
+                if ($prospect && ! $prospect->converted_tenant_id) {
+                    $before = $prospect->toArray();
+                    $prospect->forceFill([
+                        'status' => 'converted',
+                        'converted_tenant_id' => $tenantId,
+                        'converted_at' => now(),
+                    ])->save();
+
+                    $prospect->communications()->create([
+                        'direction' => 'note',
+                        'channel' => 'note',
+                        'status' => 'logged',
+                        'subject' => 'Converted to Everbranch customer',
+                        'body' => 'A production workspace was created from the landlord launch-partner pipeline.',
+                        'occurred_at' => now(),
+                        'created_by_user_id' => $request->user()?->id,
+                    ]);
+
+                    $auditService->record(
+                        tenantId: $tenantId,
+                        actorUserId: $request->user()?->id,
+                        actionType: 'landlord_prospect_converted',
+                        targetType: 'landlord_prospect',
+                        targetId: $prospectId,
+                        beforeState: $before,
+                        afterState: $prospect->fresh()?->toArray(),
+                        result: ['tenant_id' => $tenantId]
+                    );
+                }
+            }
         });
 
         if (! is_int($tenantId) || $tenantId <= 0) {
@@ -276,7 +322,9 @@ class LandlordTenantDirectoryController extends Controller
 
         return redirect()
             ->route('landlord.tenants.show', ['tenant' => $tenantId, 'tab' => 'overview'])
-            ->with('status', 'Tenant created. You can now manage role, modules, and settings from this workspace.');
+            ->with('status', $prospectId
+                ? 'Prospect converted to an Everbranch customer. Their production workspace is ready for onboarding.'
+                : 'Tenant created. You can now manage role, modules, and settings from this workspace.');
     }
 
     public function editBlueprint(
@@ -585,11 +633,11 @@ class LandlordTenantDirectoryController extends Controller
                 ->select([
                     'users.id',
                     'users.name',
-                'users.email',
-                'users.role',
-                'users.is_active',
-                'users.requested_via',
-            ])
+                    'users.email',
+                    'users.role',
+                    'users.is_active',
+                    'users.requested_via',
+                ])
                 ->orderBy('users.name'),
         ]);
 
@@ -1229,6 +1277,7 @@ class LandlordTenantDirectoryController extends Controller
         foreach ($attributes as $key => $value) {
             if ($value === null || trim((string) $value) === '') {
                 unset($admin[$key]);
+
                 continue;
             }
 
@@ -1366,12 +1415,12 @@ class LandlordTenantDirectoryController extends Controller
                     return [
                         'id' => (int) $row->id,
                         'title' => (string) ($row->submitter_name ?: $row->submitter_email ?: 'Form submission'),
-                        'subtitle' => (string) (($row->form?->name ?: 'Tenant form') . ' submission'),
+                        'subtitle' => (string) (($row->form?->name ?: 'Tenant form').' submission'),
                         'summary' => collect([
                             trim((string) ($row->submitter_company ?? '')) ?: null,
                             trim((string) ($row->submitter_email ?? '')) ?: null,
                             trim((string) ($row->form?->slug ?? '')) !== ''
-                                ? 'form: ' . trim((string) $row->form?->slug)
+                                ? 'form: '.trim((string) $row->form?->slug)
                                 : null,
                         ])->filter()->implode(' | '),
                         'module_key' => 'tenant_form_submission',
