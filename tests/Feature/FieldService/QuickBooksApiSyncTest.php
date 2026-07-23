@@ -273,6 +273,55 @@ test('quickbooks api sync dry run does not write imported records', function ():
     expect(MarketingProfile::query()->where('tenant_id', $tenant->id)->count())->toBe(0);
 });
 
+test('collins normalization changes only untouched invoice generated titles', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+
+    $invoiceJob = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'external_source' => 'quickbooks',
+        'external_id' => 'quickbooks:invoice:INV-LEGACY',
+        'title' => 'Invoice 2201 · Invoice Customer',
+        'status' => 'open',
+        'customer_name' => 'Invoice Customer',
+    ]);
+    FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id,
+        'field_service_job_id' => $invoiceJob->id,
+        'source' => 'quickbooks',
+        'document_type' => 'invoice',
+        'external_id' => 'INV-LEGACY',
+        'document_number' => '2201',
+        'transaction_date' => now(),
+        'metadata' => ['quickbooks' => ['service_address' => ['line_1' => '12 Invoice Way']]],
+    ]);
+
+    $estimateJob = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'external_source' => 'quickbooks',
+        'external_id' => 'quickbooks:estimate:EST-LEGACY',
+        'title' => 'Estimate 3301 · Estimate Customer',
+        'status' => 'quoted',
+        'customer_name' => 'Estimate Customer',
+    ]);
+    FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id,
+        'field_service_job_id' => $estimateJob->id,
+        'source' => 'quickbooks',
+        'document_type' => 'estimate',
+        'external_id' => 'EST-LEGACY',
+        'document_number' => '3301',
+        'transaction_date' => now(),
+    ]);
+
+    $this->artisan('field-service:normalize-job-drafts', ['tenant' => $tenant->slug, '--apply' => true])
+        ->assertSuccessful()
+        ->expectsOutputToContain('Applied 1 job normalization(s)');
+
+    expect($invoiceJob->fresh()->title)->toBe('Invoice Customer job')
+        ->and($invoiceJob->fresh()->service_address_line_1)->toBe('12 Invoice Way')
+        ->and($estimateJob->fresh()->title)->toBe('Estimate 3301 · Estimate Customer');
+});
+
 test('line descriptions stay searchable without manufacturing a field job', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Review Electric', 'slug' => 'review-electric']);
     enableQuickBooksBranchForApiTest($tenant);
