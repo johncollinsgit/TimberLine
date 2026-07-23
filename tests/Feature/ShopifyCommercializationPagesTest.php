@@ -143,9 +143,17 @@ test('embedded app store page renders safe visible modules and hides internal-on
         ->assertOk()
         ->assertSeeText('App Store')
         ->assertSeeText('SMS')
+        ->assertSeeText('Accounting Command Center')
         ->assertSeeText('Add module')
-        ->assertDontSeeText('Square')
         ->assertDontSeeText('Future Niche Modules')
+        ->assertViewHas('moduleStorePayload', function (array $payload): bool {
+            $moduleKeys = collect($payload['sections'] ?? [])
+                ->flatten(1)
+                ->pluck('module_key');
+
+            return $moduleKeys->contains('accounting_command_center')
+                && ! $moduleKeys->contains('square');
+        })
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             return collect($subnav)->contains(fn (array $item): bool => ($item['key'] ?? null) === 'store' && ! empty($item['active']));
         });
