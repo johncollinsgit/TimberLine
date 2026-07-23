@@ -8,6 +8,7 @@ use App\Models\AccountingEventSourceImport;
 use App\Models\AccountingProfile;
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\IntegrationConnection;
+use App\Models\MarketingOrderEventAttribution;
 use App\Models\Order;
 use App\Models\QuickBooksReportingSetting;
 use App\Models\QuickBooksReportingSnapshot;
@@ -122,9 +123,28 @@ class AccountingCommandCenterService
     {
         $orders = Order::query()->forTenantId((int) $tenant->id)
             ->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->get();
-        $square = SquarePayment::query()->forTenantId((int) $tenant->id)
+        $completedSquare = SquarePayment::query()->forTenantId((int) $tenant->id)
             ->whereBetween('created_at_source', [$range['starts_at'], $range['ends_at']])
             ->whereIn('status', ['COMPLETED', 'completed'])->get();
+        $mappedSquareOrderIds = MarketingOrderEventAttribution::query()
+            ->forTenantId((int) $tenant->id)
+            ->where('source_type', 'square_order')
+            ->whereNotNull('event_instance_id')
+            ->pluck('source_id')
+            ->map(fn ($sourceId): string => trim((string) $sourceId))
+            ->filter()
+            ->unique()
+            ->values();
+        $square = $completedSquare->filter(
+            fn (SquarePayment $payment): bool => $mappedSquareOrderIds->contains(
+                trim((string) $payment->square_order_id)
+            )
+        );
+        $unmappedSquare = $completedSquare->reject(
+            fn (SquarePayment $payment): bool => $mappedSquareOrderIds->contains(
+                trim((string) $payment->square_order_id)
+            )
+        );
         $configuration = (array) ($profile?->configuration ?? []);
         $mappingReviewed = ! empty($configuration['revenue_mappings_reviewed_at']);
 
@@ -135,7 +155,13 @@ class AccountingCommandCenterService
         $operational = [
             'wholesale' => ['amount' => $this->orderTotal($streams['wholesale']), 'count' => $streams['wholesale']->count(), 'source' => 'Shopify and reviewed QuickBooks rules'],
             'online' => ['amount' => $this->orderTotal($streams['online']), 'count' => $streams['online']->count(), 'source' => 'Shopify'],
-            'events' => ['amount' => round((float) $square->sum('amount_money') / 100, 2), 'count' => $square->count(), 'source' => 'Square mapped events'],
+            'events' => [
+                'amount' => round((float) $square->sum('amount_money') / 100, 2),
+                'count' => $square->count(),
+                'source' => 'Square payments mapped to events',
+                'unmapped_count' => $unmappedSquare->count(),
+                'unmapped_amount' => round((float) $unmappedSquare->sum('amount_money') / 100, 2),
+            ],
         ];
         $total = collect($operational)->sum('amount');
 

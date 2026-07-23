@@ -2,9 +2,12 @@
 
 use App\Models\AccountingCloseItem;
 use App\Models\AccountingProfile;
+use App\Models\EventInstance;
 use App\Models\IntegrationConnection;
+use App\Models\MarketingOrderEventAttribution;
 use App\Models\Order;
 use App\Models\QuickBooksReportingSnapshot;
+use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
@@ -137,10 +140,38 @@ test('quickbooks remains ledger truth and operational sources are never added to
         'total_price' => 500,
         'refund_total' => 0,
     ]);
+    $event = EventInstance::query()->create([
+        'title' => 'Mapped Accounting Event',
+        'starts_at' => now()->toDateString(),
+    ]);
+    SquareOrder::query()->create([
+        'tenant_id' => $tenant->id,
+        'square_order_id' => 'square-accounting-order-1',
+        'closed_at' => now(),
+    ]);
+    MarketingOrderEventAttribution::query()->create([
+        'tenant_id' => $tenant->id,
+        'source_type' => 'square_order',
+        'source_id' => 'square-accounting-order-1',
+        'event_instance_id' => $event->id,
+        'attribution_method' => 'mapping:square_tax_name',
+        'confidence' => 1,
+    ]);
     SquarePayment::query()->create([
         'tenant_id' => $tenant->id,
         'square_payment_id' => 'square-accounting-1',
+        'square_order_id' => 'square-accounting-order-1',
         'amount_money' => 20000,
+        'currency' => 'USD',
+        'status' => 'COMPLETED',
+        'created_at_source' => now(),
+        'synced_at' => now(),
+    ]);
+    SquarePayment::query()->create([
+        'tenant_id' => $tenant->id,
+        'square_payment_id' => 'square-accounting-unmapped',
+        'square_order_id' => 'square-accounting-order-unmapped',
+        'amount_money' => 50000,
         'currency' => 'USD',
         'status' => 'COMPLETED',
         'created_at_source' => now(),
@@ -154,6 +185,9 @@ test('quickbooks remains ledger truth and operational sources are never added to
         ->and(data_get($payload, 'ledger.net_operating_result'))->toBe(400.0)
         ->and(data_get($payload, 'revenue_mix.streams.online.amount'))->toBe(500.0)
         ->and(data_get($payload, 'revenue_mix.streams.events.amount'))->toBe(200.0)
+        ->and(data_get($payload, 'revenue_mix.streams.events.count'))->toBe(1)
+        ->and(data_get($payload, 'revenue_mix.streams.events.unmapped_count'))->toBe(1)
+        ->and(data_get($payload, 'revenue_mix.streams.events.unmapped_amount'))->toBe(500.0)
         ->and(data_get($payload, 'guardrails.operational_sources_added_to_ledger'))->toBeFalse()
         ->and(data_get($payload, 'revenue_mix.streams.online.percentage'))->toBeNull();
 });
