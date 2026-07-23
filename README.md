@@ -1,5 +1,24 @@
 # Modern Forestry Backstage
 
+## Accounting Command Center
+
+Everbranch includes a reusable, disabled-by-default Accounting Command Center
+Branch for owner/admin users. It organizes read-only QuickBooks reporting,
+operational source coverage, reviewed payroll and debt mappings, accountant
+tasks, monthly close, and event-profitability source setup without replacing the
+general ledger or writing back to it.
+
+Prepare a tenant setup draft with:
+
+```bash
+php artisan everbranch:prepare-accounting-command-center \
+  --tenant=modern-forestry \
+  --preset=modern-forestry
+```
+
+Add `--enable` only after the QuickBooks prerequisite and rollout review are
+ready. See `docs/operations/accounting-command-center-rollout.md`.
+
 ## Current Everbranch Structure and Release State (2026-07-22)
 
 Everbranch is a Laravel multi-workspace platform. The canonical production

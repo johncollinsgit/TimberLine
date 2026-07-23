@@ -1,5 +1,24 @@
 # SYSTEM SNAPSHOT
 
+## Accounting Command Center Branch (2026-07-23)
+
+- `accounting_command_center` is a reusable, disabled-by-default,
+  `integration_required` Branch for owner/admin accounting review. QuickBooks
+  Online remains the ledger source of truth; Shopify and Square supply only
+  operational coverage and are never added to QuickBooks revenue.
+- The Branch adds tenant-scoped accounting profiles, review-required compliance
+  tasks, monthly-close periods/items, revenue rules, debt snapshots, event-source
+  import provenance, and audit events. It does not post entries, process payroll,
+  file returns, make payments, or write back to QuickBooks.
+- `/workspaces/{tenant}/accounting` is financial-access guarded and module gated.
+  Members and employees receive neither the page nor accounting payloads.
+- `everbranch:prepare-accounting-command-center` applies a reusable preset and
+  optionally enables the Branch through ordinary entitlement/module-state
+  records. The Modern Forestry preset identifies Google Drive file
+  `1V9FAzTg6FA7tzEnGyDQDQ-OYgHqbxiBot9PWlj7txDw` as the preferred event
+  profitability source, but keeps its sheet mapping and all tax conclusions
+  unverified until reviewed.
+
 ## Reusable Field Operations v7 / Everbranch 2.3 (2026-07-22)
 
 - Field-service tasks now keep a backward-compatible primary assignee plus tenant-scoped multi-assignee and task-event records. A shared task has one completion state; handoff replaces responsibility, marks the task `waiting`, records an idempotent event/note, and notifies the new responsible people.

@@ -2,6 +2,20 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Accounting Command Center guardrails (2026-07-23)
+
+- Keep `accounting_command_center` reusable and tenant-scoped. Modern Forestry
+  is a preset and first rollout target, never a runtime branch condition.
+- QuickBooks P&L/report snapshots are the ledger truth. Shopify, Square, and
+  event sources support classification and reconciliation only; never add their
+  sales to QuickBooks revenue.
+- Every accounting route and payload must pass both module entitlement and
+  `TenantFinancialAccess`. Never place accounting amounts or metadata in member,
+  employee, or general mobile payloads.
+- Missing or unreviewed mappings remain unavailable; do not substitute zero,
+  invent tax deadlines, infer workbook formulas, post entries, or write back to
+  QuickBooks.
+
 ## Release and Documentation Rule (2026-07-21)
 
 - Treat `SYSTEM_SNAPSHOT.md` as the concise map of current product structure,

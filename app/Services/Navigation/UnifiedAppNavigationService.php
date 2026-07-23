@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
+use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Support\Birthdays\BirthdaySectionRegistry;
 use App\Support\Marketing\MarketingSectionRegistry;
@@ -25,6 +26,7 @@ class UnifiedAppNavigationService
         protected TenantExperienceProfileService $experienceProfileService,
         protected TenantModuleAccessResolver $moduleAccessResolver,
         protected TenantHostBuilder $tenantHostBuilder,
+        protected ?TenantFinancialAccess $financialAccess = null,
         protected ?TenantBrandProfileService $brandProfileService = null,
     ) {}
 
@@ -53,7 +55,7 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'accounting_command_center'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
@@ -61,6 +63,7 @@ class UnifiedAppNavigationService
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
+        $accountingEnabled = $this->moduleStateEnabled($moduleStates['accounting_command_center'] ?? null);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
         $isFlagshipTenant = $this->isFlagshipTenant($tenant);
@@ -156,6 +159,16 @@ class UnifiedAppNavigationService
                 ];
             }
 
+            if ($accountingEnabled && $tenant && $user && $this->financialAccess()->allows($user, $tenant) && Route::has('accounting.index')) {
+                $workItems[] = [
+                    'key' => 'accounting-command-center',
+                    'icon' => 'chart-bar',
+                    'href' => route('accounting.index', ['tenant' => $tenant->slug]),
+                    'label' => 'Accounting',
+                    'current' => request()->routeIs('accounting.*'),
+                ];
+            }
+
             if ($isFlagshipTenant) {
                 $productionChildren = [
                     ['key' => 'retail-plan', 'icon' => 'clipboard-document', 'href' => route('retail.plan'), 'label' => 'Pour Lists', 'current' => request()->routeIs('retail.plan')],
@@ -233,6 +246,11 @@ class UnifiedAppNavigationService
             'console_switches' => $this->consoleSwitches($user, $tenant, false),
             'shell_context' => 'tenant',
         ];
+    }
+
+    protected function financialAccess(): TenantFinancialAccess
+    {
+        return $this->financialAccess ??= app(TenantFinancialAccess::class);
     }
 
     /**

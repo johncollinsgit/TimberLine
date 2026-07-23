@@ -133,6 +133,11 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
   - `/platform/promo` -> `PlatformProductPagesController::promo`
   - `/platform/contact` -> `PlatformProductPagesController::contact`
 - Auth pages: Fortify views under `resources/views/pages/auth/*` via `FortifyServiceProvider`
+- Owner accounting:
+  - `/workspaces/{tenant}/accounting` -> `AccountingCommandCenterController`
+  - full-width tenant sidebar layout
+  - `accounting_command_center` entitlement plus `TenantFinancialAccess`
+  - missing accounting values use explicit unavailable/setup states, never zero
 
 ## Component Patterns
 - Buttons (canonical):

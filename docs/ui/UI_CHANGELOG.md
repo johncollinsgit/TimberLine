@@ -1,5 +1,27 @@
 # UI Changelog
 
+## 2026-07-23 — Reusable Accounting Command Center
+
+### What Changed
+
+- Added a full-width owner-facing Accounting Command Center with reporting
+  period selection, QuickBooks income/expense/net comparison, source freshness,
+  revenue coverage, payroll mapping state, recent financial documents, debt
+  setup, monthly close, accountant tasks, and event-source readiness.
+- Added the Branch to tenant navigation only when it is enabled and the current
+  user passes the existing financial-access policy.
+- Used semantic headings, labeled date controls, accessible chart text, table
+  captions, keyboard-visible links/buttons, status regions, and plain-language
+  unavailable states.
+
+### Guardrails
+
+- QuickBooks remains the accounting source of truth; operational sources are
+  explicitly labeled and never added to ledger totals.
+- Missing and stale source values do not render as zero.
+- The shared Drive workbook is identified but profitability remains incomplete
+  until its live structure and formulas are verified.
+
 ## 2026-07-22 - Collins Field Operations 2.3
 
 ### What Changed

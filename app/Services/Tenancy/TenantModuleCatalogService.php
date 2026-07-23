@@ -171,7 +171,7 @@ class TenantModuleCatalogService
             'wishlist' => 'heart',
             'referrals' => 'user-plus',
             'subscriptions' => 'repeat-2',
-            'reporting', 'diagnostics_advanced' => 'chart-no-axes-combined',
+            'reporting', 'diagnostics_advanced', 'accounting_command_center' => 'chart-no-axes-combined',
             'ai' => 'sparkles',
             'integrations', 'additional_channels' => 'plug',
             'uploads' => 'cloud-upload',
