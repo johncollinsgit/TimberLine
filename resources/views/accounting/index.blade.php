@@ -141,6 +141,9 @@
                         <div class="flex items-start justify-between gap-4"><h3 class="font-semibold">{{ $streamLabels[$key] }}</h3><span class="text-xs font-semibold text-zinc-500">{{ $percent($stream['percentage']) }}</span></div>
                         <div class="mt-3 text-2xl font-semibold">{{ $money($stream['amount']) }}</div>
                         <div class="mt-2 text-sm text-zinc-600">{{ number_format($stream['count']) }} source records · {{ $stream['source'] }}</div>
+                        @if($key === 'events' && ($stream['unmapped_count'] ?? 0) > 0)
+                            <div class="mt-2 text-xs text-zinc-500">{{ number_format($stream['unmapped_count']) }} completed Square payments still need event mapping.</div>
+                        @endif
                         <div class="mt-3 text-xs font-semibold text-amber-800">{{ str_replace('_', ' ', ucfirst($stream['reconciliation_status'])) }}</div>
                     </a>
                 @endforeach
