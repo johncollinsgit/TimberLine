@@ -101,6 +101,44 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
         ->and($order->fresh()->authorized_subtotal_cents)->toBe(35800);
 });
 
+test('checkout idempotency follows the complete Stripe request payload', function (): void {
+    $sent = stripePaymentAgreement(implementationAmount: null, dueOnAcceptance: null, dueBeforeLaunch: null);
+    $order = acceptStripeAgreement($this, $sent);
+    $keys = [];
+    Http::fake(function (Request $request) use (&$keys) {
+        $keys[] = (string) ($request->header('Idempotency-Key')[0] ?? '');
+
+        return Http::response(['error' => ['message' => 'Retryable test failure.']], 400);
+    });
+
+    $this->post($sent['url'].'/checkout')->assertRedirect();
+    $this->post($sent['url'].'/checkout')->assertRedirect();
+
+    TenantDirectInvoice::query()->create([
+        'tenant_id' => $order->tenant_id,
+        'status' => 'paid',
+        'currency' => 'USD',
+        'customer_name' => 'Laura K. Lee',
+        'customer_email' => 'laura@example.test',
+        'billing_address' => ['line1' => '10 Main Street', 'city' => 'Greenville', 'state' => 'SC', 'postal_code' => '29601', 'country' => 'US'],
+        'days_until_due' => 30,
+        'authorization_reference' => 'Prior paid invoice',
+        'line_items' => [],
+        'authorized_subtotal_cents' => 0,
+        'provider_customer_id' => 'cus_saved_after_retry',
+    ]);
+
+    $this->post($sent['url'].'/checkout')->assertRedirect();
+
+    expect($keys)->toHaveCount(3)
+        ->and($keys[0])->toBe($keys[1])
+        ->and($keys[2])->not->toBe($keys[1])
+        ->and($keys[2])->toStartWith('agreement-order-'.$order->id.'-checkout-')
+        ->and($keys)->not->toContain('agreement-order-'.$order->id.'-v1')
+        ->and($order->fresh()->status)->toBe('authorized')
+        ->and($order->fresh()->provider_checkout_session_id)->toBeNull();
+});
+
 test('sandbox checkout records isolated Stripe evidence without commercial activation', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Front Yard Foods', 'slug' => 'front-yard-foods']);
     $management = app(AgreementManagementService::class);
