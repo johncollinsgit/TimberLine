@@ -80,6 +80,7 @@ test('accepted proposal checkout is server priced and excludes Shopify and third
         expect($data['mode'])->toBe('subscription')
             ->and($data['metadata[billing_order_id]'])->toBe((string) $order->id)
             ->and($data['customer_email'])->toBe('laura@example.test')
+            ->and($data)->not->toHaveKey('customer_update[name]')
             ->and($data['payment_method_types[0]'])->toBe('card')
             ->and($data['payment_method_types[1]'])->toBe('us_bank_account')
             ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled')
@@ -249,6 +250,7 @@ test('checkout reuses saved Stripe customers and one-time work can save payment 
         $data = $request->data();
         if (($data['mode'] ?? null) === 'subscription') {
             expect($data['customer'])->toBe('cus_saved')
+                ->and($data['customer_update[name]'])->toBe('auto')
                 ->and($data)->not->toHaveKey('customer_email')
                 ->and($data)->not->toHaveKey('customer_creation')
                 ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled')
@@ -259,6 +261,7 @@ test('checkout reuses saved Stripe customers and one-time work can save payment 
 
         expect($data['mode'])->toBe('payment')
             ->and($data['customer'])->toBe('cus_saved')
+            ->and($data['customer_update[name]'])->toBe('auto')
             ->and($data['payment_intent_data[setup_future_usage]'])->toBe('on_session')
             ->and($data['invoice_creation[enabled]'])->toBe('true')
             ->and($data['saved_payment_method_options[payment_method_save]'])->toBe('enabled');

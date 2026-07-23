@@ -148,8 +148,27 @@ test('proposal access is evergrove host locked password protected and secret saf
         ->assertSeeText('$50.00')
         ->assertSee('signer_legal_name', false)
         ->assertSee('electronic_signature_value', false)
-        ->assertSeeText('will not sell, share, or use Front Yard Foods data');
+        ->assertSeeText('Evergrove uses Front Yard Foods data')
+        ->assertSee('placeholder="Full legal name"', false)
+        ->assertDontSee('placeholder="Laura ..."', false);
     $this->assertDatabaseHas('agreement_events', ['agreement_id' => $agreement->id, 'event_type' => 'password_failed']);
+});
+
+test('proposal overview uses the locked customer agreement without leaking another customer', function (): void {
+    $tenant = agreementTenant('collins-electric');
+    $management = app(AgreementManagementService::class);
+    $agreement = $management->prepareCollinsElectric($tenant, null, 29900, 6900, 6900);
+    $access = $management->send($agreement, null, 'ProposalPass123');
+    $token = basename(parse_url($access['url'], PHP_URL_PATH));
+    $url = 'http://evergrove.test/proposals/'.$token;
+
+    $this->post($url.'/unlock', ['password' => 'ProposalPass123'])->assertRedirect();
+    $this->get($url)
+        ->assertOk()
+        ->assertSeeText('Provide Collins Electric with a branded field-operations workspace')
+        ->assertSeeText('Evergrove will use Collins Electric data only')
+        ->assertDontSeeText('Front Yard Foods data')
+        ->assertDontSeeText('Shopify store expenses');
 });
 
 test('short agreement link redirects to the current password-protected proposal', function (): void {
