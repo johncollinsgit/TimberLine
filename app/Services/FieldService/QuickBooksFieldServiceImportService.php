@@ -582,7 +582,7 @@ class QuickBooksFieldServiceImportService
             return ['job' => null, 'created' => false, 'updated' => false, 'reason' => 'job_draft'];
         }
         $legacyGeneratedTitle = Str::limit(Str::headline($type).' '.$documentNumber.' · '.$customerName, 255, '');
-        $titleWasGenerated = hash_equals($legacyGeneratedTitle, (string) $job->title);
+        $titleWasGenerated = $type === 'invoice' && hash_equals($legacyGeneratedTitle, (string) $job->title);
         $job->forceFill([
             'marketing_profile_id' => (int) $profile->id,
             'title' => $titleWasGenerated ? Str::limit($customerName.' job', 255, '') : $job->title,
