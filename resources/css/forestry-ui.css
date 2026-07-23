@@ -8230,26 +8230,37 @@ textarea.assistant-field-input {
 }
 
 .eg-nav-button,
-.eg-button-primary {
+.eg-button.eg-button-primary {
   background: #111111;
   color: #ffffff;
 }
 
 .eg-nav-button:hover,
-.eg-button-primary:hover {
+.eg-nav-button:focus-visible,
+.eg-button.eg-button-primary:hover,
+.eg-button.eg-button-primary:focus-visible {
   background: #2f4f45;
   border-color: #2f4f45;
   color: #ffffff;
 }
 
-.eg-button-secondary {
+.eg-button.eg-button-secondary {
   background: #ffffff;
   color: #111111;
 }
 
-.eg-button-secondary:hover {
+.eg-button.eg-button-secondary:hover,
+.eg-button.eg-button-secondary:focus-visible {
   background: #edf1ec;
   color: #111111;
+}
+
+.eg-nav-button:focus-visible,
+.eg-button:focus-visible {
+  box-shadow:
+    0 0 0 3px #ffffff,
+    0 0 0 6px #2f4f45;
+  outline: none;
 }
 
 .eg-hero {
