@@ -53,6 +53,7 @@ test('the reusable branch is registered with financial capabilities and disabled
 
     expect($module['display_name'])->toBe('Accounting Command Center')
         ->and($module['activation_policy'])->toBe('integration_required')
+        ->and($module['channels'])->toBe(['both'])
         ->and($module['default_enabled'])->toBeFalse()
         ->and($module['dependencies'])->toContain('quickbooks')
         ->and($module['capabilities'])->toContain(
