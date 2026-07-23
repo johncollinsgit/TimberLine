@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\AgreementProposalController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
@@ -692,6 +693,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [QuickBooksReportsController::class, 'index'])->name('index');
             Route::put('/settings', [QuickBooksReportsController::class, 'updateSettings'])->name('settings');
             Route::post('/refresh', [QuickBooksReportsController::class, 'refresh'])->name('refresh');
+        });
+
+    Route::middleware(['tenant.access', 'module:accounting_command_center'])
+        ->prefix('workspaces/{tenant:slug}/accounting')
+        ->name('accounting.')
+        ->group(function (): void {
+            Route::get('/', [AccountingCommandCenterController::class, 'index'])->name('index');
+            Route::post('/setup/preset', [AccountingCommandCenterController::class, 'applyPreset'])->name('setup.preset');
+            Route::put('/close/items/{item}', [AccountingCommandCenterController::class, 'updateCloseItem'])->name('close-items.update');
         });
 
     Route::middleware(['tenant.access', 'module:documents'])
