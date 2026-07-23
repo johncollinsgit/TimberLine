@@ -42,7 +42,7 @@ test('all ecommerce templates carry independent fulfillment and calendar present
     $definition = app(\App\Services\Automation\WorkflowTemplateCatalog::class)->defaultDefinition($templateKey);
 
     expect(data_get($definition, 'trigger.provider'))->toBe($provider)
-        ->and(data_get($definition, 'trigger.schedule_source'))->toBe('fulfillment')
+        ->and(data_get($definition, 'trigger.schedule_source'))->toBe($provider === 'shopify' ? 'order_created' : 'fulfillment')
         ->and(data_get($definition, 'action.presentation.title_template'))->toContain('{{order_number}}')
         ->and(data_get($definition, 'action.presentation.description_fields'))->toBe(['items', 'total', 'status', 'source_link'])
         ->and(data_get($definition, 'action.presentation.location_source'))->toBe('shipping_address');
@@ -51,4 +51,5 @@ test('all ecommerce templates carry independent fulfillment and calendar present
     ['square_order_to_google_calendar', 'square'],
     ['squarespace_order_to_google_calendar', 'squarespace'],
     ['wix_order_to_google_calendar', 'wix'],
+    ['woocommerce_order_to_google_calendar', 'woocommerce'],
 ]);

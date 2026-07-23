@@ -33,7 +33,15 @@
                             @foreach($providerConnections as $providerConnection)
                                 <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3"><div class="text-xs"><strong class="text-zinc-900">{{ $providerConnection->external_account_label ?: $provider['label'].' account' }}</strong><span class="ml-2 text-zinc-500">{{ str($providerConnection->status)->headline() }}</span></div><div class="flex gap-2"><form method="POST" action="{{ route('workflows.connections.commerce.test', [$key, $providerConnection]) }}">@csrf<button class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">Test</button></form><form method="POST" action="{{ route('workflows.connections.commerce.disconnect', [$key, $providerConnection]) }}" onsubmit="return confirm('Disconnect this account and pause workflows that use it?')">@csrf<button class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800">Disconnect</button></form></div></div>
                             @endforeach
-                            <form method="POST" action="{{ route('workflows.connections.commerce.connect', $key) }}" class="flex flex-col gap-2 sm:flex-row">@csrf @if($key === 'shopify')<label class="sr-only" for="shop-domain">Shopify store domain</label><input id="shop-domain" name="shop_domain" placeholder="store-name.myshopify.com" required class="min-w-0 flex-1 rounded-xl border-zinc-200 bg-zinc-50 text-sm" />@endif<button class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-bold text-white">{{ $connected ? 'Connect another' : 'Connect' }} {{ $provider['label'] }}</button></form>
+                            <form method="POST" action="{{ route('workflows.connections.commerce.connect', $key) }}" class="flex flex-col gap-2 sm:flex-row">
+                                @csrf
+                                @if($key === 'shopify')
+                                    <label class="sr-only" for="shop-domain">Shopify store domain</label><input id="shop-domain" name="shop_domain" placeholder="store-name.myshopify.com" required class="min-w-0 flex-1 rounded-xl border-zinc-200 bg-zinc-50 text-sm" />
+                                @elseif($key === 'woocommerce')
+                                    <label class="sr-only" for="woocommerce-store-url">WooCommerce store URL</label><input id="woocommerce-store-url" name="store_url" placeholder="https://store.example.com" required class="min-w-0 flex-1 rounded-xl border-zinc-200 bg-zinc-50 text-sm" />
+                                @endif
+                                <button class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-bold text-white">{{ $connected ? 'Connect another' : 'Connect' }} {{ $provider['label'] }}</button>
+                            </form>
                         </div>
                     @else<p class="mt-4 text-xs leading-5 text-zinc-500">The workflow registry recognizes this provider, but publishing stays fail-closed until Everbranch’s provider app registration and callback are production-ready.</p>@endif
                 </article>

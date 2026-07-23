@@ -75,6 +75,15 @@ class WorkflowAutomationController extends Controller
             $sourceProvider,
             (array) data_get($workflow->draft_definition, 'action.presentation', [])
         );
+        $commerceConnectionRows = IntegrationConnection::query()->forTenantId($tenantId)
+            ->where('provider', $sourceProvider)
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->orderBy('external_account_label')
+            ->get();
+        $selectedCommerceConnection = $commerceConnectionRows->firstWhere(
+            'id',
+            (int) data_get($workflow->draft_definition, 'trigger.connection_id', 0),
+        );
 
         return view('workflows.show', [
             'workflow' => $workflow,
@@ -84,8 +93,10 @@ class WorkflowAutomationController extends Controller
             'googleConnection' => $google->status($tenantId),
             'calendarAppearance' => $calendarAppearance,
             'calendarPreview' => $calendarPresentation->preview($sourceProvider, $calendarAppearance),
-            'commerceConnections' => IntegrationConnection::query()->forTenantId($tenantId)
-                ->where('provider', $sourceProvider)->where('status', IntegrationConnection::STATUS_CONNECTED)->orderBy('external_account_label')->get(),
+            'commerceConnections' => $commerceConnectionRows,
+            'commerceSourceOptions' => $selectedCommerceConnection
+                ? $commerceConnections->sourceOptions($selectedCommerceConnection)
+                : [],
             'commerceConnectionStatus' => in_array($sourceProvider, CommerceWorkflowConnectionService::PROVIDERS, true)
                 ? $commerceConnections->status($tenantId, $sourceProvider)
                 : [],
@@ -100,10 +111,15 @@ class WorkflowAutomationController extends Controller
             'name' => ['required', 'string', 'max:160'],
             'project_gid' => [$sourceProvider === 'asana' ? 'required' : 'nullable', 'string', 'max:120'],
             'trigger_connection_id' => [$sourceProvider === 'asana' ? 'nullable' : 'required', 'integer'],
+            'location_ids' => ['nullable', 'array', 'max:10'],
+            'location_ids.*' => ['string', 'max:100'],
             'schedule_source' => ['nullable', 'string', 'in:source_date,order_created,fulfillment,delivery,pickup'],
             'calendar_id' => ['required', 'string', 'max:255'],
             'timezone' => ['required', 'timezone'],
             'default_duration_minutes' => ['required', 'integer', 'min:1', 'max:1440'],
+            'default_start_time' => ['nullable', 'date_format:H:i'],
+            'event_time_mode' => ['nullable', 'string', 'in:source_time,fixed_time,all_day'],
+            'schedule_offset_days' => ['nullable', 'integer', 'min:-365', 'max:365'],
             'skip_completed_tasks' => ['nullable', 'boolean'],
             'event_title_template' => ['required', 'string', 'max:160'],
             'event_description_fields' => ['nullable', 'array'],
@@ -117,6 +133,7 @@ class WorkflowAutomationController extends Controller
         ]);
         $service->updateDraft($workflow, $data + [
             'skip_completed_tasks' => $request->boolean('skip_completed_tasks'),
+            'location_ids' => $request->input('location_ids', []),
             'event_description_fields' => $request->input('event_description_fields', []),
         ], $request->user());
 
@@ -125,7 +142,9 @@ class WorkflowAutomationController extends Controller
 
     public function testTrigger(Request $request, AutomationWorkflow $workflow, WorkflowProductService $service): RedirectResponse
     {
-        return $this->workflowAction($request, $workflow, fn () => $service->testTrigger($workflow, $request->user()), 'Asana trigger test passed.');
+        $provider = str((string) data_get($workflow->draft_definition, 'trigger.provider', 'asana'))->replace('_', ' ')->headline();
+
+        return $this->workflowAction($request, $workflow, fn () => $service->testTrigger($workflow, $request->user()), $provider.' trigger test passed.');
     }
 
     public function testAction(Request $request, AutomationWorkflow $workflow, WorkflowProductService $service): RedirectResponse
@@ -223,6 +242,7 @@ class WorkflowAutomationController extends Controller
         try {
             $url = $service->buildConnectUrl($this->tenantId($request), $request->user(), $provider, [
                 'shop_domain' => $request->input('shop_domain'),
+                'store_url' => $request->input('store_url'),
             ]);
 
             return redirect()->away($url);
@@ -239,6 +259,15 @@ class WorkflowAutomationController extends Controller
             return redirect((string) $result['return_path'])->with('toast', ['style' => 'success', 'message' => str($provider)->headline().' connected and ready to test.']);
         } catch (AutomationWorkflowException $exception) {
             return redirect()->route('workflows.connections')->with('toast', ['style' => 'warning', 'message' => $exception->getMessage()]);
+        }
+    }
+
+    public function woocommerceKeyCallback(Request $request, CommerceWorkflowConnectionService $service)
+    {
+        try {
+            return response()->json($service->handleWooCommerceKeyCallback($request));
+        } catch (AutomationWorkflowException $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
         }
     }
 

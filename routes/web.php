@@ -606,6 +606,10 @@ Route::get('/mobile/authorize', \App\Http\Controllers\Mobile\EverbranchMobileAut
     ->middleware('throttle:20,1')
     ->name('mobile.everbranch.authorize');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
+Route::post('/workflows/connections/woocommerce/callback', [\App\Http\Controllers\WorkflowAutomationController::class, 'woocommerceKeyCallback'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:30,1')
+    ->name('workflows.connections.woocommerce.callback');
 
 Route::prefix('signup/classes/{tenant:slug}')
     ->name('public.classes.')
@@ -831,10 +835,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/connections/google-calendar/connect', 'connectGoogle')->name('connections.google.connect');
             Route::post('/connections/google-calendar/test', 'testGoogleConnection')->name('connections.google.test');
             Route::post('/connections/google-calendar/disconnect', 'disconnectGoogle')->name('connections.google.disconnect');
-            Route::post('/connections/{provider}/connect', 'connectCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.connect');
-            Route::get('/connections/{provider}/callback', 'commerceCallback')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.callback');
-            Route::post('/connections/{provider}/{connection}/test', 'testCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.test');
-            Route::post('/connections/{provider}/{connection}/disconnect', 'disconnectCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.disconnect');
+            Route::post('/connections/{provider}/connect', 'connectCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'])->name('connections.commerce.connect');
+            Route::get('/connections/{provider}/callback', 'commerceCallback')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'])->name('connections.commerce.callback');
+            Route::post('/connections/{provider}/{connection}/test', 'testCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'])->name('connections.commerce.test');
+            Route::post('/connections/{provider}/{connection}/disconnect', 'disconnectCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix', 'woocommerce'])->name('connections.commerce.disconnect');
             Route::get('/runs/{run}', 'run')->name('runs.show');
             Route::post('/runs/{run}/retry', 'retry')->name('runs.retry');
             Route::get('/{workflow}', 'show')->name('show');

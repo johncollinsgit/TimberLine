@@ -131,6 +131,7 @@ return [
         'authorization_url' => env('SQUARE_OAUTH_AUTHORIZATION_URL', 'https://connect.squareup.com/oauth2/authorize'),
         'token_url' => env('SQUARE_OAUTH_TOKEN_URL', 'https://connect.squareup.com/oauth2/token'),
         'oauth_scopes' => env('SQUARE_OAUTH_SCOPES', 'MERCHANT_PROFILE_READ ORDERS_READ ITEMS_READ'),
+        'api_version' => env('SQUARE_API_VERSION', '2026-05-20'),
     ],
 
     'squarespace' => [
@@ -140,7 +141,8 @@ return [
         'authorization_url' => env('SQUARESPACE_OAUTH_AUTHORIZATION_URL', 'https://login.squarespace.com/api/1/login/oauth/provider/authorize'),
         'token_url' => env('SQUARESPACE_OAUTH_TOKEN_URL', 'https://login.squarespace.com/api/1/login/oauth/provider/tokens'),
         'api_base' => env('SQUARESPACE_API_BASE', 'https://api.squarespace.com'),
-        'oauth_scopes' => env('SQUARESPACE_OAUTH_SCOPES', 'website.orders.read website.webhook_subscriptions.read_write'),
+        'oauth_scopes' => env('SQUARESPACE_OAUTH_SCOPES', 'website.orders.read'),
+        'user_agent' => env('SQUARESPACE_USER_AGENT', 'Everbranch Order Calendar/1.0'),
     ],
 
     'wix' => [
@@ -150,6 +152,14 @@ return [
         'redirect_uri' => env('WIX_OAUTH_REDIRECT_URI', $workflowCommerceRedirect('wix')),
         'token_url' => env('WIX_OAUTH_TOKEN_URL', 'https://www.wixapis.com/oauth2/token'),
         'api_base' => env('WIX_API_BASE', 'https://www.wixapis.com'),
+        'required_permission' => env('WIX_REQUIRED_PERMISSION', 'Read Orders'),
+    ],
+
+    'woocommerce' => [
+        'app_name' => env('WOOCOMMERCE_APP_NAME', 'Everbranch Order Calendar'),
+        'redirect_uri' => env('WOOCOMMERCE_AUTH_RETURN_URI', $workflowCommerceRedirect('woocommerce')),
+        'callback_uri' => env('WOOCOMMERCE_AUTH_CALLBACK_URI', $workflowCommerceRedirect('woocommerce')),
+        'api_version' => env('WOOCOMMERCE_API_VERSION', 'wc/v3'),
     ],
 
     'quickbooks' => [
@@ -244,7 +254,9 @@ return [
         'automation_oauth_client_id' => env('SHOPIFY_AUTOMATIONS_CLIENT_ID'),
         'automation_oauth_client_secret' => env('SHOPIFY_AUTOMATIONS_CLIENT_SECRET'),
         'automation_redirect_uri' => env('SHOPIFY_AUTOMATIONS_REDIRECT_URI', $workflowCommerceRedirect('shopify')),
-        'automation_oauth_scopes' => env('SHOPIFY_AUTOMATIONS_SCOPES', 'read_orders,read_fulfillments'),
+        'automation_oauth_scopes' => env('SHOPIFY_AUTOMATIONS_SCOPES', 'read_orders'),
+        'automation_api_version' => env('SHOPIFY_AUTOMATIONS_API_VERSION', '2026-07'),
+        'automation_protected_customer_data_approved' => (bool) env('SHOPIFY_AUTOMATIONS_PROTECTED_CUSTOMER_DATA_APPROVED', false),
         'allow_env_token_fallback' => (bool) env('SHOPIFY_ALLOW_ENV_TOKEN_FALLBACK', false),
         // Reporting window timezone used by embedded admin surfaces (Dashboard Lite, etc).
         // Defaults to the primary business timezone so "Today" matches merchant expectations.

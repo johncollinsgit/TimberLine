@@ -21,6 +21,7 @@ class WorkflowProductService
         protected AutomationWorkflowEngine $engine,
         protected CalendarEventPresentationService $calendarPresentation,
         protected CommerceWorkflowConnectionService $commerceConnections,
+        protected CommerceOrderSourceService $commerceOrders,
     ) {}
 
     public function create(int $tenantId, string $templateKey, User $actor): AutomationWorkflow
@@ -50,12 +51,28 @@ class WorkflowProductService
     {
         $before = $this->snapshot($workflow);
         $definition = (array) $workflow->draft_definition;
+        $triggerProvider = (string) data_get($definition, 'trigger.provider', 'asana');
+        if (in_array($triggerProvider, CommerceWorkflowConnectionService::PROVIDERS, true)) {
+            $connectionId = (int) ($payload['trigger_connection_id'] ?? data_get($definition, 'trigger.connection_id', 0));
+            $connection = $this->commerceConnections->connectionForTenant((int) $workflow->tenant_id, $connectionId, $triggerProvider);
+            if ($triggerProvider === 'square') {
+                $requestedLocations = array_values(array_unique(array_filter(array_map('strval', (array) ($payload['location_ids'] ?? [])))));
+                $availableLocations = array_column($this->commerceConnections->sourceOptions($connection), 'id');
+                if (array_diff($requestedLocations, $availableLocations) !== []) {
+                    throw new AutomationWorkflowException('Choose only active locations from the connected Square account.');
+                }
+            }
+        }
         data_set($definition, 'trigger.project_gid', $this->nullableString($payload['project_gid'] ?? null));
         data_set($definition, 'trigger.connection_id', isset($payload['trigger_connection_id']) ? (int) $payload['trigger_connection_id'] : data_get($definition, 'trigger.connection_id'));
+        data_set($definition, 'trigger.location_ids', array_values(array_unique(array_filter(array_map('strval', (array) ($payload['location_ids'] ?? data_get($definition, 'trigger.location_ids', [])))))));
         data_set($definition, 'trigger.schedule_source', (string) ($payload['schedule_source'] ?? data_get($definition, 'trigger.schedule_source', 'source_date')));
         data_set($definition, 'action.calendar_id', $this->nullableString($payload['calendar_id'] ?? null));
         data_set($definition, 'action.timezone', trim((string) ($payload['timezone'] ?? config('app.timezone', 'UTC'))));
         data_set($definition, 'action.default_duration_minutes', min(1440, max(1, (int) ($payload['default_duration_minutes'] ?? 60))));
+        data_set($definition, 'action.default_start_time', (string) ($payload['default_start_time'] ?? data_get($definition, 'action.default_start_time', '09:00')));
+        data_set($definition, 'action.event_time_mode', in_array(($payload['event_time_mode'] ?? null), ['source_time', 'fixed_time', 'all_day'], true) ? (string) $payload['event_time_mode'] : 'source_time');
+        data_set($definition, 'action.schedule_offset_days', min(365, max(-365, (int) ($payload['schedule_offset_days'] ?? 0))));
         data_set($definition, 'action.skip_completed_tasks', (bool) ($payload['skip_completed_tasks'] ?? false));
         data_set($definition, 'action.date_only_mode', 'all_day');
         data_set(
@@ -85,13 +102,24 @@ class WorkflowProductService
         $provider = (string) data_get($workflow->draft_definition, 'trigger.provider', 'asana');
         if (in_array($provider, CommerceWorkflowConnectionService::PROVIDERS, true)) {
             $connection = $this->selectedConnection($workflow, $provider, 'trigger.connection_id');
-            $this->commerceConnections->test($connection);
+            $test = $this->commerceConnections->test($connection);
+            $samples = in_array($provider, CommerceOrderSourceService::LIVE_PROVIDERS, true)
+                ? $this->commerceOrders->sample(
+                    $provider,
+                    (int) $workflow->tenant_id,
+                    (int) $connection->id,
+                    (array) data_get($workflow->draft_definition, 'trigger.location_ids', []),
+                )
+                : [];
 
             return $this->recordTest($workflow, $actor, 'trigger', [
                 'ok' => true,
                 'definition_hash' => $this->definitionHash((array) $workflow->draft_definition),
                 'tested_at' => now()->toIso8601String(),
-                'summary' => 'Connected to '.($connection->external_account_label ?: str($provider)->headline().' account').'.',
+                'summary' => count($samples) > 0
+                    ? 'Connected to '.($connection->external_account_label ?: str($provider)->headline().' account').' and loaded a recent order sample.'
+                    : 'Connected to '.($connection->external_account_label ?: str($provider)->headline().' account').'; no recent order sample was available.',
+                'source_options' => (array) ($test['source_options'] ?? []),
             ]);
         }
         $projectGid = $this->nullableString(data_get($workflow->draft_definition, 'trigger.project_gid'));
@@ -272,12 +300,19 @@ class WorkflowProductService
     protected function runtimeDefinition(AutomationWorkflow $workflow, array $definition): array
     {
         $base = (array) config('automation_workflows.workflows.asana_to_google_calendar', []);
+        $triggerProvider = (string) data_get($definition, 'trigger.provider', 'asana');
         $connections = IntegrationConnection::query()->forTenantId((int) $workflow->tenant_id)
-            ->whereIn('provider', ['asana', 'google_calendar'])
+            ->whereIn('provider', array_values(array_unique([$triggerProvider, 'google_calendar'])))
             ->where('status', IntegrationConnection::STATUS_CONNECTED)
-            ->oldest('connected_at')
-            ->oldest('id')
-            ->get()->keyBy('provider');
+            ->latest('connected_at')
+            ->latest('id')
+            ->get()
+            ->groupBy('provider');
+        $triggerConnectionId = (int) data_get($definition, 'trigger.connection_id', 0);
+        $triggerConnection = $triggerConnectionId > 0
+            ? $connections->get($triggerProvider)?->firstWhere('id', $triggerConnectionId)
+            : $connections->get($triggerProvider)?->first();
+        $googleConnection = $connections->get('google_calendar')?->first();
         $isLegacyMigration = AutomationWorkflowAuditEvent::query()->forAllTenants()
             ->where('tenant_id', $workflow->tenant_id)
             ->where('automation_workflow_id', $workflow->id)
@@ -290,7 +325,8 @@ class WorkflowProductService
                 preferLegacyOAuthClients: true,
             );
             foreach (['asana' => ['asana_oauth_client_id', 'asana_oauth_client_secret'], 'google_calendar' => ['google_calendar_client_id', 'google_calendar_client_secret']] as $provider => $keys) {
-                if (data_get($connections->get($provider)?->metadata, 'credential_source') === 'shared_oauth') {
+                $connection = $provider === $triggerProvider ? $triggerConnection : $googleConnection;
+                if (data_get($connection?->metadata, 'credential_source') === 'shared_oauth') {
                     continue;
                 }
                 foreach ($keys as $key) {
@@ -298,14 +334,24 @@ class WorkflowProductService
                 }
             }
         }
-        if ($connections->get('asana')?->refresh_token) {
-            $credentials['asana_oauth_refresh_token'] = $connections->get('asana')->refresh_token;
+        if ($triggerProvider === 'asana' && $triggerConnection?->refresh_token) {
+            $credentials['asana_oauth_refresh_token'] = $triggerConnection->refresh_token;
         }
-        if ($connections->get('asana')?->access_token) {
-            $credentials['asana_personal_access_token'] = $connections->get('asana')->access_token;
+        if ($triggerProvider === 'asana' && $triggerConnection?->access_token) {
+            $credentials['asana_personal_access_token'] = $triggerConnection->access_token;
         }
-        if ($connections->get('google_calendar')?->refresh_token) {
-            $credentials['google_calendar_refresh_token'] = $connections->get('google_calendar')->refresh_token;
+        if ($googleConnection?->refresh_token) {
+            $credentials['google_calendar_refresh_token'] = $googleConnection->refresh_token;
+        }
+        if ($googleConnection?->access_token) {
+            $credentials['google_calendar_access_token'] = $googleConnection->access_token;
+        }
+        if ($triggerProvider !== 'asana') {
+            foreach (array_keys($credentials) as $key) {
+                if (str_starts_with((string) $key, 'asana_')) {
+                    unset($credentials[$key]);
+                }
+            }
         }
 
         return [
@@ -331,8 +377,13 @@ class WorkflowProductService
             } catch (AutomationWorkflowException) {
                 $triggerReady = false;
             }
-            $googleReady = IntegrationConnection::query()->forTenantId($tenantId)
-                ->where('provider', 'google_calendar')->where('status', IntegrationConnection::STATUS_CONNECTED)->exists();
+            $google = IntegrationConnection::query()->forTenantId($tenantId)
+                ->where('provider', 'google_calendar')
+                ->where('status', IntegrationConnection::STATUS_CONNECTED)
+                ->latest('connected_at')
+                ->latest('id')
+                ->first();
+            $googleReady = filled($google?->refresh_token) || filled($google?->access_token);
 
             return $triggerReady && $googleReady;
         }
@@ -374,7 +425,15 @@ class WorkflowProductService
         $isAuthFailure = ! $ok && preg_match('/\b(401|403|unauthori[sz]ed|invalid[_ ]grant|authentication|credential|access token|refresh token|reconnect)\b/i', (string) $error) === 1;
 
         foreach ($providers as $provider) {
-            $connection = IntegrationConnection::query()->forTenantId((int) $workflow->tenant_id)->where('provider', $provider)->first();
+            $query = IntegrationConnection::query()->forTenantId((int) $workflow->tenant_id)
+                ->where('provider', $provider)
+                ->where('status', IntegrationConnection::STATUS_CONNECTED);
+            $selectedTriggerConnectionId = $provider === (string) data_get($definition, 'trigger.provider')
+                ? (int) data_get($definition, 'trigger.connection_id', 0)
+                : 0;
+            $connection = $selectedTriggerConnectionId > 0
+                ? $query->whereKey($selectedTriggerConnectionId)->first()
+                : $query->latest('connected_at')->latest('id')->first();
             if (! $connection) {
                 continue;
             }
