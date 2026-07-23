@@ -13,6 +13,7 @@ use App\Models\Order;
 use App\Models\QuickBooksReportingSetting;
 use App\Models\QuickBooksReportingSnapshot;
 use App\Models\QuickBooksSyncRun;
+use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\Tenant;
 use Illuminate\Support\Collection;
@@ -123,9 +124,9 @@ class AccountingCommandCenterService
     {
         $orders = Order::query()->forTenantId((int) $tenant->id)
             ->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->get();
-        $completedSquare = SquarePayment::query()->forTenantId((int) $tenant->id)
-            ->whereBetween('created_at_source', [$range['starts_at'], $range['ends_at']])
-            ->whereIn('status', ['COMPLETED', 'completed'])->get();
+        $completedSquareOrders = SquareOrder::query()->forTenantId((int) $tenant->id)
+            ->whereBetween('closed_at', [$range['starts_at'], $range['ends_at']])
+            ->whereIn('state', ['COMPLETED', 'completed'])->get();
         $mappedSquareOrderIds = MarketingOrderEventAttribution::query()
             ->forTenantId((int) $tenant->id)
             ->where('source_type', 'square_order')
@@ -135,14 +136,14 @@ class AccountingCommandCenterService
             ->filter()
             ->unique()
             ->values();
-        $square = $completedSquare->filter(
-            fn (SquarePayment $payment): bool => $mappedSquareOrderIds->contains(
-                trim((string) $payment->square_order_id)
+        $square = $completedSquareOrders->filter(
+            fn (SquareOrder $order): bool => $mappedSquareOrderIds->contains(
+                trim((string) $order->square_order_id)
             )
         );
-        $unmappedSquare = $completedSquare->reject(
-            fn (SquarePayment $payment): bool => $mappedSquareOrderIds->contains(
-                trim((string) $payment->square_order_id)
+        $unmappedSquare = $completedSquareOrders->reject(
+            fn (SquareOrder $order): bool => $mappedSquareOrderIds->contains(
+                trim((string) $order->square_order_id)
             )
         );
         $configuration = (array) ($profile?->configuration ?? []);
@@ -156,11 +157,11 @@ class AccountingCommandCenterService
             'wholesale' => ['amount' => $this->orderTotal($streams['wholesale']), 'count' => $streams['wholesale']->count(), 'source' => 'Shopify and reviewed QuickBooks rules'],
             'online' => ['amount' => $this->orderTotal($streams['online']), 'count' => $streams['online']->count(), 'source' => 'Shopify'],
             'events' => [
-                'amount' => round((float) $square->sum('amount_money') / 100, 2),
+                'amount' => round((float) $square->sum('total_money_amount') / 100, 2),
                 'count' => $square->count(),
-                'source' => 'Square payments mapped to events',
+                'source' => 'Square orders mapped to events',
                 'unmapped_count' => $unmappedSquare->count(),
-                'unmapped_amount' => round((float) $unmappedSquare->sum('amount_money') / 100, 2),
+                'unmapped_amount' => round((float) $unmappedSquare->sum('total_money_amount') / 100, 2),
             ],
         ];
         $total = collect($operational)->sum('amount');
