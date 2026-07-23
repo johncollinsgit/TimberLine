@@ -147,6 +147,15 @@ test('quickbooks remains ledger truth and operational sources are never added to
     SquareOrder::query()->create([
         'tenant_id' => $tenant->id,
         'square_order_id' => 'square-accounting-order-1',
+        'state' => 'COMPLETED',
+        'total_money_amount' => 20000,
+        'closed_at' => now(),
+    ]);
+    SquareOrder::query()->create([
+        'tenant_id' => $tenant->id,
+        'square_order_id' => 'square-accounting-order-unmapped',
+        'state' => 'COMPLETED',
+        'total_money_amount' => 50000,
         'closed_at' => now(),
     ]);
     MarketingOrderEventAttribution::query()->create([
@@ -160,7 +169,7 @@ test('quickbooks remains ledger truth and operational sources are never added to
     SquarePayment::query()->create([
         'tenant_id' => $tenant->id,
         'square_payment_id' => 'square-accounting-1',
-        'square_order_id' => 'square-accounting-order-1',
+        'square_order_id' => 'different-square-payment-order-1',
         'amount_money' => 20000,
         'currency' => 'USD',
         'status' => 'COMPLETED',
@@ -170,7 +179,7 @@ test('quickbooks remains ledger truth and operational sources are never added to
     SquarePayment::query()->create([
         'tenant_id' => $tenant->id,
         'square_payment_id' => 'square-accounting-unmapped',
-        'square_order_id' => 'square-accounting-order-unmapped',
+        'square_order_id' => 'different-square-payment-order-unmapped',
         'amount_money' => 50000,
         'currency' => 'USD',
         'status' => 'COMPLETED',
