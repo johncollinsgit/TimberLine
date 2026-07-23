@@ -56,6 +56,7 @@ class AgreementStripeCheckoutService
         ];
         if ($customerId !== null) {
             $payload['customer'] = $customerId;
+            $payload['customer_update[name]'] = 'auto';
         } else {
             $payload['customer_email'] = (string) $order->acceptance->signer_email;
             if ($mode === 'payment') {
