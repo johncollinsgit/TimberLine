@@ -57,8 +57,16 @@ class TenantBrandProfile extends Model
             return '';
         }
 
-        return $source === 'upload'
-            ? route('tenant.brand.assets.show', ['profile' => $this->getKey(), 'slot' => $asset])
-            : asset(ltrim($path, '/'));
+        if ($source === 'upload') {
+            $version = $this->updated_at?->getTimestamp() ?? $this->getKey();
+
+            return route('tenant.brand.assets.show', [
+                'profile' => $this->getKey(),
+                'slot' => $asset,
+                'v' => $version,
+            ]);
+        }
+
+        return asset(ltrim($path, '/'));
     }
 }

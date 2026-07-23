@@ -68,6 +68,7 @@ test('uploaded brand marks are served through the application with an opaque her
 
     $presentation = app(TenantBrandProfileService::class)->presentationFor($tenant);
     expect($presentation['light_logo_url'])->toContain('/workspace-brand-assets/'.$profile->id.'/light_logo');
+    expect($presentation['light_logo_url'])->toContain('?v=');
     $this->get($presentation['light_logo_url'])->assertOk()->assertHeader('x-content-type-options', 'nosniff');
     $this->actingAs($user)->get('http://uploaded-brand.theeverbranch.com/workspace/brand')
         ->assertOk()
