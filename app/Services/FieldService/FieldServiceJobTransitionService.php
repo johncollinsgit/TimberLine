@@ -25,6 +25,7 @@ class FieldServiceJobTransitionService
                 'block' => 'blocked',
                 'complete' => 'complete',
                 'cancel' => 'canceled',
+                'archive' => 'history',
                 'reopen' => $this->readiness->forJob($job)['ready'] ? 'scheduled' : 'needs_details',
                 default => throw new \InvalidArgumentException('Unsupported field-service transition.'),
             };
@@ -52,6 +53,7 @@ class FieldServiceJobTransitionService
                 'block' => 'Blocked this job: '.trim((string) $reason),
                 'complete' => 'Marked this job complete.',
                 'cancel' => 'Canceled this job.'.(filled($reason) ? ' '.trim((string) $reason) : ''),
+                'archive' => 'Archived this job.',
                 'reopen' => 'Reopened this job.',
             };
             $note = FieldServiceJobNote::query()->create([

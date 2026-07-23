@@ -245,6 +245,39 @@ test('quickbooks api sync imports collins electric customers jobs items and reco
         ->and($search->search('outdoor disconnect', ['tenant_id' => $tenant->id, 'user' => $member]))->not->toBeEmpty();
 });
 
+test('quickbooks drafts use address fallback and sync preserves an existing confirmed job site', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Address Electric', 'slug' => 'address-electric']);
+    $service = app(QuickBooksFieldServiceImportService::class);
+    $transaction = [
+        'Id' => 'INV-ADDRESS',
+        'DocNumber' => '2002',
+        'CustomerRef' => ['value' => 'C-ADDRESS', 'name' => 'Address Customer'],
+        'Balance' => 100,
+        'PrivateNote' => 'Schedule field work.',
+        'ShipAddr' => [],
+        'BillAddr' => ['Line1' => '44 Billing Lane', 'City' => 'Greenville', 'CountrySubDivisionCode' => 'SC', 'PostalCode' => '29601'],
+        'Line' => [['Description' => 'Repair service equipment.']],
+    ];
+
+    $service->importQuickBooksTransaction($tenant, $transaction, 'invoice');
+    $draft = app(FieldServiceWorkCandidateService::class)->pending($tenant)->firstWhere('external_id', 'INV-ADDRESS');
+    expect($draft?->service_address_line_1)->toBe('44 Billing Lane');
+
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'external_source' => 'quickbooks',
+        'external_id' => 'quickbooks:invoice:INV-ADDRESS',
+        'title' => 'Confirmed address job',
+        'status' => 'open',
+        'service_address_line_1' => '99 Confirmed Job Site',
+    ]);
+    unset($transaction['BillAddr']);
+    $service->importQuickBooksTransaction($tenant, $transaction, 'invoice');
+
+    expect($job->fresh()->service_address_line_1)->toBe('99 Confirmed Job Site')
+        ->and(data_get($job->fresh()->metadata, 'quickbooks.address_source'))->toBe('existing_job_address');
+});
+
 test('quickbooks api sync dry run does not write imported records', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Dry Run Electric', 'slug' => 'dry-run-electric']);
     enableQuickBooksBranchForApiTest($tenant);

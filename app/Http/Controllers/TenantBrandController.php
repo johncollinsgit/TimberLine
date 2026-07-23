@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Models\TenantBrandProfile;
 use App\Services\Tenancy\TenantBrandProfileService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TenantBrandController extends Controller
 {
@@ -65,6 +68,24 @@ class TenantBrandController extends Controller
         $brands->storeLogo($brands->ensureForTenant($tenant, $request->user()), $request->file('asset'), $slot, $request->user());
 
         return back()->with('status', 'Brand asset uploaded.');
+    }
+
+    public function asset(TenantBrandProfile $profile, string $slot): StreamedResponse
+    {
+        $field = match ($slot) {
+            'light_logo' => 'light_logo_path',
+            'dark_logo' => 'dark_logo_path',
+            'icon' => 'icon_path',
+            default => abort(404),
+        };
+        abort_unless(data_get($profile->asset_sources, $slot) === 'upload', 404);
+        $path = trim((string) $profile->{$field});
+        abort_unless($path !== '' && Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')->response($path, null, [
+            'Cache-Control' => 'public, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function reset(Request $request, TenantBrandProfileService $brands): RedirectResponse

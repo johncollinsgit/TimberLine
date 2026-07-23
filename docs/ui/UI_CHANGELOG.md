@@ -22,6 +22,18 @@
 - The shared Drive workbook is identified but profitability remains incomplete
   until its live structure and formulas are verified.
 
+## 2026-07-23 - Actionable Job Setup, Swipe Archive, and Solid Workspace Marks
+
+### What Changed
+- Replaced field-readiness warning treatments with neutral setup steps that open the exact missing schedule, job-site address, description, customer-contact, or crew field.
+- Added manager-only swipe-to-reveal Archive actions to native Work job rows. Archive moves a job into History through the existing guarded lifecycle and History jobs remain reopenable.
+- Made uploaded workspace marks render through an application-served asset route and gave the branding hero mark an opaque background so uploaded logos do not inherit a translucent card treatment.
+- QuickBooks job-site selection now prefers Ship To, preserves an already confirmed job address, and then falls back to the transaction billing or imported customer address.
+
+### Guardrails
+- Archive is not deletion, remains tenant-scoped and manager-authorized, and records a lifecycle note.
+- Address fallback does not broaden QuickBooks job classification or overwrite an existing confirmed job site when QuickBooks has no Ship To address.
+
 ## 2026-07-22 - Collins Field Operations 2.3
 
 ### What Changed
@@ -90,7 +102,6 @@
 ### Guardrails
 - All three actions remain disabled until direct Stripe invoicing and tenant allowlisting are ready; text delivery also requires an entered phone number and express billing-text consent.
 - Finalizing or delivering an invoice does not charge a saved payment method, mark it paid, increase received-payment totals, or change plans, modules, or entitlements.
-
 ## 2026-07-21 - Invoice Management and SMS Reminders
 
 ### What Changed
