@@ -67,6 +67,9 @@ test('workflow library and templates are entitled, tenant scoped, and credential
         ->assertSeeText('Squarespace orders to Google Calendar')
         ->assertSeeText('Square orders to Google Calendar')
         ->assertSeeText('Wix orders to Google Calendar')
+        ->assertSee('data-template-browser', false)
+        ->assertSeeText('Available now')
+        ->assertSeeText('Workflow preview')
         ->assertDontSee('client_secret')
         ->assertDontSee('refresh_token');
 
@@ -77,6 +80,11 @@ test('workflow library and templates are entitled, tenant scoped, and credential
         ->assertSeeText('Setup')
         ->assertSeeText('Test')
         ->assertSeeText('Calendar appearance')
+        ->assertSee('data-workflow-canvas', false)
+        ->assertSeeText('Flow controls')
+        ->assertSeeText('Filter')
+        ->assertSeeText('Delay')
+        ->assertSeeText('Paths')
         ->assertDontSee('client_secret')
         ->assertDontSee('refresh_token');
 
