@@ -60,7 +60,17 @@ test('square oauth connection is tenant bound reusable testable and replay safe'
     expect($connection->status)->toBe(IntegrationConnection::STATUS_CONNECTED)
         ->and($connection->external_account_secret)->toBe('merchant-123')
         ->and($connection->access_token)->toBe('square-access-token')
-        ->and($connection->toArray())->not->toHaveKeys(['access_token', 'refresh_token', 'external_account_secret']);
+        ->and($connection->oauth_client_id)->toBe('square-app-id')
+        ->and($connection->oauth_client_secret)->toBe('square-app-secret')
+        ->and($connection->expires_at)->not->toBeNull()
+        ->and(data_get($connection->metadata, 'oauth_client_source'))->toBe('global')
+        ->and($connection->toArray())->not->toHaveKeys([
+            'access_token',
+            'refresh_token',
+            'external_account_secret',
+            'oauth_client_id',
+            'oauth_client_secret',
+        ]);
 
     $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
         ->post(route('workflows.connections.commerce.test', ['provider' => 'square', 'connection' => $connection]))

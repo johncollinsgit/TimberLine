@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\ReleaseDueAutomationWorkflowRunItemsJob;
 use App\Models\TenantWholesaleSetting;
 use App\Services\Wholesale\WholesaleSuggestionGenerator;
 use Illuminate\Foundation\Inspiring;
@@ -161,8 +162,21 @@ Schedule::command('marketing:send-modern-forestry-bag-reminders', [
 
 // Zap-style internal workflow automations (Asana -> Google Calendar, etc).
 Schedule::command('automation:dispatch')
-    ->everyTenMinutes()
+    ->everyMinute()
     ->withoutOverlapping(15)
+    ->runInBackground();
+
+// Resume delayed and retryable v2 run items from their durable checkpoints.
+Schedule::job(new ReleaseDueAutomationWorkflowRunItemsJob)
+    ->everyMinute()
+    ->withoutOverlapping(5);
+
+// Native event payloads are encrypted but can include customer data. Mark old
+// events only after every cursor-based consumer has advanced, then retain that
+// acknowledgement for a short audit/recovery window before deletion.
+Schedule::command('automation:prune-domain-events')
+    ->dailyAt('02:40')
+    ->withoutOverlapping(30)
     ->runInBackground();
 
 // QuickBooks remains read-only. Only tenant connections explicitly enabled by

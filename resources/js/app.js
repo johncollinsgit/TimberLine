@@ -87,6 +87,12 @@ const contextualModules = [
     load: () => import("./workflow-editor"),
     mountExport: "mountWorkflowEditorNow",
   },
+  {
+    key: "workflowStudio",
+    selectors: ["[data-workflow-studio-root]"],
+    load: () => import("./workflows/studio"),
+    mountExport: "mountWorkflowStudioNow",
+  },
 ];
 
 const contextualModuleState = new Map();

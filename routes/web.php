@@ -836,7 +836,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', 'index')->name('index');
             Route::get('/new', 'create')->name('create');
-            Route::post('/', 'store')->name('store');
+            Route::post('/', [\App\Http\Controllers\WorkflowStudioApiController::class, 'store'])->name('store');
+            Route::post('/legacy', 'store')->name('legacy.store');
+            Route::get('/component-catalog', [\App\Http\Controllers\WorkflowStudioApiController::class, 'catalog'])->name('studio.catalog');
             Route::get('/history', 'history')->name('history');
             Route::get('/connections', 'connections')->name('connections');
             Route::post('/connections/asana/connect', 'connectAsana')->name('connections.asana.connect');
@@ -851,6 +853,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/connections/{provider}/{connection}/disconnect', 'disconnectCommerce')->whereIn('provider', ['shopify', 'square', 'squarespace', 'wix'])->name('connections.commerce.disconnect');
             Route::get('/runs/{run}', 'run')->name('runs.show');
             Route::post('/runs/{run}/retry', 'retry')->name('runs.retry');
+            Route::post('/runs/{run}/actions/retry', [\App\Http\Controllers\WorkflowStudioApiController::class, 'retryRun'])->name('studio.runs.retry');
+            Route::get('/{workflow}/builder', [\App\Http\Controllers\WorkflowStudioApiController::class, 'load'])->name('studio.load');
+            Route::put('/{workflow}/draft', [\App\Http\Controllers\WorkflowStudioApiController::class, 'save'])->name('studio.save');
+            Route::post('/{workflow}/steps/{step}/test', [\App\Http\Controllers\WorkflowStudioApiController::class, 'testStep'])->name('studio.steps.test');
+            Route::post('/{workflow}/test-run', [\App\Http\Controllers\WorkflowStudioApiController::class, 'testRun'])->name('studio.test-run');
+            Route::post('/{workflow}/actions/publish', [\App\Http\Controllers\WorkflowStudioApiController::class, 'publish'])->name('studio.publish');
+            Route::post('/{workflow}/actions/pause', [\App\Http\Controllers\WorkflowStudioApiController::class, 'pause'])->name('studio.pause');
+            Route::post('/{workflow}/actions/resume', [\App\Http\Controllers\WorkflowStudioApiController::class, 'resume'])->name('studio.resume');
+            Route::post('/{workflow}/actions/discard-held', [\App\Http\Controllers\WorkflowStudioApiController::class, 'discardHeld'])->name('studio.discard-held');
             Route::get('/{workflow}', 'show')->name('show');
             Route::put('/{workflow}', 'update')->name('update');
             Route::post('/{workflow}/test-trigger', 'testTrigger')->name('test-trigger');

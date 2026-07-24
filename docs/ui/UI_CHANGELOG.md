@@ -1,5 +1,44 @@
 # UI Changelog
 
+## 2026-07-24 — Functional Workflow Studio
+
+### What Changed
+
+- Replaced the template-led workflow screens with a full-height Workflow Studio: software-style header, dotted canvas, insert and reorder controls, selected-step inspector, and operational Workflows/Runs/Connections/Templates navigation.
+- Added a working step picker for the executable launch catalog, grouped mapping selectors for trigger and prior-step outputs, structured Filter/Delay/Paths configuration, Calendar action fields, per-step tests, test runs, autosave conflicts, publishing, pause/resume, and responsive branch outlines.
+- Kept templates as optional executable starters and moved unsupported integrations out of the selectable step library.
+- Made `/workflows/new` an unsaved application state that opens the trigger
+  picker immediately; the first trigger selection creates the draft and moves
+  the browser to its permanent workflow URL.
+- Assigned the immersive editor to the React/TypeScript
+  `resources/js/workflows/*` application and the shared
+  `.eb-workflow-*` stylesheet family. Studio typography is Inter-only, with
+  compact radii, restrained borders, real provider marks, and no decorative
+  emoji or preview-only nodes.
+- Added focus containment and restoration for the picker, keyboard selection,
+  Escape/back behavior, selected-node semantics, live save/test feedback,
+  reduced-motion behavior, and mobile-sized controls.
+- Kept operational pause/resume and held-item actions independent from local
+  draft merging, so a safety action cannot erase an edit waiting to autosave.
+- Added a compatible v1 builder for entitled workspaces outside the Studio
+  rollout and a controlled read-only state for v2 workflows whose rollout is
+  later disabled.
+
+### Guardrails
+
+- The Studio remains behind the existing workflow entitlement, role, tenant, connection, and OAuth protections.
+- Only registry components with executable handlers appear as usable steps; drafts use stable ULIDs and schema-v2 typed values without arbitrary code evaluation.
+- Published schema-v1 workflows keep their existing runtime until the separate parity migration is approved.
+- Individual step tests rebuild a real trigger sample after reload and dry-run
+  only mapped upstream dependencies; empty sample shells cannot create a false
+  test result.
+- Publish stays disabled until every Paths branch contains an action, matching
+  the server compiler's readiness rule.
+- The server remains authoritative for optimistic draft revisions, tenant-owned
+  connections, step tests, publish readiness, execution state, retries, and run
+  history. The UI does not claim that an action worked until the corresponding
+  API result does.
+
 ## 2026-07-23 — Workflow Builder and Step Library Redesign
 
 ### What Changed

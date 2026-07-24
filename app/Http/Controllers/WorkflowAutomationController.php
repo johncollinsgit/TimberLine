@@ -11,17 +11,28 @@ use App\Services\Automation\AutomationWorkflowException;
 use App\Services\Automation\CalendarEventPresentationService;
 use App\Services\Automation\CommerceWorkflowConnectionService;
 use App\Services\Automation\GoogleCalendarWorkflowConnectionService;
+use App\Services\Automation\V2\WorkflowComponentCatalog as WorkflowStudioComponentCatalog;
+use App\Services\Automation\V2\WorkflowDraftService;
+use App\Services\Automation\V2\WorkflowStudioBootstrapService;
+use App\Services\Automation\V2\WorkflowStudioFeatureGate;
+use App\Services\Automation\V2\WorkflowStudioProductService;
 use App\Services\Automation\WorkflowProductService;
 use App\Services\Automation\WorkflowTemplateCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class WorkflowAutomationController extends Controller
 {
-    public function index(Request $request, WorkflowTemplateCatalog $catalog): View
-    {
+    public function index(
+        Request $request,
+        WorkflowTemplateCatalog $catalog,
+        WorkflowStudioComponentCatalog $studioCatalog,
+        WorkflowStudioFeatureGate $featureGate,
+    ): View {
         $tenantId = $this->tenantId($request);
+        $studioEnabled = $featureGate->enabledForTenant($tenantId);
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', 'all'));
         $workflows = AutomationWorkflow::query()
@@ -37,12 +48,31 @@ class WorkflowAutomationController extends Controller
         return view('workflows.index', compact('workflows', 'search', 'status') + [
             'templates' => $catalog->templates(),
             'providers' => $catalog->providers(),
+            'studioComponents' => $studioCatalog->components(),
+            'studioEnabled' => $studioEnabled,
         ]);
     }
 
-    public function create(WorkflowTemplateCatalog $catalog): View
-    {
-        return view('workflows.create', ['templates' => $catalog->templates(), 'providers' => $catalog->providers()]);
+    public function create(
+        Request $request,
+        WorkflowStudioBootstrapService $bootstrap,
+        WorkflowStudioFeatureGate $featureGate,
+        WorkflowTemplateCatalog $catalog,
+    ): View {
+        $tenantId = $this->tenantId($request);
+        if (! $featureGate->enabledForTenant($tenantId)) {
+            return view('workflows.create-legacy', [
+                'templates' => $catalog->templates(),
+                'providers' => $catalog->providers(),
+            ]);
+        }
+
+        return view('workflows.create', [
+            'workflowStudioBootstrap' => $bootstrap->forNew(
+                $tenantId,
+                (string) $request->query('picker', 'home'),
+            ),
+        ]);
     }
 
     public function store(Request $request, WorkflowProductService $service): RedirectResponse
@@ -60,6 +90,9 @@ class WorkflowAutomationController extends Controller
     public function show(
         Request $request,
         AutomationWorkflow $workflow,
+        WorkflowDraftService $drafts,
+        WorkflowStudioBootstrapService $bootstrap,
+        WorkflowStudioFeatureGate $featureGate,
         WorkflowTemplateCatalog $catalog,
         AsanaWorkflowConnectionService $asana,
         GoogleCalendarWorkflowConnectionService $google,
@@ -67,28 +100,64 @@ class WorkflowAutomationController extends Controller
         CommerceWorkflowConnectionService $commerceConnections,
     ): View {
         $this->assertOwned($request, $workflow);
-        $workflow->load(['publishedVersion', 'versions' => fn ($query) => $query->latest('version')->limit(8), 'runs' => fn ($query) => $query->latest()->limit(10)]);
-        $tenantId = (int) $workflow->tenant_id;
-        $sourceProvider = (string) data_get($workflow->draft_definition, 'trigger.provider');
-        $calendarAppearance = $calendarPresentation->fromPayload(
-            [],
-            $sourceProvider,
-            (array) data_get($workflow->draft_definition, 'action.presentation', [])
-        );
+        $tenantId = $this->tenantId($request);
+        if (! $featureGate->enabledForTenant($tenantId)) {
+            $definition = (array) $workflow->draft_definition;
+            $isLegacy = (int) $workflow->definition_schema_version !== 2
+                && (int) ($definition['schema_version'] ?? 1) !== 2;
+            if (! $isLegacy) {
+                return view('workflows.studio-disabled', [
+                    'workflow' => $workflow->load([
+                        'publishedVersion',
+                        'runs' => fn ($query) => $query->latest()->limit(10),
+                    ]),
+                ]);
+            }
+
+            $workflow->load([
+                'publishedVersion',
+                'versions' => fn ($query) => $query->latest('version')->limit(8),
+                'runs' => fn ($query) => $query->latest()->limit(10),
+            ]);
+            $sourceProvider = (string) data_get($definition, 'trigger.provider', 'asana');
+            $calendarAppearance = $calendarPresentation->fromPayload(
+                [],
+                $sourceProvider,
+                (array) data_get($definition, 'action.presentation', [])
+            );
+
+            return view('workflows.show-legacy', [
+                'workflow' => $workflow,
+                'template' => $catalog->template($workflow->template_key),
+                'providers' => $catalog->providers(),
+                'asanaConnection' => $asana->status($tenantId),
+                'googleConnection' => $google->status($tenantId),
+                'calendarAppearance' => $calendarAppearance,
+                'commerceConnections' => IntegrationConnection::query()
+                    ->forTenantId($tenantId)
+                    ->where('provider', $sourceProvider)
+                    ->where('status', IntegrationConnection::STATUS_CONNECTED)
+                    ->orderBy('external_account_label')
+                    ->get(),
+                'commerceConnectionStatus' => in_array(
+                    $sourceProvider,
+                    CommerceWorkflowConnectionService::PROVIDERS,
+                    true
+                ) ? $commerceConnections->status($tenantId, $sourceProvider) : [],
+            ]);
+        }
+
+        $loaded = $drafts->load($this->tenantId($request), (int) $workflow->getKey());
+        $workflow = $loaded['workflow']->load([
+            'publishedVersion',
+            'versions' => fn ($query) => $query->latest('version')->limit(8),
+            'runs' => fn ($query) => $query->latest()->limit(10),
+        ]);
 
         return view('workflows.show', [
             'workflow' => $workflow,
-            'template' => $catalog->template($workflow->template_key),
-            'providers' => $catalog->providers(),
-            'asanaConnection' => $asana->status($tenantId),
-            'googleConnection' => $google->status($tenantId),
-            'calendarAppearance' => $calendarAppearance,
-            'calendarPreview' => $calendarPresentation->preview($sourceProvider, $calendarAppearance),
-            'commerceConnections' => IntegrationConnection::query()->forTenantId($tenantId)
-                ->where('provider', $sourceProvider)->where('status', IntegrationConnection::STATUS_CONNECTED)->orderBy('external_account_label')->get(),
-            'commerceConnectionStatus' => in_array($sourceProvider, CommerceWorkflowConnectionService::PROVIDERS, true)
-                ? $commerceConnections->status($tenantId, $sourceProvider)
-                : [],
+            'workflowStudioBootstrap' => $bootstrap->forWorkflow($workflow, (array) $loaded['definition']),
+            'convertedFromLegacy' => (bool) $loaded['converted_from_legacy'],
         ]);
     }
 
@@ -178,13 +247,35 @@ class WorkflowAutomationController extends Controller
             abort(404);
         }
 
-        return view('workflows.run', ['run' => $run->load(['workflow', 'steps'])]);
+        return view('workflows.run', [
+            'run' => $run->load(['workflow', 'version', 'steps', 'items.steps']),
+        ]);
     }
 
-    public function retry(Request $request, AutomationWorkflowRun $run): RedirectResponse
-    {
+    public function retry(
+        Request $request,
+        AutomationWorkflowRun $run,
+        WorkflowStudioProductService $studio,
+    ): RedirectResponse {
         if ((int) $run->tenant_id !== $this->tenantId($request)) {
             abort(404);
+        }
+
+        $version = $run->version()->first();
+        if ($version && (int) data_get($version->definition, 'schema_version', 1) === 2) {
+            try {
+                $count = $studio->retryRun($run, $request->user());
+            } catch (AutomationWorkflowException $exception) {
+                return back()->with('toast', [
+                    'style' => 'warning',
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+
+            return back()->with('toast', [
+                'style' => 'success',
+                'message' => "{$count} failed workflow item(s) queued from their last durable checkpoint.",
+            ]);
         }
 
         return $this->queueWorkflowRun($request, $run->workflow, 'retry', 'Retry queued against the current published workflow.');
@@ -196,25 +287,50 @@ class WorkflowAutomationController extends Controller
         AsanaWorkflowConnectionService $asana,
         GoogleCalendarWorkflowConnectionService $google,
         CommerceWorkflowConnectionService $commerce,
+        WorkflowStudioComponentCatalog $studioCatalog,
     ): View {
         $tenantId = $this->tenantId($request);
         $usage = [];
-        AutomationWorkflow::query()->forTenantId($tenantId)->get(['id', 'name', 'draft_definition'])->each(function (AutomationWorkflow $workflow) use (&$usage): void {
-            foreach (['trigger.provider', 'action.provider'] as $path) {
-                $provider = trim((string) data_get($workflow->draft_definition, $path));
-                if ($provider !== '') {
-                    $usage[$provider][] = ['id' => $workflow->id, 'name' => $workflow->name];
+        AutomationWorkflow::query()->forTenantId($tenantId)->get(['id', 'name', 'draft_definition'])->each(
+            function (AutomationWorkflow $workflow) use (&$usage, $studioCatalog): void {
+                foreach ($this->definitionProviders((array) $workflow->draft_definition, $studioCatalog) as $provider) {
+                    $usage[$provider][(int) $workflow->id] = [
+                        'id' => $workflow->id,
+                        'name' => $workflow->name,
+                    ];
                 }
             }
-        });
+        );
+        $usage = collect($usage)
+            ->map(fn (array $workflows): array => array_values($workflows))
+            ->all();
+
+        $studioPublicCatalog = $studioCatalog->publicCatalog();
+        $liveProviderKeys = collect((array) ($studioPublicCatalog['components'] ?? []))
+            ->filter(fn (array $component): bool => (bool) ($component['connection_required'] ?? false))
+            ->pluck('provider')
+            ->unique()
+            ->values();
+        $roadmapProviders = collect((array) ($studioPublicCatalog['roadmap'] ?? []))
+            ->filter(fn (array $component): bool => (bool) ($component['connection_required'] ?? false))
+            ->groupBy('provider')
+            ->map(fn ($components, string $provider): array => [
+                'provider' => $provider,
+                'label' => (string) data_get($components, '0.provider_label', str($provider)->headline()),
+                'description' => (string) data_get($components, '0.description', 'Provider execution is not available yet.'),
+            ])
+            ->values()
+            ->all();
 
         return view('workflows.connections', [
-            'providers' => $catalog->providers(),
+            'providers' => collect($catalog->providers())->only($liveProviderKeys->all())->all(),
+            'roadmapProviders' => $roadmapProviders,
             'asanaConnection' => $asana->status($tenantId),
             'googleConnection' => $google->status($tenantId),
             'connections' => IntegrationConnection::query()->forTenantId($tenantId)->orderBy('provider')->get(),
             'usage' => $usage,
             'commerceStatuses' => $commerce->statuses($tenantId),
+            'returnPath' => $this->connectionReturnPath($request),
         ]);
     }
 
@@ -223,6 +339,7 @@ class WorkflowAutomationController extends Controller
         try {
             $url = $service->buildConnectUrl($this->tenantId($request), $request->user(), $provider, [
                 'shop_domain' => $request->input('shop_domain'),
+                'return_path' => $this->connectionReturnPath($request),
             ]);
 
             return redirect()->away($url);
@@ -266,7 +383,11 @@ class WorkflowAutomationController extends Controller
     public function connectAsana(Request $request, AsanaWorkflowConnectionService $service): RedirectResponse
     {
         try {
-            return redirect()->away($service->buildConnectUrl($this->tenantId($request), $request->user(), returnPath: route('workflows.connections', absolute: false)));
+            return redirect()->away($service->buildConnectUrl(
+                $this->tenantId($request),
+                $request->user(),
+                returnPath: $this->connectionReturnPath($request),
+            ));
         } catch (AutomationWorkflowException $exception) {
             return back()->with('toast', ['style' => 'warning', 'message' => $exception->getMessage()]);
         }
@@ -275,7 +396,11 @@ class WorkflowAutomationController extends Controller
     public function connectGoogle(Request $request, GoogleCalendarWorkflowConnectionService $service): RedirectResponse
     {
         try {
-            return redirect()->away($service->buildConnectUrl($this->tenantId($request), $request->user(), returnPath: route('workflows.connections', absolute: false)));
+            return redirect()->away($service->buildConnectUrl(
+                $this->tenantId($request),
+                $request->user(),
+                returnPath: $this->connectionReturnPath($request),
+            ));
         } catch (AutomationWorkflowException $exception) {
             return back()->with('toast', ['style' => 'warning', 'message' => $exception->getMessage()]);
         }
@@ -391,5 +516,149 @@ class WorkflowAutomationController extends Controller
         if ((int) $workflow->tenant_id !== $this->tenantId($request)) {
             abort(404);
         }
+    }
+
+    protected function connectionReturnPath(Request $request): string
+    {
+        $fallback = route('workflows.connections', absolute: false);
+        $candidate = trim((string) $request->input('return_path', ''));
+        if ($candidate === '') {
+            return $fallback;
+        }
+
+        $parts = parse_url($candidate);
+        if (
+            $parts === false
+            || isset($parts['scheme'])
+            || isset($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['port'])
+            || isset($parts['fragment'])
+        ) {
+            return $fallback;
+        }
+
+        $path = (string) ($parts['path'] ?? '');
+        if ($path === route('workflows.create', absolute: false) && blank($parts['query'] ?? null)) {
+            return $path;
+        }
+        if (preg_match('#^/workflows/([1-9][0-9]*)$#', $path, $matches) !== 1) {
+            return $fallback;
+        }
+
+        $workflow = AutomationWorkflow::query()
+            ->forAllTenants()
+            ->where('tenant_id', $this->tenantId($request))
+            ->find((int) $matches[1]);
+        if (! $workflow) {
+            return $fallback;
+        }
+
+        $query = [];
+        parse_str((string) ($parts['query'] ?? ''), $query);
+        if (array_diff(array_keys($query), ['step']) !== []) {
+            return $fallback;
+        }
+
+        $stepId = trim((string) ($query['step'] ?? ''));
+        if ($stepId !== '') {
+            if (! Str::isUlid($stepId) || ! $this->definitionHasStep((array) $workflow->draft_definition, $stepId)) {
+                return $fallback;
+            }
+
+            return route('workflows.show', $workflow, absolute: false).'?'.http_build_query([
+                'step' => $stepId,
+            ], '', '&', PHP_QUERY_RFC3986);
+        }
+
+        return route('workflows.show', $workflow, absolute: false);
+    }
+
+    /** @param array<string,mixed> $definition */
+    protected function definitionHasStep(array $definition, string $stepId): bool
+    {
+        if ((string) data_get($definition, 'trigger.id') === $stepId) {
+            return true;
+        }
+
+        $find = function (array $steps) use (&$find, $stepId): bool {
+            foreach ($steps as $step) {
+                if (! is_array($step)) {
+                    continue;
+                }
+                if ((string) ($step['id'] ?? '') === $stepId) {
+                    return true;
+                }
+                foreach ((array) data_get($step, 'config.branches', []) as $branch) {
+                    if (is_array($branch) && $find((array) ($branch['steps'] ?? []))) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        return $find((array) ($definition['steps'] ?? []));
+    }
+
+    /**
+     * Resolve every connection-backed provider referenced by a workflow,
+     * including actions nested inside v2 Paths branches.
+     *
+     * @param  array<string,mixed>  $definition
+     * @return list<string>
+     */
+    protected function definitionProviders(
+        array $definition,
+        WorkflowStudioComponentCatalog $catalog,
+    ): array {
+        if ((int) ($definition['schema_version'] ?? 1) !== 2) {
+            return collect(['trigger.provider', 'action.provider'])
+                ->map(fn (string $path): string => trim((string) data_get($definition, $path)))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        $providers = [];
+        $visitStep = function (array $step) use (&$visitStep, &$providers, $catalog): void {
+            $componentKey = trim((string) ($step['component_key'] ?? ''));
+            $component = $componentKey !== '' ? $catalog->component($componentKey) : null;
+            if (is_array($component) && (bool) ($component['connection_required'] ?? false)) {
+                $provider = trim((string) ($component['connection_provider'] ?? $component['provider'] ?? ''));
+                if ($provider !== '') {
+                    $providers[$provider] = true;
+                }
+            }
+
+            $branches = data_get($step, 'config.branches');
+            if (! is_array($branches)) {
+                $branches = $step['branches'] ?? [];
+            }
+            foreach ((array) $branches as $branch) {
+                if (! is_array($branch)) {
+                    continue;
+                }
+                foreach ((array) ($branch['steps'] ?? []) as $nestedStep) {
+                    if (is_array($nestedStep)) {
+                        $visitStep($nestedStep);
+                    }
+                }
+            }
+        };
+
+        if (is_array($definition['trigger'] ?? null)) {
+            $visitStep($definition['trigger']);
+        }
+        foreach ((array) ($definition['steps'] ?? []) as $step) {
+            if (is_array($step)) {
+                $visitStep($step);
+            }
+        }
+
+        return array_keys($providers);
     }
 }

@@ -109,6 +109,13 @@ class AsanaWorkflowConnectionService
             'tenant_id' => $tenantId,
             'workflow_key' => $workflowKey,
             'code_verifier' => $codeVerifier,
+            'oauth_client_id_encrypted' => Crypt::encryptString($clientId),
+            'oauth_client_secret_encrypted' => Crypt::encryptString($clientSecret),
+            'oauth_client_source' => (string) data_get(
+                $credentials,
+                'sources.asana_oauth_client_id',
+                'missing',
+            ),
             'return_path' => $this->safeReturnPath($returnPath),
             'created_at' => now()->toIso8601String(),
         ], now()->addMinutes(15));
@@ -159,16 +166,16 @@ class AsanaWorkflowConnectionService
             throw new AutomationWorkflowException('Asana connection state belongs to a different user.');
         }
 
-        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
+        [$clientId, $clientSecret] = $this->cachedOAuthClientCredentials($cached);
         $token = $this->exchangeCode(
             code: trim($code),
             codeVerifier: trim((string) $cached['code_verifier']),
-            clientId: $credentials['asana_oauth_client_id'] ?? null,
-            clientSecret: $credentials['asana_oauth_client_secret'] ?? null,
+            clientId: $clientId,
+            clientSecret: $clientSecret,
         );
 
         $refreshToken = $this->nullableString((string) ($token['refresh_token'] ?? ''))
-            ?? $this->nullableString($credentials['asana_oauth_refresh_token'] ?? null);
+            ?? $this->existingRefreshTokenForClient($tenantId, $clientId, $clientSecret);
 
         if ($refreshToken === null) {
             throw new AutomationWorkflowException('Asana did not return a refresh token. Reconnect and grant consent again.');
@@ -198,9 +205,12 @@ class AsanaWorkflowConnectionService
                 'external_account_label' => $this->nullableString($tokenUser['name'] ?? null) ?? $this->nullableString($tokenUser['email'] ?? null) ?? 'Asana account',
                 'refresh_token' => $refreshToken,
                 'token_type' => (string) ($token['token_type'] ?? 'bearer'),
+                'oauth_client_id' => $clientId,
+                'oauth_client_secret' => $clientSecret,
                 'scopes' => $token['granted_scopes'] ?? $this->scopes(),
                 'connected_by_user_id' => $user->id,
             ],
+            oauthClientSource: (string) ($cached['oauth_client_source'] ?? 'missing'),
         );
 
         $projects = $this->projectOptions($tenantId, $workflowKey, true);
@@ -227,8 +237,12 @@ class AsanaWorkflowConnectionService
     }
 
     /** @param array<string,mixed> $values */
-    protected function persistSharedConnection(int $tenantId, string $externalAccountId, array $values): IntegrationConnection
-    {
+    protected function persistSharedConnection(
+        int $tenantId,
+        string $externalAccountId,
+        array $values,
+        string $oauthClientSource,
+    ): IntegrationConnection {
         $query = IntegrationConnection::query()->forAllTenants()
             ->where('tenant_id', $tenantId)
             ->where('provider', 'asana');
@@ -240,7 +254,13 @@ class AsanaWorkflowConnectionService
             ...$values,
             'external_account_id' => $externalAccountId,
             'status' => IntegrationConnection::STATUS_CONNECTED,
-            'metadata' => [...(array) $connection->metadata, 'credential_source' => 'shared_oauth'],
+            'metadata' => [
+                ...(array) $connection->metadata,
+                'credential_source' => $oauthClientSource === 'global'
+                    ? 'shared_oauth'
+                    : 'legacy_tenant',
+                'oauth_client_source' => $oauthClientSource,
+            ],
             'connected_at' => now(),
             'last_synced_at' => now(),
             'last_error_code' => null,
@@ -252,6 +272,8 @@ class AsanaWorkflowConnectionService
             'status' => IntegrationConnection::STATUS_DISCONNECTED,
             'access_token' => null,
             'refresh_token' => null,
+            'oauth_client_id' => null,
+            'oauth_client_secret' => null,
             'last_synced_at' => now(),
         ]);
 
@@ -270,7 +292,7 @@ class AsanaWorkflowConnectionService
     public function disconnect(int $tenantId, string $workflowKey = self::WORKFLOW_KEY): void
     {
         $workflowKey = $this->normalizeWorkflowKey($workflowKey);
-        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
+        $credentials = $this->connectionCredentials($tenantId, $workflowKey);
         $refreshToken = $this->nullableString($credentials['asana_oauth_refresh_token'] ?? null);
         $clientId = $this->nullableString($credentials['asana_oauth_client_id'] ?? null);
         $clientSecret = $this->nullableString($credentials['asana_oauth_client_secret'] ?? null);
@@ -311,6 +333,8 @@ class AsanaWorkflowConnectionService
             'status' => IntegrationConnection::STATUS_DISCONNECTED,
             'access_token' => null,
             'refresh_token' => null,
+            'oauth_client_id' => null,
+            'oauth_client_secret' => null,
             'last_synced_at' => now(),
         ]);
     }
@@ -330,7 +354,7 @@ class AsanaWorkflowConnectionService
             }
         }
 
-        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
+        $credentials = $this->connectionCredentials($tenantId, $workflowKey);
         $accessToken = $this->accessTokenFromCredentials($credentials);
         $workspaces = $this->fetchWorkspaces($accessToken);
 
@@ -381,6 +405,95 @@ class AsanaWorkflowConnectionService
     protected function redirectUri(): ?string
     {
         return $this->nullableString(config('services.asana.redirect_uri'));
+    }
+
+    /** @return array<string,mixed> */
+    protected function connectionCredentials(int $tenantId, string $workflowKey): array
+    {
+        $connection = IntegrationConnection::query()->forTenantId($tenantId)
+            ->where('provider', 'asana')
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+        $capturedSource = (string) data_get($connection?->metadata, 'oauth_client_source');
+        $preferLegacy = $capturedSource === 'legacy_tenant'
+            || data_get($connection?->metadata, 'credential_source') === 'legacy_migration';
+        $credentials = $this->workflowSettingsService->effectiveCredentials(
+            $tenantId,
+            $workflowKey,
+            preferLegacyOAuthClients: $preferLegacy,
+        );
+
+        if (filled($connection?->oauth_client_id) || filled($connection?->oauth_client_secret)) {
+            if (blank($connection?->oauth_client_id) || blank($connection?->oauth_client_secret)) {
+                throw new AutomationWorkflowException(
+                    'Asana connection has an incomplete OAuth client snapshot. Reconnect the account.'
+                );
+            }
+            $credentials['asana_oauth_client_id'] = $connection->oauth_client_id;
+            $credentials['asana_oauth_client_secret'] = $connection->oauth_client_secret;
+            $credentials['sources']['asana_oauth_client_id'] = 'connection';
+            $credentials['sources']['asana_oauth_client_secret'] = 'connection';
+        }
+        if ($connection?->refresh_token) {
+            $credentials['asana_oauth_refresh_token'] = $connection->refresh_token;
+            $credentials['sources']['asana_oauth_refresh_token'] = 'connection';
+        }
+        if ($connection?->access_token) {
+            $credentials['asana_access_token'] = $connection->access_token;
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * @param  array<string,mixed>  $state
+     * @return array{0:string,1:string}
+     */
+    protected function cachedOAuthClientCredentials(array $state): array
+    {
+        try {
+            $clientId = Crypt::decryptString((string) ($state['oauth_client_id_encrypted'] ?? ''));
+            $clientSecret = Crypt::decryptString((string) ($state['oauth_client_secret_encrypted'] ?? ''));
+        } catch (\Throwable) {
+            throw new AutomationWorkflowException(
+                'Asana connection credentials could not be verified. Start the connection again.'
+            );
+        }
+
+        if (trim($clientId) === '' || trim($clientSecret) === '') {
+            throw new AutomationWorkflowException(
+                'Asana connection credentials are incomplete. Start the connection again.'
+            );
+        }
+
+        return [$clientId, $clientSecret];
+    }
+
+    protected function existingRefreshTokenForClient(
+        int $tenantId,
+        string $clientId,
+        string $clientSecret,
+    ): ?string {
+        $connection = IntegrationConnection::query()->forTenantId($tenantId)
+            ->where('provider', 'asana')
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+        $storedClientId = trim((string) $connection?->oauth_client_id);
+        $storedClientSecret = trim((string) $connection?->oauth_client_secret);
+        if (
+            $storedClientId === ''
+            || $storedClientSecret === ''
+            || ! hash_equals($storedClientId, $clientId)
+            || ! hash_equals($storedClientSecret, $clientSecret)
+        ) {
+            return null;
+        }
+
+        return $this->nullableString($connection?->refresh_token);
     }
 
     /**

@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "resources/js/workflows/**/*.ts",
+    "resources/js/workflows/**/*.tsx"
+  ]
+}
