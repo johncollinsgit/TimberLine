@@ -1,5 +1,19 @@
 # SYSTEM SNAPSHOT
 
+## Canonical Customer Alias Identity Rule (2026-07-24)
+
+- Customer merges retain archived `marketing_profiles` aliases for auditability,
+  but tenant-scoped email and phone matching must resolve every match through
+  `CanonicalMarketingProfileResolver` before deciding whether an identity is
+  unique or ambiguous. Multiple aliases that end at one survivor are one
+  customer and must never hide that survivor's storefront rewards balance.
+- Multi-level merge chains resolve to their final survivor. Distinct survivors
+  remain ambiguous, and broken, cyclic, cross-tenant, or email/phone-conflicting
+  chains fail closed to identity review.
+- Merge aliases do not own a separate customer balance after consolidation.
+  Existing ledgers and balances remain authoritative; this identity rule does
+  not authorize a Growave re-import, balance recalculation, or data migration.
+
 ## Accounting Command Center Branch (2026-07-23)
 
 - `accounting_command_center` is a reusable, disabled-by-default,

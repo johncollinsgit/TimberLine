@@ -450,6 +450,17 @@ Strict near-term execution order (current operator rule):
 2. Email reliability fixed for launch-critical reward/customer workflows.
 3. Only then broader platform expansion.
 
+Canonical customer alias invariant:
+- Retained `marketing_profiles` merge aliases are audit records, not separate
+  customer matches.
+- Resolve every tenant-scoped email/phone match through
+  `CanonicalMarketingProfileResolver` before counting matches. Deduplicate
+  aliases that reach the same final survivor, including multi-level chains.
+- Preserve fail-closed review behavior for distinct survivors, broken or cyclic
+  chains, cross-tenant targets, and email/phone conflicts.
+- Storefront identity and review payloads must reference canonical survivors.
+  Do not move, recalculate, or re-import Candle Cash to repair alias ambiguity.
+
 Canonical Candle Cash drift-repair sequence (tenant-scoped, live-safe):
 1. `php artisan marketing:audit-candle-cash-composition --tenant-id=1`
 2. `php artisan marketing:reconcile-candle-cash-balances --tenant-id=1` (preview-only)

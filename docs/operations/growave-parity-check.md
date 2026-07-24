@@ -86,6 +86,23 @@ Canonical non-wholesale exclusion rule used by rehome/audit checks:
 - exclude if any `marketing_profile_links` row has `source_type='shopify_customer'` and `source_id LIKE 'wholesale:%'`
 - exclude if any `customer_external_profiles` row has `provider='shopify'` and `store_key='wholesale'`
 
+## Retained customer alias invariant (2026-07-24)
+
+Customer merges intentionally retain archived `marketing_profiles` aliases.
+Those rows must never create storefront ambiguity when they resolve to the same
+tenant-scoped survivor:
+
+- email and phone matches are canonicalized before match counts are evaluated;
+- multi-level aliases are deduplicated at the final survivor;
+- distinct survivors, cross-tenant targets, broken chains, cycles, and
+  email/phone conflicts still fail closed;
+- storefront and identity-review match collections contain survivors, not
+  archived aliases.
+
+This is an identity-resolution rule. Do not run a Growave import, rewrite a
+ledger, reconcile a balance, or clean pending identity-review rows merely
+because an alias and survivor share an identifier.
+
 ## Resumable full-import run strategy
 
 1) Start uncapped pass (retail example):

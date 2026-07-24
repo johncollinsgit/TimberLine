@@ -9,9 +9,9 @@ use Illuminate\Support\Collection;
 class MarketingProfileMatcher
 {
     public function __construct(
-        protected MarketingIdentityNormalizer $normalizer
-    ) {
-    }
+        protected MarketingIdentityNormalizer $normalizer,
+        protected CanonicalMarketingProfileResolver $canonicalProfiles
+    ) {}
 
     /**
      * @return array{
@@ -36,6 +36,22 @@ class MarketingProfileMatcher
                 normalizedPhone: $normalizedPhone,
                 nullTenantOnly: true
             );
+        } elseif ($tenantId !== null) {
+            $canonicalEmailMatches = $this->canonicalProfiles->canonicalCollection($emailMatches, $tenantId);
+            $canonicalPhoneMatches = $this->canonicalProfiles->canonicalCollection($phoneMatches, $tenantId);
+
+            if ($canonicalEmailMatches === null || $canonicalPhoneMatches === null) {
+                return $this->result(
+                    'review',
+                    null,
+                    'canonical_alias_resolution_failed',
+                    $canonicalEmailMatches ?? collect(),
+                    $canonicalPhoneMatches ?? collect()
+                );
+            }
+
+            $emailMatches = $canonicalEmailMatches;
+            $phoneMatches = $canonicalPhoneMatches;
         }
 
         $emailCount = $emailMatches->count();
@@ -72,8 +88,8 @@ class MarketingProfileMatcher
     }
 
     /**
-     * @param Collection<int,MarketingProfile> $emailMatches
-     * @param Collection<int,MarketingProfile> $phoneMatches
+     * @param  Collection<int,MarketingProfile>  $emailMatches
+     * @param  Collection<int,MarketingProfile>  $phoneMatches
      * @return array{
      *   outcome:string,
      *   profile:?MarketingProfile,
