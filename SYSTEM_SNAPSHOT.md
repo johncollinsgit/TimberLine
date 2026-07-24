@@ -14,6 +14,75 @@
   Existing ledgers and balances remain authoritative; this identity rule does
   not authorize a Growave re-import, balance recalculation, or data migration.
 
+## Workflow Studio v2 (2026-07-24)
+
+- `/workflows` is now an operational workspace with Workflows, Runs,
+  Connections, and optional Templates navigation. `/workflows/new` opens an
+  unsaved blank canvas and does not create an `automation_workflows` row until
+  the first trigger is selected.
+- The React/TypeScript Workflow Studio owns the immersive editor experience:
+  compact product header, dotted canvas, executable step picker, reorder and
+  insertion controls, selected-step inspector, responsive path outline,
+  autosave revision feedback, step tests, test runs, publish, pause/resume, and
+  truthful run-history links.
+- Schema v2 definitions use one trigger plus ordered Action, Filter, Delay, or
+  Paths steps. Step and branch identities are stable ULIDs; mappings may read
+  only `trigger.output.*` or output from a reachable earlier step. Arbitrary
+  code and expression evaluation are not part of the contract. Limits are 100
+  total steps, ten branches per Paths step, three nested Paths levels, and
+  delays from one minute through 30 days.
+- The canonical component registry exposes labels, provider assets,
+  configuration and input/output schemas, connection requirements, scopes, and
+  test policy without exposing handler classes. The executable launch catalog
+  contains native Everbranch customer/job/task triggers and job/email actions,
+  Asana/Shopify/Square polling triggers, Google Calendar event upsert, Filter,
+  Delay For, Delay Until, and Paths. Unsupported providers and unfinished
+  controls cannot create steps.
+- Builder JSON endpoints are tenant-scoped for catalog, draft creation/load/save,
+  stable-step testing, test runs, publish, pause, resume, held-item discard, and
+  run retry. Saves require `draft_revision`; a stale save returns HTTP 409.
+  Invalid definitions return field-addressable HTTP 422 errors.
+- Published definitions remain immutable. V2 trigger events become durable,
+  version-pinned run items before a polling cursor advances. Each item keeps its
+  encrypted payload/checkpoint, available time, retry state, current step, and
+  branch stack. Per-step action receipts and destination links provide
+  idempotency so a retry resumes from the failed step instead of repeating a
+  confirmed write.
+- `automation:dispatch` runs every minute, while each workflow's `next_run_at`
+  preserves its configured polling interval (ten minutes by default). A second
+  every-minute queue job releases due delays and retry checkpoints. Retryable
+  failures use bounded backoff; uncertain external-send outcomes and paused
+  items are held for an explicit operator decision. Runtime-disabled v2
+  workflows remain due without advancing their cadence, and already queued
+  pending/delayed items are held rather than executed.
+- Workflow routes retain the existing `workflow_automations` entitlement,
+  tenant membership, and role protections. The additional v2 feature gate is
+  enabled for an explicit tenant allowlist, defaulting to Modern Forestry
+  tenant `1`. Entitled tenants outside that allowlist retain the compatible v1
+  builder; an existing v2 draft becomes read-only rather than entering an
+  unavailable service. Connections are resolved inside the active tenant and validated
+  for provider, connected state, and declared scopes. Stored execution
+  payloads are encrypted; run summaries and errors redact secrets and common
+  PII.
+- Stable-step tests reconstruct a real trigger sample when browser-held data is
+  absent and dry-run only the earlier step IDs referenced by typed mappings.
+  Operational pause/resume and held-item responses update status without
+  replacing an unsaved local draft.
+- Provider connections retain encrypted snapshots of the OAuth client identity
+  used at connection time so refreshes use the same credential source even if
+  deployment configuration later changes. Native event retention runs daily:
+  events are acknowledged only after every relevant published workflow cursor
+  has passed them, then removed after a separate grace period.
+- Schema-v1 published workflows continue through the legacy runner. Opening one
+  in Studio converts only its editable draft; the v1 published version remains
+  active until the guarded `automation:promote-legacy-v2` path records three
+  matching shadows plus a matching confirmation. Promotion atomically creates
+  an immutable v2 version while preserving the source cursor, remapping legacy
+  destination links to the v2 action ULID, and retaining the immutable v1
+  version and rollback metadata.
+- Canonical operations, rollout, rollback, and production smoke procedure:
+  `docs/operations/workflow-studio-v2-runbook.md`.
+
 ## Accounting Command Center Branch (2026-07-23)
 
 - `accounting_command_center` is a reusable, disabled-by-default,

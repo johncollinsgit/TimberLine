@@ -19,17 +19,21 @@ class AutomationWorkflow extends Model
 
     protected $fillable = [
         'tenant_id', 'template_key', 'name', 'status', 'draft_definition',
+        'definition_schema_version', 'draft_revision',
         'published_version_id', 'test_state', 'created_by_user_id', 'updated_by_user_id',
-        'published_at', 'last_run_at',
+        'published_at', 'last_run_at', 'next_run_at',
     ];
 
     protected $casts = [
         'tenant_id' => 'integer',
+        'definition_schema_version' => 'integer',
+        'draft_revision' => 'integer',
         'published_version_id' => 'integer',
         'draft_definition' => 'array',
         'test_state' => 'array',
         'published_at' => 'datetime',
         'last_run_at' => 'datetime',
+        'next_run_at' => 'datetime',
     ];
 
     public function versions(): HasMany
@@ -45,5 +49,10 @@ class AutomationWorkflow extends Model
     public function runs(): HasMany
     {
         return $this->hasMany(AutomationWorkflowRun::class);
+    }
+
+    public function runItems(): HasMany
+    {
+        return $this->hasMany(AutomationWorkflowRunItem::class);
     }
 }

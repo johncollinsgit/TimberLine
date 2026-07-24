@@ -85,6 +85,19 @@ test('legacy cutover preserves cursor and destination links and activates only a
         ->and($workflow->fresh()->status)->toBe(AutomationWorkflow::STATUS_PAUSED);
 
     $this->artisan('automation:cutover-legacy modern-forestry-cutover --confirm')
+        ->expectsOutputToContain('Cutover blocked')
+        ->assertFailed();
+    expect((bool) data_get(TenantMarketingSetting::query()->where('tenant_id', $tenant->id)->value('value'), 'enabled'))->toBeTrue()
+        ->and($workflow->fresh()->status)->toBe(AutomationWorkflow::STATUS_PAUSED);
+
+    $this->artisan('automation:cutover-legacy modern-forestry-cutover --dry-run')
+        ->expectsOutputToContain('shadow_parity_streak=2/3')
+        ->assertSuccessful();
+    $this->artisan('automation:cutover-legacy modern-forestry-cutover --dry-run')
+        ->expectsOutputToContain('shadow_parity_streak=3/3')
+        ->assertSuccessful();
+
+    $this->artisan('automation:cutover-legacy modern-forestry-cutover --confirm')
         ->expectsOutputToContain('Cutover verified')
         ->assertSuccessful();
 
@@ -92,6 +105,7 @@ test('legacy cutover preserves cursor and destination links and activates only a
         ->and($workflow->fresh()->status)->toBe(AutomationWorkflow::STATUS_ACTIVE)
         ->and(AutomationWorkflowLink::query()->where('source_id', 'task-1')->value('destination_id'))->toBe('existing-event')
         ->and(AutomationWorkflowLink::query()->where('source_id', 'task-1')->count())->toBe(1)
+        ->and(AutomationWorkflowAuditEvent::query()->forAllTenants()->where('automation_workflow_id', $workflow->id)->where('event_type', 'legacy_shadow_preview_passed')->count())->toBe(3)
         ->and(AutomationWorkflowAuditEvent::query()->forAllTenants()->where('automation_workflow_id', $workflow->id)->where('event_type', 'legacy_cutover_completed')->exists())->toBeTrue();
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'PATCH' && str_contains($request->url(), '/events/existing-event'));

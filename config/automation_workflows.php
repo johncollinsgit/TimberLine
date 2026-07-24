@@ -4,6 +4,21 @@ use App\Services\Automation\Drivers\AsanaGoogleCalendarWorkflowDriver;
 
 return [
     'enabled' => (bool) env('AUTOMATION_WORKFLOWS_ENABLED', false),
+    'v2_enabled' => (bool) env('AUTOMATION_WORKFLOWS_V2_ENABLED', true),
+    'v2_tenant_ids' => array_values(array_filter(array_map(
+        static fn (string $value): int => (int) trim($value),
+        explode(',', (string) env('AUTOMATION_WORKFLOWS_V2_TENANT_IDS', '1'))
+    ))),
+    'default_poll_interval_minutes' => (int) env('AUTOMATION_WORKFLOWS_POLL_INTERVAL_MINUTES', 10),
+    'max_steps' => 100,
+    'max_path_branches' => 10,
+    'max_path_depth' => 3,
+    'max_delay_minutes' => 43_200,
+    'max_definition_bytes' => 1_048_576,
+    'max_event_payload_bytes' => 262_144,
+    'max_step_output_bytes' => 65_536,
+    'domain_event_retention_days' => (int) env('AUTOMATION_DOMAIN_EVENT_RETENTION_DAYS', 30),
+    'domain_event_consumed_grace_days' => (int) env('AUTOMATION_DOMAIN_EVENT_CONSUMED_GRACE_DAYS', 7),
     'oauth_state_cache_store' => env('AUTOMATION_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
 
     'drivers' => [

@@ -94,6 +94,13 @@ class GoogleCalendarWorkflowConnectionService
             'user_id' => (int) $user->id,
             'tenant_id' => $tenantId,
             'workflow_key' => $workflowKey,
+            'oauth_client_id_encrypted' => Crypt::encryptString($clientId),
+            'oauth_client_secret_encrypted' => Crypt::encryptString($clientSecret),
+            'oauth_client_source' => (string) data_get(
+                $credentials,
+                'sources.google_calendar_client_id',
+                'missing',
+            ),
             'return_path' => $this->safeReturnPath($returnPath),
             'created_at' => now()->toIso8601String(),
         ], now()->addMinutes(15));
@@ -136,15 +143,15 @@ class GoogleCalendarWorkflowConnectionService
             throw new AutomationWorkflowException('Google Calendar connection state belongs to a different user.');
         }
 
-        $credentials = $this->workflowSettingsService->effectiveCredentials($tenantId, $workflowKey);
+        [$clientId, $clientSecret] = $this->cachedOAuthClientCredentials($cached);
         $token = $this->exchangeCode(
             code: trim($code),
-            clientId: $credentials['google_calendar_client_id'] ?? null,
-            clientSecret: $credentials['google_calendar_client_secret'] ?? null,
+            clientId: $clientId,
+            clientSecret: $clientSecret,
         );
 
         $refreshToken = $this->nullableString((string) ($token['refresh_token'] ?? ''))
-            ?? $this->nullableString($credentials['google_calendar_refresh_token'] ?? null);
+            ?? $this->existingRefreshTokenForClient($tenantId, $clientId, $clientSecret);
 
         if ($refreshToken === null) {
             throw new AutomationWorkflowException('Google did not return a refresh token. Reconnect and make sure consent is granted again.');
@@ -168,9 +175,12 @@ class GoogleCalendarWorkflowConnectionService
                 'external_account_label' => 'Google Calendar account',
                 'refresh_token' => $refreshToken,
                 'token_type' => (string) ($token['token_type'] ?? 'Bearer'),
+                'oauth_client_id' => $clientId,
+                'oauth_client_secret' => $clientSecret,
                 'scopes' => $token['granted_scopes'] ?? $this->scopes(),
                 'connected_by_user_id' => $user->id,
             ],
+            oauthClientSource: (string) ($cached['oauth_client_source'] ?? 'missing'),
         );
 
         $calendars = $this->calendarOptions($tenantId, $workflowKey, true);
@@ -197,8 +207,11 @@ class GoogleCalendarWorkflowConnectionService
     }
 
     /** @param array<string,mixed> $values */
-    protected function persistSharedConnection(int $tenantId, array $values): IntegrationConnection
-    {
+    protected function persistSharedConnection(
+        int $tenantId,
+        array $values,
+        string $oauthClientSource,
+    ): IntegrationConnection {
         $externalAccountId = 'google-calendar-workflow-account';
         $query = IntegrationConnection::query()->forAllTenants()
             ->where('tenant_id', $tenantId)
@@ -211,7 +224,13 @@ class GoogleCalendarWorkflowConnectionService
             ...$values,
             'external_account_id' => $externalAccountId,
             'status' => IntegrationConnection::STATUS_CONNECTED,
-            'metadata' => [...(array) $connection->metadata, 'credential_source' => 'shared_oauth'],
+            'metadata' => [
+                ...(array) $connection->metadata,
+                'credential_source' => $oauthClientSource === 'global'
+                    ? 'shared_oauth'
+                    : 'legacy_tenant',
+                'oauth_client_source' => $oauthClientSource,
+            ],
             'connected_at' => now(),
             'last_synced_at' => now(),
             'last_error_code' => null,
@@ -223,6 +242,8 @@ class GoogleCalendarWorkflowConnectionService
             'status' => IntegrationConnection::STATUS_DISCONNECTED,
             'access_token' => null,
             'refresh_token' => null,
+            'oauth_client_id' => null,
+            'oauth_client_secret' => null,
             'last_synced_at' => now(),
         ]);
 
@@ -259,6 +280,8 @@ class GoogleCalendarWorkflowConnectionService
             'status' => IntegrationConnection::STATUS_DISCONNECTED,
             'access_token' => null,
             'refresh_token' => null,
+            'oauth_client_id' => null,
+            'oauth_client_secret' => null,
             'last_synced_at' => now(),
         ]);
     }
@@ -364,8 +387,68 @@ class GoogleCalendarWorkflowConnectionService
             $credentials['google_calendar_refresh_token'] = $connection->refresh_token;
             $credentials['sources']['google_calendar_refresh_token'] = 'connection';
         }
+        if (filled($connection?->oauth_client_id) || filled($connection?->oauth_client_secret)) {
+            if (blank($connection?->oauth_client_id) || blank($connection?->oauth_client_secret)) {
+                throw new AutomationWorkflowException(
+                    'Google Calendar connection has an incomplete OAuth client snapshot. Reconnect the account.'
+                );
+            }
+            $credentials['google_calendar_client_id'] = $connection->oauth_client_id;
+            $credentials['google_calendar_client_secret'] = $connection->oauth_client_secret;
+            $credentials['sources']['google_calendar_client_id'] = 'connection';
+            $credentials['sources']['google_calendar_client_secret'] = 'connection';
+        }
 
         return $credentials;
+    }
+
+    /**
+     * @param  array<string,mixed>  $state
+     * @return array{0:string,1:string}
+     */
+    protected function cachedOAuthClientCredentials(array $state): array
+    {
+        try {
+            $clientId = Crypt::decryptString((string) ($state['oauth_client_id_encrypted'] ?? ''));
+            $clientSecret = Crypt::decryptString((string) ($state['oauth_client_secret_encrypted'] ?? ''));
+        } catch (\Throwable) {
+            throw new AutomationWorkflowException(
+                'Google Calendar connection credentials could not be verified. Start the connection again.'
+            );
+        }
+
+        if (trim($clientId) === '' || trim($clientSecret) === '') {
+            throw new AutomationWorkflowException(
+                'Google Calendar connection credentials are incomplete. Start the connection again.'
+            );
+        }
+
+        return [$clientId, $clientSecret];
+    }
+
+    protected function existingRefreshTokenForClient(
+        int $tenantId,
+        string $clientId,
+        string $clientSecret,
+    ): ?string {
+        $connection = IntegrationConnection::query()->forTenantId($tenantId)
+            ->where('provider', 'google_calendar')
+            ->where('status', IntegrationConnection::STATUS_CONNECTED)
+            ->latest('connected_at')
+            ->latest('id')
+            ->first();
+        $storedClientId = trim((string) $connection?->oauth_client_id);
+        $storedClientSecret = trim((string) $connection?->oauth_client_secret);
+        if (
+            $storedClientId === ''
+            || $storedClientSecret === ''
+            || ! hash_equals($storedClientId, $clientId)
+            || ! hash_equals($storedClientSecret, $clientSecret)
+        ) {
+            return null;
+        }
+
+        return $this->nullableString($connection?->refresh_token);
     }
 
     /**

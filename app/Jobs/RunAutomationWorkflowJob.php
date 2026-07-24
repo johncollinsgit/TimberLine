@@ -32,6 +32,7 @@ class RunAutomationWorkflowJob implements ShouldQueue
     {
         return [
             (new WithoutOverlapping('automation-workflow:'.$this->workflowId))
+                ->shared()
                 ->releaseAfter(30)
                 ->expireAfter(900),
         ];
