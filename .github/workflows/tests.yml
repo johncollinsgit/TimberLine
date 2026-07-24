@@ -136,8 +136,5 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
-      - name: Run fresh MySQL migrations
-        run: php artisan migrate:fresh --force
-
-      - name: Verify partial migration recovery
+      - name: Verify clean and partial migration paths
         run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php --compact
