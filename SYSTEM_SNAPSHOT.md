@@ -1,5 +1,37 @@
 # SYSTEM SNAPSHOT
 
+## Operator Alerts and Landlord Branches Preview (2026-07-25)
+
+- `/landlord/branches` is the landlord-only Branch catalog preview. It lets an
+  operator select a workspace and inspect the same customer-facing Branch
+  catalog payload without mutating billing, module access, or entitlements.
+  The route is host-locked to the landlord app, protected by
+  `landlord.operator`, and appears as **Branches** in the Everbranch Admin
+  sidebar.
+- Landlord navigation keeps **Home** pinned first, then sorts the remaining
+  Everbranch Admin links alphabetically for scannable operator use. Tenant
+  navigation ordering is unchanged.
+- `OperatorAlertService` is the single SMS alert gate for agreement acceptance,
+  support-ticket, Bud-request, and weekly-snapshot operator texts. It reserves
+  an `operator_alert_logs` row before any send, records sent/failed/suppressed
+  status, and returns without texting if the reservation/dedupe layer is
+  unavailable.
+- Operator SMS delivery has no hardcoded destination. Production must set
+  `EVERBRANCH_OPERATOR_ALERT_PHONE`; `EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED`
+  defaults to enabled only when a phone is explicitly configured and can be set
+  false to keep logging without texting.
+- The legacy Modern Forestry mobile support-alert phone also has no code
+  fallback. It must come from `MODERN_FORESTRY_SUPPORT_ALERT_PHONE` or a
+  tenant-saved support-alert setting.
+- Alerts must represent real site activity. Sandbox-validation agreements,
+  “TEST MODE ONLY” agreements, known fixture tenants, demo/sandbox/test account
+  modes, `.test` or localhost request hosts, and test signer email domains are
+  suppressed and logged with reasons instead of texting. Repeated identical
+  same-tenant/event/message alerts are coalesced for
+  `EVERBRANCH_OPERATOR_ALERT_SMS_REPEAT_WINDOW_MINUTES` minutes, default 360.
+- Operating details and incident checks live in
+  `docs/operations/operator-alert-sms-runbook.md`.
+
 ## Canonical Customer Alias Identity Rule (2026-07-24)
 
 - Customer merges retain archived `marketing_profiles` aliases for auditability,

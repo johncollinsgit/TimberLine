@@ -2,6 +2,7 @@
 
 require_once __DIR__.'/ShopifyEmbeddedTestHelpers.php';
 
+use App\Jobs\PrepareMessagingCampaignRecipientsJob;
 use App\Models\MarketingCampaign;
 use App\Models\MarketingConsentEvent;
 use App\Models\MarketingDeliveryEvent;
@@ -19,7 +20,6 @@ use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Models\User;
-use App\Jobs\PrepareMessagingCampaignRecipientsJob;
 use App\Services\Marketing\SendGridEmailService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Http\UploadedFile;
@@ -347,11 +347,11 @@ test('messaging setup can save tenant-scoped modern forestry support alert phone
 
     $this->withHeaders(shopifyMessagingApiHeaders())
         ->postJson(route('shopify.app.api.messaging.setup.support-alert.update'), [
-            'support_alert_phone' => '8646165468',
+            'support_alert_phone' => '5551234567',
         ])
         ->assertOk()
         ->assertJsonPath('ok', true)
-        ->assertJsonPath('data.support_alert_phone', '+18646165468');
+        ->assertJsonPath('data.support_alert_phone', '+15551234567');
 
     $setting = TenantMarketingSetting::query()
         ->where('tenant_id', $tenant->id)
@@ -359,7 +359,7 @@ test('messaging setup can save tenant-scoped modern forestry support alert phone
         ->first();
 
     expect($setting)->not->toBeNull()
-        ->and(data_get($setting?->value, 'support_alert_phone'))->toBe('+18646165468');
+        ->and(data_get($setting?->value, 'support_alert_phone'))->toBe('+15551234567');
 });
 
 test('messaging analytics stays tenant and store scoped with attributed outcomes', function () {

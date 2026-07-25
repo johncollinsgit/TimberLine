@@ -10,7 +10,7 @@ use App\Services\Operations\OperatorAlertService;
 
 beforeEach(function (): void {
     config()->set('everbranch.operator_alert_sms_enabled', true);
-    config()->set('everbranch.operator_alert_phone', '+1 (864) 616-5468');
+    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
     config()->set('everbranch.operator_alert_sms_repeat_window_minutes', 360);
 });
 
@@ -22,7 +22,7 @@ test('operator sms alerts send for a real event once and coalesce repeated same-
     $twilio->shouldReceive('sendSms')
         ->once()
         ->with(
-            '18646165468',
+            '15550100101',
             $message,
             \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
         )

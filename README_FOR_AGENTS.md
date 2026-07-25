@@ -49,6 +49,27 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   stage unrelated rewrites. Check Actions at coarse milestones instead of
   continuously polling it; canceled superseded runs are expected.
 
+## Operator Alert SMS Guardrails (2026-07-25)
+
+- Use `App\Services\Operations\OperatorAlertService` for operator SMS alerts.
+  Do not call Twilio directly for landlord/operator texts.
+- Operator texts must describe real production activity. Test fixtures,
+  sandbox-validation agreements, demo/sandbox/test tenants, localhost/`.test`
+  hosts, and test signer emails must be suppressed and logged, not sent.
+- Every caller should pass enough context for suppression and audit:
+  `tenant_id`, `tenant_name`, `tenant_slug`, `target_type`, `target_id`,
+  request host when available, and domain-specific fields such as agreement
+  type/template/title or ticket priority/source.
+- Never add a hardcoded operator or support-alert phone number. Operator live
+  delivery requires `EVERBRANCH_OPERATOR_ALERT_PHONE`; legacy Modern Forestry
+  support-alert routing requires `MODERN_FORESTRY_SUPPORT_ALERT_PHONE` or a
+  tenant-saved support-alert setting. `EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED`
+  may disable texting while preserving `operator_alert_logs` evidence.
+- Preserve pre-send reservation and dedupe. If `operator_alert_logs` cannot be
+  reserved, the safe behavior is no SMS. Repeated identical same-tenant/event
+  alerts should coalesce through
+  `EVERBRANCH_OPERATOR_ALERT_SMS_REPEAT_WINDOW_MINUTES`.
+
 ## Agreement and Billing-Lane Guardrails (2026-07-16)
 
 - Treat `agreement_versions`, `agreement_acceptances`, and `agreement_events` as immutable/append-only legal evidence. Never update or delete accepted evidence; create a new version or child amendment.

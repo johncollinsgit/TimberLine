@@ -26,12 +26,21 @@ operator surface is `https://app.theeverbranch.com/landlord`; tenant workspaces
 remain isolated by explicit membership and selected workspace context.
 
 - **Landlord:** Home, Workspaces (including the itemized Transactions ledger),
-  support Tickets, agreements, commercial controls, and operational readiness.
+  support Tickets, agreements, commercial controls, the read-only Branches
+  preview, and operational readiness. Home remains first in the landlord
+  sidebar; the remaining landlord links are sorted alphabetically.
 - **Tenant workspace:** tenant-scoped navigation, customers, work, agreements,
   messages, branded workspace settings, and enabled Branches.
 - **Billing:** Stripe-confirmed agreement and invoice activity is recorded in a
   landlord-only transaction ledger. Refunds are explicit, provider-confirmed,
   idempotent actions; a refund is never inferred from a local status change.
+- **Operator alerts:** SMS alerts are for real production activity only. The
+  alert service reserves an `operator_alert_logs` row before sending, suppresses
+  sandbox/test/demo/fake activity, coalesces repeated identical texts, and has
+  no hardcoded personal-phone fallback. Configure live delivery explicitly with
+  `EVERBRANCH_OPERATOR_ALERT_PHONE`. Legacy Modern Forestry support-alert
+  routing also requires explicit env or tenant settings; see
+  `docs/operations/operator-alert-sms-runbook.md`.
 - **Health:** `/up` is a lightweight liveness endpoint and `/ready` verifies a
   Laravel boot, database query, cache round trip, required configuration, and
   reports the active release identifier.
@@ -70,7 +79,10 @@ HTTP 200 reporting that exact release identifier.
 
 - Class Scheduling is a reusable tenant-scoped Branch for published classes, capacity, enrollments, reminders, calendar views, attendee navigation, and the fail-closed public signup surface at `/signup/classes/{tenant}`.
 - Prepare the Front Yard Foods demonstration idempotently with `php artisan everbranch:prepare-front-yard-foods`. The command reuses slug `front-yard-foods`; otherwise it prefers tenant ID 4 and then the smallest open ID above 4. It preserves memberships while granting `johncollinsemail@gmail.com` tenant-admin access.
-- Demo preparation creates fictional customers using test phone `8646165468`, sourdough/gardening/preserving/edible-design classes, consultation and edible-landscape jobs, and durable job photos with source/license metadata. Re-running it does not duplicate records.
+- Demo preparation creates fictional customers using reserved test phone
+  `5550100101`, sourdough/gardening/preserving/edible-design classes,
+  consultation and edible-landscape jobs, and durable job photos with
+  source/license metadata. Re-running it does not duplicate records.
 - Home uses a compact top search field and clickable operational cards. The old Field Service Workspace hero and Open Palette block are retired across tenants.
 - Live SMS/email delivery remains provider-, consent-, and action-gated. Preparation schedules preview reminders only; it never sends automatically. See `docs/front-yard-foods-demo.md` for sources, verification, and release notes.
 

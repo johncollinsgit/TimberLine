@@ -1,5 +1,27 @@
 # UI Changelog
 
+## 2026-07-25 — Landlord Branches Preview and Alert Safety
+
+### What Changed
+
+- Added a landlord-only **Branches** sidebar item that opens
+  `/landlord/branches`.
+- Built the landlord Branches preview as a read-only operator view of the same
+  customer-facing Branch catalog payload for a selected workspace.
+- Sorted Everbranch Admin sidebar links alphabetically after keeping Home
+  pinned first, so operator navigation scans more predictably.
+- Operator SMS alert behavior now matches real site activity: fake/test/demo
+  events are suppressed and logged instead of texting.
+
+### Guardrails
+
+- The Branches preview does not install Branches, mutate billing, create access
+  requests, change setup state, or grant entitlements.
+- Tenant-facing navigation order and tenant Branch availability did not change.
+- Operator alert suppression is server-side and audited through
+  `operator_alert_logs`; the UI must not imply a text was sent unless the alert
+  log status is `sent`.
+
 ## 2026-07-24 — Functional Workflow Studio
 
 ### What Changed
