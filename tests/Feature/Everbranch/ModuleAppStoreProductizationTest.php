@@ -216,6 +216,30 @@ test('tenant module store renders metadata as guidance without billing checkout 
         ->assertDontSeeText('Modern Forestry');
 });
 
+test('landlord branches preview renders the customer branch catalog without mutations', function (): void {
+    config()->set('tenancy.landlord.primary_host', 'localhost');
+    config()->set('tenancy.landlord.hosts', ['localhost']);
+    config()->set('tenancy.landlord.operator_roles', ['platform_admin', 'admin']);
+    config()->set('tenancy.domains.tenant_base_domains', ['theeverbranch.com']);
+
+    $tenant = moduleStoreTenant('branch-preview-tenant');
+    $user = User::factory()->platformAdmin()->create();
+
+    $this->actingAs($user)
+        ->get(route('landlord.branches.index', ['tenant' => $tenant->id]))
+        ->assertOk()
+        ->assertSeeText('Branches')
+        ->assertSeeText('Customer preview')
+        ->assertSeeText('Base user lens')
+        ->assertSeeText('Branch Preview Tenant Branch catalog')
+        ->assertSeeText('Order Calendar')
+        ->assertSeeText('Read-only preview')
+        ->assertSee('http://branch-preview-tenant.theeverbranch.com/marketing/modules?module=workflow_automations', false)
+        ->assertSeeText('Open customer Module Store')
+        ->assertDontSeeText('Buy for')
+        ->assertDontSeeText('Pay now');
+});
+
 test('module interests remain separate from installed or entitled modules', function (): void {
     $tenant = moduleStoreTenant();
     TenantSetupStatus::query()->create([

@@ -273,6 +273,7 @@ class UnifiedAppNavigationService
             ],
             ['key' => 'access-requests', 'icon' => 'inbox', 'href' => route('landlord.onboarding.intake'), 'label' => 'Access Requests', 'current' => $request->routeIs('landlord.onboarding.intake')],
             ['key' => 'setup-reviews', 'icon' => 'clipboard-document-check', 'href' => route('landlord.onboarding.journey'), 'label' => 'Setup Reviews', 'current' => $request->routeIs('landlord.onboarding.journey') || $request->routeIs('landlord.onboarding.wizard')],
+            ['key' => 'branches', 'icon' => 'squares-2x2', 'href' => route('landlord.branches.index'), 'label' => 'Branches', 'current' => $request->routeIs('landlord.branches.*')],
             ['key' => 'features', 'icon' => 'squares-plus', 'href' => route('landlord.commercial.index'), 'label' => 'Features', 'current' => $request->routeIs('landlord.commercial.*')],
             ['key' => 'custom-requests', 'icon' => 'chat-bubble-left-right', 'href' => route('landlord.custom-module-requests.index'), 'label' => 'Custom Requests', 'current' => $request->routeIs('landlord.custom-module-requests.*')],
             ['key' => 'tickets', 'icon' => 'lifebuoy', 'href' => route('landlord.support-tickets.index'), 'label' => 'Tickets', 'current' => $request->routeIs('landlord.support-tickets.*')],

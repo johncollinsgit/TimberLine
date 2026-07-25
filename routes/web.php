@@ -19,6 +19,7 @@ use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
 use App\Http\Controllers\Landlord\LandlordAgreementController;
+use App\Http\Controllers\Landlord\LandlordBranchPreviewController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
 use App\Http\Controllers\Landlord\LandlordCommercialConfigurationController;
 use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
@@ -294,6 +295,8 @@ $landlordRoutes = static function (): void {
         ->name('bud-settings.review');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
+    Route::get('/landlord/branches', LandlordBranchPreviewController::class)
+        ->name('branches.index');
     Route::get('/landlord/agreements', [LandlordAgreementController::class, 'index'])->name('agreements.index');
     Route::get('/landlord/invoices', [LandlordDirectInvoiceController::class, 'index'])->name('invoices.index');
     Route::get('/landlord/tenants/{tenant}/invoices/create', [LandlordDirectInvoiceController::class, 'create'])->name('invoices.create');

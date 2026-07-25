@@ -6,8 +6,8 @@ use App\Models\TenantSetupStatus;
 use App\Models\User;
 
 beforeEach(function (): void {
-    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
-    config()->set('tenancy.landlord.hosts', ['app.theeverbranch.com']);
+    config()->set('tenancy.landlord.primary_host', 'localhost');
+    config()->set('tenancy.landlord.hosts', ['localhost']);
     config()->set('tenancy.landlord.operator_roles', ['platform_admin', 'admin']);
     config()->set('tenancy.landlord.operator_emails', []);
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
@@ -83,7 +83,7 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
     $user = User::factory()->platformAdmin()->create();
 
     $response = $this->actingAs($user)
-        ->get('http://app.theeverbranch.com/landlord')
+        ->get(route('landlord.dashboard'))
         ->assertOk()
         ->assertSee('data-app-shell-topbar', false)
         ->assertSee('data-shell-context="landlord"', false)
@@ -91,6 +91,9 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertSeeText('Workspaces')
         ->assertSeeText('Access Requests')
         ->assertSeeText('Setup Reviews')
+        ->assertSeeText('Branches')
+        ->assertSee('data-sidebar-key="branches"', false)
+        ->assertSee('href="'.route('landlord.branches.index').'"', false)
         ->assertSeeText('Features')
         ->assertSeeText('Custom Requests')
         ->assertSeeText('Plan / Billing Readiness')
