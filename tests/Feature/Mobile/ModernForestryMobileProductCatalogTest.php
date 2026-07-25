@@ -3,6 +3,7 @@
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
+use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingProfileScentQuizResult;
@@ -500,6 +501,79 @@ test('mobile customer auth config exposes only public oauth fields', function ()
 
     expect(json_encode($payload))->not->toContain('customer-account-secret')
         ->and(json_encode($payload))->not->toContain('graphql');
+});
+
+test('mobile customer auth accepts the Shopify public PKCE client without a client secret', function (): void {
+    $originalEnvironment = app()->environment();
+
+    try {
+        app()->instance('env', 'production');
+        config()->set('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com');
+        config()->set('services.shopify.customer_account.client_id', 'public-customer-account-client');
+        config()->set('services.shopify.customer_account.client_secret', null);
+        config()->set('services.shopify.customer_account.authorization_endpoint', null);
+        config()->set('services.shopify.customer_account.token_endpoint', null);
+        config()->set('services.shopify.customer_account.graphql_endpoint', null);
+        config()->set('services.shopify.customer_account.redirect_uri', 'https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback');
+        config()->set('services.shopify.customer_account.callback_scheme', 'shop.20812479.modernforestry');
+
+        Http::fake([
+            'https://theforestrystudio.com/.well-known/openid-configuration' => Http::response([
+                'authorization_endpoint' => 'https://account.theforestrystudio.com/authentication/oauth/authorize',
+                'token_endpoint' => 'https://account.theforestrystudio.com/authentication/oauth/token',
+                'token_endpoint_auth_methods_supported' => ['client_secret_basic'],
+            ]),
+            'https://theforestrystudio.com/.well-known/customer-account-api' => Http::response([
+                'graphql_api' => 'https://account.theforestrystudio.com/customer/api/2026-07/graphql',
+            ]),
+        ]);
+
+        $this->getJson('/api/mobile/v1/modern-forestry/auth/config')
+            ->assertOk()
+            ->assertJsonPath('data.configured', true)
+            ->assertJsonPath('data.clientId', 'public-customer-account-client')
+            ->assertJsonPath('data.authorizationEndpoint', 'https://account.theforestrystudio.com/authentication/oauth/authorize');
+    } finally {
+        app()->instance('env', $originalEnvironment);
+    }
+});
+
+test('reading mobile customer auth config does not mutate Candle Cash birthdays or customer identity', function (): void {
+    config()->set('services.shopify.customer_account.client_id', 'public-customer-account-client');
+    config()->set('services.shopify.customer_account.client_secret', null);
+    config()->set('services.shopify.customer_account.authorization_endpoint', 'https://account.theforestrystudio.com/authentication/oauth/authorize');
+    config()->set('services.shopify.customer_account.token_endpoint', 'https://account.theforestrystudio.com/authentication/oauth/token');
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://account.theforestrystudio.com/customer/api/2026-07/graphql');
+
+    $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Login',
+        'last_name' => 'Regression',
+        'email' => 'login-regression@example.com',
+        'normalized_email' => 'login-regression@example.com',
+    ]);
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 42,
+    ]);
+    $birthday = CustomerBirthdayProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 7,
+        'birth_day' => 25,
+        'source' => 'customer',
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/auth/config')
+        ->assertOk()
+        ->assertJsonPath('data.configured', true);
+
+    expect($profile->fresh()->email)->toBe('login-regression@example.com')
+        ->and($profile->candleCashBalance()->firstOrFail()->balance)->toBe(42.0)
+        ->and($birthday->fresh()->birth_month)->toBe(7)
+        ->and($birthday->fresh()->birth_day)->toBe(25)
+        ->and(CandleCashTransaction::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
 });
 
 test('mobile customer auth callback bridges shopify https redirects back to the native app scheme', function (): void {

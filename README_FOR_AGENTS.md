@@ -830,6 +830,13 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - `ModernForestryMobileCustomerSessionService` now caches resolved customer identity by token hash for a short TTL clamped to JWT expiry. Preserve that behavior unless you are intentionally changing the auth trust model.
 - Signed-in mobile flows should continue omitting buyer phone in checkout identity and should continue treating Laravel as the canonical profile store after identity resolution.
 - On the client side, the app now kicks Account and Rewards refreshes together. Do not reintroduce a single serialized dashboard bootstrap path unless you also accept slower Rewards first paint.
+
+## Modern Forestry Mobile Customer Login Readiness Rule (2026-07-25)
+
+- The live Headless storefront is a public authorization-code/PKCE client. Production must keep `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`; a Customer Account client secret is optional and must not be inferred as required from Shopify's discovery capability list.
+- `/auth/config`, token exchange, production `/ready`, and `config:doctor --env=production` must agree on that public-client contract. Losing the public client ID must fail deployment readiness instead of shipping a healthy-looking backend with customer login disabled.
+- Customer-login configuration and readiness checks are read-only with respect to `marketing_profiles`, Candle Cash balances/transactions, birthday profiles/rewards, Shopify customers, and identity links.
+
 ## Everbranch Tenant Mobile Rule (2026-07-10)
 
 - `../everbranch-mobile` is the cross-tenant Everbranch app (`com.everbranch.app`) and its canonical remote is the private `johncollinsgit/everbranch-mobile` repository. Do not merge its concerns into the Modern Forestry SwiftUI customer app or its product-catalog APIs.

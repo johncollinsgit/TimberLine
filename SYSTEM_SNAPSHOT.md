@@ -1,5 +1,22 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry App Store Customer Login Recovery (2026-07-25)
+
+- Modern Forestry's Headless Customer Account integration is a public
+  authorization-code/PKCE client. Production requires its existing
+  `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`; `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`
+  remains optional and is used only when an intentionally confidential client
+  is configured.
+- Shopify discovery may advertise `client_secret_basic` support globally. That
+  capability does not make the public Headless client confidential and must not
+  make `/auth/config` report `configured=false`.
+- Production `/ready` and `config:doctor --env=production` now fail closed when
+  the public Customer Account client ID is missing, preventing another
+  successful-looking release with App Store customer login disabled.
+- Login configuration reads and readiness probes do not mutate customer
+  identity, Candle Cash balances or transactions, birthdays, rewards, Shopify
+  customers, or customer profile links.
+
 ## Operator Alerts and Landlord Branches Preview (2026-07-25)
 
 - `/landlord/branches` is the landlord-only Branch catalog preview. It lets an

@@ -158,15 +158,15 @@ This folder owns the Laravel-side mobile catalog source of truth for the Modern 
 - Mobile checkout is guest-capable; signed-in customer identity is optional and is attached only when the app has a valid Customer Account token.
 - Customer Account OAuth public config lives at `/auth/config`, and token exchange lives behind Laravel at `/auth/token` so stores that require a confidential Customer Account client secret do not expose that secret in iOS. `/auth/token` validates the exchanged token against Customer Account GraphQL before the app treats the customer as signed in.
 - The Customer Account flow now prefers Shopify discovery documents from `https://theforestrystudio.com/.well-known/openid-configuration` and `/.well-known/customer-account-api` when resolving auth/token/graphql endpoints in live environments.
-- Shopify Customer Account OAuth is tied to the Shopify app config, not just the store's customer-account settings. Keep the mobile callback in `shopify.app.toml` under `[customer_authentication]`, release it with `shopify app deploy`, and make sure `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID` and `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` are from the same released app. A mismatched pair returns Shopify `invalid_client` from `/oauth/token`.
-- The Shopify token endpoint advertises `client_secret_basic`, but the live exchange still requires `client_id` in the form body. Keep both Basic Auth and body `client_id`; removing the body field causes the phone to flash through OAuth and then show “Shopify could not finish sign-in.”
+- Shopify Customer Account OAuth is tied to the Headless storefront plus the registered callback. Keep the mobile callback registered as `https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback` and keep the existing public Headless `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID` in production.
+- The Modern Forestry Headless storefront is a public authorization-code/PKCE client. Shopify discovery advertises support for `client_secret_basic`, but the public client does not require a secret. Always send `client_id` in the token form body; add Basic Auth only when an intentionally confidential client secret is configured.
 - Customer Account GraphQL validates with the raw Customer Account access token in the `Authorization` header, not `Bearer <token>`. A Bearer-prefixed header returns `Invalid token, missing prefix shcat_` and the app shows “Shopify sign-in finished, but the customer session could not be verified.”
 - Keep the env values in place as fallbacks, but treat discovery drift first when login says Shopify sign-in completed and session verification failed.
 - If this error shows up again, inspect:
   - the live `.well-known` token + graph endpoints
   - whether `shopify.app.toml` includes the mobile `[customer_authentication]` callback and the app version has been released
-  - whether the Customer Account client ID and secret are a matching Shopify app pair
-  - whether Laravel has `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`
+  - whether Laravel has the existing public Headless `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`
+  - whether a stale confidential-client secret is being sent for the public Headless client
   - whether the returned Shopify customer identity can resolve to a tenant-1 `MarketingProfile`
 - Product-detail lookups now fall back to a paginated active-catalog search when the exact handle misses or resolves to a non-customer-visible node.
 - Product-detail payloads now include:

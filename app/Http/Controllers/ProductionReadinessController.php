@@ -35,7 +35,12 @@ class ProductionReadinessController extends Controller
 
     private function assertRequiredConfiguration(): void
     {
-        foreach ([config('app.key'), config('database.default'), config('cache.default')] as $value) {
+        foreach ([
+            config('app.key'),
+            config('database.default'),
+            config('cache.default'),
+            config('services.shopify.customer_account.client_id'),
+        ] as $value) {
             if (! is_string($value) || trim($value) === '') {
                 throw new \RuntimeException('Required production configuration is unavailable.');
             }
