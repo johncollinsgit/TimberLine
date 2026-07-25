@@ -1,5 +1,7 @@
 @php
     $content = is_array($contact ?? null) ? $contact : [];
+    $intentValue = in_array(($intent ?? ''), ['contact', 'sales', 'walkthrough'], true) ? (string) $intent : 'contact';
+    $isWalkthrough = $intentValue === 'walkthrough';
     $brandAssets = (array) config('everbranch.brand_assets', []);
     $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
     $brandLockupPath = (string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg');
@@ -26,11 +28,18 @@
         <section class="fb-contact-panel fb-contact-panel--page" aria-label="Contact Everbranch" data-reveal data-premium-surface>
             <div>
                 <p class="fb-section-kicker">Contact</p>
-                <h1 class="fb-contact-title">Tell Everbranch what keeps getting lost.</h1>
-                <p class="fb-contact-summary">Send the messy version. We will help you find the clean starting point for your business.</p>
+                <h1 class="fb-contact-title">{{ $isWalkthrough ? 'Book a working session with Everbranch.' : 'Tell Everbranch what keeps getting lost.' }}</h1>
+                <p class="fb-contact-summary">
+                    {{ $isWalkthrough
+                        ? 'Tell us what your business needs to connect or simplify. We will follow up to schedule a focused walkthrough.'
+                        : 'Send the messy version. We will help you find the clean starting point for your business.' }}
+                </p>
             </div>
 
-            @include('platform.partials.contact-form', ['sourcePage' => 'everbranch_contact'])
+            @include('platform.partials.contact-form', [
+                'sourcePage' => $isWalkthrough ? 'everbranch_walkthrough' : 'everbranch_contact',
+                'submitLabel' => $isWalkthrough ? 'Request a meeting' : 'Send message',
+            ])
         </section>
     </main>
 </body>

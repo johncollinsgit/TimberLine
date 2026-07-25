@@ -19,7 +19,7 @@ php artisan everbranch:prepare-accounting-command-center \
 Add `--enable` only after the QuickBooks prerequisite and rollout review are
 ready. See `docs/operations/accounting-command-center-rollout.md`.
 
-## Current Everbranch Structure and Release State (2026-07-22)
+## Current Everbranch Structure and Release State (2026-07-25)
 
 Everbranch is a Laravel multi-workspace platform. The canonical production
 operator surface is `https://app.theeverbranch.com/landlord`; tenant workspaces
@@ -30,11 +30,24 @@ remain isolated by explicit membership and selected workspace context.
   preview, and operational readiness. Home remains first in the landlord
   sidebar; the remaining landlord links are sorted alphabetically.
 - **Tenant workspace:** tenant-scoped navigation, customers, work, agreements,
-  messages, branded workspace settings, and enabled Branches.
+  messages, branded workspace settings, and enabled Branches. Customers can
+  open **Branches** from the primary navigation to compare included, add-on,
+  upgrade, and request-only products with canonical pricing.
+- **Product discovery:** anonymous visitors can browse the read-only Everbranch
+  Module Explorer at `/explore/modules`. It contains only modules marked safe
+  for the public surface in `config/module_catalog.php`; its calls to action
+  open `/platform/contact?intent=walkthrough` and do not create a demo user,
+  demo workspace, or change workspace access.
+- **Search:** the tenant and landlord shells share one accessible command-palette
+  interaction (`Command/Ctrl + K`) but use separate server coordinators.
+  Landlord search covers control-plane workspaces, setup, tickets, Branch
+  requests, catalog definitions, and permitted admin actions; it never invokes
+  tenant operational search providers.
 - **Billing:** Stripe-confirmed agreement and invoice activity is recorded in a
   landlord-only transaction ledger. Refunds are explicit, provider-confirmed,
   idempotent actions; a refund is never inferred from a local status change.
-- **Operator alerts:** SMS alerts are for real production activity only. The
+- **Operator alerts:** SMS alerts are sent for real production walkthrough,
+  custom Branch, known Branch-access, agreement, and support requests only. The
   alert service reserves an `operator_alert_logs` row before sending, suppresses
   sandbox/test/demo/fake activity, coalesces repeated identical texts, and has
   no hardcoded personal-phone fallback. Configure live delivery explicitly with
@@ -519,7 +532,9 @@ This release connects the public promo surfaces, landlord/admin approval, and te
 Implemented:
 - public entry points:
   - `/platform/plans` (compare plans + add-ons; informational, config-driven)
-  - `/platform/demo` (request demo access)
+  - `/platform/contact?intent=walkthrough` (request a meeting; no demo access)
+  - `/platform/demo` (legacy demo-access intake retained for compatibility, not
+    linked from current discovery surfaces)
   - `/platform/start` (request production client access)
 - access request persistence:
   - `customer_access_requests` table + `App\\Models\\CustomerAccessRequest`
@@ -1306,9 +1321,16 @@ Interpretation of smoke test results:
 Important:
 - Do not mix login keys (`GOOGLE_CLIENT_*`) with Google Business Profile keys (`GOOGLE_GBP_*`); they are separate integrations.
 
-## Zap Replacement: Workflow Automations (2026-06-01)
+## Workflow Automations (2026-07-25)
 
-Everbranch now includes a first-party workflow runner to replace task-billed Zapier flows for supported patterns.
+**Workflow Automations** is the customer-facing Branch. **Workflow Studio** is
+the visual builder inside it. The internal module and add-on identifiers remain
+`workflow_automations` and `order_calendar` for backward compatibility, so
+existing Modern Forestry entitlements, links, and published workflows are not
+renamed or recreated.
+
+Everbranch includes a first-party workflow runner to replace task-billed Zapier
+flows for supported patterns.
 
 Primary command:
 - `php artisan automation:run`
@@ -1327,7 +1349,8 @@ Required env keys for the Asana -> Google Calendar workflow:
 - `GOOGLE_CALENDAR_REFRESH_TOKEN=...`
 
 Notes:
-- Modern Forestry now has a click-based setup path in `Marketing -> Connections -> Native Zap Replacement`.
+- Modern Forestry keeps its existing runtime behavior and has a click-based
+  setup path in **Workflow Automations → Connections**.
 - Asana can now be connected through OAuth from that page; once connected, Everbranch can load visible projects into a picker instead of requiring a raw project GID.
 - Google Calendar can be connected through OAuth from that page; once connected, Everbranch can load writable calendars into a picker instead of requiring a raw calendar ID.
 - Personal access tokens still work as a fallback, but OAuth is now the smoother setup path for both sides.

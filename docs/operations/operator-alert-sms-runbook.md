@@ -78,6 +78,7 @@ These cases are logged as `suppressed` and must not text:
   dummy, sample, or example tokens;
 - signer email domains such as `.test`, `example.com`, `example.net`,
   `example.org`, `example.test`, `test.com`, or `invalid`;
+- request email domains with the same test-only patterns;
 - agreement type `sandbox_validation`;
 - agreement template `front_yard_foods_sandbox_validation`; and
 - agreement titles containing `TEST MODE ONLY`.
@@ -91,6 +92,12 @@ Suppressed logs include `metadata.reason` and, for non-real events,
 - Support-ticket creation and Bud escalations:
   `TenantMobileSupportService`.
 - Bud activation requests: `TenantBudService`.
+- Guided walkthrough and workspace-access requests:
+  `PlatformAccessRequestController`.
+- Public contact and meeting requests: `EvergroveServiceInquiryController`
+  (Everbranch sources only).
+- Custom Branch requests: `CustomModuleRequestController`.
+- Known Branch access requests: `MarketingModuleStoreController`.
 - Weekly operator snapshot: `operator:send-weekly-snapshot`.
 
 New operator-text sources should use `OperatorAlertService` and add focused
@@ -127,6 +134,9 @@ Useful focused verification:
 
 ```bash
 php artisan test tests/Feature/Operations/OperatorAlertServiceTest.php
+php artisan test tests/Feature/Public/PlatformPlansAndAccessRequestsTest.php
+php artisan test tests/Feature/Everbranch/CustomModuleRequestWorkflowTest.php
+php artisan test tests/Feature/MarketingModuleStoreControllerTest.php
 ```
 
 For production-release verification, run the normal GitHub `Deploy Production`

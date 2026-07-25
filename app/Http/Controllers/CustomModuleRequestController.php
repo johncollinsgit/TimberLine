@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CustomModuleRequest;
 use App\Models\Tenant;
+use App\Services\Operations\OperatorAlertService;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class CustomModuleRequestController extends Controller
 {
@@ -44,8 +46,11 @@ class CustomModuleRequestController extends Controller
         ]);
     }
 
-    public function store(Request $request, TenantModuleCatalogService $catalogService): RedirectResponse
-    {
+    public function store(
+        Request $request,
+        TenantModuleCatalogService $catalogService,
+        OperatorAlertService $operatorAlerts
+    ): RedirectResponse {
         $tenant = $this->tenant($request);
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
@@ -87,6 +92,24 @@ class CustomModuleRequestController extends Controller
             'status' => 'new',
             'next_action' => 'Everbranch will review this request and follow up if discovery is needed.',
         ]);
+
+        try {
+            $operatorAlerts->notify(
+                'custom_branch_request.created',
+                "Everbranch: {$tenant->name} requested a Branch — {$customRequest->title}.",
+                [
+                    'dedupe_key' => 'custom-branch-request:'.$customRequest->id,
+                    'tenant_id' => (int) $tenant->id,
+                    'target_type' => 'custom_module_request',
+                    'target_id' => (int) $customRequest->id,
+                    'request_host' => $request->getHost(),
+                    'request_email' => (string) ($request->user()?->email ?? ''),
+                    'request_title' => (string) $customRequest->title,
+                ]
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+        }
 
         return redirect()
             ->route('custom-module-requests.show', ['customModuleRequest' => $customRequest, 'tenant' => (string) $tenant->slug])

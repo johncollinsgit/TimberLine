@@ -68,6 +68,44 @@ Transform Everbranch into a premium, calm, high-trust software experience with o
 - Reuse the same token system and typography for public, auth, admin, and embedded.
 - Prefer shared classes/components over page-local style blocks.
 - Keep page-level exceptions minimal and document them in `docs/ui/UI_CHANGELOG.md`.
+- Consistency means the same semantic role has the same appearance and
+  interaction. It does not mean every screen uses the same density or is made
+  from cards.
+
+## Canonical Page Shapes
+
+New or substantially revised screens should start from one of these shapes:
+
+1. **Dashboard:** a small number of health/outcome summaries followed by the
+   next best actions. Do not reproduce the full navigation as cards.
+2. **List:** a compact searchable list or table with filters, visible state,
+   pagination, and an instructive empty state.
+3. **List + detail:** a scanning pane and a shareable detail destination or
+   drawer. Use for catalogs, inboxes, requests, and histories.
+4. **Form/workflow:** one clear page header, grouped fields, contextual help,
+   validation next to the affected field, and a stable action row.
+5. **Immersive tool:** a purpose-built application frame for builders,
+   calendars, grids, or studios. It still uses shared tokens, controls,
+   feedback, and accessibility rules.
+
+Cards are not a page shape. Use them only when an item needs independent visual
+identity or as a small dashboard summary. Prefer rows, sections, and separators
+for information that users need to scan or compare.
+
+## Semantic Interaction Rules
+
+- The same action hierarchy is used everywhere: one primary action, quiet
+  secondary actions, and explicit destructive styling.
+- Loading disables duplicate submission and keeps the control width stable.
+- Success and failure are confirmed by a toast, inline state, or destination
+  screen appropriate to the consequence of the action.
+- Empty states explain what belongs there, why it may be empty, and the next
+  useful action.
+- Popovers hold small choices; dialogs hold focused decisions; drawers preserve
+  list context; full pages host deep or shareable workflows.
+- Destructive confirmations name the record, consequence, and reversibility.
+- Keyboard behavior, focus return, reduced motion, and 44px mobile targets are
+  product requirements, not page-level polish.
 
 ## Login/Auth Branding Rules
 - Keep tenant presentation hooks intact (`authTenantPresentation`, host tenant context, landlord mode flags).
@@ -146,6 +184,8 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Public pages:
   - `/platform/promo` -> `PlatformProductPagesController::promo`
   - `/platform/contact` -> `PlatformProductPagesController::contact`
+  - `/explore/modules` and `/explore/modules/{module}` ->
+    `PlatformProductPagesController::moduleExplorer`
 - Auth pages: Fortify views under `resources/views/pages/auth/*` via `FortifyServiceProvider`
 - Owner accounting:
   - `/workspaces/{tenant}/accounting` -> `AccountingCommandCenterController`
@@ -182,6 +222,12 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
     desktop canvas
 - Explanation block (admin/operator screens): `x-ui.page-explainer` + `.fb-page-explainer*`
 - Embedded shell primitives: `.app-shell*`, `.app-topbar*`, `.app-sidebar*`
+- Shared command palette:
+  - `resources/views/components/app-command-palette.blade.php`
+  - tenant requests use `GlobalSearchCoordinator`
+  - landlord requests use `LandlordSearchCoordinator`
+  - never combine those provider sets or filter tenant operational results only
+    in the browser
 
 ## Workflow Studio Interaction Contract
 

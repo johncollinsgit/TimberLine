@@ -1,5 +1,38 @@
 # UI Changelog
 
+## 2026-07-25 — Product Explorer, Search, and Workflow Naming
+
+### What Changed
+
+- Added a public, read-only Module Explorer with compact scanning, filters,
+  dedicated module URLs, canonical pricing, setup expectations, integrations,
+  dependencies, and guided-meeting calls to action.
+- Guided-meeting calls to action now use the contact inquiry path and do not
+  create an inactive demo user or imply immediate demo access.
+- Added a customer **Branches** destination and clearer included/add-on/upgrade/
+  request language on the workspace home and Branch catalog.
+- Rebuilt the shared command-palette interaction with keyboard navigation,
+  focus containment and restoration, debounced/cancellable requests, recent
+  destinations, and explicit loading, empty, and failure states.
+- Split landlord search onto a dedicated backend coordinator for control-plane
+  workspaces, tickets, requests, catalog definitions, and phrase-based actions
+  such as “add a user” and “see requested Branches.”
+- Renamed the customer product from **Order Calendar** to **Workflow
+  Automations**. **Workflow Studio** remains the builder name; internal
+  identifiers remain stable for compatibility.
+
+### Guardrails
+
+- Public exploration reads only `public_site`-safe canonical module
+  definitions and never needs a tenant or customer record.
+- Landlord search does not instantiate tenant customer, order, task, message,
+  file, workflow, or report providers. Ticket message bodies and attachments
+  are excluded.
+- The existing demo workspace was not changed. Public calls to action request a
+  guided meeting.
+- No entitlement, billing, connection, workflow, or customer-data mutation is
+  performed by browsing or searching.
+
 ## 2026-07-25 — Landlord Branches Preview and Alert Safety
 
 ### What Changed
