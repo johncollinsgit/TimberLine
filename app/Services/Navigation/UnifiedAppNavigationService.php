@@ -258,8 +258,9 @@ class UnifiedAppNavigationService
      */
     protected function buildLandlordShell(Request $request, ?User $user = null): array
     {
-        $items = [
-            ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')],
+        $homeItem = ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')];
+
+        $landlordItems = [
             [
                 'key' => 'workspaces',
                 'icon' => 'building-office-2',
@@ -285,6 +286,14 @@ class UnifiedAppNavigationService
             ['key' => 'developer', 'icon' => 'command-line', 'href' => route('landlord.developer'), 'label' => 'Developer', 'current' => $request->routeIs('landlord.developer')],
             ['key' => 'settings', 'icon' => 'cog-6-tooth', 'href' => route('landlord.dashboard'), 'label' => 'Settings', 'current' => false],
         ];
+        $items = collect($landlordItems)
+            ->sortBy(
+                fn (array $item): string => (string) ($item['label'] ?? ''),
+                SORT_NATURAL | SORT_FLAG_CASE
+            )
+            ->prepend($homeItem)
+            ->values()
+            ->all();
 
         return [
             'tenant' => null,

@@ -6,8 +6,10 @@ use App\Models\TenantSetupStatus;
 use App\Models\User;
 
 beforeEach(function (): void {
-    config()->set('tenancy.landlord.primary_host', 'localhost');
-    config()->set('tenancy.landlord.hosts', ['localhost']);
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'localhost';
+
+    config()->set('tenancy.landlord.primary_host', $landlordHost);
+    config()->set('tenancy.landlord.hosts', [$landlordHost]);
     config()->set('tenancy.landlord.operator_roles', ['platform_admin', 'admin']);
     config()->set('tenancy.landlord.operator_emails', []);
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
@@ -112,12 +114,36 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertDontSeeText('Forestry Backstage');
 
     $html = $response->getContent();
-    $homePosition = strpos($html, 'data-sidebar-key="home"');
-    $workspacesPosition = strpos($html, 'data-sidebar-key="workspaces"');
+    $expectedOrder = [
+        'home',
+        'access-requests',
+        'agreements',
+        'branches',
+        'custom-requests',
+        'developer',
+        'features',
+        'invoices',
+        'plan-billing-readiness',
+        'settings',
+        'setup-reviews',
+        'shopify-readiness',
+        'system-readiness',
+        'tickets',
+        'workspaces',
+    ];
+    $positions = collect($expectedOrder)->mapWithKeys(
+        fn (string $key): array => [$key => strpos($html, 'data-sidebar-key="'.$key.'"')]
+    );
 
-    expect($homePosition)->not->toBeFalse()
-        ->and($workspacesPosition)->not->toBeFalse()
-        ->and($homePosition)->toBeLessThan($workspacesPosition);
+    foreach ($expectedOrder as $key) {
+        expect($positions->get($key))->not->toBeFalse();
+    }
+
+    $orderedPositions = $positions->values()->all();
+    $sortedPositions = $orderedPositions;
+    sort($sortedPositions);
+
+    expect($orderedPositions)->toBe($sortedPositions);
 });
 
 test('demo and sandbox banners remain visible inside the premium shell', function (string $slug, string $name, string $mode, string $banner): void {

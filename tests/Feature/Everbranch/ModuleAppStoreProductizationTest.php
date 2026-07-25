@@ -217,8 +217,10 @@ test('tenant module store renders metadata as guidance without billing checkout 
 });
 
 test('landlord branches preview renders the customer branch catalog without mutations', function (): void {
-    config()->set('tenancy.landlord.primary_host', 'localhost');
-    config()->set('tenancy.landlord.hosts', ['localhost']);
+    $landlordHost = parse_url(route('landlord.branches.index'), PHP_URL_HOST) ?: 'localhost';
+
+    config()->set('tenancy.landlord.primary_host', $landlordHost);
+    config()->set('tenancy.landlord.hosts', [$landlordHost]);
     config()->set('tenancy.landlord.operator_roles', ['platform_admin', 'admin']);
     config()->set('tenancy.domains.tenant_base_domains', ['theeverbranch.com']);
 
