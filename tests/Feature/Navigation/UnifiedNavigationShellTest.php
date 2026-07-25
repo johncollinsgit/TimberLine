@@ -5,7 +5,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\User;
 
-test('unified shell surfaces modules and customer hub for tenant-aware marketing users', function () {
+test('unified shell surfaces Branches and customer hub for tenant-aware marketing users', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Navigation Tenant',
         'slug' => 'navigation-tenant',
@@ -32,7 +32,8 @@ test('unified shell surfaces modules and customer hub for tenant-aware marketing
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSeeText('Marketing')
-        ->assertSeeText('Features')
+        ->assertSeeText('Branches')
+        ->assertSee('data-sidebar-key="branches"', false)
         ->assertDontSee('data-sidebar-key="modules"', false)
         ->assertDontSee('data-sidebar-sortable', false)
         ->assertDontSeeText('Shortcuts')
@@ -104,7 +105,7 @@ test('tenant settings stays immediately above workspace guide', function () {
         ->and($settings)->toBeLessThan($guide);
 });
 
-test('marketing modules route opens marketing hub and only marks Features active', function () {
+test('marketing modules route keeps Marketing available and marks Branches active', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Navigation Tenant',
         'slug' => 'navigation-tenant',
@@ -125,12 +126,13 @@ test('marketing modules route opens marketing hub and only marks Features active
         ->assertOk()
         ->assertSeeText('Marketing')
         ->assertSee('data-sidebar-key="marketing"', false)
-        ->assertSee('data-sidebar-child-key="modules"', false)
+        ->assertSee('data-sidebar-key="branches"', false)
+        ->assertDontSee('data-sidebar-child-key="modules"', false)
         ->assertDontSee('data-sidebar-key="modules"', false);
 
     $html = $response->getContent();
 
-    expect(preg_match('/data-sidebar-child-key="modules"[^>]*mf-admin-subnav-link-active/', $html))->toBe(1)
+    expect(preg_match('/data-sidebar-key="branches"[\s\S]{0,500}data-current="data-current"/', $html))->toBe(1)
         ->and(preg_match('/data-sidebar-child-key="customers"[^>]*mf-admin-subnav-link-active/', $html))->toBe(0);
 });
 

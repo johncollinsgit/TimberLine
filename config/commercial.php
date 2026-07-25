@@ -190,7 +190,7 @@ return [
             'modules' => (array) ($canonicalAddons['messaging']['modules'] ?? ['messaging', 'email']),
         ],
         'order_calendar' => [
-            'name' => (string) ($canonicalAddons['order_calendar']['name'] ?? 'Order Calendar'),
+            'name' => (string) ($canonicalAddons['order_calendar']['name'] ?? 'Workflow Automations'),
             'position' => 35,
             'currency' => (string) data_get($canonicalAddons, 'order_calendar.pricing.currency', 'USD'),
             'recurring_price_cents' => (int) data_get($canonicalAddons, 'order_calendar.pricing.recurring_price_cents', 2900),

@@ -654,8 +654,8 @@ class UnifiedDashboardService
 
         if ($canAccessMarketing && $tenantId !== null && ((array) ($catalog['sections']['available'] ?? [])) !== []) {
             $actions[] = [
-                'label' => 'Explore modules',
-                'description' => 'See which modules can be activated or requested next for this tenant.',
+                'label' => 'Explore Branches',
+                'description' => 'See what is included, what can be added now, and what requires a request.',
                 'href' => route('marketing.modules'),
                 'tone' => 'info',
             ];
@@ -707,6 +707,9 @@ class UnifiedDashboardService
                 'display_name' => (string) ($module['display_name'] ?? 'Module'),
                 'description' => (string) ($module['description'] ?? ''),
                 'state_label' => (string) data_get($module, 'module_state.state_label', 'Available'),
+                'price_label' => filled(data_get($module, 'purchase.price_display'))
+                    ? (string) data_get($module, 'purchase.price_display')
+                    : (string) ($module['pricing_impact_label'] ?? 'Included or request-based'),
                 'href' => route('marketing.modules', ['module' => (string) ($module['module_key'] ?? '')]),
             ];
         }, $rows);

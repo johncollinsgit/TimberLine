@@ -68,13 +68,13 @@ test('tenant module store payload exposes product grade metadata for visible mod
         ->and($sms['buyer_setup']['setup_steps'] ?? [])->not->toBeEmpty();
 });
 
-test('order calendar is a public purchasable add-on with canonical pricing', function (): void {
+test('workflow automations is a public purchasable add-on with canonical pricing', function (): void {
     $tenant = moduleStoreTenant('order-calendar-store');
     $payload = app(TenantModuleCatalogService::class)->tenantStorePayload($tenant->id, 'marketing');
     $module = collect((array) ($payload['modules'] ?? []))->firstWhere('module_key', 'workflow_automations');
 
     expect($module)->toBeArray()
-        ->and($module['display_name'])->toBe('Order Calendar')
+        ->and($module['display_name'])->toBe('Workflow Automations')
         ->and($module['status'])->toBe('live')
         ->and($module['billing_mode'])->toBe('add_on')
         ->and(data_get($module, 'purchase.addon_key'))->toBe('order_calendar')
@@ -201,7 +201,7 @@ test('tenant module store renders metadata as guidance without billing checkout 
     $this->actingAs($user)
         ->get(route('marketing.modules'))
         ->assertOk()
-        ->assertSeeText('Workspace feature catalog')
+        ->assertSeeText('Add what your business needs next')
         ->assertSeeText('What this does')
         ->assertSeeText('Best next step')
         ->assertSeeText('What you need before setup')
@@ -234,7 +234,7 @@ test('landlord branches preview renders the customer branch catalog without muta
         ->assertSeeText('Customer preview')
         ->assertSeeText('Base user lens')
         ->assertSeeText('Branch Preview Tenant Branch catalog')
-        ->assertSeeText('Order Calendar')
+        ->assertSeeText('Workflow Automations')
         ->assertSeeText('Read-only preview')
         ->assertSee('http://branch-preview-tenant.theeverbranch.com/marketing/modules?module=workflow_automations', false)
         ->assertSeeText('Open customer Module Store')
