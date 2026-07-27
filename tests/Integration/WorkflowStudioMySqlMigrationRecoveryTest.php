@@ -135,10 +135,15 @@ it('recovers Website Commerce after MySQL retains a partial reservation table', 
     // table exists, but its two trailing FKs and supporting indexes do not.
     // Use individual MySQL DDL statements here. Laravel can coalesce schema
     // changes into an order MySQL rejects when an index still supports an FK.
+    // The composite variant index also supports the tenant FK, so remove and
+    // restore that constraint around the simulation. The real failed table
+    // retains only this tenant FK and its minimal supporting index.
+    DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_tenant_fk');
     DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_variant_fk');
     DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_order_fk');
     DB::statement('ALTER TABLE website_inventory_reservations DROP INDEX website_reservation_order_variant_uq');
     DB::statement('ALTER TABLE website_inventory_reservations DROP INDEX website_reservation_variant_status_idx');
+    DB::statement('ALTER TABLE website_inventory_reservations ADD CONSTRAINT website_reservations_tenant_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE');
 
     $commerce->up();
     $repair->up();
