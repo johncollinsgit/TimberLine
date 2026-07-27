@@ -77,6 +77,28 @@ test('managed website public host renders only an explicitly published snapshot'
         ->assertNotFound();
 });
 
+test('managed website editor renders its structured page data', function (): void {
+    $tenant = managedWebsiteTenant('editor-pilot');
+    $actor = managedWebsiteActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    $page = $site->pages()->where('slug', '/')->firstOrFail()->load('draftVersion');
+
+    $html = view('managed-website.editor', [
+        'tenant' => $tenant,
+        'site' => $site->load('pages.draftVersion'),
+        'page' => $page,
+        'pages' => $site->pages,
+        'isPublishingEnabled' => true,
+    ])->render();
+
+    expect($html)
+        ->toContain('id="managed-website-editor-root"')
+        ->toContain('data-page=')
+        ->toContain('data-pages=')
+        ->toContain('data-site=');
+});
+
 test('pending billing never opens the editor even when a tenant is allowlisted', function (): void {
     $tenant = managedWebsiteTenant('billing-pending');
     managedWebsiteActor($tenant);
