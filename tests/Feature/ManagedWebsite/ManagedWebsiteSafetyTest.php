@@ -72,6 +72,9 @@ test('managed website public host renders only an explicitly published snapshot'
     $this->get('https://safe-pilot.theeverbranch.com/')
         ->assertOk()
         ->assertSeeText('Managed Website Pilot');
+
+    $this->post('https://safe-pilot.theeverbranch.com/a-route-that-does-not-exist')
+        ->assertNotFound();
 });
 
 test('pending billing never opens the editor even when a tenant is allowlisted', function (): void {
