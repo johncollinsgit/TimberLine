@@ -2,6 +2,34 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Managed Website guardrails (approved contract; not yet enabled)
+
+- `managed_website` must remain default-disabled and use
+  `config/module_catalog.php`, the canonical access resolver, verified/audited
+  fulfilment, and an explicit rollout allowlist. Never infer access from a
+  billing screen, agreement, host, or provider connection.
+- Add only tenant-owned website/site/page/version/section/navigation/media/
+  redirect/publish-event records. Drafts and immutable published snapshots must
+  remain separate; publishing and rollback may update only the relevant site
+  pointer/cache keys.
+- Modern Forestry's separate Shopify app and Shopify Checkout are hard
+  exclusions. Do not alter or call their routes, UI, credentials, app config,
+  checkout, customer account, webhooks, orders, customers, rewards, imports,
+  provider connections, or workflow cursors. Modern Forestry is not a pilot.
+- Retain four independently auditable fail-closed gates: global availability,
+  tenant rollout allowlist, editor/publishing freeze, and Managed Website
+  public-render disablement. The normal rollback preserves the last good
+  snapshot; suspected isolation/security incidents disable only Managed Website
+  hosts and use the rollback runbook.
+- V1 forms create only tenant-scoped submissions. Do not create customers,
+  send messages, modify marketing audiences, trigger workflows, or process
+  Shopify/Square/Stripe/booking orders. Existing app, checkout, customer
+  account, webhook, and public route ownership must resolve before website host
+  rendering; unknown hosts fail closed.
+- Required reference: `docs/architecture/managed-website-architecture.md`,
+  `docs/operations/managed-website-operations-runbook.md`, and
+  `docs/operations/managed-website-rollback-runbook.md`.
+
 ## Accounting Command Center guardrails (2026-07-23)
 
 - Keep `accounting_command_center` reusable and tenant-scoped. Modern Forestry

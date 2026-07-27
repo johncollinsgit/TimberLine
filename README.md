@@ -1,5 +1,21 @@
 # Modern Forestry Backstage
 
+## Everbranch Managed Website (planned, disabled by default)
+
+**Everbranch Managed Website** is the planned $99/month + $499 setup-fee
+tenant add-on for structured small-business websites. It will provide a
+tenant-scoped Website editor, immutable publishing/rollback, lead forms, and
+external Shopify/Square/Stripe/booking links. It will not process orders or
+operate a native checkout.
+
+The capability is not live until verified/audited commercial fulfilment,
+tenant allowlisting, publishing and host-isolation checks, and the documented
+rollback drill pass. Modern Forestry's separate Shopify app and Shopify
+Checkout are deliberately excluded: no routes, credentials, checkout,
+customers, orders, webhooks, rewards, or existing connections may change.
+Read `docs/architecture/managed-website-architecture.md` and the paired
+operations/rollback runbooks before implementing or operating the feature.
+
 ## Accounting Command Center
 
 Everbranch includes a reusable, disabled-by-default Accounting Command Center

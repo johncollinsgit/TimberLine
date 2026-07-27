@@ -36,3 +36,26 @@
   event spreadsheets are reconciliation sources, not additive ledger revenue.
   Never invent tax conclusions or workbook mappings and never add QuickBooks
   write-back.
+
+## Managed Website safety contract (approved; feature remains disabled)
+
+- `managed_website` is a tenant-scoped, default-disabled add-on. Use the
+  canonical module catalog and audited entitlement fulfilment; do not derive
+  access from a URL, host, agreement, checkout request, or connection.
+- Its schema is additive only: tenant site, drafts, immutable published
+  versions, sections, navigation, media references, redirects, and publish
+  events. Publishing/rollback move a site-local pointer and cache keys only.
+- Modern Forestry's separate Shopify app and Shopify Checkout are a hard
+  exclusion. Managed Website work must not modify or invoke their routes, UI,
+  credentials, app settings, checkout, customer account, webhooks, orders,
+  customers, rewards, imports, existing connections, or workflow cursors.
+- Four independently auditable fail-closed gates are required: global
+  availability, tenant rollout allowlist, editor/publishing freeze, and public
+  rendering disablement for Managed Website hosts. Use
+  `docs/operations/managed-website-rollback-runbook.md`; preserve published
+  snapshots and additive records during rollback.
+- Public website rendering must follow existing landlord, authenticated app,
+  Shopify app/Checkout, customer-account, webhook, and established public
+  routing. Unknown or unverified hosts fail closed. V1 external CTA blocks only
+  link out; forms create tenant-scoped submissions and must not create
+  customers, messages, marketing events, workflows, or orders.
