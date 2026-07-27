@@ -25,9 +25,11 @@
             'url' => route('managed-website.editor', ['page' => $item]),
         ])->values();
         $editorSite = [
-            'name' => data_get($site->settings, 'theme_name', $tenant->brandProfile?->display_name ?: $tenant->name),
+            'name' => data_get(($theme ?? null)?->settings, 'theme_name', data_get($site->settings, 'theme_name', $tenant->brandProfile?->display_name ?: $tenant->name)),
             'status' => $site->status,
-            'preview_url' => $site->status === 'published' ? url('/') : null,
+            'theme' => ($theme ?? null)?->settings ?: [],
+            'navigation' => ($theme ?? null)?->navigation ?: [],
+            'preview_url' => route('managed-website.editor.preview', ['page' => $page]),
         ];
     @endphp
     <div id="managed-website-editor-root"
@@ -35,7 +37,10 @@
          data-pages='@json($editorPages)'
          data-site='@json($editorSite)'
          data-save-url="{{ route('managed-website.editor.save', ['page' => $page]) }}"
+         data-theme-save-url="{{ route('managed-website.editor.theme.save') }}"
          data-publish-url="{{ route('managed-website.editor.publish') }}"
+         data-media-url="{{ route('managed-website.media.index') }}"
+         data-media-upload-url="{{ route('managed-website.media.store') }}"
          data-index-url="{{ route('managed-website.index') }}"
          data-publishing-enabled="{{ $isPublishingEnabled ? 'true' : 'false' }}"></div>
 </body>

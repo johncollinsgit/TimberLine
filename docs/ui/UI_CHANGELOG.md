@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-07-27 — Rich Website themes, real draft preview, and media library
+
+- Website now has a Shopify-familiar three-pane editor: section outline and
+  add picker, real desktop/mobile draft iframe, and an inspector for text,
+  links, visibility, repeated cards/FAQs, images, menus, announcement, footer,
+  palette, typography, and corners.
+- Theme settings and menus save as a private site-level draft and do not alter
+  a published site until Publish. The overview uses a real framed draft preview
+  and theme cards use original starter imagery.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements ship with six
+  starter pages, usable menus, banners, service cards, FAQ, CTA, forms, and
+  mobile behavior. Collins stays draft-only.
+
 ## 2026-07-27 — Website editor and starter-theme refinement
 
 ### What changed

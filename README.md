@@ -6,6 +6,8 @@
 tenant add-on for structured small-business websites. It will provide a
 tenant-scoped Website editor, immutable publishing/rollback, lead forms, and
 an isolated native Website catalog, cart, and Stripe Connect checkout lane.
+The editor uses structured theme settings, menus, sections, reusable public-site
+images, and a real draft preview rendered by the same code as the public site.
 It never uses an existing Shopify checkout or legacy order system.
 
 The capability is not live until verified/audited commercial fulfilment,

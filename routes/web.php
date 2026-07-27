@@ -640,6 +640,12 @@ Route::post('/website/forms/{page}', [ManagedWebsiteController::class, 'submitFo
     ->middleware('throttle:6,1')
     ->name('managed-website.forms.submit');
 
+Route::get('/website-media/{media}', [ManagedWebsiteController::class, 'showMedia'])
+    ->name('managed-website.media.show');
+Route::get('/website-thumbnail-source/{siteVersion}/{pageVersion}', [ManagedWebsiteController::class, 'thumbnailSource'])
+    ->middleware('signed')
+    ->name('managed-website.thumbnail.source');
+
 // Native Website Commerce routes are host-resolved inside the controller. They
 // intentionally do not share any Shopify or legacy Order route/model.
 Route::get('/shop', [WebsiteCommerceController::class, 'shop'])->name('managed-website.store.index');
@@ -675,9 +681,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
             Route::post('/', [ManagedWebsiteController::class, 'create'])->name('create');
             Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');
+            Route::put('/editor/theme', [ManagedWebsiteController::class, 'saveTheme'])->name('editor.theme.save');
             Route::get('/editor/{page}', [ManagedWebsiteController::class, 'editor'])->name('editor');
             Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');
+            Route::get('/editor/{page}/preview', [ManagedWebsiteController::class, 'preview'])->name('editor.preview');
             Route::post('/editor/publish', [ManagedWebsiteController::class, 'publishEditor'])->name('editor.publish');
+            Route::get('/media', [ManagedWebsiteController::class, 'media'])->name('media.index');
+            Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');
+            Route::get('/thumbnails/{siteVersion}', [ManagedWebsiteController::class, 'showThumbnail'])->name('thumbnails.show');
             Route::get('/products', [WebsiteCommerceController::class, 'products'])->name('products.index');
             Route::post('/products', [WebsiteCommerceController::class, 'storeProduct'])->name('products.store');
             Route::put('/products/{product}', [WebsiteCommerceController::class, 'updateProduct'])->name('products.update');

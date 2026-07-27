@@ -116,3 +116,21 @@ Website revenue comes only from confirmed `website_orders.paid_at` records.
 The service does not join order rows, copy records, resolve customer identity,
 call a provider, or write to either lane. This gives a multi-channel merchant a
 single sales view without changing Modern Forestry's Shopify app or checkout.
+
+## Theme snapshots, media, and preview (2026-07-27)
+
+`tenant_site_versions` owns immutable site-wide theme settings, header/footer,
+navigation, announcement, SEO defaults, source manifest, and thumbnail
+reference. `tenant_sites.draft_site_version_id` and
+`published_site_version_id` are pointers only. Publishing copies the current
+draft snapshot before moving the published pointer, so global theme edits cannot
+leak into a live site ahead of Publish.
+
+`tenant_site_media` is a tenant-owned library for public website images. Files
+are type/size validated and ownership is resolved server-side. It must never be
+used as a route to field-service, customer, job, or workspace media.
+
+The editor preview is `no-store, private` and uses the same renderer with draft
+page plus draft site snapshots. Until a screenshot runtime is explicitly
+provisioned, the Website overview shows a real framed draft preview rather than
+a synthetic thumbnail.

@@ -25,6 +25,25 @@
   process commerce. Shopify/Square/Stripe/booking CTAs link to external systems
   of record.
 
+## Rich Website themes and draft preview (2026-07-27)
+
+- Site-wide Website draft/published state is immutable and separate from page
+  versions: `tenant_site_versions` owns theme settings, navigation, footer,
+  announcement, SEO defaults, source manifests, and optional thumbnail paths.
+  A publish moves only the site-local published pointer after copying the
+  current draft snapshot. Public rendering therefore cannot pick up unpublished
+  menu or styling edits.
+- `tenant_site_media` is an additive tenant-owned, public-site-only image
+  library. It accepts approved image types only and is resolved server-side;
+  private field-service, customer, and workspace files are out of scope.
+- The Website editor's desktop/mobile iframe is an authenticated, `no-store`
+  draft preview rendered by the public-site renderer. The overview labels this
+  as a live draft preview rather than presenting a fabricated screenshot.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements are complete
+  six-page starter packs with structured menus, announcements, banners, FAQs,
+  forms, service cards, and original generated starter imagery. Collins content
+  remains a draft prepared only by explicit operator action; it is not published.
+
 ## Website Commerce and live editor (default-disabled) (2026-07-27)
 
 - Website now has a dedicated full-screen editor route with a Shopify-inspired

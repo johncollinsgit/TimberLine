@@ -68,3 +68,18 @@ or delayed Website sale is a Website payment/webhook investigation; do not add
 or edit a legacy Shopify order to repair the report. Likewise, a source-channel
 discrepancy is resolved in that source system, not by merging orders or shoppers
 in Everbranch.
+
+## Theme, preview, and media checks
+
+Before approving a theme, verify its authenticated draft preview shows the
+expected navigation, footer, announcement, and page content. It is `no-store`
+and not a public preview URL. Use only public-site-safe images in the Website
+media library; customer, field-service, job, employee, and provider-export
+media are excluded.
+
+To prepare the Collins draft without publishing it, run:
+
+`php artisan everbranch:prepare-managed-website-theme collins-electric collins-electric`
+
+Confirm the output says `published=no`. Entitlement, editor access, and Publish
+remain separate audited controls.

@@ -21,6 +21,10 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   public-render disablement. The normal rollback preserves the last good
   snapshot; suspected isolation/security incidents disable only Managed Website
   hosts and use the rollback runbook.
+- Theme-level settings, navigation, footer, and announcement content belong to
+  immutable `tenant_site_versions`; never allow a draft theme setting to affect
+  a published host. `tenant_site_media` is a public-site-only tenant media
+  library and must never expose job, field-service, customer, or workspace files.
 - V1 forms create only tenant-scoped submissions. Do not create customers,
   send messages, modify marketing audiences, trigger workflows, or process
   Shopify/Square/Stripe/booking orders. Existing app, checkout, customer
