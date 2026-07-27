@@ -1,5 +1,32 @@
 # UI Changelog
 
+## 2026-07-27 — Managed Website design contract (not yet enabled)
+
+### Planned customer experience
+
+- The entitled **Website** workspace will provide a calm, Shopify-familiar
+  structured editor for pages, navigation, brand, leads, responsive preview,
+  draft autosave, publish, and rollback—not an unrestricted page builder.
+- V1 templates cover Home, Services, About, Contact, FAQ, and landing pages;
+  sections are limited to approved hero, text/image, services, testimonial,
+  FAQ, form, and external CTA patterns. Keyboard navigation, visible focus,
+  reduced-motion support, and WCAG AA contrast are required.
+- Customers can link to their existing Shopify, Square, Stripe, or booking
+  checkout. The UI must call this an external handoff and never imply that
+  Everbranch processes an order or owns the checkout.
+
+### Safety posture
+
+- The Website navigation item appears only after server-resolved, audited
+  entitlement and rollout access. Disabled, frozen, and unavailable states must
+  be explicit and must not expose an editing or publishing control that can act.
+- A publishing freeze preserves the last published site. A public-render
+  incident response affects Managed Website hosts only; it must not alter the
+  existing Everbranch app or Modern Forestry Shopify app/Checkout experience.
+- Forms create tenant-scoped submissions only. The UI must not promise customer
+  creation, messaging, marketing enrollment, workflow execution, checkout, or
+  order management.
+
 ## 2026-07-25 — Product Explorer, Search, and Workflow Naming
 
 ### What Changed

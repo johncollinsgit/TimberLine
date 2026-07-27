@@ -1,5 +1,30 @@
 # SYSTEM SNAPSHOT
 
+## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
+
+- **Everbranch Managed Website** is the planned default-disabled,
+  tenant-scoped Website add-on ($99/month plus $499 setup). It is not a live
+  entitlement until verified/audited commercial fulfilment, rollout allowlist,
+  host-isolation, publishing, and rollback-drill gates pass.
+- V1 uses additive tenant site/page/draft/immutable-version/section/navigation/
+  media/redirect/publish-event records. Public sites read only immutable
+  snapshots on `<workspace>.theeverbranch.com`; unknown or unverified hosts
+  fail closed and existing routes take precedence.
+- Modern Forestry's separate Shopify app and Shopify Checkout are explicitly
+  excluded. Managed Website must not change or call their routes, UI,
+  credentials, checkout, customer account, webhooks, orders, customers,
+  rewards, imports, connections, or workflow cursors; Modern Forestry is not a
+  pilot.
+- Four audited, independent fail-closed controls are required: global
+  availability, tenant rollout allowlist, editor/publishing freeze, and public
+  rendering disablement for Managed Website hosts. Normal rollback keeps the
+  last good public snapshot; security/isolation rollback disables only website
+  hosts. See `docs/operations/managed-website-rollback-runbook.md`.
+- Website forms remain normal tenant-scoped submissions. They do not create
+  customers, send messages, modify marketing audiences, trigger workflows, or
+  process commerce. Shopify/Square/Stripe/booking CTAs link to external systems
+  of record.
+
 ## Modern Forestry App Store Customer Login Recovery (2026-07-25)
 
 - Modern Forestry's Headless Customer Account integration is a public
