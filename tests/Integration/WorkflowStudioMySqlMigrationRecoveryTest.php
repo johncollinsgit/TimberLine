@@ -98,3 +98,67 @@ it('runs cleanly and recovers the partial workflow studio migration on mysql', f
         ->and(Schema::hasTable('automation_workflow_domain_events'))
         ->toBeTrue();
 });
+
+it('recovers Website Commerce after MySQL retains a partial reservation table', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    foreach (['website_stripe_webhook_events', 'website_fulfillments', 'website_payments', 'website_inventory_reservations', 'website_order_lines', 'website_orders', 'website_cart_items', 'website_carts', 'website_inventory_movements', 'website_product_variants', 'website_products', 'website_customer_addresses', 'website_customers'] as $table) {
+        Schema::dropIfExists($table);
+    }
+
+    if (! Schema::hasTable('tenants')) {
+        Schema::create('tenants', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (! Schema::hasTable('users')) {
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (! Schema::hasTable('tenant_sites')) {
+        Schema::create('tenant_sites', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    $commerce = require database_path('migrations/2026_07_27_180000_create_website_commerce_tables.php');
+    $repair = require database_path('migrations/2026_07_27_181000_repair_partial_website_commerce_schema.php');
+
+    $commerce->up();
+
+    // Recreate the exact shape left by the failed production candidate: the
+    // table exists, but its two trailing FKs and supporting indexes do not.
+    // Use individual MySQL DDL statements here. Laravel can coalesce schema
+    // changes into an order MySQL rejects when an index still supports an FK.
+    // The composite variant index also supports the tenant FK, so remove and
+    // restore that constraint around the simulation. The real failed table
+    // retains only this tenant FK and its minimal supporting index.
+    DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_tenant_fk');
+    DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_variant_fk');
+    DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_order_fk');
+    DB::statement('ALTER TABLE website_inventory_reservations DROP INDEX website_reservation_order_variant_uq');
+    DB::statement('ALTER TABLE website_inventory_reservations DROP INDEX website_reservation_variant_status_idx');
+    DB::statement('ALTER TABLE website_inventory_reservations ADD CONSTRAINT website_reservations_tenant_fk FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE');
+
+    $commerce->up();
+    $repair->up();
+
+    expect(Schema::hasTable('website_stripe_webhook_events'))->toBeTrue()
+        ->and(Schema::hasIndex('website_inventory_reservations', 'website_reservation_order_variant_uq'))->toBeTrue()
+        ->and(Schema::hasIndex('website_inventory_reservations', 'website_reservation_variant_status_idx'))->toBeTrue()
+        ->and(DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('CONSTRAINT_SCHEMA', DB::getDatabaseName())
+            ->where('TABLE_NAME', 'website_inventory_reservations')
+            ->where('CONSTRAINT_NAME', 'website_reservations_variant_fk')
+            ->exists())->toBeTrue()
+        ->and(DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('CONSTRAINT_SCHEMA', DB::getDatabaseName())
+            ->where('TABLE_NAME', 'website_inventory_reservations')
+            ->where('CONSTRAINT_NAME', 'website_reservations_order_fk')
+            ->exists())->toBeTrue();
+});
