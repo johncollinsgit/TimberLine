@@ -68,18 +68,36 @@ class ManagedWebsiteController extends Controller
 
     public function preview(Request $request, TenantSitePage $page, ManagedWebsiteService $websites)
     {
+        return $this->draftPreviewResponse($request, $page, $websites, false);
+    }
+
+    public function previewSite(Request $request, TenantSitePage $page, ManagedWebsiteService $websites)
+    {
+        return $this->draftPreviewResponse($request, $page, $websites, true);
+    }
+
+    protected function draftPreviewResponse(Request $request, TenantSitePage $page, ManagedWebsiteService $websites, bool $interactive)
+    {
         $tenant = $this->tenant($request);
         $this->requireEditor($tenant, $websites);
         abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
-        $site = TenantSite::query()->forTenant($tenant)->with('draftSiteVersion')->findOrFail($page->tenant_site_id);
+        $site = TenantSite::query()->forTenant($tenant)->with(['draftSiteVersion', 'pages'])->findOrFail($page->tenant_site_id);
         $payload = $websites->draftPage($site, $page);
         abort_unless($payload !== null, 404);
 
-        return response()
-            ->view('managed-website.public', $payload + ['tenant' => $tenant])
+        $response = response()
+            ->view('managed-website.public', $payload + [
+                'tenant' => $tenant,
+                'previewMode' => $interactive ? 'site' : 'editor',
+                'previewLinks' => $this->draftPreviewLinks($site),
+                'editorUrl' => route('managed-website.editor', ['page' => $page]),
+            ])
             ->header('Cache-Control', 'no-store, private')
-            ->header('Content-Security-Policy', "frame-ancestors 'self'")
-            ->header('X-Frame-Options', 'SAMEORIGIN');
+            ->header('Referrer-Policy', 'same-origin');
+
+        return $interactive
+            ? $response->header('Content-Security-Policy', "frame-ancestors 'none'")->header('X-Frame-Options', 'DENY')
+            : $response->header('Content-Security-Policy', "frame-ancestors 'self'")->header('X-Frame-Options', 'SAMEORIGIN');
     }
 
     public function thumbnailSource(TenantSiteVersion $siteVersion, TenantSitePageVersion $pageVersion)
@@ -97,6 +115,7 @@ class ManagedWebsiteController extends Controller
                 'version' => $pageVersion,
                 'theme' => $siteVersion,
                 'isDraftPreview' => true,
+                'previewMode' => 'thumbnail',
             ])
             ->header('Cache-Control', 'no-store, private')
             ->header('Content-Security-Policy', "frame-ancestors 'none'")
@@ -318,6 +337,20 @@ class ManagedWebsiteController extends Controller
         abort_unless($tenant instanceof Tenant, 403);
 
         return $tenant;
+    }
+
+    /** @return array<string,string> */
+    protected function draftPreviewLinks(TenantSite $site): array
+    {
+        return $site->pages
+            ->filter(fn (TenantSitePage $candidate): bool => (int) $candidate->tenant_id === (int) $site->tenant_id)
+            ->mapWithKeys(function (TenantSitePage $candidate): array {
+                $path = trim('/'.trim((string) $candidate->slug, '/'), '/');
+                $path = $path === '' ? '/' : '/'.$path;
+
+                return [$path => route('managed-website.editor.preview.site', ['page' => $candidate])];
+            })
+            ->all();
     }
 
     protected function requireEditor(Tenant $tenant, ManagedWebsiteService $websites): void

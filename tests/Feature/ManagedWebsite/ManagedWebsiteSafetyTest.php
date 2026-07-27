@@ -4,6 +4,7 @@ use App\Http\Controllers\ManagedWebsiteController;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
+use App\Models\TenantSitePage;
 use App\Models\User;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use Illuminate\Http\Request;
@@ -115,6 +116,55 @@ test('the authenticated draft preview may be framed only by the workspace editor
     expect($response->headers->get('Cache-Control'))->toBe('no-store, private')
         ->and($response->headers->get('Content-Security-Policy'))->toBe("frame-ancestors 'self'")
         ->and($response->headers->get('X-Frame-Options'))->toBe('SAMEORIGIN');
+});
+
+test('the full-site draft preview contains only owned preview links and a return to the exact editor page', function (): void {
+    $tenant = managedWebsiteTenant('preview-navigation-pilot');
+    $actor = managedWebsiteActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $home = $site->pages()->where('slug', '/')->firstOrFail();
+    $about = TenantSitePage::query()->create([
+        'tenant_id' => $tenant->id,
+        'tenant_site_id' => $site->id,
+        'slug' => 'about',
+        'page_type' => 'about',
+        'title' => 'About us',
+        'is_navigation_visible' => true,
+    ]);
+    $service->saveDraft($site, $about, ['title' => 'About us', 'blocks' => [['type' => 'text', 'heading' => 'About us', 'body' => 'Local and dependable.']]], $actor);
+    $service->saveDraft($site, $home, ['title' => 'Home', 'blocks' => [['type' => 'hero', 'heading' => 'Home', 'body' => 'A safe preview.', 'cta_label' => 'About us', 'cta_url' => '/about'], ['type' => 'cta', 'heading' => 'Book', 'cta_label' => 'Book online', 'cta_url' => 'https://booking.example.test'], ['type' => 'cta', 'heading' => 'Call us', 'cta_label' => 'Call', 'cta_url' => 'tel:+15550100']]], $actor);
+    $service->saveSiteDraft($site, ['settings' => ['announcement' => ['enabled' => true, 'text' => 'See more', 'url' => '/about']], 'navigation' => [['label' => 'Home', 'url' => '/', 'type' => 'page'], ['label' => 'About', 'url' => '/about', 'type' => 'page']]], $actor);
+    $request = Request::create('/website/editor/'.$home->id.'/preview-site');
+    $request->attributes->set('current_tenant', $tenant);
+
+    $response = app(ManagedWebsiteController::class)->previewSite($request, $home, $service);
+    $content = $response->getContent();
+
+    expect($response->headers->get('Cache-Control'))->toBe('no-store, private')
+        ->and($response->headers->get('Content-Security-Policy'))->toBe("frame-ancestors 'none'")
+        ->and($response->headers->get('X-Frame-Options'))->toBe('DENY')
+        ->and($content)->toContain('Private draft preview')
+        ->and($content)->toContain(route('managed-website.editor', ['page' => $home]))
+        ->and($content)->toContain(route('managed-website.editor.preview.site', ['page' => $about]))
+        ->and($content)->toContain('target="_blank" rel="noopener noreferrer"')
+        ->and($content)->not->toContain('href="/"');
+});
+
+test('draft preview routes do not accept another tenant page', function (): void {
+    $tenant = managedWebsiteTenant('preview-owner');
+    $otherTenant = managedWebsiteTenant('preview-other');
+    $actor = managedWebsiteActor($tenant);
+    managedWebsiteActor($otherTenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id, $otherTenant->id]);
+    $otherSite = app(ManagedWebsiteService::class)->createSite($otherTenant, $actor);
+    $otherPage = $otherSite->pages()->where('slug', '/')->firstOrFail();
+    $request = Request::create('/website/editor/'.$otherPage->id.'/preview-site');
+    $request->attributes->set('current_tenant', $tenant);
+
+    expect(fn () => app(ManagedWebsiteController::class)->previewSite($request, $otherPage, app(ManagedWebsiteService::class)))
+        ->toThrow(Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
 });
 
 test('pending billing never opens the editor even when a tenant is allowlisted', function (): void {

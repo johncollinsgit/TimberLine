@@ -685,6 +685,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/editor/{page}', [ManagedWebsiteController::class, 'editor'])->name('editor');
             Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');
             Route::get('/editor/{page}/preview', [ManagedWebsiteController::class, 'preview'])->name('editor.preview');
+            Route::get('/editor/{page}/preview-site', [ManagedWebsiteController::class, 'previewSite'])->name('editor.preview.site');
             Route::post('/editor/publish', [ManagedWebsiteController::class, 'publishEditor'])->name('editor.publish');
             Route::get('/media', [ManagedWebsiteController::class, 'media'])->name('media.index');
             Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');
