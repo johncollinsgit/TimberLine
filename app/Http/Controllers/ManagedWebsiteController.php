@@ -248,6 +248,17 @@ class ManagedWebsiteController extends Controller
         return back()->with('status', 'Custom domain disabled. The last published Everbranch subdomain remains unchanged.');
     }
 
+    public function cancelDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
+        $domains->cancel($domain, $request->user());
+
+        return back()->with('status', 'Domain setup removed. Enter the address you want to connect.');
+    }
+
     public function create(Request $request, ManagedWebsiteService $websites): RedirectResponse
     {
         $tenant = $this->tenant($request);
