@@ -9,6 +9,8 @@ use App\Models\TenantSite;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
+use App\Services\ManagedWebsite\WebsiteCommerceService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -16,7 +18,7 @@ use Illuminate\View\View;
 
 class ManagedWebsiteController extends Controller
 {
-    public function index(Request $request, ManagedWebsiteService $websites): View
+    public function index(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): View
     {
         $tenant = $this->tenant($request);
         $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion'])->first();
@@ -29,7 +31,44 @@ class ManagedWebsiteController extends Controller
             'isEditorEnabled' => $websites->editorEnabledFor($tenant),
             'isPublishingEnabled' => $websites->publishingEnabled(),
             'isPublicRenderEnabled' => $websites->publicRenderingEnabled(),
+            'themes' => $websites->themes(),
+            'commerceReadiness' => $commerce->checkoutReadiness($tenant),
         ]);
+    }
+
+    public function editor(Request $request, TenantSitePage $page, ManagedWebsiteService $websites): View
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
+        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion'])->findOrFail($page->tenant_site_id);
+
+        return view('managed-website.editor', compact('tenant', 'site', 'page') + [
+            'pages' => $site->pages,
+            'isPublishingEnabled' => $websites->publishingEnabled(),
+        ]);
+    }
+
+    public function saveEditor(Request $request, TenantSitePage $page, ManagedWebsiteService $websites): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
+        $site = TenantSite::query()->forTenant($tenant)->findOrFail($page->tenant_site_id);
+        $data = $request->validate(['title' => ['required', 'string', 'max:190'], 'blocks' => ['required', 'array', 'max:40'], 'seo' => ['nullable', 'array']]);
+        $version = $websites->saveDraft($site, $page, $data, $request->user());
+
+        return response()->json(['saved_at' => $version->created_at->toIso8601String(), 'version_number' => $version->version_number, 'blocks' => $version->blocks]);
+    }
+
+    public function applyTheme(Request $request, ManagedWebsiteService $websites): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        $websites->applyTheme($site, (string) $request->validate(['theme_key' => ['required', 'string', 'max:80']])['theme_key'], $request->user());
+
+        return back()->with('status', 'Theme applied as a draft. Review it in the editor before publishing.');
     }
 
     public function create(Request $request, ManagedWebsiteService $websites): RedirectResponse
@@ -61,6 +100,17 @@ class ManagedWebsiteController extends Controller
         return back()->with('status', 'Page draft added.');
     }
 
+    public function destroyPage(Request $request, TenantSitePage $page, ManagedWebsiteService $websites): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
+        abort_if($page->slug === '/', 422, 'The Home page cannot be deleted.');
+        $page->delete();
+
+        return back()->with('status', 'Page removed.');
+    }
+
     public function savePage(Request $request, TenantSitePage $page, ManagedWebsiteService $websites): RedirectResponse
     {
         $tenant = $this->tenant($request);
@@ -87,6 +137,16 @@ class ManagedWebsiteController extends Controller
         return back()->with('status', $websites->publicRenderingEnabled()
             ? 'Published. Your last approved snapshot is now live.'
             : 'Published safely. Public rendering is still disabled for this rollout.');
+    }
+
+    public function publishEditor(Request $request, ManagedWebsiteService $websites): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        $websites->publish($site, $request->user());
+
+        return response()->json(['status' => $websites->publicRenderingEnabled() ? 'published' : 'published_safely']);
     }
 
     public function rollback(Request $request, TenantSitePage $page, TenantSitePageVersion $version, ManagedWebsiteService $websites): RedirectResponse

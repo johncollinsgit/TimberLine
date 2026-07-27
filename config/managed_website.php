@@ -22,6 +22,10 @@ return [
     'publishing_enabled' => $bool('MANAGED_WEBSITE_PUBLISHING_ENABLED'),
     'public_render_enabled' => $bool('MANAGED_WEBSITE_PUBLIC_RENDER_ENABLED'),
     'editor_tenant_ids' => $tenantIds('MANAGED_WEBSITE_EDITOR_TENANT_IDS'),
-    'allowed_blocks' => ['hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta'],
+    // Commerce is a distinct, tenant-owned lane. Its webhooks and checkout
+    // fail closed until the global gate, tenant entitlement, Connect readiness,
+    // tax decision, and dedicated endpoint secret are all present.
+    'stripe_webhook_secret' => env('MANAGED_WEBSITE_STRIPE_WEBHOOK_SECRET'),
+    'allowed_blocks' => ['announcement', 'header', 'hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta', 'product_grid', 'footer'],
     'cache_seconds' => max(60, (int) env('MANAGED_WEBSITE_PUBLIC_CACHE_SECONDS', 300)),
 ];

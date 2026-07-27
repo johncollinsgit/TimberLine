@@ -1981,3 +1981,23 @@
 - Live checkout defaults off and is tenant-allowlisted.
 - Acceptance alone creates no charge, pending ACH is not treated as paid, and implementation-only payments cannot change module access.
 - Tax collection, Relay payout verification, webhook signing, and production credentials remain explicit launch blockers.
+# 2026-07-27 — Website theme manager, separate live editor, and native commerce
+
+- Replaced the inline Website draft form with an Online Store-style theme
+  overview, active desktop/mobile theme preview, three starter themes, and
+  direct Website data links.
+- Added a separate full-screen live Website editor with section outline,
+  drag reorder, insertion, inspector, autosave, undo/redo, device preview, and
+  publish status.
+- Added clean Website Products, Customers, and Orders management tables plus
+  native public catalog/cart/Stripe checkout paths. These screens use only the
+  isolated `website_*` lane and never display legacy Shopify orders.
+
+## 2026-07-27 — Sales-channel reporting
+
+- Added a clean, read-only Sales channels view and dashboard link for confirmed
+  revenue and order counts by source, including native Everbranch Website sales
+  alongside existing channels.
+- The view deliberately reports aggregates only: it does not merge customers,
+  copy Website orders into legacy Shopify/operations orders, or expose checkout
+  and fulfillment controls across source boundaries.

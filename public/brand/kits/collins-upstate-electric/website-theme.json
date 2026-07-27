@@ -1,0 +1,18 @@
+{
+  "name": "Collins Upstate Electric — Clean White",
+  "version": 1,
+  "logo": "collins-lockup-navy.svg",
+  "logo_on_dark": "collins-lockup-white.svg",
+  "colors": {
+    "ink": "#13243B",
+    "brand": "#164B7A",
+    "surface": "#FFFFFF",
+    "soft": "#F3F7FA",
+    "accent": "#1464E8"
+  },
+  "style": {
+    "direction": "clean white, crisp navy, generous spacing, precise utility",
+    "hero": "white surface with restrained navy detail",
+    "buttons": "solid navy with square-soft corners"
+  }
+}

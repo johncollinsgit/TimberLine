@@ -15,6 +15,58 @@ use Illuminate\Validation\ValidationException;
 
 class ManagedWebsiteService
 {
+    /** @return array<int,array<string,mixed>> */
+    public function themes(): array
+    {
+        return [
+            [
+                'key' => 'hvac-service', 'name' => 'HVAC Service', 'eyebrow' => 'Service-first',
+                'description' => 'A calm, clear service website built for urgent calls, seasonal work, and trust.',
+                'palette' => ['ink' => '#17343b', 'brand' => '#167f8c', 'surface' => '#f8fbfb'],
+                'hero' => ['heading' => 'Comfort for every season.', 'body' => 'Clear service, dependable technicians, and an easy way to request help.', 'cta_label' => 'Request service', 'cta_url' => '#contact'],
+            ],
+            [
+                'key' => 'collins-electric', 'name' => 'Collins Upstate Electric', 'eyebrow' => 'Clean trade',
+                'description' => 'A sharp white, navy, and service-forward starter built around the approved Collins mark.',
+                'palette' => ['ink' => '#13243b', 'brand' => '#164b7a', 'surface' => '#ffffff'],
+                'hero' => ['heading' => 'Power your next project with confidence.', 'body' => 'A clean, direct starting point for residential, commercial, and service work.', 'cta_label' => 'Talk to an electrician', 'cta_url' => '#contact'],
+            ],
+            [
+                'key' => 'outdoor-elements', 'name' => 'Outdoor Elements', 'eyebrow' => 'Outdoor living',
+                'description' => 'A warm, premium starter for outdoor structures, furniture, cabinetry, and fireplaces.',
+                'palette' => ['ink' => '#26352e', 'brand' => '#6d7d56', 'surface' => '#fbfaf6'],
+                'hero' => ['heading' => 'Elevate your outdoor space.', 'body' => 'Explore considered structures, furniture, cabinetry, and fire features for life outside.', 'cta_label' => 'Explore the collection', 'cta_url' => '/shop'],
+            ],
+        ];
+    }
+
+    public function applyTheme(TenantSite $site, string $themeKey, ?User $actor): TenantSite
+    {
+        $theme = collect($this->themes())->firstWhere('key', $themeKey);
+        abort_unless(is_array($theme), 422, 'That website theme is not available.');
+        $home = $site->pages()->where('slug', '/')->firstOrFail();
+        $this->saveDraft($site, $home, [
+            'title' => $site->tenant->brandProfile?->display_name ?: $site->tenant->name,
+            'seo' => ['title' => $site->tenant->brandProfile?->display_name ?: $site->tenant->name, 'description' => $theme['description']],
+            'blocks' => [
+                ['type' => 'announcement', 'body' => 'Thoughtful service. Clear next steps.'],
+                ['type' => 'header', 'heading' => $site->tenant->brandProfile?->display_name ?: $site->tenant->name],
+                ['type' => 'hero'] + $theme['hero'],
+                ['type' => 'services', 'heading' => 'What we can help with', 'body' => 'Use these cards to make your most important services or products easy to understand.'],
+                ['type' => 'testimonial', 'heading' => 'Built around real customers', 'body' => 'Add a customer story that makes the decision to contact you feel easy.'],
+                ['type' => 'product_grid', 'heading' => 'Featured products and services', 'body' => 'Choose what to feature from your Website catalog.'],
+                ['type' => 'faq', 'question' => 'What happens after I reach out?', 'answer' => 'Add the accurate next step for your business here.'],
+                ['type' => 'contact_form', 'heading' => 'Start a conversation'],
+                ['type' => 'footer', 'body' => '© '.now()->year.' '.($site->tenant->brandProfile?->display_name ?: $site->tenant->name)],
+            ],
+        ], $actor);
+        $settings = (array) $site->settings;
+        $site->forceFill(['settings' => $settings + ['theme_key' => $theme['key'], 'theme_name' => $theme['name'], 'theme_palette' => $theme['palette']], 'updated_by_user_id' => $actor?->id])->save();
+        $this->event($site, $home, $actor, 'site.theme_applied', ['theme_key' => $theme['key']]);
+
+        return $site->fresh(['pages.draftVersion', 'pages.publishedVersion']);
+    }
+
     public function editorEnabledFor(Tenant $tenant): bool
     {
         if (! ((bool) config('managed_website.editor_enabled', false)
