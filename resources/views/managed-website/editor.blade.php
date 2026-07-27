@@ -8,10 +8,31 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-zinc-100 text-zinc-900">
+    @php
+        // Keep the structured values outside of @json(). Blade's directive parser
+        // cannot safely parse nested array literals and closures in an attribute.
+        $editorPage = [
+            'id' => $page->id,
+            'title' => $page->draftVersion?->title ?: $page->title,
+            'slug' => $page->slug,
+            'blocks' => $page->draftVersion?->blocks ?: [],
+            'seo' => $page->draftVersion?->seo ?: [],
+        ];
+        $editorPages = $pages->map(fn ($item) => [
+            'id' => $item->id,
+            'title' => $item->title,
+            'slug' => $item->slug,
+        ])->values();
+        $editorSite = [
+            'name' => data_get($site->settings, 'theme_name', $tenant->brandProfile?->display_name ?: $tenant->name),
+            'status' => $site->status,
+            'preview_url' => $site->status === 'published' ? url('/') : null,
+        ];
+    @endphp
     <div id="managed-website-editor-root"
-         data-page='@json(['id' => $page->id, 'title' => $page->draftVersion?->title ?: $page->title, 'slug' => $page->slug, 'blocks' => $page->draftVersion?->blocks ?: [], 'seo' => $page->draftVersion?->seo ?: []])'
-         data-pages='@json($pages->map(fn ($item) => ['id' => $item->id, 'title' => $item->title, 'slug' => $item->slug])->values())'
-         data-site='@json(['name' => data_get($site->settings, 'theme_name', $tenant->brandProfile?->display_name ?: $tenant->name), 'status' => $site->status, 'preview_url' => $site->status === 'published' ? url('/') : null])'
+         data-page='@json($editorPage)'
+         data-pages='@json($editorPages)'
+         data-site='@json($editorSite)'
          data-save-url="{{ route('managed-website.editor.save', ['page' => $page]) }}"
          data-publish-url="{{ route('managed-website.editor.publish') }}"
          data-index-url="{{ route('managed-website.index') }}"
