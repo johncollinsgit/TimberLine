@@ -9,14 +9,10 @@ use App\Models\TenantSiteVersion;
 use App\Models\User;
 use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\Tenancy\PreAuthTenantContextResolver;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
-uses(Tests\TestCase::class, RefreshDatabase::class);
-
 beforeEach(function (): void {
-    $this->withoutVite();
     config()->set('managed_website.editor_enabled', true);
     config()->set('managed_website.publishing_enabled', true);
     config()->set('managed_website.public_render_enabled', true);
