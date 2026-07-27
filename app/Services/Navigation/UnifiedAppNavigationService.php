@@ -77,6 +77,18 @@ class UnifiedAppNavigationService
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
+        // Website is a primary business surface. Keep it directly below Home,
+        // rather than grouping it behind marketing, workflows, or operations.
+        if (($canAccessOps || $roleCanAccessMarketing) && $managedWebsiteEnabled && Route::has('managed-website.index')) {
+            $items[] = [
+                'key' => 'managed-website',
+                'icon' => 'globe-alt',
+                'href' => route('managed-website.index'),
+                'label' => 'Website',
+                'current' => request()->routeIs('managed-website.*'),
+            ];
+        }
+
         if ($canAccessMarketing) {
             $birthdaysRelevant = $tenantId === null
                 || $this->moduleStateRelevant($moduleStates['birthdays'] ?? null);
@@ -113,16 +125,6 @@ class UnifiedAppNavigationService
                 'href' => route('workflows.index'),
                 'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Workflow Automations'),
                 'current' => request()->routeIs('workflows.*'),
-            ];
-        }
-
-        if (($canAccessOps || $roleCanAccessMarketing) && $managedWebsiteEnabled && Route::has('managed-website.index')) {
-            $items[] = [
-                'key' => 'managed-website',
-                'icon' => 'globe-alt',
-                'href' => route('managed-website.index'),
-                'label' => 'Website',
-                'current' => request()->routeIs('managed-website.*'),
             ];
         }
 
@@ -222,9 +224,10 @@ class UnifiedAppNavigationService
             }
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
+            $primaryItemCount = ($items[1]['key'] ?? null) === 'managed-website' ? 2 : 1;
             $items = $prioritizeGrowth
                 ? array_merge($items, $opsItems)
-                : array_merge(array_slice($items, 0, 1), $opsItems, array_slice($items, 1));
+                : array_merge(array_slice($items, 0, $primaryItemCount), $opsItems, array_slice($items, $primaryItemCount));
         } elseif ($isPouring) {
             $items[] = ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')];
         }

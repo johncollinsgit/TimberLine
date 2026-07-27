@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-07-27 — Website primary navigation
+
+### What changed
+
+- Entitled workspaces now see **Website** immediately below **Home** in the primary sidebar.
+- Operational, marketing, workflow, and settings ordering stays unchanged for workspaces without Website access.
+
+### Safety posture
+
+- Website remains tenant-entitlement and role gated; this is navigation placement only and does not enable publishing, billing, or public rendering.
+
 ## 2026-07-27 — Managed Website design contract (not yet enabled)
 
 ### Planned customer experience

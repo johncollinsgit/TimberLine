@@ -2,6 +2,7 @@
 
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
 
@@ -79,6 +80,36 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
     expect($homePosition)->not->toBeFalse()
         ->and($workPosition)->not->toBeFalse()
         ->and($homePosition)->toBeLessThan($workPosition);
+});
+
+test('entitled Website is the first workspace link after Home', function (): void {
+    $tenant = pr27ShellTenant('website-client', 'Website Client');
+    $user = User::factory()->tenantAdmin()->create();
+    $user->tenants()->attach((int) $tenant->id, ['role' => 'admin']);
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'managed_website',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'add_on_paid',
+        'entitlement_source' => 'test',
+        'price_source' => 'catalog',
+    ]);
+
+    $html = $this->actingAs($user)
+        ->get('http://website-client.theeverbranch.com/dashboard')
+        ->assertOk()
+        ->assertSee('data-sidebar-key="managed-website"', false)
+        ->getContent();
+
+    preg_match_all('/data-sidebar-key="([^"]+)"/', $html, $matches);
+    $keys = $matches[1];
+    $homeIndex = array_search('home', $keys, true);
+    $websiteIndex = array_search('managed-website', $keys, true);
+
+    expect($homeIndex)->not->toBeFalse()
+        ->and($websiteIndex)->not->toBeFalse()
+        ->and($websiteIndex)->toBe($homeIndex + 1);
 });
 
 test('landlord shell keeps Home first and uses Everbranch Admin navigation', function (): void {
