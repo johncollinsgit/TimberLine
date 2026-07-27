@@ -25,6 +25,22 @@
   process commerce. Shopify/Square/Stripe/booking CTAs link to external systems
   of record.
 
+## Website Commerce and live editor (default-disabled) (2026-07-27)
+
+- Website now has a dedicated full-screen editor route with a Shopify-inspired
+  section outline, live desktop/mobile canvas, inspector, drag reorder,
+  autosave, and publish controls. It retains Everbranch names/assets and the
+  immutable Managed Website version and rollback contract.
+- `website_*` records own native Website products, variants, inventory
+  movements/reservations, carts, shoppers, orders, payments, fulfillments, and
+  signed Stripe event receipts. They are deliberately separate from legacy
+  orders, Shopify records, Modern Forestry customer data, rewards, and
+  provider connections.
+- Merchant checkout is fail-closed: the Website commercial gate, entitlement,
+  tenant allowlist, Stripe Connect account, verified webhook policy, and tax
+  decision must pass. Physical orders support pickup/manual local delivery;
+  shipping carriers and rates remain deferred.
+
 ## Modern Forestry App Store Customer Login Recovery (2026-07-25)
 
 - Modern Forestry's Headless Customer Account integration is a public

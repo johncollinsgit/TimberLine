@@ -5,8 +5,8 @@
 **Everbranch Managed Website** is the planned $99/month + $499 setup-fee
 tenant add-on for structured small-business websites. It will provide a
 tenant-scoped Website editor, immutable publishing/rollback, lead forms, and
-external Shopify/Square/Stripe/booking links. It will not process orders or
-operate a native checkout.
+an isolated native Website catalog, cart, and Stripe Connect checkout lane.
+It never uses an existing Shopify checkout or legacy order system.
 
 The capability is not live until verified/audited commercial fulfilment,
 tenant allowlisting, publishing and host-isolation checks, and the documented
@@ -2108,3 +2108,8 @@ This update removes the temporary beta redemption rollout gate and keeps Candle 
 - Canonical behavior:
   - reconciliation mode re-enables imported subscribed channels and clears stale `*_opted_out_at` values only for channels being reconciled
   - standard opt-in flows still keep their normal reward behavior (`email-signup`, SMS consent bonus)
+# Everbranch Website Commerce
+
+Everbranch Website is a separately entitled, default-disabled managed website and native commerce product. It provides a theme overview, full-screen live editor, tenant-owned pages, Website products/services, shopper records, carts, native Website orders, and Stripe Connect payment handoff. It does **not** use, migrate, or alter Shopify checkout, Shopify catalog data, legacy `orders`, customer records, rewards, provider connections, or Modern Forestry flows.
+
+Physical Website orders currently support pickup or manually coordinated local delivery. Carrier rates, labels, tracking, and shipping integrations are intentionally deferred. Checkout stays unavailable until the workspace has passed the existing Stripe Connect and tax readiness gates.

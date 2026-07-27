@@ -94,6 +94,7 @@ use App\Http\Controllers\TenantBrandController;
 use App\Http\Controllers\TenantEmployeeInvitationController;
 use App\Http\Controllers\TenantSupportTicketController;
 use App\Http\Controllers\UiPreferencesController;
+use App\Http\Controllers\WebsiteCommerceController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
@@ -638,6 +639,17 @@ Route::post('/website/forms/{page}', [ManagedWebsiteController::class, 'submitFo
     ->middleware('throttle:6,1')
     ->name('managed-website.forms.submit');
 
+// Native Website Commerce routes are host-resolved inside the controller. They
+// intentionally do not share any Shopify or legacy Order route/model.
+Route::get('/shop', [WebsiteCommerceController::class, 'shop'])->name('managed-website.store.index');
+Route::get('/products/{handle}', [WebsiteCommerceController::class, 'showProduct'])->name('managed-website.store.products.show');
+Route::post('/products/{handle}/quote', [WebsiteCommerceController::class, 'requestQuote'])->middleware('throttle:6,1')->name('managed-website.store.products.quote');
+Route::get('/cart', [WebsiteCommerceController::class, 'cart'])->name('managed-website.store.cart');
+Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
+Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
+Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
+Route::post('/webhooks/website-stripe', [WebsiteCommerceController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.webhook');
+
 Route::prefix('signup/classes/{tenant:slug}')
     ->name('public.classes.')
     ->middleware('throttle:60,1')
@@ -657,7 +669,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
             Route::post('/', [ManagedWebsiteController::class, 'create'])->name('create');
+            Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');
+            Route::get('/editor/{page}', [ManagedWebsiteController::class, 'editor'])->name('editor');
+            Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');
+            Route::post('/editor/publish', [ManagedWebsiteController::class, 'publishEditor'])->name('editor.publish');
+            Route::get('/products', [WebsiteCommerceController::class, 'products'])->name('products.index');
+            Route::post('/products', [WebsiteCommerceController::class, 'storeProduct'])->name('products.store');
+            Route::put('/products/{product}', [WebsiteCommerceController::class, 'updateProduct'])->name('products.update');
+            Route::get('/customers', [WebsiteCommerceController::class, 'customers'])->name('customers.index');
+            Route::post('/customers', [WebsiteCommerceController::class, 'storeCustomer'])->name('customers.store');
+            Route::put('/customers/{customer}', [WebsiteCommerceController::class, 'updateCustomer'])->name('customers.update');
+            Route::get('/orders', [WebsiteCommerceController::class, 'orders'])->name('orders.index');
+            Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/pages', [ManagedWebsiteController::class, 'storePage'])->name('pages.store');
+            Route::delete('/pages/{page}', [ManagedWebsiteController::class, 'destroyPage'])->name('pages.destroy');
             Route::put('/pages/{page}', [ManagedWebsiteController::class, 'savePage'])->name('pages.update');
             Route::post('/publish', [ManagedWebsiteController::class, 'publish'])->name('publish');
             Route::post('/pages/{page}/versions/{version}/rollback', [ManagedWebsiteController::class, 'rollback'])->name('pages.rollback');

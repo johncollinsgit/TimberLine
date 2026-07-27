@@ -78,3 +78,11 @@ Keep the gates conservative until root cause, impact, and remediation are
 reviewed. Billing refunds, entitlement revocation, and customer communication
 are separate explicit, audited operator decisions; rollback itself does not
 automatically perform them.
+# Website Commerce rollback
+
+Disable `MANAGED_WEBSITE_COMMERCE_ENABLED` first to stop new Website checkout
+sessions. This does not delete carts, Website orders, Stripe receipts, or the
+last public page. For an isolation/security incident, also disable public
+Managed Website rendering; do not alter Shopify, Modern Forestry, legacy
+orders, customers, rewards, or provider connections. Re-enable only the tested
+tenant after the ordinary Forge release and readiness checks pass.

@@ -30,6 +30,20 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   `docs/operations/managed-website-operations-runbook.md`, and
   `docs/operations/managed-website-rollback-runbook.md`.
 
+## Website Commerce isolation rule (2026-07-27)
+
+- Native Website Commerce tables are named `website_*` and are the only data
+  lane for Website catalog, cart, shopper, order, payment, inventory, and
+  fulfillment behavior. Never reuse, join against, backfill, or write to the
+  legacy `orders`/`order_lines` tables or Shopify catalog/customer records.
+- Stripe Connect is the regulated payment processor only. Server-side product
+  snapshots determine checkout amounts; signed, idempotent Website Stripe
+  webhook events determine payment success. No client price, tenant, order, or
+  payment status may be trusted.
+- Website public shopping routes must resolve the tenant from the verified host
+  and published Website snapshot. Admin routes resolve the active tenant with
+  `tenant.access` and the `managed_website` module guard.
+
 ## Accounting Command Center guardrails (2026-07-23)
 
 - Keep `accounting_command_center` reusable and tenant-scoped. Modern Forestry

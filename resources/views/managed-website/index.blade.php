@@ -1,71 +1,50 @@
 <x-layouts::app.sidebar title="Website">
     <flux:main>
-        <div class="fb-workflow-shell space-y-6">
-            @if(session('status'))
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-950" role="status">{{ session('status') }}</div>
-            @endif
+        <div class="mx-auto max-w-[1440px] space-y-6 pb-10">
+            @if(session('status'))<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950" role="status">{{ session('status') }}</div>@endif
 
             @if(! $site)
                 <section class="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-                    <div class="max-w-2xl">
-                        <p class="text-xs font-bold uppercase tracking-[.16em] text-emerald-800">Everbranch Managed Website</p>
-                        <h1 class="mt-3 text-3xl font-bold tracking-tight text-zinc-950">Your next customer-ready page starts as a safe draft.</h1>
-                        <p class="mt-3 text-sm leading-6 text-zinc-600">Build clear pages, collect tenant-owned leads, and send visitors to the checkout or booking tools you already trust. Nothing here changes Shopify Checkout, orders, customers, rewards, or connections.</p>
-                        @if($isEditorEnabled)
-                            <form method="POST" action="{{ route('managed-website.create') }}" class="mt-6">@csrf
-                                <button class="fb-btn fb-btn-primary" type="submit">Create website draft</button>
-                            </form>
-                        @else
-                            <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">This workspace has the Website app, but editing is still held behind the rollout gate. No public page or customer data has been created.</div>
-                        @endif
-                    </div>
+                    <p class="text-xs font-bold uppercase tracking-[.16em] text-emerald-800">Everbranch Website</p>
+                    <h1 class="mt-3 text-3xl font-bold tracking-tight text-zinc-950">Create your website as a safe draft.</h1>
+                    <p class="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">Choose a theme, build pages in the live editor, and publish only when your workspace is approved. This never changes an existing Shopify store, checkout, order, or customer record.</p>
+                    @if($isEditorEnabled)<form method="POST" action="{{ route('managed-website.create') }}" class="mt-6">@csrf<button class="fb-btn fb-btn-primary" type="submit">Create website</button></form>@else
+                        <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">Website access is held behind the rollout gate. No public site or commerce data has been created.</div>
+                    @endif
                 </section>
             @else
-                @include('managed-websites.partials.editor', ['site' => $site, 'pages' => $pages, 'templates' => $templates, 'isEditorEnabled' => $isEditorEnabled, 'isPublishingEnabled' => $isPublishingEnabled])
+                <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div><p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website</p><h1 class="mt-1 text-3xl font-bold tracking-tight text-zinc-950">Online store</h1><p class="mt-1 text-sm text-zinc-600">Manage your theme, pages, products, customers, and native Website orders.</p></div>
+                    <div class="flex flex-wrap gap-2"><a class="fb-btn fb-btn-secondary" href="{{ route('managed-website.products.index') }}">Products</a><a class="fb-btn fb-btn-secondary" href="{{ route('managed-website.customers.index') }}">Customers</a><a class="fb-btn fb-btn-secondary" href="{{ route('managed-website.orders.index') }}">Orders</a>@if($site->status === 'published' && $isPublicRenderEnabled)<a class="fb-btn fb-btn-secondary" target="_blank" rel="noopener" href="{{ url('/') }}">View site</a>@endif</div>
+                </header>
 
-                <section class="grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
-                    <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-                        <div class="flex items-start justify-between gap-4"><div><h2 class="text-lg font-bold text-zinc-950">Publish safely</h2><p class="mt-1 text-sm text-zinc-600">Publishing creates immutable snapshots. A rollback creates a new approved snapshot; it never overwrites history.</p></div><span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $site->status === 'published' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-zinc-200 bg-zinc-50 text-zinc-700' }}">{{ str($site->status)->headline() }}</span></div>
-                        <div class="mt-4 flex flex-wrap gap-3">
-                            @if($isEditorEnabled && $isPublishingEnabled)
-                                <form method="POST" action="{{ route('managed-website.publish') }}">@csrf<button class="fb-btn fb-btn-primary" type="submit">Publish approved draft</button></form>
-                            @endif
-                            @if($site->status === 'published' && $isPublicRenderEnabled)
-                                <a class="fb-btn fb-btn-secondary" target="_blank" rel="noopener" href="{{ url('/') }}">Open published site</a>
-                            @endif
+                <section class="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
+                    <div class="grid min-h-[360px] place-items-center bg-[#f6f7f6] p-5 lg:p-10">
+                        <div class="grid w-full max-w-5xl grid-cols-[minmax(0,1fr)_180px] gap-5">
+                            <div class="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_18px_42px_-34px_rgba(20,35,39,.75)]">
+                                <div class="flex items-center justify-between border-b border-zinc-200 px-5 py-3 text-xs"><strong>{{ data_get($site->settings, 'theme_name', 'Everbranch Website') }}</strong><span class="text-zinc-500">Desktop preview</span></div>
+                                <div class="min-h-[250px] bg-[linear-gradient(135deg,#eaf1ef,#fdfdfc)] p-8"><p class="text-xs font-bold uppercase tracking-[.18em] text-emerald-700">{{ data_get($site->settings, 'theme_name', 'Your theme') }}</p><h2 class="mt-5 max-w-md font-serif text-4xl leading-none text-zinc-900">{{ data_get($site->pages->first()?->draftVersion?->blocks, '2.heading', 'A polished home for your business.') }}</h2><div class="mt-8 h-9 w-32 rounded-md bg-emerald-800"></div></div>
+                            </div>
+                            <div class="overflow-hidden rounded-[20px] border-[5px] border-zinc-800 bg-white shadow-[0_18px_42px_-34px_rgba(20,35,39,.75)]"><div class="border-b border-zinc-200 px-3 py-2 text-[9px] font-semibold">{{ str(data_get($site->settings, 'theme_name', 'Theme'))->limit(18) }}</div><div class="min-h-[285px] bg-[#edf3f1] p-4"><div class="mt-10 h-4 w-12 rounded bg-emerald-700"></div><div class="mt-3 h-16 w-full rounded bg-white/80"></div><div class="mt-4 h-6 w-20 rounded bg-emerald-800"></div></div></div>
                         </div>
                     </div>
-                    <div class="rounded-2xl border border-sky-200 bg-sky-50 p-5 text-sm text-sky-950"><h2 class="font-bold">Rollback posture</h2><p class="mt-2 leading-6">A global public-render gate, tenant editor allowlist, publishing freeze, and module availability gate can each stop this product without changing your existing applications.</p></div>
+                    <div class="flex flex-col gap-5 border-t border-zinc-200 p-6 sm:flex-row sm:items-center sm:justify-between">
+                        <div><div class="flex items-center gap-3"><h2 class="text-xl font-bold text-zinc-950">{{ data_get($site->settings, 'theme_name', 'Website draft') }}</h2><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $site->status === 'published' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900' }}">{{ $site->status === 'published' ? 'Live' : 'Draft' }}</span></div><p class="mt-1 text-sm text-zinc-500">Last saved {{ $site->updated_at?->diffForHumans() }} · Immutable versions keep rollback safe.</p></div>
+                        <div class="flex gap-2"><a class="fb-btn fb-btn-secondary" href="{{ route('managed-website.editor', ['page' => $pages->first()]) }}">Edit theme</a>@if($isEditorEnabled && $isPublishingEnabled)<form method="POST" action="{{ route('managed-website.publish') }}">@csrf<button class="fb-btn fb-btn-primary" type="submit">Publish changes</button></form>@endif</div>
+                    </div>
                 </section>
 
-                @if($isEditorEnabled)
-                    <section class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-                        <h2 class="text-lg font-bold text-zinc-950">Add a structured page</h2>
-                        <form method="POST" action="{{ route('managed-website.pages.store') }}" class="mt-4 grid gap-3 md:grid-cols-3">@csrf
-                            <input required name="title" class="rounded-lg border-zinc-300 text-sm" placeholder="Page title">
-                            <input required name="slug" class="rounded-lg border-zinc-300 text-sm" placeholder="services">
-                            <select required name="page_type" class="rounded-lg border-zinc-300 text-sm">@foreach($templates as $template)<option value="{{ $template['key'] }}">{{ $template['label'] }}</option>@endforeach</select>
-                            <button class="fb-btn fb-btn-secondary md:col-span-3 justify-center" type="submit">Add page draft</button>
-                        </form>
-                    </section>
+                <section><div class="mb-4 flex items-end justify-between"><div><h2 class="text-xl font-bold text-zinc-950">Theme library</h2><p class="mt-1 text-sm text-zinc-600">Every theme starts as an editable draft. Applying a theme never changes the public site until you publish.</p></div></div>
+                    <div class="grid gap-4 lg:grid-cols-3">@foreach($themes as $theme)
+                        <article class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"><div class="h-32 p-5" style="background:linear-gradient(135deg, {{ data_get($theme, 'palette.surface') }}, {{ data_get($theme, 'palette.brand') }}20)"><p class="text-xs font-bold uppercase tracking-[.15em]" style="color:{{ data_get($theme, 'palette.brand') }}">{{ $theme['eyebrow'] }}</p><p class="mt-6 max-w-[16ch] font-serif text-xl leading-tight" style="color:{{ data_get($theme, 'palette.ink') }}">{{ data_get($theme, 'hero.heading') }}</p></div><div class="p-5"><h3 class="font-bold text-zinc-950">{{ $theme['name'] }}</h3><p class="mt-2 min-h-12 text-sm leading-5 text-zinc-600">{{ $theme['description'] }}</p><form class="mt-4" method="POST" action="{{ route('managed-website.themes.apply') }}">@csrf<input type="hidden" name="theme_key" value="{{ $theme['key'] }}"><button class="fb-btn fb-btn-secondary w-full justify-center" type="submit">Apply as draft</button></form></div></article>
+                    @endforeach</div>
+                </section>
 
-                    <section class="space-y-5" aria-label="Page drafts">
-                        @foreach($pages as $editorPage)
-                            @php($draft = $editorPage->draftVersion)
-                            @php($hero = collect((array) ($draft?->blocks ?? []))->firstWhere('type', 'hero') ?: [])
-                            <article class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"><form method="POST" action="{{ route('managed-website.pages.update', ['page' => $editorPage]) }}">@csrf @method('PUT')
-                                <input type="hidden" name="blocks[0][type]" value="hero">
-                                <div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-xs font-bold uppercase tracking-[.14em] text-emerald-800">{{ str($editorPage->page_type)->headline() }} page</p><h2 class="mt-1 text-lg font-bold text-zinc-950">{{ $editorPage->slug === '/' ? 'Home' : '/'.$editorPage->slug }}</h2></div><button class="fb-btn fb-btn-secondary" type="submit">Save draft</button></div>
-                                <div class="mt-4 grid gap-4 md:grid-cols-2"><label class="text-sm font-semibold text-zinc-700">Page title<input required name="title" value="{{ $draft?->title ?: $editorPage->title }}" class="mt-1 block w-full rounded-lg border-zinc-300 text-sm"></label><label class="text-sm font-semibold text-zinc-700">Hero heading<input required name="blocks[0][heading]" value="{{ data_get($hero, 'heading') }}" class="mt-1 block w-full rounded-lg border-zinc-300 text-sm"></label><label class="text-sm font-semibold text-zinc-700 md:col-span-2">Supporting text<textarea required name="blocks[0][body]" rows="3" class="mt-1 block w-full rounded-lg border-zinc-300 text-sm">{{ data_get($hero, 'body') }}</textarea></label><label class="text-sm font-semibold text-zinc-700">Button label<input name="blocks[0][cta_label]" value="{{ data_get($hero, 'cta_label') }}" class="mt-1 block w-full rounded-lg border-zinc-300 text-sm"></label><label class="text-sm font-semibold text-zinc-700">External checkout, booking, or contact URL<input name="blocks[0][cta_url]" value="{{ data_get($hero, 'cta_url') }}" class="mt-1 block w-full rounded-lg border-zinc-300 text-sm" placeholder="https://"></label><label class="text-sm font-semibold text-zinc-700">SEO title<input name="seo[title]" value="{{ data_get($draft?->seo, 'title') }}" class="mt-1 block w-full rounded-lg border-zinc-300 text-sm"></label><label class="text-sm font-semibold text-zinc-700">SEO description<input name="seo[description]" value="{{ data_get($draft?->seo, 'description') }}" class="mt-1 block w-full rounded-lg border-zinc-300 text-sm"></label></div>
-                            </form>
-                                @php($priorPublished = $editorPage->versions()->where('status', 'published')->latest('id')->get())
-                                @if($priorPublished->count() > 1)
-                                    <div class="mt-4 border-t border-zinc-100 pt-4"><p class="text-xs font-semibold text-zinc-500">Published history</p><div class="mt-2 flex flex-wrap gap-2">@foreach($priorPublished->skip(1) as $historical)<form method="POST" action="{{ route('managed-website.pages.rollback', ['page' => $editorPage, 'version' => $historical]) }}">@csrf<button class="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50" type="submit">Restore version {{ $historical->version_number }}</button></form>@endforeach</div></div>
-                                @endif
-                            </article>
-                        @endforeach
-                    </section>
-                @endif
+                <section class="grid gap-4 md:grid-cols-3"><a href="{{ route('managed-website.products.index') }}" class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"><p class="text-xs font-bold uppercase tracking-[.14em] text-zinc-500">Manage data</p><h3 class="mt-2 text-lg font-bold text-zinc-950">Products</h3><p class="mt-1 text-sm text-zinc-600">Add products, service offers, pricing, and stock.</p></a><a href="{{ route('managed-website.customers.index') }}" class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"><p class="text-xs font-bold uppercase tracking-[.14em] text-zinc-500">Manage data</p><h3 class="mt-2 text-lg font-bold text-zinc-950">Customers</h3><p class="mt-1 text-sm text-zinc-600">Website shoppers stay isolated from existing customer systems.</p></a><a href="{{ route('managed-website.orders.index') }}" class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md"><p class="text-xs font-bold uppercase tracking-[.14em] text-zinc-500">Manage data</p><h3 class="mt-2 text-lg font-bold text-zinc-950">Orders</h3><p class="mt-1 text-sm text-zinc-600">Review paid Website orders and mark local fulfillment complete.</p></a></section>
+
+                <section class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-lg font-bold text-zinc-950">Pages</h2><p class="mt-1 text-sm text-zinc-600">Each page has its own draft and published version history.</p></div></div><div class="mt-4 divide-y divide-zinc-100 border-y border-zinc-100">@foreach($pages as $websitePage)<div class="flex items-center justify-between gap-4 py-3"><div><strong class="text-sm text-zinc-950">{{ $websitePage->title }}</strong><span class="ml-2 text-xs text-zinc-500">{{ $websitePage->slug }}</span></div><div class="flex gap-2"><a class="text-xs font-bold text-emerald-800 hover:underline" href="{{ route('managed-website.editor', ['page' => $websitePage]) }}">Edit</a>@if($websitePage->slug !== '/')<form method="POST" action="{{ route('managed-website.pages.destroy', ['page' => $websitePage]) }}" onsubmit="return confirm('Remove this page?')">@csrf @method('DELETE')<button class="text-xs font-bold text-rose-700 hover:underline" type="submit">Delete</button></form>@endif</div></div>@endforeach</div>@if($isEditorEnabled)<form method="POST" action="{{ route('managed-website.pages.store') }}" class="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_180px_auto]">@csrf<input required name="title" class="rounded-lg border-zinc-300 text-sm" placeholder="Page title"><input required name="slug" class="rounded-lg border-zinc-300 text-sm" placeholder="page-address"><select name="page_type" class="rounded-lg border-zinc-300 text-sm"><option value="landing">Landing page</option><option value="services">Services</option><option value="about">About</option><option value="contact">Contact</option><option value="faq">FAQ</option></select><button class="fb-btn fb-btn-secondary justify-center" type="submit">Add page</button></form>@endif</section>
+
+                @if(! $commerceReadiness['ready'])<section class="rounded-2xl border border-sky-200 bg-sky-50 p-5"><h2 class="font-bold text-sky-950">Native checkout readiness</h2><p class="mt-1 text-sm text-sky-900">Products can be prepared now. Checkout remains unavailable until the workspace completes the dedicated Stripe Connect and tax gates.</p><ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-sky-900">@foreach($commerceReadiness['blockers'] as $blocker)<li>{{ $blocker }}</li>@endforeach</ul></section>@endif
             @endif
         </div>
     </flux:main>

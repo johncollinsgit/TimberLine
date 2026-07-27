@@ -22,10 +22,12 @@ Shopify app, existing checkout, customer records, or provider connections.
 - Public rendering serves only immutable published snapshots for active,
   verified Managed Website hosts. Existing landlord, app, checkout, Shopify,
   customer-account, webhook, and public route ownership stays ahead of it.
-- Forms remain tenant-scoped form submissions. V1 does not create customers,
-  send messages, update marketing audiences, or invoke workflows.
-- External CTA links may open a tenant-approved Shopify, Square, Stripe, or
-  booking destination, but do not send order data back to Everbranch.
+- Forms remain tenant-scoped form submissions and do not update marketing
+  audiences or invoke workflows. Website checkout creates only isolated
+  `website_*` shoppers/orders after the commerce readiness gates pass.
+- Website products/services use native Website checkout through Stripe Connect;
+  existing Shopify, Square, and booking destinations are not fallback systems
+  of record.
 
 ## Pilot checklist
 
@@ -46,3 +48,14 @@ For a suspected host, isolation, or content-security issue, follow
 `managed-website-rollback-runbook.md` immediately. For code recovery, use the
 Forge atomic-release runbook; direct deploy, destructive reset, broad cache
 clear, and production data rewrite remain prohibited.
+# Website Commerce readiness
+
+Before enabling native Website checkout for a tenant, verify the global Website
+Commerce gate, Website entitlement and editor allowlist, Stripe Connect account
+(`ready`, charges and payouts enabled), signed Website webhook secret, Stripe
+Connect webhook verification, and confirmed tax decision. Test a low-value
+pickup order on an isolated pilot. Do not enable this path for Modern Forestry.
+
+If payment confirmation or tax readiness is uncertain, leave catalog editing
+available but keep checkout gated. Do not substitute a Shopify checkout or
+modify legacy orders as a workaround.

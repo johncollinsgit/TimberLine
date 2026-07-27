@@ -21,6 +21,14 @@
   production deployments.
 
 - Treat `config/module_catalog.php` as the canonical source of truth for plans, modules, capabilities, visibility, billing mode, and CTA routing. Legacy `commercial.php` and `entitlements.php` are compatibility layers only.
+- Website Commerce is a tenant-owned `website_*` lane. Never reuse or touch
+  legacy `orders`, `order_lines`, Shopify catalog/customer records, Shopify
+  checkout, rewards, or Modern Forestry provider connections when building
+  Website catalog, shopper, cart, payment, or fulfillment features.
+- Website checkout must remain fail-closed behind Managed Website entitlement,
+  rollout, Stripe Connect, tax, and signed webhook readiness. Public Website
+  commerce routes resolve tenant ownership from the verified public host;
+  workspace management routes resolve it via `tenant.access`.
 - Use `TenantModuleAccessResolver`, `TenantExperienceProfileService`, `UnifiedAppNavigationService`, `UnifiedDashboardService`, and `TenantModuleCatalogService` instead of adding new ad hoc plan, channel, or module checks.
 - Tenant-facing mutations must verify tenant scope on the server. Never trust client-provided tenant, module, store, host, or channel identifiers without resolving them against current tenant/store context.
 - Public or self-serve surfaces must suppress modules unless they are explicitly safe and visible for that surface. Hidden, internal-only, placeholder, roadmap, or disabled modules should fail closed.
