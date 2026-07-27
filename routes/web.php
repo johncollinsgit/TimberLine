@@ -2105,6 +2105,11 @@ Route::middleware('signed')
 
 require __DIR__.'/settings.php';
 
-Route::fallback(function (Request $request, ManagedWebsiteController $controller, ManagedWebsiteService $websites) {
-    return $controller->showPublic($request, $request->path(), $websites);
-});
+// Register the catch-all only in a release whose public-render gate is on.
+// With the gate off, unrecognised routes retain the platform's historic 404/
+// 405 semantics rather than changing unrelated tenant and Shopify endpoints.
+if (config('managed_website.public_render_enabled')) {
+    Route::fallback(function (Request $request, ManagedWebsiteController $controller, ManagedWebsiteService $websites) {
+        return $controller->showPublic($request, $request->path(), $websites);
+    });
+}
