@@ -1,5 +1,37 @@
 # UI Changelog
 
+## 2026-07-27 — Rich Website themes, real draft preview, and media library
+
+- Website now has a Shopify-familiar three-pane editor: section outline and
+  add picker, real desktop/mobile draft iframe, and an inspector for text,
+  links, visibility, repeated cards/FAQs, images, menus, announcement, footer,
+  palette, typography, and corners.
+- Theme settings and menus save as a private site-level draft and do not alter
+  a published site until Publish. The overview uses a real framed draft preview
+  and theme cards use original starter imagery.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements ship with six
+  starter pages, usable menus, banners, service cards, FAQ, CTA, forms, and
+  mobile behavior. Collins stays draft-only.
+
+## 2026-07-27 — Website editor and starter-theme refinement
+
+### What changed
+
+- The dedicated Website editor now supports page switching, keyboard-save,
+  timed draft autosave, section visibility, safe image fields, and responsive
+  desktop/mobile previews.
+- Applying HVAC Service, Collins Upstate Electric, or Outdoor Elements creates
+  materially different structured starting sections instead of a shared
+  generic homepage.
+- Preview-only controls use the same sanitized structured content saved for the
+  public renderer; hidden sections stay hidden when a page is published.
+
+### Safety posture
+
+- The editor, publishing, commerce, and public-render gates remain disabled by
+  default. This changes no existing Shopify, legacy order, customer, reward,
+  checkout, webhook, or provider-connection behavior.
+
 ## 2026-07-27 — Website primary navigation
 
 ### What changed
@@ -22,9 +54,9 @@
   sections are limited to approved hero, text/image, services, testimonial,
   FAQ, form, and external CTA patterns. Keyboard navigation, visible focus,
   reduced-motion support, and WCAG AA contrast are required.
-- Customers can link to their existing Shopify, Square, Stripe, or booking
-  checkout. The UI must call this an external handoff and never imply that
-  Everbranch processes an order or owns the checkout.
+- Native Website Commerce uses its own tenant-owned catalog, cart, order, and
+  Stripe Connect checkout lane. It must never call, migrate, or imply use of
+  an existing Shopify or legacy checkout/order system.
 
 ### Safety posture
 

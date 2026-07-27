@@ -26,6 +26,10 @@ return [
     // fail closed until the global gate, tenant entitlement, Connect readiness,
     // tax decision, and dedicated endpoint secret are all present.
     'stripe_webhook_secret' => env('MANAGED_WEBSITE_STRIPE_WEBHOOK_SECRET'),
-    'allowed_blocks' => ['announcement', 'header', 'hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta', 'product_grid', 'footer'],
+    'allowed_blocks' => ['announcement', 'header', 'hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta', 'product_grid', 'footer', 'image_with_text', 'service_cards', 'trust_bar', 'gallery', 'faq_list'],
+    'media_max_bytes' => max(1024 * 1024, (int) env('MANAGED_WEBSITE_MEDIA_MAX_BYTES', 10 * 1024 * 1024)),
+    'screenshot_enabled' => $bool('MANAGED_WEBSITE_SCREENSHOT_ENABLED'),
+    'screenshot_node_binary' => env('MANAGED_WEBSITE_SCREENSHOT_NODE_BINARY', 'node'),
+    'screenshot_timeout_seconds' => max(15, (int) env('MANAGED_WEBSITE_SCREENSHOT_TIMEOUT_SECONDS', 60)),
     'cache_seconds' => max(60, (int) env('MANAGED_WEBSITE_PUBLIC_CACHE_SECONDS', 300)),
 ];

@@ -107,3 +107,59 @@ test('pending billing never opens the editor even when a tenant is allowlisted',
 
     expect(app(ManagedWebsiteService::class)->editorEnabledFor($tenant))->toBeFalse();
 });
+
+test('starter themes produce distinct safe drafts and hidden sections stay out of a public snapshot', function (): void {
+    $tenant = managedWebsiteTenant('theme-pilot');
+    $actor = managedWebsiteActor($tenant);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $home = $site->pages()->where('slug', '/')->firstOrFail();
+
+    $service->applyTheme($site, 'hvac-service', $actor);
+    $hvac = $home->fresh()->draftVersion->blocks;
+    $service->applyTheme($site, 'outdoor-elements', $actor);
+    $outdoor = $home->fresh()->draftVersion->blocks;
+
+    expect(collect($hvac)->pluck('heading')->implode(' '))->toContain('help')
+        ->and(collect($outdoor)->pluck('heading')->implode(' '))->toContain('outdoor')
+        ->and($hvac)->not->toEqual($outdoor)
+        ->and($service->sanitizeBlocks([['type' => 'text', 'heading' => 'Private draft', 'hidden' => 'true']]))
+        ->toBe([['type' => 'text', 'heading' => 'Private draft', 'hidden' => 'true']]);
+});
+
+test('a complete Collins starter pack stays a draft and records its public fact source', function (): void {
+    $tenant = managedWebsiteTenant('collins-theme-pilot');
+    $actor = managedWebsiteActor($tenant);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+
+    $service->applyTheme($site, 'collins-electric', $actor);
+    $site->refresh()->load('draftSiteVersion');
+
+    expect($site->status)->toBe('draft')
+        ->and($site->public_enabled)->toBeFalse()
+        ->and($site->pages()->count())->toBe(6)
+        ->and($site->draftSiteVersion?->navigation)->toHaveCount(6)
+        ->and($site->draftSiteVersion?->source_manifest[0]['url'] ?? null)->toBe('https://www.whodoyou.com/biz/1731846/collins-upstate-electrical-pendleton-sc')
+        ->and(collect($site->pages()->where('slug', '/')->firstOrFail()->fresh()->draftVersion->blocks)->pluck('heading')->implode(' '))->toContain('Electrical work');
+});
+
+test('unpublished site-wide theme changes cannot alter the published snapshot', function (): void {
+    $tenant = managedWebsiteTenant('site-version-pilot');
+    $actor = managedWebsiteActor($tenant);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $service->applyTheme($site, 'hvac-service', $actor);
+    $service->publish($site, $actor);
+
+    $publishedThemeName = $site->fresh()->publishedSiteVersion?->settings['theme_name'];
+    $service->saveSiteDraft($site->fresh(), [
+        'settings' => ['theme_name' => 'Private redesign'],
+        'navigation' => [['label' => 'Private page', 'url' => '/private', 'type' => 'page']],
+    ], $actor);
+    $site->refresh()->load(['draftSiteVersion', 'publishedSiteVersion']);
+
+    expect($site->draftSiteVersion?->settings['theme_name'])->toBe('Private redesign')
+        ->and($site->publishedSiteVersion?->settings['theme_name'])->toBe($publishedThemeName)
+        ->and($site->publishedSiteVersion?->navigation)->not->toEqual($site->draftSiteVersion?->navigation);
+});
