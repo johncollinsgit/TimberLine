@@ -24,18 +24,43 @@ class ManagedWebsiteService
                 'description' => 'A calm, clear service website built for urgent calls, seasonal work, and trust.',
                 'palette' => ['ink' => '#17343b', 'brand' => '#167f8c', 'surface' => '#f8fbfb'],
                 'hero' => ['heading' => 'Comfort for every season.', 'body' => 'Clear service, dependable technicians, and an easy way to request help.', 'cta_label' => 'Request service', 'cta_url' => '#contact'],
+                'blocks' => [
+                    ['type' => 'announcement', 'body' => 'Need help now? Start with a clear service request.'],
+                    ['type' => 'hero', 'heading' => 'Comfort for every season.', 'body' => 'Clear service, dependable technicians, and an easy way to request help.', 'cta_label' => 'Request service', 'cta_url' => '#contact'],
+                    ['type' => 'services', 'heading' => 'The help you need, made easy to understand', 'body' => 'Feature seasonal maintenance, repairs, replacements, and your most important service areas.'],
+                    ['type' => 'text', 'heading' => 'A clear next step from the first call', 'body' => 'Use this section for your service process, hours, and what customers can expect.'],
+                    ['type' => 'testimonial', 'heading' => 'Real customer feedback belongs here', 'body' => 'Replace this placeholder with an approved, genuine customer story before publishing.'],
+                    ['type' => 'faq', 'question' => 'What happens after I request service?', 'answer' => 'Add your accurate response time and scheduling process.'],
+                    ['type' => 'contact_form', 'heading' => 'Request service'],
+                ],
             ],
             [
                 'key' => 'collins-electric', 'name' => 'Collins Upstate Electric', 'eyebrow' => 'Clean trade',
                 'description' => 'A sharp white, navy, and service-forward starter built around the approved Collins mark.',
                 'palette' => ['ink' => '#13243b', 'brand' => '#164b7a', 'surface' => '#ffffff'],
                 'hero' => ['heading' => 'Power your next project with confidence.', 'body' => 'A clean, direct starting point for residential, commercial, and service work.', 'cta_label' => 'Talk to an electrician', 'cta_url' => '#contact'],
+                'blocks' => [
+                    ['type' => 'announcement', 'body' => 'Collins Upstate Electric · Clear communication from first call to final walkthrough.'],
+                    ['type' => 'hero', 'heading' => 'Power your next project with confidence.', 'body' => 'A clean, direct starting point for residential, commercial, and service work.', 'cta_label' => 'Talk to an electrician', 'cta_url' => '#contact'],
+                    ['type' => 'services', 'heading' => 'Electrical work, clearly presented', 'body' => 'Use these service cards for the work Collins wants customers to request most often.'],
+                    ['type' => 'text', 'heading' => 'Built for a better customer experience', 'body' => 'Add the approved Collins story, service area, and what makes the team easy to work with.'],
+                    ['type' => 'faq', 'question' => 'How do I get started?', 'answer' => 'Add the reviewed process for requesting an estimate or scheduling service.'],
+                    ['type' => 'contact_form', 'heading' => 'Talk to an electrician'],
+                ],
             ],
             [
                 'key' => 'outdoor-elements', 'name' => 'Outdoor Elements', 'eyebrow' => 'Outdoor living',
                 'description' => 'A warm, premium starter for outdoor structures, furniture, cabinetry, and fireplaces.',
                 'palette' => ['ink' => '#26352e', 'brand' => '#6d7d56', 'surface' => '#fbfaf6'],
                 'hero' => ['heading' => 'Elevate your outdoor space.', 'body' => 'Explore considered structures, furniture, cabinetry, and fire features for life outside.', 'cta_label' => 'Explore the collection', 'cta_url' => '/shop'],
+                'blocks' => [
+                    ['type' => 'announcement', 'body' => 'Designed for more time outside.'],
+                    ['type' => 'hero', 'heading' => 'Elevate your outdoor space.', 'body' => 'Explore considered structures, furniture, cabinetry, and fire features for life outside.', 'cta_label' => 'Explore the collection', 'cta_url' => '/shop'],
+                    ['type' => 'services', 'heading' => 'Create a space that brings people together', 'body' => 'Feature the outdoor categories that best match your current offering.'],
+                    ['type' => 'product_grid', 'heading' => 'Featured outdoor living', 'body' => 'Connect this section to the products or services you want visitors to see first.'],
+                    ['type' => 'text', 'heading' => 'A more considered way to live outside', 'body' => 'Add your approved story, materials, design process, and local service details.'],
+                    ['type' => 'contact_form', 'heading' => 'Start your outdoor project'],
+                ],
             ],
         ];
     }
@@ -51,12 +76,7 @@ class ManagedWebsiteService
             'blocks' => [
                 ['type' => 'announcement', 'body' => 'Thoughtful service. Clear next steps.'],
                 ['type' => 'header', 'heading' => $site->tenant->brandProfile?->display_name ?: $site->tenant->name],
-                ['type' => 'hero'] + $theme['hero'],
-                ['type' => 'services', 'heading' => 'What we can help with', 'body' => 'Use these cards to make your most important services or products easy to understand.'],
-                ['type' => 'testimonial', 'heading' => 'Built around real customers', 'body' => 'Add a customer story that makes the decision to contact you feel easy.'],
-                ['type' => 'product_grid', 'heading' => 'Featured products and services', 'body' => 'Choose what to feature from your Website catalog.'],
-                ['type' => 'faq', 'question' => 'What happens after I reach out?', 'answer' => 'Add the accurate next step for your business here.'],
-                ['type' => 'contact_form', 'heading' => 'Start a conversation'],
+                ...$theme['blocks'],
                 ['type' => 'footer', 'body' => '© '.now()->year.' '.($site->tenant->brandProfile?->display_name ?: $site->tenant->name)],
             ],
         ], $actor);
@@ -269,9 +289,11 @@ class ManagedWebsiteService
                 continue;
             }
             $row = ['type' => (string) $block['type']];
-            foreach (['heading', 'body', 'label', 'image_alt', 'cta_label', 'question', 'answer'] as $key) {
+            foreach (['heading', 'body', 'label', 'image_alt', 'cta_label', 'question', 'answer', 'hidden'] as $key) {
                 if (isset($block[$key])) {
-                    $row[$key] = strip_tags(mb_substr(trim((string) $block[$key]), 0, 3000));
+                    $row[$key] = $key === 'hidden'
+                        ? ((string) $block[$key] === 'true' ? 'true' : 'false')
+                        : strip_tags(mb_substr(trim((string) $block[$key]), 0, 3000));
                 }
             }
             foreach (['cta_url', 'image_url'] as $key) {

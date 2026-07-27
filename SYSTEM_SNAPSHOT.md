@@ -29,7 +29,9 @@
 
 - Website now has a dedicated full-screen editor route with a Shopify-inspired
   section outline, live desktop/mobile canvas, inspector, drag reorder,
-  autosave, and publish controls. It retains Everbranch names/assets and the
+  autosave, page switcher, safe imagery, section visibility, and publish
+  controls. HVAC, Collins, and Outdoor Elements start with distinct structured
+  page content. It retains Everbranch names/assets and the
   immutable Managed Website version and rollback contract.
 - `website_*` records own native Website products, variants, inventory
   movements/reservations, carts, shoppers, orders, payments, fulfillments, and
