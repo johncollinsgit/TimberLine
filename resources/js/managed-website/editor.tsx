@@ -12,6 +12,9 @@ type Theme = Record<string, unknown> & { announcement?: { enabled?: boolean; tex
 const labels: Record<string, string> = {
   hero: "Hero", text: "Text", image: "Image", image_with_text: "Image with text", service_cards: "Service cards", trust_bar: "Trust bar", gallery: "Gallery", faq_list: "FAQ", testimonial: "Testimonial", cta: "Call to action", contact_form: "Contact form",
 };
+const sectionDescriptions: Record<string, string> = {
+  hero: "A prominent first impression with one next step.", text: "A simple, readable content section.", image_with_text: "Pair an image with a helpful explanation.", cta: "Guide visitors to one clear action.", service_cards: "Group services or offerings into cards.", trust_bar: "Highlight short proof points.", testimonial: "Feature approved customer feedback.", image: "Add a single visual moment.", gallery: "Show a collection of public images.", faq_list: "Answer common customer questions.", contact_form: "Collect a tenant-owned inquiry.",
+};
 const categories = [
   ["Story", ["hero", "text", "image_with_text", "cta"]],
   ["Services", ["service_cards", "trust_bar", "testimonial"]],
@@ -39,6 +42,8 @@ function Editor({ root }: { root: HTMLElement }) {
   const [iframeKey, setIframeKey] = useState(0);
   const [history, setHistory] = useState<Page[]>([]);
   const [future, setFuture] = useState<Page[]>([]);
+  const [sectionLibraryOpen, setSectionLibraryOpen] = useState(false);
+  const [sectionSearch, setSectionSearch] = useState("");
   const pageDirty = useRef(false);
   const themeDirty = useRef(false);
   const selectedBlock = page.blocks[selected];
@@ -48,6 +53,7 @@ function Editor({ root }: { root: HTMLElement }) {
   const updateBlock = (key: string, value: string) => { if (!selectedBlock) return; commit({ ...page, blocks: page.blocks.map((block, index) => index === selected ? { ...block, [key]: value } : block) }); };
   const updateItems = (items: Item[]) => { if (!selectedBlock) return; commit({ ...page, blocks: page.blocks.map((block, index) => index === selected ? { ...block, items } : block) }); };
   const move = (from: number, to: number) => { if (from === to) return; const blocks = [...page.blocks]; const [block] = blocks.splice(from, 1); blocks.splice(to, 0, block); commit({ ...page, blocks }); setSelected(to); };
+  const insertSection = (type: string) => { commit({ ...page, blocks: [...page.blocks, newBlock(type)] }); setSelected(page.blocks.length); setSectionLibraryOpen(false); setSectionSearch(""); };
   const savePage = async () => {
     if (!pageDirty.current) return;
     setSaveState("Saving page…");
@@ -79,10 +85,34 @@ function Editor({ root }: { root: HTMLElement }) {
       <div className="eb-editor-top__right"><span className="eb-save" aria-live="polite">{saveState}</span><button className="eb-icon" onClick={() => { const previous = history.at(-1); if (!previous) return; setFuture((items) => [page, ...items]); setHistory((items) => items.slice(0, -1)); setPage(previous); pageDirty.current = true; }} disabled={!history.length} aria-label="Undo">↶</button><button className="eb-icon" onClick={() => { const next = future[0]; if (!next) return; setHistory((items) => [...items, page]); setFuture((items) => items.slice(1)); setPage(next); pageDirty.current = true; }} disabled={!future.length} aria-label="Redo">↷</button><button className="eb-button eb-button--quiet" onClick={() => void saveAll()}>Save</button><button className="eb-button eb-button--primary" disabled={root.dataset.publishingEnabled !== "true"} onClick={() => void publish()}>Publish</button></div>
     </header>
     <div className="eb-editor-layout">
-      <aside className="eb-tree"><div className="eb-tabs"><button className={mode === "sections" ? "active" : ""} onClick={() => setMode("sections")}>Sections</button><button className={mode === "theme" ? "active" : ""} onClick={() => setMode("theme")}>Theme</button></div>{mode === "sections" ? <><div className="eb-tree__heading">{page.title}</div><div className="eb-tree__fixed">Announcement & header</div><div className="eb-tree__sections">{page.blocks.map((block, index) => <button key={block.id || `${block.type}-${index}`} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const from = Number(event.dataTransfer.getData("text/plain")); if (Number.isFinite(from)) move(from, index); }} className={selected === index ? "is-selected" : ""} onClick={() => setSelected(index)}><span className="eb-grip">⋮⋮</span><span>{labels[block.type] || block.type}</span><small>{block.hidden === "true" ? "Hidden" : ""}</small></button>)}</div><div className="eb-add"><span>Add section</span>{categories.map(([category, types]) => <div key={category}><small>{category}</small>{types.map((type) => <button key={type} onClick={() => { commit({ ...page, blocks: [...page.blocks, newBlock(type)] }); setSelected(page.blocks.length); }}>{labels[type]}</button>)}</div>)}</div><div className="eb-tree__fixed">Footer</div></> : <ThemeTree site={site} pages={pages} updateTheme={updateTheme} updateNavigation={updateNavigation} />}</aside>
+      <aside className="eb-tree">
+        <div className="eb-tabs"><button className={mode === "sections" ? "active" : ""} onClick={() => setMode("sections")}>Sections</button><button className={mode === "theme" ? "active" : ""} onClick={() => setMode("theme")}>Theme</button></div>
+        {mode === "sections" ? <>
+          <div className="eb-tree__heading">{page.title}</div>
+          <div className="eb-tree__fixed">Announcement & header</div>
+          <div className="eb-tree__sections">{page.blocks.map((block, index) => <button key={block.id || `${block.type}-${index}`} draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const from = Number(event.dataTransfer.getData("text/plain")); if (Number.isFinite(from)) move(from, index); }} className={selected === index ? "is-selected" : ""} onClick={() => setSelected(index)}><span className="eb-grip">⋮⋮</span><span>{labels[block.type] || block.type}</span><small>{block.hidden === "true" ? "Hidden" : ""}</small></button>)}</div>
+          <button className="eb-add-section" onClick={() => setSectionLibraryOpen(true)}><span aria-hidden="true">＋</span> Add section</button>
+          <div className="eb-tree__fixed">Footer</div>
+        </> : <ThemeTree site={site} pages={pages} updateTheme={updateTheme} updateNavigation={updateNavigation} />}
+      </aside>
       <main className="eb-canvas"><div className="eb-device-toggle"><button className={device === "desktop" ? "active" : ""} onClick={() => setDevice("desktop")}>Desktop</button><button className={device === "mobile" ? "active" : ""} onClick={() => setDevice("mobile")}>Mobile</button></div><div className={`eb-preview-frame ${device}`}><iframe key={iframeKey} title="Draft website preview" src={site.preview_url} /></div><p className="eb-canvas__hint">This is your saved draft rendered by the same theme engine as the public site.</p></main>
       <aside className="eb-inspector">{mode === "sections" ? <SectionInspector block={selectedBlock} media={media} selectedMedia={selectedBlock?.image_url ? mediaByUrl.get(String(selectedBlock.image_url)) : undefined} update={updateBlock} updateItems={updateItems} upload={upload} remove={() => { if (page.blocks.length <= 1) return; commit({ ...page, blocks: page.blocks.filter((_, index) => index !== selected) }); setSelected(Math.max(0, selected - 1)); }} /> : <ThemeInspector theme={site.theme} updateTheme={updateTheme} />}</aside>
     </div>
+    {sectionLibraryOpen && <SectionLibrary search={sectionSearch} updateSearch={setSectionSearch} add={insertSection} close={() => setSectionLibraryOpen(false)} />}
+  </div>;
+}
+
+function SectionLibrary({ search, updateSearch, add, close }: { search: string; updateSearch: (value: string) => void; add: (type: string) => void; close: () => void }) {
+  const normalized = search.trim().toLowerCase();
+  const filtered = categories.map(([category, types]) => [category, types.filter((type) => !normalized || `${category} ${labels[type]}`.toLowerCase().includes(normalized))] as const).filter(([, types]) => types.length > 0);
+  return <div className="eb-library-backdrop" role="presentation" onMouseDown={close}>
+    <section className="eb-section-library" role="dialog" aria-modal="true" aria-label="Add a section" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="eb-library__top"><strong>Add a section</strong><button onClick={close} aria-label="Close section library">×</button></div>
+      <label className="eb-library__search"><span aria-hidden="true">⌕</span><input autoFocus value={search} onChange={(event) => updateSearch(event.target.value)} placeholder="Search sections" /></label>
+      <p className="eb-library__hint">Choose a structured section, then tailor its content in the inspector.</p>
+      <div className="eb-library__list">{filtered.map(([category, types]) => <section key={category}><h2>{category}</h2>{types.map((type) => <button key={type} onClick={() => add(type)}><span className="eb-library__icon" aria-hidden="true">{type === "image" || type === "gallery" ? "▧" : type === "faq_list" ? "?" : type === "contact_form" ? "✉" : "▤"}</span><span><strong>{labels[type]}</strong><small>{sectionDescriptions[type]}</small></span></button>)}</section>)}</div>
+      {!filtered.length && <p className="eb-library__empty">No section matches “{search}”.</p>}
+    </section>
   </div>;
 }
 
