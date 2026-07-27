@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-07-27 — Granular Website canvas editing
+
+- Clicking text, a CTA, an image, a card, an FAQ question/answer, announcement,
+  menu label, or footer copy now opens and focuses that exact control in the
+  inspector.
+- Repeated cards, FAQs, and gallery images use a compact item editor so an
+  operator edits one customer-facing element at a time instead of navigating a
+  section-wide form.
+- The canvas remains edit-only: the more granular selections preserve the
+  private preview boundary and do not activate phone, form, or workspace links.
+
 ## 2026-07-27 — Leak-free Website editor preview
 
 - The Website canvas is now explicitly an edit surface: clicking visible

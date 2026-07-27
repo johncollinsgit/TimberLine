@@ -8,7 +8,8 @@ tenant-scoped Website editor, immutable publishing/rollback, lead forms, and
 an isolated native Website catalog, cart, and Stripe Connect checkout lane.
 The editor uses structured theme settings, menus, sections, reusable public-site
 images, and a real draft preview rendered by the same code as the public site.
-The editing canvas selects content rather than following customer links; the
+The editing canvas selects and focuses individual content controls rather than
+following customer links; the
 separate private **Preview site** flow safely tests the saved draft and returns
 to the exact editor page.
 It never uses an existing Shopify checkout or legacy order system.

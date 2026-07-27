@@ -37,8 +37,9 @@
   library. It accepts approved image types only and is resolved server-side;
   private field-service, customer, and workspace files are out of scope.
 - The Website editor's desktop/mobile iframe is an authenticated, `no-store`
-  edit canvas rendered by the public-site renderer. Canvas clicks select the
-  relevant structured control rather than following customer links. A separate
+  edit canvas rendered by the public-site renderer. Canvas clicks select and
+  focus the matching individual text, CTA, image, card/FAQ item, or navigation
+  control rather than following customer links. A separate
   authenticated, no-store full-site draft preview resolves internal links only
   to owned preview pages and includes a private toolbar back to the exact
   editor page; neither preview can fall through to the Everbranch workspace.
