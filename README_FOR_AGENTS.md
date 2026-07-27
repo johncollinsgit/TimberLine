@@ -98,6 +98,11 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   repeat the pull-request workflow: the production workflow tests the exact
   merge commit in parallel, builds assets, and only then calls Forge. Composer
   and npm downloads are cached and Node installs use `npm ci`.
+- Default delivery preference: when a scoped feature is complete and its
+  protected GitHub checks pass, merge it to `main` and allow the normal Forge
+  release to deploy it. Keep a change on a feature branch only when John asks
+  for review-only handling, a release gate fails, or a customer-data/safety
+  concern requires a deliberate hold. Never bypass the CI/Forge gate.
 - Local verification for a scoped change is
   `composer exec pint -- --dirty --test`, followed by
   `php -d memory_limit=1G ./vendor/bin/pest --parallel --compact`. The parallel

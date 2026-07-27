@@ -118,6 +118,43 @@ test('the authenticated draft preview may be framed only by the workspace editor
         ->and($response->headers->get('X-Frame-Options'))->toBe('SAMEORIGIN');
 });
 
+test('the editor canvas marks individual content elements without activating customer links', function (): void {
+    $tenant = managedWebsiteTenant('element-selection-pilot');
+    $actor = managedWebsiteActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $page = $site->pages()->where('slug', '/')->firstOrFail();
+    $service->saveDraft($site, $page, [
+        'title' => 'Individual editing',
+        'blocks' => [[
+            'type' => 'service_cards',
+            'label' => 'Services',
+            'heading' => 'Choose a service',
+            'body' => 'One clear next step.',
+            'items' => [['heading' => 'Panel work', 'body' => 'A safer electrical panel.', 'image_url' => '/images/panel.jpg']],
+        ]],
+    ], $actor);
+    $service->saveSiteDraft($site, [
+        'settings' => ['announcement' => ['enabled' => true, 'text' => 'A useful announcement']],
+        'navigation' => [['label' => 'Home', 'url' => '/', 'type' => 'page']],
+    ], $actor);
+    $request = Request::create('/website/editor/'.$page->id.'/preview');
+    $request->attributes->set('current_tenant', $tenant);
+
+    $content = app(ManagedWebsiteController::class)->preview($request, $page, $service)->getContent();
+
+    expect($content)
+        ->toContain('data-eb-field="announcement_text"')
+        ->toContain('data-eb-field="navigation_label"')
+        ->toContain('data-eb-field="heading"')
+        ->toContain('data-eb-field="item_heading"')
+        ->toContain('data-eb-field="item_body"')
+        ->toContain('data-eb-field="item_image"')
+        ->toContain('href="#"')
+        ->and($content)->not->toContain('href="/"');
+});
+
 test('the full-site draft preview contains only owned preview links and a return to the exact editor page', function (): void {
     $tenant = managedWebsiteTenant('preview-navigation-pilot');
     $actor = managedWebsiteActor($tenant);
