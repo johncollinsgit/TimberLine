@@ -1,5 +1,27 @@
 # SYSTEM SNAPSHOT
 
+## Managed Website domain isolation and platform-home correction (2026-07-27)
+
+- `theeverbranch.com` is a platform-only public host. A prior Managed Website
+  public fallback could treat it as the flagship Modern Forestry tenant and
+  render a tenant theme there. The renderer now explicitly excludes the
+  canonical public host at `/` and fallback paths; a regression test protects
+  that boundary. Tenant sites remain limited to their approved subdomain or
+  an explicit active custom-domain record.
+- `tenant_site_domains` is additive and tenant-owned. The Website workspace
+  exposes a guided domain flow: normalize the customer-owned domain, create a
+  unique encrypted TXT proof, verify authoritative DNS, then activate only
+  when the published-site, global custom-domain, tenant allowlist, and
+  independent activation gate all pass. No registrar credentials are stored;
+  verification does not modify DNS or enable a hostname by itself.
+- Custom domain rollback is host-local: disabling the domain stops that public
+  host without deleting Website snapshots, forms, customer records, orders,
+  provider connections, workflows, or unrelated Everbranch services.
+- Active external Website hosts are public-render/form-only and use a
+  host-local session cookie. App/login, landlord, API, Shopify, webhook, and
+  workspace namespaces return 404 there rather than becoming alternate app
+  origins.
+
 ## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
 
 - **Everbranch Managed Website** is the planned default-disabled,

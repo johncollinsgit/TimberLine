@@ -203,7 +203,11 @@ Route::get('/', function (
     // or Checkout routes because those remain explicit routes and no site exists
     // without a separately entitled, rollout-approved workspace.
     $hostTenant = $request->attributes->get('host_tenant');
-    if ($hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
+    // theeverbranch.com is the Everbranch public home, never a tenant's
+    // Website. This keeps a published flagship draft from replacing the
+    // platform product page through host-context fallback.
+    $isPlatformPublicHost = $requestHost === $normalizeHost((string) config('tenancy.domains.canonical.public_host', ''));
+    if (! $isPlatformPublicHost && $hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
         return app(ManagedWebsiteController::class)->showPublic($request, '', $managedWebsites);
     }
 
@@ -681,6 +685,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
             Route::post('/', [ManagedWebsiteController::class, 'create'])->name('create');
             Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');
+            Route::post('/domains', [ManagedWebsiteController::class, 'requestDomain'])->name('domains.request');
+            Route::post('/domains/{domain}/verify', [ManagedWebsiteController::class, 'verifyDomain'])->name('domains.verify');
+            Route::post('/domains/{domain}/activate', [ManagedWebsiteController::class, 'activateDomain'])->name('domains.activate');
+            Route::post('/domains/{domain}/deactivate', [ManagedWebsiteController::class, 'deactivateDomain'])->name('domains.deactivate');
             Route::put('/editor/theme', [ManagedWebsiteController::class, 'saveTheme'])->name('editor.theme.save');
             Route::get('/editor/{page}', [ManagedWebsiteController::class, 'editor'])->name('editor');
             Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');

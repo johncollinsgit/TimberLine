@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-07-27 — Website custom-domain wizard
+
+- The Website overview now has a plain-language address wizard for customers
+  who already own a domain: add domain, copy a one-time DNS TXT proof, check
+  connection, and activate only after the published-site and public-host gates
+  pass.
+- The wizard explains that it never asks for registrar credentials or changes
+  unrelated DNS, email, checkout, customer, order, or provider records. Its
+  disable action is a host-only rollback.
+- Corrected a public-host boundary: `theeverbranch.com` is again reserved for
+  Everbranch’s platform site and cannot display a Modern Forestry or any other
+  tenant Website theme.
+
 ## 2026-07-27 — Granular Website canvas editing
 
 - Clicking text, a CTA, an image, a card, an FAQ question/answer, announcement,

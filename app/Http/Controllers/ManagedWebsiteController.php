@@ -6,10 +6,12 @@ use App\Models\FormSubmission;
 use App\Models\Tenant;
 use App\Models\TenantForm;
 use App\Models\TenantSite;
+use App\Models\TenantSiteDomain;
 use App\Models\TenantSiteMedia;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
 use App\Models\TenantSiteVersion;
+use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -20,10 +22,10 @@ use Illuminate\View\View;
 
 class ManagedWebsiteController extends Controller
 {
-    public function index(Request $request, ManagedWebsiteService $websites): View
+    public function index(Request $request, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): View
     {
         $tenant = $this->tenant($request);
-        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion'])->first();
+        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion', 'domains'])->first();
 
         return view('managed-website.index', [
             'tenant' => $tenant,
@@ -34,6 +36,9 @@ class ManagedWebsiteController extends Controller
             'isPublishingEnabled' => $websites->publishingEnabled(),
             'isPublicRenderEnabled' => $websites->publicRenderingEnabled(),
             'themes' => $websites->themes(),
+            'domainsEnabled' => $domains->enabledFor($tenant),
+            'domainTarget' => $domains->connectionTarget(),
+            'publicUrl' => $site ? $domains->publicUrl($site) : null,
         ]);
     }
 
@@ -199,6 +204,48 @@ class ManagedWebsiteController extends Controller
         $websites->applyTheme($site, (string) $request->validate(['theme_key' => ['required', 'string', 'max:80']])['theme_key'], $request->user());
 
         return back()->with('status', 'Theme applied as a draft. Review it in the editor before publishing.');
+    }
+
+    public function requestDomain(Request $request, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
+        $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        $domain = $domains->request($site, (string) $request->validate(['domain' => ['required', 'string', 'max:300']])['domain'], $request->user());
+
+        return back()->with('status', 'Domain saved. Add the verification record, then check the connection.')->with('domain_wizard_id', $domain->id);
+    }
+
+    public function verifyDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
+        $domain = $domains->verify($domain, $request->user());
+
+        return back()->with('status', $domain->status === 'verified' ? 'Domain ownership verified. You can activate it after the live routing check.' : 'The verification record is not visible yet. Check the record name and try again shortly.')->with('domain_wizard_id', $domain->id);
+    }
+
+    public function activateDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        $domains->activate($domain, $request->user());
+
+        return back()->with('status', $domain->hostname.' is now the live website address.')->with('domain_wizard_id', $domain->id);
+    }
+
+    public function deactivateDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        $domains->deactivate($domain, $request->user());
+
+        return back()->with('status', 'Custom domain disabled. The last published Everbranch subdomain remains unchanged.');
     }
 
     public function create(Request $request, ManagedWebsiteService $websites): RedirectResponse

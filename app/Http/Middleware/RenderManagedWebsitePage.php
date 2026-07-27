@@ -25,6 +25,11 @@ class RenderManagedWebsitePage
             return $response;
         }
 
+        $publicHost = strtolower(trim((string) config('tenancy.domains.canonical.public_host', '')));
+        if ($publicHost !== '' && strtolower(trim((string) $request->getHost())) === $publicHost) {
+            return $response;
+        }
+
         $payload = app(ManagedWebsiteService::class)->publicPage($tenant, $request->path());
         if ($payload === null) {
             return $response;
