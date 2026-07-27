@@ -148,6 +148,27 @@ class ManagedWebsiteDomainService
         app(ManagedWebsiteService::class)->recordEvent($domain->site, null, $actor, 'domain.deactivated', ['hostname' => $domain->hostname]);
     }
 
+    /**
+     * End an unactivated domain setup without deleting its audit trail. A user can
+     * immediately enter a different address; a later request for this hostname
+     * receives a fresh, single-use verification token.
+     */
+    public function cancel(TenantSiteDomain $domain, ?User $actor): void
+    {
+        abort_if($domain->status === 'active', 422, 'Use the live-domain control to disable an active website address.');
+
+        $domain->loadMissing('site');
+        $domain->forceFill([
+            'status' => 'disabled',
+            'is_primary' => false,
+            'activated_at' => null,
+            'last_error' => null,
+            'updated_by_user_id' => $actor?->id,
+        ])->save();
+
+        app(ManagedWebsiteService::class)->recordEvent($domain->site, null, $actor, 'domain.setup_cancelled', ['hostname' => $domain->hostname]);
+    }
+
     public function tenantForActiveHost(string $host): ?Tenant
     {
         if (! $this->enabled()) {

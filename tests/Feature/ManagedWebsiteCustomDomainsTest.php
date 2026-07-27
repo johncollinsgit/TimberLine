@@ -99,3 +99,34 @@ test('platform domains cannot be claimed by a customer website', function (): vo
     expect(fn () => app(ManagedWebsiteDomainService::class)->request($site, 'theeverbranch.com', $actor))
         ->toThrow(Illuminate\Validation\ValidationException::class);
 });
+
+test('an attempted custom domain can be removed without deleting audit-safe state', function (): void {
+    [, $actor, $site] = customDomainPilot();
+    $service = app(ManagedWebsiteDomainService::class);
+    $domain = $service->request($site, 'wrong-address.example', $actor);
+
+    $service->cancel($domain, $actor);
+
+    expect($domain->fresh())
+        ->status->toBe('disabled')
+        ->is_primary->toBeFalse();
+
+    $replacement = $service->request($site, 'collinselectricsc.com', $actor);
+
+    expect($replacement->hostname)->toBe('collinselectricsc.com')
+        ->and($replacement->status)->toBe('pending');
+});
+
+test('a tenant cannot cancel another tenant’s attempted domain', function (): void {
+    [$tenant, $actor, $site] = customDomainPilot();
+    $domain = app(ManagedWebsiteDomainService::class)->request($site, 'collinselectricsc.com', $actor);
+    [$otherTenant, $otherActor] = customDomainPilot('Other Pilot', 'other-pilot');
+
+    config()->set('managed_website.custom_domain_tenant_ids', [$tenant->id, $otherTenant->id]);
+
+    $this->actingAs($otherActor)->withSession(['tenant_id' => $otherTenant->id])
+        ->post(route('managed-website.domains.cancel', ['domain' => $domain]))
+        ->assertNotFound();
+
+    expect($domain->fresh()->status)->toBe('pending');
+});

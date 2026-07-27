@@ -689,6 +689,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/domains/{domain}/verify', [ManagedWebsiteController::class, 'verifyDomain'])->name('domains.verify');
             Route::post('/domains/{domain}/activate', [ManagedWebsiteController::class, 'activateDomain'])->name('domains.activate');
             Route::post('/domains/{domain}/deactivate', [ManagedWebsiteController::class, 'deactivateDomain'])->name('domains.deactivate');
+            Route::post('/domains/{domain}/cancel', [ManagedWebsiteController::class, 'cancelDomain'])->name('domains.cancel');
             Route::put('/editor/theme', [ManagedWebsiteController::class, 'saveTheme'])->name('editor.theme.save');
             Route::get('/editor/{page}', [ManagedWebsiteController::class, 'editor'])->name('editor');
             Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');
