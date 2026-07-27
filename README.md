@@ -2112,4 +2112,10 @@ This update removes the temporary beta redemption rollout gate and keeps Candle 
 
 Everbranch Website is a separately entitled, default-disabled managed website and native commerce product. It provides a theme overview, full-screen live editor, tenant-owned pages, Website products/services, shopper records, carts, native Website orders, and Stripe Connect payment handoff. It does **not** use, migrate, or alter Shopify checkout, Shopify catalog data, legacy `orders`, customer records, rewards, provider connections, or Modern Forestry flows.
 
+For multi-channel operations, **Sales channels** provides a tenant-scoped,
+read-only summary of confirmed revenue and order counts by source. Native
+Website payments appear beside existing sources only after payment confirmation;
+the summary never copies Website orders into legacy `orders`, merges shoppers,
+or changes Shopify checkout and fulfillment workflows.
+
 Physical Website orders currently support pickup or manually coordinated local delivery. Carrier rates, labels, tracking, and shipping integrations are intentionally deferred. Checkout stays unavailable until the workspace has passed the existing Stripe Connect and tax readiness gates.

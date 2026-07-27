@@ -106,3 +106,13 @@ The full-screen Website editor persists only ordinary immutable draft page
 versions through `ManagedWebsiteService`; publish still copies draft snapshots
 into immutable published versions. The editor may be frozen without taking the
 last published page offline.
+
+## Sales-channel reporting boundary
+
+`SalesChannelSummaryService` is the only cross-channel seam introduced for
+Website Commerce. It reads tenant-scoped aggregate summaries from independent
+sources: existing legacy/provider orders remain in `orders`, while native
+Website revenue comes only from confirmed `website_orders.paid_at` records.
+The service does not join order rows, copy records, resolve customer identity,
+call a provider, or write to either lane. This gives a multi-channel merchant a
+single sales view without changing Modern Forestry's Shopify app or checkout.

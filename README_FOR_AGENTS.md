@@ -36,6 +36,11 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   lane for Website catalog, cart, shopper, order, payment, inventory, and
   fulfillment behavior. Never reuse, join against, backfill, or write to the
   legacy `orders`/`order_lines` tables or Shopify catalog/customer records.
+- Multi-channel reporting may read normalized, tenant-scoped summaries from
+  independent channels, but it must never merge records or make Website sales
+  a legacy order. `SalesChannelSummaryService` is read-only: Website payments
+  count only after confirmation and provider channels retain their own source
+  of truth, customer records, checkout, and operations.
 - Stripe Connect is the regulated payment processor only. Server-side product
   snapshots determine checkout amounts; signed, idempotent Website Stripe
   webhook events determine payment success. No client price, tenant, order, or

@@ -1992,3 +1992,12 @@
 - Added clean Website Products, Customers, and Orders management tables plus
   native public catalog/cart/Stripe checkout paths. These screens use only the
   isolated `website_*` lane and never display legacy Shopify orders.
+
+## 2026-07-27 — Sales-channel reporting
+
+- Added a clean, read-only Sales channels view and dashboard link for confirmed
+  revenue and order counts by source, including native Everbranch Website sales
+  alongside existing channels.
+- The view deliberately reports aggregates only: it does not merge customers,
+  copy Website orders into legacy Shopify/operations orders, or expose checkout
+  and fulfillment controls across source boundaries.

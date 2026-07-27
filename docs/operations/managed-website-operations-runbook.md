@@ -59,3 +59,12 @@ pickup order on an isolated pilot. Do not enable this path for Modern Forestry.
 If payment confirmation or tax readiness is uncertain, leave catalog editing
 available but keep checkout gated. Do not substitute a Shopify checkout or
 modify legacy orders as a workaround.
+
+# Sales-channel reporting
+
+Sales channels is read-only operational reporting. Confirm that a Website order
+has `payment_status=paid` and `paid_at` before expecting it to appear. A missing
+or delayed Website sale is a Website payment/webhook investigation; do not add
+or edit a legacy Shopify order to repair the report. Likewise, a source-channel
+discrepancy is resolved in that source system, not by merging orders or shoppers
+in Everbranch.

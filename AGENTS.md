@@ -25,6 +25,10 @@
   legacy `orders`, `order_lines`, Shopify catalog/customer records, Shopify
   checkout, rewards, or Modern Forestry provider connections when building
   Website catalog, shopper, cart, payment, or fulfillment features.
+- Multi-channel reporting may only normalize tenant-scoped, read-only summaries
+  through `SalesChannelSummaryService`. Never copy Website orders into legacy
+  orders, merge Website shoppers into existing customers, or let reporting
+  trigger commerce, marketing, checkout, provider, or fulfillment mutations.
 - Website checkout must remain fail-closed behind Managed Website entitlement,
   rollout, Stripe Connect, tax, and signed webhook readiness. Public Website
   commerce routes resolve tenant ownership from the verified public host;

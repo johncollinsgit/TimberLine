@@ -40,6 +40,10 @@
   tenant allowlist, Stripe Connect account, verified webhook policy, and tax
   decision must pass. Physical orders support pickup/manual local delivery;
   shipping carriers and rates remain deferred.
+- Sales-channel reporting exposes a tenant-scoped, read-only summary of
+  confirmed sources, including native Website payments alongside existing
+  provider sales. It never copies Website records into legacy `orders`, merges
+  shoppers, or changes Modern Forestry's Shopify checkout/source-of-truth.
 
 ## Modern Forestry App Store Customer Login Recovery (2026-07-25)
 

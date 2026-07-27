@@ -74,6 +74,7 @@ use App\Http\Controllers\PublicBudConversationController;
 use App\Http\Controllers\PublicClassSignupController;
 use App\Http\Controllers\PublicLegalController;
 use App\Http\Controllers\QuickBooksReportsController;
+use App\Http\Controllers\SalesChannelController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
@@ -662,6 +663,10 @@ Route::prefix('signup/classes/{tenant:slug}')
     });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->get('/sales-channels', [SalesChannelController::class, 'index'])
+        ->name('sales-channels.index');
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:managed_website'])
         ->prefix('website')
