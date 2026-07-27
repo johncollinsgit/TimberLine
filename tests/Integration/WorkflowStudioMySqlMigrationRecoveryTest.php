@@ -133,15 +133,12 @@ it('recovers Website Commerce after MySQL retains a partial reservation table', 
 
     // Recreate the exact shape left by the failed production candidate: the
     // table exists, but its two trailing FKs and supporting indexes do not.
-    Schema::table('website_inventory_reservations', function (Blueprint $table): void {
-        $table->dropForeign('website_reservations_variant_fk');
-        $table->dropForeign('website_reservations_order_fk');
-    });
-
-    Schema::table('website_inventory_reservations', function (Blueprint $table): void {
-        $table->dropUnique('website_reservation_order_variant_uq');
-        $table->dropIndex('website_reservation_variant_status_idx');
-    });
+    // Use individual MySQL DDL statements here. Laravel can coalesce schema
+    // changes into an order MySQL rejects when an index still supports an FK.
+    DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_variant_fk');
+    DB::statement('ALTER TABLE website_inventory_reservations DROP FOREIGN KEY website_reservations_order_fk');
+    DB::statement('ALTER TABLE website_inventory_reservations DROP INDEX website_reservation_order_variant_uq');
+    DB::statement('ALTER TABLE website_inventory_reservations DROP INDEX website_reservation_variant_status_idx');
 
     $commerce->up();
     $repair->up();
