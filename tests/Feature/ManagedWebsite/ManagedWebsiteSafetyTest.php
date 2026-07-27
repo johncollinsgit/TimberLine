@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\ManagedWebsiteController;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
@@ -97,6 +99,22 @@ test('managed website editor renders its structured page data', function (): voi
         ->toContain('data-page=')
         ->toContain('data-pages=')
         ->toContain('data-site=');
+});
+
+test('the authenticated draft preview may be framed only by the workspace editor', function (): void {
+    $tenant = managedWebsiteTenant('preview-frame-pilot');
+    $actor = managedWebsiteActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    $page = $site->pages()->where('slug', '/')->firstOrFail();
+    $request = Request::create('/website/editor/'.$page->id.'/preview');
+    $request->attributes->set('current_tenant', $tenant);
+
+    $response = app(ManagedWebsiteController::class)->preview($request, $page, app(ManagedWebsiteService::class));
+
+    expect($response->headers->get('Cache-Control'))->toBe('no-store, private')
+        ->and($response->headers->get('Content-Security-Policy'))->toBe("frame-ancestors 'self'")
+        ->and($response->headers->get('X-Frame-Options'))->toBe('SAMEORIGIN');
 });
 
 test('pending billing never opens the editor even when a tenant is allowlisted', function (): void {

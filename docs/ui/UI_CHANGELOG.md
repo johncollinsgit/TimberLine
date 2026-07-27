@@ -1,5 +1,22 @@
 # UI Changelog
 
+## 2026-07-27 — Website preview repair and section library
+
+- The private Website preview now explicitly permits framing by its own
+  authenticated editor while remaining non-cacheable; it no longer inherits a
+  Shopify-only frame policy that left the editor canvas blank.
+- **Add section** is now one clear row that opens a searchable, categorized
+  section library. It replaces the always-visible pill controls with a more
+  scannable editor pattern while keeping the existing structured, safe section
+  catalog.
+
+### Safety posture
+
+- The preview can be framed only by the same Everbranch origin. Thumbnail
+  source pages remain explicitly unframeable. No public snapshot, published
+  site, customer data, checkout, order, or provider connection behavior
+  changes.
+
 ## 2026-07-27 — Rich Website themes, real draft preview, and media library
 
 - Website now has a Shopify-familiar three-pane editor: section outline and

@@ -75,7 +75,11 @@ class ManagedWebsiteController extends Controller
         $payload = $websites->draftPage($site, $page);
         abort_unless($payload !== null, 404);
 
-        return response()->view('managed-website.public', $payload + ['tenant' => $tenant])->header('Cache-Control', 'no-store, private');
+        return response()
+            ->view('managed-website.public', $payload + ['tenant' => $tenant])
+            ->header('Cache-Control', 'no-store, private')
+            ->header('Content-Security-Policy', "frame-ancestors 'self'")
+            ->header('X-Frame-Options', 'SAMEORIGIN');
     }
 
     public function thumbnailSource(TenantSiteVersion $siteVersion, TenantSitePageVersion $pageVersion)
@@ -85,14 +89,19 @@ class ManagedWebsiteController extends Controller
         $page = TenantSitePage::query()->findOrFail($pageVersion->tenant_site_page_id);
         abort_unless((int) $site->draft_site_version_id === (int) $siteVersion->id && (int) $page->draft_version_id === (int) $pageVersion->id, 404);
 
-        return response()->view('managed-website.public', [
-            'tenant' => Tenant::query()->findOrFail($site->tenant_id),
-            'site' => $site,
-            'page' => $page,
-            'version' => $pageVersion,
-            'theme' => $siteVersion,
-            'isDraftPreview' => true,
-        ])->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer');
+        return response()
+            ->view('managed-website.public', [
+                'tenant' => Tenant::query()->findOrFail($site->tenant_id),
+                'site' => $site,
+                'page' => $page,
+                'version' => $pageVersion,
+                'theme' => $siteVersion,
+                'isDraftPreview' => true,
+            ])
+            ->header('Cache-Control', 'no-store, private')
+            ->header('Content-Security-Policy', "frame-ancestors 'none'")
+            ->header('X-Frame-Options', 'DENY')
+            ->header('Referrer-Policy', 'no-referrer');
     }
 
     public function showThumbnail(Request $request, TenantSiteVersion $siteVersion)

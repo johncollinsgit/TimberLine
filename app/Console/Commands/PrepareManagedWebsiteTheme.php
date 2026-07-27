@@ -33,7 +33,7 @@ class PrepareManagedWebsiteTheme extends Command
         }
 
         $actorEmail = strtolower(trim((string) $this->option('actor-email')));
-        $actor = $actorEmail !== '' ? User::query()->where('email', $actorEmail)->first() : $tenant->users()->whereIn('role', ['owner', 'admin'])->orderBy('users.id')->first();
+        $actor = $actorEmail !== '' ? User::query()->where('email', $actorEmail)->first() : $tenant->users()->wherePivotIn('role', ['owner', 'admin'])->orderBy('users.id')->first();
         if (! $actor instanceof User) {
             $this->error('An existing tenant owner or admin is required. Pass --actor-email if necessary.');
 
