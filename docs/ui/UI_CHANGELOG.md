@@ -1,5 +1,24 @@
 # UI Changelog
 
+## 2026-07-27 — Leak-free Website editor preview
+
+- The Website canvas is now explicitly an edit surface: clicking visible
+  content, cards, calls to action, menus, announcement, header, or footer
+  opens the matching inspector controls instead of following a customer link.
+- **Preview site** saves the draft and opens an interactive, private full-site
+  preview in a separate tab. Its toolbar returns to the exact editor page.
+- Draft preview navigation now resolves owned Website pages server-side. Home,
+  menus, footer links, announcements, and CTAs cannot fall through to the
+  Everbranch workspace; unknown internal links fail closed, external links are
+  safely new-tabbed, and form/phone/email actions remain inert.
+
+### Safety posture
+
+- The interactive preview is authenticated, no-store, and unframeable; the
+  embedded edit canvas remains same-origin frame-only. Public rendering has no
+  preview toolbar or editor metadata. No commerce, Modern Forestry, Shopify,
+  customer, order, reward, webhook, or connection behavior changes.
+
 ## 2026-07-27 — Website preview repair and section library
 
 - The private Website preview now explicitly permits framing by its own

@@ -37,8 +37,11 @@
   library. It accepts approved image types only and is resolved server-side;
   private field-service, customer, and workspace files are out of scope.
 - The Website editor's desktop/mobile iframe is an authenticated, `no-store`
-  draft preview rendered by the public-site renderer. The overview labels this
-  as a live draft preview rather than presenting a fabricated screenshot.
+  edit canvas rendered by the public-site renderer. Canvas clicks select the
+  relevant structured control rather than following customer links. A separate
+  authenticated, no-store full-site draft preview resolves internal links only
+  to owned preview pages and includes a private toolbar back to the exact
+  editor page; neither preview can fall through to the Everbranch workspace.
 - HVAC Service, Collins Upstate Electric, and Outdoor Elements are complete
   six-page starter packs with structured menus, announcements, banners, FAQs,
   forms, service cards, and original generated starter imagery. Collins content

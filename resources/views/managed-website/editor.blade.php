@@ -30,6 +30,7 @@
             'theme' => ($theme ?? null)?->settings ?: [],
             'navigation' => ($theme ?? null)?->navigation ?: [],
             'preview_url' => route('managed-website.editor.preview', ['page' => $page]),
+            'preview_site_url' => route('managed-website.editor.preview.site', ['page' => $page]),
         ];
     @endphp
     <div id="managed-website-editor-root"
