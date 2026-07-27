@@ -450,7 +450,7 @@ class FirstLoginWorkspaceController extends Controller
             'quickbooks' => ['label' => 'QuickBooks', 'description' => 'Accounting sync planning.', 'icon' => '📒'],
             'shopify' => ['label' => 'Shopify', 'description' => 'Storefront, customer, and order workflows.', 'icon' => '🛍'],
             'square' => ['label' => 'Square', 'description' => 'POS and commerce intake.', 'icon' => '◼'],
-            'workflow_automations' => ['label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Workflow Automations'), 'description' => 'Turn connected work and orders into dependable calendar workflows.', 'icon' => '⚡'],
+            'workflow_automations' => ['label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Order Calendar'), 'description' => 'Put dated work and orders on the right calendar.', 'icon' => '🗓️'],
             'ai' => ['label' => 'AI assistant', 'description' => 'Guided opportunities and drafted next steps.', 'icon' => '✨'],
             'uploads' => ['label' => 'Imports', 'description' => 'CSV and manual data import.', 'icon' => '⬆️'],
             'notifications' => ['label' => 'Notifications', 'description' => 'Alerts, reminders, and status nudges.', 'icon' => '🔔'],

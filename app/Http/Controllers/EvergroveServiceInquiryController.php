@@ -3,16 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\ServiceInquiry;
-use App\Services\Operations\OperatorAlertService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Throwable;
 
 class EvergroveServiceInquiryController extends Controller
 {
-    public function store(Request $request, OperatorAlertService $operatorAlerts): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
         $businessSizeKeys = array_keys((array) config('evergrove.business_sizes', []));
         $timelineKeys = array_keys((array) config('evergrove.timeline_options', []));
@@ -34,7 +32,7 @@ class EvergroveServiceInquiryController extends Controller
 
         $sourcePage = $this->nullableText($validated['source_page'] ?? $request->path(), 120);
 
-        $inquiry = ServiceInquiry::query()->create([
+        ServiceInquiry::query()->create([
             'name' => $this->text($validated['name'] ?? '', 190),
             'email' => strtolower($this->text($validated['email'] ?? '', 190)),
             'company' => $this->nullableText($validated['company'] ?? null, 190),
@@ -50,29 +48,6 @@ class EvergroveServiceInquiryController extends Controller
         ]);
 
         $product = str_contains((string) $sourcePage, 'everbranch') ? 'Everbranch' : 'Evergrove';
-        if ($product === 'Everbranch') {
-            $requestType = str_contains((string) $sourcePage, 'walkthrough') ? 'meeting' : 'contact';
-            $requester = trim((string) ($inquiry->company ?: $inquiry->name ?: 'New prospect'));
-
-            try {
-                $operatorAlerts->notify(
-                    'service_inquiry.created',
-                    "Everbranch: New {$requestType} request from {$requester}.",
-                    [
-                        'dedupe_key' => 'service-inquiry:'.$inquiry->id,
-                        'target_type' => 'service_inquiry',
-                        'target_id' => (int) $inquiry->id,
-                        'request_host' => $request->getHost(),
-                        'request_email' => (string) $inquiry->email,
-                        'request_intent' => $requestType,
-                        'request_company' => (string) $inquiry->company,
-                        'request_name' => (string) $inquiry->name,
-                    ]
-                );
-            } catch (Throwable $exception) {
-                report($exception);
-            }
-        }
 
         return back()->with('status', "Thanks. {$product} has your note and will follow up shortly.");
     }

@@ -1,9 +1,7 @@
 <?php
 
-use App\Models\OperatorAlertLog;
 use App\Models\ServiceInquiry;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -110,44 +108,6 @@ test('everbranch contact page stores messages in the landlord queue', function (
     expect($inquiry->email)->toBe('owner@example.com')
         ->and($inquiry->source_page)->toBe('everbranch_contact')
         ->and($inquiry->pain_point)->toBe('Customer follow-ups disappear.');
-});
-
-test('everbranch walkthrough requests send one production safe operator text without creating demo access', function (): void {
-    config()->set('everbranch.operator_alert_sms_enabled', true);
-    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
-
-    $twilio = \Mockery::mock(TwilioSmsService::class);
-    $twilio->shouldReceive('sendSms')
-        ->once()
-        ->with(
-            '15550100101',
-            'Everbranch: New meeting request from Ridge Workshop.',
-            \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
-        )
-        ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
-
-    $this->get('http://theeverbranch.com/platform/contact?intent=walkthrough')
-        ->assertOk()
-        ->assertSeeText('Book a working session with Everbranch.')
-        ->assertSee('name="source_page" value="everbranch_walkthrough"', false)
-        ->assertSeeText('Request a meeting');
-
-    $this->from('http://theeverbranch.com/platform/contact?intent=walkthrough')
-        ->post('http://theeverbranch.com/services/inquiries', [
-            'name' => 'Riley Morgan',
-            'email' => 'owner@ridgeworkshop.co',
-            'company' => 'Ridge Workshop',
-            'pain_point' => 'We want to connect store orders to the team calendar.',
-            'source_page' => 'everbranch_walkthrough',
-        ])
-        ->assertRedirect('http://theeverbranch.com/platform/contact?intent=walkthrough');
-
-    expect(ServiceInquiry::query()->where('source_page', 'everbranch_walkthrough')->count())->toBe(1)
-        ->and(User::query()->where('email', 'owner@ridgeworkshop.co')->exists())->toBeFalse()
-        ->and(OperatorAlertLog::query()
-            ->where('event_key', 'service_inquiry.created')
-            ->value('status'))->toBe('sent');
 });
 
 test('authenticated users still see evergrove surface on evergrove public host', function (): void {

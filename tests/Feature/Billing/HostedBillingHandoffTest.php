@@ -237,7 +237,7 @@ test('billing portal endpoint creates session and redirects', function (): void 
         ->assertRedirect($portalUrl);
 });
 
-test('workflow automations add-on checkout is server priced and preserves the tenant plan', function (): void {
+test('order calendar add-on checkout is server priced and preserves the tenant plan', function (): void {
     config()->set('commercial.billing_readiness.checkout_active', true);
     config()->set('services.stripe.secret', 'sk_test_123');
 

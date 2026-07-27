@@ -204,25 +204,13 @@ class TenantModuleCatalogService
                 'key' => $moduleKey,
                 'display_name' => (string) ($definition['display_name'] ?? Str::headline($moduleKey)),
                 'description' => (string) ($definition['description'] ?? ''),
-                'short_description' => (string) ($productMetadata['short_description'] ?? ''),
-                'long_description' => (string) ($productMetadata['long_description'] ?? ''),
-                'category' => (string) ($productMetadata['category'] ?? 'operations'),
                 'category_label' => (string) ($productMetadata['category_label'] ?? 'Operations'),
                 'lifecycle_label' => (string) ($productMetadata['lifecycle_label'] ?? 'Internal'),
-                'setup_effort' => (string) ($productMetadata['setup_effort'] ?? 'standard'),
                 'setup_effort_label' => (string) ($productMetadata['setup_effort_label'] ?? 'Standard setup'),
-                'required_integrations' => (array) ($productMetadata['required_integrations'] ?? []),
                 'required_integrations_label' => (string) ($productMetadata['required_integrations_label'] ?? 'No required integration'),
-                'mobile_relevance' => (string) ($productMetadata['mobile_relevance'] ?? 'not_mobile_specific'),
                 'mobile_relevance_label' => (string) ($productMetadata['mobile_relevance_label'] ?? 'Not mobile-specific'),
                 'pricing_impact_label' => (string) ($productMetadata['pricing_impact_label'] ?? 'Pricing impact not configured'),
-                'entitlement_requirement_label' => (string) ($productMetadata['entitlement_requirement_label'] ?? 'Access review required'),
                 'buyer_setup' => is_array($productMetadata['buyer_setup'] ?? null) ? (array) $productMetadata['buyer_setup'] : [],
-                'dependencies' => $this->publicDependencyLabels((array) ($definition['dependencies'] ?? [])),
-                'is_standalone' => ((array) ($definition['dependencies'] ?? [])) === [],
-                'data_used' => $this->publicDataUsed($moduleKey, $definition),
-                'industry_relevance' => $this->publicIndustryRelevance($moduleKey, $definition),
-                'primary_actions' => $this->publicPrimaryActions($definition, $productMetadata),
                 'purchase' => $purchaseMetadata,
                 'status' => strtolower(trim((string) ($definition['status'] ?? 'disabled'))),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
@@ -270,114 +258,6 @@ class TenantModuleCatalogService
             'plans' => $plans,
             'modules' => $modules,
         ];
-    }
-
-    /**
-     * @param  array<int,mixed>  $dependencies
-     * @return array<int,string>
-     */
-    protected function publicDependencyLabels(array $dependencies): array
-    {
-        return collect($dependencies)
-            ->map(function (mixed $moduleKey): string {
-                $key = strtolower(trim((string) $moduleKey));
-                $definition = (array) config('module_catalog.modules.'.$key, []);
-
-                return trim((string) ($definition['display_name'] ?? Str::headline($key)));
-            })
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @param  array<string,mixed>  $definition
-     * @return array<int,string>
-     */
-    protected function publicDataUsed(string $moduleKey, array $definition): array
-    {
-        $category = $this->categoryKey($definition);
-        $data = match ($category) {
-            'customer_operations' => ['Customer profiles', 'Activity and status records'],
-            'commerce' => ['Orders', 'Products', 'Customer profiles'],
-            'communications' => ['Customer profiles', 'Consent and delivery status'],
-            'reporting' => ['Workspace activity', 'Operational metrics'],
-            'integrations' => ['Connected account records', 'Sync status'],
-            default => ['Workspace records', 'Operational status'],
-        };
-
-        if ($moduleKey === 'workflow_automations') {
-            $data = ['Dated tasks or ecommerce orders', 'Calendar event settings', 'Workflow run history'];
-        }
-
-        if (str_contains($moduleKey, 'inventory')) {
-            $data[] = 'Inventory and product records';
-        }
-
-        return array_values(array_unique($data));
-    }
-
-    /**
-     * @param  array<string,mixed>  $definition
-     * @return array<int,string>
-     */
-    protected function publicIndustryRelevance(string $moduleKey, array $definition): array
-    {
-        $category = $this->categoryKey($definition);
-        $industries = match ($category) {
-            'commerce' => ['Retail', 'Ecommerce', 'Wholesale'],
-            'customer_operations' => ['Services', 'Retail', 'Hospitality'],
-            'communications' => ['Retail', 'Services', 'Membership businesses'],
-            'reporting' => ['All small businesses'],
-            'integrations' => ['All small businesses'],
-            default => ['Services', 'Retail', 'Project-based teams'],
-        };
-
-        if ($moduleKey === 'class_scheduling') {
-            $industries = ['Classes and workshops', 'Hospitality', 'Makers and educators'];
-        } elseif ($moduleKey === 'field_service') {
-            $industries = ['Trades', 'Field service', 'Home services'];
-        } elseif ($moduleKey === 'workflow_automations') {
-            $industries = ['Ecommerce', 'Retail', 'Services', 'Production teams'];
-        }
-
-        return $industries;
-    }
-
-    /**
-     * @param  array<string,mixed>  $definition
-     * @param  array<string,mixed>  $productMetadata
-     * @return array<int,string>
-     */
-    protected function publicPrimaryActions(array $definition, array $productMetadata): array
-    {
-        $buyerSetup = is_array($productMetadata['buyer_setup'] ?? null)
-            ? (array) $productMetadata['buyer_setup']
-            : [];
-        $steps = collect((array) ($buyerSetup['setup_steps'] ?? []))
-            ->map(fn (mixed $step): string => trim((string) $step))
-            ->filter()
-            ->take(3)
-            ->values()
-            ->all();
-
-        if ($steps !== []) {
-            return $steps;
-        }
-
-        $capabilities = collect((array) ($definition['capabilities'] ?? []))
-            ->map(function (mixed $capability): string {
-                $label = Str::of((string) $capability)->after('.')->replace(['_', '.'], ' ')->headline()->toString();
-
-                return $label !== '' ? $label : 'Use the module';
-            })
-            ->filter()
-            ->take(3)
-            ->values()
-            ->all();
-
-        return $capabilities !== [] ? $capabilities : ['Open the module workspace'];
     }
 
     /**

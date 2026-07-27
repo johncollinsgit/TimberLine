@@ -1,13 +1,11 @@
 <?php
 
-use App\Models\LandlordOperatorAction;
-use App\Models\OperatorAlertLog;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\LandlordOperatorAction;
 use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -43,8 +41,8 @@ test('marketing modules page renders tenant-aware module catalog for authenticat
 
 test('marketing modules page can activate and request module access', function (): void {
     $tenant = Tenant::query()->create([
-        'name' => 'Ridge Company',
-        'slug' => 'ridge-company',
+        'name' => 'Direct Activation Tenant',
+        'slug' => 'direct-activation-tenant',
     ]);
 
     TenantAccessProfile::query()->create([
@@ -57,25 +55,9 @@ test('marketing modules page can activate and request module access', function (
     $user = User::factory()->create([
         'role' => 'marketing_manager',
         'is_active' => true,
-        'email' => 'owner@ridgecompany.co',
         'email_verified_at' => now(),
     ]);
     $user->tenants()->attach($tenant->id, ['role' => 'manager']);
-    config()->set('everbranch.operator_alert_sms_enabled', true);
-    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
-    config()->set('tenancy.domains.canonical.base_domain', 'theeverbranch.com');
-    config()->set('tenancy.domains.canonical.public_host', 'theeverbranch.com');
-
-    $twilio = \Mockery::mock(TwilioSmsService::class);
-    $twilio->shouldReceive('sendSms')
-        ->once()
-        ->with(
-            '15550100101',
-            'Everbranch: Ridge Company requested the Advanced Diagnostics Branch.',
-            \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
-        )
-        ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
 
     $this->actingAs($user)
         ->post(route('marketing.modules.activate', ['moduleKey' => 'sms']))
@@ -87,7 +69,7 @@ test('marketing modules page can activate and request module access', function (
         ->value('enabled_status'))->toBe('enabled');
 
     $this->actingAs($user)
-        ->post('http://ridge-company.theeverbranch.com'.route('marketing.modules.request', ['moduleKey' => 'diagnostics_advanced'], absolute: false))
+        ->post(route('marketing.modules.request', ['moduleKey' => 'diagnostics_advanced']))
         ->assertRedirect(route('marketing.modules', ['module' => 'diagnostics_advanced']));
 
     expect(TenantModuleEntitlement::query()
@@ -104,11 +86,6 @@ test('marketing modules page can activate and request module access', function (
         ->where('tenant_id', $tenant->id)
         ->where('action_type', 'tenant_module_access_request_created')
         ->exists())->toBeTrue();
-
-    expect(OperatorAlertLog::query()
-        ->where('event_key', 'branch_access_request.created')
-        ->where('tenant_id', $tenant->id)
-        ->value('status'))->toBe('sent');
 });
 
 test('marketing module activation is blocked for hidden or unsafe modules', function (): void {

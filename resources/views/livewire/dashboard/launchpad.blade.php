@@ -42,7 +42,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="size-6"><path d="M13 2 4.5 13H11l-1 9 8.5-12H12l1-8Z"/></svg>
                         </span>
                         <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Workflow Automations health</p>
+                            <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Order Calendar health</p>
                             <h2 id="workflow-health-title" class="mt-1 text-xl font-semibold text-zinc-950">
                                 {{ $workflowHealth['active'] }} active of {{ $workflowHealth['total'] }} workflow{{ $workflowHealth['total'] === 1 ? '' : 's' }}
                             </h2>
@@ -243,11 +243,11 @@
             <section class="mf-app-card rounded-3xl p-5 sm:p-6">
                 <div class="mb-5 flex items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-lg font-semibold text-[var(--fb-text)] sm:text-xl">Your Branches</h2>
-                        <p class="mt-1 text-sm text-[var(--fb-muted)]">See what is active, included, available to buy, or ready to request.</p>
+                        <h2 class="text-lg font-semibold text-[var(--fb-text)] sm:text-xl">Pinned modules</h2>
+                        <p class="mt-1 text-sm text-[var(--fb-muted)]">A quick read on active and high-value next-step modules.</p>
                     </div>
                     @if(auth()->user()?->canAccessMarketing())
-                        <a href="{{ route('marketing.modules') }}" class="inline-flex items-center rounded-full border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] px-3 py-1.5 text-xs font-semibold text-[var(--fb-brand)]">Open Branches</a>
+                        <a href="{{ route('marketing.modules') }}" class="inline-flex items-center rounded-full border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] px-3 py-1.5 text-xs font-semibold text-[var(--fb-brand)]">Open Modules</a>
                     @endif
                 </div>
 
@@ -258,14 +258,13 @@
                                 <div>
                                     <div class="text-sm font-semibold text-[var(--fb-text)]">{{ $module['display_name'] ?? 'Module' }}</div>
                                     <div class="mt-1 text-sm leading-6 text-[var(--fb-muted)]">{{ $module['description'] ?? '' }}</div>
-                                    <div class="mt-2 text-xs font-semibold text-[var(--fb-brand)]">{{ $module['price_label'] ?? 'View access options' }}</div>
                                 </div>
                                 <span class="rounded-full border border-[var(--fb-border)] bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--fb-muted)]">{{ $module['state_label'] ?? 'Module' }}</span>
                             </div>
                         </a>
                     @empty
                         <div class="rounded-3xl border border-dashed border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 text-sm text-[var(--fb-muted)]">
-                            Branch recommendations will appear here as workspace access and catalog availability evolve.
+                            Module recommendations will appear here as workspace access and App Store availability evolve.
                         </div>
                     @endforelse
                 </div>

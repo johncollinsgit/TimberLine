@@ -25,9 +25,9 @@
  <section class="fb-workflow-header">
  <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
  <div>
- <div class="fb-eyebrow">Branches</div>
- <h2 class="mt-2 text-xl font-semibold text-[var(--fb-text-primary)] sm:text-2xl">Add what your business needs next</h2>
- <p class="mt-2 max-w-4xl text-sm text-[var(--fb-text-secondary)]">Each Branch clearly shows whether it is included, available to buy, requires a plan change, or needs an Everbranch review. Viewing a Branch never changes billing or access.</p>
+ <div class="fb-eyebrow">Module Store</div>
+ <h2 class="mt-2 text-xl font-semibold text-[var(--fb-text-primary)] sm:text-2xl">Workspace feature catalog</h2>
+ <p class="mt-2 max-w-4xl text-sm text-[var(--fb-text-secondary)]">Pick the next useful module, see what it does in plain language, and follow the setup steps when you are ready. Viewing a card does not change billing or feature access.</p>
  <div class="mt-4 flex flex-wrap gap-2">
  <a href="{{ route('custom-module-requests.create') }}" class="fb-btn-soft fb-link-soft">Request something custom</a>
  <a href="{{ route('custom-module-requests.index') }}" class="fb-btn-soft fb-link-soft">View custom requests</a>
@@ -98,7 +98,7 @@
  <div class="fb-eyebrow">Catalog Section</div>
  <h2 class="mt-2 text-lg font-semibold text-[var(--fb-text-primary)]">{{ $sectionLabel }}</h2>
  </div>
- <span class="fb-chip fb-chip--quiet">{{ count($modules) }} Branches</span>
+ <span class="fb-chip fb-chip--quiet">{{ count($modules) }} modules</span>
  </div>
 
  <div class="fb-panel-body">

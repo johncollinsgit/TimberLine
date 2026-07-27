@@ -60,8 +60,8 @@ return [
         ],
         'preview_flow' => [
             [
-                'title' => 'Meet with Everbranch',
-                'description' => 'Walk through the work your business needs to connect, simplify, or stop losing.',
+                'title' => 'See Everbranch in action',
+                'description' => 'Look at a guided example of customers, work, notes, and next steps living together.',
             ],
             [
                 'title' => 'Share what you need',
@@ -83,8 +83,8 @@ return [
                 'href' => '/shopify/reinstall/retail',
             ],
             'demo' => [
-                'label' => 'Request a walkthrough',
-                'href' => '/platform/contact?intent=walkthrough',
+                'label' => 'See Everbranch in action',
+                'href' => '/platform/demo',
             ],
             'start_client' => [
                 'label' => 'Start as a client',
@@ -301,9 +301,9 @@ return [
                 'summary' => 'A shared customer inbox with 5,000 monthly emails. Additional email is $5 per 1,000.',
             ],
             'order_calendar' => [
-                'name' => 'Workflow Automations',
+                'name' => 'Order Calendar',
                 'price_display' => '+$29/mo',
-                'summary' => 'Tested, configurable workflows that move Asana and ecommerce activity into Google Calendar, with run history, retries, and preserved links.',
+                'summary' => 'Configurable Asana and ecommerce events on Google Calendar, with testing, run history, retries, and preserved event links.',
             ],
             'additional_channels' => [
                 'name' => 'Additional Stores/Channels',
@@ -546,7 +546,7 @@ return [
             'workflow_automations' => [
                 'key' => 'workflow_automations',
                 'module_key' => 'workflow_automations',
-                'title' => 'Workflow Automations',
+                'title' => 'Order Calendar',
                 'description' => 'Turn connected work and orders into configurable Google Calendar events with dependable run history.',
                 'category' => 'marketing',
                 'availability' => 'available',

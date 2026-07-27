@@ -6,7 +6,6 @@ use App\Notifications\WholesaleApplicationReviewNotification;
 use App\Services\Forms\TenantFormSubmissionService;
 use App\Services\Onboarding\CustomerAccessRequestService;
 use App\Services\Onboarding\WholesaleApplicationReviewInboxResolver;
-use App\Services\Operations\OperatorAlertService;
 use App\Services\Shopify\ShopifyWholesaleApplicationCustomerService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use Illuminate\Http\RedirectResponse;
@@ -21,8 +20,7 @@ class PlatformAccessRequestController extends Controller
         Request $request,
         CustomerAccessRequestService $service,
         WholesaleApplicationReviewInboxResolver $reviewInboxResolver,
-        TenantCommercialExperienceService $experienceService,
-        OperatorAlertService $operatorAlerts,
+        TenantCommercialExperienceService $experienceService
     ): RedirectResponse {
         $formOptions = $experienceService->publicAccessRequestOptions();
         $businessTypeKeys = array_keys((array) ($formOptions['business_types'] ?? []));
@@ -68,7 +66,6 @@ class PlatformAccessRequestController extends Controller
         ]);
 
         $this->notifyReviewInbox($requestRecord, $reviewInboxResolver);
-        $this->notifyOperatorOfPlatformRequest($request, $requestRecord, $operatorAlerts);
 
         return redirect()
             ->route('platform.request-submitted', ['intent' => (string) $validated['intent']])
@@ -164,36 +161,6 @@ class PlatformAccessRequestController extends Controller
                 'mail',
                 $reviewInboxResolver->resolve($requestRecord)
             )->notify(new WholesaleApplicationReviewNotification($requestRecord));
-        } catch (Throwable $e) {
-            report($e);
-        }
-    }
-
-    protected function notifyOperatorOfPlatformRequest(
-        Request $request,
-        \App\Models\CustomerAccessRequest $requestRecord,
-        OperatorAlertService $operatorAlerts
-    ): void {
-        try {
-            $requestType = (string) $requestRecord->intent === 'demo'
-                ? 'guided walkthrough'
-                : 'workspace access';
-            $requester = trim((string) ($requestRecord->company ?: $requestRecord->name ?: 'New prospect'));
-
-            $operatorAlerts->notify(
-                'platform_access_request.created',
-                "Everbranch: New {$requestType} request from {$requester}.",
-                [
-                    'dedupe_key' => 'platform-access-request:'.$requestRecord->id,
-                    'target_type' => 'customer_access_request',
-                    'target_id' => (int) $requestRecord->id,
-                    'request_host' => $request->getHost(),
-                    'request_email' => (string) $requestRecord->email,
-                    'request_intent' => (string) $requestRecord->intent,
-                    'request_company' => (string) $requestRecord->company,
-                    'request_name' => (string) $requestRecord->name,
-                ]
-            );
         } catch (Throwable $e) {
             report($e);
         }

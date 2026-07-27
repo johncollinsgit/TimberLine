@@ -3,12 +3,8 @@
 namespace App\Services\Operations;
 
 use App\Models\Agreement;
-use App\Models\CustomerAccessRequest;
-use App\Models\CustomModuleRequest;
 use App\Models\OperatorAlertLog;
-use App\Models\ServiceInquiry;
 use App\Models\Tenant;
-use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantSupportTicket;
 use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Facades\Cache;
@@ -152,59 +148,6 @@ class OperatorAlertService
             }
         }
 
-        if ($targetType === 'customer_access_request' && $targetId !== null) {
-            $accessRequest = CustomerAccessRequest::query()->find($targetId);
-
-            if ($accessRequest instanceof CustomerAccessRequest) {
-                $context['request_email'] ??= $accessRequest->email;
-                $context['request_intent'] ??= $accessRequest->intent;
-                $context['request_company'] ??= $accessRequest->company;
-                $context['request_name'] ??= $accessRequest->name;
-            }
-        }
-
-        if ($targetType === 'service_inquiry' && $targetId !== null) {
-            $inquiry = ServiceInquiry::query()->find($targetId);
-
-            if ($inquiry instanceof ServiceInquiry) {
-                $context['request_email'] ??= $inquiry->email;
-                $context['request_company'] ??= $inquiry->company;
-                $context['request_name'] ??= $inquiry->name;
-            }
-        }
-
-        if ($targetType === 'custom_module_request' && $targetId !== null) {
-            $moduleRequest = CustomModuleRequest::query()
-                ->with(['tenant.accessProfile', 'requester'])
-                ->find($targetId);
-
-            if ($moduleRequest instanceof CustomModuleRequest) {
-                $context['tenant_id'] ??= (int) $moduleRequest->tenant_id;
-                $context['request_title'] ??= $moduleRequest->title;
-                $context['request_email'] ??= $moduleRequest->requester?->email;
-
-                if ($moduleRequest->tenant instanceof Tenant) {
-                    $context = $this->withTenantContext($context, $moduleRequest->tenant);
-                }
-            }
-        }
-
-        if ($targetType === 'tenant_module_access_request' && $targetId !== null) {
-            $moduleAccessRequest = TenantModuleAccessRequest::query()
-                ->with(['tenant.accessProfile', 'requester'])
-                ->find($targetId);
-
-            if ($moduleAccessRequest instanceof TenantModuleAccessRequest) {
-                $context['tenant_id'] ??= (int) $moduleAccessRequest->tenant_id;
-                $context['module_key'] ??= $moduleAccessRequest->module_key;
-                $context['request_email'] ??= $moduleAccessRequest->requester?->email;
-
-                if ($moduleAccessRequest->tenant instanceof Tenant) {
-                    $context = $this->withTenantContext($context, $moduleAccessRequest->tenant);
-                }
-            }
-        }
-
         if (($context['tenant_slug'] ?? null) === null && is_numeric($context['tenant_id'] ?? null)) {
             $tenant = Tenant::query()
                 ->with('accessProfile')
@@ -258,11 +201,6 @@ class OperatorAlertService
         $signerEmail = strtolower(trim((string) ($context['signer_email'] ?? '')));
         if ($signerEmail !== '' && $this->looksLikeTestEmail($signerEmail)) {
             $reasons[] = 'test_signer_email';
-        }
-
-        $requestEmail = strtolower(trim((string) ($context['request_email'] ?? '')));
-        if ($requestEmail !== '' && $this->looksLikeTestEmail($requestEmail)) {
-            $reasons[] = 'test_request_email';
         }
 
         if ($eventKey === 'agreement.accepted') {
@@ -373,11 +311,6 @@ class OperatorAlertService
                 'ticket_priority',
                 'ticket_subject',
                 'ticket_source_type',
-                'request_intent',
-                'request_company',
-                'request_name',
-                'request_title',
-                'module_key',
             ])
             ->filter(fn (mixed $value): bool => $value !== null && $value !== '')
             ->all();

@@ -31,10 +31,6 @@
   $latestRun = $opsAttention['latest_run'] ?? null;
   $shellContext = (string) ($navigationShell['shell_context'] ?? 'tenant');
   $isLandlordShell = $shellContext === 'landlord';
-  $commandSearchEndpoint = $isLandlordShell ? route('landlord.search') : route('app.search');
-  $commandSearchDescription = $isLandlordShell
-      ? 'Search workspaces, setup, plans, modules, requests, and Everbranch Admin destinations.'
-      : 'Search authorized records, modules, actions, and destinations in this workspace.';
   $isNeutralTenantSurface = request()->routeIs('proposals.*', 'billing.*', 'payments.*', 'invoices.*')
       || request()->is('proposals*', 'billing*', 'payments*', 'invoices*');
   $activeTenant = $navigationShell['tenant'] ?? null;
@@ -356,10 +352,9 @@
 
 <div id="mf-toast" role="status" aria-live="polite" class="pointer-events-none fixed left-1/2 top-5 z-50 hidden w-[min(92vw,48rem)] -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white/95 px-5 py-4 text-base font-semibold text-zinc-950 shadow-2xl"></div>
 <x-app-command-palette
-  :search-endpoint="$commandSearchEndpoint"
+  :search-endpoint="route('app.search')"
   :placeholder="$commandPlaceholder"
   :context-label="$workspaceLabel"
-  :description="$commandSearchDescription"
 />
 <script>
   (function () {

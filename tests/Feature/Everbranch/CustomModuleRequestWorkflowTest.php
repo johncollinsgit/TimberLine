@@ -1,12 +1,10 @@
 <?php
 
 use App\Models\CustomModuleRequest;
-use App\Models\OperatorAlertLog;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
-use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
@@ -16,10 +14,9 @@ beforeEach(function (): void {
     config()->set('tenancy.domains.canonical.scheme', 'https');
     config()->set('tenancy.domains.canonical.base_domain', 'theeverbranch.com');
     config()->set('tenancy.domains.canonical.public_host', 'theeverbranch.com');
-    $registeredLandlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'localhost';
-    config()->set('tenancy.domains.canonical.landlord_host', $registeredLandlordHost);
-    config()->set('tenancy.landlord.primary_host', $registeredLandlordHost);
-    config()->set('tenancy.landlord.hosts', [$registeredLandlordHost]);
+    config()->set('tenancy.domains.canonical.landlord_host', 'app.theeverbranch.com');
+    config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
+    config()->set('tenancy.landlord.hosts', ['app.theeverbranch.com']);
     config()->set('tenancy.landlord.operator_roles', ['admin']);
     config()->set('tenancy.landlord.operator_emails', []);
     config()->set('commercial.billing_readiness.checkout_active', false);
@@ -76,20 +73,6 @@ function customRequestPayload(array $overrides = []): array
 test('tenant can submit a custom module request without module or billing activation', function (): void {
     $tenant = customRequestTenant('acme');
     $user = customRequestUser($tenant);
-    $user->forceFill(['email' => 'owner@acmeworks.co'])->save();
-    config()->set('everbranch.operator_alert_sms_enabled', true);
-    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
-
-    $twilio = \Mockery::mock(TwilioSmsService::class);
-    $twilio->shouldReceive('sendSms')
-        ->once()
-        ->with(
-            '15550100101',
-            'Everbranch: Acme requested a Branch — Field photo checklist.',
-            \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
-        )
-        ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
-    app()->instance(TwilioSmsService::class, $twilio);
 
     $this->actingAs($user)
         ->post('http://acme.theeverbranch.com/custom-module-requests?tenant=acme', customRequestPayload([
@@ -104,10 +87,6 @@ test('tenant can submit a custom module request without module or billing activa
         ->and($request->status)->toBe('new')
         ->and($request->reusable_module_interest)->toBeTrue()
         ->and($request->mobile_relevance)->toBe('future_mobile_companion')
-        ->and(OperatorAlertLog::query()
-            ->where('event_key', 'custom_branch_request.created')
-            ->where('target_id', $request->id)
-            ->value('status'))->toBe('sent')
         ->and(TenantModuleEntitlement::query()->where('tenant_id', $tenant->id)->exists())->toBeFalse()
         ->and(config('commercial.billing_readiness.checkout_active'))->toBeFalse()
         ->and(config('commercial.billing_readiness.lifecycle_mutations_enabled'))->toBeFalse();
@@ -176,14 +155,14 @@ test('landlord admin can view and triage all custom module requests', function (
     ]);
 
     $this->actingAs($admin)
-        ->get(route('landlord.custom-module-requests.index'))
+        ->get('http://app.theeverbranch.com/landlord/custom-module-requests')
         ->assertOk()
         ->assertSeeText('Quote calculator')
         ->assertSeeText('Client communication portal')
         ->assertSeeText('Status updates do not create modules');
 
     $this->actingAs($admin)
-        ->post(route('landlord.custom-module-requests.update', ['customModuleRequest' => $request]), [
+        ->post("http://app.theeverbranch.com/landlord/custom-module-requests/{$request->id}", [
             'status' => 'needs_discovery',
             'next_action' => 'Schedule discovery call.',
             'landlord_notes' => 'Ask about field crew workflow.',
@@ -205,7 +184,7 @@ test('non landlord user cannot access landlord custom request triage', function 
     $user = customRequestUser($tenant);
 
     $this->actingAs($user)
-        ->get(route('landlord.custom-module-requests.index'))
+        ->get('http://app.theeverbranch.com/landlord/custom-module-requests')
         ->assertForbidden();
 });
 
@@ -255,7 +234,7 @@ test('mobile relevance and terminal statuses are labels only', function (): void
     ]);
 
     $this->actingAs($admin)
-        ->post(route('landlord.custom-module-requests.update', ['customModuleRequest' => $request]), [
+        ->post("http://app.theeverbranch.com/landlord/custom-module-requests/{$request->id}", [
             'status' => 'converted_to_reusable_module',
             'next_action' => 'Document reusable idea; no module is created by this status.',
             'landlord_notes' => 'Planning label only.',

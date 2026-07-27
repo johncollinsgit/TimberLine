@@ -93,16 +93,6 @@ class UnifiedAppNavigationService
                 'current' => $marketingCurrent,
                 'children' => $marketingChildren,
             ];
-
-            if ($tenantId !== null && Route::has('marketing.modules')) {
-                $items[] = [
-                    'key' => 'branches',
-                    'icon' => 'squares-2x2',
-                    'href' => route('marketing.modules'),
-                    'label' => 'Branches',
-                    'current' => request()->routeIs('marketing.modules*'),
-                ];
-            }
         }
 
         if (($canAccessOps || $roleCanAccessMarketing) && $workflowAutomationsEnabled && Route::has('workflows.index')) {
@@ -110,7 +100,7 @@ class UnifiedAppNavigationService
                 'key' => 'workflow-automations',
                 'icon' => 'bolt',
                 'href' => route('workflows.index'),
-                'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Workflow Automations'),
+                'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Order Calendar'),
                 'current' => request()->routeIs('workflows.*'),
             ];
         }
@@ -673,11 +663,15 @@ class UnifiedAppNavigationService
     protected function marketingNavigationChildren(bool $includeFeatures, bool $includeBirthdays): array
     {
         $items = collect(MarketingSectionRegistry::sections())
-            ->reject(fn (array $section, string $key): bool => $key === 'modules')
+            ->reject(fn (array $section, string $key): bool => $key === 'modules' && ! $includeFeatures)
             ->map(function (array $section, string $key): array {
+                $label = $key === 'modules'
+                    ? 'Features'
+                    : (string) $section['label'];
+
                 return [
                     'key' => $key,
-                    'label' => (string) $section['label'],
+                    'label' => $label,
                     'href' => route($section['route']),
                     'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
                 ];

@@ -1,6 +1,5 @@
 @php
     $sourcePage = (string) ($sourcePage ?? 'everbranch_contact');
-    $submitLabel = (string) ($submitLabel ?? 'Send message');
 @endphp
 
 <form method="POST" action="{{ route('evergrove.inquiries.store') }}" class="fb-contact-form">
@@ -47,5 +46,5 @@
         <input name="current_tools" type="text" value="{{ old('current_tools') }}" class="fb-input" placeholder="Texts, email, spreadsheets, Shopify, QuickBooks..." />
     </label>
 
-    <button type="submit" class="fb-btn fb-btn-primary">{{ $submitLabel }}</button>
+    <button type="submit" class="fb-btn fb-btn-primary">Send message</button>
 </form>

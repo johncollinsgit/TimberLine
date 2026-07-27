@@ -26,7 +26,6 @@ use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
 use App\Http\Controllers\Landlord\LandlordDeveloperDashboardController;
 use App\Http\Controllers\Landlord\LandlordDirectInvoiceController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
-use App\Http\Controllers\Landlord\LandlordSearchController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordSupportTicketController;
@@ -249,8 +248,6 @@ $landlordHosts = array_values(array_unique(array_filter($landlordHosts, static f
 $landlordRoutes = static function (): void {
     Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
         ->name('dashboard');
-    Route::get('/landlord/search', LandlordSearchController::class)
-        ->name('search');
     Route::post('/landlord/operator-costs', [LandlordTenantDirectoryController::class, 'storeRecurringCost'])
         ->name('operator-costs.store');
     Route::get('/landlord/transactions', [LandlordTransactionController::class, 'index'])
@@ -476,10 +473,6 @@ Route::get('/platform/request-submitted', [PlatformProductPagesController::class
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
 Route::post('/platform/access-request', [PlatformAccessRequestController::class, 'store'])->name('platform.access-request');
 Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalogFeed'])->name('platform.catalog.feed');
-Route::get('/explore/modules', [PlatformProductPagesController::class, 'moduleExplorer'])->name('platform.modules.explore');
-Route::get('/explore/modules/{module}', [PlatformProductPagesController::class, 'moduleExplorer'])
-    ->where('module', '[A-Za-z0-9_-]+')
-    ->name('platform.modules.show');
 Route::get('/.well-known/brand-discovery.json', [BrandDiscoveryController::class, 'wellKnown'])->name('discovery.well-known.brand');
 Route::get('/api/public/discovery/brand/{tenant}', [BrandDiscoveryController::class, 'byTenant'])->name('discovery.public.brand');
 Route::get('/api/public/discovery/structured/{tenant?}', [BrandDiscoveryController::class, 'structured'])->name('discovery.public.structured');
