@@ -55,4 +55,9 @@ class TenantSite extends Model
     {
         return $this->hasMany(TenantSiteMedia::class);
     }
+
+    public function domains(): HasMany
+    {
+        return $this->hasMany(TenantSiteDomain::class);
+    }
 }

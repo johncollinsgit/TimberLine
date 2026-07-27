@@ -54,12 +54,29 @@ site's published-version pointer and cache keys; rollback repoints to a prior
 published snapshot. Neither operation destroys drafts, versions, tenant forms,
 or unrelated data.
 
-Initial public URLs use `<workspace>.theeverbranch.com`. The managed-site host
-resolver runs only after existing landlord, authenticated app, Modern Forestry
-Shopify app, Shopify Checkout, customer-account, webhook, and established
-public route ownership has been resolved. Unknown, inactive, and unverified
-hosts fail closed. Custom domains are deferred until the subdomain pilot and a
-separate DNS/TLS operating review pass.
+Initial public URLs use `<workspace>.theeverbranch.com`. The canonical
+`theeverbranch.com` host is platform-only and must never render a tenant
+Website, including a flagship tenant Website; this is enforced independently
+at the root route and the public fallback. The managed-site host resolver runs
+only after existing landlord, authenticated app, Modern Forestry Shopify app,
+Shopify Checkout, customer-account, webhook, and established public route
+ownership has been resolved. Unknown, inactive, and unverified hosts fail
+closed.
+
+Custom domains are tenant-owned `tenant_site_domains` records. The Website
+wizard accepts a normalized hostname, creates a unique encrypted TXT proof at
+`_everbranch-verify.<hostname>`, verifies that proof from DNS, and records the
+check/audit event without storing registrar credentials. DNS verification is
+not activation: a hostname resolves only after it is verified, the Website is
+published, the custom-domain global gate, tenant allowlist, and separate
+activation gate are all enabled, and the external DNS/TLS routing runbook has
+passed. Disabling an active record is a host-local rollback and preserves all
+immutable content and non-Website data.
+
+An external custom hostname is a public-render/form host only. It must never
+serve the Everbranch app, authentication, landlord, API, Shopify, webhook, or
+workspace namespaces and must use a host-local session rather than the
+`.theeverbranch.com` application cookie.
 
 ## Rollout controls
 

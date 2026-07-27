@@ -19,6 +19,10 @@ tenant allowlisting, publishing and host-isolation checks, and the documented
 rollback drill pass. Modern Forestry's separate Shopify app and Shopify
 Checkout are deliberately excluded: no routes, credentials, checkout,
 customers, orders, webhooks, rewards, or existing connections may change.
+`theeverbranch.com` is always the Everbranch platform site, not a tenant
+Website address. Customer custom domains use a separate verification and
+activation flow and remain disabled until their tenant and public-host gates
+are explicitly enabled.
 Read `docs/architecture/managed-website-architecture.md` and the paired
 operations/rollback runbooks before implementing or operating the feature.
 

@@ -30,6 +30,18 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   authenticated, no-store draft-preview route whose internal destinations are
   server-resolved to the current tenant site and whose toolbar returns only to
   the matching editor page.
+- `theeverbranch.com` is platform-only. Never allow the canonical public host
+  to fall through to `host_tenant`, a flagship tenant, or a Managed Website
+  renderer. This is a permanent regression boundary: a tenant's published
+  Website may render only on its approved tenant subdomain or an explicitly
+  active `tenant_site_domains` hostname.
+- Customer domain setup stores only a tenant-owned hostname and encrypted
+  one-time DNS proof. It must use independent global, tenant, and activation
+  gates; DNS ownership verification alone never activates a public host. Do
+  not store registrar credentials or change unrelated DNS records.
+- An active custom Website hostname is public-render/form-only. It must not
+  become a second app, login, landlord, API, Shopify, webhook, or workspace
+  origin, and it must not share the `.theeverbranch.com` application session.
 - V1 forms create only tenant-scoped submissions. Do not create customers,
   send messages, modify marketing audiences, trigger workflows, or process
   Shopify/Square/Stripe/booking orders. Existing app, checkout, customer

@@ -42,6 +42,25 @@ Shopify app, existing checkout, customer records, or provider connections.
    changes without logging page form payloads, tokens, credentials, or checkout
    data.
 
+## Custom-domain pilot
+
+1. Confirm the site is already a tested, published non-Modern-Forestry pilot
+   and that the canonical Everbranch public home still renders the platform
+   page, not the pilot theme.
+2. Enable only the custom-domain global gate and that tenant's allowlist. The
+   separate activation gate stays off while the customer completes the Website
+   wizard's TXT ownership proof.
+3. Give the customer the generated `_everbranch-verify.<domain>` TXT name and
+   `everbranch-site=<token>` value. Never collect a registrar password or
+   replace existing MX, SPF, DKIM, or unrelated website records.
+4. Verify the TXT record using the wizard, then complete the DNS, edge/TLS,
+   and origin-host acceptance checks from the release record. Confirm the host
+   returns only the intended tenant's immutable published snapshot.
+5. Enable the one-time activation gate only for the reviewed cutover, activate
+   the domain, smoke desktop/mobile, lead form, `/up`, `/ready`, landlord,
+   normal tenant access, and the protected Modern Forestry Shopify/account/
+   checkout paths. Disable the activation gate again after the pilot.
+
 ## Escalation
 
 For a suspected host, isolation, or content-security issue, follow

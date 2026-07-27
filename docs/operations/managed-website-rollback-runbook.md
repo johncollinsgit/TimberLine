@@ -24,6 +24,11 @@ tenant data during an incident.
    the neutral maintenance response only there; do not alter the app, landlord,
    Modern Forestry Shopify app, Shopify Checkout, customer-account, webhook,
    or other public host behavior.
+5. For a custom-domain-only incident, disable that `tenant_site_domains`
+   record first. This takes only the affected external hostname offline and
+   leaves the immutable published snapshot available on its Everbranch
+   subdomain. Do not delete the domain proof, page versions, forms, or DNS
+   records while investigating.
 
 ## Recovery decision
 

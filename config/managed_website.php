@@ -22,6 +22,12 @@ return [
     'publishing_enabled' => $bool('MANAGED_WEBSITE_PUBLISHING_ENABLED'),
     'public_render_enabled' => $bool('MANAGED_WEBSITE_PUBLIC_RENDER_ENABLED'),
     'editor_tenant_ids' => $tenantIds('MANAGED_WEBSITE_EDITOR_TENANT_IDS'),
+    // Custom domains are a separate public-host gate. They are deliberately
+    // opt-in per tenant and never turn a DNS record into a live site by itself.
+    'custom_domains_enabled' => $bool('MANAGED_WEBSITE_CUSTOM_DOMAINS_ENABLED'),
+    'custom_domain_activation_enabled' => $bool('MANAGED_WEBSITE_CUSTOM_DOMAIN_ACTIVATION_ENABLED'),
+    'custom_domain_tenant_ids' => $tenantIds('MANAGED_WEBSITE_CUSTOM_DOMAIN_TENANT_IDS'),
+    'custom_domain_target' => trim((string) env('MANAGED_WEBSITE_CUSTOM_DOMAIN_TARGET', '')),
     // Commerce is a distinct, tenant-owned lane. Its webhooks and checkout
     // fail closed until the global gate, tenant entitlement, Connect readiness,
     // tax decision, and dedicated endpoint secret are all present.
