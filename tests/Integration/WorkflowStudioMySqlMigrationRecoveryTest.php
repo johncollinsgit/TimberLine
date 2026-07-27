@@ -98,3 +98,65 @@ it('runs cleanly and recovers the partial workflow studio migration on mysql', f
         ->and(Schema::hasTable('automation_workflow_domain_events'))
         ->toBeTrue();
 });
+
+it('recovers Website Commerce after MySQL retains a partial reservation table', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    foreach (['website_stripe_webhook_events', 'website_fulfillments', 'website_payments', 'website_inventory_reservations', 'website_order_lines', 'website_orders', 'website_cart_items', 'website_carts', 'website_inventory_movements', 'website_product_variants', 'website_products', 'website_customer_addresses', 'website_customers'] as $table) {
+        Schema::dropIfExists($table);
+    }
+
+    if (! Schema::hasTable('tenants')) {
+        Schema::create('tenants', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (! Schema::hasTable('users')) {
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (! Schema::hasTable('tenant_sites')) {
+        Schema::create('tenant_sites', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    $commerce = require database_path('migrations/2026_07_27_180000_create_website_commerce_tables.php');
+    $repair = require database_path('migrations/2026_07_27_181000_repair_partial_website_commerce_schema.php');
+
+    $commerce->up();
+
+    // Recreate the exact shape left by the failed production candidate: the
+    // table exists, but its two trailing FKs and supporting indexes do not.
+    Schema::table('website_inventory_reservations', function (Blueprint $table): void {
+        $table->dropForeign('website_reservations_variant_fk');
+        $table->dropForeign('website_reservations_order_fk');
+    });
+
+    Schema::table('website_inventory_reservations', function (Blueprint $table): void {
+        $table->dropUnique('website_reservation_order_variant_uq');
+        $table->dropIndex('website_reservation_variant_status_idx');
+    });
+
+    $commerce->up();
+    $repair->up();
+
+    expect(Schema::hasTable('website_stripe_webhook_events'))->toBeTrue()
+        ->and(Schema::hasIndex('website_inventory_reservations', 'website_reservation_order_variant_uq'))->toBeTrue()
+        ->and(Schema::hasIndex('website_inventory_reservations', 'website_reservation_variant_status_idx'))->toBeTrue()
+        ->and(DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('CONSTRAINT_SCHEMA', DB::getDatabaseName())
+            ->where('TABLE_NAME', 'website_inventory_reservations')
+            ->where('CONSTRAINT_NAME', 'website_reservations_variant_fk')
+            ->exists())->toBeTrue()
+        ->and(DB::table('information_schema.TABLE_CONSTRAINTS')
+            ->where('CONSTRAINT_SCHEMA', DB::getDatabaseName())
+            ->where('TABLE_NAME', 'website_inventory_reservations')
+            ->where('CONSTRAINT_NAME', 'website_reservations_order_fk')
+            ->exists())->toBeTrue();
+});
