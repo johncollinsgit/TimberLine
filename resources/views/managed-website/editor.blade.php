@@ -22,6 +22,7 @@
             'id' => $item->id,
             'title' => $item->title,
             'slug' => $item->slug,
+            'url' => route('managed-website.editor', ['page' => $item]),
         ])->values();
         $editorSite = [
             'name' => data_get($site->settings, 'theme_name', $tenant->brandProfile?->display_name ?: $tenant->name),

@@ -12,6 +12,7 @@
 <body>
 <header class="shell top"><a class="brand" href="/">@if(data_get($site->settings, 'theme_key') === 'collins-electric')<img src="/brand/kits/collins-upstate-electric/collins-lockup-navy.svg" alt="Collins Upstate Electric" style="display:block;height:38px;width:auto">@else{{ $tenant->brandProfile?->display_name ?: $tenant->name }}@endif</a><nav class="nav">@foreach($site->pages->where('is_navigation_visible', true)->whereNotNull('published_version_id') as $navigation)<a href="{{ $navigation->slug === '/' ? '/' : '/'.$navigation->slug }}">{{ $navigation->title }}</a>@endforeach<a href="{{ route('managed-website.store.index') }}">Shop</a></nav></header>
 @foreach((array) $version->blocks as $block)
+    @continue(data_get($block, 'hidden') === 'true')
     @php($type = (string) data_get($block, 'type'))
     <section class="{{ $type === 'hero' ? 'hero' : 'block' }}"><div class="shell @if($type === 'contact_form') card @endif">
         @if($type === 'contact_form')

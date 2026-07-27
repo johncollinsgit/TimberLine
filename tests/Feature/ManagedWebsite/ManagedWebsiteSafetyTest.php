@@ -107,3 +107,22 @@ test('pending billing never opens the editor even when a tenant is allowlisted',
 
     expect(app(ManagedWebsiteService::class)->editorEnabledFor($tenant))->toBeFalse();
 });
+
+test('starter themes produce distinct safe drafts and hidden sections stay out of a public snapshot', function (): void {
+    $tenant = managedWebsiteTenant('theme-pilot');
+    $actor = managedWebsiteActor($tenant);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $home = $site->pages()->where('slug', '/')->firstOrFail();
+
+    $service->applyTheme($site, 'hvac-service', $actor);
+    $hvac = $home->fresh()->draftVersion->blocks;
+    $service->applyTheme($site, 'outdoor-elements', $actor);
+    $outdoor = $home->fresh()->draftVersion->blocks;
+
+    expect(collect($hvac)->pluck('heading')->implode(' '))->toContain('help')
+        ->and(collect($outdoor)->pluck('heading')->implode(' '))->toContain('outdoor')
+        ->and($hvac)->not->toEqual($outdoor)
+        ->and($service->sanitizeBlocks([['type' => 'text', 'heading' => 'Private draft', 'hidden' => 'true']]))
+        ->toBe([['type' => 'text', 'heading' => 'Private draft', 'hidden' => 'true']]);
+});
