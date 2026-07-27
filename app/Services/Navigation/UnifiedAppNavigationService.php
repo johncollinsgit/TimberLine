@@ -55,7 +55,7 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'accounting_command_center'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'managed_website', 'accounting_command_center'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
@@ -63,6 +63,7 @@ class UnifiedAppNavigationService
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
+        $managedWebsiteEnabled = $this->moduleStateEnabled($moduleStates['managed_website'] ?? null);
         $accountingEnabled = $this->moduleStateEnabled($moduleStates['accounting_command_center'] ?? null);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
@@ -112,6 +113,16 @@ class UnifiedAppNavigationService
                 'href' => route('workflows.index'),
                 'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Workflow Automations'),
                 'current' => request()->routeIs('workflows.*'),
+            ];
+        }
+
+        if (($canAccessOps || $roleCanAccessMarketing) && $managedWebsiteEnabled && Route::has('managed-website.index')) {
+            $items[] = [
+                'key' => 'managed-website',
+                'icon' => 'globe-alt',
+                'href' => route('managed-website.index'),
+                'label' => 'Website',
+                'current' => request()->routeIs('managed-website.*'),
             ];
         }
 

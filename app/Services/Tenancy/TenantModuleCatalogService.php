@@ -386,6 +386,12 @@ class TenantModuleCatalogService
     public function activateModuleForTenant(int $tenantId, string $moduleKey, ?int $actorId = null, string $source = 'tenant_app_store'): array
     {
         $normalizedModuleKey = $this->canonicalModuleKey($moduleKey);
+        if ($normalizedModuleKey === 'managed_website' && ! (bool) config('managed_website.commerce_enabled', false)) {
+            return [
+                'ok' => false,
+                'message' => 'Managed Website purchase is temporarily paused while the rollout gate is closed.',
+            ];
+        }
         try {
             $validatedAction = $this->validateSelfServeModuleAction($tenantId, $normalizedModuleKey, 'activate');
         } catch (ValidationException $exception) {
@@ -599,6 +605,10 @@ class TenantModuleCatalogService
         $visible = [];
         foreach ((array) config('module_catalog.modules', []) as $moduleKey => $definition) {
             if (! is_array($definition)) {
+                continue;
+            }
+
+            if ($moduleKey === 'managed_website' && ! (bool) config('managed_website.commerce_enabled', false)) {
                 continue;
             }
 

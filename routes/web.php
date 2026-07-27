@@ -59,6 +59,7 @@ use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\SesWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
+use App\Http\Controllers\ManagedWebsiteController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
 use App\Http\Controllers\Onboarding\CustomerStartHereController;
 use App\Http\Controllers\Onboarding\FirstLoginWorkspaceController;
@@ -143,6 +144,7 @@ use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
+use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
@@ -182,7 +184,8 @@ Route::get('/', function (
     TenantDisplayLabelResolver $displayLabelResolver,
     PlatformProductPagesController $platformPagesController,
     TenantCommercialExperienceService $experienceService,
-    ModernForestryAlphaBootstrapService $alphaBootstrapService
+    ModernForestryAlphaBootstrapService $alphaBootstrapService,
+    ManagedWebsiteService $managedWebsites
 ) use ($evergrovePublicHosts, $normalizeHost) {
     if ($contextService->hasPageContext($request)) {
         return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService, $alphaBootstrapService);
@@ -191,6 +194,15 @@ Route::get('/', function (
     $requestHost = $normalizeHost($request->getHost()) ?? '';
     if ($requestHost !== '' && in_array($requestHost, $evergrovePublicHosts, true)) {
         return $evergroveController->home();
+    }
+
+    // A managed site is opt-in, published-only, and gated independently from
+    // tenant host resolution. This does not alter Modern Forestry's Shopify app
+    // or Checkout routes because those remain explicit routes and no site exists
+    // without a separately entitled, rollout-approved workspace.
+    $hostTenant = $request->attributes->get('host_tenant');
+    if ($hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
+        return app(ManagedWebsiteController::class)->showPublic($request, '', $managedWebsites);
     }
 
     if (auth()->check()) {
@@ -622,6 +634,10 @@ Route::get('/workspace-brand-assets/{profile}/{slot}', [TenantBrandController::c
     ->whereIn('slot', ['light_logo', 'dark_logo', 'icon'])
     ->name('tenant.brand.assets.show');
 
+Route::post('/website/forms/{page}', [ManagedWebsiteController::class, 'submitForm'])
+    ->middleware('throttle:6,1')
+    ->name('managed-website.forms.submit');
+
 Route::prefix('signup/classes/{tenant:slug}')
     ->name('public.classes.')
     ->middleware('throttle:60,1')
@@ -634,6 +650,18 @@ Route::prefix('signup/classes/{tenant:slug}')
     });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:managed_website'])
+        ->prefix('website')
+        ->name('managed-website.')
+        ->group(function (): void {
+            Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
+            Route::post('/', [ManagedWebsiteController::class, 'create'])->name('create');
+            Route::post('/pages', [ManagedWebsiteController::class, 'storePage'])->name('pages.store');
+            Route::put('/pages/{page}', [ManagedWebsiteController::class, 'savePage'])->name('pages.update');
+            Route::post('/publish', [ManagedWebsiteController::class, 'publish'])->name('publish');
+            Route::post('/pages/{page}/versions/{version}/rollback', [ManagedWebsiteController::class, 'rollback'])->name('pages.rollback');
+        });
 
     Route::middleware(['tenant.access', 'role:admin'])->prefix('workspace/brand')->name('tenant.brand.')->group(function (): void {
         Route::get('/', [TenantBrandController::class, 'edit'])->name('edit');
@@ -2076,3 +2104,7 @@ Route::middleware('signed')
     ->name('rewards.policy.exports.signed');
 
 require __DIR__.'/settings.php';
+
+Route::fallback(function (Request $request, ManagedWebsiteController $controller, ManagedWebsiteService $websites) {
+    return $controller->showPublic($request, $request->path(), $websites);
+});
