@@ -282,6 +282,10 @@
   commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
+- **Default delivery:** completed scoped features merge to `main` and deploy
+  through the protected GitHub/Forge path unless John requests review-only
+  handling, a release gate fails, or a customer-data/isolation concern requires
+  an explicit hold. This never permits a direct or gate-bypassing release.
 - **Optimized CI posture:** pull requests run changed-file Pint plus one cached,
   parallel PHP 8.4 build/test gate, and superseded runs cancel automatically.
   PHP 8.5 compatibility runs nightly and whenever dependency/runtime inputs
