@@ -2161,7 +2161,10 @@ require __DIR__.'/settings.php';
 // Shopify, checkout, webhook, and workspace route has had precedence. A
 // Laravel fallback avoids turning unrelated unknown methods into a 405 while
 // keeping custom-domain rendering strictly host-scoped.
-Route::fallback(function (Request $request, ManagedWebsiteService $managedWebsites) {
+// Laravel's Route::fallback helper is GET-only. Marking this all-method route
+// as a fallback preserves final-route precedence while allowing non-GET/HEAD
+// misses to return the required 404 instead of a framework 405.
+Route::any('/{managedWebsiteFallbackPath}', function (Request $request, ManagedWebsiteService $managedWebsites) {
     if ((! $request->isMethod('GET') && ! $request->isMethod('HEAD')) || $request->expectsJson()) {
         abort(404);
     }
@@ -2178,4 +2181,6 @@ Route::fallback(function (Request $request, ManagedWebsiteService $managedWebsit
     abort_unless($payload !== null, 404);
 
     return view('managed-website.public', $payload + ['tenant' => $context->tenant]);
-})->name('managed-website.public.fallback');
+})->where('managedWebsiteFallbackPath', '.*')
+    ->fallback()
+    ->name('managed-website.public.fallback');
