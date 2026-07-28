@@ -22,11 +22,12 @@
   workspace namespaces return 404 there rather than becoming alternate app
   origins.
 - Published child pages on an active custom domain use Laravel's final
-  fallback only after all explicit routes have precedence. It accepts GET/HEAD
+  fallback only after all explicit routes have precedence. It renders GET/HEAD
   only, requires `managed_website_custom_domain` host context, and resolves an
-  exact immutable tenant page; unknown paths, JSON requests, and non-GET/HEAD
-  requests return 404. This avoids the former global GET catch-all, which
-  could shadow later application routes and turn unrelated POSTs into 405s.
+  exact immutable tenant page; unknown paths and JSON requests return 404,
+  while a real route with the wrong method retains 405. This avoids the former
+  global GET catch-all, which could shadow later application routes and turn
+  unrelated POSTs into 405s.
 
 ## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
 

@@ -156,6 +156,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 $normalizeHost = static function (mixed $value): ?string {
     $host = strtolower(trim((string) $value));
@@ -2165,7 +2166,21 @@ require __DIR__.'/settings.php';
 // as a fallback preserves final-route precedence while allowing non-GET/HEAD
 // misses to return the required 404 instead of a framework 405.
 Route::any('/{managedWebsiteFallbackPath}', function (Request $request, ManagedWebsiteService $managedWebsites) {
-    if ((! $request->isMethod('GET') && ! $request->isMethod('HEAD')) || $request->expectsJson()) {
+    if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
+        // Preserve a real route's normal 405 contract. Unknown paths match
+        // only this final fallback and deliberately become a normal 404.
+        $getProbe = $request->duplicate();
+        $getProbe->setMethod('GET');
+        $getRoute = app('router')->getRoutes()->match($getProbe);
+
+        if (! $getRoute->isFallback) {
+            throw new MethodNotAllowedHttpException($getRoute->methods());
+        }
+
+        abort(404);
+    }
+
+    if ($request->expectsJson()) {
         abort(404);
     }
 

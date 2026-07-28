@@ -58,13 +58,14 @@ Initial public URLs use `<workspace>.theeverbranch.com`. The canonical
 `theeverbranch.com` host is platform-only and must never render a tenant
 Website, including a flagship tenant Website; this is enforced independently
 at the root route and the final custom-domain-only fallback. That fallback
-accepts only GET/HEAD requests whose resolved host context is an active
+renders only GET/HEAD requests whose resolved host context is an active
 `managed_website_custom_domain`; it renders only an exact immutable published
-page. The managed-site host resolver runs only after existing landlord,
-authenticated app, Modern Forestry Shopify app, Shopify Checkout,
-customer-account, webhook, and established public route ownership has been
-resolved. Unknown, inactive, unverified, JSON, and non-GET/HEAD requests fail
-closed with 404.
+page. It receives other methods solely to return 404 for unknown paths while
+preserving 405 for a real route with the wrong method. The managed-site host
+resolver runs only after existing landlord, authenticated app, Modern Forestry
+Shopify app, Shopify Checkout, customer-account, webhook, and established
+public route ownership has been resolved. Unknown, inactive, unverified, and
+JSON requests fail closed with 404.
 
 Custom domains are tenant-owned `tenant_site_domains` records. The Website
 wizard accepts a normalized hostname, creates a unique encrypted TXT proof at
