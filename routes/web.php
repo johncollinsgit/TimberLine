@@ -140,6 +140,7 @@ use App\Livewire\Shipping\Orders as ShippingOrders;
 use App\Models\Blend;
 use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
+use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
@@ -2155,3 +2156,20 @@ Route::middleware('signed')
     ->name('rewards.policy.exports.signed');
 
 require __DIR__.'/settings.php';
+
+// Public child pages on a verified custom Website domain are resolved only
+// after every explicit platform, Shopify, checkout, and workspace route has
+// had precedence. The domain service performs the exact active-domain lookup,
+// so an arbitrary Host header can never turn this catch-all into a tenant
+// route on the Everbranch platform.
+Route::get('/{managedWebsitePath}', function (
+    Request $request,
+    string $managedWebsitePath,
+    ManagedWebsiteDomainService $managedWebsiteDomains,
+    ManagedWebsiteService $managedWebsites
+) {
+    $tenant = $managedWebsiteDomains->tenantForActiveHost((string) $request->getHost());
+    abort_unless($tenant instanceof \App\Models\Tenant, 404);
+
+    return app(ManagedWebsiteController::class)->showPublic($request, $managedWebsitePath, $managedWebsites);
+})->where('managedWebsitePath', '.*')->name('managed-website.public.page');

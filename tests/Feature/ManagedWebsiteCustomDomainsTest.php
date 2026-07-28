@@ -85,6 +85,41 @@ test('only an active custom domain resolves a public tenant host', function (): 
     $this->get('https://collinselectricsc.com/login')->assertNotFound();
 });
 
+test('an active custom domain renders its published child pages without becoming a platform catch-all', function (): void {
+    [$tenant, $actor, $site] = customDomainPilot();
+    $page = TenantSitePage::query()->create([
+        'tenant_id' => $tenant->id,
+        'tenant_site_id' => $site->id,
+        'slug' => 'residential',
+        'page_type' => 'standard',
+        'title' => 'Residential electrical services',
+        'is_navigation_visible' => true,
+    ]);
+    $version = TenantSitePageVersion::query()->create([
+        'tenant_id' => $tenant->id,
+        'tenant_site_id' => $site->id,
+        'tenant_site_page_id' => $page->id,
+        'version_number' => 1,
+        'status' => 'published',
+        'title' => 'Residential electrical services',
+        'blocks' => [['type' => 'hero', 'heading' => 'Residential electrical services']],
+        'seo' => [],
+        'published_at' => now(),
+    ]);
+    $page->forceFill(['published_version_id' => $version->id])->save();
+
+    $domain = app(ManagedWebsiteDomainService::class)->request($site, 'collinselectricsc.com', $actor);
+    $domain->forceFill(['status' => 'verified', 'verified_at' => now()])->save();
+    app(ManagedWebsiteDomainService::class)->activate($domain, $actor);
+
+    $this->get('https://collinselectricsc.com/residential')
+        ->assertOk()
+        ->assertSeeText('Residential electrical services');
+
+    $this->get('https://collinselectricsc.com/not-a-page')->assertNotFound();
+    $this->get('https://theeverbranch.com/residential')->assertNotFound();
+});
+
 test('the everbranch public home cannot render a published modern forestry website', function (): void {
     customDomainPilot('Modern Forestry', 'modern-forestry');
 
