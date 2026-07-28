@@ -7,10 +7,12 @@ the canonical module catalog marks it as purchasable but default-disabled, the
 tenant has verified/audited entitlement fulfilment, the tenant is deliberately
 on the rollout allowlist, and all four rollback controls are operable.
 
-The public-render gate controls registration of the public-site fallback at
-application boot. Change it only through a normal Forge release/config reload;
-never use a broad production cache clear as a substitute for a controlled
-release.
+The public-render gate controls whether the final custom-domain-only fallback
+may render a published site. The fallback itself remains registered so unknown
+application requests retain Laravel's normal 404 behavior rather than becoming
+405 responses. Change the gate only through a normal Forge release/config
+reload; never use a broad production cache clear as a substitute for a
+controlled release.
 
 Do not enable Modern Forestry as the first pilot or infer access from its
 Shopify app, existing checkout, customer records, or provider connections.

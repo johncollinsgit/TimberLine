@@ -140,7 +140,6 @@ use App\Livewire\Shipping\Orders as ShippingOrders;
 use App\Models\Blend;
 use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
-use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
@@ -151,6 +150,7 @@ use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
+use App\Support\Tenancy\HostTenantContext;
 use App\Support\Wiki\WikiRepository;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
@@ -2157,19 +2157,25 @@ Route::middleware('signed')
 
 require __DIR__.'/settings.php';
 
-// Public child pages on a verified custom Website domain are resolved only
-// after every explicit platform, Shopify, checkout, and workspace route has
-// had precedence. The domain service performs the exact active-domain lookup,
-// so an arbitrary Host header can never turn this catch-all into a tenant
-// route on the Everbranch platform.
-Route::get('/{managedWebsitePath}', function (
-    Request $request,
-    string $managedWebsitePath,
-    ManagedWebsiteDomainService $managedWebsiteDomains,
-    ManagedWebsiteService $managedWebsites
-) {
-    $tenant = $managedWebsiteDomains->tenantForActiveHost((string) $request->getHost());
-    abort_unless($tenant instanceof \App\Models\Tenant, 404);
+// Published customer pages are resolved only after every explicit platform,
+// Shopify, checkout, webhook, and workspace route has had precedence. A
+// Laravel fallback avoids turning unrelated unknown methods into a 405 while
+// keeping custom-domain rendering strictly host-scoped.
+Route::fallback(function (Request $request, ManagedWebsiteService $managedWebsites) {
+    if ((! $request->isMethod('GET') && ! $request->isMethod('HEAD')) || $request->expectsJson()) {
+        abort(404);
+    }
 
-    return app(ManagedWebsiteController::class)->showPublic($request, $managedWebsitePath, $managedWebsites);
-})->where('managedWebsitePath', '.*')->name('managed-website.public.page');
+    $context = $request->attributes->get('host_tenant_context');
+    abort_unless(
+        $context instanceof HostTenantContext
+        && $context->strategy === 'managed_website_custom_domain'
+        && $context->tenant instanceof \App\Models\Tenant,
+        404,
+    );
+
+    $payload = $managedWebsites->publicPage($context->tenant, $request->path());
+    abort_unless($payload !== null, 404);
+
+    return view('managed-website.public', $payload + ['tenant' => $context->tenant]);
+})->name('managed-website.public.fallback');

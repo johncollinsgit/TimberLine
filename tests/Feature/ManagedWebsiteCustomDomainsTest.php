@@ -59,6 +59,32 @@ function customDomainPilot(string $name = 'Domain Pilot', string $slug = 'domain
     return [$tenant, $actor, $site->fresh()];
 }
 
+function publishedCustomDomainPage(Tenant $tenant, TenantSite $site, string $slug, string $title): TenantSitePage
+{
+    $page = TenantSitePage::query()->create([
+        'tenant_id' => $tenant->id,
+        'tenant_site_id' => $site->id,
+        'slug' => $slug,
+        'page_type' => 'standard',
+        'title' => $title,
+        'is_navigation_visible' => true,
+    ]);
+    $version = TenantSitePageVersion::query()->create([
+        'tenant_id' => $tenant->id,
+        'tenant_site_id' => $site->id,
+        'tenant_site_page_id' => $page->id,
+        'version_number' => 1,
+        'status' => 'published',
+        'title' => $title,
+        'blocks' => [['type' => 'hero', 'heading' => $title]],
+        'seo' => [],
+        'published_at' => now(),
+    ]);
+    $page->forceFill(['published_version_id' => $version->id])->save();
+
+    return $page;
+}
+
 test('a custom domain stays pending until verified and is bound to one site', function (): void {
     [, $actor, $site] = customDomainPilot();
     $service = app(ManagedWebsiteDomainService::class);
@@ -87,26 +113,8 @@ test('only an active custom domain resolves a public tenant host', function (): 
 
 test('an active custom domain renders its published child pages without becoming a platform catch-all', function (): void {
     [$tenant, $actor, $site] = customDomainPilot();
-    $page = TenantSitePage::query()->create([
-        'tenant_id' => $tenant->id,
-        'tenant_site_id' => $site->id,
-        'slug' => 'residential',
-        'page_type' => 'standard',
-        'title' => 'Residential electrical services',
-        'is_navigation_visible' => true,
-    ]);
-    $version = TenantSitePageVersion::query()->create([
-        'tenant_id' => $tenant->id,
-        'tenant_site_id' => $site->id,
-        'tenant_site_page_id' => $page->id,
-        'version_number' => 1,
-        'status' => 'published',
-        'title' => 'Residential electrical services',
-        'blocks' => [['type' => 'hero', 'heading' => 'Residential electrical services']],
-        'seo' => [],
-        'published_at' => now(),
-    ]);
-    $page->forceFill(['published_version_id' => $version->id])->save();
+    publishedCustomDomainPage($tenant, $site, 'residential', 'Residential electrical services');
+    publishedCustomDomainPage($tenant, $site, 'api', 'Never a platform API page');
 
     $domain = app(ManagedWebsiteDomainService::class)->request($site, 'collinselectricsc.com', $actor);
     $domain->forceFill(['status' => 'verified', 'verified_at' => now()])->save();
@@ -117,7 +125,42 @@ test('an active custom domain renders its published child pages without becoming
         ->assertSeeText('Residential electrical services');
 
     $this->get('https://collinselectricsc.com/not-a-page')->assertNotFound();
+    $this->post('https://collinselectricsc.com/not-a-page')->assertNotFound();
+    $this->withHeaders(['Accept' => 'application/json'])
+        ->get('https://collinselectricsc.com/residential')
+        ->assertNotFound();
+    $this->get('https://collinselectricsc.com/api')->assertNotFound();
+    $this->get('https://collinselectricsc.com/login')->assertNotFound();
     $this->get('https://theeverbranch.com/residential')->assertNotFound();
+});
+
+test('active custom domains resolve only their own immutable published pages', function (): void {
+    [$firstTenant, $firstActor, $firstSite] = customDomainPilot('First Electrical', 'first-electrical');
+    [$secondTenant, $secondActor, $secondSite] = customDomainPilot('Second Electrical', 'second-electrical');
+    config()->set('managed_website.custom_domain_tenant_ids', [$firstTenant->id, $secondTenant->id]);
+
+    publishedCustomDomainPage($firstTenant, $firstSite, 'residential', 'First tenant residential service');
+    publishedCustomDomainPage($secondTenant, $secondSite, 'residential', 'Second tenant residential service');
+
+    $domains = app(ManagedWebsiteDomainService::class);
+    foreach ([
+        [$firstSite, 'first-electric.example', $firstActor],
+        [$secondSite, 'second-electric.example', $secondActor],
+    ] as [$site, $hostname, $actor]) {
+        $domain = $domains->request($site, $hostname, $actor);
+        $domain->forceFill(['status' => 'verified', 'verified_at' => now()])->save();
+        $domains->activate($domain, $actor);
+    }
+
+    $this->get('https://first-electric.example/residential')
+        ->assertOk()
+        ->assertSeeText('First tenant residential service')
+        ->assertDontSeeText('Second tenant residential service');
+    $this->get('https://second-electric.example/residential')
+        ->assertOk()
+        ->assertSeeText('Second tenant residential service')
+        ->assertDontSeeText('First tenant residential service');
+    $this->get('https://unknown-electric.example/residential')->assertNotFound();
 });
 
 test('the everbranch public home cannot render a published modern forestry website', function (): void {
