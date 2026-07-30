@@ -1,6 +1,20 @@
 # Shopify Product Options Branch
 
-Status: implemented for the Modern Forestry tenant as a Shopify-only Everbranch module.
+Status: implemented as a Shopify-only Everbranch module, initially entitled
+for the Modern Forestry tenant.
+
+## Capability classification
+
+- Classification: reusable Shopify-only Everbranch module.
+- Tenant scope: rulesets, assignments, installed stores, and product metafield
+  writes resolve through the current tenant.
+- Entitlement/billing: the existing `shopify_product_options` entitlement is
+  required; Modern Forestry's current entitlement is included.
+- Canonical contracts: `TenantModuleAccessResolver`, `ShopifyStore`,
+  `ShopifyProductOptionsService`, signed app-proxy resolution, Shopify
+  line-item properties, and Shopify Functions.
+- Non-Forestry use: any entitled Shopify tenant can configure rulesets and
+  assigned product handles without code changes.
 
 ## Purpose
 
@@ -24,11 +38,32 @@ The storefront block writes the selections as Shopify line-item properties. Exis
 ## Storefront surface
 
 - Theme app extension block: `Everbranch scent options`
+- Active theme app embed: automatically mounts the same option UI on assigned
+  product pages, protecting stores where the optional product block was never
+  placed.
 - App proxy request: `/apps/forestry/product-options`
 - Backing route: `/shopify/marketing/v1/product-options`
 - Cart properties: `properties[Scent 1]`, `properties[Scent 2]`, and so on.
 
-Add the app block to the product template after deploying the Shopify app extension. Rulesets with no matching product handle stay hidden on the storefront.
+The optional product block controls exact template placement. If it is absent,
+the active app embed moves the option UI into the visible product form before
+its Add to cart / accelerated checkout controls. Rulesets with no matching
+product handle stay hidden on the storefront.
+
+## Checkout enforcement
+
+- `everbranch-bundle-scent-validation` is a Cart and Checkout Validation
+  Shopify Function. Shopify runs it for cart, standard checkout, Shop Pay,
+  PayPal, Google Pay, Apple Pay, and other express checkout paths.
+- Each assigned product stores its tenant-owned rule in the JSON metafield
+  `everbranch.bundle_scent_rule`. Ruleset saves synchronize the selection
+  count, distinct-value requirement, enabled state, and allowed values.
+- The initial migrated handles are also compiled into the Function as a
+  rollout fallback so the known bundles fail closed before their first
+  metafield backfill.
+- Preview/backfill with
+  `php artisan shopify:sync-product-option-validation --tenant-id={id}` and
+  add `--apply` only when the target tenant/store has been verified.
 
 ## Initial Infinite Options migration
 
@@ -52,10 +87,14 @@ The Modern Forestry mobile product-detail API reads the same assigned ruleset. E
 
 The locally stored `retail` OAuth token belongs to the retired `modernforestry-test.myshopify.com` shop and returns HTTP 404. The live `modernforestry.myshopify.com` store returns HTTP 401 for that token, confirming that the app must be reauthorized against the live store before Admin API product discovery can run.
 
-After the web app and Shopify extension are deployed:
+After the web app and Shopify extensions are deployed:
 
 1. Open `/shopify/reinstall/retail` and complete OAuth for `modernforestry.myshopify.com`.
 2. Open Everbranch from Shopify Admin and select `Product Options`.
 3. Paste or confirm the product handles for the five unassigned rulesets.
-4. Add the `Everbranch scent options` app block to the relevant product template(s).
-5. Test a bundle add-to-cart and confirm `Scent 1...N` appear on the Shopify cart line and order.
+4. Activate the Everbranch bundle scent validation in Shopify Checkout rules.
+5. Run the product-metafield backfill for the verified tenant.
+6. Optionally add the `Everbranch scent options` block to relevant product
+   templates for explicit placement; the active app embed is the fallback.
+7. Test Add to cart and Shop Pay. Confirm missing scents are blocked and
+   `Scent 1...N` appear on the Shopify cart line and order after selection.

@@ -46,7 +46,14 @@
       return;
     }
 
+    if (form.dataset.everbranchProductOptionsAttached === 'true') {
+      root.remove();
+      return;
+    }
+    form.dataset.everbranchProductOptionsAttached = 'true';
+
     if (!form.id) form.id = 'everbranch-product-form-' + Math.random().toString(36).slice(2, 10);
+    placeInsideProductForm(root, form);
 
     const count = Math.max(1, Number(ruleset.option_count || 1));
     const values = Array.isArray(ruleset.allowed_values) ? ruleset.allowed_values.filter(Boolean) : [];
@@ -112,34 +119,86 @@
     error.setAttribute('aria-live', 'polite');
     root.appendChild(error);
 
-    form.addEventListener('submit', function (event) {
+    function validate(event) {
       error.hidden = true;
       error.textContent = '';
 
       const missing = selects.find((select) => !select.value);
       if (missing) {
-        event.preventDefault();
+        blockEvent(event);
         error.textContent = 'Choose all ' + count + ' scent' + (count === 1 ? '' : 's') + ' before adding this bundle.';
         error.hidden = false;
         missing.focus();
-        return;
+        return false;
       }
 
       if (ruleset.require_distinct_values) {
         const chosen = selects.map((select) => select.value);
         if (new Set(chosen).size !== chosen.length) {
-          event.preventDefault();
+          blockEvent(event);
           error.textContent = 'Choose a different scent for each item in this bundle.';
           error.hidden = false;
           selects[0].focus();
+          return false;
         }
+      }
+
+      return true;
+    }
+
+    form.addEventListener('submit', validate, true);
+    form.addEventListener('click', function (event) {
+      if (isCheckoutControl(event.target)) {
+        validate(event);
       }
     }, true);
   }
 
   function findProductForm(root) {
-    return root.closest('form[action*="/cart/add"]')
-      || document.querySelector('form[action*="/cart/add"]');
+    const closest = root.closest('form[action*="/cart/add"]');
+    if (closest) return closest;
+
+    const forms = Array.from(document.querySelectorAll('form[action*="/cart/add"]'))
+      .filter((form) => form.querySelector('[name="id"]'));
+
+    return forms.find((form) => form.getClientRects().length > 0)
+      || forms[0]
+      || null;
+  }
+
+  function placeInsideProductForm(root, form) {
+    if (root.closest('form') === form) return;
+
+    const anchor = form.querySelector(
+      '.product-form__buttons, .product-form__payment-container, .shopify-payment-button, shopify-accelerated-checkout, button[type="submit"], input[type="submit"]'
+    );
+
+    if (anchor) {
+      let insertionPoint = anchor;
+      while (insertionPoint.parentElement && insertionPoint.parentElement !== form) {
+        insertionPoint = insertionPoint.parentElement;
+      }
+      form.insertBefore(root, insertionPoint);
+    } else {
+      form.appendChild(root);
+    }
+  }
+
+  function isCheckoutControl(target) {
+    if (!(target instanceof Element)) return false;
+
+    return Boolean(target.closest(
+      'button[type="submit"], input[type="submit"], .shopify-payment-button, shopify-accelerated-checkout, [data-shopify="payment-button"]'
+    ));
+  }
+
+  function blockEvent(event) {
+    if (!event) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') {
+      event.stopImmediatePropagation();
+    }
   }
 
   if (document.readyState === 'loading') {

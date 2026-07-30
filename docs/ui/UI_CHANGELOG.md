@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-07-30 — Required bundle scents across Shop Pay
+
+- Assigned Everbranch Product Option rules now render through the active
+  storefront app embed even when the optional product-template block was not
+  placed.
+- Bundle scent selectors sit inside the actual product form, and both ordinary
+  Add to cart and accelerated checkout controls show the same inline error and
+  stop until every required scent is selected.
+- Shopify checkout validation independently blocks Shop Pay and other express
+  checkout paths when an assigned bundle reaches checkout without its required
+  scent properties.
+
 ## 2026-07-27 — Website custom-domain wizard
 
 - The Website overview now has a plain-language address wizard for customers

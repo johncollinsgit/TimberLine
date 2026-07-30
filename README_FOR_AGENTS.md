@@ -2,6 +2,18 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Shopify bundle option checkout rule (2026-07-30)
+
+- Required bundle scent choices need both layers: the theme app extension
+  collects `Scent 1...N`, while the
+  `everbranch-bundle-scent-validation` Shopify Function blocks standard and
+  express checkout when they are missing.
+- Keep Product Options tenant-scoped. Ruleset assignment changes must
+  synchronize `everbranch.bundle_scent_rule` on the assigned Shopify product;
+  use `shopify:sync-product-option-validation` for previewed backfills.
+- Do not rely only on product-form submit events. Shop Pay and other accelerated
+  paths require Shopify's server-side Cart and Checkout Validation Function.
+
 ## Managed Website guardrails (approved contract; not yet enabled)
 
 - `managed_website` must remain default-disabled and use
