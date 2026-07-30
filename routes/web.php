@@ -269,10 +269,16 @@ $landlordRoutes = static function (): void {
         ->name('onboarding.prospects.index');
     Route::post('/landlord/onboarding', [LandlordProspectOnboardingController::class, 'store'])
         ->name('onboarding.prospects.store');
+    Route::post('/landlord/onboarding/discovery', [LandlordProspectOnboardingController::class, 'discover'])
+        ->name('onboarding.prospects.discovery.store');
     Route::patch('/landlord/onboarding/{prospect}', [LandlordProspectOnboardingController::class, 'update'])
         ->name('onboarding.prospects.update');
+    Route::post('/landlord/onboarding/{prospect}/drafts', [LandlordProspectOnboardingController::class, 'createOutreachDraft'])
+        ->name('onboarding.prospects.drafts.store');
     Route::post('/landlord/onboarding/{prospect}/communications', [LandlordProspectOnboardingController::class, 'storeCommunication'])
         ->name('onboarding.prospects.communications.store');
+    Route::patch('/landlord/onboarding/{prospect}/communications/{communication}/sent', [LandlordProspectOnboardingController::class, 'markCommunicationSent'])
+        ->name('onboarding.prospects.communications.sent');
     Route::get('/landlord/onboarding-export.csv', [LandlordProspectOnboardingController::class, 'export'])
         ->name('onboarding.prospects.export');
     Route::post('/landlord/onboarding/setup-status/{tenant}', [LandlordOnboardingJourneyDiagnosticsController::class, 'updateSetupStatus'])

@@ -4,6 +4,10 @@ namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
 use App\Models\LandlordProspect;
+use App\Models\LandlordProspectCommunication;
+use App\Models\LandlordProspectDiscoveryRun;
+use App\Services\Landlord\LandlordProspectDiscoveryService;
+use App\Services\Landlord\LandlordProspectOutreachTemplateService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,6 +25,7 @@ class LandlordProspectOnboardingController extends Controller
             'status' => strtolower(trim((string) $request->query('status', 'all'))),
             'trade' => trim((string) $request->query('trade', 'all')),
             'county' => trim((string) $request->query('county', 'all')),
+            'website' => trim((string) $request->query('website', 'all')),
         ];
 
         $prospects = $this->filteredQuery($filters)
@@ -50,16 +55,79 @@ class LandlordProspectOnboardingController extends Controller
             'statusOptions' => $this->statusOptions(),
             'tradeOptions' => LandlordProspect::query()->whereNotNull('trade')->distinct()->orderBy('trade')->pluck('trade'),
             'countyOptions' => LandlordProspect::query()->whereNotNull('county')->distinct()->orderBy('county')->pluck('county'),
+            'outreachTemplateOptions' => app(LandlordProspectOutreachTemplateService::class)->options(),
+            'outreachCadence' => (array) config('landlord_prospecting.cadence', []),
+            'prospectingPhoto' => (array) config('landlord_prospecting.photo', []),
+            'discoveryConfigured' => trim((string) config('services.google_places.api_key')) !== '',
+            'estimatedDiscoveryCost' => (float) config('services.google_places.estimated_cost_per_request', 0.032),
+            'recentDiscoveryRuns' => LandlordProspectDiscoveryRun::query()->latest()->limit(5)->get(),
             'metrics' => [
                 'total' => LandlordProspect::query()->count(),
                 'draft_ready' => (int) ($statusCounts['draft_ready'] ?? 0),
                 'replied' => (int) ($statusCounts['replied'] ?? 0),
                 'meetings' => (int) ($statusCounts['meeting_scheduled'] ?? 0),
                 'converted' => (int) ($statusCounts['converted'] ?? 0),
+                'website_missing' => LandlordProspect::query()->whereIn('website_status', ['missing_verified', 'missing_unverified'])->count(),
+                'follow_up_due' => LandlordProspect::query()
+                    ->whereNotIn('status', ['converted', 'not_fit', 'unsubscribed'])
+                    ->whereNotNull('next_follow_up_at')
+                    ->where('next_follow_up_at', '<=', now())
+                    ->count(),
                 'launch_partner_spots_open' => 8,
                 'launch_partner_spots_total' => 10,
             ],
         ]);
+    }
+
+    public function discover(
+        Request $request,
+        LandlordProspectDiscoveryService $discoveryService,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'trade' => ['required', 'string', 'max:80'],
+            'search_region' => ['required', 'string', 'max:160'],
+            'website_preference' => ['required', 'string', 'in:missing_only,all'],
+            'maximum_results' => ['required', 'integer', 'min:1', 'max:20'],
+            'confirm_cost' => ['accepted'],
+        ]);
+
+        try {
+            $run = $discoveryService->discover(
+                trade: trim((string) $validated['trade']),
+                searchRegion: trim((string) $validated['search_region']),
+                websitePreference: (string) $validated['website_preference'],
+                maximumResults: (int) $validated['maximum_results'],
+                actorUserId: $request->user()?->id
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'discovery' => 'Discovery did not complete. No existing prospect stages were changed. '.$exception->getMessage(),
+            ])->withInput();
+        }
+
+        $auditService->record(
+            tenantId: null,
+            actorUserId: $request->user()?->id,
+            actionType: 'landlord_prospect_discovery_completed',
+            targetType: 'landlord_prospect_discovery_run',
+            targetId: (int) $run->id,
+            result: [
+                'query' => $run->search_query,
+                'created' => $run->results_created,
+                'duplicates' => $run->duplicates_suppressed,
+                'website_missing' => $run->website_missing_count,
+                'actual_api_cost' => $run->actual_api_cost,
+            ]
+        );
+
+        return back()->with(
+            'status',
+            "Discovery reviewed {$run->results_discovered} Maps results and added {$run->results_created} prospects. "
+                ."{$run->website_missing_count} had no website URL in the Places response."
+        );
     }
 
     public function store(
@@ -175,6 +243,78 @@ class LandlordProspectOnboardingController extends Controller
         return back()->with('status', 'Communication added to the prospect timeline.');
     }
 
+    public function createOutreachDraft(
+        Request $request,
+        LandlordProspect $prospect,
+        LandlordProspectOutreachTemplateService $templateService,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'template' => ['required', 'string', 'in:'.implode(',', array_keys($templateService->options()))],
+        ]);
+        $draft = $templateService->draft($prospect, (string) $validated['template']);
+        $communication = $prospect->communications()->create([
+            'direction' => 'outbound',
+            'channel' => 'email',
+            'status' => 'draft',
+            'subject' => $draft['subject'],
+            'body' => $draft['body'],
+            'from_address' => $draft['from_address'],
+            'to_address' => $draft['to_address'],
+            'occurred_at' => now(),
+            'created_by_user_id' => $request->user()?->id,
+        ]);
+
+        if (! in_array($prospect->status, ['contacted', 'replied', 'meeting_scheduled', 'qualified', 'converted'], true)) {
+            $prospect->forceFill(['status' => 'draft_ready'])->save();
+        }
+
+        $auditService->record(
+            tenantId: $prospect->converted_tenant_id,
+            actorUserId: $request->user()?->id,
+            actionType: 'landlord_prospect_outreach_draft_created',
+            targetType: 'landlord_prospect_communication',
+            targetId: (int) $communication->id,
+            context: ['prospect_id' => (int) $prospect->id, 'template' => (string) $validated['template']]
+        );
+
+        return back()->with('status', 'A review-only outreach draft was added to the timeline.');
+    }
+
+    public function markCommunicationSent(
+        Request $request,
+        LandlordProspect $prospect,
+        LandlordProspectCommunication $communication,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
+        abort_unless((int) $communication->landlord_prospect_id === (int) $prospect->id, 404);
+        abort_unless($communication->direction === 'outbound' && $communication->status === 'draft', 422);
+
+        $communication->forceFill([
+            'status' => 'sent',
+            'occurred_at' => now(),
+        ])->save();
+        $prospect->forceFill([
+            'status' => in_array($prospect->status, ['replied', 'meeting_scheduled', 'qualified', 'converted'], true)
+                ? $prospect->status
+                : 'contacted',
+            'last_contacted_at' => $communication->occurred_at,
+            'next_follow_up_at' => $prospect->next_follow_up_at
+                ?? now()->addDays((int) config('landlord_prospecting.default_follow_up_days', 4)),
+        ])->save();
+
+        $auditService->record(
+            tenantId: $prospect->converted_tenant_id,
+            actorUserId: $request->user()?->id,
+            actionType: 'landlord_prospect_outreach_marked_sent',
+            targetType: 'landlord_prospect_communication',
+            targetId: (int) $communication->id,
+            context: ['prospect_id' => (int) $prospect->id]
+        );
+
+        return back()->with('status', 'Draft marked sent and the next follow-up was scheduled.');
+    }
+
     public function export(Request $request): StreamedResponse
     {
         $filters = [
@@ -182,6 +322,7 @@ class LandlordProspectOnboardingController extends Controller
             'status' => strtolower(trim((string) $request->query('status', 'all'))),
             'trade' => trim((string) $request->query('trade', 'all')),
             'county' => trim((string) $request->query('county', 'all')),
+            'website' => trim((string) $request->query('website', 'all')),
         ];
 
         $rows = $this->filteredQuery($filters)
@@ -256,7 +397,9 @@ class LandlordProspectOnboardingController extends Controller
             })
             ->when(($filters['status'] ?? 'all') !== 'all', fn (Builder $query) => $query->where('status', $filters['status']))
             ->when(($filters['trade'] ?? 'all') !== 'all', fn (Builder $query) => $query->where('trade', $filters['trade']))
-            ->when(($filters['county'] ?? 'all') !== 'all', fn (Builder $query) => $query->where('county', $filters['county']));
+            ->when(($filters['county'] ?? 'all') !== 'all', fn (Builder $query) => $query->where('county', $filters['county']))
+            ->when(($filters['website'] ?? 'all') === 'missing', fn (Builder $query) => $query->whereIn('website_status', ['missing_verified', 'missing_unverified']))
+            ->when(($filters['website'] ?? 'all') === 'present', fn (Builder $query) => $query->where('website_status', 'present'));
     }
 
     /**
@@ -265,7 +408,7 @@ class LandlordProspectOnboardingController extends Controller
     protected function statusOptions(): array
     {
         return [
-            'new' => 'New lead',
+            'new' => 'Prospective',
             'draft_ready' => 'Draft ready',
             'contacted' => 'Contacted',
             'replied' => 'Replied',

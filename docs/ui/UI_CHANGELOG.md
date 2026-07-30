@@ -1,5 +1,21 @@
 # UI Changelog
 
+## 2026-07-30 — Landlord Trade Prospecting Workflow
+
+### What Changed
+
+- Expanded the landlord launch-partner sheet into an end-to-end prospect workflow with bounded Google Places discovery, website-presence prioritization, deduplication, cost acknowledgement, current search history, stage management, follow-up dates, interaction logging, outreach drafts, and conversion into the existing tenant flow.
+- Added evidence-informed first-touch, no-website, follow-up, and close-the-loop templates that use real Everbranch field-service capabilities and require operator review before sending.
+- Added a trades-focused Unsplash hero image with visible attribution, public Maps evidence, review counts, no-website verification states, workflow cadence guidance, and direct mail-client handoff.
+- Added three manually reviewed Upstate trade prospects whose current Google Maps result cards had public contact/review evidence but no website link.
+
+### Guardrails
+
+- This is landlord-global internal tooling; it does not use Shopify wholesale tables, tenant messaging data, billing, or entitlements.
+- Google Places searches are limited to one request and 20 results, show estimated cost, and never contact a prospect automatically.
+- A missing Places website URL is a research signal. The UI requires a current Maps recheck before outreach, and manual verification is recorded separately from API discovery.
+- Email drafts open in the operator's mail client and are marked sent explicitly. Cold SMS and autonomous outreach remain unavailable.
+
 ## 2026-07-23 — Reusable Accounting Command Center
 
 ### What Changed

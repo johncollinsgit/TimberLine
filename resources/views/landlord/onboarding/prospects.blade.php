@@ -19,23 +19,26 @@
 
     <div class="space-y-6">
         <section class="overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-950 text-white shadow-sm">
-            <div class="grid gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:p-8">
-                <div>
+            <div class="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,.9fr)]">
+                <div class="p-6 lg:p-8">
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">Evergrove launch partners</p>
-                    <h2 class="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">Turn local conversations into long-term customers.</h2>
+                    <h2 class="mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">Find the right local businesses. Work every next step.</h2>
                     <p class="mt-3 max-w-3xl text-sm leading-6 text-zinc-300">
-                        A focused pipeline for trade businesses in Pickens and Greenville counties. Keep every address, call, note, email, response, appointment, and conversion in one place.
+                        Discover trade businesses, prioritize a strong Google presence with no website, prepare relevant outreach, record every interaction, and carry qualified companies into Everbranch.
                     </p>
                     <div class="mt-5 flex flex-wrap gap-2">
                         <a href="#prospects" class="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-300">View prospect sheet</a>
+                        <a href="#discovery" class="rounded-xl border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Find prospects</a>
                         <a href="{{ route('landlord.onboarding.prospects.export', request()->query()) }}" class="rounded-xl border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Export CSV</a>
-                        <a href="{{ route('landlord.dashboard') }}" class="rounded-xl border border-white/20 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10">Landlord dashboard</a>
                     </div>
                 </div>
-                <div class="min-w-56 rounded-2xl border border-emerald-300/30 bg-emerald-300/10 p-5">
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200">Launch availability</p>
-                    <p class="mt-2 text-4xl font-semibold">{{ $metrics['launch_partner_spots_open'] }}/{{ $metrics['launch_partner_spots_total'] }}</p>
-                    <p class="mt-1 text-sm text-emerald-100">spots currently open</p>
+                <div class="relative min-h-64 overflow-hidden">
+                    <img src="{{ $prospectingPhoto['url'] ?? '' }}" alt="{{ $prospectingPhoto['alt'] ?? 'Construction workers using a tablet' }}" class="absolute inset-0 h-full w-full object-cover" />
+                    <div class="absolute inset-0 bg-gradient-to-r from-zinc-950/70 via-zinc-950/15 to-transparent"></div>
+                    <div class="absolute bottom-4 right-4 rounded-xl bg-zinc-950/75 px-3 py-2 text-right backdrop-blur">
+                        <p class="text-xs font-semibold text-white">{{ $metrics['launch_partner_spots_open'] }}/{{ $metrics['launch_partner_spots_total'] }} launch spots open</p>
+                        <a href="{{ $prospectingPhoto['credit_url'] ?? '#' }}" target="_blank" rel="noopener" class="mt-1 block text-[10px] text-zinc-300 hover:text-white">{{ $prospectingPhoto['credit_label'] ?? 'Unsplash photo' }} ↗</a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -57,10 +60,12 @@
             </div>
         @endif
 
-        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
             @foreach ([
                 ['label' => 'Prospects', 'value' => $metrics['total'], 'copy' => 'in the local pipeline'],
+                ['label' => 'No website', 'value' => $metrics['website_missing'], 'copy' => 'Maps presence to verify'],
                 ['label' => 'Drafts ready', 'value' => $metrics['draft_ready'], 'copy' => 'ready for review'],
+                ['label' => 'Follow-up due', 'value' => $metrics['follow_up_due'], 'copy' => 'need a next touch'],
                 ['label' => 'Replies', 'value' => $metrics['replied'], 'copy' => 'need a response'],
                 ['label' => 'Meetings', 'value' => $metrics['meetings'], 'copy' => 'appointments booked'],
                 ['label' => 'Customers', 'value' => $metrics['converted'], 'copy' => 'converted to tenants'],
@@ -71,6 +76,86 @@
                     <p class="mt-1 text-xs text-zinc-500">{{ $metric['copy'] }}</p>
                 </article>
             @endforeach
+        </section>
+
+        <section id="discovery" class="grid scroll-mt-24 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
+            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Prospect finder</p>
+                        <h3 class="mt-1 text-xl font-semibold text-zinc-950">Search Google Places</h3>
+                        <p class="mt-1 max-w-2xl text-sm leading-6 text-zinc-600">One bounded search, up to 20 results. Exact Google Place matches are deduplicated, and nothing is contacted automatically.</p>
+                    </div>
+                    <span class="rounded-full border px-3 py-1 text-xs font-semibold {{ $discoveryConfigured ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800' }}">
+                        {{ $discoveryConfigured ? 'Places API ready' : 'API key needed' }}
+                    </span>
+                </div>
+
+                <form method="POST" action="{{ route('landlord.onboarding.prospects.discovery.store') }}" class="mt-5 grid gap-3 md:grid-cols-2">
+                    @csrf
+                    <label class="space-y-1 text-xs font-semibold text-zinc-600">
+                        <span>Trade</span>
+                        <input name="trade" required value="{{ old('trade', 'HVAC') }}" placeholder="HVAC, electrical, plumbing…" class="w-full rounded-xl border-zinc-300 text-sm font-normal text-zinc-900" />
+                    </label>
+                    <label class="space-y-1 text-xs font-semibold text-zinc-600">
+                        <span>City, county, or market</span>
+                        <input name="search_region" required value="{{ old('search_region', 'Powdersville, SC') }}" class="w-full rounded-xl border-zinc-300 text-sm font-normal text-zinc-900" />
+                    </label>
+                    <label class="space-y-1 text-xs font-semibold text-zinc-600">
+                        <span>Website priority</span>
+                        <select name="website_preference" class="w-full rounded-xl border-zinc-300 text-sm font-normal text-zinc-900">
+                            <option value="missing_only">Only listings with no website URL</option>
+                            <option value="all">All matching listings</option>
+                        </select>
+                    </label>
+                    <label class="space-y-1 text-xs font-semibold text-zinc-600">
+                        <span>Maximum results</span>
+                        <select name="maximum_results" class="w-full rounded-xl border-zinc-300 text-sm font-normal text-zinc-900">
+                            @foreach ([5, 10, 15, 20] as $maximum)
+                                <option value="{{ $maximum }}" @selected((int) old('maximum_results', 10) === $maximum)>{{ $maximum }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="flex items-start gap-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs leading-5 text-zinc-700 md:col-span-2">
+                        <input name="confirm_cost" type="checkbox" value="1" required class="mt-1 rounded border-zinc-300 text-emerald-700" />
+                        <span>I approve one Places request, estimated at <strong>${{ number_format($estimatedDiscoveryCost, 4) }}</strong>. I will review public evidence before outreach.</span>
+                    </label>
+                    <div class="md:col-span-2">
+                        <button @disabled(! $discoveryConfigured) class="rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-zinc-300">Find prospects</button>
+                    </div>
+                </form>
+
+                @if ($recentDiscoveryRuns->isNotEmpty())
+                    <div class="mt-5 border-t border-zinc-200 pt-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Recent searches</p>
+                        <div class="mt-2 space-y-2">
+                            @foreach ($recentDiscoveryRuns as $run)
+                                <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                                    <span><strong class="text-zinc-900">{{ $run->search_query }}</strong> · {{ \Illuminate\Support\Str::headline($run->status) }}</span>
+                                    <span>{{ $run->results_created }} added · {{ $run->website_missing_count }} no website · ${{ number_format((float) $run->actual_api_cost, 4) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+
+            <div class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Human-approved cadence</p>
+                <h3 class="mt-1 text-xl font-semibold text-zinc-950">A workflow, not a blast</h3>
+                <p class="mt-1 text-sm leading-6 text-zinc-600">Each touch adds context and one useful next step. Stop immediately on a decline or unsubscribe.</p>
+                <ol class="mt-5 space-y-3">
+                    @foreach ($outreachCadence as $step)
+                        <li class="flex gap-3 rounded-2xl border border-zinc-200 p-3">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-semibold text-white">D{{ $step['day'] }}</span>
+                            <div>
+                                <p class="text-sm font-semibold text-zinc-950">{{ $step['label'] }}</p>
+                                <p class="mt-0.5 text-xs text-zinc-500">{{ $step['channel'] }} · create, personalize, approve, log</p>
+                            </div>
+                        </li>
+                    @endforeach
+                </ol>
+            </div>
         </section>
 
         <section class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -153,7 +238,7 @@
                     <p class="text-xs font-semibold text-zinc-500">{{ number_format($prospects->total()) }} matching</p>
                 </div>
 
-                <form method="GET" action="{{ route('landlord.onboarding.prospects.index') }}" class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_180px_200px_auto]">
+                <form method="GET" action="{{ route('landlord.onboarding.prospects.index') }}" class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_160px_160px_180px_170px_auto]">
                     <input name="q" value="{{ $filters['q'] }}" placeholder="Search business, email, phone, or notes" class="rounded-xl border-zinc-300 text-sm" />
                     <select name="status" class="rounded-xl border-zinc-300 text-sm">
                         <option value="all">All stages</option>
@@ -172,6 +257,11 @@
                         @foreach ($countyOptions as $county)
                             <option value="{{ $county }}" @selected($filters['county'] === $county)>{{ $county }}</option>
                         @endforeach
+                    </select>
+                    <select name="website" class="rounded-xl border-zinc-300 text-sm">
+                        <option value="all">Any website status</option>
+                        <option value="missing" @selected($filters['website'] === 'missing')>No website URL</option>
+                        <option value="present" @selected($filters['website'] === 'present')>Website present</option>
                     </select>
                     <button class="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Filter</button>
                 </form>
@@ -204,11 +294,21 @@
                                     <div class="mt-1 text-xs text-zinc-500">{{ $prospect->contact_name ?: 'Contact not identified' }}</div>
                                     @if ($prospect->website)
                                         <a href="{{ $prospect->website }}" target="_blank" rel="noopener" class="mt-2 inline-flex text-xs font-semibold text-zinc-600 hover:text-zinc-950">Website ↗</a>
+                                    @elseif (in_array($prospect->website_status, ['missing_verified', 'missing_unverified'], true))
+                                        <span class="mt-2 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                                            {{ $prospect->website_status === 'missing_verified' ? 'No website · reviewed' : 'No website URL · verify' }}
+                                        </span>
+                                    @endif
+                                    @if ($prospect->google_maps_url)
+                                        <a href="{{ $prospect->google_maps_url }}" target="_blank" rel="noopener" class="mt-2 ml-2 inline-flex text-xs font-semibold text-blue-700 hover:text-blue-900">Maps ↗</a>
                                     @endif
                                 </td>
                                 <td class="px-4 py-4 text-zinc-700">
                                     <div class="font-semibold text-zinc-900">{{ $prospect->trade }}</div>
                                     <div class="mt-1 text-xs text-zinc-500">{{ collect([$prospect->city, $prospect->county ? $prospect->county.' County' : null])->filter()->implode(' · ') }}</div>
+                                    @if ($prospect->google_review_count)
+                                        <div class="mt-2 text-xs text-zinc-500">{{ number_format((float) $prospect->google_rating, 1) }} ★ · {{ number_format((int) $prospect->google_review_count) }} reviews</div>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-4">
                                     @if ($prospect->email)
@@ -262,6 +362,19 @@
                                                 <div class="mt-6 grid gap-6 xl:grid-cols-2">
                                                     <section class="rounded-2xl border border-zinc-200 p-4">
                                                         <h5 class="font-semibold text-zinc-950">Prospect details</h5>
+                                                        @if ($prospect->formatted_address || $prospect->google_maps_url)
+                                                            <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900">
+                                                                <p class="font-semibold">Public discovery evidence</p>
+                                                                <p>{{ $prospect->formatted_address ?: 'Address not returned' }}</p>
+                                                                <p class="mt-1">
+                                                                    {{ $prospect->google_review_count ? number_format((float) $prospect->google_rating, 1).' stars from '.number_format((int) $prospect->google_review_count).' reviews' : 'No review count returned' }}
+                                                                    · {{ $prospect->website_status === 'missing_verified' ? 'website absence manually reviewed' : ($prospect->website_status === 'missing_unverified' ? 'website URL missing; manual review required' : 'website returned') }}
+                                                                </p>
+                                                                @if ($prospect->google_maps_url)
+                                                                    <a href="{{ $prospect->google_maps_url }}" target="_blank" rel="noopener" class="mt-1 inline-flex font-semibold underline">Recheck on Google Maps ↗</a>
+                                                                @endif
+                                                            </div>
+                                                        @endif
                                                         <form method="POST" action="{{ route('landlord.onboarding.prospects.update', $prospect) }}" class="mt-4 grid gap-3 sm:grid-cols-2">
                                                             @csrf
                                                             @method('PATCH')
@@ -312,7 +425,21 @@
                                                     </section>
 
                                                     <section class="rounded-2xl border border-zinc-200 p-4">
-                                                        <h5 class="font-semibold text-zinc-950">Log communication or response</h5>
+                                                        <h5 class="font-semibold text-zinc-950">Prepare and log outreach</h5>
+                                                        <form method="POST" action="{{ route('landlord.onboarding.prospects.drafts.store', $prospect) }}" class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                                                            @csrf
+                                                            <label class="space-y-1 text-xs font-semibold text-emerald-900">
+                                                                <span>Evidence-informed template</span>
+                                                                <select name="template" class="w-full rounded-xl border-emerald-200 bg-white text-sm font-normal text-zinc-900">
+                                                                    @foreach ($outreachTemplateOptions as $value => $label)
+                                                                        <option value="{{ $value }}" @selected($value === ($prospect->website ? 'first_touch' : 'website_gap'))>{{ $label }}</option>
+                                                                    @endforeach
+                                                                </select>
+                                                            </label>
+                                                            <p class="mt-2 text-xs leading-5 text-emerald-900">Creates a review-only draft using public facts and Everbranch’s real field-service capabilities. It does not send.</p>
+                                                            <button class="mt-3 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Create draft</button>
+                                                        </form>
+
                                                         <form method="POST" action="{{ route('landlord.onboarding.prospects.communications.store', $prospect) }}" class="mt-4 grid gap-3 sm:grid-cols-3">
                                                             @csrf
                                                             <label class="space-y-1 text-xs font-semibold text-zinc-600">
@@ -379,6 +506,20 @@
                                                                     <h6 class="mt-3 font-semibold text-zinc-950">{{ $communication->subject }}</h6>
                                                                 @endif
                                                                 <p class="mt-2 whitespace-pre-line text-sm leading-6 text-zinc-700">{{ $communication->body }}</p>
+                                                                @if ($communication->direction === 'outbound' && $communication->channel === 'email' && $communication->status === 'draft')
+                                                                    <div class="mt-4 flex flex-wrap gap-2 border-t border-zinc-200 pt-3">
+                                                                        @if ($prospect->email)
+                                                                            <a href="mailto:{{ $prospect->email }}?subject={{ rawurlencode((string) $communication->subject) }}&body={{ rawurlencode((string) $communication->body) }}" class="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Open in email app</a>
+                                                                        @else
+                                                                            <span class="rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Add a public business email before emailing</span>
+                                                                        @endif
+                                                                        <form method="POST" action="{{ route('landlord.onboarding.prospects.communications.sent', [$prospect, $communication]) }}">
+                                                                            @csrf
+                                                                            @method('PATCH')
+                                                                            <button class="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50">Mark sent + schedule follow-up</button>
+                                                                        </form>
+                                                                    </div>
+                                                                @endif
                                                             </article>
                                                         @empty
                                                             <div class="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-5 text-sm text-zinc-500">No communications logged yet. Gmail drafts can be copied here after review, and replies can be logged as they arrive.</div>
