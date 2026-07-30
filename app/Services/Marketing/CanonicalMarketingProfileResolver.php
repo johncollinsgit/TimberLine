@@ -63,15 +63,37 @@ class CanonicalMarketingProfileResolver
         );
     }
 
-    /** @param Collection<int,MarketingProfile> $profiles */
-    public function oneCanonical(Collection $profiles, int $tenantId): ?MarketingProfile
+    /**
+     * Resolve a tenant-scoped match collection to unique surviving profiles.
+     *
+     * A null result means at least one retained alias could not be resolved
+     * safely because its chain is broken, cyclic, or crosses tenant bounds.
+     *
+     * @param  Collection<int,MarketingProfile>  $profiles
+     * @return Collection<int,MarketingProfile>|null
+     */
+    public function canonicalCollection(Collection $profiles, int $tenantId): ?Collection
     {
         $canonical = $profiles
-            ->map(fn (MarketingProfile $profile): ?MarketingProfile => $this->canonical($profile, $tenantId))
-            ->filter()
+            ->map(fn (MarketingProfile $profile): ?MarketingProfile => $this->canonical($profile, $tenantId));
+
+        if ($canonical->containsStrict(null)) {
+            return null;
+        }
+
+        /** @var Collection<int,MarketingProfile> $survivors */
+        $survivors = $canonical
             ->unique(fn (MarketingProfile $profile): int => (int) $profile->id)
             ->values();
 
-        return $canonical->count() === 1 ? $canonical->first() : null;
+        return $survivors;
+    }
+
+    /** @param Collection<int,MarketingProfile> $profiles */
+    public function oneCanonical(Collection $profiles, int $tenantId): ?MarketingProfile
+    {
+        $canonical = $this->canonicalCollection($profiles, $tenantId);
+
+        return $canonical?->count() === 1 ? $canonical->first() : null;
     }
 }

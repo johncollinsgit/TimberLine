@@ -7,6 +7,7 @@ use App\Models\AutomationWorkflowState;
 use App\Services\Automation\AutomationWorkflowException;
 use App\Services\Automation\CalendarEventPresentationService;
 use App\Services\Automation\Contracts\AutomationWorkflowDriver;
+use App\Services\Automation\V2\CalendarEventParityFingerprint;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -15,7 +16,52 @@ use Illuminate\Support\Facades\Schema;
 
 class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 {
-    public function __construct(protected CalendarEventPresentationService $calendarPresentation) {}
+    public function __construct(
+        protected CalendarEventPresentationService $calendarPresentation,
+        protected CalendarEventParityFingerprint $parityFingerprints,
+    ) {}
+
+    /**
+     * Execute the exact v1 mapping path without provider writes. This is used
+     * only by the guarded v1-to-v2 promotion service.
+     *
+     * @param  array<string,mixed>  $task
+     * @param  array<string,mixed>  $definition
+     * @return array{status:string,semantic_fingerprint?:string,legacy_link_fingerprint?:string}
+     */
+    public function previewMapping(
+        array $task,
+        string $workflowKey,
+        array $definition,
+    ): array {
+        if (
+            (bool) data_get($definition, 'action.skip_completed_tasks', true)
+            && (bool) ($task['completed'] ?? false)
+        ) {
+            return ['status' => 'skipped'];
+        }
+
+        $payload = $this->buildEventPayload(
+            task: $task,
+            workflowKey: $workflowKey,
+            timezone: trim((string) data_get($definition, 'action.timezone', 'America/New_York')),
+            defaultStartTime: trim((string) data_get($definition, 'action.default_start_time', '12:00:00')),
+            defaultDurationMinutes: max(1, (int) data_get($definition, 'action.default_duration_minutes', 60)),
+            presentation: (array) data_get($definition, 'action.presentation', []),
+        );
+        if ($payload === null) {
+            return ['status' => 'skipped'];
+        }
+
+        return [
+            'status' => 'ready',
+            'semantic_fingerprint' => $this->parityFingerprints->hash($payload),
+            'legacy_link_fingerprint' => hash(
+                'sha256',
+                json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+            ),
+        ];
+    }
 
     /**
      * @param  array<string,mixed>  $definition
@@ -77,6 +123,8 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 
         $nextCursor = $modifiedSince;
         $errors = [];
+        $shadowSourceIds = [];
+        $shadowMappings = [];
 
         foreach ($tasks as $task) {
             if (! is_array($task)) {
@@ -96,6 +144,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
 
                 continue;
             }
+            $shadowSourceIds[] = $taskGid;
 
             if ($skipCompleted && (bool) ($task['completed'] ?? false)) {
                 $counts['skipped']++;
@@ -119,6 +168,7 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
             }
 
             $fingerprint = hash('sha256', json_encode($eventPayload, JSON_UNESCAPED_SLASHES));
+            $shadowMappings[] = $taskGid.':'.$fingerprint;
             $link = $this->link($workflowKey, $taskGid, ! $dryRun, $automationWorkflowId);
 
             if (
@@ -169,6 +219,9 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
             }
         }
 
+        sort($shadowSourceIds, SORT_STRING);
+        sort($shadowMappings, SORT_STRING);
+
         return [
             'ok' => $counts['failed'] === 0,
             'status' => $counts['failed'] === 0 ? 'success' : 'partial_failure',
@@ -177,6 +230,12 @@ class AsanaGoogleCalendarWorkflowDriver implements AutomationWorkflowDriver
             'counts' => $counts,
             'dry_run' => $dryRun,
             'dry_run_counts' => $dryRunCounts,
+            'shadow_parity' => $dryRun ? [
+                'source_selection_hash' => hash('sha256', json_encode($shadowSourceIds, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)),
+                'mapping_hash' => hash('sha256', json_encode($shadowMappings, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)),
+                'selected_source_count' => count($shadowSourceIds),
+                'mapped_action_count' => count($shadowMappings),
+            ] : null,
             'errors' => $errors,
         ];
     }

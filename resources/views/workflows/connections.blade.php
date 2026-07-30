@@ -27,17 +27,37 @@
                             @endforelse
                         </div>
                     </div>
-                    @if(in_array($key, ['asana','google_calendar'], true) && $ready)<div class="mt-4 flex flex-wrap gap-2">@if($connected)<form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.test') : route('workflows.connections.google.test') }}">@csrf<button class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-800">Test connection</button></form><form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.disconnect') : route('workflows.connections.google.disconnect') }}" onsubmit="return confirm('Disconnect this account? Active workflows that use it will stop working until reconnected.')">@csrf<button class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-800">Disconnect</button></form><form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.connect') : route('workflows.connections.google.connect') }}">@csrf<button class="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-bold text-zinc-800">Reconnect</button></form>@else<form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.connect') : route('workflows.connections.google.connect') }}">@csrf<button class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-bold text-white">{{ $reconnectRequired ? 'Reconnect' : 'Connect' }} {{ $provider['label'] }}</button></form>@endif</div>
+                    @if(in_array($key, ['asana','google_calendar'], true) && $ready)<div class="mt-4 flex flex-wrap gap-2">@if($connected)<form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.test') : route('workflows.connections.google.test') }}">@csrf<button class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-800">Test connection</button></form><form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.disconnect') : route('workflows.connections.google.disconnect') }}" onsubmit="return confirm('Disconnect this account? Active workflows that use it will stop working until reconnected.')">@csrf<button class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-800">Disconnect</button></form><form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.connect') : route('workflows.connections.google.connect') }}">@csrf<input type="hidden" name="return_path" value="{{ $returnPath ?? route('workflows.connections', absolute: false) }}"><button class="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-bold text-zinc-800">Reconnect</button></form>@else<form method="POST" action="{{ $key === 'asana' ? route('workflows.connections.asana.connect') : route('workflows.connections.google.connect') }}">@csrf<input type="hidden" name="return_path" value="{{ $returnPath ?? route('workflows.connections', absolute: false) }}"><button class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-bold text-white">{{ $reconnectRequired ? 'Reconnect' : 'Connect' }} {{ $provider['label'] }}</button></form>@endif</div>
                     @elseif($ready)
                         <div class="mt-4 space-y-3">
                             @foreach($providerConnections as $providerConnection)
                                 <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3"><div class="text-xs"><strong class="text-zinc-900">{{ $providerConnection->external_account_label ?: $provider['label'].' account' }}</strong><span class="ml-2 text-zinc-500">{{ str($providerConnection->status)->headline() }}</span></div><div class="flex gap-2"><form method="POST" action="{{ route('workflows.connections.commerce.test', [$key, $providerConnection]) }}">@csrf<button class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">Test</button></form><form method="POST" action="{{ route('workflows.connections.commerce.disconnect', [$key, $providerConnection]) }}" onsubmit="return confirm('Disconnect this account and pause workflows that use it?')">@csrf<button class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-800">Disconnect</button></form></div></div>
                             @endforeach
-                            <form method="POST" action="{{ route('workflows.connections.commerce.connect', $key) }}" class="flex flex-col gap-2 sm:flex-row">@csrf @if($key === 'shopify')<label class="sr-only" for="shop-domain">Shopify store domain</label><input id="shop-domain" name="shop_domain" placeholder="store-name.myshopify.com" required class="min-w-0 flex-1 rounded-xl border-zinc-200 bg-zinc-50 text-sm" />@endif<button class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-bold text-white">{{ $connected ? 'Connect another' : 'Connect' }} {{ $provider['label'] }}</button></form>
+                            <form method="POST" action="{{ route('workflows.connections.commerce.connect', $key) }}" class="flex flex-col gap-2 sm:flex-row">@csrf<input type="hidden" name="return_path" value="{{ $returnPath ?? route('workflows.connections', absolute: false) }}"> @if($key === 'shopify')<label class="sr-only" for="shop-domain">Shopify store domain</label><input id="shop-domain" name="shop_domain" placeholder="store-name.myshopify.com" required class="min-w-0 flex-1 rounded-xl border-zinc-200 bg-zinc-50 text-sm" />@endif<button class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-bold text-white">{{ $connected ? 'Connect another' : 'Connect' }} {{ $provider['label'] }}</button></form>
                         </div>
                     @else<p class="mt-4 text-xs leading-5 text-zinc-500">The workflow registry recognizes this provider, but publishing stays fail-closed until Everbranch’s provider app registration and callback are production-ready.</p>@endif
                 </article>
             @endforeach
         </div>
+        @if(($roadmapProviders ?? []) !== [])
+            <section class="rounded-xl border border-zinc-200 bg-white p-5">
+                <div class="flex flex-col gap-1">
+                    <span class="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">Connections roadmap</span>
+                    <h2 class="text-lg font-black text-zinc-950">Not selectable in workflows yet</h2>
+                    <p class="text-sm text-zinc-600">These apps stay outside the step picker until their OAuth scopes, tests, execution, retries, and run history are production-ready.</p>
+                </div>
+                <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                    @foreach($roadmapProviders as $provider)
+                        <article class="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                            <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white text-xs font-black text-zinc-700" aria-hidden="true">{{ strtoupper(substr((string) $provider['label'], 0, 2)) }}</span>
+                            <div>
+                                <strong class="block text-sm text-zinc-950">{{ $provider['label'] }}</strong>
+                                <span class="mt-0.5 block text-xs leading-5 text-zinc-500">{{ $provider['description'] }}</span>
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+            </section>
+        @endif
     </div></div>
 </x-layouts::app>

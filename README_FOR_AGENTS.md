@@ -2,6 +2,74 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Managed Website guardrails (approved contract; not yet enabled)
+
+- `managed_website` must remain default-disabled and use
+  `config/module_catalog.php`, the canonical access resolver, verified/audited
+  fulfilment, and an explicit rollout allowlist. Never infer access from a
+  billing screen, agreement, host, or provider connection.
+- Add only tenant-owned website/site/page/version/section/navigation/media/
+  redirect/publish-event records. Drafts and immutable published snapshots must
+  remain separate; publishing and rollback may update only the relevant site
+  pointer/cache keys.
+- Modern Forestry's separate Shopify app and Shopify Checkout are hard
+  exclusions. Do not alter or call their routes, UI, credentials, app config,
+  checkout, customer account, webhooks, orders, customers, rewards, imports,
+  provider connections, or workflow cursors. Modern Forestry is not a pilot.
+- Retain four independently auditable fail-closed gates: global availability,
+  tenant rollout allowlist, editor/publishing freeze, and Managed Website
+  public-render disablement. The normal rollback preserves the last good
+  snapshot; suspected isolation/security incidents disable only Managed Website
+  hosts and use the rollback runbook.
+- Theme-level settings, navigation, footer, and announcement content belong to
+  immutable `tenant_site_versions`; never allow a draft theme setting to affect
+  a published host. `tenant_site_media` is a public-site-only tenant media
+  library and must never expose job, field-service, customer, or workspace files.
+- Website editor canvas links must never resolve against the Everbranch app
+  root. Canvas clicks select structured controls; customer-link testing uses an
+  authenticated, no-store draft-preview route whose internal destinations are
+  server-resolved to the current tenant site and whose toolbar returns only to
+  the matching editor page.
+- `theeverbranch.com` is platform-only. Never allow the canonical public host
+  to fall through to `host_tenant`, a flagship tenant, or a Managed Website
+  renderer. This is a permanent regression boundary: a tenant's published
+  Website may render only on its approved tenant subdomain or an explicitly
+  active `tenant_site_domains` hostname.
+- Customer domain setup stores only a tenant-owned hostname and encrypted
+  one-time DNS proof. It must use independent global, tenant, and activation
+  gates; DNS ownership verification alone never activates a public host. Do
+  not store registrar credentials or change unrelated DNS records.
+- An active custom Website hostname is public-render/form-only. It must not
+  become a second app, login, landlord, API, Shopify, webhook, or workspace
+  origin, and it must not share the `.theeverbranch.com` application session.
+- V1 forms create only tenant-scoped submissions. Do not create customers,
+  send messages, modify marketing audiences, trigger workflows, or process
+  Shopify/Square/Stripe/booking orders. Existing app, checkout, customer
+  account, webhook, and public route ownership must resolve before website host
+  rendering; unknown hosts fail closed.
+- Required reference: `docs/architecture/managed-website-architecture.md`,
+  `docs/operations/managed-website-operations-runbook.md`, and
+  `docs/operations/managed-website-rollback-runbook.md`.
+
+## Website Commerce isolation rule (2026-07-27)
+
+- Native Website Commerce tables are named `website_*` and are the only data
+  lane for Website catalog, cart, shopper, order, payment, inventory, and
+  fulfillment behavior. Never reuse, join against, backfill, or write to the
+  legacy `orders`/`order_lines` tables or Shopify catalog/customer records.
+- Multi-channel reporting may read normalized, tenant-scoped summaries from
+  independent channels, but it must never merge records or make Website sales
+  a legacy order. `SalesChannelSummaryService` is read-only: Website payments
+  count only after confirmation and provider channels retain their own source
+  of truth, customer records, checkout, and operations.
+- Stripe Connect is the regulated payment processor only. Server-side product
+  snapshots determine checkout amounts; signed, idempotent Website Stripe
+  webhook events determine payment success. No client price, tenant, order, or
+  payment status may be trusted.
+- Website public shopping routes must resolve the tenant from the verified host
+  and published Website snapshot. Admin routes resolve the active tenant with
+  `tenant.access` and the `managed_website` module guard.
+
 ## Accounting Command Center guardrails (2026-07-23)
 
 - Keep `accounting_command_center` reusable and tenant-scoped. Modern Forestry
@@ -42,12 +110,38 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   repeat the pull-request workflow: the production workflow tests the exact
   merge commit in parallel, builds assets, and only then calls Forge. Composer
   and npm downloads are cached and Node installs use `npm ci`.
+- Default delivery preference: when a scoped feature is complete and its
+  protected GitHub checks pass, merge it to `main` and allow the normal Forge
+  release to deploy it. Keep a change on a feature branch only when John asks
+  for review-only handling, a release gate fails, or a customer-data/safety
+  concern requires a deliberate hold. Never bypass the CI/Forge gate.
 - Local verification for a scoped change is
   `composer exec pint -- --dirty --test`, followed by
   `php -d memory_limit=1G ./vendor/bin/pest --parallel --compact`. The parallel
   suite is the supported fast path. Do not bulk-format inherited style debt or
   stage unrelated rewrites. Check Actions at coarse milestones instead of
   continuously polling it; canceled superseded runs are expected.
+
+## Operator Alert SMS Guardrails (2026-07-25)
+
+- Use `App\Services\Operations\OperatorAlertService` for operator SMS alerts.
+  Do not call Twilio directly for landlord/operator texts.
+- Operator texts must describe real production activity. Test fixtures,
+  sandbox-validation agreements, demo/sandbox/test tenants, localhost/`.test`
+  hosts, and test signer emails must be suppressed and logged, not sent.
+- Every caller should pass enough context for suppression and audit:
+  `tenant_id`, `tenant_name`, `tenant_slug`, `target_type`, `target_id`,
+  request host when available, and domain-specific fields such as agreement
+  type/template/title or ticket priority/source.
+- Never add a hardcoded operator or support-alert phone number. Operator live
+  delivery requires `EVERBRANCH_OPERATOR_ALERT_PHONE`; legacy Modern Forestry
+  support-alert routing requires `MODERN_FORESTRY_SUPPORT_ALERT_PHONE` or a
+  tenant-saved support-alert setting. `EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED`
+  may disable texting while preserving `operator_alert_logs` evidence.
+- Preserve pre-send reservation and dedupe. If `operator_alert_logs` cannot be
+  reserved, the safe behavior is no SMS. Repeated identical same-tenant/event
+  alerts should coalesce through
+  `EVERBRANCH_OPERATOR_ALERT_SMS_REPEAT_WINDOW_MINUTES`.
 
 ## Agreement and Billing-Lane Guardrails (2026-07-16)
 
@@ -450,6 +544,17 @@ Strict near-term execution order (current operator rule):
 2. Email reliability fixed for launch-critical reward/customer workflows.
 3. Only then broader platform expansion.
 
+Canonical customer alias invariant:
+- Retained `marketing_profiles` merge aliases are audit records, not separate
+  customer matches.
+- Resolve every tenant-scoped email/phone match through
+  `CanonicalMarketingProfileResolver` before counting matches. Deduplicate
+  aliases that reach the same final survivor, including multi-level chains.
+- Preserve fail-closed review behavior for distinct survivors, broken or cyclic
+  chains, cross-tenant targets, and email/phone conflicts.
+- Storefront identity and review payloads must reference canonical survivors.
+  Do not move, recalculate, or re-import Candle Cash to repair alias ambiguity.
+
 Canonical Candle Cash drift-repair sequence (tenant-scoped, live-safe):
 1. `php artisan marketing:audit-candle-cash-composition --tenant-id=1`
 2. `php artisan marketing:reconcile-candle-cash-balances --tenant-id=1` (preview-only)
@@ -798,6 +903,13 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - `ModernForestryMobileCustomerSessionService` now caches resolved customer identity by token hash for a short TTL clamped to JWT expiry. Preserve that behavior unless you are intentionally changing the auth trust model.
 - Signed-in mobile flows should continue omitting buyer phone in checkout identity and should continue treating Laravel as the canonical profile store after identity resolution.
 - On the client side, the app now kicks Account and Rewards refreshes together. Do not reintroduce a single serialized dashboard bootstrap path unless you also accept slower Rewards first paint.
+
+## Modern Forestry Mobile Customer Login Readiness Rule (2026-07-25)
+
+- The live Headless storefront is a public authorization-code/PKCE client. Production must keep `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`; a Customer Account client secret is optional and must not be inferred as required from Shopify's discovery capability list.
+- `/auth/config`, token exchange, production `/ready`, and `config:doctor --env=production` must agree on that public-client contract. Losing the public client ID must fail deployment readiness instead of shipping a healthy-looking backend with customer login disabled.
+- Customer-login configuration and readiness checks are read-only with respect to `marketing_profiles`, Candle Cash balances/transactions, birthday profiles/rewards, Shopify customers, and identity links.
+
 ## Everbranch Tenant Mobile Rule (2026-07-10)
 
 - `../everbranch-mobile` is the cross-tenant Everbranch app (`com.everbranch.app`) and its canonical remote is the private `johncollinsgit/everbranch-mobile` repository. Do not merge its concerns into the Modern Forestry SwiftUI customer app or its product-catalog APIs.

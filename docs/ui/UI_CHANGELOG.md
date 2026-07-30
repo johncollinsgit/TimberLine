@@ -16,6 +16,244 @@
 - A missing Places website URL is a research signal. The UI requires a current Maps recheck before outreach, and manual verification is recorded separately from API discovery.
 - Email drafts open in the operator's mail client and are marked sent explicitly. Cold SMS and autonomous outreach remain unavailable.
 
+## 2026-07-27 — Website custom-domain wizard
+
+- The Website overview now has a plain-language address wizard for customers
+  who already own a domain: add domain, copy a one-time DNS TXT proof, check
+  connection, and activate only after the published-site and public-host gates
+  pass.
+- The wizard explains that it never asks for registrar credentials or changes
+  unrelated DNS, email, checkout, customer, order, or provider records. Its
+  disable action is a host-only rollback.
+- Corrected a public-host boundary: `theeverbranch.com` is again reserved for
+  Everbranch’s platform site and cannot display a Modern Forestry or any other
+  tenant Website theme.
+
+## 2026-07-27 — Granular Website canvas editing
+
+- Clicking text, a CTA, an image, a card, an FAQ question/answer, announcement,
+  menu label, or footer copy now opens and focuses that exact control in the
+  inspector.
+- Repeated cards, FAQs, and gallery images use a compact item editor so an
+  operator edits one customer-facing element at a time instead of navigating a
+  section-wide form.
+- The canvas remains edit-only: the more granular selections preserve the
+  private preview boundary and do not activate phone, form, or workspace links.
+
+## 2026-07-27 — Leak-free Website editor preview
+
+- The Website canvas is now explicitly an edit surface: clicking visible
+  content, cards, calls to action, menus, announcement, header, or footer
+  opens the matching inspector controls instead of following a customer link.
+- **Preview site** saves the draft and opens an interactive, private full-site
+  preview in a separate tab. Its toolbar returns to the exact editor page.
+- Draft preview navigation now resolves owned Website pages server-side. Home,
+  menus, footer links, announcements, and CTAs cannot fall through to the
+  Everbranch workspace; unknown internal links fail closed, external links are
+  safely new-tabbed, and form/phone/email actions remain inert.
+
+### Safety posture
+
+- The interactive preview is authenticated, no-store, and unframeable; the
+  embedded edit canvas remains same-origin frame-only. Public rendering has no
+  preview toolbar or editor metadata. No commerce, Modern Forestry, Shopify,
+  customer, order, reward, webhook, or connection behavior changes.
+
+## 2026-07-27 — Website preview repair and section library
+
+- The private Website preview now explicitly permits framing by its own
+  authenticated editor while remaining non-cacheable; it no longer inherits a
+  Shopify-only frame policy that left the editor canvas blank.
+- **Add section** is now one clear row that opens a searchable, categorized
+  section library. It replaces the always-visible pill controls with a more
+  scannable editor pattern while keeping the existing structured, safe section
+  catalog.
+
+### Safety posture
+
+- The preview can be framed only by the same Everbranch origin. Thumbnail
+  source pages remain explicitly unframeable. No public snapshot, published
+  site, customer data, checkout, order, or provider connection behavior
+  changes.
+
+## 2026-07-27 — Rich Website themes, real draft preview, and media library
+
+- Website now has a Shopify-familiar three-pane editor: section outline and
+  add picker, real desktop/mobile draft iframe, and an inspector for text,
+  links, visibility, repeated cards/FAQs, images, menus, announcement, footer,
+  palette, typography, and corners.
+- Theme settings and menus save as a private site-level draft and do not alter
+  a published site until Publish. The overview uses a real framed draft preview
+  and theme cards use original starter imagery.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements ship with six
+  starter pages, usable menus, banners, service cards, FAQ, CTA, forms, and
+  mobile behavior. Collins stays draft-only.
+
+## 2026-07-27 — Website editor and starter-theme refinement
+
+### What changed
+
+- The dedicated Website editor now supports page switching, keyboard-save,
+  timed draft autosave, section visibility, safe image fields, and responsive
+  desktop/mobile previews.
+- Applying HVAC Service, Collins Upstate Electric, or Outdoor Elements creates
+  materially different structured starting sections instead of a shared
+  generic homepage.
+- Preview-only controls use the same sanitized structured content saved for the
+  public renderer; hidden sections stay hidden when a page is published.
+
+### Safety posture
+
+- The editor, publishing, commerce, and public-render gates remain disabled by
+  default. This changes no existing Shopify, legacy order, customer, reward,
+  checkout, webhook, or provider-connection behavior.
+
+## 2026-07-27 — Website primary navigation
+
+### What changed
+
+- Entitled workspaces now see **Website** immediately below **Home** in the primary sidebar.
+- Operational, marketing, workflow, and settings ordering stays unchanged for workspaces without Website access.
+
+### Safety posture
+
+- Website remains tenant-entitlement and role gated; this is navigation placement only and does not enable publishing, billing, or public rendering.
+
+## 2026-07-27 — Managed Website design contract (not yet enabled)
+
+### Planned customer experience
+
+- The entitled **Website** workspace will provide a calm, Shopify-familiar
+  structured editor for pages, navigation, brand, leads, responsive preview,
+  draft autosave, publish, and rollback—not an unrestricted page builder.
+- V1 templates cover Home, Services, About, Contact, FAQ, and landing pages;
+  sections are limited to approved hero, text/image, services, testimonial,
+  FAQ, form, and external CTA patterns. Keyboard navigation, visible focus,
+  reduced-motion support, and WCAG AA contrast are required.
+- Native Website Commerce uses its own tenant-owned catalog, cart, order, and
+  Stripe Connect checkout lane. It must never call, migrate, or imply use of
+  an existing Shopify or legacy checkout/order system.
+
+### Safety posture
+
+- The Website navigation item appears only after server-resolved, audited
+  entitlement and rollout access. Disabled, frozen, and unavailable states must
+  be explicit and must not expose an editing or publishing control that can act.
+- A publishing freeze preserves the last published site. A public-render
+  incident response affects Managed Website hosts only; it must not alter the
+  existing Everbranch app or Modern Forestry Shopify app/Checkout experience.
+- Forms create tenant-scoped submissions only. The UI must not promise customer
+  creation, messaging, marketing enrollment, workflow execution, checkout, or
+  order management.
+
+## 2026-07-25 — Product Explorer, Search, and Workflow Naming
+
+### What Changed
+
+- Added a public, read-only Module Explorer with compact scanning, filters,
+  dedicated module URLs, canonical pricing, setup expectations, integrations,
+  dependencies, and guided-meeting calls to action.
+- Guided-meeting calls to action now use the contact inquiry path and do not
+  create an inactive demo user or imply immediate demo access.
+- Added a customer **Branches** destination and clearer included/add-on/upgrade/
+  request language on the workspace home and Branch catalog.
+- Rebuilt the shared command-palette interaction with keyboard navigation,
+  focus containment and restoration, debounced/cancellable requests, recent
+  destinations, and explicit loading, empty, and failure states.
+- Split landlord search onto a dedicated backend coordinator for control-plane
+  workspaces, tickets, requests, catalog definitions, and phrase-based actions
+  such as “add a user” and “see requested Branches.”
+- Renamed the customer product from **Order Calendar** to **Workflow
+  Automations**. **Workflow Studio** remains the builder name; internal
+  identifiers remain stable for compatibility.
+
+### Guardrails
+
+- Public exploration reads only `public_site`-safe canonical module
+  definitions and never needs a tenant or customer record.
+- Landlord search does not instantiate tenant customer, order, task, message,
+  file, workflow, or report providers. Ticket message bodies and attachments
+  are excluded.
+- The existing demo workspace was not changed. Public calls to action request a
+  guided meeting.
+- No entitlement, billing, connection, workflow, or customer-data mutation is
+  performed by browsing or searching.
+
+## 2026-07-25 — Landlord Branches Preview and Alert Safety
+
+### What Changed
+
+- Added a landlord-only **Branches** sidebar item that opens
+  `/landlord/branches`.
+- Built the landlord Branches preview as a read-only operator view of the same
+  customer-facing Branch catalog payload for a selected workspace.
+- Sorted Everbranch Admin sidebar links alphabetically after keeping Home
+  pinned first, so operator navigation scans more predictably.
+- Operator SMS alert behavior now matches real site activity: fake/test/demo
+  events are suppressed and logged instead of texting.
+
+### Guardrails
+
+- The Branches preview does not install Branches, mutate billing, create access
+  requests, change setup state, or grant entitlements.
+- Tenant-facing navigation order and tenant Branch availability did not change.
+- Operator alert suppression is server-side and audited through
+  `operator_alert_logs`; the UI must not imply a text was sent unless the alert
+  log status is `sent`.
+
+## 2026-07-24 — Functional Workflow Studio
+
+### What Changed
+
+- Replaced the template-led workflow screens with a full-height Workflow Studio: software-style header, dotted canvas, insert and reorder controls, selected-step inspector, and operational Workflows/Runs/Connections/Templates navigation.
+- Added a working step picker for the executable launch catalog, grouped mapping selectors for trigger and prior-step outputs, structured Filter/Delay/Paths configuration, Calendar action fields, per-step tests, test runs, autosave conflicts, publishing, pause/resume, and responsive branch outlines.
+- Kept templates as optional executable starters and moved unsupported integrations out of the selectable step library.
+- Made `/workflows/new` an unsaved application state that opens the trigger
+  picker immediately; the first trigger selection creates the draft and moves
+  the browser to its permanent workflow URL.
+- Assigned the immersive editor to the React/TypeScript
+  `resources/js/workflows/*` application and the shared
+  `.eb-workflow-*` stylesheet family. Studio typography is Inter-only, with
+  compact radii, restrained borders, real provider marks, and no decorative
+  emoji or preview-only nodes.
+- Added focus containment and restoration for the picker, keyboard selection,
+  Escape/back behavior, selected-node semantics, live save/test feedback,
+  reduced-motion behavior, and mobile-sized controls.
+- Kept operational pause/resume and held-item actions independent from local
+  draft merging, so a safety action cannot erase an edit waiting to autosave.
+- Added a compatible v1 builder for entitled workspaces outside the Studio
+  rollout and a controlled read-only state for v2 workflows whose rollout is
+  later disabled.
+
+### Guardrails
+
+- The Studio remains behind the existing workflow entitlement, role, tenant, connection, and OAuth protections.
+- Only registry components with executable handlers appear as usable steps; drafts use stable ULIDs and schema-v2 typed values without arbitrary code evaluation.
+- Published schema-v1 workflows keep their existing runtime until the separate parity migration is approved.
+- Individual step tests rebuild a real trigger sample after reload and dry-run
+  only mapped upstream dependencies; empty sample shells cannot create a false
+  test result.
+- Publish stays disabled until every Paths branch contains an action, matching
+  the server compiler's readiness rule.
+- The server remains authoritative for optimistic draft revisions, tenant-owned
+  connections, step tests, publish readiness, execution state, retries, and run
+  history. The UI does not claim that an action worked until the corresponding
+  API result does.
+
+## 2026-07-23 — Workflow Builder and Step Library Redesign
+
+### What Changed
+
+- Replaced the oversized workflow-template card gallery with a compact three-pane browser: availability/provider filters, scannable template rows, and a trigger-to-action preview.
+- Reworked the workflow editor into a denser dotted canvas with compact step nodes, a stable setup inspector, and restrained status/actions.
+- Added a visible building-block rail and step picker for triggers, actions, flow controls, and utilities. Existing executable app steps open their current configuration fields; Filter, Delay, Paths, Loop, Formatter, Webhook, and Schedule are clearly labeled as upcoming engine capabilities.
+
+### Guardrails
+
+- Existing workflow templates, tenant connections, tests, publishing, scheduling, and module entitlement contracts remain canonical and unchanged.
+- The interface does not present unfinished flow controls or utilities as executable. Connector previews remain visibly distinct from currently available templates.
+- The redesign is shared and tenant-neutral; no Modern Forestry-specific language or behavior was introduced.
+
 ## 2026-07-23 — Reusable Accounting Command Center
 
 ### What Changed
@@ -1851,3 +2089,23 @@
 - Live checkout defaults off and is tenant-allowlisted.
 - Acceptance alone creates no charge, pending ACH is not treated as paid, and implementation-only payments cannot change module access.
 - Tax collection, Relay payout verification, webhook signing, and production credentials remain explicit launch blockers.
+# 2026-07-27 — Website theme manager, separate live editor, and native commerce
+
+- Replaced the inline Website draft form with an Online Store-style theme
+  overview, active desktop/mobile theme preview, three starter themes, and
+  direct Website data links.
+- Added a separate full-screen live Website editor with section outline,
+  drag reorder, insertion, inspector, autosave, undo/redo, device preview, and
+  publish status.
+- Added clean Website Products, Customers, and Orders management tables plus
+  native public catalog/cart/Stripe checkout paths. These screens use only the
+  isolated `website_*` lane and never display legacy Shopify orders.
+
+## 2026-07-27 — Sales-channel reporting
+
+- Added a clean, read-only Sales channels view and dashboard link for confirmed
+  revenue and order counts by source, including native Everbranch Website sales
+  alongside existing channels.
+- The view deliberately reports aggregates only: it does not merge customers,
+  copy Website orders into legacy Shopify/operations orders, or expose checkout
+  and fulfillment controls across source boundaries.

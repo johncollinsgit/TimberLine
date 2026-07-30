@@ -1,4 +1,13 @@
-<x-layouts::app :title="'Order Calendar run history'">
+@php
+    $runStatusClass = static fn (string $status): string => match ($status) {
+        'success' => 'bg-emerald-100 text-emerald-800',
+        'running' => 'bg-sky-100 text-sky-800',
+        'held' => 'bg-amber-100 text-amber-900',
+        'discarded' => 'bg-zinc-200 text-zinc-700',
+        default => 'bg-rose-100 text-rose-800',
+    };
+@endphp
+<x-layouts::app :title="'Workflow run history'">
     <div class="min-h-full bg-stone-50">
         <div class="mx-auto max-w-7xl space-y-6 px-4 py-7 sm:px-6 lg:px-8">
             <header>
@@ -17,7 +26,7 @@
                     @endforeach
                 </select>
                 <select name="status" class="rounded-xl border-zinc-200 bg-zinc-50 text-sm">
-                    @foreach(['all' => 'All statuses', 'success' => 'Success', 'failed' => 'Failed', 'partial_failure' => 'Partial failure'] as $value => $label)
+                    @foreach(['all' => 'All statuses', 'running' => 'Running', 'success' => 'Success', 'held' => 'Held for review', 'failed' => 'Failed', 'partial_failure' => 'Partial failure', 'discarded' => 'Discarded'] as $value => $label)
                         <option value="{{ $value }}" @selected($status === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
@@ -31,7 +40,7 @@
                             <div class="font-bold text-zinc-950">{{ $run->workflow?->name ?? 'Deleted workflow' }}</div>
                             <div class="mt-1 text-xs text-zinc-500">Run #{{ $run->id }} · {{ str($run->mode)->headline() }}</div>
                         </div>
-                        <span class="w-fit rounded-full px-2.5 py-1 text-xs font-black {{ $run->status === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">{{ str($run->status)->headline() }}</span>
+                        <span class="w-fit rounded-full px-2.5 py-1 text-xs font-black {{ $runStatusClass((string) $run->status) }}">{{ str($run->status)->headline() }}</span>
                         <span class="text-sm text-zinc-600">{{ $run->created_at->format('M j, g:i A') }}</span>
                         <span class="text-sm text-zinc-500">{{ $run->finished_at && $run->started_at ? $run->started_at->diffForHumans($run->finished_at, true) : '—' }}</span>
                     </a>

@@ -1,5 +1,31 @@
 # Modern Forestry Backstage
 
+## Everbranch Managed Website (planned, disabled by default)
+
+**Everbranch Managed Website** is the planned $99/month + $499 setup-fee
+tenant add-on for structured small-business websites. It will provide a
+tenant-scoped Website editor, immutable publishing/rollback, lead forms, and
+an isolated native Website catalog, cart, and Stripe Connect checkout lane.
+The editor uses structured theme settings, menus, sections, reusable public-site
+images, and a real draft preview rendered by the same code as the public site.
+The editing canvas selects and focuses individual content controls rather than
+following customer links; the
+separate private **Preview site** flow safely tests the saved draft and returns
+to the exact editor page.
+It never uses an existing Shopify checkout or legacy order system.
+
+The capability is not live until verified/audited commercial fulfilment,
+tenant allowlisting, publishing and host-isolation checks, and the documented
+rollback drill pass. Modern Forestry's separate Shopify app and Shopify
+Checkout are deliberately excluded: no routes, credentials, checkout,
+customers, orders, webhooks, rewards, or existing connections may change.
+`theeverbranch.com` is always the Everbranch platform site, not a tenant
+Website address. Customer custom domains use a separate verification and
+activation flow and remain disabled until their tenant and public-host gates
+are explicitly enabled.
+Read `docs/architecture/managed-website-architecture.md` and the paired
+operations/rollback runbooks before implementing or operating the feature.
+
 ## Accounting Command Center
 
 Everbranch includes a reusable, disabled-by-default Accounting Command Center
@@ -19,19 +45,41 @@ php artisan everbranch:prepare-accounting-command-center \
 Add `--enable` only after the QuickBooks prerequisite and rollout review are
 ready. See `docs/operations/accounting-command-center-rollout.md`.
 
-## Current Everbranch Structure and Release State (2026-07-22)
+## Current Everbranch Structure and Release State (2026-07-25)
 
 Everbranch is a Laravel multi-workspace platform. The canonical production
 operator surface is `https://app.theeverbranch.com/landlord`; tenant workspaces
 remain isolated by explicit membership and selected workspace context.
 
 - **Landlord:** Home, Workspaces (including the itemized Transactions ledger),
-  support Tickets, agreements, commercial controls, and operational readiness.
+  support Tickets, agreements, commercial controls, the read-only Branches
+  preview, and operational readiness. Home remains first in the landlord
+  sidebar; the remaining landlord links are sorted alphabetically.
 - **Tenant workspace:** tenant-scoped navigation, customers, work, agreements,
-  messages, branded workspace settings, and enabled Branches.
+  messages, branded workspace settings, and enabled Branches. Customers can
+  open **Branches** from the primary navigation to compare included, add-on,
+  upgrade, and request-only products with canonical pricing.
+- **Product discovery:** anonymous visitors can browse the read-only Everbranch
+  Module Explorer at `/explore/modules`. It contains only modules marked safe
+  for the public surface in `config/module_catalog.php`; its calls to action
+  open `/platform/contact?intent=walkthrough` and do not create a demo user,
+  demo workspace, or change workspace access.
+- **Search:** the tenant and landlord shells share one accessible command-palette
+  interaction (`Command/Ctrl + K`) but use separate server coordinators.
+  Landlord search covers control-plane workspaces, setup, tickets, Branch
+  requests, catalog definitions, and permitted admin actions; it never invokes
+  tenant operational search providers.
 - **Billing:** Stripe-confirmed agreement and invoice activity is recorded in a
   landlord-only transaction ledger. Refunds are explicit, provider-confirmed,
   idempotent actions; a refund is never inferred from a local status change.
+- **Operator alerts:** SMS alerts are sent for real production walkthrough,
+  custom Branch, known Branch-access, agreement, and support requests only. The
+  alert service reserves an `operator_alert_logs` row before sending, suppresses
+  sandbox/test/demo/fake activity, coalesces repeated identical texts, and has
+  no hardcoded personal-phone fallback. Configure live delivery explicitly with
+  `EVERBRANCH_OPERATOR_ALERT_PHONE`. Legacy Modern Forestry support-alert
+  routing also requires explicit env or tenant settings; see
+  `docs/operations/operator-alert-sms-runbook.md`.
 - **Health:** `/up` is a lightweight liveness endpoint and `/ready` verifies a
   Laravel boot, database query, cache round trip, required configuration, and
   reports the active release identifier.
@@ -70,7 +118,10 @@ HTTP 200 reporting that exact release identifier.
 
 - Class Scheduling is a reusable tenant-scoped Branch for published classes, capacity, enrollments, reminders, calendar views, attendee navigation, and the fail-closed public signup surface at `/signup/classes/{tenant}`.
 - Prepare the Front Yard Foods demonstration idempotently with `php artisan everbranch:prepare-front-yard-foods`. The command reuses slug `front-yard-foods`; otherwise it prefers tenant ID 4 and then the smallest open ID above 4. It preserves memberships while granting `johncollinsemail@gmail.com` tenant-admin access.
-- Demo preparation creates fictional customers using test phone `8646165468`, sourdough/gardening/preserving/edible-design classes, consultation and edible-landscape jobs, and durable job photos with source/license metadata. Re-running it does not duplicate records.
+- Demo preparation creates fictional customers using reserved test phone
+  `5550100101`, sourdough/gardening/preserving/edible-design classes,
+  consultation and edible-landscape jobs, and durable job photos with
+  source/license metadata. Re-running it does not duplicate records.
 - Home uses a compact top search field and clickable operational cards. The old Field Service Workspace hero and Open Palette block are retired across tenants.
 - Live SMS/email delivery remains provider-, consent-, and action-gated. Preparation schedules preview reminders only; it never sends automatically. See `docs/front-yard-foods-demo.md` for sources, verification, and release notes.
 
@@ -507,7 +558,9 @@ This release connects the public promo surfaces, landlord/admin approval, and te
 Implemented:
 - public entry points:
   - `/platform/plans` (compare plans + add-ons; informational, config-driven)
-  - `/platform/demo` (request demo access)
+  - `/platform/contact?intent=walkthrough` (request a meeting; no demo access)
+  - `/platform/demo` (legacy demo-access intake retained for compatibility, not
+    linked from current discovery surfaces)
   - `/platform/start` (request production client access)
 - access request persistence:
   - `customer_access_requests` table + `App\\Models\\CustomerAccessRequest`
@@ -1294,9 +1347,16 @@ Interpretation of smoke test results:
 Important:
 - Do not mix login keys (`GOOGLE_CLIENT_*`) with Google Business Profile keys (`GOOGLE_GBP_*`); they are separate integrations.
 
-## Zap Replacement: Workflow Automations (2026-06-01)
+## Workflow Automations (2026-07-25)
 
-Everbranch now includes a first-party workflow runner to replace task-billed Zapier flows for supported patterns.
+**Workflow Automations** is the customer-facing Branch. **Workflow Studio** is
+the visual builder inside it. The internal module and add-on identifiers remain
+`workflow_automations` and `order_calendar` for backward compatibility, so
+existing Modern Forestry entitlements, links, and published workflows are not
+renamed or recreated.
+
+Everbranch includes a first-party workflow runner to replace task-billed Zapier
+flows for supported patterns.
 
 Primary command:
 - `php artisan automation:run`
@@ -1315,7 +1375,8 @@ Required env keys for the Asana -> Google Calendar workflow:
 - `GOOGLE_CALENDAR_REFRESH_TOKEN=...`
 
 Notes:
-- Modern Forestry now has a click-based setup path in `Marketing -> Connections -> Native Zap Replacement`.
+- Modern Forestry keeps its existing runtime behavior and has a click-based
+  setup path in **Workflow Automations → Connections**.
 - Asana can now be connected through OAuth from that page; once connected, Everbranch can load visible projects into a picker instead of requiring a raw project GID.
 - Google Calendar can be connected through OAuth from that page; once connected, Everbranch can load writable calendars into a picker instead of requiring a raw calendar ID.
 - Personal access tokens still work as a fallback, but OAuth is now the smoother setup path for both sides.
@@ -1504,17 +1565,17 @@ Mobile catalog local/testing mode:
 - Mobile product summary payloads include `variantId` when an available Shopify variant exists, so native cards can become purchaseable without a second product lookup.
 - Mobile checkout supports guest checkout and attaches `customerAccessToken` only when the native app has a validated Customer Account session.
 - Customer Account OAuth code exchange is handled by Laravel at `/api/mobile/v1/modern-forestry/auth/token`; iOS first reads non-secret public OAuth settings from `/api/mobile/v1/modern-forestry/auth/config` so the app does not ship stale Shopify client IDs.
-- Production customer login must configure `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`, optional `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`, `SHOPIFY_CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT` or a token endpoint Laravel can derive from, `SHOPIFY_CUSTOMER_ACCOUNT_TOKEN_ENDPOINT`, `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT`, `SHOPIFY_CUSTOMER_ACCOUNT_REDIRECT_URI`, and `SHOPIFY_CUSTOMER_ACCOUNT_SCOPES`.
+- Production customer login must configure the public Headless storefront's `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`. `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` is optional and is sent only for a confidential client. Authorization, token, and GraphQL endpoints are discovery-first with env fallbacks; the HTTPS redirect URI, native callback scheme, and scopes retain safe defaults.
 - The Customer Account OAuth app config is source-controlled in `shopify.app.toml` under `[customer_authentication]`. The mobile callback must stay registered there as `https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback`, and the config must be released with `shopify app deploy` before Shopify accepts the callback for app login.
-- On 2026-06-24, production `invalid_client` during `/auth/token` was caused by pairing the old Headless/customer-account UUID client ID with the Modern Forestry Backstage app secret. The live fix was to release the `[customer_authentication]` block on the Backstage app, then set `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID` to that app's client ID so the client ID and secret belong to the same Shopify app.
+- On 2026-07-25, production login failed closed because the public Headless Customer Account client ID was absent and the backend incorrectly treated Shopify discovery support for `client_secret_basic` as proof that every client required a secret. The live Headless storefront is a public PKCE client: keep its existing client ID configured and do not generate or require a secret for it.
 - A second 2026-06-24 `invalid_client` source was the token request shape: Shopify's live token endpoint requires `client_id` in the form body even when the client authenticates with `client_secret_basic`. Laravel intentionally sends both Basic Auth and body `client_id`.
 - Shopify Customer Account auth is now discovery-first in production: Laravel prefers `https://theforestrystudio.com/.well-known/openid-configuration` and `/.well-known/customer-account-api` for the live authorization, token, and Customer Account GraphQL endpoints, then falls back to the configured env values only when discovery is unavailable.
 - This matters because Shopify’s live Customer Account endpoints can drift by API version or customer-account domain; a stale hardcoded `SHOPIFY_CUSTOMER_ACCOUNT_GRAPHQL_ENDPOINT` is a direct cause of “Shopify sign-in finished, but the customer session could not be verified.”
-- The live Modern Forestry storefront currently advertises `token_endpoint_auth_methods_supported=["client_secret_basic"]`, so production should include `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` unless Shopify changes that discovery document.
+- The live Modern Forestry discovery document currently advertises `token_endpoint_auth_methods_supported=["client_secret_basic"]`, but the public Headless client accepts the authorization-code/PKCE exchange without Basic Auth. Discovery capability must not be interpreted as a per-client secret requirement.
 
 2026-07-08 Claude handoff: Modern Forestry native login/social sign-in state:
 - iOS login hardening is code-complete on the native `next-version` branch. Relevant commits are `028d06a` (remove the 20s interactive sign-in timeout), `315039d` (use an ephemeral web auth session to prevent stale/wrong-email SSO prefill), `12bd4fb` (proactive mid-session token refresh so Rewards does not force a re-login), and `6c38aaf` (suppress false wishlist/quiz-save errors after successful saves). `a535e85` adds the Sale collection shelf.
-- Production Forge now has `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID` and `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` set from the matching Modern Forestry Backstage Shopify app credential pair. The live ID suffix is `087c`; the secret must not be documented or echoed. Laravel config was cleared and re-cached after the env update.
+- Production Forge must keep the Modern Forestry Headless storefront's public `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`. A Customer Account client secret is not required for this public PKCE client and must not be generated merely to satisfy the backend readiness gate.
 - The live Customer Account redirect is now `https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback`, and the native callback scheme remains `shop.20812479.modernforestry`. This fixes Shopify's `Invalid redirect_uri scheme` error that appeared when the app sent `shop.20812479.modernforestry://shopify-customer-auth` directly to Shopify. Shopify accepts the HTTPS callback registered in `shopify.app.toml`, then Laravel bridges back to the native scheme.
 - Backend safety commit `6614ad3` (`Fix mobile customer auth redirect fallback`) changes the Laravel fallback redirect from the native scheme to the registered HTTPS callback and adds a regression assertion. Targeted auth tests passed: `php artisan test tests/Feature/Mobile/ModernForestryMobileProductCatalogTest.php --filter='mobile customer auth'` returned 3 passing tests / 17 assertions.
 - Live `/api/mobile/v1/modern-forestry/auth/config` was verified after the fix: `configured=true`, `redirectUri=https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback`, and `callbackScheme=shop.20812479.modernforestry`.
@@ -2057,3 +2118,14 @@ This update removes the temporary beta redemption rollout gate and keeps Candle 
 - Canonical behavior:
   - reconciliation mode re-enables imported subscribed channels and clears stale `*_opted_out_at` values only for channels being reconciled
   - standard opt-in flows still keep their normal reward behavior (`email-signup`, SMS consent bonus)
+# Everbranch Website Commerce
+
+Everbranch Website is a separately entitled, default-disabled managed website and native commerce product. It provides a theme overview, full-screen live editor, tenant-owned pages, Website products/services, shopper records, carts, native Website orders, and Stripe Connect payment handoff. It does **not** use, migrate, or alter Shopify checkout, Shopify catalog data, legacy `orders`, customer records, rewards, provider connections, or Modern Forestry flows.
+
+For multi-channel operations, **Sales channels** provides a tenant-scoped,
+read-only summary of confirmed revenue and order counts by source. Native
+Website payments appear beside existing sources only after payment confirmation;
+the summary never copies Website orders into legacy `orders`, merges shoppers,
+or changes Shopify checkout and fulfillment workflows.
+
+Physical Website orders currently support pickup or manually coordinated local delivery. Carrier rates, labels, tracking, and shipping integrations are intentionally deferred. Checkout stays unavailable until the workspace has passed the existing Stripe Connect and tax readiness gates.

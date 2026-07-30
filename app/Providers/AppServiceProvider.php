@@ -2,8 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\FieldServiceJob;
+use App\Models\FieldServiceTask;
+use App\Models\MarketingProfile;
 use App\Models\MarketingReviewHistory;
 use App\Models\User;
+use App\Observers\FieldServiceJobWorkflowObserver;
+use App\Observers\FieldServiceTaskWorkflowObserver;
+use App\Observers\MarketingProfileWorkflowObserver;
 use App\Observers\MarketingReviewHistoryObserver;
 use App\Services\Integrations\ConnectionManager;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
@@ -56,6 +62,9 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         MarketingReviewHistory::observe(MarketingReviewHistoryObserver::class);
+        MarketingProfile::observe(MarketingProfileWorkflowObserver::class);
+        FieldServiceJob::observe(FieldServiceJobWorkflowObserver::class);
+        FieldServiceTask::observe(FieldServiceTaskWorkflowObserver::class);
 
         Date::use(CarbonImmutable::class);
 

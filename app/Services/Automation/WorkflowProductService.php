@@ -5,11 +5,16 @@ namespace App\Services\Automation;
 use App\Models\AutomationWorkflow;
 use App\Models\AutomationWorkflowAuditEvent;
 use App\Models\AutomationWorkflowRun;
+use App\Models\AutomationWorkflowRunItem;
 use App\Models\AutomationWorkflowRunStep;
 use App\Models\AutomationWorkflowVersion;
 use App\Models\IntegrationConnection;
 use App\Models\User;
+use App\Services\Automation\V2\WorkflowComponentCatalog;
+use App\Services\Automation\V2\WorkflowRunItemExecutionService;
+use App\Services\Automation\V2\WorkflowStudioRuntimeAccess;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class WorkflowProductService
 {
@@ -21,6 +26,9 @@ class WorkflowProductService
         protected AutomationWorkflowEngine $engine,
         protected CalendarEventPresentationService $calendarPresentation,
         protected CommerceWorkflowConnectionService $commerceConnections,
+        protected WorkflowRunItemExecutionService $v2Execution,
+        protected WorkflowComponentCatalog $v2Catalog,
+        protected WorkflowStudioRuntimeAccess $v2RuntimeAccess,
     ) {}
 
     public function create(int $tenantId, string $templateKey, User $actor): AutomationWorkflow
@@ -48,6 +56,8 @@ class WorkflowProductService
     /** @param array<string,mixed> $payload */
     public function updateDraft(AutomationWorkflow $workflow, array $payload, User $actor): AutomationWorkflow
     {
+        $this->assertLegacyMutationWorkflow($workflow);
+
         $before = $this->snapshot($workflow);
         $definition = (array) $workflow->draft_definition;
         data_set($definition, 'trigger.project_gid', $this->nullableString($payload['project_gid'] ?? null));
@@ -82,6 +92,8 @@ class WorkflowProductService
     /** @return array<string,mixed> */
     public function testTrigger(AutomationWorkflow $workflow, User $actor): array
     {
+        $this->assertLegacyMutationWorkflow($workflow);
+
         $provider = (string) data_get($workflow->draft_definition, 'trigger.provider', 'asana');
         if (in_array($provider, CommerceWorkflowConnectionService::PROVIDERS, true)) {
             $connection = $this->selectedConnection($workflow, $provider, 'trigger.connection_id');
@@ -115,6 +127,8 @@ class WorkflowProductService
     /** @return array<string,mixed> */
     public function testAction(AutomationWorkflow $workflow, User $actor): array
     {
+        $this->assertLegacyMutationWorkflow($workflow);
+
         $calendarId = $this->nullableString(data_get($workflow->draft_definition, 'action.calendar_id'));
         if ($calendarId === null) {
             throw new AutomationWorkflowException('Choose a Google Calendar before testing the action.');
@@ -144,6 +158,8 @@ class WorkflowProductService
 
     public function publish(AutomationWorkflow $workflow, User $actor): AutomationWorkflow
     {
+        $this->assertLegacyMutationWorkflow($workflow);
+
         if (! $this->connectionsReady($workflow)) {
             throw new AutomationWorkflowException('Reconnect the selected trigger and Google Calendar accounts before publishing.');
         }
@@ -180,11 +196,15 @@ class WorkflowProductService
 
     public function pause(AutomationWorkflow $workflow, User $actor): AutomationWorkflow
     {
+        $this->assertLegacyMutationWorkflow($workflow);
+
         return $this->setStatus($workflow, AutomationWorkflow::STATUS_PAUSED, $actor, 'paused');
     }
 
     public function resume(AutomationWorkflow $workflow, User $actor): AutomationWorkflow
     {
+        $this->assertLegacyMutationWorkflow($workflow);
+
         if ($workflow->published_version_id === null) {
             throw new AutomationWorkflowException('Publish this workflow before turning it on.');
         }
@@ -201,6 +221,9 @@ class WorkflowProductService
         if (! $version) {
             throw new AutomationWorkflowException('Publish this workflow before running it.');
         }
+        if ((int) data_get($version->definition, 'schema_version', 1) === 2) {
+            $this->v2RuntimeAccess->ensure((int) $workflow->tenant_id);
+        }
 
         $run = AutomationWorkflowRun::query()->create([
             'tenant_id' => $workflow->tenant_id,
@@ -211,6 +234,23 @@ class WorkflowProductService
             'initiated_by_user_id' => $actor?->id,
             'started_at' => now(),
         ]);
+
+        if ((int) data_get($version->definition, 'schema_version', 1) === 2) {
+            try {
+                $this->v2Execution->start($workflow, $version, $run, $dryRun);
+            } catch (Throwable $exception) {
+                $run->forceFill([
+                    'status' => 'failed',
+                    'error_summary' => $this->safeError($exception->getMessage()),
+                    'finished_at' => now(),
+                ])->save();
+
+                throw $exception;
+            }
+
+            return $run->fresh(['items', 'steps']);
+        }
+
         $started = microtime(true);
         $definition = $this->runtimeDefinition($workflow, (array) $version->definition);
         $result = $this->engine->runDefinition('workflow:'.$workflow->id, $definition, $dryRun);
@@ -221,7 +261,10 @@ class WorkflowProductService
         $run->fill([
             'status' => $status,
             'counts' => (array) ($result['counts'] ?? []),
-            'context' => ['dry_run_counts' => (array) ($result['dry_run_counts'] ?? [])],
+            'context' => [
+                'dry_run_counts' => (array) ($result['dry_run_counts'] ?? []),
+                'shadow_parity' => (array) ($result['shadow_parity'] ?? []),
+            ],
             'error_summary' => $safeError,
             'finished_at' => now(),
         ])->save();
@@ -253,19 +296,77 @@ class WorkflowProductService
         $workflows = AutomationWorkflow::query()->forAllTenants()
             ->where('tenant_id', $tenantId)
             ->where('status', AutomationWorkflow::STATUS_ACTIVE)
+            ->with('publishedVersion')
             ->get()
-            ->filter(fn (AutomationWorkflow $workflow): bool => in_array($provider, [
-                (string) data_get($workflow->draft_definition, 'trigger.provider'),
-                (string) data_get($workflow->draft_definition, 'action.provider'),
-            ], true));
+            ->filter(function (AutomationWorkflow $workflow) use ($provider): bool {
+                return $this->definitionUsesProvider(
+                    (array) $workflow->draft_definition,
+                    $provider,
+                ) || $this->definitionUsesProvider(
+                    (array) $workflow->publishedVersion?->definition,
+                    $provider,
+                );
+            });
 
+        $paused = 0;
         foreach ($workflows as $workflow) {
-            $before = $this->snapshot($workflow);
-            $workflow->forceFill(['status' => AutomationWorkflow::STATUS_PAUSED, 'updated_by_user_id' => $actor?->id])->save();
-            $this->audit($workflow, $actor, 'paused_connection_disconnected', $before, $this->snapshot($workflow), ['provider' => $provider]);
+            $didPause = DB::transaction(function () use ($workflow, $provider, $actor): bool {
+                $locked = AutomationWorkflow::query()
+                    ->forAllTenants()
+                    ->where('tenant_id', $workflow->tenant_id)
+                    ->where('status', AutomationWorkflow::STATUS_ACTIVE)
+                    ->lockForUpdate()
+                    ->find($workflow->id);
+                if (! $locked) {
+                    return false;
+                }
+
+                $before = $this->snapshot($locked);
+                $publishedDefinition = $locked->publishedVersion()->first()?->definition;
+                $isV2 = (int) data_get($publishedDefinition, 'schema_version', 1) === 2;
+                $locked->forceFill([
+                    'status' => AutomationWorkflow::STATUS_PAUSED,
+                    'next_run_at' => null,
+                    'updated_by_user_id' => $actor?->id,
+                ])->save();
+
+                if ($isV2) {
+                    AutomationWorkflowRunItem::query()
+                        ->forAllTenants()
+                        ->where('tenant_id', $locked->tenant_id)
+                        ->where('automation_workflow_id', $locked->id)
+                        ->whereIn('status', [
+                            AutomationWorkflowRunItem::STATUS_PENDING,
+                            AutomationWorkflowRunItem::STATUS_DELAYED,
+                        ])
+                        ->lockForUpdate()
+                        ->get()
+                        ->each(function (AutomationWorkflowRunItem $item): void {
+                            $context = (array) $item->context;
+                            $context['held_from_status'] = $item->status;
+                            $item->forceFill([
+                                'status' => AutomationWorkflowRunItem::STATUS_HELD,
+                                'context' => $context,
+                                'error_summary' => 'The provider connection was disconnected. Reconnect, then explicitly release or discard this held item.',
+                            ])->save();
+                        });
+                }
+
+                $this->audit(
+                    $locked,
+                    $actor,
+                    'paused_connection_disconnected',
+                    $before,
+                    $this->snapshot($locked),
+                    ['provider' => $provider],
+                );
+
+                return true;
+            });
+            $paused += $didPause ? 1 : 0;
         }
 
-        return $workflows->count();
+        return $paused;
     }
 
     /** @return array<string,mixed> */
@@ -406,6 +507,68 @@ class WorkflowProductService
                 $workflow->forceFill(['status' => AutomationWorkflow::STATUS_PAUSED])->save();
                 $this->audit($workflow, null, 'paused_reconnect_required', $before, $this->snapshot($workflow), ['provider' => $provider]);
             }
+        }
+    }
+
+    /** @param array<string,mixed> $definition */
+    protected function definitionUsesProvider(array $definition, string $provider): bool
+    {
+        if ((int) ($definition['schema_version'] ?? 0) !== 2) {
+            return in_array($provider, [
+                (string) data_get($definition, 'trigger.provider'),
+                (string) data_get($definition, 'action.provider'),
+            ], true);
+        }
+
+        $uses = function (mixed $step) use ($provider): bool {
+            if (! is_array($step)) {
+                return false;
+            }
+
+            $component = $this->v2Catalog->component((string) ($step['component_key'] ?? ''));
+
+            return (string) ($component['provider'] ?? '') === $provider;
+        };
+        if ($uses($definition['trigger'] ?? null)) {
+            return true;
+        }
+
+        $visit = function (array $steps) use (&$visit, $uses): bool {
+            foreach ($steps as $step) {
+                if ($uses($step)) {
+                    return true;
+                }
+                if (! is_array($step)) {
+                    continue;
+                }
+                foreach ((array) data_get($step, 'config.branches', []) as $branch) {
+                    if (is_array($branch) && $visit((array) ($branch['steps'] ?? []))) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        return $visit((array) ($definition['steps'] ?? []));
+    }
+
+    /**
+     * The legacy form actions intentionally remain available for immutable
+     * schema-v1 compatibility only. Schema-v2 mutations must pass through the
+     * Studio compiler, optimistic revision lock, per-step tests, and held-item
+     * pause semantics.
+     */
+    protected function assertLegacyMutationWorkflow(AutomationWorkflow $workflow): void
+    {
+        if (
+            (int) $workflow->definition_schema_version === 2
+            || (int) data_get($workflow->draft_definition, 'schema_version', 1) === 2
+        ) {
+            throw new AutomationWorkflowException(
+                'This workflow must be changed through Workflow Studio.'
+            );
         }
     }
 

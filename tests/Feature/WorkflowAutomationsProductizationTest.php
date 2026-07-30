@@ -56,27 +56,40 @@ function workflowConnections(Tenant $tenant, User $user): void
     }
 }
 
-test('workflow library and templates are entitled, tenant scoped, and credential safe', function (): void {
+test('workflow studio opens blank without persistence and exposes only executable tenant safe components', function (): void {
     [$tenant, $user] = entitledWorkflowTenant();
+
+    expect(AutomationWorkflow::query()->forAllTenants()->where('tenant_id', $tenant->id)->count())->toBe(0);
 
     $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
         ->get(route('workflows.create'))
         ->assertOk()
-        ->assertSeeText('Asana tasks to Google Calendar')
-        ->assertSeeText('Shopify orders to Google Calendar')
-        ->assertSeeText('Squarespace orders to Google Calendar')
-        ->assertSeeText('Square orders to Google Calendar')
-        ->assertSeeText('Wix orders to Google Calendar')
+        ->assertSee('data-workflow-studio-root', false)
+        ->assertSeeText('Opening Workflow Studio')
+        ->assertSee('everbranch.customer.created', false)
+        ->assertSee('asana.task.created_or_updated', false)
+        ->assertSee('shopify.order.created_or_updated', false)
+        ->assertSee('square.order.created_or_updated', false)
+        ->assertSee('core.filter', false)
+        ->assertSee('core.delay_for', false)
+        ->assertSee('core.paths', false)
+        ->assertDontSee('squarespace.order', false)
+        ->assertDontSee('wix.order', false)
         ->assertDontSee('client_secret')
         ->assertDontSee('refresh_token');
+
+    expect(AutomationWorkflow::query()->forAllTenants()->where('tenant_id', $tenant->id)->count())->toBe(0);
 
     $workflow = app(WorkflowProductService::class)->create($tenant->id, 'asana_to_google_calendar', $user);
     $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
         ->get(route('workflows.show', $workflow))
         ->assertOk()
-        ->assertSeeText('Setup')
-        ->assertSeeText('Test')
-        ->assertSeeText('Calendar appearance')
+        ->assertSee('data-workflow-studio-root', false)
+        ->assertSeeText('Opening Workflow Studio')
+        ->assertSee('schema_version', false)
+        ->assertSee('core.filter', false)
+        ->assertSee('core.delay_until', false)
+        ->assertSee('core.paths', false)
         ->assertDontSee('client_secret')
         ->assertDontSee('refresh_token');
 
@@ -102,6 +115,82 @@ test('disabled workflow entitlement fails closed', function (): void {
     $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
         ->get(route('workflows.index'))
         ->assertForbidden();
+});
+
+test('tenants outside the v2 rollout retain the compatible v1 workflow builder', function (): void {
+    [$tenant, $user] = entitledWorkflowTenant('legacy-rollout-workflow-tenant');
+    config()->set('automation_workflows.v2_enabled', true);
+    config()->set('automation_workflows.v2_tenant_ids', [$tenant->id + 1000]);
+    $workflow = app(WorkflowProductService::class)->create(
+        $tenant->id,
+        'asana_to_google_calendar',
+        $user,
+    );
+
+    $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
+        ->get(route('workflows.index'))
+        ->assertOk()
+        ->assertSeeText('compatible workflow builder')
+        ->assertSee(route('workflows.show', $workflow), false);
+
+    $this->get(route('workflows.create'))
+        ->assertOk()
+        ->assertSeeText('compatible workflow builder')
+        ->assertSee(route('workflows.legacy.store'), false)
+        ->assertDontSee('data-workflow-studio-root', false);
+
+    $this->get(route('workflows.show', $workflow))
+        ->assertOk()
+        ->assertSeeText('compatible v1 builder')
+        ->assertSee(route('workflows.update', $workflow), false)
+        ->assertDontSee('data-workflow-studio-root', false);
+
+    $this->get(route('workflows.studio.catalog'))->assertForbidden();
+    $this->get(route('workflows.studio.load', $workflow))->assertForbidden();
+
+    $before = AutomationWorkflow::query()
+        ->forAllTenants()
+        ->where('tenant_id', $tenant->id)
+        ->count();
+    $this->post(route('workflows.legacy.store'), [
+        'template_key' => 'asana_to_google_calendar',
+    ])->assertRedirect();
+
+    expect(AutomationWorkflow::query()
+        ->forAllTenants()
+        ->where('tenant_id', $tenant->id)
+        ->count())->toBe($before + 1);
+});
+
+test('a disabled v2 rollout renders a controlled read only workflow screen', function (): void {
+    [$tenant, $user] = entitledWorkflowTenant('disabled-v2-workflow-tenant');
+    config()->set('automation_workflows.v2_enabled', true);
+    config()->set('automation_workflows.v2_tenant_ids', [$tenant->id + 1000]);
+    $workflow = AutomationWorkflow::query()->forAllTenants()->create([
+        'tenant_id' => $tenant->id,
+        'template_key' => 'blank',
+        'name' => 'Held v2 workflow',
+        'status' => AutomationWorkflow::STATUS_PAUSED,
+        'draft_definition' => [
+            'schema_version' => 2,
+            'trigger' => null,
+            'steps' => [],
+            'settings' => [
+                'poll_interval_minutes' => 10,
+                'max_items_per_poll' => 100,
+            ],
+        ],
+        'definition_schema_version' => 2,
+        'draft_revision' => 1,
+        'created_by_user_id' => $user->id,
+        'updated_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)->withSession(['tenant_id' => $tenant->id])
+        ->get(route('workflows.show', $workflow))
+        ->assertOk()
+        ->assertSeeText('Workflow Studio is not enabled for this workspace')
+        ->assertDontSee('data-workflow-studio-root', false);
 });
 
 test('multiple workflows publish immutable versions and reuse tenant connections', function (): void {

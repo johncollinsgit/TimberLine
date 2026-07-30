@@ -9,6 +9,7 @@ class AutomationWorkflowLink extends Model
     protected $fillable = [
         'tenant_id',
         'automation_workflow_id',
+        'step_key',
         'workflow_key',
         'source_system',
         'source_id',

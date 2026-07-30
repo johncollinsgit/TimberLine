@@ -55,7 +55,7 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'accounting_command_center'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'managed_website', 'accounting_command_center'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
@@ -63,6 +63,7 @@ class UnifiedAppNavigationService
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
+        $managedWebsiteEnabled = $this->moduleStateEnabled($moduleStates['managed_website'] ?? null);
         $accountingEnabled = $this->moduleStateEnabled($moduleStates['accounting_command_center'] ?? null);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
@@ -75,6 +76,18 @@ class UnifiedAppNavigationService
 
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
+
+        // Website is a primary business surface. Keep it directly below Home,
+        // rather than grouping it behind marketing, workflows, or operations.
+        if (($canAccessOps || $roleCanAccessMarketing) && $managedWebsiteEnabled && Route::has('managed-website.index')) {
+            $items[] = [
+                'key' => 'managed-website',
+                'icon' => 'globe-alt',
+                'href' => route('managed-website.index'),
+                'label' => 'Website',
+                'current' => request()->routeIs('managed-website.*'),
+            ];
+        }
 
         if ($canAccessMarketing) {
             $birthdaysRelevant = $tenantId === null
@@ -93,6 +106,16 @@ class UnifiedAppNavigationService
                 'current' => $marketingCurrent,
                 'children' => $marketingChildren,
             ];
+
+            if ($tenantId !== null && Route::has('marketing.modules')) {
+                $items[] = [
+                    'key' => 'branches',
+                    'icon' => 'squares-2x2',
+                    'href' => route('marketing.modules'),
+                    'label' => 'Branches',
+                    'current' => request()->routeIs('marketing.modules*'),
+                ];
+            }
         }
 
         if (($canAccessOps || $roleCanAccessMarketing) && $workflowAutomationsEnabled && Route::has('workflows.index')) {
@@ -100,7 +123,7 @@ class UnifiedAppNavigationService
                 'key' => 'workflow-automations',
                 'icon' => 'bolt',
                 'href' => route('workflows.index'),
-                'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Order Calendar'),
+                'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Workflow Automations'),
                 'current' => request()->routeIs('workflows.*'),
             ];
         }
@@ -201,9 +224,10 @@ class UnifiedAppNavigationService
             }
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
+            $primaryItemCount = ($items[1]['key'] ?? null) === 'managed-website' ? 2 : 1;
             $items = $prioritizeGrowth
                 ? array_merge($items, $opsItems)
-                : array_merge(array_slice($items, 0, 1), $opsItems, array_slice($items, 1));
+                : array_merge(array_slice($items, 0, $primaryItemCount), $opsItems, array_slice($items, $primaryItemCount));
         } elseif ($isPouring) {
             $items[] = ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')];
         }
@@ -258,8 +282,9 @@ class UnifiedAppNavigationService
      */
     protected function buildLandlordShell(Request $request, ?User $user = null): array
     {
-        $items = [
-            ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')],
+        $homeItem = ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')];
+
+        $landlordItems = [
             [
                 'key' => 'workspaces',
                 'icon' => 'building-office-2',
@@ -273,6 +298,7 @@ class UnifiedAppNavigationService
             ],
             ['key' => 'access-requests', 'icon' => 'inbox', 'href' => route('landlord.onboarding.intake'), 'label' => 'Access Requests', 'current' => $request->routeIs('landlord.onboarding.intake')],
             ['key' => 'setup-reviews', 'icon' => 'clipboard-document-check', 'href' => route('landlord.onboarding.journey'), 'label' => 'Setup Reviews', 'current' => $request->routeIs('landlord.onboarding.journey') || $request->routeIs('landlord.onboarding.wizard')],
+            ['key' => 'branches', 'icon' => 'squares-2x2', 'href' => route('landlord.branches.index'), 'label' => 'Branches', 'current' => $request->routeIs('landlord.branches.*')],
             ['key' => 'features', 'icon' => 'squares-plus', 'href' => route('landlord.commercial.index'), 'label' => 'Features', 'current' => $request->routeIs('landlord.commercial.*')],
             ['key' => 'custom-requests', 'icon' => 'chat-bubble-left-right', 'href' => route('landlord.custom-module-requests.index'), 'label' => 'Custom Requests', 'current' => $request->routeIs('landlord.custom-module-requests.*')],
             ['key' => 'tickets', 'icon' => 'lifebuoy', 'href' => route('landlord.support-tickets.index'), 'label' => 'Tickets', 'current' => $request->routeIs('landlord.support-tickets.*')],
@@ -284,6 +310,14 @@ class UnifiedAppNavigationService
             ['key' => 'developer', 'icon' => 'command-line', 'href' => route('landlord.developer'), 'label' => 'Developer', 'current' => $request->routeIs('landlord.developer')],
             ['key' => 'settings', 'icon' => 'cog-6-tooth', 'href' => route('landlord.dashboard'), 'label' => 'Settings', 'current' => false],
         ];
+        $items = collect($landlordItems)
+            ->sortBy(
+                fn (array $item): string => (string) ($item['label'] ?? ''),
+                SORT_NATURAL | SORT_FLAG_CASE
+            )
+            ->prepend($homeItem)
+            ->values()
+            ->all();
 
         return [
             'tenant' => null,
@@ -653,15 +687,11 @@ class UnifiedAppNavigationService
     protected function marketingNavigationChildren(bool $includeFeatures, bool $includeBirthdays): array
     {
         $items = collect(MarketingSectionRegistry::sections())
-            ->reject(fn (array $section, string $key): bool => $key === 'modules' && ! $includeFeatures)
+            ->reject(fn (array $section, string $key): bool => $key === 'modules')
             ->map(function (array $section, string $key): array {
-                $label = $key === 'modules'
-                    ? 'Features'
-                    : (string) $section['label'];
-
                 return [
                     'key' => $key,
-                    'label' => $label,
+                    'label' => (string) $section['label'],
                     'href' => route($section['route']),
                     'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
                 ];

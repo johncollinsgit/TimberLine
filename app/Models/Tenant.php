@@ -81,6 +81,11 @@ class Tenant extends Model
         return $this->hasOne(TenantBrandProfile::class);
     }
 
+    public function managedSite(): HasOne
+    {
+        return $this->hasOne(TenantSite::class);
+    }
+
     public function accessProfile(): HasOne
     {
         return $this->hasOne(TenantAccessProfile::class);

@@ -261,7 +261,7 @@ test('shopify v1 consent request alias and consent status endpoint share the sam
     config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
-    $email = 'stage10.' . Str::lower(Str::random(8)) . '@example.com';
+    $email = 'stage10.'.Str::lower(Str::random(8)).'@example.com';
     $payload = [
         'email' => $email,
         'phone' => '5554441234',
@@ -537,6 +537,70 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->and($vote)->not->toBeNull()
         ->and(data_get($vote, 'eligibility.state'))->toBe('locked')
         ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
+});
+
+test('shopify v1 candle cash status resolves a retained merge alias to the survivor balance', function () {
+    configureStage10RewardsStorefront();
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Canonical Alias Tenant',
+        'slug' => 'canonical-alias-tenant',
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'timberline.example.myshopify.com',
+        'access_token' => 'stage10-oauth-token',
+        'scopes' => 'read_customers',
+        'installed_at' => now(),
+    ]);
+
+    $survivor = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Canonical',
+        'last_name' => 'Customer',
+        'email' => 'canonical.alias@example.com',
+        'normalized_email' => 'canonical.alias@example.com',
+        'phone' => '5557773434',
+        'normalized_phone' => '+15557773434',
+    ]);
+    MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Archived',
+        'last_name' => 'Alias',
+        'email' => 'canonical.alias@example.com',
+        'normalized_email' => 'canonical.alias@example.com',
+        'phone' => '5557773434',
+        'normalized_phone' => '+15557773434',
+        'merged_into_profile_id' => $survivor->id,
+        'merged_at' => now(),
+    ]);
+
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $survivor->id,
+        'balance' => 456.9,
+    ]);
+    CandleCashTransaction::query()->create([
+        'marketing_profile_id' => $survivor->id,
+        'type' => 'import_opening_balance',
+        'candle_cash_delta' => 456.9,
+        'source' => 'test',
+        'source_id' => 'stage10-canonical-alias-balance',
+        'description' => 'Canonical survivor balance',
+    ]);
+
+    $query = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => 'canonical.alias@example.com',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('data.state', 'linked_customer')
+        ->assertJsonPath('data.profile_id', $survivor->id)
+        ->assertJsonPath('data.balance.candle_cash', 456.9);
 });
 
 test('shopify v1 candle cash status lifetime earned excludes legacy growave-converted credits', function () {
@@ -988,6 +1052,19 @@ test('shopify v1 candle cash status keeps candle club vote locked for guests', f
     config()->set('services.shopify.stores.retail.shop', 'timberline.example.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'stage10-retail-client');
 
+    $hiddenProfile = MarketingProfile::query()->create([
+        'email' => 'hidden.from.guest@example.com',
+        'normalized_email' => 'hidden.from.guest@example.com',
+    ]);
+    app(CandleCashService::class)->addPoints(
+        profile: $hiddenProfile,
+        points: 999,
+        type: 'earn',
+        source: 'test',
+        sourceId: 'stage10-guest-data-isolation',
+        description: 'Must remain hidden from guest requests'
+    );
+
     $query = stage10AppProxySignedQuery([
         'shop' => 'timberline.example.myshopify.com',
         'timestamp' => (string) time(),
@@ -996,7 +1073,9 @@ test('shopify v1 candle cash status keeps candle club vote locked for guests', f
     $response = $this->getJson(route('marketing.shopify.v1.candle-cash.status', $query))
         ->assertOk()
         ->assertJsonPath('ok', true)
-        ->assertJsonPath('data.state', 'unknown_customer');
+        ->assertJsonPath('data.state', 'unknown_customer')
+        ->assertJsonPath('data.profile_id', null)
+        ->assertJsonPath('data.balance.candle_cash', 0);
 
     $tasks = collect($response->json('data.tasks'));
     $vote = $tasks->firstWhere('handle', 'candle-club-vote');
@@ -1120,6 +1199,6 @@ test('shopify v1 endpoints used by extension resolve under app proxy transport',
 });
 
 /**
- * @param array<string,mixed> $query
+ * @param  array<string,mixed>  $query
  * @return array<string,string>
  */

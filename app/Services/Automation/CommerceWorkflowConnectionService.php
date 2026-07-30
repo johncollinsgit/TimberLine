@@ -6,7 +6,9 @@ use App\Models\IntegrationConnection;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -50,19 +52,25 @@ class CommerceWorkflowConnectionService
         }
 
         $state = Str::random(64);
+        [$clientId, $clientSecret] = $this->oauthClientCredentials($provider);
         $payload = [
             'tenant_id' => $tenantId,
             'user_id' => (int) $user->id,
             'provider' => $provider,
-            'return_path' => route('workflows.connections', absolute: false),
+            'oauth_client_id_encrypted' => Crypt::encryptString($clientId),
+            'oauth_client_secret_encrypted' => Crypt::encryptString($clientSecret),
+            'oauth_client_source' => 'global',
+            'return_path' => $this->safeReturnPath((string) (
+                $options['return_path'] ?? route('workflows.connections', absolute: false)
+            )),
             'shop_domain' => $provider === 'shopify' ? $this->shopDomain((string) ($options['shop_domain'] ?? '')) : null,
         ];
         Cache::store($this->cacheStore())->put($this->stateKey($state), $payload, now()->addMinutes(10));
 
         return match ($provider) {
-            'shopify' => $this->shopifyAuthorizationUrl($state, (string) $payload['shop_domain']),
-            'square' => $this->squareAuthorizationUrl($state),
-            'squarespace' => $this->oauthAuthorizationUrl('squarespace', $state),
+            'shopify' => $this->shopifyAuthorizationUrl($state, (string) $payload['shop_domain'], $clientId),
+            'square' => $this->squareAuthorizationUrl($state, $clientId),
+            'squarespace' => $this->oauthAuthorizationUrl('squarespace', $state, $clientId),
             'wix' => $this->wixInstallUrl($state),
         };
     }
@@ -84,11 +92,17 @@ class CommerceWorkflowConnectionService
         }
 
         $tenantId = (int) $statePayload['tenant_id'];
+        [$clientId, $clientSecret] = $this->cachedOAuthClientCredentials($statePayload);
         $token = match ($provider) {
-            'shopify' => $this->exchangeShopify($request, (string) $statePayload['shop_domain']),
-            'square' => $this->exchangeStandardCode('square', $request),
-            'squarespace' => $this->exchangeStandardCode('squarespace', $request),
-            'wix' => $this->exchangeWixInstance($request),
+            'shopify' => $this->exchangeShopify(
+                $request,
+                (string) $statePayload['shop_domain'],
+                $clientId,
+                $clientSecret,
+            ),
+            'square' => $this->exchangeStandardCode('square', $request, $clientId, $clientSecret),
+            'squarespace' => $this->exchangeStandardCode('squarespace', $request, $clientId, $clientSecret),
+            'wix' => $this->exchangeWixInstance($request, $clientId, $clientSecret),
         };
         $identity = $this->identity($provider, $token, $statePayload);
         $rawId = (string) $identity['id'];
@@ -101,11 +115,18 @@ class CommerceWorkflowConnectionService
                 'access_token' => (string) ($token['access_token'] ?? ''),
                 'refresh_token' => $this->nullableString($token['refresh_token'] ?? null),
                 'token_type' => (string) ($token['token_type'] ?? 'Bearer'),
-                'expires_at' => isset($token['expires_in']) ? now()->addSeconds(max(60, (int) $token['expires_in'])) : null,
-                'scopes' => $this->scopes($token['scope'] ?? config("services.{$provider}.oauth_scopes", '')),
+                'oauth_client_id' => $clientId,
+                'oauth_client_secret' => $clientSecret,
+                'expires_at' => $this->tokenExpiresAt($token),
+                'scopes' => $this->scopes($token['scope'] ?? (
+                    $provider === 'shopify'
+                        ? config('services.shopify.automation_oauth_scopes', 'read_orders,read_fulfillments')
+                        : config("services.{$provider}.oauth_scopes", '')
+                )),
                 'metadata' => array_filter([
                     'api_base' => config("services.{$provider}.api_base"),
                     'shop_domain' => $provider === 'shopify' ? (string) $statePayload['shop_domain'] : null,
+                    'oauth_client_source' => (string) ($statePayload['oauth_client_source'] ?? 'global'),
                     'legacy_coexistence' => true,
                 ]),
                 'connected_by_user_id' => $request->user()?->id,
@@ -145,6 +166,8 @@ class CommerceWorkflowConnectionService
             'status' => IntegrationConnection::STATUS_DISCONNECTED,
             'access_token' => null,
             'refresh_token' => null,
+            'oauth_client_id' => null,
+            'oauth_client_secret' => null,
             'expires_at' => null,
             'last_error_code' => null,
             'last_error_message' => null,
@@ -165,31 +188,48 @@ class CommerceWorkflowConnectionService
         return collect($required)->every(fn (string $key): bool => filled(config("services.{$provider}.{$key}")));
     }
 
-    /** @return array<string,mixed> */
-    protected function exchangeShopify(Request $request, string $shop): array
+    protected function safeReturnPath(string $path): string
     {
-        $this->verifyShopifyCallback($request);
+        $path = trim($path);
+
+        return str_starts_with($path, '/') && ! str_starts_with($path, '//')
+            ? $path
+            : route('workflows.connections', absolute: false);
+    }
+
+    /** @return array<string,mixed> */
+    protected function exchangeShopify(
+        Request $request,
+        string $shop,
+        string $clientId,
+        string $clientSecret,
+    ): array {
+        $this->verifyShopifyCallback($request, $clientSecret);
         if ($this->shopDomain((string) $request->query('shop')) !== $shop) {
             throw new AutomationWorkflowException('Shopify returned a different shop than the one that started this connection.');
         }
 
         return $this->successfulJson(Http::asForm()->acceptJson()->post("https://{$shop}/admin/oauth/access_token", [
-            'client_id' => config('services.shopify.automation_oauth_client_id'),
-            'client_secret' => config('services.shopify.automation_oauth_client_secret'),
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
             'code' => (string) $request->query('code'),
         ]), 'Shopify token exchange failed.');
     }
 
     /** @return array<string,mixed> */
-    protected function exchangeStandardCode(string $provider, Request $request): array
-    {
+    protected function exchangeStandardCode(
+        string $provider,
+        Request $request,
+        string $clientId,
+        string $clientSecret,
+    ): array {
         $code = trim((string) $request->query('code'));
         if ($code === '') {
             throw new AutomationWorkflowException(Str::headline($provider).' did not return an authorization code.');
         }
         $payload = [
-            'client_id' => config("services.{$provider}.oauth_client_id"),
-            'client_secret' => config("services.{$provider}.oauth_client_secret"),
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
             'code' => $code,
             'grant_type' => 'authorization_code',
             'redirect_uri' => config("services.{$provider}.redirect_uri"),
@@ -199,16 +239,19 @@ class CommerceWorkflowConnectionService
     }
 
     /** @return array<string,mixed> */
-    protected function exchangeWixInstance(Request $request): array
-    {
+    protected function exchangeWixInstance(
+        Request $request,
+        string $clientId,
+        string $clientSecret,
+    ): array {
         $instanceId = trim((string) $request->query('instanceId'));
         if ($instanceId === '') {
             throw new AutomationWorkflowException('Wix did not provide the installed app instance.');
         }
         $token = $this->successfulJson(Http::asJson()->acceptJson()->post((string) config('services.wix.token_url', 'https://www.wixapis.com/oauth2/token'), [
             'grant_type' => 'client_credentials',
-            'client_id' => config('services.wix.app_id'),
-            'client_secret' => config('services.wix.client_secret'),
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
             'instance_id' => $instanceId,
         ]), 'Wix access-token creation failed.');
         $token['instance_id'] = $instanceId;
@@ -241,27 +284,27 @@ class CommerceWorkflowConnectionService
         return ['id' => $id, 'label' => (string) ($json['siteTitle'] ?? 'Squarespace site')];
     }
 
-    protected function shopifyAuthorizationUrl(string $state, string $shop): string
+    protected function shopifyAuthorizationUrl(string $state, string $shop, string $clientId): string
     {
         return 'https://'.$shop.'/admin/oauth/authorize?'.http_build_query([
-            'client_id' => config('services.shopify.automation_oauth_client_id'),
+            'client_id' => $clientId,
             'scope' => config('services.shopify.automation_oauth_scopes', 'read_orders,read_fulfillments'),
             'redirect_uri' => config('services.shopify.automation_redirect_uri'),
             'state' => $state,
         ]);
     }
 
-    protected function squareAuthorizationUrl(string $state): string
+    protected function squareAuthorizationUrl(string $state, string $clientId): string
     {
         return rtrim((string) config('services.square.authorization_url'), '?').'?'.http_build_query([
-            'client_id' => config('services.square.oauth_client_id'), 'scope' => config('services.square.oauth_scopes'), 'session' => 'false', 'state' => $state,
+            'client_id' => $clientId, 'scope' => config('services.square.oauth_scopes'), 'session' => 'false', 'state' => $state,
         ]);
     }
 
-    protected function oauthAuthorizationUrl(string $provider, string $state): string
+    protected function oauthAuthorizationUrl(string $provider, string $state, string $clientId): string
     {
         return rtrim((string) config("services.{$provider}.authorization_url"), '?').'?'.http_build_query([
-            'client_id' => config("services.{$provider}.oauth_client_id"), 'redirect_uri' => config("services.{$provider}.redirect_uri"),
+            'client_id' => $clientId, 'redirect_uri' => config("services.{$provider}.redirect_uri"),
             'response_type' => 'code', 'scope' => config("services.{$provider}.oauth_scopes"), 'state' => $state,
         ]);
     }
@@ -273,13 +316,13 @@ class CommerceWorkflowConnectionService
         return (string) config('services.wix.install_url').$separator.http_build_query(['state' => $state, 'redirectUrl' => config('services.wix.redirect_uri')]);
     }
 
-    protected function verifyShopifyCallback(Request $request): void
+    protected function verifyShopifyCallback(Request $request, string $clientSecret): void
     {
         $params = $request->query();
         $provided = (string) Arr::pull($params, 'hmac', '');
         ksort($params);
         $message = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
-        $expected = hash_hmac('sha256', $message, (string) config('services.shopify.automation_oauth_client_secret'));
+        $expected = hash_hmac('sha256', $message, $clientSecret);
         if ($provided === '' || ! hash_equals($expected, $provided)) {
             throw new AutomationWorkflowException('Shopify callback signature could not be verified.');
         }
@@ -319,6 +362,79 @@ class CommerceWorkflowConnectionService
         $value = trim((string) $value);
 
         return $value !== '' ? $value : null;
+    }
+
+    /** @param array<string,mixed> $token */
+    protected function tokenExpiresAt(array $token): ?Carbon
+    {
+        if (filled($token['expires_at'] ?? null)) {
+            try {
+                return Carbon::parse((string) $token['expires_at']);
+            } catch (\Throwable) {
+                throw new AutomationWorkflowException(
+                    'The provider returned an invalid token expiration. Start the connection again.'
+                );
+            }
+        }
+        if (isset($token['expires_in'])) {
+            return now()->addSeconds(max(60, (int) $token['expires_in']));
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    protected function oauthClientCredentials(string $provider): array
+    {
+        [$clientId, $clientSecret] = match ($provider) {
+            'shopify' => [
+                config('services.shopify.automation_oauth_client_id'),
+                config('services.shopify.automation_oauth_client_secret'),
+            ],
+            'wix' => [
+                config('services.wix.app_id'),
+                config('services.wix.client_secret'),
+            ],
+            default => [
+                config("services.{$provider}.oauth_client_id"),
+                config("services.{$provider}.oauth_client_secret"),
+            ],
+        };
+        $clientId = trim((string) $clientId);
+        $clientSecret = trim((string) $clientSecret);
+        if ($clientId === '' || $clientSecret === '') {
+            throw new AutomationWorkflowException(
+                Str::headline($provider).' OAuth client is not configured.'
+            );
+        }
+
+        return [$clientId, $clientSecret];
+    }
+
+    /**
+     * @param  array<string,mixed>  $state
+     * @return array{0:string,1:string}
+     */
+    protected function cachedOAuthClientCredentials(array $state): array
+    {
+        try {
+            $clientId = Crypt::decryptString((string) ($state['oauth_client_id_encrypted'] ?? ''));
+            $clientSecret = Crypt::decryptString((string) ($state['oauth_client_secret_encrypted'] ?? ''));
+        } catch (\Throwable) {
+            throw new AutomationWorkflowException(
+                'The connection credentials could not be verified. Start again from Connections.'
+            );
+        }
+
+        if (trim($clientId) === '' || trim($clientSecret) === '') {
+            throw new AutomationWorkflowException(
+                'The connection credentials are incomplete. Start again from Connections.'
+            );
+        }
+
+        return [$clientId, $clientSecret];
     }
 
     protected function scopes(mixed $value): array

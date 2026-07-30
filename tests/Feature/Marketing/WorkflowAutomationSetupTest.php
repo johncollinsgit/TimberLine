@@ -463,7 +463,10 @@ test('asana oauth callback stores refresh token and auto-selects the only visibl
         ->and(data_get($setting->value, 'trigger.project_gid'))->toBe('1201541082238924')
         ->and(IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->where('provider', 'asana')->count())->toBe(1)
         ->and($asanaConnection->external_account_id)->toBe('999')
-        ->and(data_get($asanaConnection->metadata, 'credential_source'))->toBe('shared_oauth');
+        ->and(data_get($asanaConnection->metadata, 'credential_source'))->toBe('legacy_tenant')
+        ->and(data_get($asanaConnection->metadata, 'oauth_client_source'))->toBe('legacy_tenant')
+        ->and($asanaConnection->oauth_client_id)->toBe('asana-oauth-client-id-1234')
+        ->and($asanaConnection->oauth_client_secret)->toBe('asana-oauth-client-secret-1234');
 
     $this->actingAs($user)
         ->withSession(['tenant_id' => $tenant->id])
@@ -573,7 +576,10 @@ test('google calendar oauth callback stores refresh token and auto-selects the o
         ->and(data_get($setting->value, 'action.calendar_id'))->toBe('selected-calendar@example.com')
         ->and(IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)->where('provider', 'google_calendar')->count())->toBe(1)
         ->and($googleConnection->external_account_id)->toBe('google-calendar-workflow-account')
-        ->and(data_get($googleConnection->metadata, 'credential_source'))->toBe('shared_oauth');
+        ->and(data_get($googleConnection->metadata, 'credential_source'))->toBe('legacy_tenant')
+        ->and(data_get($googleConnection->metadata, 'oauth_client_source'))->toBe('legacy_tenant')
+        ->and($googleConnection->oauth_client_id)->toBe('google-client-id-1234')
+        ->and($googleConnection->oauth_client_secret)->toBe('google-client-secret-1234');
 
     $this->actingAs($user)
         ->withSession(['tenant_id' => $tenant->id])

@@ -204,7 +204,7 @@ return [
     ],
 
     'modern_forestry' => [
-        'support_alert_phone' => env('MODERN_FORESTRY_SUPPORT_ALERT_PHONE', '+18646165468'),
+        'support_alert_phone' => env('MODERN_FORESTRY_SUPPORT_ALERT_PHONE'),
     ],
 
     'stripe' => [

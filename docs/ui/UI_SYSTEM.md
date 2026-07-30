@@ -68,6 +68,56 @@ Transform Everbranch into a premium, calm, high-trust software experience with o
 - Reuse the same token system and typography for public, auth, admin, and embedded.
 - Prefer shared classes/components over page-local style blocks.
 - Keep page-level exceptions minimal and document them in `docs/ui/UI_CHANGELOG.md`.
+- Consistency means the same semantic role has the same appearance and
+  interaction. It does not mean every screen uses the same density or is made
+  from cards.
+
+## Canonical Page Shapes
+
+New or substantially revised screens should start from one of these shapes:
+
+1. **Dashboard:** a small number of health/outcome summaries followed by the
+   next best actions. Do not reproduce the full navigation as cards.
+2. **List:** a compact searchable list or table with filters, visible state,
+   pagination, and an instructive empty state.
+3. **List + detail:** a scanning pane and a shareable detail destination or
+   drawer. Use for catalogs, inboxes, requests, and histories.
+4. **Form/workflow:** one clear page header, grouped fields, contextual help,
+   validation next to the affected field, and a stable action row.
+5. **Immersive tool:** a purpose-built application frame for builders,
+   calendars, grids, or studios. It still uses shared tokens, controls,
+   feedback, and accessibility rules.
+
+Cards are not a page shape. Use them only when an item needs independent visual
+identity or as a small dashboard summary. Prefer rows, sections, and separators
+for information that users need to scan or compare.
+
+## Semantic Interaction Rules
+
+- The same action hierarchy is used everywhere: one primary action, quiet
+  secondary actions, and explicit destructive styling.
+- Loading disables duplicate submission and keeps the control width stable.
+- Success and failure are confirmed by a toast, inline state, or destination
+  screen appropriate to the consequence of the action.
+- Empty states explain what belongs there, why it may be empty, and the next
+  useful action.
+- Popovers hold small choices; dialogs hold focused decisions; drawers preserve
+  list context; full pages host deep or shareable workflows.
+- Destructive confirmations name the record, consequence, and reversibility.
+- Keyboard behavior, focus return, reduced motion, and 44px mobile targets are
+  product requirements, not page-level polish.
+
+### Managed Website editor preview
+
+- The Website canvas is an edit surface: a normal click selects the matching
+  individual text field, button, image, repeated card/FAQ item, header, footer,
+  announcement, or menu control. The inspector focuses the exact matching
+  setting; repeated content opens as a small item-only editor rather than a
+  whole-section form. It does not simulate customer navigation.
+- Full customer navigation is tested only through the private **Preview site**
+  action. That route is authenticated and no-store, resolves internal pages on
+  the server for the current Website only, and shows a preview-only return to
+  the matching editor page. Public sites never receive editor chrome.
 
 ## Login/Auth Branding Rules
 - Keep tenant presentation hooks intact (`authTenantPresentation`, host tenant context, landlord mode flags).
@@ -108,6 +158,9 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Headline/display: Fraunces (`--fb-font-display`)
 - Body/UI: Inter (`--fb-font-ui`)
 - Tailwind `--font-sans` is set Inter-first in `resources/css/app.css`
+- Workflow Studio exception: the entire immersive editor, including workflow
+  names and picker headings, uses Inter. Fraunces is not used inside
+  `.eb-workflow-studio`.
 
 ## Spacing Rules
 - Use consistent card radii via `--fb-radius-*` tokens.
@@ -123,6 +176,17 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
   - `resources/views/components/app-sidebar.blade.php`
 - Auth shell: `resources/views/layouts/auth/simple.blade.php`
 - Public landing: `resources/views/platform/promo.blade.php`
+- Workflow Studio host views:
+  - `resources/views/workflows/create.blade.php` for an unsaved blank canvas
+  - `resources/views/workflows/show.blade.php` for a persisted draft
+- Workflow Studio application:
+  - `resources/js/workflows/StudioApp.tsx`
+  - `resources/js/workflows/components/*`
+  - `resources/js/workflows/definition.ts`
+  - `resources/js/workflows/api.ts`
+- Workflow Studio styles are the `.eb-workflow-*` rules in
+  `resources/css/forestry-ui.css`. Do not fork these into page-local style
+  blocks.
 
 ## Route and Layout Ownership
 - Root behavior: `routes/web.php` (`/` home closure)
@@ -132,6 +196,8 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Public pages:
   - `/platform/promo` -> `PlatformProductPagesController::promo`
   - `/platform/contact` -> `PlatformProductPagesController::contact`
+  - `/explore/modules` and `/explore/modules/{module}` ->
+    `PlatformProductPagesController::moduleExplorer`
 - Auth pages: Fortify views under `resources/views/pages/auth/*` via `FortifyServiceProvider`
 - Owner accounting:
   - `/workspaces/{tenant}/accounting` -> `AccountingCommandCenterController`
@@ -153,8 +219,59 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
   - `.fb-state*` (empty/error/warn/success banners)
   - `.fb-module-card*` (selected/locked/recommended module selection cards)
   - `.fb-motion-enter` (fast, subtle enter; reduced-motion safe)
+- Workflow Studio is a dedicated software surface, not a marketing card or
+  onboarding wizard. Its canonical patterns are:
+  - `.eb-workflow-studio` for the full-height application frame
+  - a 52–56px product header with editable name, save state, undo/redo, Test
+    run, Publish, and overflow actions
+  - a dotted canvas with compact, centered step nodes and working insert/reorder
+    controls
+  - one selected-step inspector with App & event, Account, Configure, and Test
+    sections
+  - an application picker organized around Home, Apps, Flow controls,
+    Utilities, and Templates
+  - an explicit linear branch outline at narrow widths rather than a scaled-down
+    desktop canvas
 - Explanation block (admin/operator screens): `x-ui.page-explainer` + `.fb-page-explainer*`
 - Embedded shell primitives: `.app-shell*`, `.app-topbar*`, `.app-sidebar*`
+- Shared command palette:
+  - `resources/views/components/app-command-palette.blade.php`
+  - tenant requests use `GlobalSearchCoordinator`
+  - landlord requests use `LandlordSearchCoordinator`
+  - never combine those provider sets or filter tenant operational results only
+    in the browser
+
+## Workflow Studio Interaction Contract
+
+- `/workflows/new` must remain side-effect free. The blank canvas opens the
+  picker automatically; selecting the first executable trigger creates the
+  draft and replaces the URL with `/workflows/{id}`.
+- Templates use the same definition catalog and editor components as blank
+  workflows. Do not restore a separate preview-only template browser.
+- Only components returned as executable by the canonical server registry may
+  appear selectable. Unsupported providers belong in Connections roadmap
+  language and must not produce a canvas node.
+- The server remains authoritative for definitions, connection ownership,
+  publish readiness, tests, run state, and optimistic `draft_revision`.
+  Client-only success decoration is not acceptable.
+- Pause/resume and held-item actions may update operational status while a
+  draft is unsaved, but their responses must never replace the local name,
+  definition, test state, or revision.
+- Step tests without browser-held samples must rebuild a real trigger sample
+  and mapped upstream outputs on the server. Paths publish controls stay
+  disabled until every branch contains an executable action.
+- Selection, errors, tests, saves, and publishing need persistent visible state.
+  Nodes use `aria-selected`; save/test announcements use live regions.
+- Picker dialogs trap focus, support keyboard movement, Escape/back behavior,
+  and restore focus to the invoking control. Interactive mobile targets are at
+  least 44px.
+- Respect `prefers-reduced-motion`; do not animate canvas transitions when the
+  user requests reduced motion.
+- Keep studio geometry restrained: 6–8px radii, quiet borders, minimal shadows,
+  forest/navy emphasis, provider-owned marks, and no emoji controls or
+  candy-colored placeholder tiles.
+- The operational and release contract is documented in
+  `docs/operations/workflow-studio-v2-runbook.md`.
 
 ## Public Motion Pattern
 - Motion enhancements for public marketing pages are opt-in via `data-premium-motion="public"` on `<body>`.

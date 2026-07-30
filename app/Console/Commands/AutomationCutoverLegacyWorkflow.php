@@ -22,6 +22,14 @@ class AutomationCutoverLegacyWorkflow extends Command
 
     public function handle(WorkflowProductService $workflows): int
     {
+        $isDryRun = (bool) $this->option('dry-run');
+        $isConfirm = (bool) $this->option('confirm');
+        if ($isDryRun === $isConfirm) {
+            $this->error('Choose exactly one mode: --dry-run to build parity evidence or --confirm to cut over.');
+
+            return self::FAILURE;
+        }
+
         $tenant = Tenant::query()
             ->where('slug', (string) $this->argument('tenant'))
             ->orWhere('id', ctype_digit((string) $this->argument('tenant')) ? (int) $this->argument('tenant') : 0)
@@ -49,24 +57,73 @@ class AutomationCutoverLegacyWorkflow extends Command
         }
 
         try {
+            $qualifiedGate = $this->shadowPreviewGate($workflow);
+            if ($isConfirm && $qualifiedGate['count'] < 3) {
+                $this->error(sprintf(
+                    'Cutover blocked: %d of 3 consecutive matching shadow previews are recorded. Run --dry-run until the gate passes.',
+                    $qualifiedGate['count'],
+                ));
+
+                return self::FAILURE;
+            }
+
             $preview = $workflows->run($workflow, 'cutover_test', null, dryRun: true);
             $this->line('preview_status='.$preview->status);
             $this->line('preview_counts='.json_encode((array) $preview->counts, JSON_UNESCAPED_SLASHES));
             if ($preview->status !== 'success') {
+                $this->audit($workflow, 'legacy_shadow_preview_failed', [
+                    'mode' => $isConfirm ? 'confirmation' : 'qualification',
+                    'run_id' => $preview->id,
+                    'status' => $preview->status,
+                    'error' => $preview->error_summary,
+                ]);
                 $this->error('Preview failed. Legacy execution remains unchanged.');
 
                 return self::FAILURE;
             }
-            if ($this->option('dry-run')) {
-                $this->info('Preview passed. No settings or calendar events were changed.');
 
-                return self::SUCCESS;
-            }
-            if (! $this->option('confirm')) {
-                $this->error('Re-run with --confirm after reviewing the successful preview.');
+            $parity = $this->shadowParityEvidence($workflow, $preview);
+            if ($parity === null) {
+                $this->audit($workflow, 'legacy_shadow_preview_failed', [
+                    'mode' => $isConfirm ? 'confirmation' : 'qualification',
+                    'run_id' => $preview->id,
+                    'reason' => 'missing_parity_evidence',
+                ]);
+                $this->error('Preview did not produce complete source-selection and mapping evidence. Legacy execution remains unchanged.');
 
                 return self::FAILURE;
             }
+
+            if ($isDryRun) {
+                $this->audit($workflow, 'legacy_shadow_preview_passed', $parity + [
+                    'mode' => 'qualification',
+                    'run_id' => $preview->id,
+                ]);
+                $gate = $this->shadowPreviewGate($workflow);
+                $this->line(sprintf('shadow_parity_streak=%d/3', min(3, $gate['count'])));
+                $this->info($gate['count'] >= 3
+                    ? 'Preview passed. The three-preview parity gate is ready for --confirm. No workflow settings or calendar events were changed.'
+                    : 'Preview passed. Repeat --dry-run until three consecutive matching previews are recorded. No workflow settings or calendar events were changed.');
+
+                return self::SUCCESS;
+            }
+
+            if (! hash_equals((string) $qualifiedGate['signature'], (string) $parity['signature'])) {
+                $this->audit($workflow, 'legacy_shadow_preview_failed', $parity + [
+                    'mode' => 'confirmation',
+                    'run_id' => $preview->id,
+                    'reason' => 'confirmation_parity_changed',
+                    'qualified_signature' => $qualifiedGate['signature'],
+                ]);
+                $this->error('Confirmation preview changed source selection, mappings, or expected action counts. Run three new matching --dry-run previews.');
+
+                return self::FAILURE;
+            }
+            $this->audit($workflow, 'legacy_shadow_confirmation_passed', $parity + [
+                'mode' => 'confirmation',
+                'run_id' => $preview->id,
+                'qualified_preview_count' => $qualifiedGate['count'],
+            ]);
 
             $legacyValue = (array) $legacy->value;
             $legacyWasEnabled = (bool) ($legacyValue['enabled'] ?? false);
@@ -91,6 +148,8 @@ class AutomationCutoverLegacyWorkflow extends Command
                 'run_id' => $live->id,
                 'legacy_setting_id' => $legacy->id,
                 'preserved_destination_links' => AutomationWorkflowLink::query()->where('automation_workflow_id', $workflow->id)->count(),
+                'shadow_preview_count' => $qualifiedGate['count'],
+                'shadow_parity_signature' => $qualifiedGate['signature'],
             ]);
             $this->info('Cutover verified. Legacy execution is disabled and the productized workflow is active.');
 
@@ -111,5 +170,68 @@ class AutomationCutoverLegacyWorkflow extends Command
             'context' => $context,
             'occurred_at' => now(),
         ]);
+    }
+
+    /**
+     * @return array{count:int,signature:?string}
+     */
+    protected function shadowPreviewGate(AutomationWorkflow $workflow): array
+    {
+        $events = AutomationWorkflowAuditEvent::query()
+            ->forAllTenants()
+            ->where('tenant_id', $workflow->tenant_id)
+            ->where('automation_workflow_id', $workflow->id)
+            ->whereIn('event_type', ['legacy_shadow_preview_passed', 'legacy_shadow_preview_failed'])
+            ->latest('id')
+            ->limit(20)
+            ->get(['event_type', 'context']);
+
+        $count = 0;
+        $signature = null;
+        foreach ($events as $event) {
+            if ($event->event_type !== 'legacy_shadow_preview_passed') {
+                break;
+            }
+
+            $candidate = trim((string) data_get($event->context, 'signature'));
+            if ($candidate === '' || ($signature !== null && ! hash_equals($signature, $candidate))) {
+                break;
+            }
+
+            $signature ??= $candidate;
+            $count++;
+        }
+
+        return ['count' => $count, 'signature' => $signature];
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    protected function shadowParityEvidence(
+        AutomationWorkflow $workflow,
+        \App\Models\AutomationWorkflowRun $preview,
+    ): ?array {
+        $sourceSelectionHash = trim((string) data_get($preview->context, 'shadow_parity.source_selection_hash'));
+        $mappingHash = trim((string) data_get($preview->context, 'shadow_parity.mapping_hash'));
+        if ($sourceSelectionHash === '' || $mappingHash === '') {
+            return null;
+        }
+
+        $evidence = [
+            'definition_hash' => (string) $workflow->publishedVersion?->definition_hash,
+            'source_selection_hash' => $sourceSelectionHash,
+            'mapping_hash' => $mappingHash,
+            'selected_source_count' => (int) data_get($preview->context, 'shadow_parity.selected_source_count', 0),
+            'mapped_action_count' => (int) data_get($preview->context, 'shadow_parity.mapped_action_count', 0),
+            'expected_action_counts' => [
+                'would_create' => (int) data_get($preview->context, 'dry_run_counts.would_create', 0),
+                'would_update' => (int) data_get($preview->context, 'dry_run_counts.would_update', 0),
+            ],
+        ];
+
+        return $evidence + [
+            'signature' => hash('sha256', json_encode($evidence, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)),
+        ];
     }
 }

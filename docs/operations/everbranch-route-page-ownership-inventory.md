@@ -1,7 +1,8 @@
 # Everbranch Route/Page Ownership Inventory
 
-Status: PR 2 brand and navigation coherence inventory.
-Date: 2026-05-21.
+Status: brand/navigation coherence inventory, with landlord Branches preview
+added 2026-07-25.
+Date: 2026-07-25.
 
 ## Purpose
 
@@ -16,7 +17,8 @@ This inventory documents who each major route/page belongs to so future work can
 | `/platform/plans` | public | Plans & Add-ons, billing-disabled explanatory copy | Everbranch public platform | Keep "Plans & Add-ons"; do not imply checkout is ready | No additional change |
 | `/platform/contact` | public | Previous headline "Talk with the Forestry Backstage team" | Everbranch sales/contact | Talk with the Everbranch team | Yes |
 | `/platform/start` | public/client intake | Demo/production access request with setup/import and mobile intent fields | Everbranch guided intake | Keep "Request production access"; do not call self-serve ready | PR 3 updated |
-| `/platform/demo` | public/client intake | Demo request | Everbranch demo intake | "See Everbranch in action" | Yes through config |
+| `/platform/contact?intent=walkthrough` | public/client inquiry | Guided meeting request | Everbranch contact intake; does not create demo access | "Request a walkthrough" | Yes through config |
+| `/platform/demo` | legacy public/client intake | Demo access request | Retained for compatibility; not linked from current discovery surfaces | Legacy only | Yes through config |
 | `/platform/request-submitted` | public/client intake | Request confirmation | Everbranch guided intake | Keep honest manual approval language | Later |
 | `/platform/catalog` | public API/feed | Safe public module catalog feed | Everbranch module discovery | Everbranch module catalog; safe modules only | No |
 | `/login` | auth | Tenant-aware auth page; previous workspace copy said Forestry Backstage | Everbranch auth with tenant context | Everbranch workspace, tenant label preserved | Yes |
@@ -25,6 +27,7 @@ This inventory documents who each major route/page belongs to so future work can
 | `/landlord` | landlord | Landlord Operator Console | Everbranch operator/admin context | Everbranch Admin Console | Yes |
 | `/landlord/tenants` | landlord | Tenant Workspace Directory | Everbranch Admin tenant management | Keep tenant/admin language | Later |
 | `/landlord/commercial` | landlord | Tenant Management/commercial readiness | Everbranch Admin commercial controls | Keep guarded billing/readiness language | Later |
+| `/landlord/branches` | landlord | Read-only Branch catalog preview for a selected workspace | Everbranch Admin Branch discovery/support context | Show the same customer-facing Branch catalog payload without mutating billing/access | Yes, 2026-07-25 |
 | `/landlord/agreements` | landlord | Agreement portfolio, draft/version/send/evidence/termination tools | Everbranch Admin legal/commercial operations | Operator-only; immutable accepted versions and audited mutations | Yes, 2026-07-16 |
 | `/landlord/tenants/{tenant}/agreements` | landlord | Per-workspace agreement list | Everbranch Admin tenant commercial operations | Tenant-scoped operator view | Yes, 2026-07-16 |
 | `/landlord/onboarding/journey` | landlord | Onboarding diagnostics plus client setup status review | Everbranch Admin diagnostics | Keep diagnostics/admin language; setup review remains lightweight | PR 3 updated |

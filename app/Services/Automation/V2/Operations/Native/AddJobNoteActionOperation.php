@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Services\Automation\V2\Operations\Native;
+
+use App\Services\Automation\V2\Data\ActionOperationContext;
+use App\Services\Automation\V2\Data\ActionResult;
+
+class AddJobNoteActionOperation extends NativeActionOperation
+{
+    protected function perform(ActionOperationContext $context, bool $dryRun): ActionResult
+    {
+        $workflow = $this->workflow($context);
+        $result = $this->actions->addJobNote(
+            $context->execution->tenantId,
+            $this->actors->resolve($workflow),
+            $this->payload($context),
+            $dryRun,
+        );
+
+        return new ActionResult(
+            output: $result,
+            summary: [
+                'job_id' => $result['job_id'] ?? null,
+                'note_id' => $result['note_id'] ?? null,
+                'dry_run' => $dryRun,
+            ],
+            externalId: isset($result['note_id']) ? (string) $result['note_id'] : null,
+        );
+    }
+}

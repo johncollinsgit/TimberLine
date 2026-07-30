@@ -9,7 +9,9 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleState;
 use App\Models\User;
+use App\Models\WebsiteOrder;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
+use App\Services\ManagedWebsite\ManagedWebsiteService;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -81,7 +83,7 @@ test('dashboard renders commerce hero metric for shopify-connected tenants', fun
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSeeText('Order-linked revenue · Current month')
+        ->assertSeeText('Sales-channel revenue · Current month')
         ->assertSeeText('Commerce workspace')
         ->assertSeeText('$300.00')
         ->assertSeeText('Time window')
@@ -124,9 +126,40 @@ test('dashboard range defaults to current month and filters a selected one day w
     $this->actingAs($user)
         ->get(route('dashboard', ['range' => '1d']))
         ->assertOk()
-        ->assertSeeText('Order-linked revenue · 1 day')
+        ->assertSeeText('Sales-channel revenue · 1 day')
         ->assertSeeText('$125.00')
         ->assertDontSeeText('$425.00');
+});
+
+test('dashboard recognizes confirmed native Website sales as a separate channel', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Website Sales Tenant', 'slug' => 'website-sales-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create(['role' => 'admin']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $user);
+    WebsiteOrder::query()->create([
+        'tenant_id' => $tenant->id,
+        'tenant_site_id' => $site->id,
+        'number' => 'WEB-DASH-100',
+        'lookup_token' => 'website-dashboard-order-lookup-token',
+        'payment_status' => 'paid',
+        'subtotal_cents' => 14200,
+        'total_cents' => 14200,
+        'paid_at' => now(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSeeText('Sales-channel revenue · Current month')
+        ->assertSeeText('Everbranch Website')
+        ->assertSeeText('$142.00')
+        ->assertSee(route('sales-channels.index'));
 });
 
 test('dashboard hides marketing only actions and customer metrics for ops managers', function () {

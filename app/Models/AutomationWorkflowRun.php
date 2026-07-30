@@ -20,8 +20,18 @@ class AutomationWorkflowRun extends Model
         return $this->belongsTo(AutomationWorkflow::class, 'automation_workflow_id');
     }
 
+    public function version(): BelongsTo
+    {
+        return $this->belongsTo(AutomationWorkflowVersion::class, 'automation_workflow_version_id');
+    }
+
     public function steps(): HasMany
     {
         return $this->hasMany(AutomationWorkflowRunStep::class)->orderBy('position');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(AutomationWorkflowRunItem::class);
     }
 }

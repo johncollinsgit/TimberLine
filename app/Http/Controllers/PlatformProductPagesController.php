@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class PlatformProductPagesController extends Controller
@@ -14,10 +15,13 @@ class PlatformProductPagesController extends Controller
         return response()->view('platform.promo', $experienceService->promoPayload());
     }
 
-    public function contact(): Response
+    public function contact(Request $request): Response
     {
+        $intent = strtolower(trim((string) $request->query('intent', 'contact')));
+
         return response()->view('platform.contact', [
             'contact' => (array) config('product_surfaces.contact', []),
+            'intent' => in_array($intent, ['contact', 'sales', 'walkthrough'], true) ? $intent : 'contact',
         ]);
     }
 
@@ -66,5 +70,31 @@ class PlatformProductPagesController extends Controller
     public function catalogFeed(TenantModuleCatalogService $catalogService): JsonResponse
     {
         return response()->json($catalogService->publicCatalogPayload());
+    }
+
+    public function moduleExplorer(Request $request, TenantModuleCatalogService $catalogService, ?string $module = null): Response
+    {
+        $catalog = $catalogService->publicCatalogPayload();
+        $modules = collect((array) ($catalog['modules'] ?? []));
+        $selectedModule = null;
+
+        if (filled($module)) {
+            $selectedModule = $modules->firstWhere('key', strtolower(trim((string) $module)));
+            abort_unless(is_array($selectedModule), 404);
+        }
+
+        return response()->view('platform.module-explorer', [
+            'catalog' => $catalog,
+            'modules' => $modules->values()->all(),
+            'selectedModule' => $selectedModule,
+            'filters' => [
+                'query' => trim((string) $request->query('q', '')),
+                'category' => trim((string) $request->query('category', '')),
+                'integration' => trim((string) $request->query('integration', '')),
+                'setup' => trim((string) $request->query('setup', '')),
+                'industry' => trim((string) $request->query('industry', '')),
+                'sort' => trim((string) $request->query('sort', 'recommended')),
+            ],
+        ]);
     }
 }

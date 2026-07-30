@@ -1,5 +1,236 @@
 # SYSTEM SNAPSHOT
 
+## Managed Website domain isolation and platform-home correction (2026-07-27)
+
+- `theeverbranch.com` is a platform-only public host. A prior Managed Website
+  public fallback could treat it as the flagship Modern Forestry tenant and
+  render a tenant theme there. The renderer now explicitly excludes the
+  canonical public host at `/` and fallback paths; a regression test protects
+  that boundary. Tenant sites remain limited to their approved subdomain or
+  an explicit active custom-domain record.
+- `tenant_site_domains` is additive and tenant-owned. The Website workspace
+  exposes a guided domain flow: normalize the customer-owned domain, create a
+  unique encrypted TXT proof, verify authoritative DNS, then activate only
+  when the published-site, global custom-domain, tenant allowlist, and
+  independent activation gate all pass. No registrar credentials are stored;
+  verification does not modify DNS or enable a hostname by itself.
+- Custom domain rollback is host-local: disabling the domain stops that public
+  host without deleting Website snapshots, forms, customer records, orders,
+  provider connections, workflows, or unrelated Everbranch services.
+- Active external Website hosts are public-render/form-only and use a
+  host-local session cookie. App/login, landlord, API, Shopify, webhook, and
+  workspace namespaces return 404 there rather than becoming alternate app
+  origins.
+- Published child pages on an active custom domain use Laravel's final
+  fallback only after all explicit routes have precedence. It renders GET/HEAD
+  only, requires `managed_website_custom_domain` host context, and resolves an
+  exact immutable tenant page; unknown paths and JSON requests return 404,
+  while a real route with the wrong method retains 405. This avoids the former
+  global GET catch-all, which could shadow later application routes and turn
+  unrelated POSTs into 405s.
+
+## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
+
+- **Everbranch Managed Website** is the planned default-disabled,
+  tenant-scoped Website add-on ($99/month plus $499 setup). It is not a live
+  entitlement until verified/audited commercial fulfilment, rollout allowlist,
+  host-isolation, publishing, and rollback-drill gates pass.
+- V1 uses additive tenant site/page/draft/immutable-version/section/navigation/
+  media/redirect/publish-event records. Public sites read only immutable
+  snapshots on `<workspace>.theeverbranch.com`; unknown or unverified hosts
+  fail closed and existing routes take precedence.
+- Modern Forestry's separate Shopify app and Shopify Checkout are explicitly
+  excluded. Managed Website must not change or call their routes, UI,
+  credentials, checkout, customer account, webhooks, orders, customers,
+  rewards, imports, connections, or workflow cursors; Modern Forestry is not a
+  pilot.
+- Four audited, independent fail-closed controls are required: global
+  availability, tenant rollout allowlist, editor/publishing freeze, and public
+  rendering disablement for Managed Website hosts. Normal rollback keeps the
+  last good public snapshot; security/isolation rollback disables only website
+  hosts. See `docs/operations/managed-website-rollback-runbook.md`.
+- Website forms remain normal tenant-scoped submissions. They do not create
+  customers, send messages, modify marketing audiences, trigger workflows, or
+  process commerce. Shopify/Square/Stripe/booking CTAs link to external systems
+  of record.
+
+## Rich Website themes and draft preview (2026-07-27)
+
+- Site-wide Website draft/published state is immutable and separate from page
+  versions: `tenant_site_versions` owns theme settings, navigation, footer,
+  announcement, SEO defaults, source manifests, and optional thumbnail paths.
+  A publish moves only the site-local published pointer after copying the
+  current draft snapshot. Public rendering therefore cannot pick up unpublished
+  menu or styling edits.
+- `tenant_site_media` is an additive tenant-owned, public-site-only image
+  library. It accepts approved image types only and is resolved server-side;
+  private field-service, customer, and workspace files are out of scope.
+- The Website editor's desktop/mobile iframe is an authenticated, `no-store`
+  edit canvas rendered by the public-site renderer. Canvas clicks select and
+  focus the matching individual text, CTA, image, card/FAQ item, or navigation
+  control rather than following customer links. A separate
+  authenticated, no-store full-site draft preview resolves internal links only
+  to owned preview pages and includes a private toolbar back to the exact
+  editor page; neither preview can fall through to the Everbranch workspace.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements are complete
+  six-page starter packs with structured menus, announcements, banners, FAQs,
+  forms, service cards, and original generated starter imagery. Collins content
+  remains a draft prepared only by explicit operator action; it is not published.
+
+## Website Commerce and live editor (default-disabled) (2026-07-27)
+
+- Website now has a dedicated full-screen editor route with a Shopify-inspired
+  section outline, live desktop/mobile canvas, inspector, drag reorder,
+  autosave, page switcher, safe imagery, section visibility, and publish
+  controls. HVAC, Collins, and Outdoor Elements start with distinct structured
+  page content. It retains Everbranch names/assets and the
+  immutable Managed Website version and rollback contract.
+- `website_*` records own native Website products, variants, inventory
+  movements/reservations, carts, shoppers, orders, payments, fulfillments, and
+  signed Stripe event receipts. They are deliberately separate from legacy
+  orders, Shopify records, Modern Forestry customer data, rewards, and
+  provider connections.
+- Merchant checkout is fail-closed: the Website commercial gate, entitlement,
+  tenant allowlist, Stripe Connect account, verified webhook policy, and tax
+  decision must pass. Physical orders support pickup/manual local delivery;
+  shipping carriers and rates remain deferred.
+- Sales-channel reporting exposes a tenant-scoped, read-only summary of
+  confirmed sources, including native Website payments alongside existing
+  provider sales. It never copies Website records into legacy `orders`, merges
+  shoppers, or changes Modern Forestry's Shopify checkout/source-of-truth.
+
+## Modern Forestry App Store Customer Login Recovery (2026-07-25)
+
+- Modern Forestry's Headless Customer Account integration is a public
+  authorization-code/PKCE client. Production requires its existing
+  `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`; `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`
+  remains optional and is used only when an intentionally confidential client
+  is configured.
+- Shopify discovery may advertise `client_secret_basic` support globally. That
+  capability does not make the public Headless client confidential and must not
+  make `/auth/config` report `configured=false`.
+- Production `/ready` and `config:doctor --env=production` now fail closed when
+  the public Customer Account client ID is missing, preventing another
+  successful-looking release with App Store customer login disabled.
+- Login configuration reads and readiness probes do not mutate customer
+  identity, Candle Cash balances or transactions, birthdays, rewards, Shopify
+  customers, or customer profile links.
+
+## Operator Alerts and Landlord Branches Preview (2026-07-25)
+
+- `/landlord/branches` is the landlord-only Branch catalog preview. It lets an
+  operator select a workspace and inspect the same customer-facing Branch
+  catalog payload without mutating billing, module access, or entitlements.
+  The route is host-locked to the landlord app, protected by
+  `landlord.operator`, and appears as **Branches** in the Everbranch Admin
+  sidebar.
+- Landlord navigation keeps **Home** pinned first, then sorts the remaining
+  Everbranch Admin links alphabetically for scannable operator use. Tenant
+  navigation ordering is unchanged.
+- `OperatorAlertService` is the single SMS alert gate for agreement acceptance,
+  support-ticket, Bud-request, and weekly-snapshot operator texts. It reserves
+  an `operator_alert_logs` row before any send, records sent/failed/suppressed
+  status, and returns without texting if the reservation/dedupe layer is
+  unavailable.
+- Operator SMS delivery has no hardcoded destination. Production must set
+  `EVERBRANCH_OPERATOR_ALERT_PHONE`; `EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED`
+  defaults to enabled only when a phone is explicitly configured and can be set
+  false to keep logging without texting.
+- The legacy Modern Forestry mobile support-alert phone also has no code
+  fallback. It must come from `MODERN_FORESTRY_SUPPORT_ALERT_PHONE` or a
+  tenant-saved support-alert setting.
+- Alerts must represent real site activity. Sandbox-validation agreements,
+  “TEST MODE ONLY” agreements, known fixture tenants, demo/sandbox/test account
+  modes, `.test` or localhost request hosts, and test signer email domains are
+  suppressed and logged with reasons instead of texting. Repeated identical
+  same-tenant/event/message alerts are coalesced for
+  `EVERBRANCH_OPERATOR_ALERT_SMS_REPEAT_WINDOW_MINUTES` minutes, default 360.
+- Operating details and incident checks live in
+  `docs/operations/operator-alert-sms-runbook.md`.
+
+## Canonical Customer Alias Identity Rule (2026-07-24)
+
+- Customer merges retain archived `marketing_profiles` aliases for auditability,
+  but tenant-scoped email and phone matching must resolve every match through
+  `CanonicalMarketingProfileResolver` before deciding whether an identity is
+  unique or ambiguous. Multiple aliases that end at one survivor are one
+  customer and must never hide that survivor's storefront rewards balance.
+- Multi-level merge chains resolve to their final survivor. Distinct survivors
+  remain ambiguous, and broken, cyclic, cross-tenant, or email/phone-conflicting
+  chains fail closed to identity review.
+- Merge aliases do not own a separate customer balance after consolidation.
+  Existing ledgers and balances remain authoritative; this identity rule does
+  not authorize a Growave re-import, balance recalculation, or data migration.
+
+## Workflow Studio v2 (2026-07-24)
+
+- `/workflows` is now an operational workspace with Workflows, Runs,
+  Connections, and optional Templates navigation. `/workflows/new` opens an
+  unsaved blank canvas and does not create an `automation_workflows` row until
+  the first trigger is selected.
+- The React/TypeScript Workflow Studio owns the immersive editor experience:
+  compact product header, dotted canvas, executable step picker, reorder and
+  insertion controls, selected-step inspector, responsive path outline,
+  autosave revision feedback, step tests, test runs, publish, pause/resume, and
+  truthful run-history links.
+- Schema v2 definitions use one trigger plus ordered Action, Filter, Delay, or
+  Paths steps. Step and branch identities are stable ULIDs; mappings may read
+  only `trigger.output.*` or output from a reachable earlier step. Arbitrary
+  code and expression evaluation are not part of the contract. Limits are 100
+  total steps, ten branches per Paths step, three nested Paths levels, and
+  delays from one minute through 30 days.
+- The canonical component registry exposes labels, provider assets,
+  configuration and input/output schemas, connection requirements, scopes, and
+  test policy without exposing handler classes. The executable launch catalog
+  contains native Everbranch customer/job/task triggers and job/email actions,
+  Asana/Shopify/Square polling triggers, Google Calendar event upsert, Filter,
+  Delay For, Delay Until, and Paths. Unsupported providers and unfinished
+  controls cannot create steps.
+- Builder JSON endpoints are tenant-scoped for catalog, draft creation/load/save,
+  stable-step testing, test runs, publish, pause, resume, held-item discard, and
+  run retry. Saves require `draft_revision`; a stale save returns HTTP 409.
+  Invalid definitions return field-addressable HTTP 422 errors.
+- Published definitions remain immutable. V2 trigger events become durable,
+  version-pinned run items before a polling cursor advances. Each item keeps its
+  encrypted payload/checkpoint, available time, retry state, current step, and
+  branch stack. Per-step action receipts and destination links provide
+  idempotency so a retry resumes from the failed step instead of repeating a
+  confirmed write.
+- `automation:dispatch` runs every minute, while each workflow's `next_run_at`
+  preserves its configured polling interval (ten minutes by default). A second
+  every-minute queue job releases due delays and retry checkpoints. Retryable
+  failures use bounded backoff; uncertain external-send outcomes and paused
+  items are held for an explicit operator decision. Runtime-disabled v2
+  workflows remain due without advancing their cadence, and already queued
+  pending/delayed items are held rather than executed.
+- Workflow routes retain the existing `workflow_automations` entitlement,
+  tenant membership, and role protections. The additional v2 feature gate is
+  enabled for an explicit tenant allowlist, defaulting to Modern Forestry
+  tenant `1`. Entitled tenants outside that allowlist retain the compatible v1
+  builder; an existing v2 draft becomes read-only rather than entering an
+  unavailable service. Connections are resolved inside the active tenant and validated
+  for provider, connected state, and declared scopes. Stored execution
+  payloads are encrypted; run summaries and errors redact secrets and common
+  PII.
+- Stable-step tests reconstruct a real trigger sample when browser-held data is
+  absent and dry-run only the earlier step IDs referenced by typed mappings.
+  Operational pause/resume and held-item responses update status without
+  replacing an unsaved local draft.
+- Provider connections retain encrypted snapshots of the OAuth client identity
+  used at connection time so refreshes use the same credential source even if
+  deployment configuration later changes. Native event retention runs daily:
+  events are acknowledged only after every relevant published workflow cursor
+  has passed them, then removed after a separate grace period.
+- Schema-v1 published workflows continue through the legacy runner. Opening one
+  in Studio converts only its editable draft; the v1 published version remains
+  active until the guarded `automation:promote-legacy-v2` path records three
+  matching shadows plus a matching confirmation. Promotion atomically creates
+  an immutable v2 version while preserving the source cursor, remapping legacy
+  destination links to the v2 action ULID, and retaining the immutable v1
+  version and rollback metadata.
+- Canonical operations, rollout, rollback, and production smoke procedure:
+  `docs/operations/workflow-studio-v2-runbook.md`.
+
 ## Accounting Command Center Branch (2026-07-23)
 
 - `accounting_command_center` is a reusable, disabled-by-default,
@@ -80,6 +311,10 @@
   commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
+- **Default delivery:** completed scoped features merge to `main` and deploy
+  through the protected GitHub/Forge path unless John requests review-only
+  handling, a release gate fails, or a customer-data/isolation concern requires
+  an explicit hold. This never permits a direct or gate-bypassing release.
 - **Optimized CI posture:** pull requests run changed-file Pint plus one cached,
   parallel PHP 8.4 build/test gate, and superseded runs cancel automatically.
   PHP 8.5 compatibility runs nightly and whenever dependency/runtime inputs

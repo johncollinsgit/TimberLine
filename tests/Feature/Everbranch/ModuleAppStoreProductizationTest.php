@@ -68,13 +68,13 @@ test('tenant module store payload exposes product grade metadata for visible mod
         ->and($sms['buyer_setup']['setup_steps'] ?? [])->not->toBeEmpty();
 });
 
-test('order calendar is a public purchasable add-on with canonical pricing', function (): void {
+test('workflow automations is a public purchasable add-on with canonical pricing', function (): void {
     $tenant = moduleStoreTenant('order-calendar-store');
     $payload = app(TenantModuleCatalogService::class)->tenantStorePayload($tenant->id, 'marketing');
     $module = collect((array) ($payload['modules'] ?? []))->firstWhere('module_key', 'workflow_automations');
 
     expect($module)->toBeArray()
-        ->and($module['display_name'])->toBe('Order Calendar')
+        ->and($module['display_name'])->toBe('Workflow Automations')
         ->and($module['status'])->toBe('live')
         ->and($module['billing_mode'])->toBe('add_on')
         ->and(data_get($module, 'purchase.addon_key'))->toBe('order_calendar')
@@ -201,7 +201,7 @@ test('tenant module store renders metadata as guidance without billing checkout 
     $this->actingAs($user)
         ->get(route('marketing.modules'))
         ->assertOk()
-        ->assertSeeText('Workspace feature catalog')
+        ->assertSeeText('Add what your business needs next')
         ->assertSeeText('What this does')
         ->assertSeeText('Best next step')
         ->assertSeeText('What you need before setup')
@@ -214,6 +214,32 @@ test('tenant module store renders metadata as guidance without billing checkout 
         ->assertDontSeeText('Candle Club')
         ->assertDontSeeText('Candle Cash')
         ->assertDontSeeText('Modern Forestry');
+});
+
+test('landlord branches preview renders the customer branch catalog without mutations', function (): void {
+    $landlordHost = parse_url(route('landlord.branches.index'), PHP_URL_HOST) ?: 'localhost';
+
+    config()->set('tenancy.landlord.primary_host', $landlordHost);
+    config()->set('tenancy.landlord.hosts', [$landlordHost]);
+    config()->set('tenancy.landlord.operator_roles', ['platform_admin', 'admin']);
+    config()->set('tenancy.domains.tenant_base_domains', ['theeverbranch.com']);
+
+    $tenant = moduleStoreTenant('branch-preview-tenant');
+    $user = User::factory()->platformAdmin()->create();
+
+    $this->actingAs($user)
+        ->get(route('landlord.branches.index', ['tenant' => $tenant->id]))
+        ->assertOk()
+        ->assertSeeText('Branches')
+        ->assertSeeText('Customer preview')
+        ->assertSeeText('Base user lens')
+        ->assertSeeText('Branch Preview Tenant Branch catalog')
+        ->assertSeeText('Workflow Automations')
+        ->assertSeeText('Read-only preview')
+        ->assertSee('http://branch-preview-tenant.theeverbranch.com/marketing/modules?module=workflow_automations', false)
+        ->assertSeeText('Open customer Module Store')
+        ->assertDontSeeText('Buy for')
+        ->assertDontSeeText('Pay now');
 });
 
 test('module interests remain separate from installed or entitled modules', function (): void {

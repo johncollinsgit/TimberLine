@@ -144,16 +144,13 @@ class ModernForestryMobileCustomerSessionService
         $scopes = $this->customerAccountString('scopes')
             ?: 'openid email customer-account-api:full';
         $callbackScheme = $this->nativeCallbackScheme($redirectUri);
-        $requiresClientSecret = $this->requiresClientSecret($discovery);
-        $clientSecret = $this->customerAccountString('client_secret');
 
         $configured = $clientId !== ''
             && $authorizationEndpoint !== ''
             && $tokenEndpoint !== ''
             && $graphqlEndpoint !== ''
             && $redirectUri !== ''
-            && $callbackScheme !== ''
-            && (! $requiresClientSecret || $clientSecret !== '');
+            && $callbackScheme !== '';
 
         return [
             'configured' => $configured,
@@ -205,10 +202,6 @@ class ModernForestryMobileCustomerSessionService
         }
 
         if ($clientId === '' || $tokenEndpoint === '' || $graphqlEndpoint === '') {
-            throw ModernForestryMobileCustomerAuthException::notConfigured();
-        }
-
-        if ($this->requiresClientSecret($discovery) && $clientSecret === '') {
             throw ModernForestryMobileCustomerAuthException::notConfigured();
         }
 
@@ -289,10 +282,6 @@ class ModernForestryMobileCustomerSessionService
         }
 
         if ($clientId === '' || $tokenEndpoint === '' || $graphqlEndpoint === '') {
-            throw ModernForestryMobileCustomerAuthException::notConfigured();
-        }
-
-        if ($this->requiresClientSecret($discovery) && $clientSecret === '') {
             throw ModernForestryMobileCustomerAuthException::notConfigured();
         }
 
@@ -399,19 +388,6 @@ class ModernForestryMobileCustomerSessionService
         }
 
         return $this->customerAccountString('graphql_endpoint');
-    }
-
-    /**
-     * @param  array<string,mixed>|null  $discovery
-     */
-    protected function requiresClientSecret(?array $discovery = null): bool
-    {
-        $supported = data_get($discovery ?? $this->customerAccountDiscovery(), 'openid.token_endpoint_auth_methods_supported');
-        if (! is_array($supported) || $supported === []) {
-            return false;
-        }
-
-        return in_array('client_secret_basic', $supported, true);
     }
 
     protected function bearerToken(Request $request): ?string

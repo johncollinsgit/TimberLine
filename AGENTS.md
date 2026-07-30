@@ -21,6 +21,18 @@
   production deployments.
 
 - Treat `config/module_catalog.php` as the canonical source of truth for plans, modules, capabilities, visibility, billing mode, and CTA routing. Legacy `commercial.php` and `entitlements.php` are compatibility layers only.
+- Website Commerce is a tenant-owned `website_*` lane. Never reuse or touch
+  legacy `orders`, `order_lines`, Shopify catalog/customer records, Shopify
+  checkout, rewards, or Modern Forestry provider connections when building
+  Website catalog, shopper, cart, payment, or fulfillment features.
+- Multi-channel reporting may only normalize tenant-scoped, read-only summaries
+  through `SalesChannelSummaryService`. Never copy Website orders into legacy
+  orders, merge Website shoppers into existing customers, or let reporting
+  trigger commerce, marketing, checkout, provider, or fulfillment mutations.
+- Website checkout must remain fail-closed behind Managed Website entitlement,
+  rollout, Stripe Connect, tax, and signed webhook readiness. Public Website
+  commerce routes resolve tenant ownership from the verified public host;
+  workspace management routes resolve it via `tenant.access`.
 - Use `TenantModuleAccessResolver`, `TenantExperienceProfileService`, `UnifiedAppNavigationService`, `UnifiedDashboardService`, and `TenantModuleCatalogService` instead of adding new ad hoc plan, channel, or module checks.
 - Tenant-facing mutations must verify tenant scope on the server. Never trust client-provided tenant, module, store, host, or channel identifiers without resolving them against current tenant/store context.
 - Public or self-serve surfaces must suppress modules unless they are explicitly safe and visible for that surface. Hidden, internal-only, placeholder, roadmap, or disabled modules should fail closed.
@@ -36,3 +48,30 @@
   event spreadsheets are reconciliation sources, not additive ledger revenue.
   Never invent tax conclusions or workbook mappings and never add QuickBooks
   write-back.
+
+## Managed Website safety contract (approved; feature remains disabled)
+
+- `managed_website` is a tenant-scoped, default-disabled add-on. Use the
+  canonical module catalog and audited entitlement fulfilment; do not derive
+  access from a URL, host, agreement, checkout request, or connection.
+- Its schema is additive only: tenant site, drafts, immutable published
+  versions, sections, navigation, media references, redirects, and publish
+  events. Publishing/rollback move a site-local pointer and cache keys only.
+- Modern Forestry's separate Shopify app and Shopify Checkout are a hard
+  exclusion. Managed Website work must not modify or invoke their routes, UI,
+  credentials, app settings, checkout, customer account, webhooks, orders,
+  customers, rewards, imports, existing connections, or workflow cursors.
+- Four independently auditable fail-closed gates are required: global
+  availability, tenant rollout allowlist, editor/publishing freeze, and public
+  rendering disablement for Managed Website hosts. Use
+  `docs/operations/managed-website-rollback-runbook.md`; preserve published
+  snapshots and additive records during rollback.
+- Public website rendering must follow existing landlord, authenticated app,
+  Shopify app/Checkout, customer-account, webhook, and established public
+  routing. Unknown or unverified hosts fail closed. V1 external CTA blocks only
+  link out; forms create tenant-scoped submissions and must not create
+  customers, messages, marketing events, workflows, or orders.
+- Site-wide styling, menus, footer, announcement, and SEO defaults are versioned
+  in `tenant_site_versions` separately from page versions. Public pages must
+  resolve only the published site and page snapshot pair; authenticated preview
+  uses draft snapshots with `no-store` caching.

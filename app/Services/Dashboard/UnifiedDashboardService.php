@@ -17,6 +17,7 @@ use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
 use App\Models\User;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
+use App\Services\Reporting\SalesChannelSummaryService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBlueprintProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -38,6 +39,7 @@ class UnifiedDashboardService
         protected TenantFinancialAccess $financialAccess,
         protected TenantModuleAccessResolver $moduleAccess,
         protected QuickBooksOwnerReportingService $ownerReports,
+        protected SalesChannelSummaryService $salesChannels,
     ) {}
 
     /**
@@ -298,18 +300,23 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($tenantId !== null && Schema::hasTable('orders') && in_array($channelType, ['shopify', 'hybrid'], true) && ($canAccessMarketing || $canAccessOps)) {
-            $query = Order::query()->forTenantId($tenantId);
-            $revenue = (float) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->sum('total_price');
-            $orders = (int) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->count();
+        if ($tenantId !== null && ($canAccessMarketing || $canAccessOps)) {
+            $sales = $this->salesChannels->forTenant($tenantId, $range['starts_at'], $range['ends_at']);
+            $hasRelevantChannel = in_array($channelType, ['shopify', 'hybrid'], true) || $sales['has_website_channel'];
 
-            return [
-                'label' => 'Order-linked revenue · '.$range['short_label'],
-                'value' => '$'.number_format($revenue, 2),
-                'supporting' => number_format($orders).' recent orders',
-                'tone' => 'emerald',
-                'destination' => ['kind' => 'orders'],
-            ];
+            if ($hasRelevantChannel && $sales['order_count'] > 0) {
+                $channelDetail = $sales['channel_count'] === 1
+                    ? ($sales['channels'][0]['label'] ?? 'Sales channel')
+                    : number_format($sales['channel_count']).' channels';
+
+                return [
+                    'label' => 'Sales-channel revenue · '.$range['short_label'],
+                    'value' => '$'.number_format($sales['revenue_cents'] / 100, 2),
+                    'supporting' => number_format($sales['order_count']).' confirmed orders · '.$channelDetail,
+                    'tone' => 'emerald',
+                    'destination' => ['kind' => 'sales_channels'],
+                ];
+            }
         }
 
         if ($clientFacingFieldService && $canAccessOps && $tenantId !== null && $useCase === 'field_service' && Schema::hasTable('field_service_jobs')) {
@@ -654,8 +661,8 @@ class UnifiedDashboardService
 
         if ($canAccessMarketing && $tenantId !== null && ((array) ($catalog['sections']['available'] ?? [])) !== []) {
             $actions[] = [
-                'label' => 'Explore modules',
-                'description' => 'See which modules can be activated or requested next for this tenant.',
+                'label' => 'Explore Branches',
+                'description' => 'See what is included, what can be added now, and what requires a request.',
                 'href' => route('marketing.modules'),
                 'tone' => 'info',
             ];
@@ -707,6 +714,9 @@ class UnifiedDashboardService
                 'display_name' => (string) ($module['display_name'] ?? 'Module'),
                 'description' => (string) ($module['description'] ?? ''),
                 'state_label' => (string) data_get($module, 'module_state.state_label', 'Available'),
+                'price_label' => filled(data_get($module, 'purchase.price_display'))
+                    ? (string) data_get($module, 'purchase.price_display')
+                    : (string) ($module['pricing_impact_label'] ?? 'Included or request-based'),
                 'href' => route('marketing.modules', ['module' => (string) ($module['module_key'] ?? '')]),
             ];
         }, $rows);
@@ -730,6 +740,7 @@ class UnifiedDashboardService
             'field_service', 'field_service_job' => route('field-service.index').($destination['section'] ?? false ? '#'.(string) $destination['section'] : ''),
             'customers', 'customer' => route('marketing.customers'),
             'orders' => route('shipping.orders'),
+            'sales_channels' => route('sales-channels.index', ['range' => $rangeKey]),
             'imports' => route('marketing.providers-integrations'),
             'modules' => route('marketing.modules'),
             'reporting' => $tenant ? route('quickbooks.reports.index', ['tenant' => $tenant->slug, 'range' => $rangeKey]) : null,

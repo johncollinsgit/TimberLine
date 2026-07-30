@@ -37,6 +37,8 @@ class IntegrationConnection extends Model
         'access_token',
         'refresh_token',
         'token_type',
+        'oauth_client_id',
+        'oauth_client_secret',
         'expires_at',
         'scopes',
         'metadata',
@@ -53,6 +55,8 @@ class IntegrationConnection extends Model
         'access_token' => 'encrypted',
         'refresh_token' => 'encrypted',
         'external_account_secret' => 'encrypted',
+        'oauth_client_id' => 'encrypted',
+        'oauth_client_secret' => 'encrypted',
         'scopes' => 'array',
         'metadata' => 'array',
         'expires_at' => 'datetime',
@@ -65,6 +69,8 @@ class IntegrationConnection extends Model
         'access_token',
         'refresh_token',
         'external_account_secret',
+        'oauth_client_id',
+        'oauth_client_secret',
     ];
 
     public function tenant(): BelongsTo

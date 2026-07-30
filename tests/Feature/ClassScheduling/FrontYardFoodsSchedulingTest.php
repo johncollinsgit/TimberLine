@@ -52,7 +52,7 @@ test('front yard foods preparation is idempotent and creates tenant four demo ac
         ->and(ScheduledClass::query()->forTenantId(4)->count())->toBe(4)
         ->and(ClassEnrollment::query()->forTenantId(4)->count())->toBe(10)
         ->and(MarketingProfile::query()->forTenantId(4)->count())->toBe(6)
-        ->and(MarketingProfile::query()->forTenantId(4)->where('normalized_phone', '!=', '8646165468')->exists())->toBeFalse()
+        ->and(MarketingProfile::query()->forTenantId(4)->where('normalized_phone', '!=', '5550100101')->exists())->toBeFalse()
         ->and(Agreement::query()->forTenantId(4)->where('template_key', 'front_yard_foods_launch_partner')->count())->toBe(1)
         ->and(Agreement::query()->forTenantId(4)->firstOrFail()->versions()->count())->toBe(1)
         ->and(SubscriptionAuthorization::query()->forTenantId(4)->count())->toBe(0)
@@ -347,7 +347,7 @@ test('public signup creates a tenant customer enrollment and consent gated remin
     $this->post(route('public.classes.store', ['tenant' => $tenant->slug, 'class' => $class->slug]), [
         'name' => 'Taylor Garden',
         'email' => 'taylor.garden@example.test',
-        'phone' => '8646165468',
+        'phone' => '5550100101',
         'seats' => 1,
         'email_reminders_enabled' => 1,
         'sms_reminders_enabled' => 1,
@@ -357,7 +357,7 @@ test('public signup creates a tenant customer enrollment and consent gated remin
         ->post(route('public.classes.store', ['tenant' => $tenant->slug, 'class' => $class->slug]), [
             'name' => 'Taylor Garden',
             'email' => 'TAYLOR.GARDEN@example.test',
-            'phone' => '8646165468',
+            'phone' => '5550100101',
             'seats' => 1,
         ])
         ->assertRedirect()
@@ -367,7 +367,7 @@ test('public signup creates a tenant customer enrollment and consent gated remin
     $enrollment = ClassEnrollment::query()->forTenantId(4)->where('marketing_profile_id', $profile->id)->firstOrFail();
 
     expect($enrollment->scheduled_class_id)->toBe($class->id)
-        ->and($enrollment->normalized_phone)->toBe('8646165468')
+        ->and($enrollment->normalized_phone)->toBe('5550100101')
         ->and(ClassReminder::query()->forTenantId(4)->where('class_enrollment_id', $enrollment->id)->pluck('channel')->sort()->values()->all())->toBe(['email', 'sms'])
         ->and(ClassReminder::query()->forTenantId(4)->where('class_enrollment_id', $enrollment->id)->where('status', 'scheduled')->count())->toBe(2)
         ->and(ClassReminder::query()->forTenantId(4)->where('class_enrollment_id', $enrollment->id)->where('provider_metadata->delivery_gate', 'tenant_provider_and_consent_required')->count())->toBe(2);
