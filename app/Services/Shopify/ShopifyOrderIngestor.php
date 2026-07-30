@@ -268,7 +268,7 @@ class ShopifyOrderIngestor
                 continue;
             }
             $isCandleClub = $this->isCandleClubLineItem($line);
-            if ($this->isBundleLineItem($line)) {
+            if ($this->isBundleLineItem($line, $parser)) {
                 $bundleLines = $this->expandBundleLineItem($line, $parser, $scentIndex, $storeKey, $orderData, $tenantId);
                 foreach ($bundleLines as $bundleLine) {
                     $key = implode('|', [
@@ -510,12 +510,16 @@ class ShopifyOrderIngestor
     /**
      * @param  array<string, mixed>  $line
      */
-    protected function isBundleLineItem(array $line): bool
+    protected function isBundleLineItem(array $line, ?InfiniteOptionsParser $parser = null): bool
     {
         $title = strtolower((string) ($line['title'] ?? ''));
         $productType = strtolower((string) ($line['product_type'] ?? ''));
 
-        return str_contains($title, 'bundle') || str_contains($productType, 'bundle');
+        if (str_contains($title, 'bundle') || str_contains($productType, 'bundle')) {
+            return true;
+        }
+
+        return count(($parser ?? new InfiniteOptionsParser)->parseBundleSelections($line)) > 1;
     }
 
     /**
@@ -679,13 +683,22 @@ class ShopifyOrderIngestor
     {
         $title = strtolower((string) ($line['title'] ?? ''));
         $variantTitle = strtolower((string) ($line['variant_title'] ?? ''));
+        $sizeText = trim($title.' '.$variantTitle);
+
+        if (str_contains($sizeText, 'wax melt')) {
+            return 'wax-melts';
+        }
+
+        if (str_contains($sizeText, 'room spray')) {
+            return 'room-sprays';
+        }
 
         $baseSize = null;
-        if (str_contains($title, '16oz') || str_contains($title, '16 oz')) {
+        if (str_contains($sizeText, '16oz') || str_contains($sizeText, '16 oz')) {
             $baseSize = '16oz';
-        } elseif (str_contains($title, '8oz') || str_contains($title, '8 oz')) {
+        } elseif (str_contains($sizeText, '8oz') || str_contains($sizeText, '8 oz')) {
             $baseSize = '8oz';
-        } elseif (str_contains($title, '4oz') || str_contains($title, '4 oz')) {
+        } elseif (str_contains($sizeText, '4oz') || str_contains($sizeText, '4 oz')) {
             $baseSize = '4oz';
         }
 
