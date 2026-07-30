@@ -305,6 +305,10 @@ return [
         'large_search_threshold' => (int) env('GOOGLE_PLACES_LARGE_SEARCH_THRESHOLD', 40),
     ],
 
+    'google_booking' => [
+        'url' => env('GOOGLE_BOOKING_URL'),
+    ],
+
     'pexels' => [
         'key' => env('PEXELS_API_KEY'),
     ],

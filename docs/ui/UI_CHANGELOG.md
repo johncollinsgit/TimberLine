@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-07-30 - Evergrove Consultation Booking Page
+
+### What Changed
+
+- Added the public Evergrove `/book` page with the existing Evergrove navigation, brand assets, typography, color system, responsive layout, and a compact public footer.
+- Added an accessible `Choose a Time` action that opens the configured Google Calendar appointment schedule in a new tab with safe external-link attributes.
+- Added a graceful email fallback for periods when online scheduling is not configured, plus exact consultation metadata for search and link previews.
+
+### Guardrails
+
+- Google appointment schedules are still created manually in Google Calendar. The website only reads `GOOGLE_BOOKING_URL`.
+- Missing, malformed, or non-HTTPS booking URLs never render as booking links; visitors are directed to `john@evergrovesoftware.com` instead.
+- No billing, calendar API integration, tenant access, module availability, or automated scheduling behavior changed.
+
 ## 2026-07-30 — Landlord Trade Prospecting Workflow
 
 ### What Changed

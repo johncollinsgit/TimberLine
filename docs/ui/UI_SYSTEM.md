@@ -196,6 +196,7 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Public pages:
   - `/platform/promo` -> `PlatformProductPagesController::promo`
   - `/platform/contact` -> `PlatformProductPagesController::contact`
+  - `/book` -> `EvergroveServicesController::book` on the Evergrove public site
   - `/explore/modules` and `/explore/modules/{module}` ->
     `PlatformProductPagesController::moduleExplorer`
 - Auth pages: Fortify views under `resources/views/pages/auth/*` via `FortifyServiceProvider`
@@ -339,6 +340,8 @@ Primary usage points:
 - FAQ
 - plan summary
 - final CTA + footer
+
+The Evergrove consultation page at `resources/views/evergrove/book.blade.php` reuses the Evergrove public navigation, brand assets, typography, buttons, and responsive tokens. Its compact footer lives at `resources/views/evergrove/partials/footer.blade.php`.
 
 ## Auth Branding Behavior
 - `resources/views/layouts/auth/simple.blade.php` renders brand panel + auth card with tenant presentation content.

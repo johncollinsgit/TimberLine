@@ -12,11 +12,16 @@
     );
     $appMetaName = (string) ($app_name ?? $authTenantPresentation['app_name'] ?? $headBrand['display_name'] ?? config('everbranch.product_name', 'Everbranch'));
     $resolvedTitle = trim((string) ($title ?? ''));
+    $useExactTitle = (bool) ($exact_title ?? false);
     $brandAssets = (array) ($brand_assets ?? config('everbranch.brand_assets', []));
     $mfAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
-    $mfPageTitle = ($resolvedTitle !== '' && mb_strtolower($resolvedTitle) !== mb_strtolower($appMetaName))
-        ? $resolvedTitle.' - '.$appMetaName
-        : $appMetaName;
+    if ($useExactTitle && $resolvedTitle !== '') {
+        $mfPageTitle = $resolvedTitle;
+    } elseif ($resolvedTitle !== '' && mb_strtolower($resolvedTitle) !== mb_strtolower($appMetaName)) {
+        $mfPageTitle = $resolvedTitle.' - '.$appMetaName;
+    } else {
+        $mfPageTitle = $appMetaName;
+    }
     $mfDescription = trim((string) ($description ?? config('product_surfaces.promo.summary', 'Everbranch unifies production, shipping, and customer growth in one place.')));
     $mfOgImage = asset((string) ($brandAssets['og_image'] ?? 'og-image.png')).'?v='.$mfAssetVersion;
     $mfFaviconSvg = ! $isNeutralTenantSurface && $headTenant instanceof \App\Models\Tenant
