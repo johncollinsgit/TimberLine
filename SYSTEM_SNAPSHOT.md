@@ -1,5 +1,20 @@
 # SYSTEM SNAPSHOT
 
+## Shopify bundle scent checkout enforcement (2026-07-30)
+
+- Everbranch Product Options remains a Shopify-only, tenant-scoped module.
+  Assigned option sets render through the active storefront app embed as well
+  as the optional product block, so a missing block placement cannot leave a
+  configured bundle without selectors.
+- The everbranch-bundle-scent-validation Shopify Function is the
+  non-bypassable checkout gate for Shop Pay and other express checkout paths.
+  It reads Everbranch rule JSON from each assigned product's bundle scent rule
+  metafield, with migration fallbacks for the initially assigned Modern
+  Forestry bundle handles.
+- Product Option actions synchronize those product metafields through the
+  tenant-owned installed Shopify store. The product-option-validation command
+  previews the initial/backfill sync and requires explicit apply for writes.
+
 ## Everbranch public-site studio redesign (2026-08-07)
 
 - The canonical public Everbranch marketing surface (`/`, Plans, access/demo,
