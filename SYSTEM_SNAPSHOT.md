@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Evergrove Public Booking Page (2026-07-30)
+
+- `https://evergrovesoftware.com/book` is the branded public consultation page for Evergrove Software. It links to John Collins's externally created Google Calendar appointment schedule only when `GOOGLE_BOOKING_URL` contains a valid HTTPS URL.
+- When scheduling is not configured, the page fails safely to a direct email option at `john@evergrovesoftware.com`; it never renders an empty or unsafe booking link.
+- Google Calendar appointment schedules remain operator-created in the Google Calendar interface. The application only presents the configured public booking URL.
+
 ## Managed Website domain isolation and platform-home correction (2026-07-27)
 
 - `theeverbranch.com` is a platform-only public host. A prior Managed Website

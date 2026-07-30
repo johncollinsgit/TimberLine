@@ -19,6 +19,7 @@
             <a href="/#examples">Fixes</a>
             <a href="/#work">Studio</a>
             <a href="/#contact">Contact</a>
+            <a href="/book" @if(request()->routeIs('evergrove.book')) aria-current="page" @endif>Book</a>
         </div>
 
         <div class="eg-site-actions">
