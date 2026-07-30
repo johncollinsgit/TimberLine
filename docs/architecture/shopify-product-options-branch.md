@@ -83,18 +83,34 @@ The initial allowed scent values are the 31 values visible across the supplied R
 
 The Modern Forestry mobile product-detail API reads the same assigned ruleset. Existing iOS bundle selectors therefore receive the ruleset count and filtered scents, plus `requireDistinctValues` for rules that require a different scent in every slot.
 
-## Live activation dependency
+## Order normalization
 
-The locally stored `retail` OAuth token belongs to the retired `modernforestry-test.myshopify.com` shop and returns HTTP 404. The live `modernforestry.myshopify.com` store returns HTTP 401 for that token, confirming that the app must be reauthorized against the live store before Admin API product discovery can run.
+`ShopifyOrderIngestor` expands each recognized option-set order line into one
+Everbranch order line per selected scent. The normalized line carries the
+canonical scent and size IDs, multiplied bundle quantity, and a stable
+parent-line/slot external key so re-import is idempotent.
 
-After the web app and Shopify extensions are deployed:
+The migrated mappings cover:
 
-1. Open `/shopify/reinstall/retail` and complete OAuth for `modernforestry.myshopify.com`.
-2. Open Everbranch from Shopify Admin and select `Product Options`.
-3. Paste or confirm the product handles for the five unassigned rulesets.
-4. Activate the Everbranch bundle scent validation in Shopify Checkout rules.
-5. Run the product-metafield backfill for the verified tenant.
-6. Optionally add the `Everbranch scent options` block to relevant product
-   templates for explicit placement; the active app embed is the fallback.
-7. Test Add to cart and Shop Pay. Confirm missing scents are blocked and
-   `Scent 1...N` appear on the Shopify cart line and order after selection.
+- 4oz and 8oz three-candle bundles;
+- Teacher Candles in 4oz, 8oz, 16oz, and wax-melt variants;
+- five-wax-melt bundles; and
+- three-room-spray bundles.
+
+Unexpected selection counts, unknown scents, and unresolved sizes create
+Shopify import exceptions instead of silently producing incomplete demand.
+
+## Live activation
+
+- Shopify app version `modernforestrybackstage-35` is released.
+- The retail installation has approved `read_validations` and
+  `write_validations`.
+- Validation `gid://shopify/Validation/121798915` is enabled with
+  `blockOnFailure: true`.
+- Live Cart AJAX checks block missing selections for active 4oz, 8oz, and
+  Teacher products, block duplicates where configured, and accept complete
+  valid selections.
+- The room-spray product is currently draft and cannot receive a customer-cart
+  smoke test until reactivated.
+- Full external evidence is stored under
+  `docs/operations/evidence/shopify/2026-07-30/`.

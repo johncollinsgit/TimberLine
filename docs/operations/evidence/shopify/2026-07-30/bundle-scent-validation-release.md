@@ -68,4 +68,28 @@ Anonymous storefront Cart AJAX requests were made against variant `3217168053050
 
 The rejected attempt creates no cart line. This is server-side Shopify Function enforcement rather than a theme-only browser check, so accelerated checkout cannot bypass the required selections.
 
+## Assigned option-set audit
+
+| Product | Shopify state | Validation evidence |
+| --- | --- | --- |
+| `3 (4oz) Soy Candle Bundle` | Active | Live missing, duplicate, and valid Cart AJAX tests passed. |
+| `3 (8oz) Soy Candle Bundle` | Active | Live missing, duplicate, and valid Cart AJAX tests passed. |
+| `Teacher Candles` | Active | Live 4oz missing-selection rejection passed; valid 4oz, 16oz, and wax-melt selections passed. Repeated scents are accepted because this ruleset does not require distinct values. |
+| `5 Wax Melts Bundle` | Active | Deployed Function source tests pass for missing, duplicate, and five-valid-scent cases. A second live Cart AJAX pass was interrupted by Shopify/Cloudflare HTTP 429 bot verification after the preceding smoke requests. |
+| `Three Room Sprays for $30` | Draft | The product has no online-store URL and cannot be tested through a customer cart while draft. Deployed Function source tests pass for missing and complete three-scent cases if the product is reactivated. |
+
+The Function suite now exercises all five migrated option sets and passes 13 tests.
+
+## Everbranch order normalization
+
+The Shopify order importer recognizes every assigned option-set title and expands its `Scent 1` through `Scent N` properties into individual Everbranch order lines. Each expanded line receives:
+
+- one canonical `scent_id`;
+- the applicable canonical `size_id` (`4oz-cotton`, `8oz-cotton`, `16oz-cotton`, `wax-melts`, or `room-sprays`);
+- quantity multiplied by the Shopify bundle quantity;
+- a stable parent-line-and-slot external key for idempotent re-import;
+- the original bundle title, properties, selection, and resolved size in its payload.
+
+Local normalization coverage passes for both candle bundle sizes, every Teacher Candles variant family, wax melts, and room sprays.
+
 No Shopify client secret or access token is stored in this evidence.
