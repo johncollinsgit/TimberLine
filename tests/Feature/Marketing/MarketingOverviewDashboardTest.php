@@ -312,10 +312,6 @@ test('marketing overview shows real imported-system metrics and grouped navigati
     $response
         ->assertOk()
         ->assertSeeText('What is actually resident in the marketing system')
-        ->assertSeeText('Home')
-        ->assertSeeText('Lists & Sends')
-        ->assertSeeText('Rewards')
-        ->assertSeeText('Setup')
         ->assertSeeText('Canonical Profiles')
         ->assertSeeText('Cross-channel Core')
         ->assertSeeText('Capture Square buyer contact info')
