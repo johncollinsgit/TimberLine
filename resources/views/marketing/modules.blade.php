@@ -90,13 +90,10 @@
         .branch-directory__grid { display: grid; gap: 1.2rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .branch-directory__card { background: #fff; border: 1px solid var(--fb-border, #e7eceb); border-radius: 10px; display: flex; flex-direction: column; min-height: 100%; overflow: hidden; transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
         .branch-directory__card:hover, .branch-directory__card[data-focused="true"] { border-color: #93aaa5; box-shadow: 0 16px 34px -26px rgba(13, 27, 30, .65); transform: translateY(-2px); }
-        .branch-directory__image { background-color: #e5ecea; background-position: center; background-repeat: no-repeat; background-size: cover; display: flex; height: 138px; overflow: hidden; position: relative; width: 100%; }
-        .branch-directory__image::after { background: linear-gradient(90deg, rgba(8, 25, 28, .22), transparent 62%); content: ''; inset: 0; pointer-events: none; position: absolute; }
-        .branch-directory__screen { align-self: flex-end; background: rgba(255, 255, 255, .95); border: 1px solid rgba(15, 45, 48, .14); box-shadow: 0 12px 28px -14px rgba(13, 27, 30, .7); color: #153b42; display: grid; gap: .18rem; margin: 0 0 .75rem .75rem; max-width: 67%; padding: .5rem .58rem; position: relative; transform: perspective(300px) rotateY(5deg) rotateX(2deg); z-index: 1; }
-        .branch-directory__screen span { color: #41656a; font-size: .49rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-        .branch-directory__screen strong { font-size: .7rem; line-height: 1.1; }
-        .branch-directory__screen small { color: #597074; font-size: .57rem; line-height: 1.2; }
-        .branch-directory__screen em { background: #123c43; color: #fff; font-size: .51rem; font-style: normal; font-weight: 750; justify-self: start; margin-top: .16rem; padding: .18rem .34rem; }
+        .branch-directory__image { background-color: #e5ecea; background-position: center; background-repeat: no-repeat; background-size: cover; border: 0; color: inherit; display: flex; height: 138px; overflow: hidden; padding: 0; position: relative; text-align: left; width: 100%; }
+        a.branch-directory__image, button.branch-directory__image { cursor: pointer; text-decoration: none; }
+        a.branch-directory__image:hover, button.branch-directory__image:hover { filter: brightness(.96); }
+        a.branch-directory__image:focus-visible, button.branch-directory__image:focus-visible { outline: 3px solid rgba(30, 90, 99, .5); outline-offset: -4px; }
         .branch-directory__card-body { display: flex; flex: 1; flex-direction: column; gap: .75rem; padding: 1rem; }
         .branch-directory__meta { color: var(--fb-brand-2, #1e5a63); display: flex; font-size: .68rem; font-weight: 800; justify-content: space-between; letter-spacing: .09em; text-transform: uppercase; }
         .branch-directory__card h3 { font-size: 1.02rem; line-height: 1.2; margin: 0; }
@@ -178,14 +175,21 @@
                 <div class="branch-directory__grid">
                     @foreach($moduleCards as $card)
                         <article class="branch-directory__card" data-branch-card data-focused="{{ $card['focused'] ? 'true' : 'false' }}" data-category="{{ $card['category'] }}" data-search="{{ strtolower(implode(' ', [$card['name'], $card['description'], $card['category_label'], $card['outcome']])) }}" x-show="matches($el)" x-cloak>
-                            <div class="branch-directory__image" style="background-image: url('{{ $card['cover_image'] }}')" role="img" aria-label="Preview of the {{ $card['name'] }} Branch page">
-                                <div class="branch-directory__screen" aria-hidden="true">
-                                    <span>Everbranch · Branch</span>
-                                    <strong>{{ $card['name'] }}</strong>
-                                    <small>{{ Illuminate\Support\Str::limit($card['outcome'], 52) }}</small>
-                                    <em>Explore</em>
+                            @php($imageAttributes = "style=\"background-image: url('{$card['cover_image']}')\"")
+                            @if($card['action'] && $card['action']['kind'] === 'link')
+                                <a class="branch-directory__image" {!! $imageAttributes !!} href="{{ $card['action']['url'] }}" aria-label="Open {{ $card['name'] }} Branch">
+                            @elseif($card['action'])
+                                <button class="branch-directory__image" {!! $imageAttributes !!} type="button" @click='openBranch(@json($card))' aria-label="Open {{ $card['name'] }} Branch">
+                            @else
+                                <div class="branch-directory__image" {!! $imageAttributes !!} role="img" aria-label="Preview of the {{ $card['name'] }} Branch page">
+                            @endif
+                            @if($card['action'] && $card['action']['kind'] === 'link')
+                                </a>
+                            @elseif($card['action'])
+                                </button>
+                            @else
                                 </div>
-                            </div>
+                            @endif
                             <div class="branch-directory__card-body">
                                 <div class="branch-directory__meta"><span>{{ $card['category_label'] }}</span><span>{{ $card['state_label'] }}</span></div>
                                 <h3>{{ $card['name'] }}</h3>
