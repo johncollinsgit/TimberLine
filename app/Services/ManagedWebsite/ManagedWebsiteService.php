@@ -79,8 +79,14 @@ class ManagedWebsiteService
     {
         $host = strtolower(trim(explode(':', $host)[0]));
         $baseDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com')));
+        $includedHost = $site->subdomain.'.'.$baseDomain;
+        $pilot = $site->relationLoaded('setup') ? $site->setup : $site->setup()->first();
+        if ($pilot?->domain_choice === 'everbranch_subdomain') {
+            return $host !== '' && $baseDomain !== '' && hash_equals($includedHost, $host);
+        }
 
-        return $host !== '' && $baseDomain !== '' && hash_equals($site->subdomain.'.'.$baseDomain, $host);
+        return $host !== '' && ($baseDomain !== '' && hash_equals($includedHost, $host)
+            || $site->domains()->where('status', 'active')->where('hostname', $host)->exists());
     }
 
     public function createSite(Tenant $tenant, ?User $actor): TenantSite

@@ -11,8 +11,11 @@ use App\Models\TenantSiteMedia;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
 use App\Models\TenantSiteVersion;
+use App\Services\ManagedWebsite\ManagedWebsiteAccessService;
 use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
+use App\Services\ManagedWebsite\WebsiteCommerceService;
+use App\Services\ManagedWebsite\WebsitePilotService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,10 +25,12 @@ use Illuminate\View\View;
 
 class ManagedWebsiteController extends Controller
 {
-    public function index(Request $request, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): View
+    public function index(Request $request, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains, WebsitePilotService $pilot, ManagedWebsiteAccessService $access): View
     {
         $tenant = $this->tenant($request);
-        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion', 'domains'])->first();
+        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion', 'domains', 'setup'])->first();
+        $setup = $site?->setup;
+        $checklist = $pilot->checklist($site, $setup);
 
         return view('managed-website.index', [
             'tenant' => $tenant,
@@ -39,6 +44,10 @@ class ManagedWebsiteController extends Controller
             'domainsEnabled' => $domains->enabledFor($tenant),
             'domainTarget' => $domains->connectionTarget(),
             'publicUrl' => $site ? $domains->publicUrl($site) : null,
+            'setup' => $setup,
+            'checklist' => $checklist,
+            'nextChecklistItem' => collect($checklist)->firstWhere('complete', false),
+            'canPublish' => $access->canPublish($tenant, $request->user()),
         ]);
     }
 

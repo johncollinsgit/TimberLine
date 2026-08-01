@@ -18,7 +18,7 @@
                     <div class="flex flex-wrap gap-2">@if($site->status === 'published' && $isPublicRenderEnabled)<a class="fb-btn fb-btn-secondary" target="_blank" rel="noopener" href="{{ $publicUrl }}">View live site</a>@endif</div>
                 </header>
 
-                <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-domain-heading">
+                @if(! $setup || $setup->domain_choice !== 'everbranch_subdomain')<section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-domain-heading">
                     <div class="border-b border-zinc-200 px-6 py-5">
                         <p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website address</p>
                         <h2 id="website-domain-heading" class="mt-1 text-xl font-bold tracking-tight text-zinc-950">Connect a domain you already own</h2>
@@ -76,7 +76,7 @@
                             </aside>
                         </div>
                     @endif
-                </section>
+                </section>@endif
 
                 <section class="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
                     <div class="grid min-h-[360px] place-items-center bg-[#f6f7f6] p-5 lg:p-10">

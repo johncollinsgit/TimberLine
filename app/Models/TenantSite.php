@@ -61,4 +61,9 @@ class TenantSite extends Model
     {
         return $this->hasMany(TenantSiteDomain::class);
     }
+
+    public function setup(): HasOne
+    {
+        return $this->hasOne(TenantSiteSetup::class, 'tenant_site_id');
+    }
 }
