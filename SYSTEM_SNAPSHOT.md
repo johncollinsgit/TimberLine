@@ -1,20 +1,39 @@
 # SYSTEM SNAPSHOT
 
-## Quote-first electrician Website pilot (2026-08-01)
+## Evergrove Public Booking Page (2026-07-30)
 
-- The dedicated `everbranch-website-pilot` preparation command creates an isolated, owner-scoped electrician workspace and private Collins Electric draft; an entitlement still requires an explicit audited request or operator grant, plus the existing allowlist and runtime gates.
-- Website setup is a tenant-site one-to-one profile with the quote-first wizard, saved checklist, quote-only Website services, and tenant-scoped Website Leads. It does not create legacy customers, jobs, orders, marketing records, messages, appointments, or notifications.
-- Tenant owners/admins alone may publish or roll back snapshots; managers can prepare drafts. A public Website host must exactly match the saved `name.theeverbranch.com` address and read a published immutable snapshot.
+- `https://evergrovesoftware.com/book` is the branded public consultation page for Evergrove Software. It links to John Collins's externally created Google Calendar appointment schedule only when `GOOGLE_BOOKING_URL` contains a valid HTTPS URL.
+- When scheduling is not configured, the page fails safely to a direct email option at `john@evergrovesoftware.com`; it never renders an empty or unsafe booking link.
+- Google Calendar appointment schedules remain operator-created in the Google Calendar interface. The application only presents the configured public booking URL.
 
-## Tenant Branch directory refinement (2026-08-01)
+## Managed Website domain isolation and platform-home correction (2026-07-27)
 
-- Tenant **Branches** now uses the same safe catalog payload with categories,
-  instant local search, concise local-photo cards, clear price/plan language,
-  and a focused three-step setup decision dialog. Catalog filtering is
-  presentation only: server-side tenant membership, entitlement, billing, and
-  audit checks remain authoritative. See
-  `docs/architecture/website-branch-tenant-audit-2026-08-01.md` for the Website
-  journey audit and phased plan; Managed Website remains default-disabled.
+- `theeverbranch.com` is a platform-only public host. A prior Managed Website
+  public fallback could treat it as the flagship Modern Forestry tenant and
+  render a tenant theme there. The renderer now explicitly excludes the
+  canonical public host at `/` and fallback paths; a regression test protects
+  that boundary. Tenant sites remain limited to their approved subdomain or
+  an explicit active custom-domain record.
+- `tenant_site_domains` is additive and tenant-owned. The Website workspace
+  exposes a guided domain flow: normalize the customer-owned domain, create a
+  unique encrypted TXT proof, verify authoritative DNS, then activate only
+  when the published-site, global custom-domain, tenant allowlist, and
+  independent activation gate all pass. No registrar credentials are stored;
+  verification does not modify DNS or enable a hostname by itself.
+- Custom domain rollback is host-local: disabling the domain stops that public
+  host without deleting Website snapshots, forms, customer records, orders,
+  provider connections, workflows, or unrelated Everbranch services.
+- Active external Website hosts are public-render/form-only and use a
+  host-local session cookie. App/login, landlord, API, Shopify, webhook, and
+  workspace namespaces return 404 there rather than becoming alternate app
+  origins.
+- Published child pages on an active custom domain use Laravel's final
+  fallback only after all explicit routes have precedence. It renders GET/HEAD
+  only, requires `managed_website_custom_domain` host context, and resolves an
+  exact immutable tenant page; unknown paths and JSON requests return 404,
+  while a real route with the wrong method retains 405. This avoids the former
+  global GET catch-all, which could shadow later application routes and turn
+  unrelated POSTs into 405s.
 
 ## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
 
@@ -40,6 +59,29 @@
   customers, send messages, modify marketing audiences, trigger workflows, or
   process commerce. Shopify/Square/Stripe/booking CTAs link to external systems
   of record.
+
+## Rich Website themes and draft preview (2026-07-27)
+
+- Site-wide Website draft/published state is immutable and separate from page
+  versions: `tenant_site_versions` owns theme settings, navigation, footer,
+  announcement, SEO defaults, source manifests, and optional thumbnail paths.
+  A publish moves only the site-local published pointer after copying the
+  current draft snapshot. Public rendering therefore cannot pick up unpublished
+  menu or styling edits.
+- `tenant_site_media` is an additive tenant-owned, public-site-only image
+  library. It accepts approved image types only and is resolved server-side;
+  private field-service, customer, and workspace files are out of scope.
+- The Website editor's desktop/mobile iframe is an authenticated, `no-store`
+  edit canvas rendered by the public-site renderer. Canvas clicks select and
+  focus the matching individual text, CTA, image, card/FAQ item, or navigation
+  control rather than following customer links. A separate
+  authenticated, no-store full-site draft preview resolves internal links only
+  to owned preview pages and includes a private toolbar back to the exact
+  editor page; neither preview can fall through to the Everbranch workspace.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements are complete
+  six-page starter packs with structured menus, announcements, banners, FAQs,
+  forms, service cards, and original generated starter imagery. Collins content
+  remains a draft prepared only by explicit operator action; it is not published.
 
 ## Website Commerce and live editor (default-disabled) (2026-07-27)
 
@@ -275,6 +317,10 @@
   commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
+- **Default delivery:** completed scoped features merge to `main` and deploy
+  through the protected GitHub/Forge path unless John requests review-only
+  handling, a release gate fails, or a customer-data/isolation concern requires
+  an explicit hold. This never permits a direct or gate-bypassing release.
 - **Optimized CI posture:** pull requests run changed-file Pint plus one cached,
   parallel PHP 8.4 build/test gate, and superseded runs cancel automatically.
   PHP 8.5 compatibility runs nightly and whenever dependency/runtime inputs

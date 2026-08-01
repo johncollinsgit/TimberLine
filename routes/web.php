@@ -26,6 +26,7 @@ use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
 use App\Http\Controllers\Landlord\LandlordDeveloperDashboardController;
 use App\Http\Controllers\Landlord\LandlordDirectInvoiceController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
+use App\Http\Controllers\Landlord\LandlordProspectOnboardingController;
 use App\Http\Controllers\Landlord\LandlordSearchController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
@@ -150,11 +151,13 @@ use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
+use App\Support\Tenancy\HostTenantContext;
 use App\Support\Wiki\WikiRepository;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 $normalizeHost = static function (mixed $value): ?string {
     $host = strtolower(trim((string) $value));
@@ -203,7 +206,11 @@ Route::get('/', function (
     // or Checkout routes because those remain explicit routes and no site exists
     // without a separately entitled, rollout-approved workspace.
     $hostTenant = $request->attributes->get('host_tenant');
-    if ($hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
+    // theeverbranch.com is the Everbranch public home, never a tenant's
+    // Website. This keeps a published flagship draft from replacing the
+    // platform product page through host-context fallback.
+    $isPlatformPublicHost = $requestHost === $normalizeHost((string) config('tenancy.domains.canonical.public_host', ''));
+    if (! $isPlatformPublicHost && $hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
         return app(ManagedWebsiteController::class)->showPublic($request, '', $managedWebsites);
     }
 
@@ -282,6 +289,22 @@ $landlordRoutes = static function (): void {
         ->name('onboarding.wizard');
     Route::get('/landlord/onboarding/intake', [LandlordOnboardingJourneyDiagnosticsController::class, 'intake'])
         ->name('onboarding.intake');
+    Route::get('/landlord/onboarding', [LandlordProspectOnboardingController::class, 'index'])
+        ->name('onboarding.prospects.index');
+    Route::post('/landlord/onboarding', [LandlordProspectOnboardingController::class, 'store'])
+        ->name('onboarding.prospects.store');
+    Route::post('/landlord/onboarding/discovery', [LandlordProspectOnboardingController::class, 'discover'])
+        ->name('onboarding.prospects.discovery.store');
+    Route::patch('/landlord/onboarding/{prospect}', [LandlordProspectOnboardingController::class, 'update'])
+        ->name('onboarding.prospects.update');
+    Route::post('/landlord/onboarding/{prospect}/drafts', [LandlordProspectOnboardingController::class, 'createOutreachDraft'])
+        ->name('onboarding.prospects.drafts.store');
+    Route::post('/landlord/onboarding/{prospect}/communications', [LandlordProspectOnboardingController::class, 'storeCommunication'])
+        ->name('onboarding.prospects.communications.store');
+    Route::patch('/landlord/onboarding/{prospect}/communications/{communication}/sent', [LandlordProspectOnboardingController::class, 'markCommunicationSent'])
+        ->name('onboarding.prospects.communications.sent');
+    Route::get('/landlord/onboarding-export.csv', [LandlordProspectOnboardingController::class, 'export'])
+        ->name('onboarding.prospects.export');
     Route::post('/landlord/onboarding/setup-status/{tenant}', [LandlordOnboardingJourneyDiagnosticsController::class, 'updateSetupStatus'])
         ->name('onboarding.setup-status.update');
     Route::get('/landlord/commercial-intent', [LandlordOnboardingJourneyDiagnosticsController::class, 'commercialIntent'])
@@ -475,6 +498,9 @@ Route::get('/assistant/activity', function (Request $request, ShopifyEmbeddedUrl
 })->name('shopify.embedded.assistant.activity');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/lander', [EvergroveServicesController::class, 'lander'])->name('evergrove.lander');
+Route::get('/book', [EvergroveServicesController::class, 'book'])
+    ->middleware(EnsureEvergroveProposalHost::class)
+    ->name('evergrove.book');
 Route::get('/tools/project-estimate', [EvergroveServicesController::class, 'projectEstimate'])->name('evergrove.tools.project-estimate');
 Route::get('/tools/ai-roi', [EvergroveServicesController::class, 'aiRoi'])->name('evergrove.tools.ai-roi');
 Route::get('/tools/automation-savings', [EvergroveServicesController::class, 'automationSavings'])->name('evergrove.tools.automation-savings');
@@ -640,6 +666,12 @@ Route::post('/website/forms/{page}', [ManagedWebsiteController::class, 'submitFo
     ->middleware('throttle:6,1')
     ->name('managed-website.forms.submit');
 
+Route::get('/website-media/{media}', [ManagedWebsiteController::class, 'showMedia'])
+    ->name('managed-website.media.show');
+Route::get('/website-thumbnail-source/{siteVersion}/{pageVersion}', [ManagedWebsiteController::class, 'thumbnailSource'])
+    ->middleware('signed')
+    ->name('managed-website.thumbnail.source');
+
 // Native Website Commerce routes are host-resolved inside the controller. They
 // intentionally do not share any Shopify or legacy Order route/model.
 Route::get('/shop', [WebsiteCommerceController::class, 'shop'])->name('managed-website.store.index');
@@ -681,9 +713,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/services', [WebsiteCommerceController::class, 'storeService'])->name('services.store');
             Route::put('/services/{product}', [WebsiteCommerceController::class, 'updateService'])->name('services.update');
             Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');
+            Route::post('/domains', [ManagedWebsiteController::class, 'requestDomain'])->name('domains.request');
+            Route::post('/domains/{domain}/verify', [ManagedWebsiteController::class, 'verifyDomain'])->name('domains.verify');
+            Route::post('/domains/{domain}/activate', [ManagedWebsiteController::class, 'activateDomain'])->name('domains.activate');
+            Route::post('/domains/{domain}/deactivate', [ManagedWebsiteController::class, 'deactivateDomain'])->name('domains.deactivate');
+            Route::post('/domains/{domain}/cancel', [ManagedWebsiteController::class, 'cancelDomain'])->name('domains.cancel');
+            Route::put('/editor/theme', [ManagedWebsiteController::class, 'saveTheme'])->name('editor.theme.save');
             Route::get('/editor/{page}', [ManagedWebsiteController::class, 'editor'])->name('editor');
             Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');
+            Route::get('/editor/{page}/preview', [ManagedWebsiteController::class, 'preview'])->name('editor.preview');
+            Route::get('/editor/{page}/preview-site', [ManagedWebsiteController::class, 'previewSite'])->name('editor.preview.site');
             Route::post('/editor/publish', [ManagedWebsiteController::class, 'publishEditor'])->name('editor.publish');
+            Route::get('/media', [ManagedWebsiteController::class, 'media'])->name('media.index');
+            Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');
+            Route::get('/thumbnails/{siteVersion}', [ManagedWebsiteController::class, 'showThumbnail'])->name('thumbnails.show');
             Route::get('/products', [WebsiteCommerceController::class, 'products'])->name('products.index');
             Route::post('/products', [WebsiteCommerceController::class, 'storeProduct'])->name('products.store');
             Route::put('/products/{product}', [WebsiteCommerceController::class, 'updateProduct'])->name('products.update');
@@ -2140,3 +2183,45 @@ Route::middleware('signed')
     ->name('rewards.policy.exports.signed');
 
 require __DIR__.'/settings.php';
+
+// Published customer pages are resolved only after every explicit platform,
+// Shopify, checkout, webhook, and workspace route has had precedence. A
+// Laravel fallback avoids turning unrelated unknown methods into a 405 while
+// keeping custom-domain rendering strictly host-scoped.
+// Laravel's Route::fallback helper is GET-only. Marking this all-method route
+// as a fallback preserves final-route precedence while allowing non-GET/HEAD
+// misses to return the required 404 instead of a framework 405.
+Route::any('/{managedWebsiteFallbackPath}', function (Request $request, ManagedWebsiteService $managedWebsites) {
+    if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
+        // Preserve a real route's normal 405 contract. Unknown paths match
+        // only this final fallback and deliberately become a normal 404.
+        $getProbe = $request->duplicate();
+        $getProbe->setMethod('GET');
+        $getRoute = app('router')->getRoutes()->match($getProbe);
+
+        if (! $getRoute->isFallback) {
+            throw new MethodNotAllowedHttpException($getRoute->methods());
+        }
+
+        abort(404);
+    }
+
+    if ($request->expectsJson()) {
+        abort(404);
+    }
+
+    $context = $request->attributes->get('host_tenant_context');
+    abort_unless(
+        $context instanceof HostTenantContext
+        && $context->strategy === 'managed_website_custom_domain'
+        && $context->tenant instanceof \App\Models\Tenant,
+        404,
+    );
+
+    $payload = $managedWebsites->publicPage($context->tenant, $request->path());
+    abort_unless($payload !== null, 404);
+
+    return view('managed-website.public', $payload + ['tenant' => $context->tenant]);
+})->where('managedWebsiteFallbackPath', '.*')
+    ->fallback()
+    ->name('managed-website.public.fallback');

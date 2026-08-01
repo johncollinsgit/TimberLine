@@ -1,30 +1,107 @@
 # UI Changelog
 
-## 2026-08-01 — Electrician Website pilot
+## 2026-07-30 - Evergrove Consultation Booking Page
 
-- Replaced the Website home’s commerce-heavy entry point with a compact electrician, quote-first setup wizard and saved checklist.
-- Added focused Services and Website Leads screens; removed Products, Customers, Orders, checkout, booking, deposits, and domains from the pilot home surface.
+### What Changed
 
-## 2026-08-01 — Tenant Branch directory refinement
+- Added the public Evergrove `/book` page with the existing Evergrove navigation, brand assets, typography, color system, responsive layout, and a compact public footer.
+- Added an accessible `Choose a Time` action that opens the configured Google Calendar appointment schedule in a new tab with safe external-link attributes.
+- Added a graceful email fallback for periods when online scheduling is not configured, plus exact consultation metadata for search and link previews.
 
-### What changed
+### Guardrails
 
-- Replaced the dense tenant Branch catalog with a visual directory: local,
-  rights-safe cover photography, clear short descriptions, a visible price or
-  plan message, categories, and instant client-side search-as-you-type.
-- Adding, requesting, or purchasing a Branch now opens a short three-step
-  focused dialog before the existing server-authorized action. The card itself
-  stays concise; prerequisites and setup steps appear only when the customer
-  asks for them.
-- The directory uses ordinary compact-radius controls rather than pill buttons
-  and keeps category/status/price information as readable text.
+- Google appointment schedules are still created manually in Google Calendar. The website only reads `GOOGLE_BOOKING_URL`.
+- Missing, malformed, or non-HTTPS booking URLs never render as booking links; visitors are directed to `john@evergrovesoftware.com` instead.
+- No billing, calendar API integration, tenant access, module availability, or automated scheduling behavior changed.
+
+## 2026-07-30 — Landlord Trade Prospecting Workflow
+
+### What Changed
+
+- Expanded the landlord launch-partner sheet into an end-to-end prospect workflow with bounded Google Places discovery, website-presence prioritization, deduplication, cost acknowledgement, current search history, stage management, follow-up dates, interaction logging, outreach drafts, and conversion into the existing tenant flow.
+- Added evidence-informed first-touch, no-website, follow-up, and close-the-loop templates that use real Everbranch field-service capabilities and require operator review before sending.
+- Added a trades-focused Unsplash hero image with visible attribution, public Maps evidence, review counts, no-website verification states, workflow cadence guidance, and direct mail-client handoff.
+- Added three manually reviewed Upstate trade prospects whose current Google Maps result cards had public contact/review evidence but no website link.
+
+### Guardrails
+
+- This is landlord-global internal tooling; it does not use Shopify wholesale tables, tenant messaging data, billing, or entitlements.
+- Google Places searches are limited to one request and 20 results, show estimated cost, and never contact a prospect automatically.
+- A missing Places website URL is a research signal. The UI requires a current Maps recheck before outreach, and manual verification is recorded separately from API discovery.
+- Email drafts open in the operator's mail client and are marked sent explicitly. Cold SMS and autonomous outreach remain unavailable.
+
+## 2026-07-27 — Website custom-domain wizard
+
+- The Website overview now has a plain-language address wizard for customers
+  who already own a domain: add domain, copy a one-time DNS TXT proof, check
+  connection, and activate only after the published-site and public-host gates
+  pass.
+- The wizard explains that it never asks for registrar credentials or changes
+  unrelated DNS, email, checkout, customer, order, or provider records. Its
+  disable action is a host-only rollback.
+- Corrected a public-host boundary: `theeverbranch.com` is again reserved for
+  Everbranch’s platform site and cannot display a Modern Forestry or any other
+  tenant Website theme.
+
+## 2026-07-27 — Granular Website canvas editing
+
+- Clicking text, a CTA, an image, a card, an FAQ question/answer, announcement,
+  menu label, or footer copy now opens and focuses that exact control in the
+  inspector.
+- Repeated cards, FAQs, and gallery images use a compact item editor so an
+  operator edits one customer-facing element at a time instead of navigating a
+  section-wide form.
+- The canvas remains edit-only: the more granular selections preserve the
+  private preview boundary and do not activate phone, form, or workspace links.
+
+## 2026-07-27 — Leak-free Website editor preview
+
+- The Website canvas is now explicitly an edit surface: clicking visible
+  content, cards, calls to action, menus, announcement, header, or footer
+  opens the matching inspector controls instead of following a customer link.
+- **Preview site** saves the draft and opens an interactive, private full-site
+  preview in a separate tab. Its toolbar returns to the exact editor page.
+- Draft preview navigation now resolves owned Website pages server-side. Home,
+  menus, footer links, announcements, and CTAs cannot fall through to the
+  Everbranch workspace; unknown internal links fail closed, external links are
+  safely new-tabbed, and form/phone/email actions remain inert.
 
 ### Safety posture
 
-- Catalog filtering is presentation-only. `TenantModuleCatalogService`, tenant
-  membership, role checks, entitlement validation, billing handoff, and action
-  auditing remain the server-side authority. Browsing/searching does not change
-  a Branch, billing state, or entitlement.
+- The interactive preview is authenticated, no-store, and unframeable; the
+  embedded edit canvas remains same-origin frame-only. Public rendering has no
+  preview toolbar or editor metadata. No commerce, Modern Forestry, Shopify,
+  customer, order, reward, webhook, or connection behavior changes.
+
+## 2026-07-27 — Website preview repair and section library
+
+- The private Website preview now explicitly permits framing by its own
+  authenticated editor while remaining non-cacheable; it no longer inherits a
+  Shopify-only frame policy that left the editor canvas blank.
+- **Add section** is now one clear row that opens a searchable, categorized
+  section library. It replaces the always-visible pill controls with a more
+  scannable editor pattern while keeping the existing structured, safe section
+  catalog.
+
+### Safety posture
+
+- The preview can be framed only by the same Everbranch origin. Thumbnail
+  source pages remain explicitly unframeable. No public snapshot, published
+  site, customer data, checkout, order, or provider connection behavior
+  changes.
+
+## 2026-07-27 — Rich Website themes, real draft preview, and media library
+
+- Website now has a Shopify-familiar three-pane editor: section outline and
+  add picker, real desktop/mobile draft iframe, and an inspector for text,
+  links, visibility, repeated cards/FAQs, images, menus, announcement, footer,
+  palette, typography, and corners.
+- Theme settings and menus save as a private site-level draft and do not alter
+  a published site until Publish. The overview uses a real framed draft preview
+  and theme cards use original starter imagery.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements ship with six
+  starter pages, usable menus, banners, service cards, FAQ, CTA, forms, and
+  mobile behavior. Collins stays draft-only.
 
 ## 2026-07-27 — Website editor and starter-theme refinement
 

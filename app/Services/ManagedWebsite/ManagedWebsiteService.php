@@ -2,12 +2,14 @@
 
 namespace App\Services\ManagedWebsite;
 
+use App\Jobs\GenerateTenantSiteThumbnail;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSite;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
 use App\Models\TenantSitePublishEvent;
+use App\Models\TenantSiteVersion;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -15,76 +17,37 @@ use Illuminate\Validation\ValidationException;
 
 class ManagedWebsiteService
 {
+    public function __construct(private readonly WebsiteThemeCatalog $themeCatalog) {}
+
     /** @return array<int,array<string,mixed>> */
     public function themes(): array
     {
-        return [
-            [
-                'key' => 'hvac-service', 'name' => 'HVAC Service', 'eyebrow' => 'Service-first',
-                'description' => 'A calm, clear service website built for urgent calls, seasonal work, and trust.',
-                'palette' => ['ink' => '#17343b', 'brand' => '#167f8c', 'surface' => '#f8fbfb'],
-                'hero' => ['heading' => 'Comfort for every season.', 'body' => 'Clear service, dependable technicians, and an easy way to request help.', 'cta_label' => 'Request service', 'cta_url' => '#contact', 'image_url' => '/images/website-themes/hvac-service-hero.png', 'image_alt' => 'A comfortable home exterior at dusk with an HVAC unit.'],
-                'blocks' => [
-                    ['type' => 'announcement', 'body' => 'Need help now? Start with a clear service request.'],
-                    ['type' => 'hero', 'heading' => 'Comfort for every season.', 'body' => 'Clear service, dependable technicians, and an easy way to request help.', 'cta_label' => 'Request service', 'cta_url' => '#contact', 'image_url' => '/images/website-themes/hvac-service-hero.png', 'image_alt' => 'A comfortable home exterior at dusk with an HVAC unit.'],
-                    ['type' => 'services', 'heading' => 'The help you need, made easy to understand', 'body' => 'Feature seasonal maintenance, repairs, replacements, and your most important service areas.'],
-                    ['type' => 'text', 'heading' => 'A clear next step from the first call', 'body' => 'Use this section for your service process, hours, and what customers can expect.'],
-                    ['type' => 'testimonial', 'heading' => 'Real customer feedback belongs here', 'body' => 'Replace this placeholder with an approved, genuine customer story before publishing.'],
-                    ['type' => 'faq', 'question' => 'What happens after I request service?', 'answer' => 'Add your accurate response time and scheduling process.'],
-                    ['type' => 'contact_form', 'heading' => 'Request service'],
-                ],
-            ],
-            [
-                'key' => 'collins-electric', 'name' => 'Collins Upstate Electric', 'eyebrow' => 'Clean trade',
-                'description' => 'A sharp white, navy, and service-forward starter built around the approved Collins mark.',
-                'palette' => ['ink' => '#13243b', 'brand' => '#164b7a', 'surface' => '#ffffff'],
-                'hero' => ['heading' => 'Power your next project with confidence.', 'body' => 'A clean, direct starting point for residential, commercial, and service work.', 'cta_label' => 'Talk to an electrician', 'cta_url' => '#contact', 'image_url' => '/images/website-themes/collins-electric-hero.png', 'image_alt' => 'A clean, modern electrical work setting.'],
-                'blocks' => [
-                    ['type' => 'announcement', 'body' => 'Collins Upstate Electric · Clear communication from first call to final walkthrough.'],
-                    ['type' => 'hero', 'heading' => 'Power your next project with confidence.', 'body' => 'A clean, direct starting point for residential, commercial, and service work.', 'cta_label' => 'Talk to an electrician', 'cta_url' => '#contact', 'image_url' => '/images/website-themes/collins-electric-hero.png', 'image_alt' => 'A clean, modern electrical work setting.'],
-                    ['type' => 'services', 'heading' => 'Electrical work, clearly presented', 'body' => 'Use these service cards for the work Collins wants customers to request most often.'],
-                    ['type' => 'text', 'heading' => 'Built for a better customer experience', 'body' => 'Add the approved Collins story, service area, and what makes the team easy to work with.'],
-                    ['type' => 'faq', 'question' => 'How do I get started?', 'answer' => 'Add the reviewed process for requesting an estimate or scheduling service.'],
-                    ['type' => 'contact_form', 'heading' => 'Talk to an electrician'],
-                ],
-            ],
-            [
-                'key' => 'outdoor-elements', 'name' => 'Outdoor Elements', 'eyebrow' => 'Outdoor living',
-                'description' => 'A warm, premium starter for outdoor structures, furniture, cabinetry, and fireplaces.',
-                'palette' => ['ink' => '#26352e', 'brand' => '#6d7d56', 'surface' => '#fbfaf6'],
-                'hero' => ['heading' => 'Elevate your outdoor space.', 'body' => 'Explore considered structures, furniture, cabinetry, and fire features for life outside.', 'cta_label' => 'Explore the collection', 'cta_url' => '/shop', 'image_url' => '/images/website-themes/outdoor-elements-hero.png', 'image_alt' => 'A refined outdoor living terrace at dusk.'],
-                'blocks' => [
-                    ['type' => 'announcement', 'body' => 'Designed for more time outside.'],
-                    ['type' => 'hero', 'heading' => 'Elevate your outdoor space.', 'body' => 'Explore considered structures, furniture, cabinetry, and fire features for life outside.', 'cta_label' => 'Explore the collection', 'cta_url' => '/shop', 'image_url' => '/images/website-themes/outdoor-elements-hero.png', 'image_alt' => 'A refined outdoor living terrace at dusk.'],
-                    ['type' => 'services', 'heading' => 'Create a space that brings people together', 'body' => 'Feature the outdoor categories that best match your current offering.'],
-                    ['type' => 'product_grid', 'heading' => 'Featured outdoor living', 'body' => 'Connect this section to the products or services you want visitors to see first.'],
-                    ['type' => 'text', 'heading' => 'A more considered way to live outside', 'body' => 'Add your approved story, materials, design process, and local service details.'],
-                    ['type' => 'contact_form', 'heading' => 'Start your outdoor project'],
-                ],
-            ],
-        ];
+        return $this->themeCatalog->all();
     }
 
     public function applyTheme(TenantSite $site, string $themeKey, ?User $actor): TenantSite
     {
-        $theme = collect($this->themes())->firstWhere('key', $themeKey);
+        $theme = $this->themeCatalog->find($themeKey);
         abort_unless(is_array($theme), 422, 'That website theme is not available.');
-        $home = $site->pages()->where('slug', '/')->firstOrFail();
-        $this->saveDraft($site, $home, [
-            'title' => $site->tenant->brandProfile?->display_name ?: $site->tenant->name,
-            'seo' => ['title' => $site->tenant->brandProfile?->display_name ?: $site->tenant->name, 'description' => $theme['description']],
-            'blocks' => [
-                ['type' => 'announcement', 'body' => 'Thoughtful service. Clear next steps.'],
-                ['type' => 'header', 'heading' => $site->tenant->brandProfile?->display_name ?: $site->tenant->name],
-                ...$theme['blocks'],
-                ['type' => 'footer', 'body' => '© '.now()->year.' '.($site->tenant->brandProfile?->display_name ?: $site->tenant->name)],
-            ],
-        ], $actor);
-        $settings = (array) $site->settings;
-        $site->forceFill(['settings' => $settings + ['theme_key' => $theme['key'], 'theme_name' => $theme['name'], 'theme_palette' => $theme['palette']], 'updated_by_user_id' => $actor?->id])->save();
-        $this->event($site, $home, $actor, 'site.theme_applied', ['theme_key' => $theme['key']]);
 
-        return $site->fresh(['pages.draftVersion', 'pages.publishedVersion']);
+        return DB::transaction(function () use ($site, $theme, $actor): TenantSite {
+            $navigation = [];
+            foreach ((array) $theme['pages'] as $definition) {
+                $page = TenantSitePage::query()->firstOrCreate(
+                    ['tenant_site_id' => $site->id, 'slug' => (string) $definition['slug']],
+                    ['tenant_id' => $site->tenant_id, 'page_type' => $definition['page_type'], 'title' => $definition['title'], 'is_navigation_visible' => true]
+                );
+                $page->forceFill(['title' => $definition['title'], 'page_type' => $definition['page_type'], 'is_navigation_visible' => true])->save();
+                $this->saveDraft($site, $page, ['title' => $definition['title'], 'blocks' => $definition['blocks'], 'seo' => $definition['seo']], $actor);
+                $navigation[] = ['label' => $definition['title'], 'url' => $definition['slug'] === '/' ? '/' : '/'.ltrim($definition['slug'], '/'), 'type' => 'page'];
+            }
+            $settings = (array) $theme['settings'];
+            $settings['theme_thumbnail'] = $theme['thumbnail'] ?? null;
+            $this->saveSiteDraft($site, ['settings' => $settings, 'navigation' => $navigation, 'source_manifest' => $theme['source_manifest'] ?? []], $actor);
+            $this->event($site, null, $actor, 'site.theme_applied', ['theme_key' => $theme['key'], 'page_count' => count($navigation)]);
+
+            return $site->fresh(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion']);
+        });
     }
 
     public function editorEnabledFor(Tenant $tenant): bool
@@ -157,10 +120,63 @@ class ManagedWebsiteService
                 ], $actor);
             }
 
+            if (! $site->draft_site_version_id) {
+                $home = $site->pages()->where('slug', '/')->first();
+                $this->saveSiteDraft($site, [
+                    'settings' => ['theme_name' => $tenant->brandProfile?->display_name ?: $tenant->name, 'theme_palette' => ['ink' => '#142327', 'brand' => '#1e5a63', 'surface' => '#ffffff']],
+                    'navigation' => $home ? [['label' => $home->title, 'url' => '/', 'type' => 'page']] : [],
+                ], $actor);
+            }
+
             $this->event($site, null, $actor, 'site.created');
 
-            return $site->fresh(['pages.draftVersion', 'pages.publishedVersion']);
+            return $site->fresh(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion']);
         });
+    }
+
+    /** @param array<string,mixed> $input */
+    public function saveSiteDraft(TenantSite $site, array $input, ?User $actor): TenantSiteVersion
+    {
+        $current = $this->siteVersion($site, true);
+        $settings = $this->sanitizeSettings(array_replace((array) ($current?->settings ?? $site->settings ?? []), (array) ($input['settings'] ?? [])));
+        $navigation = $this->sanitizeNavigation((array) ($input['navigation'] ?? $current?->navigation ?? []));
+        $seo = $this->sanitizeSeo(array_replace((array) ($current?->seo ?? []), (array) ($input['seo'] ?? [])));
+        $sourceManifest = $this->sanitizeSourceManifest((array) ($input['source_manifest'] ?? $current?->source_manifest ?? []));
+
+        $version = TenantSiteVersion::query()->create([
+            'tenant_id' => $site->tenant_id,
+            'tenant_site_id' => $site->id,
+            'version_number' => ((int) $site->siteVersions()->max('version_number')) + 1,
+            'status' => 'draft',
+            'settings' => $settings,
+            'navigation' => $navigation,
+            'seo' => $seo,
+            'thumbnail_path' => $current?->thumbnail_path,
+            'source_manifest' => $sourceManifest,
+            'created_by_user_id' => $actor?->id,
+        ]);
+        $site->forceFill([
+            'draft_site_version_id' => $version->id,
+            // Compatibility only. Public rendering uses publishedSiteVersion.
+            'settings' => $settings,
+            'updated_by_user_id' => $actor?->id,
+        ])->save();
+        $this->event($site, null, $actor, 'site.draft_saved', ['site_version_id' => $version->id]);
+        if ((bool) config('managed_website.screenshot_enabled', false)) {
+            DB::afterCommit(fn () => GenerateTenantSiteThumbnail::dispatch((int) $version->id));
+        }
+
+        return $version;
+    }
+
+    public function siteVersion(TenantSite $site, bool $draft = true): ?TenantSiteVersion
+    {
+        $relation = $draft ? 'draftSiteVersion' : 'publishedSiteVersion';
+        if ($site->relationLoaded($relation)) {
+            return $site->getRelation($relation);
+        }
+
+        return $draft ? $site->draftSiteVersion()->first() : $site->publishedSiteVersion()->first();
     }
 
     /** @param array<string,mixed> $input */
@@ -204,6 +220,8 @@ class ManagedWebsiteService
         DB::transaction(function () use ($site, $actor): void {
             $pages = $site->pages()->with('draftVersion')->get();
             abort_if($pages->isEmpty() || $pages->firstWhere('slug', '/') === null, 422, 'A Home page is required before publishing.');
+            $siteDraft = $this->siteVersion($site, true);
+            abort_unless($siteDraft instanceof TenantSiteVersion, 422, 'Save your website theme before publishing.');
 
             foreach ($pages as $page) {
                 $draft = $page->draftVersion;
@@ -225,13 +243,28 @@ class ManagedWebsiteService
                 $page->forceFill(['published_version_id' => $published->id])->save();
             }
 
+            $publishedSiteVersion = TenantSiteVersion::query()->create([
+                'tenant_id' => $site->tenant_id,
+                'tenant_site_id' => $site->id,
+                'version_number' => ((int) $site->siteVersions()->max('version_number')) + 1,
+                'status' => 'published',
+                'settings' => $siteDraft->settings,
+                'navigation' => $siteDraft->navigation,
+                'seo' => $siteDraft->seo,
+                'thumbnail_path' => $siteDraft->thumbnail_path,
+                'source_manifest' => $siteDraft->source_manifest,
+                'created_by_user_id' => $actor?->id,
+                'published_at' => now(),
+            ]);
+
             $site->forceFill([
                 'status' => 'published',
                 'public_enabled' => true,
+                'published_site_version_id' => $publishedSiteVersion->id,
                 'published_at' => now(),
                 'updated_by_user_id' => $actor?->id,
             ])->save();
-            $this->event($site, null, $actor, 'site.published');
+            $this->event($site, null, $actor, 'site.published', ['site_version_id' => $publishedSiteVersion->id]);
             $this->forgetPublicCache($site);
         });
     }
@@ -265,7 +298,7 @@ class ManagedWebsiteService
         if (! $this->publicRenderingEnabled()) {
             return null;
         }
-        $site = TenantSite::query()->forTenant($tenant)->where('status', 'published')->where('public_enabled', true)->first();
+        $site = TenantSite::query()->forTenant($tenant)->where('status', 'published')->where('public_enabled', true)->with('publishedSiteVersion')->first();
         if (! $site) {
             return null;
         }
@@ -283,11 +316,24 @@ class ManagedWebsiteService
                 return null;
             }
 
-            return ['site' => $site, 'page' => $page, 'version' => $page->publishedVersion];
+            return ['site' => $site, 'page' => $page, 'version' => $page->publishedVersion, 'theme' => $this->siteVersion($site, false)];
         });
     }
 
-    /** @param array<int,mixed> $blocks @return array<int,array<string,string>> */
+    /** @return array<string,mixed>|null */
+    public function draftPage(TenantSite $site, TenantSitePage $page): ?array
+    {
+        $page->loadMissing('draftVersion');
+        $theme = $this->siteVersion($site, true);
+
+        if (! $page->draftVersion || ! $theme) {
+            return null;
+        }
+
+        return ['site' => $site, 'page' => $page, 'version' => $page->draftVersion, 'theme' => $theme, 'isDraftPreview' => true];
+    }
+
+    /** @param array<int,mixed> $blocks @return array<int,array<string,mixed>> */
     public function sanitizeBlocks(array $blocks): array
     {
         $allowed = (array) config('managed_website.allowed_blocks', []);
@@ -297,9 +343,13 @@ class ManagedWebsiteService
                 continue;
             }
             $row = ['type' => (string) $block['type']];
-            foreach (['heading', 'body', 'label', 'image_alt', 'cta_label', 'question', 'answer', 'hidden'] as $key) {
+            $id = preg_replace('/[^a-z0-9_-]/i', '', (string) ($block['id'] ?? ''));
+            if ($id !== '') {
+                $row['id'] = $id;
+            }
+            foreach (['heading', 'body', 'label', 'image_alt', 'cta_label', 'question', 'answer', 'hidden', 'visible', 'layout', 'image_position'] as $key) {
                 if (isset($block[$key])) {
-                    $row[$key] = $key === 'hidden'
+                    $row[$key] = in_array($key, ['hidden', 'visible'], true)
                         ? ((string) $block[$key] === 'true' ? 'true' : 'false')
                         : strip_tags(mb_substr(trim((string) $block[$key]), 0, 3000));
                 }
@@ -308,6 +358,23 @@ class ManagedWebsiteService
                 if (isset($block[$key]) && $this->safeUrl((string) $block[$key])) {
                     $row[$key] = trim((string) $block[$key]);
                 }
+            }
+            if (isset($block['items']) && is_array($block['items'])) {
+                $row['items'] = collect($block['items'])->take(12)->filter(fn (mixed $item): bool => is_array($item))->map(function (array $item): array {
+                    $safe = [];
+                    foreach (['heading', 'body', 'label', 'image_alt'] as $key) {
+                        if (isset($item[$key])) {
+                            $safe[$key] = strip_tags(mb_substr(trim((string) $item[$key]), 0, 1000));
+                        }
+                    }
+                    foreach (['url', 'image_url'] as $key) {
+                        if (isset($item[$key]) && $this->safeUrl((string) $item[$key])) {
+                            $safe[$key] = trim((string) $item[$key]);
+                        }
+                    }
+
+                    return $safe;
+                })->filter()->values()->all();
             }
             $safe[] = $row;
         }
@@ -329,7 +396,60 @@ class ManagedWebsiteService
     {
         $value = trim($value);
 
-        return $value !== '' && (str_starts_with($value, '/') || str_starts_with($value, '#') || filter_var($value, FILTER_VALIDATE_URL));
+        if ($value === '' || strlen($value) > 2000 || preg_match('/[\x00-\x1F\x7F\s"\'\\\\]/', $value) === 1) {
+            return false;
+        }
+
+        return str_starts_with($value, '/') || str_starts_with($value, '#') || preg_match('/^(tel|mailto):/i', $value) === 1 || filter_var($value, FILTER_VALIDATE_URL);
+    }
+
+    /** @param array<string,mixed> $settings @return array<string,mixed> */
+    protected function sanitizeSettings(array $settings): array
+    {
+        $palette = (array) ($settings['theme_palette'] ?? []);
+        $safePalette = [];
+        foreach (['ink', 'brand', 'surface', 'soft', 'accent'] as $key) {
+            $value = trim((string) ($palette[$key] ?? ''));
+            if (preg_match('/^#[0-9a-fA-F]{6}$/', $value) === 1) {
+                $safePalette[$key] = $value;
+            }
+        }
+        $announcement = (array) ($settings['announcement'] ?? []);
+        $footer = (array) ($settings['footer'] ?? []);
+
+        return [
+            'theme_key' => preg_replace('/[^a-z0-9_-]/i', '', (string) ($settings['theme_key'] ?? 'custom')) ?: 'custom',
+            'theme_name' => strip_tags(mb_substr(trim((string) ($settings['theme_name'] ?? 'Website')), 0, 120)),
+            'theme_palette' => $safePalette,
+            'typography' => in_array((string) ($settings['typography'] ?? 'sans'), ['sans', 'serif', 'system'], true) ? (string) ($settings['typography'] ?? 'sans') : 'sans',
+            'corners' => in_array((string) ($settings['corners'] ?? 'soft'), ['square', 'soft', 'rounded'], true) ? (string) ($settings['corners'] ?? 'soft') : 'soft',
+            'content_width' => in_array((string) ($settings['content_width'] ?? 'wide'), ['standard', 'wide'], true) ? (string) ($settings['content_width'] ?? 'wide') : 'wide',
+            'announcement' => ['enabled' => (bool) ($announcement['enabled'] ?? false), 'text' => strip_tags(mb_substr(trim((string) ($announcement['text'] ?? '')), 0, 300)), 'url' => $this->safeUrl((string) ($announcement['url'] ?? '')) ? trim((string) $announcement['url']) : ''],
+            'footer' => ['copyright' => strip_tags(mb_substr(trim((string) ($footer['copyright'] ?? '')), 0, 300)), 'tagline' => strip_tags(mb_substr(trim((string) ($footer['tagline'] ?? '')), 0, 500))],
+            'social_links' => collect((array) ($settings['social_links'] ?? []))->filter(fn (mixed $url): bool => is_string($url) && $this->safeUrl($url))->take(6)->values()->all(),
+            'theme_thumbnail' => $this->safeUrl((string) ($settings['theme_thumbnail'] ?? '')) ? trim((string) $settings['theme_thumbnail']) : '',
+        ];
+    }
+
+    /** @param array<int,mixed> $navigation @return array<int,array<string,string>> */
+    protected function sanitizeNavigation(array $navigation): array
+    {
+        return collect($navigation)->take(10)->filter(fn (mixed $item): bool => is_array($item))->map(function (array $item): ?array {
+            $label = strip_tags(mb_substr(trim((string) ($item['label'] ?? '')), 0, 80));
+            $url = trim((string) ($item['url'] ?? ''));
+
+            return $label !== '' && $this->safeUrl($url) ? ['label' => $label, 'url' => $url, 'type' => ($item['type'] ?? 'link') === 'page' ? 'page' : 'link'] : null;
+        })->filter()->values()->all();
+    }
+
+    /** @param array<int,mixed> $sources @return array<int,array<string,string>> */
+    protected function sanitizeSourceManifest(array $sources): array
+    {
+        return collect($sources)->take(20)->filter(fn (mixed $source): bool => is_array($source))->map(function (array $source): ?array {
+            $url = trim((string) ($source['url'] ?? ''));
+
+            return filter_var($url, FILTER_VALIDATE_URL) ? ['url' => $url, 'retrieved_on' => preg_replace('/[^0-9-]/', '', (string) ($source['retrieved_on'] ?? '')), 'use' => strip_tags(mb_substr(trim((string) ($source['use'] ?? '')), 0, 300))] : null;
+        })->filter()->values()->all();
     }
 
     protected function forgetPublicCache(TenantSite $site): void
@@ -346,5 +466,11 @@ class ManagedWebsiteService
             'tenant_id' => $site->tenant_id, 'tenant_site_id' => $site->id, 'tenant_site_page_id' => $page?->id,
             'actor_user_id' => $actor?->id, 'event_type' => $type, 'context' => $context,
         ]);
+    }
+
+    /** @param array<string,mixed> $context */
+    public function recordEvent(TenantSite $site, ?TenantSitePage $page, ?User $actor, string $type, array $context = []): void
+    {
+        $this->event($site, $page, $actor, $type, $context);
     }
 }

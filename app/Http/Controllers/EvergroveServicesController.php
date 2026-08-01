@@ -16,6 +16,20 @@ class EvergroveServicesController extends Controller
         ]);
     }
 
+    public function book(): View
+    {
+        $configuredUrl = trim((string) config('services.google_booking.url', ''));
+        $scheme = strtolower((string) parse_url($configuredUrl, PHP_URL_SCHEME));
+        $bookingUrl = filter_var($configuredUrl, FILTER_VALIDATE_URL) !== false && $scheme === 'https'
+            ? $configuredUrl
+            : null;
+
+        return view('evergrove.book', [
+            'bookingUrl' => $bookingUrl,
+            'content' => (array) config('evergrove', []),
+        ]);
+    }
+
     public function projectEstimate(): View
     {
         return $this->tool('project_estimate');

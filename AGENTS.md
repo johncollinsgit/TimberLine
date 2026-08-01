@@ -71,3 +71,7 @@
   routing. Unknown or unverified hosts fail closed. V1 external CTA blocks only
   link out; forms create tenant-scoped submissions and must not create
   customers, messages, marketing events, workflows, or orders.
+- Site-wide styling, menus, footer, announcement, and SEO defaults are versioned
+  in `tenant_site_versions` separately from page versions. Public pages must
+  resolve only the published site and page snapshot pair; authenticated preview
+  uses draft snapshots with `no-store` caching.

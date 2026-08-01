@@ -107,6 +107,18 @@ for information that users need to scan or compare.
 - Keyboard behavior, focus return, reduced motion, and 44px mobile targets are
   product requirements, not page-level polish.
 
+### Managed Website editor preview
+
+- The Website canvas is an edit surface: a normal click selects the matching
+  individual text field, button, image, repeated card/FAQ item, header, footer,
+  announcement, or menu control. The inspector focuses the exact matching
+  setting; repeated content opens as a small item-only editor rather than a
+  whole-section form. It does not simulate customer navigation.
+- Full customer navigation is tested only through the private **Preview site**
+  action. That route is authenticated and no-store, resolves internal pages on
+  the server for the current Website only, and shows a preview-only return to
+  the matching editor page. Public sites never receive editor chrome.
+
 ## Login/Auth Branding Rules
 - Keep tenant presentation hooks intact (`authTenantPresentation`, host tenant context, landlord mode flags).
 - Keep Fortify + Socialite flow intact.
@@ -184,6 +196,7 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Public pages:
   - `/platform/promo` -> `PlatformProductPagesController::promo`
   - `/platform/contact` -> `PlatformProductPagesController::contact`
+  - `/book` -> `EvergroveServicesController::book` on the Evergrove public site
   - `/explore/modules` and `/explore/modules/{module}` ->
     `PlatformProductPagesController::moduleExplorer`
 - Auth pages: Fortify views under `resources/views/pages/auth/*` via `FortifyServiceProvider`
@@ -327,6 +340,8 @@ Primary usage points:
 - FAQ
 - plan summary
 - final CTA + footer
+
+The Evergrove consultation page at `resources/views/evergrove/book.blade.php` reuses the Evergrove public navigation, brand assets, typography, buttons, and responsive tokens. Its compact footer lives at `resources/views/evergrove/partials/footer.blade.php`.
 
 ## Auth Branding Behavior
 - `resources/views/layouts/auth/simple.blade.php` renders brand panel + auth card with tenant presentation content.

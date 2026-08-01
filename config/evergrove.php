@@ -38,7 +38,6 @@ return [
     'canonical_host' => $canonicalHost,
     'hosts' => $publicHosts,
     'contact_email' => env('EVERGROVE_CONTACT_EMAIL', 'hello@evergrovesoftware.com'),
-    'booking_url' => env('EVERGROVE_BOOKING_URL', ''),
     'brand_assets' => [
         'cache_tag' => env('EVERGROVE_BRAND_ASSET_VERSION', 'eg3'),
         'mark' => 'brand/evergrove-mark.svg',

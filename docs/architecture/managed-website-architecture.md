@@ -54,12 +54,33 @@ site's published-version pointer and cache keys; rollback repoints to a prior
 published snapshot. Neither operation destroys drafts, versions, tenant forms,
 or unrelated data.
 
-Initial public URLs use `<workspace>.theeverbranch.com`. The managed-site host
+Initial public URLs use `<workspace>.theeverbranch.com`. The canonical
+`theeverbranch.com` host is platform-only and must never render a tenant
+Website, including a flagship tenant Website; this is enforced independently
+at the root route and the final custom-domain-only fallback. That fallback
+renders only GET/HEAD requests whose resolved host context is an active
+`managed_website_custom_domain`; it renders only an exact immutable published
+page. It receives other methods solely to return 404 for unknown paths while
+preserving 405 for a real route with the wrong method. The managed-site host
 resolver runs only after existing landlord, authenticated app, Modern Forestry
 Shopify app, Shopify Checkout, customer-account, webhook, and established
-public route ownership has been resolved. Unknown, inactive, and unverified
-hosts fail closed. Custom domains are deferred until the subdomain pilot and a
-separate DNS/TLS operating review pass.
+public route ownership has been resolved. Unknown, inactive, unverified, and
+JSON requests fail closed with 404.
+
+Custom domains are tenant-owned `tenant_site_domains` records. The Website
+wizard accepts a normalized hostname, creates a unique encrypted TXT proof at
+`_everbranch-verify.<hostname>`, verifies that proof from DNS, and records the
+check/audit event without storing registrar credentials. DNS verification is
+not activation: a hostname resolves only after it is verified, the Website is
+published, the custom-domain global gate, tenant allowlist, and separate
+activation gate are all enabled, and the external DNS/TLS routing runbook has
+passed. Disabling an active record is a host-local rollback and preserves all
+immutable content and non-Website data.
+
+An external custom hostname is a public-render/form host only. It must never
+serve the Everbranch app, authentication, landlord, API, Shopify, webhook, or
+workspace namespaces and must use a host-local session rather than the
+`.theeverbranch.com` application cookie.
 
 ## Rollout controls
 
@@ -116,3 +137,21 @@ Website revenue comes only from confirmed `website_orders.paid_at` records.
 The service does not join order rows, copy records, resolve customer identity,
 call a provider, or write to either lane. This gives a multi-channel merchant a
 single sales view without changing Modern Forestry's Shopify app or checkout.
+
+## Theme snapshots, media, and preview (2026-07-27)
+
+`tenant_site_versions` owns immutable site-wide theme settings, header/footer,
+navigation, announcement, SEO defaults, source manifest, and thumbnail
+reference. `tenant_sites.draft_site_version_id` and
+`published_site_version_id` are pointers only. Publishing copies the current
+draft snapshot before moving the published pointer, so global theme edits cannot
+leak into a live site ahead of Publish.
+
+`tenant_site_media` is a tenant-owned library for public website images. Files
+are type/size validated and ownership is resolved server-side. It must never be
+used as a route to field-service, customer, job, or workspace media.
+
+The editor preview is `no-store, private` and uses the same renderer with draft
+page plus draft site snapshots. Until a screenshot runtime is explicitly
+provisioned, the Website overview shows a real framed draft preview rather than
+a synthetic thumbnail.

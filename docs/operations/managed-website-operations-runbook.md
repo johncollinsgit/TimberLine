@@ -7,10 +7,12 @@ the canonical module catalog marks it as purchasable but default-disabled, the
 tenant has verified/audited entitlement fulfilment, the tenant is deliberately
 on the rollout allowlist, and all four rollback controls are operable.
 
-The public-render gate controls registration of the public-site fallback at
-application boot. Change it only through a normal Forge release/config reload;
-never use a broad production cache clear as a substitute for a controlled
-release.
+The public-render gate controls whether the final custom-domain-only fallback
+may render a published site. The fallback itself remains registered so unknown
+application requests retain Laravel's normal 404 behavior rather than becoming
+405 responses. Change the gate only through a normal Forge release/config
+reload; never use a broad production cache clear as a substitute for a
+controlled release.
 
 Do not enable Modern Forestry as the first pilot or infer access from its
 Shopify app, existing checkout, customer records, or provider connections.
@@ -42,6 +44,25 @@ Shopify app, existing checkout, customer records, or provider connections.
    changes without logging page form payloads, tokens, credentials, or checkout
    data.
 
+## Custom-domain pilot
+
+1. Confirm the site is already a tested, published non-Modern-Forestry pilot
+   and that the canonical Everbranch public home still renders the platform
+   page, not the pilot theme.
+2. Enable only the custom-domain global gate and that tenant's allowlist. The
+   separate activation gate stays off while the customer completes the Website
+   wizard's TXT ownership proof.
+3. Give the customer the generated `_everbranch-verify.<domain>` TXT name and
+   `everbranch-site=<token>` value. Never collect a registrar password or
+   replace existing MX, SPF, DKIM, or unrelated website records.
+4. Verify the TXT record using the wizard, then complete the DNS, edge/TLS,
+   and origin-host acceptance checks from the release record. Confirm the host
+   returns only the intended tenant's immutable published snapshot.
+5. Enable the one-time activation gate only for the reviewed cutover, activate
+   the domain, smoke desktop/mobile, lead form, `/up`, `/ready`, landlord,
+   normal tenant access, and the protected Modern Forestry Shopify/account/
+   checkout paths. Disable the activation gate again after the pilot.
+
 ## Escalation
 
 For a suspected host, isolation, or content-security issue, follow
@@ -68,3 +89,18 @@ or delayed Website sale is a Website payment/webhook investigation; do not add
 or edit a legacy Shopify order to repair the report. Likewise, a source-channel
 discrepancy is resolved in that source system, not by merging orders or shoppers
 in Everbranch.
+
+## Theme, preview, and media checks
+
+Before approving a theme, verify its authenticated draft preview shows the
+expected navigation, footer, announcement, and page content. It is `no-store`
+and not a public preview URL. Use only public-site-safe images in the Website
+media library; customer, field-service, job, employee, and provider-export
+media are excluded.
+
+To prepare the Collins draft without publishing it, run:
+
+`php artisan everbranch:prepare-managed-website-theme collins-electric collins-electric`
+
+Confirm the output says `published=no`. Entitlement, editor access, and Publish
+remain separate audited controls.

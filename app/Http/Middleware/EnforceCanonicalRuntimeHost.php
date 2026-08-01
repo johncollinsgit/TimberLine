@@ -30,11 +30,22 @@ class EnforceCanonicalRuntimeHost
         $this->applicationSessionDomain ??= config('session.domain');
         config(['session.domain' => $this->isEvergroveHost($host) ? null : $this->applicationSessionDomain]);
 
+        $context = $request->attributes->get('host_tenant_context');
+        if ($context instanceof HostTenantContext && $context->strategy === 'managed_website_custom_domain') {
+            // A custom customer domain is a public Website host, never an
+            // alternative tenant-app/login origin. It cannot share the
+            // platform cookie domain, and it accepts only public rendering and
+            // the public Website contact form.
+            config(['session.domain' => null]);
+            if (! $this->isManagedWebsitePublicRequest($request)) {
+                abort(404);
+            }
+        }
+
         if ($this->allowLocalDevHost($host) || in_array($host, $this->allowedExactHosts(), true)) {
             return $next($request);
         }
 
-        $context = $request->attributes->get('host_tenant_context');
         if ($context instanceof HostTenantContext && $context->resolved()) {
             return $next($request);
         }
@@ -146,6 +157,29 @@ class EnforceCanonicalRuntimeHost
         }
 
         return str_ends_with($host, '.test') || str_ends_with($host, '.localhost');
+    }
+
+    protected function isManagedWebsitePublicRequest(Request $request): bool
+    {
+        if ($request->isMethod('POST')) {
+            return $request->is('website/forms/*');
+        }
+
+        if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
+            return false;
+        }
+
+        // These are platform/app namespaces and cannot be claimed as a
+        // customer page on an external Website host. Other GET paths are
+        // intentionally left to the published-site resolver, which fails
+        // closed when the page does not exist.
+        return ! $request->is([
+            'login', 'logout', 'register', 'password/*', 'two-factor*',
+            'dashboard', 'website', 'website/*', 'landlord', 'landlord/*',
+            'workspaces', 'workspaces/*', 'workspace/*', 'settings', 'settings/*',
+            'workflows', 'workflows/*', 'shopify', 'shopify/*', 'api', 'api/*',
+            'mobile', 'mobile/*', 'webhooks/*', 'up', 'ready',
+        ]);
     }
 
     protected function normalizeHost(?string $value): ?string

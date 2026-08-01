@@ -6,27 +6,26 @@ use App\Models\FormSubmission;
 use App\Models\Tenant;
 use App\Models\TenantForm;
 use App\Models\TenantSite;
+use App\Models\TenantSiteDomain;
+use App\Models\TenantSiteMedia;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
-use App\Services\ManagedWebsite\ManagedWebsiteAccessService;
+use App\Models\TenantSiteVersion;
+use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
-use App\Services\ManagedWebsite\WebsiteCommerceService;
-use App\Services\ManagedWebsite\WebsitePilotService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ManagedWebsiteController extends Controller
 {
-    public function index(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce, WebsitePilotService $pilot, ManagedWebsiteAccessService $access): View
+    public function index(Request $request, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): View
     {
         $tenant = $this->tenant($request);
-        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'setup'])->first();
-        $setup = $site?->setup;
-        $checklist = $pilot->checklist($site, $setup);
-        $next = collect($checklist)->firstWhere('complete', false);
+        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion', 'domains'])->first();
 
         return view('managed-website.index', [
             'tenant' => $tenant,
@@ -37,11 +36,9 @@ class ManagedWebsiteController extends Controller
             'isPublishingEnabled' => $websites->publishingEnabled(),
             'isPublicRenderEnabled' => $websites->publicRenderingEnabled(),
             'themes' => $websites->themes(),
-            'commerceReadiness' => $commerce->checkoutReadiness($tenant),
-            'setup' => $setup,
-            'checklist' => $checklist,
-            'nextChecklistItem' => $next,
-            'canPublish' => $access->canPublish($tenant, $request->user()),
+            'domainsEnabled' => $domains->enabledFor($tenant),
+            'domainTarget' => $domains->connectionTarget(),
+            'publicUrl' => $site ? $domains->publicUrl($site) : null,
         ]);
     }
 
@@ -98,12 +95,141 @@ class ManagedWebsiteController extends Controller
         $tenant = $this->tenant($request);
         $this->requireEditor($tenant, $websites);
         abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
-        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion'])->findOrFail($page->tenant_site_id);
+        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'draftSiteVersion', 'publishedSiteVersion'])->findOrFail($page->tenant_site_id);
 
         return view('managed-website.editor', compact('tenant', 'site', 'page') + [
             'pages' => $site->pages,
+            'theme' => $websites->siteVersion($site, true),
             'isPublishingEnabled' => $websites->publishingEnabled(),
         ]);
+    }
+
+    public function saveTheme(Request $request, ManagedWebsiteService $websites): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        $data = $request->validate([
+            'settings' => ['required', 'array'],
+            'navigation' => ['required', 'array', 'max:10'],
+            'seo' => ['nullable', 'array'],
+        ]);
+        $version = $websites->saveSiteDraft($site, $data, $request->user());
+
+        return response()->json(['saved_at' => $version->created_at->toIso8601String(), 'version_number' => $version->version_number, 'settings' => $version->settings, 'navigation' => $version->navigation]);
+    }
+
+    public function preview(Request $request, TenantSitePage $page, ManagedWebsiteService $websites)
+    {
+        return $this->draftPreviewResponse($request, $page, $websites, false);
+    }
+
+    public function previewSite(Request $request, TenantSitePage $page, ManagedWebsiteService $websites)
+    {
+        return $this->draftPreviewResponse($request, $page, $websites, true);
+    }
+
+    protected function draftPreviewResponse(Request $request, TenantSitePage $page, ManagedWebsiteService $websites, bool $interactive)
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $page->tenant_id === (int) $tenant->id, 404);
+        $site = TenantSite::query()->forTenant($tenant)->with(['draftSiteVersion', 'pages'])->findOrFail($page->tenant_site_id);
+        $payload = $websites->draftPage($site, $page);
+        abort_unless($payload !== null, 404);
+
+        $response = response()
+            ->view('managed-website.public', $payload + [
+                'tenant' => $tenant,
+                'previewMode' => $interactive ? 'site' : 'editor',
+                'previewLinks' => $this->draftPreviewLinks($site),
+                'editorUrl' => route('managed-website.editor', ['page' => $page]),
+            ])
+            ->header('Cache-Control', 'no-store, private')
+            ->header('Referrer-Policy', 'same-origin');
+
+        return $interactive
+            ? $response->header('Content-Security-Policy', "frame-ancestors 'none'")->header('X-Frame-Options', 'DENY')
+            : $response->header('Content-Security-Policy', "frame-ancestors 'self'")->header('X-Frame-Options', 'SAMEORIGIN');
+    }
+
+    public function thumbnailSource(TenantSiteVersion $siteVersion, TenantSitePageVersion $pageVersion)
+    {
+        abort_unless((int) $siteVersion->tenant_id === (int) $pageVersion->tenant_id && (int) $siteVersion->tenant_site_id === (int) $pageVersion->tenant_site_id, 404);
+        $site = TenantSite::query()->findOrFail($siteVersion->tenant_site_id);
+        $page = TenantSitePage::query()->findOrFail($pageVersion->tenant_site_page_id);
+        abort_unless((int) $site->draft_site_version_id === (int) $siteVersion->id && (int) $page->draft_version_id === (int) $pageVersion->id, 404);
+
+        return response()
+            ->view('managed-website.public', [
+                'tenant' => Tenant::query()->findOrFail($site->tenant_id),
+                'site' => $site,
+                'page' => $page,
+                'version' => $pageVersion,
+                'theme' => $siteVersion,
+                'isDraftPreview' => true,
+                'previewMode' => 'thumbnail',
+            ])
+            ->header('Cache-Control', 'no-store, private')
+            ->header('Content-Security-Policy', "frame-ancestors 'none'")
+            ->header('X-Frame-Options', 'DENY')
+            ->header('Referrer-Policy', 'no-referrer');
+    }
+
+    public function showThumbnail(Request $request, TenantSiteVersion $siteVersion)
+    {
+        $tenant = $this->tenant($request);
+        abort_unless((int) $siteVersion->tenant_id === (int) $tenant->id && filled($siteVersion->thumbnail_path), 404);
+        abort_unless(Storage::disk('local')->exists((string) $siteVersion->thumbnail_path), 404);
+
+        return Storage::disk('local')->response((string) $siteVersion->thumbnail_path, 'website-draft.png', ['Content-Type' => 'image/png', 'Cache-Control' => 'private, no-store']);
+    }
+
+    public function media(Request $request, ManagedWebsiteService $websites): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        $media = $site->media()->latest()->get()->map(fn (TenantSiteMedia $item): array => $this->mediaPayload($item));
+
+        return response()->json(['media' => $media]);
+    }
+
+    public function storeMedia(Request $request, ManagedWebsiteService $websites): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        $maxKilobytes = max(1024, (int) ceil(((int) config('managed_website.media_max_bytes', 10485760)) / 1024));
+        $data = $request->validate([
+            'image' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/avif', 'max:'.$maxKilobytes],
+            'alt_text' => ['nullable', 'string', 'max:500'],
+        ]);
+        $file = $data['image'];
+        $extension = strtolower($file->extension() ?: 'bin');
+        $path = 'tenant-site-media/'.$tenant->id.'/'.Str::uuid().'.'.$extension;
+        $disk = 'local';
+        Storage::disk($disk)->put($path, file_get_contents($file->getRealPath()));
+        $media = TenantSiteMedia::query()->create([
+            'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'uploaded_by_user_id' => $request->user()?->id,
+            'storage_disk' => $disk, 'storage_path' => $path, 'file_name' => basename($file->getClientOriginalName()),
+            'mime_type' => $file->getMimeType(), 'file_size' => $file->getSize(), 'checksum' => hash_file('sha256', $file->getRealPath()),
+            'kind' => 'image', 'source' => 'upload', 'alt_text' => strip_tags((string) ($data['alt_text'] ?? '')),
+        ]);
+        $websites->recordEvent($site, null, $request->user(), 'site.media_uploaded', ['media_id' => $media->id]);
+
+        return response()->json(['media' => $this->mediaPayload($media)], 201);
+    }
+
+    public function showMedia(Request $request, TenantSiteMedia $media)
+    {
+        $tenant = $request->attributes->get('current_tenant') ?? $request->attributes->get('host_tenant');
+        abort_unless($tenant instanceof Tenant && (int) $tenant->id === (int) $media->tenant_id, 404);
+        $site = TenantSite::query()->forTenant($tenant)->findOrFail($media->tenant_site_id);
+        abort_unless($request->user() || ($site->public_enabled && $site->status === 'published'), 404);
+        abort_unless(Storage::disk($media->storage_disk)->exists($media->storage_path), 404);
+
+        return Storage::disk($media->storage_disk)->response($media->storage_path, $media->file_name, ['Content-Type' => $media->mime_type, 'Cache-Control' => 'public, max-age=86400']);
     }
 
     public function saveEditor(Request $request, TenantSitePage $page, ManagedWebsiteService $websites): JsonResponse
@@ -126,6 +252,59 @@ class ManagedWebsiteController extends Controller
         $websites->applyTheme($site, (string) $request->validate(['theme_key' => ['required', 'string', 'max:80']])['theme_key'], $request->user());
 
         return back()->with('status', 'Theme applied as a draft. Review it in the editor before publishing.');
+    }
+
+    public function requestDomain(Request $request, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
+        $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        $domain = $domains->request($site, (string) $request->validate(['domain' => ['required', 'string', 'max:300']])['domain'], $request->user());
+
+        return back()->with('status', 'Domain saved. Add the verification record, then check the connection.')->with('domain_wizard_id', $domain->id);
+    }
+
+    public function verifyDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
+        $domain = $domains->verify($domain, $request->user());
+
+        return back()->with('status', $domain->status === 'verified' ? 'Domain ownership verified. You can activate it after the live routing check.' : 'The verification record is not visible yet. Check the record name and try again shortly.')->with('domain_wizard_id', $domain->id);
+    }
+
+    public function activateDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        $domains->activate($domain, $request->user());
+
+        return back()->with('status', $domain->hostname.' is now the live website address.')->with('domain_wizard_id', $domain->id);
+    }
+
+    public function deactivateDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        $domains->deactivate($domain, $request->user());
+
+        return back()->with('status', 'Custom domain disabled. The last published Everbranch subdomain remains unchanged.');
+    }
+
+    public function cancelDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        abort_unless((int) $domain->tenant_id === (int) $tenant->id, 404);
+        abort_unless($domains->enabledFor($tenant), 423, 'Custom domains are not enabled for this website yet.');
+        $domains->cancel($domain, $request->user());
+
+        return back()->with('status', 'Domain setup removed. Enter the address you want to connect.');
     }
 
     public function create(Request $request, ManagedWebsiteService $websites): RedirectResponse
@@ -233,6 +412,12 @@ class ManagedWebsiteController extends Controller
         return view('managed-website.public', $payload + ['tenant' => $tenant]);
     }
 
+    /** @return array<string,mixed> */
+    protected function mediaPayload(TenantSiteMedia $media): array
+    {
+        return ['id' => $media->id, 'name' => $media->file_name, 'url' => route('managed-website.media.show', ['media' => $media]), 'alt_text' => $media->alt_text, 'mime_type' => $media->mime_type, 'size' => $media->file_size];
+    }
+
     public function submitForm(Request $request, TenantSitePage $page): RedirectResponse
     {
         $site = TenantSite::query()->forTenantId((int) $page->tenant_id)->findOrFail($page->tenant_site_id);
@@ -264,6 +449,20 @@ class ManagedWebsiteController extends Controller
         abort_unless($tenant instanceof Tenant, 403);
 
         return $tenant;
+    }
+
+    /** @return array<string,string> */
+    protected function draftPreviewLinks(TenantSite $site): array
+    {
+        return $site->pages
+            ->filter(fn (TenantSitePage $candidate): bool => (int) $candidate->tenant_id === (int) $site->tenant_id)
+            ->mapWithKeys(function (TenantSitePage $candidate): array {
+                $path = trim('/'.trim((string) $candidate->slug, '/'), '/');
+                $path = $path === '' ? '/' : '/'.$path;
+
+                return [$path => route('managed-website.editor.preview.site', ['page' => $candidate])];
+            })
+            ->all();
     }
 
     protected function requireEditor(Tenant $tenant, ManagedWebsiteService $websites): void

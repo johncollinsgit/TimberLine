@@ -6,6 +6,12 @@
 tenant add-on for structured small-business websites. It will provide a
 tenant-scoped Website editor, immutable publishing/rollback, lead forms, and
 an isolated native Website catalog, cart, and Stripe Connect checkout lane.
+The editor uses structured theme settings, menus, sections, reusable public-site
+images, and a real draft preview rendered by the same code as the public site.
+The editing canvas selects and focuses individual content controls rather than
+following customer links; the
+separate private **Preview site** flow safely tests the saved draft and returns
+to the exact editor page.
 It never uses an existing Shopify checkout or legacy order system.
 
 The capability is not live until verified/audited commercial fulfilment,
@@ -13,6 +19,10 @@ tenant allowlisting, publishing and host-isolation checks, and the documented
 rollback drill pass. Modern Forestry's separate Shopify app and Shopify
 Checkout are deliberately excluded: no routes, credentials, checkout,
 customers, orders, webhooks, rewards, or existing connections may change.
+`theeverbranch.com` is always the Everbranch platform site, not a tenant
+Website address. Customer custom domains use a separate verification and
+activation flow and remain disabled until their tenant and public-host gates
+are explicitly enabled.
 Read `docs/architecture/managed-website-architecture.md` and the paired
 operations/rollback runbooks before implementing or operating the feature.
 

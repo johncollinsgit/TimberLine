@@ -21,6 +21,27 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   public-render disablement. The normal rollback preserves the last good
   snapshot; suspected isolation/security incidents disable only Managed Website
   hosts and use the rollback runbook.
+- Theme-level settings, navigation, footer, and announcement content belong to
+  immutable `tenant_site_versions`; never allow a draft theme setting to affect
+  a published host. `tenant_site_media` is a public-site-only tenant media
+  library and must never expose job, field-service, customer, or workspace files.
+- Website editor canvas links must never resolve against the Everbranch app
+  root. Canvas clicks select structured controls; customer-link testing uses an
+  authenticated, no-store draft-preview route whose internal destinations are
+  server-resolved to the current tenant site and whose toolbar returns only to
+  the matching editor page.
+- `theeverbranch.com` is platform-only. Never allow the canonical public host
+  to fall through to `host_tenant`, a flagship tenant, or a Managed Website
+  renderer. This is a permanent regression boundary: a tenant's published
+  Website may render only on its approved tenant subdomain or an explicitly
+  active `tenant_site_domains` hostname.
+- Customer domain setup stores only a tenant-owned hostname and encrypted
+  one-time DNS proof. It must use independent global, tenant, and activation
+  gates; DNS ownership verification alone never activates a public host. Do
+  not store registrar credentials or change unrelated DNS records.
+- An active custom Website hostname is public-render/form-only. It must not
+  become a second app, login, landlord, API, Shopify, webhook, or workspace
+  origin, and it must not share the `.theeverbranch.com` application session.
 - V1 forms create only tenant-scoped submissions. Do not create customers,
   send messages, modify marketing audiences, trigger workflows, or process
   Shopify/Square/Stripe/booking orders. Existing app, checkout, customer
@@ -89,6 +110,11 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   repeat the pull-request workflow: the production workflow tests the exact
   merge commit in parallel, builds assets, and only then calls Forge. Composer
   and npm downloads are cached and Node installs use `npm ci`.
+- Default delivery preference: when a scoped feature is complete and its
+  protected GitHub checks pass, merge it to `main` and allow the normal Forge
+  release to deploy it. Keep a change on a feature branch only when John asks
+  for review-only handling, a release gate fails, or a customer-data/safety
+  concern requires a deliberate hold. Never bypass the CI/Forge gate.
 - Local verification for a scoped change is
   `composer exec pint -- --dirty --test`, followed by
   `php -d memory_limit=1G ./vendor/bin/pest --parallel --compact`. The parallel
