@@ -112,6 +112,14 @@ class ManagedWebsiteService
         return (bool) config('managed_website.public_render_enabled', false);
     }
 
+    public function publicHostAllowed(TenantSite $site, string $host): bool
+    {
+        $host = strtolower(trim(explode(':', $host)[0]));
+        $baseDomain = strtolower(trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com')));
+
+        return $host !== '' && $baseDomain !== '' && hash_equals($site->subdomain.'.'.$baseDomain, $host);
+    }
+
     public function createSite(Tenant $tenant, ?User $actor): TenantSite
     {
         return DB::transaction(function () use ($tenant, $actor): TenantSite {

@@ -1,5 +1,21 @@
 # SYSTEM SNAPSHOT
 
+## Quote-first electrician Website pilot (2026-08-01)
+
+- The dedicated `everbranch-website-pilot` preparation command creates an isolated, owner-scoped electrician workspace and private Collins Electric draft; an entitlement still requires an explicit audited request or operator grant, plus the existing allowlist and runtime gates.
+- Website setup is a tenant-site one-to-one profile with the quote-first wizard, saved checklist, quote-only Website services, and tenant-scoped Website Leads. It does not create legacy customers, jobs, orders, marketing records, messages, appointments, or notifications.
+- Tenant owners/admins alone may publish or roll back snapshots; managers can prepare drafts. A public Website host must exactly match the saved `name.theeverbranch.com` address and read a published immutable snapshot.
+
+## Tenant Branch directory refinement (2026-08-01)
+
+- Tenant **Branches** now uses the same safe catalog payload with categories,
+  instant local search, concise local-photo cards, clear price/plan language,
+  and a focused three-step setup decision dialog. Catalog filtering is
+  presentation only: server-side tenant membership, entitlement, billing, and
+  audit checks remain authoritative. See
+  `docs/architecture/website-branch-tenant-audit-2026-08-01.md` for the Website
+  journey audit and phased plan; Managed Website remains default-disabled.
+
 ## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
 
 - **Everbranch Managed Website** is the planned default-disabled,

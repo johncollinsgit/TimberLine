@@ -1,148 +1,214 @@
 <x-layouts::app :title="$currentSection['label']">
- @php
- $payload = is_array($moduleStorePayload ?? null) ? $moduleStorePayload : [];
- $currentPlan = is_array($payload['current_plan'] ?? null) ? $payload['current_plan'] : ['label' => 'Unknown', 'operating_mode' => 'direct'];
- $sectionsPayload = is_array($payload['sections'] ?? null) ? $payload['sections'] : [];
- $blueprintRecommendations = is_array($payload['blueprint_recommendations'] ?? null) ? $payload['blueprint_recommendations'] : [];
- $blueprintContext = is_array($blueprintRecommendations['context'] ?? null) ? $blueprintRecommendations['context'] : [];
- $blueprintRows = array_values((array) ($blueprintRecommendations['rows'] ?? []));
- $blueprintSummary = is_array($blueprintRecommendations['summary'] ?? null) ? $blueprintRecommendations['summary'] : [];
- $storeSections = [
- 'active' => 'Active now',
- 'available' => 'Available to add',
- 'upgrade' => 'Upgrade path',
- 'request' => 'Request or sales assist',
- ];
- $focusModule = strtolower(trim((string) request('module', '')));
- @endphp
+    @php
+        $payload = is_array($moduleStorePayload ?? null) ? $moduleStorePayload : [];
+        $currentPlan = is_array($payload['current_plan'] ?? null) ? $payload['current_plan'] : ['label' => 'your current plan'];
+        $modules = collect((array) ($payload['modules'] ?? []))->values();
+        $focusModule = strtolower(trim((string) request('module', '')));
+        $categories = $modules
+            ->groupBy(fn (array $module): string => (string) ($module['category'] ?? 'other'))
+            ->map(fn ($items, string $key): array => [
+                'key' => $key,
+                'label' => (string) data_get($items->first(), 'category_label', str($key)->headline()),
+                'count' => $items->count(),
+            ])
+            ->sortBy('label')
+            ->values();
+        $moduleCards = $modules->map(function (array $module) use ($focusModule): array {
+            $state = is_array($module['module_state'] ?? null) ? (array) $module['module_state'] : [];
+            $purchase = is_array($module['purchase'] ?? null) ? (array) $module['purchase'] : [];
+            $buyerSetup = is_array($module['buyer_setup'] ?? null) ? (array) $module['buyer_setup'] : [];
+            $moduleKey = (string) ($module['module_key'] ?? '');
+            $cta = (string) ($state['cta'] ?? 'none');
+            $action = null;
 
- <div class="fb-workflow-shell">
- <x-marketing.partials.section-shell
- :section="$currentSection"
- :sections="$sections"
- />
+            if ($cta === 'add' && filled($purchase['addon_key'] ?? null)) {
+                $action = ['kind' => 'purchase', 'label' => 'Review purchase', 'url' => route('billing.addons.checkout', ['addonKey' => $purchase['addon_key']])];
+            } elseif ($cta === 'add') {
+                $action = ['kind' => 'add', 'label' => (string) ($state['cta_label'] ?? 'Add Branch'), 'url' => route('marketing.modules.activate', ['moduleKey' => $moduleKey])];
+            } elseif ($cta === 'request') {
+                $action = ['kind' => 'request', 'label' => (string) ($state['cta_label'] ?? 'Request access'), 'url' => route('marketing.modules.request', ['moduleKey' => $moduleKey])];
+            } elseif (filled($state['cta_href'] ?? null)) {
+                $action = ['kind' => 'link', 'label' => (string) ($state['cta_label'] ?? 'Open Branch'), 'url' => (string) $state['cta_href']];
+            }
 
- <section class="fb-workflow-header">
- <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
- <div>
- <div class="fb-eyebrow">Branches</div>
- <h2 class="mt-2 text-xl font-semibold text-[var(--fb-text-primary)] sm:text-2xl">Add what your business needs next</h2>
- <p class="mt-2 max-w-4xl text-sm text-[var(--fb-text-secondary)]">Each Branch clearly shows whether it is included, available to buy, requires a plan change, or needs an Everbranch review. Viewing a Branch never changes billing or access.</p>
- <div class="mt-4 flex flex-wrap gap-2">
- <a href="{{ route('custom-module-requests.create') }}" class="fb-btn-soft fb-link-soft">Request something custom</a>
- <a href="{{ route('custom-module-requests.index') }}" class="fb-btn-soft fb-link-soft">View custom requests</a>
- </div>
- </div>
- <div class="fb-chip fb-chip--quiet">
-     Plan {{ $currentPlan['label'] ?? 'Unknown' }} · setup {{ strtoupper((string) ($currentPlan['operating_mode'] ?? 'direct')) }}
- </div>
- </div>
- </section>
+            $price = trim((string) ($purchase['price_display'] ?? ''));
+            if ($price === '') {
+                $price = match ((string) ($module['state_bucket'] ?? '')) {
+                    'active' => 'Included with your plan',
+                    'upgrade' => 'Plan change needed',
+                    'request' => 'Talk to us about pricing',
+                    default => 'Pricing shown before you confirm',
+                };
+            }
 
- @if($blueprintRows !== [])
- <section class="fb-panel" data-blueprint-module-recommendations="true">
- <div class="fb-panel-head">
- <div>
- <div class="fb-eyebrow">Setup guidance</div>
- <h2 class="mt-2 text-lg font-semibold text-[var(--fb-text-primary)]">Recommended for your setup</h2>
- <p class="mt-2 max-w-3xl text-sm text-[var(--fb-text-secondary)]">
- {{ $blueprintContext['business_template_label'] ?? 'Workspace' }} profile · {{ $blueprintContext['operating_mode_label'] ?? 'Not sure yet' }} setup. Recommendations are planning guidance only and do not install features, change access, start billing, run imports, or activate future workflows.
- </p>
- </div>
- <div class="flex flex-wrap gap-2">
- <span class="fb-chip fb-chip--quiet">{{ (int) ($blueprintSummary['recommended'] ?? 0) }} recommended</span>
- <span class="fb-chip fb-chip--quiet">{{ (int) ($blueprintSummary['requested'] ?? 0) }} requested</span>
- <span class="fb-chip fb-chip--quiet">{{ (int) ($blueprintSummary['planned_or_future'] ?? 0) }} planned/future</span>
- </div>
- </div>
+            return [
+                'key' => $moduleKey,
+                'name' => (string) ($module['display_name'] ?? str($moduleKey)->headline()),
+                'description' => (string) ($module['short_description'] ?? $module['description'] ?? ''),
+                'category' => (string) ($module['category'] ?? 'other'),
+                'category_label' => (string) ($module['category_label'] ?? 'Other'),
+                'cover_image' => (string) ($module['cover_image'] ?? '/images/branch-covers/customer-operations.png'),
+                'state_label' => (string) ($state['display_state_label'] ?? 'Available'),
+                'price' => $price,
+                'action' => $action,
+                'outcome' => (string) ($buyerSetup['outcome'] ?? $module['description'] ?? ''),
+                'best_for' => (string) ($buyerSetup['best_for'] ?? ''),
+                'what_you_need' => array_values(array_filter(array_map('strval', (array) ($buyerSetup['what_you_need'] ?? [])))),
+                'setup_steps' => array_values(array_filter(array_map('strval', (array) ($buyerSetup['setup_steps'] ?? [])))),
+                'help_text' => (string) ($buyerSetup['help_text'] ?? ''),
+                'focused' => $focusModule !== '' && $focusModule === $moduleKey,
+            ];
+        })->values();
+    @endphp
 
- @if((bool) ($blueprintContext['is_demo'] ?? false) || (bool) ($blueprintContext['is_sandbox'] ?? false))
- <div class="mx-5 mt-4 fb-state text-sm">
- {{ (bool) ($blueprintContext['is_demo'] ?? false) ? 'Demo tenant context' : 'Sandbox tenant context' }}: module recommendations are for review/testing only.
- </div>
- @endif
+    <style>
+        [x-cloak] { display: none !important; }
+        .branch-directory { max-width: 1440px; margin: 0 auto; color: var(--fb-text-primary, #0d1b1e); }
+        .branch-directory__header { border-bottom: 1px solid var(--fb-border, #e7eceb); padding: .4rem 0 1.8rem; }
+        .branch-directory__eyebrow { color: var(--fb-brand-2, #1e5a63); font-size: .71rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+        .branch-directory__header h1 { font-size: clamp(1.85rem, 3vw, 2.55rem); letter-spacing: -.035em; line-height: 1.05; margin: .5rem 0 0; }
+        .branch-directory__header p { color: var(--fb-text-secondary, #5d6b6a); font-size: .98rem; line-height: 1.55; margin: .7rem 0 0; max-width: 46rem; }
+        .branch-directory__layout { align-items: start; display: grid; gap: 2rem; grid-template-columns: 220px minmax(0, 1fr); padding-top: 1.5rem; }
+        .branch-directory__filter-title { color: var(--fb-text-secondary, #5d6b6a); font-size: .68rem; font-weight: 800; letter-spacing: .12em; margin: 0 0 .65rem; text-transform: uppercase; }
+        .branch-directory__categories { border-top: 1px solid var(--fb-border, #e7eceb); display: grid; }
+        .branch-directory__category { align-items: center; background: transparent; border: 0; border-bottom: 1px solid var(--fb-border, #e7eceb); color: var(--fb-text-secondary, #5d6b6a); display: flex; font: inherit; font-size: .86rem; font-weight: 650; justify-content: space-between; min-height: 44px; padding: 0 .35rem; text-align: left; width: 100%; }
+        .branch-directory__category:hover, .branch-directory__category[aria-pressed="true"] { background: #f2f6f5; color: var(--fb-brand, #123c43); }
+        .branch-directory__category:focus-visible, .branch-directory__search:focus-visible, .branch-directory__button:focus-visible, .branch-directory__dialog-close:focus-visible { outline: 3px solid rgba(30, 90, 99, .3); outline-offset: 2px; }
+        .branch-directory__category small { color: inherit; font-size: .72rem; }
+        .branch-directory__search { background: white; border: 1px solid #b9c8c5; border-radius: 8px; color: inherit; font: inherit; min-height: 46px; padding: 0 .85rem; width: 100%; }
+        .branch-directory__search::placeholder { color: #71807d; }
+        .branch-directory__result-head { align-items: end; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
+        .branch-directory__result-head h2 { font-size: 1.15rem; margin: 0; }
+        .branch-directory__result-head p { color: var(--fb-text-secondary, #5d6b6a); font-size: .83rem; margin: 0; }
+        .branch-directory__grid { display: grid; gap: 1.2rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .branch-directory__card { background: #fff; border: 1px solid var(--fb-border, #e7eceb); border-radius: 10px; display: flex; flex-direction: column; min-height: 100%; overflow: hidden; transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
+        .branch-directory__card:hover, .branch-directory__card[data-focused="true"] { border-color: #93aaa5; box-shadow: 0 16px 34px -26px rgba(13, 27, 30, .65); transform: translateY(-2px); }
+        .branch-directory__image { background: #e5ecea; display: block; height: 138px; object-fit: cover; width: 100%; }
+        .branch-directory__card-body { display: flex; flex: 1; flex-direction: column; gap: .75rem; padding: 1rem; }
+        .branch-directory__meta { color: var(--fb-brand-2, #1e5a63); display: flex; font-size: .68rem; font-weight: 800; justify-content: space-between; letter-spacing: .09em; text-transform: uppercase; }
+        .branch-directory__card h3 { font-size: 1.02rem; line-height: 1.2; margin: 0; }
+        .branch-directory__card p { color: var(--fb-text-secondary, #5d6b6a); font-size: .84rem; line-height: 1.48; margin: 0; }
+        .branch-directory__price { border-top: 1px solid var(--fb-border, #e7eceb); color: #182c30; font-size: .85rem; font-weight: 750; margin-top: auto; padding-top: .8rem; }
+        .branch-directory__button, .branch-directory__dialog-close { background: #123c43; border: 1px solid #123c43; border-radius: 8px; color: white; cursor: pointer; font: inherit; font-size: .84rem; font-weight: 750; min-height: 42px; padding: 0 .9rem; text-align: center; text-decoration: none; }
+        .branch-directory__button:hover { background: #0d3036; }
+        .branch-directory__button--quiet, .branch-directory__dialog-close { background: white; color: #234046; }
+        .branch-directory__button--quiet:hover, .branch-directory__dialog-close:hover { background: #f2f6f5; }
+        .branch-directory__empty { border: 1px dashed #b9c8c5; color: var(--fb-text-secondary, #5d6b6a); padding: 2.5rem 1.5rem; text-align: center; }
+        .branch-directory__backdrop { align-items: center; background: rgba(13, 27, 30, .5); display: flex; inset: 0; justify-content: center; padding: 1rem; position: fixed; z-index: 80; }
+        .branch-directory__dialog { background: white; border-radius: 12px; box-shadow: 0 24px 70px -20px rgba(0, 0, 0, .45); max-width: 580px; overflow: hidden; width: 100%; }
+        .branch-directory__dialog-image { height: 150px; object-fit: cover; width: 100%; }
+        .branch-directory__dialog-body { padding: 1.3rem; }
+        .branch-directory__dialog-step { color: var(--fb-brand-2, #1e5a63); font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+        .branch-directory__dialog h2 { font-size: 1.45rem; letter-spacing: -.025em; margin: .35rem 0 0; }
+        .branch-directory__dialog p { color: var(--fb-text-secondary, #5d6b6a); font-size: .9rem; line-height: 1.55; }
+        .branch-directory__dialog-list { color: var(--fb-text-secondary, #5d6b6a); display: grid; font-size: .88rem; gap: .6rem; line-height: 1.45; margin: 1rem 0 0; padding-left: 1.2rem; }
+        .branch-directory__dialog-actions { border-top: 1px solid var(--fb-border, #e7eceb); display: flex; gap: .65rem; justify-content: space-between; margin-top: 1.25rem; padding-top: 1rem; }
+        .branch-directory__dialog-actions > div { display: flex; gap: .65rem; }
+        @media (max-width: 1100px) { .branch-directory__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 760px) { .branch-directory__layout { display: block; } .branch-directory__filters { margin-bottom: 1.5rem; } .branch-directory__categories { display: flex; overflow-x: auto; } .branch-directory__category { border-top: 1px solid var(--fb-border, #e7eceb); border-right: 1px solid var(--fb-border, #e7eceb); flex: 0 0 auto; padding: 0 .75rem; white-space: nowrap; } .branch-directory__grid { grid-template-columns: 1fr; } .branch-directory__image { height: 160px; } }
+    </style>
 
- <div class="fb-panel-body">
- <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
- @foreach(array_slice($blueprintRows, 0, 12) as $row)
- <article class="rounded-lg border border-zinc-200 bg-white p-4">
- <div class="flex items-start justify-between gap-3">
- <div>
- <h3 class="text-sm font-semibold text-[var(--fb-text-primary)]">{{ $row['label'] ?? Str::headline((string) ($row['key'] ?? 'module')) }}</h3>
- <p class="mt-1 text-xs leading-5 text-[var(--fb-text-secondary)]">{{ $row['reason'] ?? 'Setup recommendation only.' }}</p>
- </div>
- <span class="fb-module-pill">{{ $row['display_state_label'] ?? 'Planned' }}</span>
- </div>
- @if(! empty($row['requires_future_implementation']))
- <p class="mt-3 text-xs text-[var(--fb-text-secondary)]">Future module family. Not active yet.</p>
- @endif
- </article>
- @endforeach
- </div>
- </div>
- </section>
- @endif
+    <div class="branch-directory" x-data="{
+        query: '', category: 'all', selected: null, wizardStep: 1, visibleCount: {{ $moduleCards->count() }},
+        matches(el) { const text = (el.dataset.search || ''); return (this.category === 'all' || el.dataset.category === this.category) && text.includes(this.query.trim().toLowerCase()); },
+        updateCount() { this.$nextTick(() => { this.visibleCount = [...this.$root.querySelectorAll('[data-branch-card]')].filter((el) => !el.hidden && getComputedStyle(el).display !== 'none').length; }); },
+        setCategory(category) { this.category = category; this.updateCount(); },
+        openBranch(branch) { this.selected = branch; this.wizardStep = 1; this.$nextTick(() => this.$refs.dialog?.focus()); },
+        closeBranch() { this.selected = null; },
+    }" x-init="updateCount()">
+        <x-marketing.partials.section-shell :section="$currentSection" :sections="$sections" />
 
- @foreach($storeSections as $sectionKey => $sectionLabel)
- @php
- $modules = is_array($sectionsPayload[$sectionKey] ?? null) ? $sectionsPayload[$sectionKey] : [];
- @endphp
+        <header class="branch-directory__header">
+            <div class="branch-directory__eyebrow">Branches</div>
+            <h1>Choose what helps your business grow next.</h1>
+            <p>Browse simple, purpose-built tools for your business. Every Branch explains what it does and its price before you make a change.</p>
+        </header>
 
- @if($modules === [])
- @continue
- @endif
+        <div class="branch-directory__layout">
+            <aside class="branch-directory__filters" aria-label="Filter Branches">
+                <label class="branch-directory__filter-title" for="branch-search">Find a Branch</label>
+                <input id="branch-search" class="branch-directory__search" type="search" x-model.debounce.100ms="query" @input="updateCount()" placeholder="Search Branches" autocomplete="off">
+                <p class="branch-directory__filter-title" style="margin-top: 1.5rem">Categories</p>
+                <div class="branch-directory__categories">
+                    <button class="branch-directory__category" type="button" :aria-pressed="category === 'all'" @click="setCategory('all')">All Branches <small>{{ $moduleCards->count() }}</small></button>
+                    @foreach($categories as $category)
+                        <button class="branch-directory__category" type="button" :aria-pressed="category === @js($category['key'])" @click="setCategory(@js($category['key']))">{{ $category['label'] }} <small>{{ $category['count'] }}</small></button>
+                    @endforeach
+                </div>
+            </aside>
 
- <section class="fb-panel">
- <div class="fb-panel-head">
- <div>
- <div class="fb-eyebrow">Catalog Section</div>
- <h2 class="mt-2 text-lg font-semibold text-[var(--fb-text-primary)]">{{ $sectionLabel }}</h2>
- </div>
- <span class="fb-chip fb-chip--quiet">{{ count($modules) }} Branches</span>
- </div>
+            <main aria-live="polite" aria-atomic="true">
+                <div class="branch-directory__result-head">
+                    <div><h2>Browse Branches</h2><p x-text="visibleCount + (visibleCount === 1 ? ' Branch' : ' Branches') + ' shown'"></p></div>
+                    <p>{{ $currentPlan['label'] ?? 'Your current plan' }}</p>
+                </div>
+                <div class="branch-directory__grid">
+                    @foreach($moduleCards as $card)
+                        <article class="branch-directory__card" data-branch-card data-focused="{{ $card['focused'] ? 'true' : 'false' }}" data-category="{{ $card['category'] }}" data-search="{{ strtolower(implode(' ', [$card['name'], $card['description'], $card['category_label'], $card['outcome']])) }}" x-show="matches($el)" x-cloak>
+                            <img class="branch-directory__image" src="{{ $card['cover_image'] }}" alt="" loading="lazy">
+                            <div class="branch-directory__card-body">
+                                <div class="branch-directory__meta"><span>{{ $card['category_label'] }}</span><span>{{ $card['state_label'] }}</span></div>
+                                <h3>{{ $card['name'] }}</h3>
+                                <p>{{ $card['description'] }}</p>
+                                <div class="branch-directory__price">{{ $card['price'] }}</div>
+                                @if($card['action'])
+                                    @if($card['action']['kind'] === 'link')
+                                        <a class="branch-directory__button" href="{{ $card['action']['url'] }}">{{ $card['action']['label'] }}</a>
+                                    @else
+                                        <button class="branch-directory__button" type="button" @click='openBranch(@json($card))'>{{ $card['action']['label'] }}</button>
+                                    @endif
+                                @endif
+                            </div>
+                        </article>
+                    @endforeach
+                </div>
+                <div class="branch-directory__empty" x-show="visibleCount === 0" x-cloak>
+                    No Branches match that search. Try a different word or choose another category.
+                </div>
+            </main>
+        </div>
 
- <div class="fb-panel-body">
- <div class="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
- @foreach($modules as $module)
- @php
- $moduleState = is_array($module['module_state'] ?? null) ? $module['module_state'] : [];
- $cta = (string) ($moduleState['cta'] ?? 'none');
- $moduleKey = (string) ($module['module_key'] ?? '');
- $isFocused = $focusModule !== '' && $focusModule === $moduleKey;
- $ctaHref = trim((string) ($moduleState['cta_href'] ?? ''));
- $purchase = is_array($module['purchase'] ?? null) ? (array) $module['purchase'] : [];
- @endphp
- <x-tenancy.module-next-step-card
- :module="$module"
- :module-state="$moduleState"
- :focused="$isFocused"
- >
- @if($cta === 'add' && filled($purchase['addon_key'] ?? null))
- <form method="POST" action="{{ route('billing.addons.checkout', ['addonKey' => $purchase['addon_key']]) }}">
- @csrf
- <button type="submit" class="fb-btn-soft fb-btn-accent fb-link-soft">Buy for {{ $purchase['price_display'] }}</button>
- </form>
- @elseif($cta === 'add')
- <form method="POST" action="{{ route('marketing.modules.activate', ['moduleKey' => $moduleKey]) }}">
- @csrf
- <button type="submit" class="fb-btn-soft fb-btn-accent fb-link-soft">{{ $moduleState['cta_label'] ?? 'Add module' }}</button>
- </form>
- @elseif($cta === 'request')
- <form method="POST" action="{{ route('marketing.modules.request', ['moduleKey' => $moduleKey]) }}">
- @csrf
- <button type="submit" class="fb-btn-soft fb-link-soft">{{ $moduleState['cta_label'] ?? 'Request access' }}</button>
- </form>
- @elseif($cta === 'upgrade' && $ctaHref !== '')
- <a href="{{ $ctaHref }}" class="fb-btn-soft fb-link-soft">{{ $moduleState['cta_label'] ?? 'Upgrade plan' }}</a>
- @elseif($ctaHref !== '')
- <a href="{{ $ctaHref }}" class="fb-btn-soft fb-link-soft">{{ $moduleState['cta_label'] ?? 'Learn more' }}</a>
- @endif
- <a href="{{ route('custom-module-requests.create', ['related_module_key' => $moduleKey]) }}" class="fb-btn-soft fb-link-soft">Request customization</a>
- </x-tenancy.module-next-step-card>
- @endforeach
- </div>
- </div>
- </section>
- @endforeach
- </div>
+        <div class="branch-directory__backdrop" x-show="selected" x-cloak @click.self="closeBranch()" @keydown.escape.window="closeBranch()" role="presentation">
+            <section class="branch-directory__dialog" x-ref="dialog" tabindex="-1" role="dialog" aria-modal="true" :aria-label="selected ? selected.name + ' setup' : 'Branch setup'">
+                <img class="branch-directory__dialog-image" :src="selected?.cover_image" alt="">
+                <div class="branch-directory__dialog-body">
+                    <template x-if="wizardStep === 1">
+                        <div>
+                            <div class="branch-directory__dialog-step">Step 1 of 3 · Your choice</div>
+                            <h2 x-text="selected?.name"></h2>
+                            <p x-text="selected?.outcome"></p>
+                            <p x-show="selected?.best_for"><strong>Best for:</strong> <span x-text="selected?.best_for"></span></p>
+                        </div>
+                    </template>
+                    <template x-if="wizardStep === 2">
+                        <div>
+                            <div class="branch-directory__dialog-step">Step 2 of 3 · Prepare</div>
+                            <h2>What you’ll need</h2>
+                            <ul class="branch-directory__dialog-list"><template x-for="item in (selected?.what_you_need || [])" :key="item"><li x-text="item"></li></template></ul>
+                            <p x-show="!(selected?.what_you_need || []).length">We’ll guide you through the essentials after you add this Branch.</p>
+                        </div>
+                    </template>
+                    <template x-if="wizardStep === 3">
+                        <div>
+                            <div class="branch-directory__dialog-step">Step 3 of 3 · Confirm</div>
+                            <h2>Here’s what happens next</h2>
+                            <ol class="branch-directory__dialog-list"><template x-for="step in (selected?.setup_steps || []).slice(0, 4)" :key="step"><li x-text="step"></li></template></ol>
+                            <p x-show="selected?.help_text" x-text="selected?.help_text"></p>
+                        </div>
+                    </template>
+                    <div class="branch-directory__dialog-actions">
+                        <button class="branch-directory__dialog-close" type="button" @click="closeBranch()">Cancel</button>
+                        <div>
+                            <button class="branch-directory__dialog-close" type="button" x-show="wizardStep > 1" @click="wizardStep--">Back</button>
+                            <button class="branch-directory__button" type="button" x-show="wizardStep < 3" @click="wizardStep++">Continue</button>
+                            <form x-show="wizardStep === 3" method="POST" :action="selected?.action?.url">
+                                @csrf
+                                <button class="branch-directory__button" type="submit" x-text="selected?.action?.kind === 'purchase' ? 'Continue to purchase' : selected?.action?.label"></button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
 </x-layouts::app>

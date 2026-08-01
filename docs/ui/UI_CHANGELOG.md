@@ -1,5 +1,31 @@
 # UI Changelog
 
+## 2026-08-01 — Electrician Website pilot
+
+- Replaced the Website home’s commerce-heavy entry point with a compact electrician, quote-first setup wizard and saved checklist.
+- Added focused Services and Website Leads screens; removed Products, Customers, Orders, checkout, booking, deposits, and domains from the pilot home surface.
+
+## 2026-08-01 — Tenant Branch directory refinement
+
+### What changed
+
+- Replaced the dense tenant Branch catalog with a visual directory: local,
+  rights-safe cover photography, clear short descriptions, a visible price or
+  plan message, categories, and instant client-side search-as-you-type.
+- Adding, requesting, or purchasing a Branch now opens a short three-step
+  focused dialog before the existing server-authorized action. The card itself
+  stays concise; prerequisites and setup steps appear only when the customer
+  asks for them.
+- The directory uses ordinary compact-radius controls rather than pill buttons
+  and keeps category/status/price information as readable text.
+
+### Safety posture
+
+- Catalog filtering is presentation-only. `TenantModuleCatalogService`, tenant
+  membership, role checks, entitlement validation, billing handoff, and action
+  auditing remain the server-side authority. Browsing/searching does not change
+  a Branch, billing state, or entitlement.
+
 ## 2026-07-27 — Website editor and starter-theme refinement
 
 ### What changed

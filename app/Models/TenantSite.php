@@ -6,6 +6,7 @@ use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class TenantSite extends Model
 {
@@ -34,5 +35,10 @@ class TenantSite extends Model
     public function publishEvents(): HasMany
     {
         return $this->hasMany(TenantSitePublishEvent::class);
+    }
+
+    public function setup(): HasOne
+    {
+        return $this->hasOne(TenantSiteSetup::class, 'tenant_site_id');
     }
 }

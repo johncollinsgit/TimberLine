@@ -65,6 +65,7 @@ class TenantModuleCatalogService
                 'long_description' => (string) ($productMetadata['long_description'] ?? ''),
                 'category' => (string) ($productMetadata['category'] ?? 'operations'),
                 'category_label' => (string) ($productMetadata['category_label'] ?? 'Operations'),
+                'cover_image' => $this->branchCoverImage($moduleKey, $productMetadata),
                 'lifecycle' => (string) ($productMetadata['lifecycle'] ?? 'internal'),
                 'lifecycle_label' => (string) ($productMetadata['lifecycle_label'] ?? 'Internal'),
                 'setup_effort' => (string) ($productMetadata['setup_effort'] ?? 'standard'),
@@ -177,6 +178,24 @@ class TenantModuleCatalogService
             'uploads' => 'cloud-upload',
             'settings' => 'settings',
             default => 'blocks',
+        };
+    }
+
+    /**
+     * Purposeful, local photography keeps the Branch directory easy to scan
+     * without coupling customer-facing presentation to a tenant's data.
+     *
+     * @param  array<string,mixed>  $productMetadata
+     */
+    protected function branchCoverImage(string $moduleKey, array $productMetadata): string
+    {
+        return match ($moduleKey) {
+            'field_service', 'time_tracking', 'field_inventory', 'fleet', 'team_communication' => '/images/branch-covers/field-service.png',
+            'managed_website', 'wholesale_operations', 'inventory', 'subscriptions' => '/images/branch-covers/commerce.png',
+            default => match ((string) ($productMetadata['category'] ?? '')) {
+                'commerce', 'shopify_growth' => '/images/branch-covers/commerce.png',
+                default => '/images/branch-covers/customer-operations.png',
+            },
         };
     }
 
@@ -605,10 +624,6 @@ class TenantModuleCatalogService
         $visible = [];
         foreach ((array) config('module_catalog.modules', []) as $moduleKey => $definition) {
             if (! is_array($definition)) {
-                continue;
-            }
-
-            if ($moduleKey === 'managed_website' && ! (bool) config('managed_website.commerce_enabled', false)) {
                 continue;
             }
 

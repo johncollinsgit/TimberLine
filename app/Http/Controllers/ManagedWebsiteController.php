@@ -8,8 +8,10 @@ use App\Models\TenantForm;
 use App\Models\TenantSite;
 use App\Models\TenantSitePage;
 use App\Models\TenantSitePageVersion;
+use App\Services\ManagedWebsite\ManagedWebsiteAccessService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
+use App\Services\ManagedWebsite\WebsitePilotService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,10 +20,13 @@ use Illuminate\View\View;
 
 class ManagedWebsiteController extends Controller
 {
-    public function index(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): View
+    public function index(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce, WebsitePilotService $pilot, ManagedWebsiteAccessService $access): View
     {
         $tenant = $this->tenant($request);
-        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion'])->first();
+        $site = TenantSite::query()->forTenant($tenant)->with(['pages.draftVersion', 'pages.publishedVersion', 'setup'])->first();
+        $setup = $site?->setup;
+        $checklist = $pilot->checklist($site, $setup);
+        $next = collect($checklist)->firstWhere('complete', false);
 
         return view('managed-website.index', [
             'tenant' => $tenant,
@@ -33,7 +38,59 @@ class ManagedWebsiteController extends Controller
             'isPublicRenderEnabled' => $websites->publicRenderingEnabled(),
             'themes' => $websites->themes(),
             'commerceReadiness' => $commerce->checkoutReadiness($tenant),
+            'setup' => $setup,
+            'checklist' => $checklist,
+            'nextChecklistItem' => $next,
+            'canPublish' => $access->canPublish($tenant, $request->user()),
         ]);
+    }
+
+    public function saveSetup(Request $request, ManagedWebsiteService $websites, WebsitePilotService $pilot, WebsiteCommerceService $commerce): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        $data = $request->validate([
+            'contact_name' => ['nullable', 'string', 'max:190'],
+            'contact_email' => ['nullable', 'email:rfc,dns', 'max:190'],
+            'contact_phone' => ['nullable', 'string', 'max:80'],
+            'hours' => ['nullable', 'string', 'max:500'],
+            'service_area' => ['nullable', 'string', 'max:500'],
+            'service_title' => ['nullable', 'string', 'max:190'],
+            'service_description' => ['nullable', 'string', 'max:8000'],
+        ]);
+        $site = $websites->createSite($tenant, $request->user());
+        $websites->applyTheme($site, 'collins-electric', $request->user());
+        $pilot->saveSetup($tenant, $site, $data, $request->user());
+        if (filled($data['service_title'] ?? null)) {
+            $commerce->saveProduct($site, [
+                'title' => $data['service_title'], 'description' => $data['service_description'] ?? '', 'product_type' => 'quote',
+                'status' => 'active', 'price' => '0', 'track_inventory' => false, 'is_available' => true,
+            ]);
+        }
+
+        return redirect()->route('managed-website.index')->with('status', 'Your Website setup was saved. You can pick up where you left off anytime.');
+    }
+
+    public function leads(Request $request): View
+    {
+        $tenant = $this->tenant($request);
+        $submissions = FormSubmission::query()
+            ->forTenant($tenant)
+            ->whereIn('source', ['managed_website', 'managed_website_quote'])
+            ->with('form')
+            ->latest('submitted_at')
+            ->paginate(30);
+
+        return view('managed-website.leads', compact('tenant', 'submissions'));
+    }
+
+    public function markMobilePreviewed(Request $request, ManagedWebsiteService $websites, WebsitePilotService $pilot): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireEditor($tenant, $websites);
+        $pilot->markMobilePreviewed($tenant, $request->user());
+
+        return back()->with('status', 'Mobile preview marked as checked.');
     }
 
     public function editor(Request $request, TenantSitePage $page, ManagedWebsiteService $websites): View
@@ -127,11 +184,13 @@ class ManagedWebsiteController extends Controller
         return back()->with('status', 'Draft saved.');
     }
 
-    public function publish(Request $request, ManagedWebsiteService $websites): RedirectResponse
+    public function publish(Request $request, ManagedWebsiteService $websites, ManagedWebsiteAccessService $access, WebsitePilotService $pilot): RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->requireEditor($tenant, $websites);
+        $this->requirePublisher($tenant, $request, $access);
         $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        abort_unless($pilot->readyToPublish($site, $site->setup), 422, 'Finish the Website checklist before publishing.');
         $websites->publish($site, $request->user());
 
         return back()->with('status', $websites->publicRenderingEnabled()
@@ -139,20 +198,23 @@ class ManagedWebsiteController extends Controller
             : 'Published safely. Public rendering is still disabled for this rollout.');
     }
 
-    public function publishEditor(Request $request, ManagedWebsiteService $websites): JsonResponse
+    public function publishEditor(Request $request, ManagedWebsiteService $websites, ManagedWebsiteAccessService $access, WebsitePilotService $pilot): JsonResponse
     {
         $tenant = $this->tenant($request);
         $this->requireEditor($tenant, $websites);
+        $this->requirePublisher($tenant, $request, $access);
         $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        abort_unless($pilot->readyToPublish($site, $site->setup), 422, 'Finish the Website checklist before publishing.');
         $websites->publish($site, $request->user());
 
         return response()->json(['status' => $websites->publicRenderingEnabled() ? 'published' : 'published_safely']);
     }
 
-    public function rollback(Request $request, TenantSitePage $page, TenantSitePageVersion $version, ManagedWebsiteService $websites): RedirectResponse
+    public function rollback(Request $request, TenantSitePage $page, TenantSitePageVersion $version, ManagedWebsiteService $websites, ManagedWebsiteAccessService $access): RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->requireEditor($tenant, $websites);
+        $this->requirePublisher($tenant, $request, $access);
         $site = TenantSite::query()->forTenant($tenant)->findOrFail($page->tenant_site_id);
         abort_unless((int) $page->tenant_id === (int) $tenant->id && (int) $version->tenant_id === (int) $tenant->id, 404);
         $websites->rollback($site, $page, $version, $request->user());
@@ -166,6 +228,7 @@ class ManagedWebsiteController extends Controller
         abort_unless($tenant instanceof Tenant, 404);
         $payload = $websites->publicPage($tenant, (string) $path);
         abort_unless($payload !== null, 404);
+        abort_unless($websites->publicHostAllowed($payload['site'], $request->getHost()), 404);
 
         return view('managed-website.public', $payload + ['tenant' => $tenant]);
     }
@@ -206,6 +269,11 @@ class ManagedWebsiteController extends Controller
     protected function requireEditor(Tenant $tenant, ManagedWebsiteService $websites): void
     {
         abort_unless($websites->editorEnabledFor($tenant), 423, 'Website editing is not enabled for this workspace yet.');
+    }
+
+    protected function requirePublisher(Tenant $tenant, Request $request, ManagedWebsiteAccessService $access): void
+    {
+        abort_unless($access->canPublish($tenant, $request->user()), 403, 'Only a workspace owner or admin can publish or restore a live website.');
     }
 
     /** @return array<int,array<string,string>> */

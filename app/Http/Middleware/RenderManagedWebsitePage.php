@@ -29,6 +29,9 @@ class RenderManagedWebsitePage
         if ($payload === null) {
             return $response;
         }
+        if (! app(ManagedWebsiteService::class)->publicHostAllowed($payload['site'], $request->getHost())) {
+            return $response;
+        }
 
         return response()->view('managed-website.public', $payload + ['tenant' => $tenant]);
     }

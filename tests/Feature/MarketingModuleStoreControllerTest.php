@@ -36,9 +36,13 @@ test('marketing modules page renders tenant-aware module catalog for authenticat
     $this->actingAs($user)
         ->get(route('marketing.modules'))
         ->assertOk()
-        ->assertSeeText('Tenant-aware module marketplace')
+        ->assertSeeText('Choose what helps your business grow next.')
+        ->assertSeeText('Find a Branch')
+        ->assertSeeText('Categories')
         ->assertSeeText('SMS')
-        ->assertSeeText('Modules');
+        ->assertSeeText('Browse Branches')
+        ->assertSee('data-branch-card', false)
+        ->assertSee('x-model.debounce.100ms="query"', false);
 });
 
 test('marketing modules page can activate and request module access', function (): void {
