@@ -1,17 +1,13 @@
 <x-layouts::app.sidebar title="Website">
     <flux:main>
-        <div class="mx-auto max-w-[1440px] space-y-6 pb-10">
-            @if(session('status'))<div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950" role="status">{{ session('status') }}</div>@endif
-
-            @if(! $site)
-                <section class="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
-                    <p class="text-xs font-bold uppercase tracking-[.16em] text-emerald-800">Everbranch Website</p>
-                    <h1 class="mt-3 text-3xl font-bold tracking-tight text-zinc-950">Create your website as a safe draft.</h1>
-                    <p class="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">Choose a theme, build pages in the live editor, and publish only when your workspace is approved. This never changes an existing Shopify store, checkout, order, or customer record.</p>
-                    @if($isEditorEnabled)<form method="POST" action="{{ route('managed-website.create') }}" class="mt-6">@csrf<button class="fb-btn fb-btn-primary" type="submit">Create website</button></form>@else
-                        <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">Website access is held behind the rollout gate. No public site or commerce data has been created.</div>
-                    @endif
-                </section>
+        <div class="mx-auto max-w-6xl space-y-6 pb-12">
+            @if(session('status'))<div class="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950" role="status">{{ session('status') }}</div>@endif
+            <header class="flex flex-col gap-4 border-b border-zinc-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
+                <div><p class="text-xs font-bold uppercase tracking-[.16em] text-emerald-800">Website Branch · quote-first pilot</p><h1 class="mt-2 text-3xl font-bold tracking-tight text-zinc-950">Your electrician website</h1><p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Give customers a clear way to request electrical work or call your business. Payments, domains, booking, and customer systems are not part of this pilot.</p></div>
+                @if($isEditorEnabled)<button class="fb-btn fb-btn-primary" type="button" onclick="document.getElementById('website-setup').showModal()">{{ $site ? 'Continue setup' : 'Set up website' }}</button>@endif
+            </header>
+            @if(! $isEditorEnabled)
+                <section class="border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Website access is still being approved for this workspace. Nothing public, billable, or connected has been created.</section>
             @else
                 @php
                     $draftTheme = $site->draftSiteVersion;
@@ -22,7 +18,7 @@
                     <div class="flex flex-wrap gap-2">@if($site->status === 'published' && $isPublicRenderEnabled)<a class="fb-btn fb-btn-secondary" target="_blank" rel="noopener" href="{{ $publicUrl }}">View live site</a>@endif</div>
                 </header>
 
-                <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-domain-heading">
+                @if(! $setup || $setup->domain_choice !== 'everbranch_subdomain')<section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-domain-heading">
                     <div class="border-b border-zinc-200 px-6 py-5">
                         <p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website address</p>
                         <h2 id="website-domain-heading" class="mt-1 text-xl font-bold tracking-tight text-zinc-950">Connect a domain you already own</h2>
@@ -80,7 +76,7 @@
                             </aside>
                         </div>
                     @endif
-                </section>
+                </section>@endif
 
                 <section class="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
                     <div class="grid min-h-[360px] place-items-center bg-[#f6f7f6] p-5 lg:p-10">
@@ -114,4 +110,15 @@
             @endif
         </div>
     </flux:main>
+    <dialog id="website-setup" class="w-[min(92vw,620px)] border border-zinc-200 bg-white p-0 shadow-2xl backdrop:bg-zinc-950/40">
+        <form method="POST" action="{{ route('managed-website.setup.save') }}" class="p-6" data-wizard>@csrf
+            <div class="flex items-center justify-between border-b border-zinc-200 pb-4"><div><p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website setup</p><h2 class="mt-1 text-xl font-bold text-zinc-950">A few quick choices</h2></div><button type="button" class="text-xl text-zinc-500" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
+            <section data-step="1" class="space-y-4 pt-5"><h3 class="text-lg font-bold">1. Confirm your customer goal</h3><p class="text-sm leading-6 text-zinc-600">This pilot is set for an electrician who sells services and wants quote requests plus phone calls.</p><div class="border border-zinc-200 bg-zinc-50 p-4 text-sm"><strong>Electrician / trades</strong><br>Services · Request a quote · Call the business</div></section>
+            <section data-step="2" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">2. Your starting design</h3><div class="border-2 border-emerald-700 p-4"><strong>Collins Electric</strong><p class="mt-1 text-sm text-zinc-600">A clear service-first design with space for electrical work, contact details, and quote requests.</p></div></section>
+            <section data-step="3" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">3. Business details</h3><div class="grid gap-3 sm:grid-cols-2"><label class="text-sm font-semibold">Business name<input name="contact_name" value="{{ old('contact_name', $setup?->contact_name ?: $tenant->name) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Email<input name="contact_email" type="email" value="{{ old('contact_email', $setup?->contact_email) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Phone<input name="contact_phone" value="{{ old('contact_phone', $setup?->contact_phone) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Hours<input name="hours" value="{{ old('hours', $setup?->hours) }}" placeholder="Mon–Fri, 8am–5pm" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold sm:col-span-2">Service area<input name="service_area" value="{{ old('service_area', $setup?->service_area) }}" placeholder="Towns, counties, or neighborhoods you serve" class="mt-1 block w-full rounded border-zinc-300"></label></div></section>
+            <section data-step="4" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">4. Add your first service</h3><p class="text-sm leading-6 text-zinc-600">Customers will be able to request a quote for this service. No checkout or deposits are enabled.</p><label class="block text-sm font-semibold">Service name<input name="service_title" placeholder="Panel upgrade" class="mt-1 block w-full rounded border-zinc-300"></label><label class="block text-sm font-semibold">Clear description<textarea name="service_description" rows="3" placeholder="Tell customers when they should request this work." class="mt-1 block w-full rounded border-zinc-300"></textarea></label></section>
+            <div class="mt-6 flex justify-between border-t border-zinc-200 pt-4"><button class="fb-btn fb-btn-secondary invisible" type="button" data-back>Back</button><div class="flex gap-2"><button class="fb-btn fb-btn-secondary" type="button" onclick="this.closest('dialog').close()">Save for later</button><button class="fb-btn fb-btn-primary" type="button" data-next>Continue</button><button class="fb-btn fb-btn-primary hidden" type="submit" data-finish>Save setup</button></div></div>
+        </form>
+    </dialog>
+    <script>document.querySelectorAll('[data-wizard]').forEach(function(w){let n=1;const render=()=>{w.querySelectorAll('[data-step]').forEach(s=>s.classList.toggle('hidden',Number(s.dataset.step)!==n));w.querySelector('[data-back]').classList.toggle('invisible',n===1);w.querySelector('[data-next]').classList.toggle('hidden',n===4);w.querySelector('[data-finish]').classList.toggle('hidden',n!==4)};w.querySelector('[data-next]').onclick=()=>{n=Math.min(4,n+1);render()};w.querySelector('[data-back]').onclick=()=>{n=Math.max(1,n-1);render()};render()})</script>
 </x-layouts::app.sidebar>

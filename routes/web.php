@@ -706,6 +706,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
             Route::post('/', [ManagedWebsiteController::class, 'create'])->name('create');
+            Route::post('/setup', [ManagedWebsiteController::class, 'saveSetup'])->name('setup.save');
+            Route::post('/mobile-previewed', [ManagedWebsiteController::class, 'markMobilePreviewed'])->name('mobile-previewed');
+            Route::get('/leads', [ManagedWebsiteController::class, 'leads'])->name('leads.index');
+            Route::get('/services', [WebsiteCommerceController::class, 'services'])->name('services.index');
+            Route::post('/services', [WebsiteCommerceController::class, 'storeService'])->name('services.store');
+            Route::put('/services/{product}', [WebsiteCommerceController::class, 'updateService'])->name('services.update');
             Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');
             Route::post('/domains', [ManagedWebsiteController::class, 'requestDomain'])->name('domains.request');
             Route::post('/domains/{domain}/verify', [ManagedWebsiteController::class, 'verifyDomain'])->name('domains.verify');

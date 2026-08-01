@@ -20,6 +20,34 @@ use Illuminate\View\View;
 
 class WebsiteCommerceController extends Controller
 {
+    public function services(Request $request, ManagedWebsiteService $websites): View
+    {
+        $tenant = $this->tenant($request);
+        $site = $this->site($tenant);
+        $products = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('product_type', 'quote')->with('variants')->latest()->paginate(25);
+
+        return view('managed-website.services', compact('tenant', 'site', 'products') + ['isEditorEnabled' => $websites->editorEnabledFor($tenant)]);
+    }
+
+    public function storeService(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        abort_unless($websites->editorEnabledFor($tenant), 423, 'Website editing is not enabled for this workspace yet.');
+        $commerce->saveProduct($this->site($tenant), $this->serviceData($request));
+
+        return back()->with('status', 'Quote service saved.');
+    }
+
+    public function updateService(Request $request, WebsiteProduct $product, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        abort_unless((int) $product->tenant_id === (int) $tenant->id && $product->product_type === 'quote', 404);
+        abort_unless($websites->editorEnabledFor($tenant), 423, 'Website editing is not enabled for this workspace yet.');
+        $commerce->saveProduct($this->site($tenant), $this->serviceData($request) + ['id' => $product->id]);
+
+        return back()->with('status', 'Quote service updated.');
+    }
+
     public function products(Request $request, ManagedWebsiteService $websites): View
     {
         $tenant = $this->tenant($request);
@@ -97,7 +125,9 @@ class WebsiteCommerceController extends Controller
     public function shop(Request $request, ManagedWebsiteService $websites): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
-        $products = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active')->with('variants')->get();
+        $products = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active')
+            ->when(data_get($site->settings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
+            ->with('variants')->get();
 
         return view('managed-website.shop', compact('tenant', 'site', 'products'));
     }
@@ -105,14 +135,17 @@ class WebsiteCommerceController extends Controller
     public function showProduct(Request $request, string $handle, ManagedWebsiteService $websites): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
-        $product = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('handle', $handle)->where('status', 'active')->with('variants')->firstOrFail();
+        $product = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('handle', $handle)->where('status', 'active')
+            ->when(data_get($site->settings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
+            ->with('variants')->firstOrFail();
 
         return view('managed-website.product', compact('tenant', 'site', 'product'));
     }
 
     public function cart(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): View
     {
-        [, $site] = $this->publicSite($request, $websites);
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $this->requireCommerce($tenant, $commerce);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $request->session()->put($this->cartSessionKey($site), $cart->token);
 
@@ -124,17 +157,17 @@ class WebsiteCommerceController extends Controller
         [$tenant, $site] = $this->publicSite($request, $websites);
         $product = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('handle', $handle)->where('product_type', 'quote')->where('status', 'active')->firstOrFail();
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:190'], 'email' => ['required', 'email:rfc,dns', 'max:190'],
-            'phone' => ['nullable', 'string', 'max:80'], 'message' => ['required', 'string', 'max:4000'], 'website' => ['nullable', 'max:0'],
+            'name' => ['required', 'string', 'max:190'], 'email' => ['required', 'email:rfc', 'max:190'],
+            'phone' => ['required', 'string', 'max:80'], 'service_address' => ['required', 'string', 'max:500'], 'service_needed' => ['required', 'string', 'max:500'], 'message' => ['required', 'string', 'max:4000'], 'website' => ['nullable', 'max:0'],
         ]);
         $form = TenantForm::query()->firstOrCreate(
             ['tenant_id' => $tenant->id, 'slug' => 'managed-website-quote'],
-            ['name' => 'Website quote request', 'status' => 'active', 'channel' => 'website', 'schema' => ['name', 'email', 'phone', 'message'], 'settings' => ['managed_website_quote' => true]]
+            ['name' => 'Website quote request', 'status' => 'active', 'channel' => 'website', 'schema' => ['name', 'email', 'phone', 'service_address', 'service_needed', 'message'], 'settings' => ['managed_website_quote' => true]]
         );
         FormSubmission::query()->create([
             'tenant_id' => $tenant->id, 'tenant_form_id' => $form->id, 'status' => 'submitted', 'source' => 'managed_website_quote',
             'source_key' => 'managed-website-quote-'.Str::uuid(), 'submitted_at' => now(), 'submitter_name' => $data['name'], 'submitter_email' => $data['email'], 'submitter_phone' => $data['phone'] ?? null,
-            'payload' => ['message' => $data['message']], 'normalized_payload' => ['website_product_id' => $product->id],
+            'payload' => ['service_address' => $data['service_address'], 'service_needed' => $data['service_needed'], 'message' => $data['message']], 'normalized_payload' => ['website_product_id' => $product->id, 'tenant_site_id' => $site->id],
         ]);
 
         return back()->with('quote_status', 'Thanks — your quote request was received.');
@@ -143,6 +176,7 @@ class WebsiteCommerceController extends Controller
     public function addCartItem(Request $request, WebsiteProductVariant $variant, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
+        $this->requireCommerce($tenant, $commerce);
         abort_unless((int) $variant->tenant_id === (int) $tenant->id && $variant->product?->tenant_site_id === $site->id, 404);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $quantity = (int) ($request->validate(['quantity' => ['nullable', 'integer', 'min:1', 'max:20']])['quantity'] ?? 1);
@@ -155,6 +189,7 @@ class WebsiteCommerceController extends Controller
     public function checkout(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
+        $this->requireCommerce($tenant, $commerce);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $data = $request->validate([
             'name' => ['required', 'string', 'max:190'], 'email' => ['required', 'email:rfc,dns', 'max:190'], 'phone' => ['nullable', 'string', 'max:80'],
@@ -193,6 +228,16 @@ class WebsiteCommerceController extends Controller
         ]);
     }
 
+    /** @return array<string,mixed> */
+    private function serviceData(Request $request): array
+    {
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:190'], 'description' => ['nullable', 'string', 'max:8000'], 'status' => ['required', 'in:draft,active'],
+        ]);
+
+        return $data + ['product_type' => 'quote', 'price' => '0', 'track_inventory' => false, 'is_available' => true];
+    }
+
     /** @return array<string,string> */
     private function customerData(Request $request): array
     {
@@ -211,6 +256,7 @@ class WebsiteCommerceController extends Controller
         abort_unless($tenant instanceof Tenant, 404);
         $payload = $websites->publicPage($tenant, '');
         abort_unless($payload !== null, 404);
+        abort_unless($websites->publicHostAllowed($payload['site'], $request->getHost()), 404);
 
         return [$tenant, $payload['site']];
     }
