@@ -53,6 +53,23 @@ test('unified shell keeps modules hidden when there is no tenant context', funct
         ->assertDontSeeText('Wiki Sections');
 });
 
+test('every active tenant member can open Branches from the primary sidebar', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Branch Access Tenant', 'slug' => 'branch-access-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create(['role' => 'member']);
+    $user->tenants()->attach($tenant->id, ['role' => 'member']);
+
+    $this->actingAs($user)
+        ->get('http://branch-access-tenant.theeverbranch.com/marketing/modules')
+        ->assertOk()
+        ->assertSee('data-sidebar-key="branches"', false);
+});
+
 test('account help uses a readable light support hero', function () {
     $tenant = Tenant::query()->create(['name' => 'Support Tenant', 'slug' => 'support-tenant']);
     TenantAccessProfile::query()->create([

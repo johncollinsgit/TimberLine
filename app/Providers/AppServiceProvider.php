@@ -122,7 +122,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Gate::define('view-tenant-module-store', function (User $user, ?int $tenantId = null): bool {
-            if ($user->getAttribute('is_active') === false || ! $user->canAccessMarketing() || $tenantId === null) {
+            if ($user->getAttribute('is_active') === false || $tenantId === null) {
                 return false;
             }
 

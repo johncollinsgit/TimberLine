@@ -89,6 +89,19 @@ class UnifiedAppNavigationService
             ];
         }
 
+        // Branches is the common starting point for discovering what a
+        // workspace can do. Keep it visible to every active tenant member,
+        // independently of whether their role can work in Marketing.
+        if ($tenantId !== null && Route::has('marketing.modules')) {
+            $items[] = [
+                'key' => 'branches',
+                'icon' => 'squares-2x2',
+                'href' => route('marketing.modules'),
+                'label' => 'Branches',
+                'current' => request()->routeIs('marketing.modules*'),
+            ];
+        }
+
         if ($canAccessMarketing) {
             $birthdaysRelevant = $tenantId === null
                 || $this->moduleStateRelevant($moduleStates['birthdays'] ?? null);
@@ -107,15 +120,6 @@ class UnifiedAppNavigationService
                 'children' => $marketingChildren,
             ];
 
-            if ($tenantId !== null && Route::has('marketing.modules')) {
-                $items[] = [
-                    'key' => 'branches',
-                    'icon' => 'squares-2x2',
-                    'href' => route('marketing.modules'),
-                    'label' => 'Branches',
-                    'current' => request()->routeIs('marketing.modules*'),
-                ];
-            }
         }
 
         if (($canAccessOps || $roleCanAccessMarketing) && $workflowAutomationsEnabled && Route::has('workflows.index')) {
