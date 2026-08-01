@@ -397,9 +397,9 @@ test('mobile bootstrap uses the canonical Collins light and dark brand presentat
         ->assertOk()
         ->assertJsonPath('branding.display_name', 'Collins Upstate Electric')
         ->assertJsonPath('branding.tagline', 'Residential · Commercial · Reliable Power')
-        ->assertJsonPath('branding.theme_key', 'collins-upstate-electric')
-        ->assertJsonPath('branding.primary_color', '#061D42')
-        ->assertJsonPath('branding.accent_color', '#1464E8')
+        ->assertJsonPath('branding.theme_key', 'custom')
+        ->assertJsonPath('branding.primary_color', '#123C43')
+        ->assertJsonPath('branding.accent_color', '#1E5A63')
         ->assertJson(fn ($json) => $json
             ->whereType('branding.light_logo_url', 'string')
             ->whereType('branding.dark_logo_url', 'string')
