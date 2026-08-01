@@ -127,8 +127,6 @@
         openBranch(branch) { this.selected = branch; this.wizardStep = 1; this.$nextTick(() => this.$refs.dialog?.focus()); },
         closeBranch() { this.selected = null; },
     }" x-init="updateCount()">
-        <x-marketing.partials.section-shell :section="$currentSection" :sections="$sections" />
-
         <header class="branch-directory__header">
             <div class="branch-directory__eyebrow">Branches</div>
             <h1>Choose what helps your business grow next.</h1>
