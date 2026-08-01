@@ -1173,6 +1173,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('analytics.index');
     });
 
+    // Branches is the shared tenant catalog. Keep it available without granting
+    // access to the broader Marketing workspace or its mutation actions.
+    Route::middleware(['role:admin,marketing_manager,manager,member,pouring', 'tenant.access'])
+        ->prefix('marketing')
+        ->name('marketing.')
+        ->group(function (): void {
+            Route::get('/modules', [MarketingModuleStoreController::class, 'index'])->name('modules');
+        });
+
     // Marketing
     Route::middleware(['role:admin,marketing_manager,manager'])
         ->prefix('marketing')
@@ -1335,7 +1344,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->defaults('section', 'reviews')
                     ->name('reviews');
                 Route::middleware(['tenant.access'])->group(function (): void {
-                    Route::get('/modules', [MarketingModuleStoreController::class, 'index'])->name('modules');
                     Route::post('/modules/{moduleKey}/activate', [MarketingModuleStoreController::class, 'activate'])->name('modules.activate');
                     Route::post('/modules/{moduleKey}/request', [MarketingModuleStoreController::class, 'requestAccess'])->name('modules.request');
                 });

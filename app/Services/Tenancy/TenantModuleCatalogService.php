@@ -65,7 +65,7 @@ class TenantModuleCatalogService
                 'long_description' => (string) ($productMetadata['long_description'] ?? ''),
                 'category' => (string) ($productMetadata['category'] ?? 'operations'),
                 'category_label' => (string) ($productMetadata['category_label'] ?? 'Operations'),
-                'cover_image' => $this->branchCoverImage($moduleKey, $productMetadata),
+                'cover_image' => $this->branchCoverImage($moduleKey),
                 'lifecycle' => (string) ($productMetadata['lifecycle'] ?? 'internal'),
                 'lifecycle_label' => (string) ($productMetadata['lifecycle_label'] ?? 'Internal'),
                 'setup_effort' => (string) ($productMetadata['setup_effort'] ?? 'standard'),
@@ -96,6 +96,12 @@ class TenantModuleCatalogService
 
         $blueprintRecommendations = $this->blueprintRecommendations->forTenant($tenantId, $modules);
         $modules = $this->blueprintRecommendations->decorateCatalogModules($modules, $blueprintRecommendations);
+        $businessTemplate = strtolower(trim((string) data_get($blueprintRecommendations, 'context.business_template', 'generic')));
+        $modules = array_map(function (array $module) use ($businessTemplate): array {
+            $module['cover_image'] = $this->branchCoverImage((string) ($module['module_key'] ?? ''), $businessTemplate);
+
+            return $module;
+        }, $modules);
 
         usort($modules, function (array $left, array $right): int {
             $bucketOrder = ['active' => 0, 'available' => 1, 'upgrade' => 2, 'request' => 3];
@@ -185,18 +191,17 @@ class TenantModuleCatalogService
      * Purposeful, local photography keeps the Branch directory easy to scan
      * without coupling customer-facing presentation to a tenant's data.
      *
-     * @param  array<string,mixed>  $productMetadata
      */
-    protected function branchCoverImage(string $moduleKey, array $productMetadata): string
+    protected function branchCoverImage(string $moduleKey, string $businessTemplate = 'generic'): string
     {
-        return match ($moduleKey) {
-            'field_service', 'time_tracking', 'field_inventory', 'fleet', 'team_communication' => '/images/branch-covers/field-service.png',
-            'managed_website', 'wholesale_operations', 'inventory', 'subscriptions' => '/images/branch-covers/commerce.png',
-            default => match ((string) ($productMetadata['category'] ?? '')) {
-                'commerce', 'shopify_growth' => '/images/branch-covers/commerce.png',
-                default => '/images/branch-covers/customer-operations.png',
-            },
-        };
+        $moduleKey = strtolower(trim($moduleKey));
+        $businessTemplate = strtolower(trim($businessTemplate));
+
+        if ($businessTemplate === 'electrician' && $moduleKey === 'field_service') {
+            return '/images/branch-covers/everbranch/field-service-electrical.png';
+        }
+
+        return '/images/branch-covers/everbranch/customers.png';
     }
 
     protected function storeDisplayName(string $surface, string $displayName): string
