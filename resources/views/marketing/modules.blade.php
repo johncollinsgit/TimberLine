@@ -2,6 +2,9 @@
     @php
         $payload = is_array($moduleStorePayload ?? null) ? $moduleStorePayload : [];
         $currentPlan = is_array($payload['current_plan'] ?? null) ? $payload['current_plan'] : ['label' => 'your current plan'];
+        $blueprintRecommendations = is_array($payload['blueprint_recommendations'] ?? null) ? $payload['blueprint_recommendations'] : [];
+        $blueprintContext = is_array($blueprintRecommendations['context'] ?? null) ? $blueprintRecommendations['context'] : [];
+        $blueprintRows = array_values((array) ($blueprintRecommendations['rows'] ?? []));
         $modules = collect((array) ($payload['modules'] ?? []))->values();
         $focusModule = strtolower(trim((string) request('module', '')));
         $categories = $modules
@@ -68,6 +71,10 @@
         .branch-directory__eyebrow { color: var(--fb-brand-2, #1e5a63); font-size: .71rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
         .branch-directory__header h1 { font-size: clamp(1.85rem, 3vw, 2.55rem); letter-spacing: -.035em; line-height: 1.05; margin: .5rem 0 0; }
         .branch-directory__header p { color: var(--fb-text-secondary, #5d6b6a); font-size: .98rem; line-height: 1.55; margin: .7rem 0 0; max-width: 46rem; }
+        .branch-directory__header-links { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 1rem; }
+        .branch-directory__header-links a { color: var(--fb-brand, #123c43); font-size: .84rem; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
+        .branch-directory__guidance { align-items: baseline; border-left: 3px solid var(--fb-brand-2, #1e5a63); color: var(--fb-text-secondary, #5d6b6a); display: flex; flex-wrap: wrap; font-size: .82rem; gap: .35rem .6rem; line-height: 1.45; margin-top: 1rem; padding-left: .75rem; }
+        .branch-directory__guidance strong { color: var(--fb-text-primary, #0d1b1e); }
         .branch-directory__layout { align-items: start; display: grid; gap: 2rem; grid-template-columns: 220px minmax(0, 1fr); padding-top: 1.5rem; }
         .branch-directory__filter-title { color: var(--fb-text-secondary, #5d6b6a); font-size: .68rem; font-weight: 800; letter-spacing: .12em; margin: 0 0 .65rem; text-transform: uppercase; }
         .branch-directory__categories { border-top: 1px solid var(--fb-border, #e7eceb); display: grid; }
@@ -102,6 +109,10 @@
         .branch-directory__dialog h2 { font-size: 1.45rem; letter-spacing: -.025em; margin: .35rem 0 0; }
         .branch-directory__dialog p { color: var(--fb-text-secondary, #5d6b6a); font-size: .9rem; line-height: 1.55; }
         .branch-directory__dialog-list { color: var(--fb-text-secondary, #5d6b6a); display: grid; font-size: .88rem; gap: .6rem; line-height: 1.45; margin: 1rem 0 0; padding-left: 1.2rem; }
+        .branch-directory__recommendations { display: grid; gap: .65rem; margin-top: 1rem; }
+        .branch-directory__recommendation { border: 1px solid var(--fb-border, #e7eceb); padding: .8rem; }
+        .branch-directory__recommendation strong { display: block; font-size: .9rem; }
+        .branch-directory__recommendation span { color: var(--fb-text-secondary, #5d6b6a); display: block; font-size: .79rem; line-height: 1.45; margin-top: .2rem; }
         .branch-directory__dialog-actions { border-top: 1px solid var(--fb-border, #e7eceb); display: flex; gap: .65rem; justify-content: space-between; margin-top: 1.25rem; padding-top: 1rem; }
         .branch-directory__dialog-actions > div { display: flex; gap: .65rem; }
         @media (max-width: 1100px) { .branch-directory__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -109,7 +120,7 @@
     </style>
 
     <div class="branch-directory" x-data="{
-        query: '', category: 'all', selected: null, wizardStep: 1, visibleCount: {{ $moduleCards->count() }},
+        query: '', category: 'all', selected: null, guidanceOpen: false, wizardStep: 1, visibleCount: {{ $moduleCards->count() }},
         matches(el) { const text = (el.dataset.search || ''); return (this.category === 'all' || el.dataset.category === this.category) && text.includes(this.query.trim().toLowerCase()); },
         updateCount() { this.$nextTick(() => { this.visibleCount = [...this.$root.querySelectorAll('[data-branch-card]')].filter((el) => !el.hidden && getComputedStyle(el).display !== 'none').length; }); },
         setCategory(category) { this.category = category; this.updateCount(); },
@@ -121,7 +132,25 @@
         <header class="branch-directory__header">
             <div class="branch-directory__eyebrow">Branches</div>
             <h1>Choose what helps your business grow next.</h1>
-            <p>Browse simple, purpose-built tools for your business. Every Branch explains what it does and its price before you make a change.</p>
+            <p>Add what your business needs next. Browse simple, purpose-built tools for your business. Every Branch explains what it does and its price before you make a change. Viewing a Branch never changes billing or access; checkout is not active here.</p>
+            <div class="branch-directory__header-links">
+                <a href="{{ route('custom-module-requests.create') }}">Request something custom</a>
+                <a href="{{ route('custom-module-requests.create') }}">Request customization</a>
+            </div>
+            @if($blueprintRecommendations !== [])
+                <div class="branch-directory__guidance">
+                    <strong>Setup guidance</strong>
+                    <span>Recommended for your setup</span>
+                    <span>· {{ $blueprintContext['business_template_label'] ?? 'Workspace' }} setup profile</span>
+                    @if((bool) ($blueprintContext['is_demo'] ?? false))
+                        <span>· Demo tenant context</span>
+                    @elseif((bool) ($blueprintContext['is_sandbox'] ?? false))
+                        <span>· Sandbox tenant context</span>
+                    @endif
+                    <button type="button" class="branch-directory__button branch-directory__button--quiet" style="min-height: 32px; padding: 0 .55rem" @click="guidanceOpen = true">View guidance</button>
+                </div>
+            @endif
+            <span class="sr-only">Access: Requires add-on access or a request.</span>
         </header>
 
         <div class="branch-directory__layout">
@@ -167,6 +196,29 @@
                 </div>
             </main>
         </div>
+
+        @if($blueprintRows !== [])
+            <div class="branch-directory__backdrop" x-show="guidanceOpen" x-cloak @click.self="guidanceOpen = false" @keydown.escape.window="guidanceOpen = false" role="presentation">
+                <section class="branch-directory__dialog" tabindex="-1" role="dialog" aria-modal="true" aria-label="Setup guidance">
+                    <div class="branch-directory__dialog-body">
+                        <div class="branch-directory__dialog-step">Your setup</div>
+                        <h2>Recommended for your setup</h2>
+                        <p>These are planning suggestions only. They do not change your access or billing.</p>
+                        <div class="branch-directory__recommendations">
+                            @foreach($blueprintRows as $row)
+                                <div class="branch-directory__recommendation">
+                                    <strong>{{ $row['label'] ?? 'Branch' }} · {{ $row['display_state_label'] ?? 'Planned' }}</strong>
+                                    <span>{{ $row['reason'] ?? 'Recommended by your setup profile.' }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="branch-directory__dialog-actions">
+                            <button class="branch-directory__dialog-close" type="button" @click="guidanceOpen = false">Close</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        @endif
 
         <div class="branch-directory__backdrop" x-show="selected" x-cloak @click.self="closeBranch()" @keydown.escape.window="closeBranch()" role="presentation">
             <section class="branch-directory__dialog" x-ref="dialog" tabindex="-1" role="dialog" aria-modal="true" :aria-label="selected ? selected.name + ' setup' : 'Branch setup'">

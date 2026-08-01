@@ -53,10 +53,6 @@ class TenantExperienceProfileService
             (string) ($user?->id ?? 0),
         ]);
 
-        if (isset($this->cache[$cacheKey])) {
-            return $this->cache[$cacheKey];
-        }
-
         if ($tenantId !== null && ! $tenant instanceof Tenant) {
             $tenant = Tenant::query()
                 ->with(['accessProfile', 'shopifyStores'])

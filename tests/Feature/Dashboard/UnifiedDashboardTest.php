@@ -74,7 +74,7 @@ test('dashboard renders commerce hero metric for shopify-connected tenants', fun
         'order_label' => 'Order 2002',
         'status' => 'paid',
         'total_price' => 300,
-        'ordered_at' => now()->subDays(2),
+        'ordered_at' => now(),
     ]);
 
     $user = User::factory()->create(['role' => 'admin']);
