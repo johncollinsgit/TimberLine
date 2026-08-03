@@ -1,10 +1,12 @@
 <?php
 
+use App\Mail\LandlordProspectOutreachMail;
 use App\Models\LandlordProspect;
 use App\Models\LandlordProspectDiscoveryRun;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 
 beforeEach(function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST);
@@ -123,6 +125,8 @@ test('landlord can create a reviewed outreach draft and explicitly mark it sent'
     expect($draft->status)->toBe('draft')
         ->and($draft->body)->toContain('service calls')
         ->and($draft->body)->toContain('Everbranch')
+        ->and($draft->body)->toContain('12 years in online retail')
+        ->and($draft->body)->toContain('• A front-facing website with service and estimate requests')
         ->and($prospect->fresh()->status)->toBe('draft_ready');
 
     $this->actingAs($user)
@@ -133,6 +137,39 @@ test('landlord can create a reviewed outreach draft and explicitly mark it sent'
         ->and($prospect->fresh()->status)->toBe('contacted')
         ->and($prospect->fresh()->last_contacted_at)->not->toBeNull()
         ->and($prospect->fresh()->next_follow_up_at)->not->toBeNull();
+});
+
+test('landlord can send a reviewed prospect email from the configured Evergrove mailbox', function (): void {
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'app.theeverbranch.com';
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $prospect = LandlordProspect::query()->where('email', 'ageehvac.llc@gmail.com')->firstOrFail();
+    $draft = $prospect->communications()->create([
+        'direction' => 'outbound',
+        'channel' => 'email',
+        'status' => 'draft',
+        'subject' => 'A practical workflow idea',
+        'body' => 'A reviewed Everbranch outreach email.',
+        'occurred_at' => now(),
+        'created_by_user_id' => $user->id,
+    ]);
+    Mail::fake();
+
+    $this->actingAs($user)
+        ->post("http://{$landlordHost}/landlord/onboarding/{$prospect->id}/communications/{$draft->id}/send")
+        ->assertRedirect();
+
+    Mail::assertSent(LandlordProspectOutreachMail::class, function (LandlordProspectOutreachMail $mail) use ($prospect): bool {
+        return $mail->hasTo((string) $prospect->email);
+    });
+
+    expect($draft->fresh()->status)->toBe('sent')
+        ->and($draft->fresh()->from_address)->toBe('john@evergrovesoftware.com')
+        ->and($draft->fresh()->to_address)->toBe($prospect->email)
+        ->and($prospect->fresh()->status)->toBe('contacted');
 });
 
 test('landlord can log an inbound email response and move the prospect to replied', function (): void {

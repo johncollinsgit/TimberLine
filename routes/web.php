@@ -303,6 +303,8 @@ $landlordRoutes = static function (): void {
         ->name('onboarding.prospects.communications.store');
     Route::patch('/landlord/onboarding/{prospect}/communications/{communication}/sent', [LandlordProspectOnboardingController::class, 'markCommunicationSent'])
         ->name('onboarding.prospects.communications.sent');
+    Route::post('/landlord/onboarding/{prospect}/communications/{communication}/send', [LandlordProspectOnboardingController::class, 'sendCommunication'])
+        ->name('onboarding.prospects.communications.send');
     Route::get('/landlord/onboarding-export.csv', [LandlordProspectOnboardingController::class, 'export'])
         ->name('onboarding.prospects.export');
     Route::post('/landlord/onboarding/setup-status/{tenant}', [LandlordOnboardingJourneyDiagnosticsController::class, 'updateSetupStatus'])

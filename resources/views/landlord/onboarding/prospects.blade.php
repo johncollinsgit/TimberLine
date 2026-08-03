@@ -425,7 +425,8 @@
                                                     </section>
 
                                                     <section class="rounded-2xl border border-zinc-200 p-4">
-                                                        <h5 class="font-semibold text-zinc-950">Prepare and log outreach</h5>
+                                                        <h5 class="font-semibold text-zinc-950">Email workspace</h5>
+                                                        <p class="mt-1 text-xs leading-5 text-zinc-600">Create a reviewed draft, then send it from <strong>john@evergrovesoftware.com</strong>. Every draft and delivery stays in this record.</p>
                                                         <form method="POST" action="{{ route('landlord.onboarding.prospects.drafts.store', $prospect) }}" class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                                                             @csrf
                                                             <label class="space-y-1 text-xs font-semibold text-emerald-900">
@@ -436,7 +437,7 @@
                                                                     @endforeach
                                                                 </select>
                                                             </label>
-                                                            <p class="mt-2 text-xs leading-5 text-emerald-900">Creates a review-only draft using public facts and Everbranch’s real field-service capabilities. It does not send.</p>
+                                                            <p class="mt-2 text-xs leading-5 text-emerald-900">Creates a review-only draft using public facts and Everbranch’s real field-service capabilities. Review it before sending.</p>
                                                             <button class="mt-3 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800">Create draft</button>
                                                         </form>
 
@@ -478,8 +479,14 @@
                                                                 <span>Message, response, or call notes</span>
                                                                 <textarea name="body" required rows="5" class="w-full rounded-xl border-zinc-300 text-sm font-normal text-zinc-900"></textarea>
                                                             </label>
-                                                            <input type="hidden" name="from_address" value="{{ $prospect->email }}" />
-                                                            <input type="hidden" name="to_address" value="john@evergrovesoftware.com" />
+                                                            <label class="space-y-1 text-xs font-semibold text-zinc-600 sm:col-span-3">
+                                                                <span>From</span>
+                                                                <input name="from_address" type="email" value="john@evergrovesoftware.com" class="w-full rounded-xl border-zinc-300 text-sm font-normal text-zinc-900" />
+                                                            </label>
+                                                            <label class="space-y-1 text-xs font-semibold text-zinc-600 sm:col-span-3">
+                                                                <span>To</span>
+                                                                <input name="to_address" type="email" value="{{ $prospect->email }}" class="w-full rounded-xl border-zinc-300 text-sm font-normal text-zinc-900" />
+                                                            </label>
                                                             <div class="sm:col-span-3">
                                                                 <button class="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Add to timeline</button>
                                                             </div>
@@ -508,10 +515,14 @@
                                                                 <p class="mt-2 whitespace-pre-line text-sm leading-6 text-zinc-700">{{ $communication->body }}</p>
                                                                 @if ($communication->direction === 'outbound' && $communication->channel === 'email' && $communication->status === 'draft')
                                                                     <div class="mt-4 flex flex-wrap gap-2 border-t border-zinc-200 pt-3">
-                                                                        @if ($prospect->email)
-                                                                            <a href="mailto:{{ $prospect->email }}?subject={{ rawurlencode((string) $communication->subject) }}&body={{ rawurlencode((string) $communication->body) }}" class="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Open in email app</a>
+                                                                        @if ($prospect->email && $prospect->status !== 'unsubscribed')
+                                                                            <form method="POST" action="{{ route('landlord.onboarding.prospects.communications.send', [$prospect, $communication]) }}" onsubmit="return confirm('Send this reviewed email from john@evergrovesoftware.com to {{ $prospect->email }}?')">
+                                                                                @csrf
+                                                                                <button class="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Send from john@evergrovesoftware.com</button>
+                                                                            </form>
+                                                                            <a href="mailto:{{ $prospect->email }}?subject={{ rawurlencode((string) $communication->subject) }}&body={{ rawurlencode((string) $communication->body) }}" class="rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Open in email app</a>
                                                                         @else
-                                                                            <span class="rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Add a public business email before emailing</span>
+                                                                            <span class="rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">Add a public business email and confirm it is not opted out before emailing</span>
                                                                         @endif
                                                                         <form method="POST" action="{{ route('landlord.onboarding.prospects.communications.sent', [$prospect, $communication]) }}">
                                                                             @csrf
