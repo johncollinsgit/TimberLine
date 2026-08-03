@@ -1,5 +1,20 @@
 # SYSTEM SNAPSHOT
 
+## Tenant Website product workspace (2026-08-02)
+
+- Every tenant with the existing Managed Website entitlement now receives a
+  dedicated **Products** item immediately below **Website** in the application
+  sidebar. It is a shared Managed Website capability, not a Carolina Barrel Co.
+  special case and not a separate billable module.
+- Products remain isolated by both `tenant_id` and `tenant_site_id` in the
+  existing `website_*` data lane. Operators can create, read, update, safely
+  archive, CSV-export, and transactional CSV-import catalog items, including an
+  optional wholesale price and product image URL. Archival preserves order
+  history and makes product variants unavailable instead of deleting records.
+- CSV imports match by normalized handle, accept no more than 1,000 rows, and
+  roll the entire file back when a row is invalid. They never read or write
+  legacy orders, Shopify catalogs, provider records, or another tenant's site.
+
 ## Evergrove Public Booking Page (2026-07-30)
 
 - `https://evergrovesoftware.com/book` is the branded public consultation page for Evergrove Software. It links to John Collins's externally created Google Calendar appointment schedule only when `GOOGLE_BOOKING_URL` contains a valid HTTPS URL.

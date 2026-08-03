@@ -6,12 +6,15 @@ use App\Models\Tenant;
 use App\Models\TenantSite;
 use App\Models\TenantSiteDomain;
 use App\Models\User;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ManagedWebsiteDomainService
 {
+    public function __construct(private readonly TenantHostBuilder $hosts) {}
+
     public function enabled(): bool
     {
         return (bool) config('managed_website.custom_domains_enabled', false);
@@ -43,9 +46,40 @@ class ManagedWebsiteDomainService
             return 'https://'.$active->hostname;
         }
 
-        $base = trim((string) config('tenancy.domains.canonical.base_domain', 'theeverbranch.com'), '.');
+        return $this->platformUrl($site);
+    }
 
-        return 'https://'.trim((string) $site->subdomain).'.'.$base;
+    /**
+     * Every Website receives this first-party address as soon as its site
+     * record exists. Wildcard DNS and host-based tenant resolution mean no
+     * per-customer DNS work is required; publishing is the only go-live step.
+     */
+    public function platformUrl(TenantSite $site): string
+    {
+        return (string) $this->hosts->urlForHostPath($this->hosts->hostForSlug((string) $site->subdomain), '/');
+    }
+
+    /** @return array<int,array{type:string,name:string,value:string,label:string}> */
+    public function connectionRecords(TenantSiteDomain $domain): array
+    {
+        $records = [[
+            'type' => 'TXT',
+            'name' => $this->verificationRecordName($domain->hostname),
+            'value' => $this->verificationValue($domain),
+            'label' => 'Ownership verification',
+        ]];
+
+        $target = $this->connectionTarget();
+        if ($target !== '') {
+            $records[] = [
+                'type' => 'CNAME',
+                'name' => $domain->hostname,
+                'value' => $target,
+                'label' => 'Website routing',
+            ];
+        }
+
+        return $records;
     }
 
     public function request(TenantSite $site, string $input, ?User $actor): TenantSiteDomain

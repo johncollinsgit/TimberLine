@@ -18,11 +18,25 @@
                     <div class="flex flex-wrap gap-2">@if($site->status === 'published' && $isPublicRenderEnabled)<a class="fb-btn fb-btn-secondary" target="_blank" rel="noopener" href="{{ $publicUrl }}">View live site</a>@endif</div>
                 </header>
 
-                @if(! $setup || $setup->domain_choice !== 'everbranch_subdomain')<section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-domain-heading">
+                <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-address-heading">
+                    <div class="flex flex-col gap-4 border-b border-zinc-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Included Everbranch address</p>
+                            <h2 id="website-address-heading" class="mt-1 text-xl font-bold tracking-tight text-zinc-950">{{ parse_url($platformUrl, PHP_URL_HOST) }}</h2>
+                            <p class="mt-1 text-sm leading-6 text-zinc-600">Reserved automatically. No DNS setup is needed; it goes live the moment this Website is published.</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $site->status === 'published' && $site->public_enabled ? 'bg-emerald-100 text-emerald-900' : 'bg-zinc-100 text-zinc-700' }}">{{ $site->status === 'published' && $site->public_enabled ? 'Live now' : 'Reserved' }}</span>
+                            @if($site->status === 'published' && $site->public_enabled)<a class="fb-btn fb-btn-secondary" href="{{ $platformUrl }}" target="_blank" rel="noopener">Open site</a>@endif
+                        </div>
+                    </div>
+                </section>
+
+                <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-domain-heading">
                     <div class="border-b border-zinc-200 px-6 py-5">
-                        <p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website address</p>
-                        <h2 id="website-domain-heading" class="mt-1 text-xl font-bold tracking-tight text-zinc-950">Connect a domain you already own</h2>
-                        <p class="mt-1 max-w-3xl text-sm leading-6 text-zinc-600">Use your own address without moving your business data into Everbranch. We verify ownership first; your current published site stays untouched until you activate the domain.</p>
+                        <p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Optional custom address</p>
+                        <h2 id="website-domain-heading" class="mt-1 text-xl font-bold tracking-tight text-zinc-950">Use a domain you already own</h2>
+                        <p class="mt-1 max-w-3xl text-sm leading-6 text-zinc-600">Enter the address once, add the generated records in one DNS visit, and let Everbranch check the connection. Your included Everbranch address stays live throughout the change.</p>
                     </div>
                     @if(! $domainsEnabled)
                         <div class="m-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">Custom domains are available after the public-host pilot is approved for this workspace. Your existing Everbranch preview address remains unchanged.</div>
@@ -52,9 +66,9 @@
                                                 </div>
                                                 @if($domain->status === 'pending')
                                                     <div class="mt-4 rounded-lg bg-zinc-50 p-4 text-sm text-zinc-700">
-                                                        <p class="font-bold text-zinc-950">Step 2 — Prove you own it</p>
-                                                        <p class="mt-1 leading-6">In your DNS provider, create this TXT record. Do not replace existing email or website records.</p>
-                                                        <dl class="mt-3 grid gap-2 font-mono text-xs sm:grid-cols-[100px_minmax(0,1fr)]"><dt class="font-sans font-bold text-zinc-600">Name</dt><dd class="break-all select-all text-zinc-950">{{ '_everbranch-verify.'.$domain->hostname }}</dd><dt class="font-sans font-bold text-zinc-600">Value</dt><dd class="break-all select-all text-zinc-950">everbranch-site={{ $domain->verification_token }}</dd></dl>
+                                                        <p class="font-bold text-zinc-950">Step 2 — Add these records once</p>
+                                                        <p class="mt-1 leading-6">In your DNS provider, add the records below. Do not replace email records. If a website record already uses this exact name, update that record instead of creating a duplicate.</p>
+                                                        <div class="mt-3 overflow-x-auto"><table class="min-w-full text-left text-xs"><thead class="text-zinc-500"><tr><th class="pb-2 pr-4">Purpose</th><th class="pb-2 pr-4">Type</th><th class="pb-2 pr-4">Name</th><th class="pb-2">Value</th></tr></thead><tbody class="divide-y divide-zinc-200 font-mono">@foreach($domainConnectionRecords->get($domain->id, []) as $record)<tr><td class="py-2 pr-4 font-sans font-semibold text-zinc-700">{{ $record['label'] }}</td><td class="py-2 pr-4 text-zinc-950">{{ $record['type'] }}</td><td class="break-all py-2 pr-4 text-zinc-950 select-all">{{ $record['name'] }}</td><td class="break-all py-2 text-zinc-950 select-all">{{ $record['value'] }}</td></tr>@endforeach</tbody></table></div>
                                                         <form class="mt-4" method="POST" action="{{ route('managed-website.domains.verify', ['domain' => $domain]) }}">@csrf<button class="fb-btn fb-btn-secondary" type="submit">Check connection</button></form>
                                                         <form class="mt-3" method="POST" action="{{ route('managed-website.domains.cancel', ['domain' => $domain]) }}" onsubmit="return confirm('Remove this attempted domain setup? You can enter a different address next.')">@csrf<button class="text-sm font-bold text-rose-700 hover:underline" type="submit">Remove this attempted address</button></form>
                                                         @if($domain->last_error)<p class="mt-3 text-xs leading-5 text-amber-900">{{ $domain->last_error }}</p>@endif
@@ -76,7 +90,7 @@
                             </aside>
                         </div>
                     @endif
-                </section>@endif
+                </section>
 
                 <section class="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
                     <div class="grid min-h-[360px] place-items-center bg-[#f6f7f6] p-5 lg:p-10">

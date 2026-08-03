@@ -43,7 +43,11 @@ class ManagedWebsiteController extends Controller
             'themes' => $websites->themes(),
             'domainsEnabled' => $domains->enabledFor($tenant),
             'domainTarget' => $domains->connectionTarget(),
+            'domainConnectionRecords' => $site?->domains
+                ? $site->domains->mapWithKeys(fn (TenantSiteDomain $domain): array => [$domain->id => $domains->connectionRecords($domain)])
+                : collect(),
             'publicUrl' => $site ? $domains->publicUrl($site) : null,
+            'platformUrl' => $site ? $domains->platformUrl($site) : null,
             'setup' => $setup,
             'checklist' => $checklist,
             'nextChecklistItem' => collect($checklist)->firstWhere('complete', false),
@@ -271,7 +275,7 @@ class ManagedWebsiteController extends Controller
         $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
         $domain = $domains->request($site, (string) $request->validate(['domain' => ['required', 'string', 'max:300']])['domain'], $request->user());
 
-        return back()->with('status', 'Domain saved. Add the verification record, then check the connection.')->with('domain_wizard_id', $domain->id);
+        return back()->with('status', 'Domain saved. Add the records shown below in one DNS visit, then check the connection.')->with('domain_wizard_id', $domain->id);
     }
 
     public function verifyDomain(Request $request, TenantSiteDomain $domain, ManagedWebsiteService $websites, ManagedWebsiteDomainService $domains): RedirectResponse

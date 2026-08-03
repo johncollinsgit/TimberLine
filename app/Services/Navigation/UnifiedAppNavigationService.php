@@ -85,8 +85,17 @@ class UnifiedAppNavigationService
                 'icon' => 'globe-alt',
                 'href' => route('managed-website.index'),
                 'label' => 'Website',
-                'current' => request()->routeIs('managed-website.*'),
+                'current' => request()->routeIs('managed-website.*') && ! request()->routeIs('managed-website.products.*'),
             ];
+            if (Route::has('managed-website.products.index')) {
+                $items[] = [
+                    'key' => 'website-products',
+                    'icon' => 'shopping-bag',
+                    'href' => route('managed-website.products.index'),
+                    'label' => 'Products',
+                    'current' => request()->routeIs('managed-website.products.*'),
+                ];
+            }
         }
 
         // Branches is the common starting point for discovering what a
@@ -228,7 +237,7 @@ class UnifiedAppNavigationService
             }
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
-            $primaryItemCount = ($items[1]['key'] ?? null) === 'managed-website' ? 2 : 1;
+            $primaryItemCount = ($items[2]['key'] ?? null) === 'website-products' ? 3 : (($items[1]['key'] ?? null) === 'managed-website' ? 2 : 1);
             $items = $prioritizeGrowth
                 ? array_merge($items, $opsItems)
                 : array_merge(array_slice($items, 0, $primaryItemCount), $opsItems, array_slice($items, $primaryItemCount));
@@ -252,6 +261,7 @@ class UnifiedAppNavigationService
         $prefs = is_array($user?->ui_preferences ?? null) ? $user->ui_preferences : [];
         $preferredSidebarOrder = is_array($prefs['sidebar_order'] ?? null) ? $prefs['sidebar_order'] : [];
         $items = $this->orderedItems($items, $preferredSidebarOrder);
+        $items = $this->pinWebsiteProductsBelowWebsite($items);
         $items = $this->pinTenantSettingsLast($items);
 
         $canCustomizeWorkspace = $this->brandProfileService()->userCanCustomize($user, $tenant);
@@ -564,6 +574,24 @@ class UnifiedAppNavigationService
             ->push($settings)
             ->values()
             ->all();
+    }
+
+    /** @param array<int,array<string,mixed>> $items @return array<int,array<string,mixed>> */
+    protected function pinWebsiteProductsBelowWebsite(array $items): array
+    {
+        $products = collect($items)->first(fn (array $item): bool => (string) ($item['key'] ?? '') === 'website-products');
+        if (! is_array($products)) {
+            return $items;
+        }
+
+        $withoutProducts = collect($items)->reject(fn (array $item): bool => (string) ($item['key'] ?? '') === 'website-products')->values()->all();
+        $websiteIndex = collect($withoutProducts)->search(fn (array $item): bool => (string) ($item['key'] ?? '') === 'managed-website');
+        if ($websiteIndex === false) {
+            return $items;
+        }
+        array_splice($withoutProducts, ((int) $websiteIndex) + 1, 0, [$products]);
+
+        return $withoutProducts;
     }
 
     protected function normalizeSidebarOrderKey(string $key): string

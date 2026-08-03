@@ -15,7 +15,7 @@ class WebsiteProductVariant extends Model
 
     protected function casts(): array
     {
-        return ['tenant_id' => 'integer', 'website_product_id' => 'integer', 'price_cents' => 'integer', 'compare_at_price_cents' => 'integer', 'inventory_quantity' => 'integer', 'is_available' => 'boolean', 'options' => 'array'];
+        return ['tenant_id' => 'integer', 'website_product_id' => 'integer', 'price_cents' => 'integer', 'wholesale_price_cents' => 'integer', 'compare_at_price_cents' => 'integer', 'inventory_quantity' => 'integer', 'is_available' => 'boolean', 'options' => 'array'];
     }
 
     public function product(): BelongsTo

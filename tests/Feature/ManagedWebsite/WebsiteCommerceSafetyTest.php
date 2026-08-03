@@ -6,10 +6,13 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\TenantPaymentAccount;
 use App\Models\User;
 use App\Models\WebsiteOrder;
+use App\Models\WebsiteProduct;
 use App\Models\WebsiteProductVariant;
 use App\Models\WebsiteStripeWebhookEvent;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
+use App\Services\ManagedWebsite\WebsiteProductCsvService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
@@ -90,3 +93,53 @@ test('another tenant cannot add a Website variant to its cart', function (): voi
     $cart = $commerce->cartFor($otherSite, null);
     $commerce->addToCart($cart, $product->variants->firstOrFail(), 1);
 })->throws(Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
+
+test('Website products support wholesale pricing, CSV round trips, and history-safe archival', function (): void {
+    $tenant = commerceTenant();
+    $actor = commerceActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    $commerce = app(WebsiteCommerceService::class);
+    $product = $commerce->saveProduct($site, [
+        'handle' => 'signature-five-stave-chair',
+        'title' => 'Signature Five-Stave Chair',
+        'product_type' => 'physical',
+        'description' => 'Reclaimed barrel chair.',
+        'status' => 'active',
+        'price' => '500.00',
+        'wholesale_price' => '350.00',
+        'sku' => 'CBC-CHAIR-5',
+        'media' => ['https://example.test/chair.jpg'],
+        'track_inventory' => true,
+        'inventory_quantity' => 4,
+        'is_available' => true,
+    ]);
+
+    expect($product->handle)->toBe('signature-five-stave-chair')
+        ->and($product->variants->firstOrFail()->price_cents)->toBe(50000)
+        ->and($product->variants->firstOrFail()->wholesale_price_cents)->toBe(35000);
+
+    $csv = app(WebsiteProductCsvService::class);
+    ob_start();
+    $csv->export($site)->sendContent();
+    $export = (string) ob_get_clean();
+    expect($export)->toContain('wholesale_price')
+        ->and($export)->toContain('signature-five-stave-chair')
+        ->and($export)->toContain('350.00');
+
+    $file = UploadedFile::fake()->createWithContent('catalog.csv', implode("\n", [
+        'handle,title,product_type,description,status,retail_price,wholesale_price,sku,image_url,track_inventory,inventory_quantity,is_available',
+        'signature-five-stave-chair,Renamed Five-Stave Chair,physical,Updated chair,active,500.00,325.00,CBC-CHAIR-5,https://example.test/chair-new.jpg,1,6,1',
+        'barrel-fire-table,Barrel Fire Table,physical,Outdoor gathering piece,draft,1500.00,1050.00,CBC-FIRE-1,https://example.test/fire.jpg,0,0,1',
+    ]));
+    $result = $csv->import($site, $file);
+
+    expect($result)->toBe(['created' => 1, 'updated' => 1])
+        ->and(WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->count())->toBe(2)
+        ->and($product->fresh()->handle)->toBe('signature-five-stave-chair')
+        ->and($product->fresh('variants')->variants->firstOrFail()->wholesale_price_cents)->toBe(32500);
+
+    $archived = $commerce->archiveProduct($site, $product->fresh());
+    expect($archived->status)->toBe('archived')
+        ->and($archived->variants->firstOrFail()->is_available)->toBeFalse();
+});

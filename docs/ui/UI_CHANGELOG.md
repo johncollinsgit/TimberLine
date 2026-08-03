@@ -1,5 +1,33 @@
 # UI Changelog
 
+## 2026-08-02 — Instant Website addresses and simpler custom domains
+
+- Website now shows the automatically reserved `<workspace>.theeverbranch.com` address as a first-class live/reserved status card.
+- Custom-domain setup remains available alongside the included address and presents ownership and routing records together for a single DNS visit.
+- The safe activation gate remains separate: DNS ownership alone never activates a customer host.
+
+## 2026-08-02 — Tenant Website Products workspace
+
+### What Changed
+
+- Added **Products** as a primary left-sidebar destination directly below
+  **Website** for tenants with Managed Website access.
+- Expanded the catalog workspace with retail and optional wholesale pricing,
+  SKU and product-image fields, clearer status and inventory visibility,
+  create/edit controls, history-safe archive actions, and CSV import/export.
+- CSV imports explain handle matching and all-or-nothing validation in context;
+  the table keeps trade pricing visible without hiding retail pricing.
+
+### Guardrails
+
+- This uses the existing Managed Website entitlement and isolated `website_*`
+  records. It does not create a new Branch, price, entitlement, or tenant-specific
+  Carolina Barrel Co. runtime path.
+- Imports are tenant/site-scoped, transactional, and capped at 1,000 rows.
+  Archiving preserves Website order history and never deletes linked records.
+- Shopify, legacy order/customer, provider, marketing, and Modern Forestry data
+  remain out of scope.
+
 ## 2026-07-30 - Evergrove Consultation Booking Page
 
 ### What Changed

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
+use App\Mail\LandlordProspectOutreachMail;
 use App\Models\LandlordProspect;
 use App\Models\LandlordProspectCommunication;
 use App\Models\LandlordProspectDiscoveryRun;
@@ -13,6 +14,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -313,6 +315,65 @@ class LandlordProspectOnboardingController extends Controller
         );
 
         return back()->with('status', 'Draft marked sent and the next follow-up was scheduled.');
+    }
+
+    public function sendCommunication(
+        Request $request,
+        LandlordProspect $prospect,
+        LandlordProspectCommunication $communication,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
+        abort_unless((int) $communication->landlord_prospect_id === (int) $prospect->id, 404);
+        abort_unless($communication->direction === 'outbound' && $communication->channel === 'email' && $communication->status === 'draft', 422);
+        abort_unless($prospect->status !== 'unsubscribed', 422);
+
+        $recipient = Str::lower(trim((string) $prospect->email));
+        $sender = trim((string) config('landlord_prospecting.sender.email', 'john@evergrovesoftware.com'));
+        abort_unless(filter_var($recipient, FILTER_VALIDATE_EMAIL), 422, 'A valid public business email is required before sending.');
+        abort_unless(filter_var($sender, FILTER_VALIDATE_EMAIL), 422, 'Configure a valid Evergrove outreach sender before sending.');
+
+        $communication->forceFill([
+            'from_address' => $sender,
+            'to_address' => $recipient,
+        ])->save();
+
+        try {
+            Mail::to($recipient)->send(new LandlordProspectOutreachMail($communication));
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'outreach' => 'Everbranch could not send this email. The draft was kept unchanged; verify the configured mail provider and try again.',
+            ]);
+        }
+
+        $communication->forceFill([
+            'status' => 'sent',
+            'occurred_at' => now(),
+        ])->save();
+        $prospect->forceFill([
+            'status' => in_array($prospect->status, ['replied', 'meeting_scheduled', 'qualified', 'converted'], true)
+                ? $prospect->status
+                : 'contacted',
+            'last_contacted_at' => $communication->occurred_at,
+            'next_follow_up_at' => $prospect->next_follow_up_at
+                ?? now()->addDays((int) config('landlord_prospecting.default_follow_up_days', 4)),
+        ])->save();
+
+        $auditService->record(
+            tenantId: $prospect->converted_tenant_id,
+            actorUserId: $request->user()?->id,
+            actionType: 'landlord_prospect_outreach_sent',
+            targetType: 'landlord_prospect_communication',
+            targetId: (int) $communication->id,
+            context: [
+                'prospect_id' => (int) $prospect->id,
+                'from_address' => $sender,
+                'to_address' => $recipient,
+            ]
+        );
+
+        return back()->with('status', "Email sent from {$sender} and the next follow-up was scheduled.");
     }
 
     public function export(Request $request): StreamedResponse

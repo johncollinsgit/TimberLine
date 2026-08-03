@@ -303,6 +303,8 @@ $landlordRoutes = static function (): void {
         ->name('onboarding.prospects.communications.store');
     Route::patch('/landlord/onboarding/{prospect}/communications/{communication}/sent', [LandlordProspectOnboardingController::class, 'markCommunicationSent'])
         ->name('onboarding.prospects.communications.sent');
+    Route::post('/landlord/onboarding/{prospect}/communications/{communication}/send', [LandlordProspectOnboardingController::class, 'sendCommunication'])
+        ->name('onboarding.prospects.communications.send');
     Route::get('/landlord/onboarding-export.csv', [LandlordProspectOnboardingController::class, 'export'])
         ->name('onboarding.prospects.export');
     Route::post('/landlord/onboarding/setup-status/{tenant}', [LandlordOnboardingJourneyDiagnosticsController::class, 'updateSetupStatus'])
@@ -728,8 +730,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');
             Route::get('/thumbnails/{siteVersion}', [ManagedWebsiteController::class, 'showThumbnail'])->name('thumbnails.show');
             Route::get('/products', [WebsiteCommerceController::class, 'products'])->name('products.index');
+            Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
+            Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
             Route::post('/products', [WebsiteCommerceController::class, 'storeProduct'])->name('products.store');
             Route::put('/products/{product}', [WebsiteCommerceController::class, 'updateProduct'])->name('products.update');
+            Route::delete('/products/{product}', [WebsiteCommerceController::class, 'archiveProduct'])->name('products.destroy');
             Route::get('/customers', [WebsiteCommerceController::class, 'customers'])->name('customers.index');
             Route::post('/customers', [WebsiteCommerceController::class, 'storeCustomer'])->name('customers.store');
             Route::put('/customers/{customer}', [WebsiteCommerceController::class, 'updateCustomer'])->name('customers.update');
