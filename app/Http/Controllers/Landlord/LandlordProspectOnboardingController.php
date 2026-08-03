@@ -9,6 +9,7 @@ use App\Models\LandlordProspectCommunication;
 use App\Models\LandlordProspectDiscoveryRun;
 use App\Services\Landlord\LandlordProspectDiscoveryService;
 use App\Services\Landlord\LandlordProspectOutreachTemplateService;
+use App\Services\Operations\OperatorAlertService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,12 +36,13 @@ class LandlordProspectOnboardingController extends Controller
                 'communications' => fn ($query) => $query->orderByDesc('occurred_at')->orderByDesc('id'),
                 'convertedTenant:id,name,slug',
             ])
-            ->orderByRaw("case status
-                when 'replied' then 0
-                when 'meeting_scheduled' then 1
-                when 'contacted' then 2
-                when 'draft_ready' then 3
-                else 4 end")
+            ->orderByRaw("case
+                when status = 'replied' then 0
+                when next_follow_up_at is not null and next_follow_up_at <= ? then 1
+                when status = 'meeting_scheduled' then 2
+                when status = 'draft_ready' then 3
+                when status = 'contacted' then 4
+                else 5 end", [now()])
             ->orderBy('business_name')
             ->paginate(50)
             ->withQueryString();
@@ -181,7 +183,8 @@ class LandlordProspectOnboardingController extends Controller
     public function storeCommunication(
         Request $request,
         LandlordProspect $prospect,
-        LandlordOperatorActionAuditService $auditService
+        LandlordOperatorActionAuditService $auditService,
+        OperatorAlertService $operatorAlerts
     ): RedirectResponse {
         $validated = $request->validate([
             'direction' => ['required', 'string', 'in:outbound,inbound,note'],
@@ -228,6 +231,20 @@ class LandlordProspectOnboardingController extends Controller
             $prospect->forceFill($updates)->save();
         }
 
+        if ($communication->direction === 'inbound') {
+            $operatorAlerts->notify(
+                'landlord_prospect.reply_received',
+                "Everbranch: {$prospect->business_name} replied. Open the prospect workspace to respond.",
+                [
+                    'target_type' => 'landlord_prospect_communication',
+                    'target_id' => (int) $communication->id,
+                    'prospect_id' => (int) $prospect->id,
+                    'prospect_email' => (string) $prospect->email,
+                    'dedupe_key' => 'landlord-prospect-reply:'.$communication->id,
+                ]
+            );
+        }
+
         $auditService->record(
             tenantId: $prospect->converted_tenant_id,
             actorUserId: $request->user()?->id,
@@ -242,7 +259,9 @@ class LandlordProspectOnboardingController extends Controller
             ]
         );
 
-        return back()->with('status', 'Communication added to the prospect timeline.');
+        return back()->with('status', $communication->direction === 'inbound'
+            ? 'Reply recorded. An operator SMS alert was queued when alerts are configured.'
+            : 'Communication added to the prospect timeline.');
     }
 
     public function createOutreachDraft(
@@ -280,7 +299,119 @@ class LandlordProspectOnboardingController extends Controller
             context: ['prospect_id' => (int) $prospect->id, 'template' => (string) $validated['template']]
         );
 
-        return back()->with('status', 'A review-only outreach draft was added to the timeline.');
+        return back()
+            ->with('status', 'A review-only outreach draft is ready to personalize and send.')
+            ->with('open_prospect_id', (int) $prospect->id)
+            ->with('open_composer_id', (int) $communication->id);
+    }
+
+    public function createBlankEmailDraft(
+        Request $request,
+        LandlordProspect $prospect,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
+        $sender = trim((string) config('landlord_prospecting.sender.email', 'john@evergrovesoftware.com'));
+        $communication = $prospect->communications()->create([
+            'direction' => 'outbound',
+            'channel' => 'email',
+            'status' => 'draft',
+            'subject' => 'A quick idea for '.$prospect->business_name,
+            'body' => "Hi {$prospect->business_name} team,\n\n",
+            'from_address' => $sender,
+            'to_address' => $prospect->email,
+            'occurred_at' => now(),
+            'created_by_user_id' => $request->user()?->id,
+        ]);
+
+        if (! in_array($prospect->status, ['contacted', 'replied', 'meeting_scheduled', 'qualified', 'converted'], true)) {
+            $prospect->forceFill(['status' => 'draft_ready'])->save();
+        }
+
+        $auditService->record(
+            tenantId: $prospect->converted_tenant_id,
+            actorUserId: $request->user()?->id,
+            actionType: 'landlord_prospect_email_draft_created',
+            targetType: 'landlord_prospect_communication',
+            targetId: (int) $communication->id,
+            context: ['prospect_id' => (int) $prospect->id, 'source' => 'blank']
+        );
+
+        return back()
+            ->with('status', 'New email draft opened.')
+            ->with('open_prospect_id', (int) $prospect->id)
+            ->with('open_composer_id', (int) $communication->id);
+    }
+
+    public function updateCommunication(
+        Request $request,
+        LandlordProspect $prospect,
+        LandlordProspectCommunication $communication,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
+        abort_unless((int) $communication->landlord_prospect_id === (int) $prospect->id, 404);
+        abort_unless($communication->direction === 'outbound' && $communication->channel === 'email' && $communication->status === 'draft', 422);
+
+        $validated = $request->validate([
+            'subject' => ['required', 'string', 'max:255'],
+            'body' => ['required', 'string', 'max:20000'],
+        ]);
+        $before = $communication->only(['subject', 'body']);
+        $communication->forceFill($validated)->save();
+
+        $auditService->record(
+            tenantId: $prospect->converted_tenant_id,
+            actorUserId: $request->user()?->id,
+            actionType: 'landlord_prospect_outreach_draft_updated',
+            targetType: 'landlord_prospect_communication',
+            targetId: (int) $communication->id,
+            beforeState: $before,
+            afterState: $communication->only(['subject', 'body']),
+            context: ['prospect_id' => (int) $prospect->id]
+        );
+
+        return back()
+            ->with('status', 'Draft saved.')
+            ->with('open_prospect_id', (int) $prospect->id)
+            ->with('open_composer_id', (int) $communication->id);
+    }
+
+    public function applyTemplateToCommunication(
+        Request $request,
+        LandlordProspect $prospect,
+        LandlordProspectCommunication $communication,
+        LandlordProspectOutreachTemplateService $templateService,
+        LandlordOperatorActionAuditService $auditService
+    ): RedirectResponse {
+        abort_unless((int) $communication->landlord_prospect_id === (int) $prospect->id, 404);
+        abort_unless($communication->direction === 'outbound' && $communication->channel === 'email' && $communication->status === 'draft', 422);
+
+        $validated = $request->validate([
+            'template' => ['required', 'string', 'in:'.implode(',', array_keys($templateService->options()))],
+        ]);
+        $before = $communication->only(['subject', 'body']);
+        $draft = $templateService->draft($prospect, (string) $validated['template']);
+        $communication->forceFill([
+            'subject' => $draft['subject'],
+            'body' => $draft['body'],
+            'from_address' => $draft['from_address'],
+            'to_address' => $draft['to_address'],
+        ])->save();
+
+        $auditService->record(
+            tenantId: $prospect->converted_tenant_id,
+            actorUserId: $request->user()?->id,
+            actionType: 'landlord_prospect_outreach_template_loaded',
+            targetType: 'landlord_prospect_communication',
+            targetId: (int) $communication->id,
+            beforeState: $before,
+            afterState: $communication->only(['subject', 'body']),
+            context: ['prospect_id' => (int) $prospect->id, 'template' => (string) $validated['template']]
+        );
+
+        return back()
+            ->with('status', 'Template loaded. Review and personalize before sending.')
+            ->with('open_prospect_id', (int) $prospect->id)
+            ->with('open_composer_id', (int) $communication->id);
     }
 
     public function markCommunicationSent(
@@ -326,6 +457,14 @@ class LandlordProspectOnboardingController extends Controller
         abort_unless((int) $communication->landlord_prospect_id === (int) $prospect->id, 404);
         abort_unless($communication->direction === 'outbound' && $communication->channel === 'email' && $communication->status === 'draft', 422);
         abort_unless($prospect->status !== 'unsubscribed', 422);
+
+        $draftEdits = $request->validate([
+            'subject' => ['sometimes', 'required', 'string', 'max:255'],
+            'body' => ['sometimes', 'required', 'string', 'max:20000'],
+        ]);
+        if ($draftEdits !== []) {
+            $communication->forceFill($draftEdits)->save();
+        }
 
         $recipient = Str::lower(trim((string) $prospect->email));
         $sender = trim((string) config('landlord_prospecting.sender.email', 'john@evergrovesoftware.com'));

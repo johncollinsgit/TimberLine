@@ -299,8 +299,16 @@ $landlordRoutes = static function (): void {
         ->name('onboarding.prospects.update');
     Route::post('/landlord/onboarding/{prospect}/drafts', [LandlordProspectOnboardingController::class, 'createOutreachDraft'])
         ->name('onboarding.prospects.drafts.store');
+    Route::post('/landlord/onboarding/{prospect}/email-drafts', [LandlordProspectOnboardingController::class, 'createBlankEmailDraft'])
+        ->name('onboarding.prospects.email-drafts.store');
     Route::post('/landlord/onboarding/{prospect}/communications', [LandlordProspectOnboardingController::class, 'storeCommunication'])
         ->name('onboarding.prospects.communications.store');
+    Route::patch('/landlord/onboarding/{prospect}/communications/{communication}', [LandlordProspectOnboardingController::class, 'updateCommunication'])
+        ->name('onboarding.prospects.communications.update');
+    Route::post('/landlord/onboarding/{prospect}/communications/{communication}/save', [LandlordProspectOnboardingController::class, 'updateCommunication'])
+        ->name('onboarding.prospects.communications.save');
+    Route::post('/landlord/onboarding/{prospect}/communications/{communication}/template', [LandlordProspectOnboardingController::class, 'applyTemplateToCommunication'])
+        ->name('onboarding.prospects.communications.template');
     Route::patch('/landlord/onboarding/{prospect}/communications/{communication}/sent', [LandlordProspectOnboardingController::class, 'markCommunicationSent'])
         ->name('onboarding.prospects.communications.sent');
     Route::post('/landlord/onboarding/{prospect}/communications/{communication}/send', [LandlordProspectOnboardingController::class, 'sendCommunication'])
