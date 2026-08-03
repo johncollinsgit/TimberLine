@@ -97,6 +97,31 @@ test('a custom domain stays pending until verified and is bound to one site', fu
         ->and($service->verificationValue($domain))->toStartWith('everbranch-site=');
 });
 
+test('every site has an immediate platform address and one-visit custom domain records', function (): void {
+    [, $actor, $site] = customDomainPilot('Immediate Site', 'immediate-site');
+    config()->set('managed_website.custom_domain_target', 'sites.theeverbranch.com');
+
+    $service = app(ManagedWebsiteDomainService::class);
+    $domain = $service->request($site, 'www.immediate-site.example', $actor);
+
+    expect($service->platformUrl($site))->toBe('https://immediate-site.theeverbranch.com/')
+        ->and($service->publicUrl($site))->toBe('https://immediate-site.theeverbranch.com/')
+        ->and($service->connectionRecords($domain))->toBe([
+            [
+                'type' => 'TXT',
+                'name' => '_everbranch-verify.www.immediate-site.example',
+                'value' => 'everbranch-site='.$domain->verification_token,
+                'label' => 'Ownership verification',
+            ],
+            [
+                'type' => 'CNAME',
+                'name' => 'www.immediate-site.example',
+                'value' => 'sites.theeverbranch.com',
+                'label' => 'Website routing',
+            ],
+        ]);
+});
+
 test('only an active custom domain resolves a public tenant host', function (): void {
     [$tenant, $actor, $site] = customDomainPilot();
     $domain = app(ManagedWebsiteDomainService::class)->request($site, 'collinselectricsc.com', $actor);

@@ -54,7 +54,11 @@ site's published-version pointer and cache keys; rollback repoints to a prior
 published snapshot. Neither operation destroys drafts, versions, tenant forms,
 or unrelated data.
 
-Initial public URLs use `<workspace>.theeverbranch.com`. The canonical
+Initial public URLs use `<workspace>.theeverbranch.com`. The site record
+reserves this first-party address immediately; wildcard DNS and tenant-host
+resolution require no per-workspace DNS operation, so publishing is the only
+go-live step. The Website screen always shows this address separately from the
+optional custom-domain connection. The canonical
 `theeverbranch.com` host is platform-only and must never render a tenant
 Website, including a flagship tenant Website; this is enforced independently
 at the root route and the final custom-domain-only fallback. That fallback
@@ -70,7 +74,9 @@ JSON requests fail closed with 404.
 Custom domains are tenant-owned `tenant_site_domains` records. The Website
 wizard accepts a normalized hostname, creates a unique encrypted TXT proof at
 `_everbranch-verify.<hostname>`, verifies that proof from DNS, and records the
-check/audit event without storing registrar credentials. DNS verification is
+check/audit event without storing registrar credentials. When a connection
+target is configured, the wizard presents the ownership TXT and routing CNAME
+together so the owner can complete DNS in one visit. DNS verification is
 not activation: a hostname resolves only after it is verified, the Website is
 published, the custom-domain global gate, tenant allowlist, and separate
 activation gate are all enabled, and the external DNS/TLS routing runbook has

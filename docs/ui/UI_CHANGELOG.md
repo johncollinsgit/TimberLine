@@ -1,5 +1,11 @@
 # UI Changelog
 
+## 2026-08-02 — Instant Website addresses and simpler custom domains
+
+- Website now shows the automatically reserved `<workspace>.theeverbranch.com` address as a first-class live/reserved status card.
+- Custom-domain setup remains available alongside the included address and presents ownership and routing records together for a single DNS visit.
+- The safe activation gate remains separate: DNS ownership alone never activates a customer host.
+
 ## 2026-08-02 — Tenant Website Products workspace
 
 ### What Changed
