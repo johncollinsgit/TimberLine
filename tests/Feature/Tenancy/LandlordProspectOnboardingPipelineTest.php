@@ -3,8 +3,10 @@
 use App\Mail\LandlordProspectOutreachMail;
 use App\Models\LandlordProspect;
 use App\Models\LandlordProspectDiscoveryRun;
+use App\Models\OperatorAlertLog;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Marketing\TwilioSmsService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 
@@ -34,14 +36,13 @@ test('landlord onboarding sheet includes researched trade prospects and verified
 
     $response
         ->assertOk()
-        ->assertSeeText('Find the right local businesses. Work every next step.')
-        ->assertSeeText('8/10')
+        ->assertSeeText('One lead sheet. One clear next action.')
+        ->assertSeeText('Priority lead sheet')
         ->assertSeeText('R&R Lawn LLC')
         ->assertSeeText('SC Wired')
         ->assertSeeText('Warmer Water & Plumbing')
         ->assertSeeText('Garcia Landscape LLC')
-        ->assertSeeText('No website · reviewed')
-        ->assertSeeText('Convert to customer');
+        ->assertSeeText('Website opportunity');
 });
 
 test('landlord can run a bounded no website places search with deduplication and cost evidence', function (): void {
@@ -172,6 +173,36 @@ test('landlord can send a reviewed prospect email from the configured Evergrove 
         ->and($prospect->fresh()->status)->toBe('contacted');
 });
 
+test('landlord can save a personalized prospect email draft before sending', function (): void {
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'app.theeverbranch.com';
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $prospect = LandlordProspect::query()->where('email', 'ageehvac.llc@gmail.com')->firstOrFail();
+    $draft = $prospect->communications()->create([
+        'direction' => 'outbound',
+        'channel' => 'email',
+        'status' => 'draft',
+        'subject' => 'Original subject',
+        'body' => 'Original draft.',
+        'occurred_at' => now(),
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)
+        ->post("http://{$landlordHost}/landlord/onboarding/{$prospect->id}/communications/{$draft->id}/save", [
+            'subject' => 'Personalized subject',
+            'body' => 'Personalized reviewed draft.',
+        ])
+        ->assertRedirect();
+
+    expect($draft->fresh()->subject)->toBe('Personalized subject')
+        ->and($draft->fresh()->body)->toBe('Personalized reviewed draft.')
+        ->and($draft->fresh()->status)->toBe('draft');
+});
+
 test('landlord can log an inbound email response and move the prospect to replied', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'app.theeverbranch.com';
     $user = User::factory()->create([
@@ -180,6 +211,18 @@ test('landlord can log an inbound email response and move the prospect to replie
         'email_verified_at' => now(),
     ]);
     $prospect = LandlordProspect::query()->where('email', 'ryan@scwired.com')->firstOrFail();
+    config()->set('everbranch.operator_alert_sms_enabled', true);
+    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')
+        ->once()
+        ->with(
+            '15550100101',
+            "Everbranch: {$prospect->business_name} replied. Open the prospect workspace to respond.",
+            \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
+        )
+        ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
+    app()->instance(TwilioSmsService::class, $twilio);
 
     $this->actingAs($user)
         ->post("http://{$landlordHost}/landlord/onboarding/{$prospect->id}/communications", [
@@ -204,6 +247,44 @@ test('landlord can log an inbound email response and move the prospect to replie
         'action_type' => 'landlord_prospect_communication_logged',
         'target_type' => 'landlord_prospect_communication',
     ]);
+    expect(OperatorAlertLog::query()
+        ->where('event_key', 'landlord_prospect.reply_received')
+        ->where('status', 'sent')
+        ->exists())->toBeTrue();
+});
+
+test('sendgrid inbound replies automatically update a prospect and alert the operator', function (): void {
+    $prospect = LandlordProspect::query()->where('email', 'ryan@scwired.com')->firstOrFail();
+    config()->set('everbranch.operator_alert_sms_enabled', true);
+    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')
+        ->once()
+        ->with(
+            '15550100101',
+            "Everbranch: {$prospect->business_name} replied. Open the prospect workspace to respond.",
+            \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
+        )
+        ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $payload = [
+        'from' => 'Ryan <ryan@scwired.com>',
+        'to' => 'john@evergrovesoftware.com',
+        'subject' => 'Re: A practical workflow idea',
+        'text' => 'Yes, I would like to see an example.',
+        'headers' => 'Message-ID: <prospect-reply-001@example.test>',
+    ];
+
+    $this->post(route('marketing.webhooks.sendgrid-inbound'), $payload)
+        ->assertOk()
+        ->assertJsonPath('status', 'landlord_prospect_received');
+    $this->post(route('marketing.webhooks.sendgrid-inbound'), $payload)
+        ->assertOk()
+        ->assertJsonPath('status', 'landlord_prospect_duplicate');
+
+    expect($prospect->fresh()->status)->toBe('replied')
+        ->and($prospect->communications()->where('external_message_id', '<prospect-reply-001@example.test>')->count())->toBe(1);
 });
 
 test('landlord can convert a researched prospect into a production tenant', function (): void {
