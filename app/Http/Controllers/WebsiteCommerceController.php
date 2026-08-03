@@ -12,11 +12,13 @@ use App\Models\WebsiteProduct;
 use App\Models\WebsiteProductVariant;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
+use App\Services\ManagedWebsite\WebsiteProductCsvService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WebsiteCommerceController extends Controller
 {
@@ -75,6 +77,32 @@ class WebsiteCommerceController extends Controller
         $commerce->saveProduct($this->site($tenant), $this->productData($request) + ['id' => $product->id]);
 
         return back()->with('status', 'Website product updated.');
+    }
+
+    public function archiveProduct(Request $request, WebsiteProduct $product, WebsiteCommerceService $commerce): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireCommerce($tenant, $commerce);
+        $commerce->archiveProduct($this->site($tenant), $product);
+
+        return back()->with('status', 'Product archived. Existing order history was preserved.');
+    }
+
+    public function exportProducts(Request $request, WebsiteProductCsvService $csv): StreamedResponse
+    {
+        $tenant = $this->tenant($request);
+
+        return $csv->export($this->site($tenant));
+    }
+
+    public function importProducts(Request $request, WebsiteCommerceService $commerce, WebsiteProductCsvService $csv): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireCommerce($tenant, $commerce);
+        $data = $request->validate(['catalog' => ['required', 'file', 'mimes:csv,txt', 'max:10240']]);
+        $result = $csv->import($this->site($tenant), $data['catalog']);
+
+        return back()->with('status', "Catalog imported: {$result['created']} created, {$result['updated']} updated.");
     }
 
     public function customers(Request $request, ManagedWebsiteService $websites): View
@@ -220,12 +248,17 @@ class WebsiteCommerceController extends Controller
 
     private function productData(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'title' => ['required', 'string', 'max:190'], 'product_type' => ['required', 'in:physical,service,quote'], 'description' => ['nullable', 'string', 'max:8000'],
-            'status' => ['required', 'in:draft,active,archived'], 'price' => ['required', 'numeric', 'min:0', 'max:1000000'], 'compare_at_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
+            'status' => ['required', 'in:draft,active,archived'], 'price' => ['required', 'numeric', 'min:0', 'max:1000000'], 'wholesale_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'], 'compare_at_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'variant_title' => ['nullable', 'string', 'max:190'], 'sku' => ['nullable', 'string', 'max:120'], 'track_inventory' => ['nullable', 'boolean'], 'inventory_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'], 'is_available' => ['nullable', 'boolean'],
+            'image_url' => ['nullable', 'url:http,https', 'max:2048'],
             'service_details' => ['nullable', 'array'], 'seo_title' => ['nullable', 'string', 'max:190'], 'seo_description' => ['nullable', 'string', 'max:320'],
         ]);
+
+        $data['media'] = filled($data['image_url'] ?? null) ? [$data['image_url']] : [];
+
+        return $data;
     }
 
     /** @return array<string,mixed> */

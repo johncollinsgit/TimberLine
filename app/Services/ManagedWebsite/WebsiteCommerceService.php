@@ -66,7 +66,7 @@ class WebsiteCommerceService
             : new WebsiteProduct(['tenant_id' => $site->tenant_id, 'tenant_site_id' => $site->id]);
 
         $product->fill([
-            'handle' => Str::slug((string) $data['title']),
+            'handle' => Str::slug((string) ($data['handle'] ?? $data['title'])),
             'title' => trim((string) $data['title']),
             'product_type' => $data['product_type'],
             'description' => trim((string) ($data['description'] ?? '')),
@@ -86,9 +86,10 @@ class WebsiteCommerceService
             'title' => trim((string) ($data['variant_title'] ?? 'Default')) ?: 'Default',
             'sku' => trim((string) ($data['sku'] ?? '')) ?: null,
             'price_cents' => $this->dollarsToCents((string) $data['price']),
+            'wholesale_price_cents' => ($data['wholesale_price'] ?? null) !== null && $data['wholesale_price'] !== '' ? $this->dollarsToCents((string) $data['wholesale_price']) : null,
             'compare_at_price_cents' => ($data['compare_at_price'] ?? null) !== null && $data['compare_at_price'] !== '' ? $this->dollarsToCents((string) $data['compare_at_price']) : null,
             'inventory_quantity' => $product->track_inventory ? max(0, (int) ($data['inventory_quantity'] ?? 0)) : null,
-            'is_available' => (bool) ($data['is_available'] ?? true),
+            'is_available' => $product->status === 'archived' ? false : (bool) ($data['is_available'] ?? true),
         ]);
         $wasNew = ! $variant->exists;
         $before = $variant->inventory_quantity;
@@ -103,6 +104,18 @@ class WebsiteCommerceService
         }
 
         return $product->fresh('variants');
+    }
+
+    public function archiveProduct(TenantSite $site, WebsiteProduct $product): WebsiteProduct
+    {
+        abort_unless((int) $product->tenant_id === (int) $site->tenant_id && (int) $product->tenant_site_id === (int) $site->id, 404);
+
+        return DB::transaction(function () use ($product): WebsiteProduct {
+            $product->forceFill(['status' => 'archived'])->save();
+            $product->variants()->update(['is_available' => false]);
+
+            return $product->fresh('variants');
+        });
     }
 
     public function cartFor(TenantSite $site, ?string $token): WebsiteCart

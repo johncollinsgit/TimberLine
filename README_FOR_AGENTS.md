@@ -69,6 +69,14 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - Website public shopping routes must resolve the tenant from the verified host
   and published Website snapshot. Admin routes resolve the active tenant with
   `tenant.access` and the `managed_website` module guard.
+- The tenant application sidebar exposes **Products** immediately below
+  **Website** for the same Managed Website entitlement; it is not an independent
+  module or billing gate. Product CRUD, optional wholesale pricing, image URLs,
+  CSV import/export, and archival must remain generic and site-scoped.
+- Catalog CSV import matches normalized handles, is transactional, and is
+  limited to 1,000 rows. Invalid rows roll back the full file. "Delete" in the
+  UI is history-safe archival: keep product, variant, and order references, set
+  the product archived, and make its variants unavailable.
 
 ## Accounting Command Center guardrails (2026-07-23)
 
