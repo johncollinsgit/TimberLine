@@ -30,6 +30,11 @@ Set and deploy with these values:
 - `GOOGLE_GBP_REDIRECT_URI=https://app.theeverbranch.com/marketing/candle-cash/google-business/callback`
 
 ## 4) Edge Redirect Requirements (Cloudflare)
+
+The canonical public host is `theeverbranch.com`. Keep the versioned
+`cloudflare/www-redirect` Worker deployed on `www.theeverbranch.com/*` so links
+from Facebook, search results, and printed material preserve their path and
+query string while redirecting to the canonical host.
 Use path/query-preserving host redirects.
 
 Start in validation mode:
