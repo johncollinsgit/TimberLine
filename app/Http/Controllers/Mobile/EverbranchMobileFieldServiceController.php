@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobNotification;
@@ -78,6 +79,8 @@ class EverbranchMobileFieldServiceController extends Controller
         }
         $month = Carbon::createFromFormat('Y-m', (string) ($validated['month'] ?? now()->format('Y-m')))->startOfMonth();
         $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
+            ->whereNull('archived_at')
+            ->notGeneratedQuickBooksInvoice()
             ->with([
                 'assignedUser:id,name', 'participants:id,name', 'vehicles:id,tenant_id,name,identifier,status',
                 'materials:id,tenant_id,field_service_job_id,quantity,pulled_quantity,loaded_quantity,used_quantity,status',
@@ -197,7 +200,8 @@ class EverbranchMobileFieldServiceController extends Controller
                 ])->values(),
             ])->values(),
             'photos' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
-            'documents' => $job->assets->reject(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
+            'plans' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
+            'documents' => $job->assets->reject(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/') || in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'activity' => $job->notes->map(fn (FieldServiceJobNote $note): array => ['id' => (int) $note->id, 'body' => $note->body, 'status_update' => $note->status_update, 'noted_at' => $note->noted_at?->toIso8601String(), 'created_by' => $note->createdBy?->name ?: 'QuickBooks', 'source' => data_get($note->metadata, 'source', 'everbranch'), 'mentions' => $note->mentions->map(fn (User $mentioned): array => ['id' => (int) $mentioned->id, 'name' => $mentioned->name])->values()])->values(),
             'financials' => $owner ? $job->financialDocuments->map(fn ($document): array => ['id' => (int) $document->id, 'type' => $document->document_type, 'number' => $document->document_number, 'status' => $document->status, 'transaction_date' => $document->transaction_date?->toDateString(), 'total' => (float) $document->total_amount, 'balance' => (float) $document->balance])->values() : [],
             'can_manage' => $access->canManageJobs($user, $tenantModel),
@@ -284,6 +288,8 @@ class EverbranchMobileFieldServiceController extends Controller
             'lock_box_code' => ['nullable', 'string', 'max:120'], 'assigned_user_id' => ['nullable', 'integer'],
             'participant_user_ids' => ['nullable', 'array', 'max:50'], 'participant_user_ids.*' => ['integer'],
             'vehicle_ids' => ['nullable', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
+            'invoice_ids' => ['nullable', 'array', 'max:20'], 'invoice_ids.*' => ['integer'],
+            'first_task' => ['nullable', 'string', 'max:255'],
         ]);
         $profile = null;
         if (is_numeric($validated['customer_id'] ?? null)) {
@@ -302,6 +308,12 @@ class EverbranchMobileFieldServiceController extends Controller
             ]);
         }
         $assigned = $this->tenantUserId($tenant, $validated['assigned_user_id'] ?? null);
+        $invoiceIds = collect((array) ($validated['invoice_ids'] ?? []))->filter(fn ($id): bool => is_numeric($id))->map(fn ($id): int => (int) $id)->unique()->values();
+        if ($invoiceIds->isNotEmpty()) {
+            $matching = FieldServiceFinancialDocument::query()->forTenantId((int) $tenant->id)
+                ->where('document_type', 'invoice')->whereIn('id', $invoiceIds)->count();
+            abort_unless($matching === $invoiceIds->count(), 422, 'Choose invoices from this workspace.');
+        }
         $job = FieldServiceJob::query()->create([
             'tenant_id' => (int) $tenant->id, 'marketing_profile_id' => (int) $profile->id, 'assigned_user_id' => $assigned,
             'title' => $validated['title'], 'status' => 'open', 'status_source' => 'system', 'priority' => $validated['priority'] ?? 'normal',
@@ -319,6 +331,25 @@ class EverbranchMobileFieldServiceController extends Controller
         $job->participants()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'role' => 'member', 'following' => true]])->all());
         $vehicleIds = \App\Models\FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->whereIn('id', (array) ($validated['vehicle_ids'] ?? []))->pluck('id')->map(fn ($id): int => (int) $id);
         $job->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'assigned_by_user_id' => (int) $user->id]])->all());
+        if ($invoiceIds->isNotEmpty()) {
+            FieldServiceFinancialDocument::query()->forTenantId((int) $tenant->id)
+                ->where('document_type', 'invoice')->whereIn('id', $invoiceIds)
+                ->update(['field_service_job_id' => (int) $job->id, 'updated_at' => now()]);
+        }
+        if (filled($validated['first_task'] ?? null)) {
+            $task = FieldServiceTask::query()->create([
+                'tenant_id' => (int) $tenant->id,
+                'field_service_job_id' => (int) $job->id,
+                'assigned_user_id' => $assigned,
+                'created_by_user_id' => (int) $user->id,
+                'title' => trim((string) $validated['first_task']),
+                'status' => 'open',
+                'priority' => $validated['priority'] ?? 'normal',
+            ]);
+            if ($assigned) {
+                app(FieldServiceTaskAssignmentService::class)->sync($task, $tenant, $user, [$assigned]);
+            }
+        }
         $job->load('participants');
         $job->forceFill(['operational_status' => $readiness->forJob($job)['ready'] ? 'scheduled' : 'needs_details'])->save();
         $notifications->notifyJobEvent($job, $user, 'assigned', 'You were assigned to '.$job->title.'.', 'job-created:'.$job->id, $ids->push($assigned)->filter()->all());
@@ -391,6 +422,17 @@ class EverbranchMobileFieldServiceController extends Controller
         $created = collect($request->file('files', []))->map(fn ($file) => $assets->storeUpload($tenantModel, $user, $file, [(int) $job->id], 'team', $request->string('caption')->toString(), ['drawing', 'pdf']));
 
         return response()->json(['ok' => true, 'files' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
+    }
+
+    public function uploadPlans(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        $request->validate(['plans' => ['required', 'array', 'min:1', 'max:20'], 'plans.*' => ['required', 'file', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
+        $created = collect($request->file('plans', []))->map(fn ($plan) => $assets->storeUpload($tenantModel, $user, $plan, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-plan']));
+
+        return response()->json(['ok' => true, 'plans' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
     }
 
     public function storeTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications, FieldServiceTaskAssignmentService $assignments): JsonResponse
@@ -615,6 +657,18 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function archiveJob(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id && $access->canManageJobs($user, $tenantModel), 403);
+
+        // Preserve operational and imported accounting history; only hide this job from the active list.
+        $job->forceFill(['archived_at' => now()])->save();
+
+        return response()->json(['ok' => true]);
+    }
+
     public function updateMaterial(Request $request, string $tenant, FieldServiceJob $job, FieldServiceMaterial $material, FieldServiceAccessService $access): JsonResponse
     {
         $tenantModel = $this->tenant($request);
@@ -755,7 +809,9 @@ class EverbranchMobileFieldServiceController extends Controller
     /** @return array<string,int> */
     protected function counts(Tenant $tenant, User $user, FieldServiceAccessService $access): array
     {
-        $query = FieldServiceJob::query()->forTenantId((int) $tenant->id);
+        $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
+            ->whereNull('archived_at')
+            ->notGeneratedQuickBooksInvoice();
         $access->scopeVisibleJobs($query, $user, $tenant);
 
         return [
@@ -799,7 +855,7 @@ class EverbranchMobileFieldServiceController extends Controller
     /** @return array<string,mixed> */
     protected function assetPayload(WorkspaceAsset $asset, Tenant $tenant): array
     {
-        return ['id' => (int) $asset->id, 'name' => $asset->file_name, 'mime_type' => $asset->mime_type, 'caption' => $asset->caption, 'captured_at' => $asset->captured_at?->toIso8601String(), 'url' => route('mobile.v1.workspace.field-service.assets.show', ['tenant' => $tenant->slug, 'asset' => $asset->id], false)];
+        return ['id' => (int) $asset->id, 'name' => $asset->file_name, 'mime_type' => $asset->mime_type, 'caption' => $asset->caption, 'tags' => $asset->tags ?: [], 'captured_at' => $asset->captured_at?->toIso8601String(), 'url' => route('mobile.v1.workspace.field-service.assets.show', ['tenant' => $tenant->slug, 'asset' => $asset->id], false)];
     }
 
     /** @return array<string,?string> */

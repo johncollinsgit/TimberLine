@@ -46,6 +46,10 @@ $workflowCommerceRedirect = static fn (string $provider): string => ($canonicalL
 
 return [
 
+    'google_maps' => [
+        'places_api_key' => env('GOOGLE_MAPS_PLACES_API_KEY', env('GOOGLE_PLACES_API_KEY')),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

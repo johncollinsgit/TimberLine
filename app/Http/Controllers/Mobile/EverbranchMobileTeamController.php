@@ -75,6 +75,11 @@ class EverbranchMobileTeamController extends Controller
             'name' => $channel->kind === 'job' ? $channel->job?->title : ($other?->name ?: ($channel->name ?: 'Conversation')),
             'job_id' => $channel->field_service_job_id ? (int) $channel->field_service_job_id : null,
             'message_count' => (int) ($channel->messages_count ?? 0),
+            'unread_count' => $channel->messages()
+                ->whereNull('deleted_at')
+                ->where('created_by_user_id', '!=', (int) $viewer->id)
+                ->when($channel->members->firstWhere('id', (int) $viewer->id)?->pivot?->last_read_at, fn ($messages, $lastRead) => $messages->where('created_at', '>', $lastRead))
+                ->count(),
             'updated_at' => $channel->updated_at?->toIso8601String(),
         ];
     }

@@ -125,6 +125,82 @@ test('field service mobile keeps members on participating jobs and lets owners s
         ->assertOk()->assertJsonPath('job.financials.0.balance', 450)->assertJsonPath('job.activity.0.body', 'Panel is labeled and ready for inspection.');
 });
 
+test('legacy QuickBooks invoice jobs stay out of current mobile jobs', function (): void {
+    [$tenant, $owner] = usabilityWorkspace();
+    $legacyInvoiceJob = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Invoice 9001 · Legacy import',
+        'customer_name' => 'Legacy Homeowner',
+        'status' => 'open',
+        'operational_status' => 'active',
+        'external_source' => 'quickbooks',
+        'external_id' => 'quickbooks:invoice:9001',
+    ]);
+    $manualJob = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Manual panel upgrade',
+        'customer_name' => 'Current Homeowner',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list&filter=active')
+        ->assertOk()
+        ->assertJsonPath('counts.active', 1)
+        ->assertJsonPath('jobs.0.id', $manualJob->id)
+        ->assertJsonMissing(['id' => $legacyInvoiceJob->id]);
+});
+
+test('owners manage an independent invoice desk and may deliberately attach an invoice to a manual job', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $invoice = FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id,
+        'source' => 'quickbooks',
+        'document_type' => 'invoice',
+        'external_id' => 'unlinked-invoice',
+        'document_number' => 'INV-1042',
+        'status' => 'open',
+        'transaction_date' => now(),
+        'total_amount' => 750,
+        'balance' => 750,
+    ]);
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Manual service call', 'status' => 'open']);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/invoices')->assertForbidden();
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/invoices?status=draft')
+        ->assertOk()->assertJsonPath('invoices.0.id', $invoice->id);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/invoices?status=active')
+        ->assertOk()->assertJsonPath('invoices.0.id', $invoice->id);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/invoices?status=unlinked')
+        ->assertOk()->assertJsonPath('invoices.0.id', $invoice->id)->assertJsonPath('invoices.0.job', null);
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/invoices/'.$invoice->id.'/job', ['field_service_job_id' => $job->id])
+        ->assertOk()->assertJsonPath('invoice.job.id', $job->id);
+    expect($invoice->fresh()->field_service_job_id)->toBe($job->id);
+});
+
+test('managers may remove a job from the current list without deleting its operational history', function (): void {
+    [$tenant, $owner] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Archive from current work',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
+        ->assertOk()->assertJsonPath('ok', true);
+
+    expect($job->fresh()->archived_at)->not->toBeNull();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?bucket=current')
+        ->assertOk()->assertJsonMissing(['id' => $job->id]);
+});
+
 test('estimator is draft only and owner restricted', function (): void {
     [$tenant, $owner, $member] = usabilityWorkspace();
     $item = FieldServicePriceBookItem::query()->create([

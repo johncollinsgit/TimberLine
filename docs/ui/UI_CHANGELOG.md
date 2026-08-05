@@ -2151,3 +2151,39 @@
 - The view deliberately reports aggregates only: it does not merge customers,
   copy Website orders into legacy Shopify/operations orders, or expose checkout
   and fulfillment controls across source boundaries.
+
+## 2026-08-04 - Field Service invoice-first job intake
+
+### What changed
+
+- Native job rows now lead with homeowner name and a visible service address.
+- Added a compact owner/admin Invoice desk that is independent of the job
+  list, with direct job-from-invoice intake and an optional invoice picker in
+  manual job creation.
+- Job intake now includes homeowner contact, autocomplete-capable address
+  entry, scope, schedule, lead technician, first task, and invoice linking in
+  one short form.
+- Removed the literal job-start control; clock-in remains a separate time
+  workflow.
+
+### Safety posture
+
+- Financial documents remain server-filtered for owner/admin users.
+- Invoice-to-job links are deliberate and reversible; no imported invoice can
+  create a job by itself.
+
+## 2026-08-04 - Collins mobile current-work refinement
+
+### What changed
+
+- Replaced the Current/Potential/Past control with a focused Jobs view and evenly spaced Calendar, Invoices, New Job, and Refresh actions.
+- Added swipe-to-delete affordance on current jobs. The action archives a job from active work instead of destroying its record.
+- Added an actionable three-line workspace menu, Nate Collins user-management entry, owner-only QuickBooks connection prompt, and compact home action cards.
+- Simplified job actions: removed Block/Complete controls and the field-readiness warning, kept clock-in for field employee/member accounts only, and added native Camera capture alongside photo-library upload.
+- Team messages now list newest activity first, surface unread badges, and provide a New Message chooser with people and job search.
+- Work defaults to All Current Jobs for admins/managers and My Jobs for field employees, with an explicit selector. QuickBooks invoices now appear as draft-job opportunities in both Work and the Invoice Desk; they never auto-create a job, and existing invoice-created import jobs are excluded immediately from current Jobs, Calendar, and My Day before being safely archived on the next sync. New Job no longer asks for priority; it provides tappable address suggestions and a dedicated lock-box-code field. Job Overview provides an editable lock-box field and Plans upload area for PDFs or plan images.
+
+### Safety posture
+
+- Archiving retains linked invoices, tasks, time, notes, photos, and audit history; it only removes the job from Current Work.
+- Invoice and financial access remain owner/admin-gated. Current production clients require the matching API deployment before the new Invoice Desk endpoint can return data.

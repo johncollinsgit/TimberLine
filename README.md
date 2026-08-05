@@ -158,6 +158,7 @@ HTTP 200 reporting that exact release identifier.
 - QuickBooks evidence derives `quote`, `active`, `needs_details`, `complete`, or `history` without changing source records. Manual status overrides survive synchronization. Financial activity older than one year is hidden from current counts and default lists, not deleted.
 - QuickBooks is now a reusable, opt-in beta Branch (`module_key=quickbooks`) for direct or Shopify-connected tenants. Interest captured during onboarding never enables it; an owner/admin must add the Branch, authorize the tenant's QuickBooks Online company, and approve a dry run.
 - QuickBooks invoices and estimates always remain distinct tenant-owned financial documents. A field job is created only from stronger operational evidence (job/subcustomer, project, service address, memo/private note, or dated service line); a line description alone stays searchable in the owner-only review queue and never manufactures a job.
+- Legacy QuickBooks invoice-generated records are excluded immediately from current job, calendar, and My Day responses while their invoice records remain available as draft opportunities; the next sync also archives those legacy job records for clean history.
 - The read-only discovery path inventories accounting entities, estimates, invoices, notes, line items, attachments, receivables, and supported reports without printing raw business records. Encrypted source snapshots and audit summaries are tenant-scoped. The import preserves financial documents/lines separately, links jobs only when operational evidence exists, builds a service-item price book, and is idempotent.
 - QuickBooks private invoice notes are owner/admin-only. Operational customer memos and work-line descriptions may support team job context; team members remain blocked from financial reports, amounts, receivables, P&L wages, contract labor, price-book costs, billing, and integration controls.
 - Collins-specific ownership and execution rules live in `docs/collins-electric-access-and-quickbooks.md`. The iOS system picker copies user-selected iCloud/Shared Album photos into authenticated Everbranch assets; it does not crawl albums. SMS reminders remain disabled/not verified until provider readiness, tenant staff consent, quiet hours, opt-out, and delivery logs pass a smoke test.
@@ -171,6 +172,19 @@ HTTP 200 reporting that exact release identifier.
 - PDF drawings use authenticated tenant/job-scoped storage, a 25 MB limit, audit events, team visibility by default, and inline mobile preview. Team-visible means all authorized company employees can view the file; it does not mean the file is public.
 - Everbranch mobile 2.3.0 build 11 consumes the canonical tenant brand profile, including the Collins navy/white lockup, tagline, palette, and light/dark presentation. App Store metadata is prepared without uploading a build.
 - Deploy through protected `main`, verify `/up` and `/ready`, then run `php artisan field-service:normalize-job-drafts collins-electric` before the same command with `--apply`. Re-sync QuickBooks only while the existing connection remains explicitly authorized for read-only sync.
+
+### Independent invoices and streamlined job intake (2026-08-04)
+
+- Owner/admin users receive a dedicated mobile Invoice desk. Invoices remain
+  separate from jobs; a job can be made manually, made from an invoice with
+  homeowner context prefilled, or linked to selected invoice records after
+  creation. This changes no QuickBooks source data and does not enable
+  QuickBooks write-back.
+- Field job rows always show homeowner and service address. The Field Service
+  customer list defaults to customers with a paid invoice in the last twelve
+  months while retaining older customer and invoice history for authorized
+  search. Address suggestions use Google Places only when a server-side key is
+  configured, otherwise the ordinary address field remains available.
 
 ## Shared Dashboard Time Windows (2026-07-13)
 
@@ -2050,6 +2064,14 @@ This update removes the temporary beta redemption rollout gate and keeps Candle 
 - Estimator is a reusable, default-disabled Branch dependent on Field Service. It uses owner-reviewed historical pricing to create Everbranch-only drafts and performs no QuickBooks write-back.
 - Global dashboard/report ranges are `1d`, `1w`, `1m`, `30d`, and `ytd`, with current calendar month as the default. Accounting invoices are `work billed`; only jobs with `completed_at` are `jobs completed`.
 - See `docs/collins-electric-access-and-quickbooks.md` for the first-tenant rollout and access guardrails.
+
+## Collins mobile field workflow refinement (2026-08-04)
+
+- Current work is now a simplified job list with evenly spaced Calendar, Invoices, New Job, and Refresh actions. Admins/managers open to All Current Jobs; field employees open to My Jobs. Jobs can be safely removed from that list by archiving them; no imported accounting, photo, time, task, or operational history is hard-deleted.
+- QuickBooks invoices never create a field job automatically, including invoices with a service address or an open balance. They are surfaced as draft-job opportunities in the admin Work screen and Invoice Desk; the admin reviews the prefilled draft, then deliberately saves and links the job. Existing invoice-created import jobs are archived on the next QuickBooks sync, preserving their audit history. Paid and full-history invoice views remain available.
+- Every job has a dedicated lock-box-code field and a Plans section for job-specific PDFs or plan images.
+- Job actions focus on communication, customer contact, and camera capture. Only employee/member accounts see the job clock-in action; administrative controls do not expose field clock-in.
+- Team messages are newest-first with unread counts, search, and a New Message picker for a person or job. QuickBooks remains an explicit connection action when its workspace is disconnected.
 
 ## Future Purchasable Add-Ons (Tenant-Scoped)
 - Build future apps/modules as tenant-scoped add-ons attached to the shared platform shell.
