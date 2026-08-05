@@ -284,6 +284,21 @@
 - Mobile module bootstrap can enforce role declarations and `min_app_version` when the client reports `X-Everbranch-App-Version`. Everbranch 2.3.0 build 11 is the first client for Field Service contract v7 and consumes canonical `TenantBrandProfile` light/dark branding.
 - `php artisan everbranch:prepare-app-review-workspace --password=...` idempotently prepares the fictional, tenant-isolated Apple review workspace. Production execution additionally requires `--force-production`; the password is never printed or committed.
 
+## Independent invoices and job intake (2026-08-04)
+
+- Field Service now treats imported financial documents as a separate,
+  owner/admin-only invoice desk. Invoices remain tenant-owned QuickBooks
+  records whether linked to a job or not; a manager may create a fully manual
+  job, attach selected invoices during intake, or create a job from an invoice
+  with customer context prefilled. The import never creates a job solely from
+  an invoice link.
+- Field job rows lead with homeowner and visible service address. Field Service
+  customer lists show customers with a paid invoice in the prior twelve months
+  while retaining older records for authorized history; no financial or
+  customer history is deleted. Native address suggestions use Google Places
+  only when a server-side Places key is configured and otherwise fail quietly
+  to normal address entry.
+
 ## Operator Structure and Atomic Release Snapshot (2026-07-21)
 
 ### System map
@@ -1435,3 +1450,9 @@ Scope guard:
 - The concierge export path remains `php artisan field-service:import-quickbooks FILE --tenant=collins-electric`. API identities use provider/type/external ID, and repeated live syncs must prove stable row counts with no duplicates.
 - This is read/import only. It does not write back to QuickBooks, enable payments/billing, schedule recurring sync, activate Estimator/payroll, or activate SMS/reminder sending.
 - Owner evidence may justify cards for quote backlog, quoted versus invoiced, receivables, completed-work value, supplies/vendor spend, contract labor, wages/payroll percentage, common job templates, and sync health. Do not activate those cards solely from assumptions; use the production audit.
+
+## Collins mobile field workflow refinement (2026-08-04)
+
+- Mobile Current Work hides archived jobs but preserves the underlying job record and its associated operational/accounting evidence. The mobile DELETE route is an archive action, restricted to job managers.
+- Work navigation opens to All Current Jobs for admins/managers and My Jobs for field employees, with an explicit switch between the two. QuickBooks invoices never auto-create jobs; they appear as draft-job opportunities in the admin Work screen and at the top of the Invoice Desk. Existing invoice-created import jobs are excluded immediately from current job, calendar, and My Day responses, then archived by the next sync, preserving history while cleaning Current Jobs. Every job has a dedicated lock-box-code field and plan-document upload area.
+- Job clock-in is employee/member-only. Photo capture uses the native camera path. Team channels are newest-first and include server-derived unread counts for the current viewer.

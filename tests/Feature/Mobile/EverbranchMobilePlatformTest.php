@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\EverbranchMobilePushDevice;
+use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobPhoto;
 use App\Models\LandlordOperatorAction;
@@ -366,6 +367,17 @@ test('mobile customer work and preferences endpoints stay membership scoped', fu
         TenantAccessProfile::query()->create(['tenant_id' => $workspace->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
     }
     $customer = MarketingProfile::factory()->create(['tenant_id' => $tenant->id, 'first_name' => 'Ada', 'last_name' => 'Lovelace']);
+    FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $customer->id,
+        'source' => 'quickbooks',
+        'document_type' => 'invoice',
+        'external_id' => 'mobile-customer-paid-invoice',
+        'status' => 'paid',
+        'transaction_date' => now()->subMonth(),
+        'total_amount' => 250,
+        'balance' => 0,
+    ]);
     $privateCustomer = MarketingProfile::factory()->create(['tenant_id' => $other->id]);
     $user = User::factory()->create(['role' => 'manager', 'is_active' => true, 'email_verified_at' => now()]);
     $user->tenants()->attach($tenant->id, ['role' => 'manager']);
@@ -577,6 +589,12 @@ test('field service photo actions require an entitled tenant scoped job and a li
     ])->assertCreated()->assertJsonPath('ok', true);
 
     expect(FieldServiceJobPhoto::query()->forTenantId((int) $tenant->id)->count())->toBe(1);
+
+    $this->post('/api/mobile/v1/workspaces/allowed-actions/field-service/jobs/'.$job->id.'/plans', [
+        'plans' => [UploadedFile::fake()->create('panel-layout.pdf', 120, 'application/pdf')],
+    ])->assertCreated()->assertJsonPath('ok', true);
+    $this->getJson('/api/mobile/v1/workspaces/allowed-actions/field-service/jobs/'.$job->id)
+        ->assertOk()->assertJsonPath('job.plans.0.name', 'panel-layout.pdf');
 
     $this->post('/api/mobile/v1/workspaces/allowed-actions/modules/field_service/actions/capture_photo', [
         'job_id' => $otherJob->id,

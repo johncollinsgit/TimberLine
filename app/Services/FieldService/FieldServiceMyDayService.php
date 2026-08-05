@@ -32,6 +32,7 @@ class FieldServiceMyDayService
         $end = $day->copy()->endOfDay()->utc();
         $upcomingEnd = $day->copy()->addDays(7)->endOfDay()->utc();
         $base = FieldServiceJob::query()->forTenantId((int) $tenant->id)
+            ->notGeneratedQuickBooksInvoice()
             ->with(['assignedUser:id,name', 'participants:id,name'])
             ->withCount(['tasks', 'notes']);
         $this->access->scopeVisibleJobs($base, $user, $tenant);
@@ -43,6 +44,7 @@ class FieldServiceMyDayService
             ->with(['job:id,tenant_id,title,operational_status,scheduled_for', 'assignedUser:id,name', 'assignees:id,name,email'])
             ->where('status', '!=', 'done')
             ->whereHas('job', function (Builder $jobs) use ($user, $tenant): void {
+                $jobs->notGeneratedQuickBooksInvoice();
                 $this->access->scopeVisibleJobs($jobs, $user, $tenant);
             })
             ->where(fn (Builder $assigned) => $assigned

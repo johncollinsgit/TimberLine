@@ -28,11 +28,21 @@ class TenantMobileResourceService
     ) {}
 
     /** @return array<string,mixed> */
-    public function customers(int $tenantId, string $search = '', ?string $cursor = null, int $limit = 25): array
+    public function customers(int $tenantId, string $search = '', ?string $cursor = null, int $limit = 25, bool $recentPaidOnly = false): array
     {
         $search = trim($search);
         $paginator = MarketingProfile::query()->forTenantId($tenantId)
             ->select(['id', 'first_name', 'last_name', 'email', 'phone', 'city', 'state', 'updated_at'])
+            ->when($recentPaidOnly && Schema::hasTable('field_service_financial_documents'), function (Builder $query): void {
+                $query->whereExists(function ($documents): void {
+                    $documents->selectRaw('1')->from('field_service_financial_documents')
+                        ->whereColumn('field_service_financial_documents.marketing_profile_id', 'marketing_profiles.id')
+                        ->whereColumn('field_service_financial_documents.tenant_id', 'marketing_profiles.tenant_id')
+                        ->where('field_service_financial_documents.document_type', 'invoice')
+                        ->whereRaw("lower(coalesce(field_service_financial_documents.status, '')) = 'paid'")
+                        ->whereDate('field_service_financial_documents.transaction_date', '>=', now()->subYear()->toDateString());
+                });
+            })
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $like = '%'.$search.'%';
                 $query->where(function (Builder $builder) use ($like): void {

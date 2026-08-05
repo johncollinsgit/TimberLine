@@ -114,7 +114,10 @@ class EverbranchMobileController extends Controller
         $this->requireBranch($registry, (int) $tenant->id, 'customers');
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'cursor' => ['nullable', 'string', 'max:1000'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
 
-        return response()->json($resources->customers((int) $tenant->id, (string) ($validated['q'] ?? ''), $validated['cursor'] ?? null, (int) ($validated['limit'] ?? 25)));
+        $fieldServiceEnabled = collect($registry->manifest((int) $tenant->id, $request->user(), $request->header('X-Everbranch-App-Version')))
+            ->contains('module_key', 'field_service');
+
+        return response()->json($resources->customers((int) $tenant->id, (string) ($validated['q'] ?? ''), $validated['cursor'] ?? null, (int) ($validated['limit'] ?? 25), $fieldServiceEnabled));
     }
 
     public function customer(Request $request, string $tenant, int $customer, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
