@@ -41,7 +41,13 @@ class EverbranchMobileInvoiceController extends Controller
             });
 
         match ($status) {
-            'draft' => $query->where('source', 'quickbooks')->whereNull('field_service_job_id')->where('balance', '>', 0),
+            'draft' => $query->where('source', 'quickbooks')->where('balance', '>', 0)
+                ->where(function (Builder $documents): void {
+                    $documents->whereNull('field_service_job_id')
+                        ->orWhereHas('job', fn (Builder $jobs) => $jobs
+                            ->where('external_source', 'quickbooks')
+                            ->where('external_id', 'like', 'quickbooks:invoice:%'));
+                }),
             'active' => $query->where('balance', '>', 0),
             'paid' => $query->whereRaw('lower(coalesce(status, \'\')) = ?', ['paid']),
             'open' => $query->where('balance', '>', 0)->where(function (Builder $documents): void {

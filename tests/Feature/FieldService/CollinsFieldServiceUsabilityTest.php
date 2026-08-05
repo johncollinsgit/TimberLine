@@ -183,6 +183,35 @@ test('owners manage an independent invoice desk and may deliberately attach an i
     expect($invoice->fresh()->field_service_job_id)->toBe($job->id);
 });
 
+test('an invoice linked only to a legacy QuickBooks invoice job remains a draft opportunity', function (): void {
+    [$tenant, $owner] = usabilityWorkspace();
+    $legacyJob = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Invoice 1881 · Legacy import',
+        'status' => 'open',
+        'external_source' => 'quickbooks',
+        'external_id' => 'quickbooks:invoice:1881',
+    ]);
+    $invoice = FieldServiceFinancialDocument::query()->create([
+        'tenant_id' => $tenant->id,
+        'field_service_job_id' => $legacyJob->id,
+        'source' => 'quickbooks',
+        'document_type' => 'invoice',
+        'external_id' => '1881',
+        'document_number' => '1881',
+        'status' => 'open',
+        'transaction_date' => now(),
+        'total_amount' => 650,
+        'balance' => 650,
+    ]);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/invoices?status=draft')
+        ->assertOk()
+        ->assertJsonPath('invoices.0.id', $invoice->id);
+});
+
 test('managers may remove a job from the current list without deleting its operational history', function (): void {
     [$tenant, $owner] = usabilityWorkspace();
     $job = FieldServiceJob::query()->create([
