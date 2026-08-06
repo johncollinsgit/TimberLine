@@ -9,7 +9,9 @@
   Shopify outside the normal scheduler and release process. It does **not**
   prove staff embedded access: the audit found retail rejecting Shopify's
   signed `admin_theme` launch parameter and wholesale using a stale production
-  client secret. Both must be corrected and verified from Shopify Admin.
+  client secret. Both were corrected in release `2de2ed7d`; future signed
+  scalar Shopify metadata is verified without expanding the navigation
+  context, and both store smoke launches passed.
 - Candle Cash legacy conversion is reconciled: the production validation found
   all legacy candidates tagged, no rows needing correction, and zero
   balance-table/ledger mismatches. The compatibility observation remains

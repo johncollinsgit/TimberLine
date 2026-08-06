@@ -5,10 +5,10 @@
 The live Everbranch service, storefront search, and retail/wholesale Shopify
 imports are healthy. Candle Cash conversion has no detected balance drift, and
 the preserved birthday history remains available through the current rewards
-flows. A staff-only embedded Shopify launch outage was found during the audit:
-retail launches omit Shopify's signed `admin_theme` parameter during HMAC
-verification, and wholesale also has a stale production app secret. The source
-fix and the required credential cutover are documented in
+flows. A staff-only embedded Shopify launch outage was found and remediated
+during the audit: retail now verifies Shopify's signed `admin_theme` and future
+scalar launch metadata, and wholesale has its current production app secret.
+The source fix and release evidence are documented in
 `docs/operations/modern-forestry-production-guard.md`.
 
 The Candle Club subscription workspace is intentionally **pre-cutover**, not

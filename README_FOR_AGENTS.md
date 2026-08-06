@@ -11,10 +11,11 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   customer account/mobile, or embedded search/navigation. The full CI and
   production deployment gates run the entire Pest suite as the enforcement
   layer; no direct production deployment bypass is permitted. The 2026-08-06
-  audit found a live embedded-launch regression: Shopify now signs
-  `admin_theme`, so it must remain part of `ShopifyEmbeddedContextQuery`;
-  wholesale also requires its current Developer Dashboard client secret in
-  production. Verify both Shopify Admin launches after every release or
+  audit found and remediated a live embedded-launch regression: Shopify now
+  signs `admin_theme`, so it must remain part of
+  `ShopifyEmbeddedContextQuery`; the verifier also checks future signed scalar
+  metadata, and wholesale uses its current Developer Dashboard client secret
+  in production. Verify both Shopify Admin launches after every release or
   credential rotation.
 - Retail and wholesale are separate Shopify embedded surfaces. A verified
   wholesale session must redirect from retail HTML and receive `403` from

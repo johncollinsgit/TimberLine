@@ -42,12 +42,26 @@ The visual Shopify Admin check found both **Modern Forestry Backstage** and
 The source repair retains `admin_theme` for HMAC verification and also checks
 the complete scalar Shopify launch query, so a future signed Shopify metadata
 field will not be dropped by the compact navigation-context allowlist. It has
-regression tests for Shopify's current and a future launch shape. The
-production cutover still requires: (1) release that repair, (2) replace only
-`SHOPIFY_WHOLESALE_CLIENT_SECRET` with the existing Developer Dashboard value
-through the approved secret-management path, and (3) manually open each app
-from its own Shopify Admin installation and confirm an authorized dashboard.
-Never print, commit, or place either client secret in documentation.
+regression tests for Shopify's current and a future launch shape.
+
+### Remediation completed
+
+- Production release `2de2ed7d` deployed through the documented Forge fallback
+  after the GitHub-hosted runner remained queued. The application, storefront
+  imports, migrations, configuration cache, queues, and assets completed their
+  release checks successfully.
+- Only `SHOPIFY_WHOLESALE_CLIENT_SECRET` was replaced with the existing
+  Developer Dashboard value through an stdin-only production update. A
+  timestamped server-side backup was retained; no secret was printed,
+  committed, or rotated.
+- Post-release production signed-launch smoke tests for both stores returned
+  authorized dashboards with HTTP 200 and no invalid-HMAC response. The
+  retail smoke includes `admin_theme`; both include a future signed scalar
+  metadata field.
+
+Reopen each app from its own Shopify Admin installation after any future
+release or credential rotation. Never print, commit, or place either client
+secret in documentation.
 
 ## Finding: Candle Club is intentionally pre-cutover
 
