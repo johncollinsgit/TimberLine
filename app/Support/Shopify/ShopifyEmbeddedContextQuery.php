@@ -96,11 +96,11 @@ class ShopifyEmbeddedContextQuery
         $rebuilt = $path;
 
         if ($query !== []) {
-            $rebuilt .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+            $rebuilt .= '?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         }
 
         if (! empty($parts['fragment'])) {
-            $rebuilt .= '#' . $parts['fragment'];
+            $rebuilt .= '#'.$parts['fragment'];
         }
 
         return $rebuilt;
