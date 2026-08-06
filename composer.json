@@ -68,6 +68,9 @@
             "@test:lint",
             "@php -d memory_limit=512M ./vendor/bin/pest"
         ],
+        "test:modern-forestry": [
+            "@php -d memory_limit=1G ./vendor/bin/pest --compact tests/Feature/Marketing/CandleCashLifecycleAutomationTest.php tests/Feature/Marketing/CandleCashLegacyCompatibilityReadinessTest.php tests/Feature/Marketing/CandleCashShopifyDiscountServiceTest.php tests/Feature/Marketing/BirthdayProfileServiceTest.php tests/Feature/Marketing/BirthdayRewardEngineTest.php tests/Feature/Birthdays/BirthdayRewardShopifySyncTest.php tests/Feature/Birthdays/BirthdayCsvImportServiceTest.php tests/Feature/ShopifyEmbeddedAppTest.php tests/Feature/ShopifyEmbeddedRewardsTest.php tests/Feature/ShopifyEmbeddedSurfaceIsolationTest.php tests/Feature/Shopify/ScheduledImportsCoverBothStoresTest.php tests/Feature/Shopify/ShopifyImportHealthTest.php tests/Feature/Wholesale/EmbeddedWholesaleOperationsTest.php tests/Feature/Mobile/ModernForestryMobileRewardsRecoveryTest.php"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

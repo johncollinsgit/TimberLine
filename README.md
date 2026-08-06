@@ -1,5 +1,36 @@
 # Modern Forestry Backstage
 
+## Modern Forestry production guard (audit updated 2026-08-06)
+
+The live Everbranch service, storefront search, and retail/wholesale Shopify
+imports are healthy. Candle Cash conversion has no detected balance drift, and
+the preserved birthday history remains available through the current rewards
+flows. A staff-only embedded Shopify launch outage was found during the audit:
+retail launches omit Shopify's signed `admin_theme` parameter during HMAC
+verification, and wholesale also has a stale production app secret. The source
+fix and the required credential cutover are documented in
+`docs/operations/modern-forestry-production-guard.md`.
+
+The Candle Club subscription workspace is intentionally **pre-cutover**, not
+broken: it mirrors the existing active subscription data, but its module state
+is setup-needed, billing scheduling is off, and pause/cancel/swap actions are
+recorded as staff intents until a separately approved Shopify/Recharge cutover.
+Do not mark it configured or enable its scheduler merely to make the interface
+look live.
+
+Before a change that can touch Modern Forestry customer data, rewards,
+Shopify, storefronts, or embedded navigation, run:
+
+```bash
+composer test:modern-forestry
+```
+
+The mandatory GitHub production gate runs the full Pest suite, which includes
+this focused coverage. The retail and wholesale embedded surfaces remain
+fail-closed and cannot cross into one another. Do not mark either staff
+embedded surface working until its Shopify Admin launch has been checked after
+release.
+
 ## Everbranch Managed Website (planned, disabled by default)
 
 **Everbranch Managed Website** is the planned $99/month + $499 setup-fee

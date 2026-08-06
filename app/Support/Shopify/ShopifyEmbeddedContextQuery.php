@@ -16,6 +16,10 @@ class ShopifyEmbeddedContextQuery
         'id_token',
         'locale',
         'session',
+        // Shopify Admin now includes this in the signed embedded-app launch
+        // query. It must be retained for HMAC verification, even though the
+        // application does not otherwise need the presentation preference.
+        'admin_theme',
     ];
 
     /**
@@ -37,6 +41,36 @@ class ShopifyEmbeddedContextQuery
             if (is_scalar($value)) {
                 $query[$key] = is_string($value) ? trim($value) : $value;
             }
+        }
+
+        return $query;
+    }
+
+    /**
+     * Return every scalar launch parameter that Shopify may have signed.
+     *
+     * The compact context above is deliberately used for application links so
+     * app-owned parameters such as `full` and `store_key` never invalidate a
+     * previously verified launch. Shopify can add presentation or session
+     * metadata at any time, though, so verification must also consider the
+     * complete scalar query it actually signed.
+     *
+     * @return array<string, mixed>
+     */
+    public static function verificationQuery(Request $request): array
+    {
+        $query = [];
+
+        foreach ($request->query() as $key => $value) {
+            if (! is_string($key) || ! is_scalar($value)) {
+                continue;
+            }
+
+            if (is_string($value) && trim($value) === '') {
+                continue;
+            }
+
+            $query[$key] = is_string($value) ? trim($value) : $value;
         }
 
         return $query;

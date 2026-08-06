@@ -1,5 +1,37 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry customer and Shopify production guard (audit updated 2026-08-06)
+
+- Production `/ready` reports the active release and both Modern Forestry
+  Shopify storefronts respond. The per-store read-only import-health check
+  confirmed fresh successful retail and wholesale imports. This is the
+  production evidence baseline, not authorization to run an import or mutate
+  Shopify outside the normal scheduler and release process. It does **not**
+  prove staff embedded access: the audit found retail rejecting Shopify's
+  signed `admin_theme` launch parameter and wholesale using a stale production
+  client secret. Both must be corrected and verified from Shopify Admin.
+- Candle Cash legacy conversion is reconciled: the production validation found
+  all legacy candidates tagged, no rows needing correction, and zero
+  balance-table/ledger mismatches. The compatibility observation remains
+  intentionally active, so old points columns must not yet be removed.
+- Birthday history is preserved in tenant-scoped profiles, imported rewards,
+  and redemption history. The feature supports old birthday CSV state, Shopify
+  discount issuance/reconciliation, and customer reward status without a data
+  re-import or reset.
+- Candle Club is **not a live Shopify subscription-mutation lane**. The July 2
+  subscriptions foundation deliberately entitles Modern Forestry for its
+  mirror/workspace while leaving setup incomplete, no migration batch approved,
+  and the billing scheduler disabled. The current active contract is visible,
+  but no active poll or monthly scent schedule is configured. Staff/customer
+  pause, cancel, swap, address, and billing-change actions remain auditable
+  intents until a separately authorized Shopify/Recharge cutover.
+- Future development must run `composer test:modern-forestry` when it affects
+  Modern Forestry commerce surfaces. The full CI/Forge gate runs all Pest
+  tests; `ShopifyEmbeddedSurfaceIsolationTest` prevents retail/wholesale
+  cross-surface search or mutation access. Managed Website work remains a hard
+  exclusion from Modern Forestry Shopify, checkout, customer, rewards, imports,
+  connections, and webhooks.
+
 ## Tenant Website product workspace (2026-08-02)
 
 - Every tenant with the existing Managed Website entitlement now receives a

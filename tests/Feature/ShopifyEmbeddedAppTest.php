@@ -54,6 +54,33 @@ test('shopify embedded app route renders verified admin shell for configured sto
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
 });
 
+test('shopify embedded app route accepts Shopify Admin theme metadata in its signed launch query', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.app', retailEmbeddedExtendedSignedQuery([
+        'admin_theme' => 'admin',
+    ])));
+
+    $response->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertDontSeeText('We could not verify this Shopify request');
+});
+
+test('shopify embedded app route accepts future scalar metadata that Shopify signs', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.app', retailEmbeddedExtendedSignedQuery([
+        'admin_theme' => 'admin',
+        'shopify_launch_context' => 'future-shopify-ui-value',
+    ])));
+
+    $response->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertDontSeeText('We could not verify this Shopify request');
+});
+
 test('shopify embedded retail app route redirects a verified wholesale store to wholesale overview', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',

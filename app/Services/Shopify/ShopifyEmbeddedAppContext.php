@@ -84,13 +84,19 @@ class ShopifyEmbeddedAppContext
         }
 
         $signedQuery = $this->contextQuery($request);
+        $verificationQueries = array_values(array_unique([
+            $signedQuery,
+            ShopifyEmbeddedContextQuery::verificationQuery($request),
+        ], SORT_REGULAR));
         $credentials = $this->embeddedAppCredentials->credentialsForStore($store);
         $verified = false;
 
         foreach ($credentials as $credential) {
-            if ($this->hmacVerifier->verifyQuery($signedQuery, $credential['secret'])) {
-                $verified = true;
-                break;
+            foreach ($verificationQueries as $verificationQuery) {
+                if ($this->hmacVerifier->verifyQuery($verificationQuery, $credential['secret'])) {
+                    $verified = true;
+                    break 2;
+                }
             }
         }
 

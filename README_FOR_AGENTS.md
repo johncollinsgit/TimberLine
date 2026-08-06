@@ -2,6 +2,36 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Modern Forestry production guard (2026-08-06)
+
+- The verified production baseline is documented in
+  `docs/operations/modern-forestry-production-guard.md`. Run
+  `composer test:modern-forestry` for every change that could affect Modern
+  Forestry retail/wholesale Shopify, Candle Cash, birthday data, rewards,
+  customer account/mobile, or embedded search/navigation. The full CI and
+  production deployment gates run the entire Pest suite as the enforcement
+  layer; no direct production deployment bypass is permitted. The 2026-08-06
+  audit found a live embedded-launch regression: Shopify now signs
+  `admin_theme`, so it must remain part of `ShopifyEmbeddedContextQuery`;
+  wholesale also requires its current Developer Dashboard client secret in
+  production. Verify both Shopify Admin launches after every release or
+  credential rotation.
+- Retail and wholesale are separate Shopify embedded surfaces. A verified
+  wholesale session must redirect from retail HTML and receive `403` from
+  retail APIs/mutations; a retail or mixed store cannot open wholesale
+  operations. Preserve `EnforceShopifyEmbeddedSurface` and its regression
+  coverage.
+- Candle Club subscriptions are intentionally pre-cutover. Modern Forestry has
+  access to the mirror and staff workspace, while `tenant_module_states` is
+  deliberately absent/default setup-needed and
+  `subscription_module_settings.billing_scheduler_enabled` is false. Customer
+  and staff subscription changes are recorded as auditable intents only until
+  an explicitly approved Shopify/Recharge cutover. Do not force the module to
+  configured, enable the scheduler, or treat an intent as a Shopify mutation.
+- Legacy points/Candle Cash and birthday records are production data. Preserve
+  the compatibility layer and use its read-only checks before any retirement
+  migration; do not reset its observations as part of routine verification.
+
 ## Managed Website guardrails (approved contract; not yet enabled)
 
 - `managed_website` must remain default-disabled and use
