@@ -41,10 +41,7 @@
     <main id="main-content">
         <section id="top" class="eb-studio-hero" aria-labelledby="hero-title">
             <div class="eb-studio-hero__media" aria-hidden="true">
-                <video autoplay muted loop playsinline preload="metadata" poster="{{ asset('images/public-site/everbranch-studio-hero.jpg') }}">
-                    <source src="{{ asset('images/public-site/everbranch-studio-hero-loop.webm') }}" type="video/webm">
-                    <source src="{{ asset('images/public-site/everbranch-studio-hero-loop.mp4') }}" type="video/mp4">
-                </video>
+                <img src="{{ asset('images/public-site/everbranch-hvac-electrical-hero.jpg') }}" alt="" fetchpriority="high" />
             </div>
             <div class="eb-studio-hero__shade"></div>
             <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>
@@ -64,7 +61,12 @@
 
         <section class="eb-studio-manifesto" aria-labelledby="manifesto-title">
             <div class="eb-studio-container eb-studio-manifesto__grid">
-                <p class="eb-studio-eyebrow">Built for the messy middle</p>
+                <div class="eb-studio-manifesto__media">
+                    <p class="eb-studio-eyebrow">Built for the messy middle</p>
+                    <figure>
+                        <img src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="An HVAC and electrical technician documenting a service visit" loading="lazy" />
+                    </figure>
+                </div>
                 <div>
                     <h2 id="manifesto-title">The work is personal. The system behind it should be human, too.</h2>
                     <p>Everbranch brings the useful context together without making your business feel like a spreadsheet. It gives the office, the field, and the owner a shared place to see what is true and what comes next.</p>
@@ -132,10 +134,10 @@
                     <p>Every business has a different rhythm. Everbranch starts with the work you do now and grows only where it helps.</p>
                 </div>
                 <div class="eb-studio-industry-grid">
-                    <article class="eb-studio-industry-card eb-studio-industry-card--retail" tabindex="0"><div><small>01 · Wholesale · loyalty · follow-ups</small><h3>Retail &amp; product brands</h3><p>Keep buyer questions, customer context, events, and reorders moving.</p></div></article>
-                    <article class="eb-studio-industry-card eb-studio-industry-card--service" tabindex="0"><div><small>02 · Jobs · schedules · customer updates</small><h3>Field &amp; service teams</h3><p>Give office and field teams one living record for every job.</p></div></article>
-                    <article class="eb-studio-industry-card eb-studio-industry-card--projects" tabindex="0"><div><small>03 · Projects · files · handoffs</small><h3>Project work</h3><p>Bring approvals, materials, notes, and next steps out of the cracks.</p></div></article>
-                    <article class="eb-studio-industry-card eb-studio-industry-card--studio" tabindex="0"><div><small>04 · Clients · tasks · messages</small><h3>Independent studios</h3><p>Make room for the craft without losing the business behind it.</p></div></article>
+                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-retail.jpg') }}" alt="" /><div><small>01 · Wholesale · loyalty · follow-ups</small><h3>Retail &amp; product brands</h3><p>Keep buyer questions, customer context, events, and reorders moving.</p></div></article>
+                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-field-service.jpg') }}" alt="" /><div><small>02 · Jobs · schedules · customer updates</small><h3>Field &amp; service teams</h3><p>Give office and field teams one living record for every job.</p></div></article>
+                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-projects.jpg') }}" alt="" /><div><small>03 · Projects · files · handoffs</small><h3>Project work</h3><p>Bring approvals, materials, notes, and next steps out of the cracks.</p></div></article>
+                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-studios.jpg') }}" alt="" /><div><small>04 · Clients · tasks · messages</small><h3>Independent studios</h3><p>Make room for the craft without losing the business behind it.</p></div></article>
                 </div>
             </div>
         </section>
@@ -143,7 +145,7 @@
         <section id="modules" class="eb-studio-modules" aria-labelledby="modules-title">
             <div class="eb-studio-container eb-studio-modules__grid">
                 <figure class="eb-studio-photo-card">
-                    <img src="{{ asset('images/public-site/everbranch-field-team.jpg') }}" alt="A field-service team coordinating the next job" loading="lazy" />
+                    <img src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="An HVAC and electrical technician documenting a service visit" loading="lazy" />
                     <figcaption>Work follows the team, not the other way around.</figcaption>
                 </figure>
                 <div class="eb-studio-modules__copy">
@@ -179,7 +181,7 @@
     <dialog class="eb-studio-film" data-studio-film aria-labelledby="film-title">
         <button class="eb-studio-film__close" type="button" data-studio-film-close aria-label="Close Everbranch story">×</button>
         <div class="eb-studio-film__frame">
-            <img src="{{ asset('images/public-site/everbranch-studio-hero.jpg') }}" alt="Small-business owners reviewing work together" />
+            <img src="{{ asset('images/public-site/everbranch-hvac-electrical-hero.jpg') }}" alt="Two HVAC and electrical technicians reviewing work beside a service panel" />
                 <div class="eb-studio-film__copy"><p class="eb-studio-eyebrow eb-studio-eyebrow--light">The Everbranch story</p><h2 id="film-title">A better business day begins when the next thing is clear.</h2><p>Everbranch is built to make the day more connected, not more complicated. A full sound-on product film and transcript can be dropped into this accessible film frame when approved production footage is ready.</p></div>
         </div>
     </dialog>
