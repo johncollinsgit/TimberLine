@@ -41,10 +41,7 @@
     <main id="main-content">
         <section id="top" class="eb-studio-hero" aria-labelledby="hero-title">
             <div class="eb-studio-hero__media" aria-hidden="true">
-                <video autoplay muted loop playsinline preload="metadata" poster="{{ asset('images/public-site/everbranch-studio-hero.jpg') }}">
-                    <source src="{{ asset('images/public-site/everbranch-studio-hero-loop.webm') }}" type="video/webm">
-                    <source src="{{ asset('images/public-site/everbranch-studio-hero-loop.mp4') }}" type="video/mp4">
-                </video>
+                <img src="{{ asset('images/public-site/everbranch-hvac-electrical-hero.jpg') }}" alt="" fetchpriority="high" />
             </div>
             <div class="eb-studio-hero__shade"></div>
             <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>
@@ -143,7 +140,7 @@
         <section id="modules" class="eb-studio-modules" aria-labelledby="modules-title">
             <div class="eb-studio-container eb-studio-modules__grid">
                 <figure class="eb-studio-photo-card">
-                    <img src="{{ asset('images/public-site/everbranch-field-team.jpg') }}" alt="A field-service team coordinating the next job" loading="lazy" />
+                    <img src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="An HVAC and electrical technician documenting a service visit" loading="lazy" />
                     <figcaption>Work follows the team, not the other way around.</figcaption>
                 </figure>
                 <div class="eb-studio-modules__copy">
@@ -179,7 +176,7 @@
     <dialog class="eb-studio-film" data-studio-film aria-labelledby="film-title">
         <button class="eb-studio-film__close" type="button" data-studio-film-close aria-label="Close Everbranch story">×</button>
         <div class="eb-studio-film__frame">
-            <img src="{{ asset('images/public-site/everbranch-studio-hero.jpg') }}" alt="Small-business owners reviewing work together" />
+            <img src="{{ asset('images/public-site/everbranch-hvac-electrical-hero.jpg') }}" alt="Two HVAC and electrical technicians reviewing work beside a service panel" />
                 <div class="eb-studio-film__copy"><p class="eb-studio-eyebrow eb-studio-eyebrow--light">The Everbranch story</p><h2 id="film-title">A better business day begins when the next thing is clear.</h2><p>Everbranch is built to make the day more connected, not more complicated. A full sound-on product film and transcript can be dropped into this accessible film frame when approved production footage is ready.</p></div>
         </div>
     </dialog>
