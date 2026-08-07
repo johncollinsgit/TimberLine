@@ -153,7 +153,9 @@ storage, retained prior releases, and `/ready` health checks. The GitHub
 Actions test/build gate is the required gate for `main`; after it passes,
 GitHub posts to the protected Forge deploy hook and Forge performs the atomic
 release. Direct Forge push-to-deploy remains off so no source push can bypass
-the gate. The first end-to-end automatic Forge release completed successfully
+the gate. The gate does not treat a hook acknowledgment as release evidence:
+it must see `/ready` report the exact requested commit before it succeeds. The
+first end-to-end automatic Forge release completed successfully
 on 2026-07-21: Forge release `73789933`, commit `c272464…`, `/ready` HTTP 200.
 The Collins operations pass was production-verified on 2026-07-21 through
 `Deploy Production` run `29856463126`: merged commit
