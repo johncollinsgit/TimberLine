@@ -17,7 +17,7 @@
         'description' => 'Browse Everbranch modules by business outcome, setup effort, integration, and industry without joining a workspace.',
     ])
 </head>
-<body class="fb-public-body eb-explorer-body">
+<body class="fb-public-body eb-explorer-body eb-studio-support-body">
     <a class="eb-skip-link" href="#module-catalog">Skip to module catalog</a>
 
     <header class="eb-explorer-nav">

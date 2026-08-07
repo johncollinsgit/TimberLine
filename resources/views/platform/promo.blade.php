@@ -1,920 +1,187 @@
 @php
-    $content = is_array($promo ?? null) ? $promo : [];
-    $cta = is_array($content['ctas'] ?? null) ? $content['ctas'] : [];
     $brandAssets = (array) config('everbranch.brand_assets', []);
     $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
     $brandLockupPath = (string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg');
     $brandMarkPath = (string) ($brandAssets['mark'] ?? 'brand/everbranch-mark.svg');
     $productName = (string) config('everbranch.product_name', 'Everbranch');
-    $headline = 'Less Problems. More peace. The one place to run your business.';
-    $summary = 'Everbranch helps small businesses organize customers, tasks, messages, files, and workflows in one simple system, so nothing important gets lost in the noise so you can spend more time with your family.';
+    $cta = is_array($cta ?? null) ? $cta : [];
     $startClientCta = is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null)
-        ? [
-            'href' => (string) $cta['start_client']['href'],
-            'label' => (string) ($cta['start_client']['label'] ?? 'Start as a client'),
-        ]
-        : [
-            'href' => route('platform.start'),
-            'label' => 'Request access',
-        ];
-    $planConfig = (array) config('product_surfaces.plans', []);
-    $planCards = is_array($planConfig['cards'] ?? null) ? $planConfig['cards'] : [];
-    $planOrder = array_values(array_filter((array) ($planConfig['plan_order'] ?? ['starter', 'launch_partner', 'growth']), fn ($planKey) => in_array($planKey, ['starter', 'launch_partner', 'growth'], true)));
-    $recommendedPlanKey = (string) ($planConfig['recommended_plan_key'] ?? 'launch_partner');
-    $homepagePlanHighlights = [
-        'growth' => [
-            'Rewards, loyalty, and birthday reminders',
-            'Campaign and email-readiness expansion',
-            'More room as you grow',
-        ],
-    ];
-    $industryCards = [
-        [
-            'title' => 'Retail & product brands',
-            'summary' => 'Wholesale requests, inventory questions, event prep, reorders, and follow-ups.',
-            'outcome' => 'Keep buyer requests, reorders, and customer context attached.',
-            'chips' => ['Wholesale', 'Reorders', 'Events'],
-        ],
-        [
-            'title' => 'Electrical & plumbing',
-            'summary' => 'Job notes, estimates, parts questions, scheduling notes, and crew next steps.',
-            'outcome' => 'Give every service call one record the office and field can trust.',
-            'chips' => ['Jobs', 'Parts', 'Crew'],
-        ],
-        [
-            'title' => 'Construction & project work',
-            'summary' => 'Approvals, materials, change requests, documents, subcontractor updates, and punch lists.',
-            'outcome' => 'Put decisions and open items where everyone can find them.',
-            'chips' => ['Approvals', 'Materials', 'Punch list'],
-        ],
-        [
-            'title' => 'Service businesses',
-            'summary' => 'Client records, appointments, recurring work, task handoffs, and follow-up reminders.',
-            'outcome' => 'Make the next appointment, reminder, and handoff easy to see.',
-            'chips' => ['Clients', 'Appointments', 'Reminders'],
-        ],
-    ];
+        ? $cta['start_client']
+        : ['href' => route('platform.start'), 'label' => 'Become a launch partner'];
 @endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>
     @include('partials.head', [
-        'title' => $productName.' | One Place to Run Your Business',
-        'description' => $summary,
+        'title' => $productName.' | One place to run your business',
+        'description' => 'Everbranch brings customers, work, follow-ups, and the next right action into one calm operating system for small businesses.',
     ])
 </head>
-<body class="fb-public-body fb-public-body--splash" data-premium-motion="public">
-    @include('platform.partials.premium-motion')
+<body class="fb-public-body eb-studio-body" data-premium-motion="public">
+    <a class="eb-skip-link" href="#main-content">Skip to main content</a>
 
-    <div class="fb-public-shell fb-public-shell--wide">
-        <div class="fb-site-nav-wrap" data-public-mobile-nav>
-            <nav class="fb-site-nav fb-site-nav--premium" aria-label="Primary navigation">
-                <div class="fb-site-nav__bar">
-                    <a href="#splash" class="fb-site-brand fb-site-brand--lockup">
-                        <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
-                    </a>
-                    <button
-                        type="button"
-                        class="fb-site-nav__toggle"
-                        data-public-mobile-nav-toggle
-                        aria-expanded="false"
-                        aria-controls="public-mobile-drawer"
-                        aria-label="Open navigation menu"
-                    >
-                        <span></span>
-                        <span></span>
-                        <span></span>
+    <header class="eb-studio-nav-wrap">
+        <nav class="eb-studio-nav" aria-label="Primary navigation">
+            <a class="eb-studio-brand" href="#top" aria-label="{{ $productName }} home">
+                <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
+            </a>
+            <div class="eb-studio-nav__links" aria-label="Explore Everbranch">
+                <a href="#how-it-works">How it works</a>
+                <a href="#industries">Who it helps</a>
+                <a href="#modules">Modules</a>
+                <a href="{{ route('platform.plans') }}">Plans</a>
+            </div>
+            <div class="eb-studio-nav__actions">
+                <a class="eb-studio-text-link" href="{{ route('login') }}">Log in</a>
+                <a class="eb-studio-button eb-studio-button--dark" href="{{ $startClientCta['href'] }}">{{ $startClientCta['label'] }}</a>
+            </div>
+        </nav>
+    </header>
+
+    <main id="main-content">
+        <section id="top" class="eb-studio-hero" aria-labelledby="hero-title">
+            <div class="eb-studio-hero__media" aria-hidden="true">
+                <video autoplay muted loop playsinline preload="metadata" poster="{{ asset('images/public-site/everbranch-studio-hero.jpg') }}">
+                    <source src="{{ asset('images/public-site/everbranch-studio-hero-loop.webm') }}" type="video/webm">
+                    <source src="{{ asset('images/public-site/everbranch-studio-hero-loop.mp4') }}" type="video/mp4">
+                </video>
+            </div>
+            <div class="eb-studio-hero__shade"></div>
+            <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>
+                <p class="eb-studio-eyebrow eb-studio-eyebrow--light">A calmer way to run the work</p>
+                <h1 id="hero-title">Your business has a rhythm.<br>Everbranch helps you keep it.</h1>
+                <p class="eb-studio-hero__lede">Customers, work, messages, files, and the next thing that needs attention—connected in one place that feels like it was made for how your team actually operates.</p>
+                <div class="eb-studio-hero__actions">
+                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Become a launch partner <span aria-hidden="true">↗</span></a>
+                    <button class="eb-studio-play" type="button" data-studio-film-open aria-haspopup="dialog">
+                        <span class="eb-studio-play__icon" aria-hidden="true">▶</span>
+                        <span>See the Everbranch story</span>
                     </button>
                 </div>
-                <div class="fb-site-links" role="tablist" aria-label="Public sections">
-                    <a id="tab-product" href="#everbranch-public" class="is-active" role="tab" aria-selected="true" aria-controls="panel-product" data-public-tab-trigger="product">Home</a>
-                    <a id="tab-workflows" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-workflows" data-public-tab-trigger="workflows">See it work</a>
-                    <a id="tab-customers" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-customers" data-public-tab-trigger="customers">Who it helps</a>
-                    <a id="tab-contact" href="#everbranch-public" role="tab" aria-selected="false" aria-controls="panel-contact" data-public-tab-trigger="contact">Contact</a>
-                </div>
-                <div class="fb-hero-cta fb-hero-cta--nav">
-                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-                    <a href="{{ $startClientCta['href'] }}" class="fb-btn fb-btn-primary">{{ $startClientCta['label'] }}</a>
-                </div>
-            </nav>
-            <button type="button" class="fb-site-nav__backdrop" data-public-mobile-nav-backdrop hidden aria-hidden="true" tabindex="-1"></button>
-            <div id="public-mobile-drawer" class="fb-site-nav__drawer" data-public-mobile-nav-drawer hidden>
-                <div class="fb-site-nav__drawer-links" aria-label="Public sections">
-                    <a href="#everbranch-public" class="is-active" data-public-tab-trigger="product" data-public-mobile-nav-link="product">Home</a>
-                    <a href="#everbranch-public" data-public-tab-trigger="workflows" data-public-mobile-nav-link="workflows">See it work</a>
-                    <a href="#everbranch-public" data-public-tab-trigger="customers" data-public-mobile-nav-link="customers">Who it helps</a>
-                    <a href="#everbranch-public" data-public-tab-trigger="contact" data-public-mobile-nav-link="contact">Contact</a>
-                </div>
-                <div class="fb-site-nav__drawer-cta">
-                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary" data-public-mobile-nav-link="login">Login</a>
-                    <a href="{{ $startClientCta['href'] }}" class="fb-btn fb-btn-primary" data-public-mobile-nav-link="start">{{ $startClientCta['label'] }}</a>
+                <p class="eb-studio-hero__note">One flat price for the business. No per-user fees.</p>
+            </div>
+        </section>
+
+        <section class="eb-studio-manifesto" aria-labelledby="manifesto-title">
+            <div class="eb-studio-container eb-studio-manifesto__grid">
+                <p class="eb-studio-eyebrow">Built for the messy middle</p>
+                <div>
+                    <h2 id="manifesto-title">The work is personal. The system behind it should be human, too.</h2>
+                    <p>Everbranch brings the useful context together without making your business feel like a spreadsheet. It gives the office, the field, and the owner a shared place to see what is true and what comes next.</p>
+                    <a class="eb-studio-inline-link" href="#how-it-works">See how the pieces connect <span aria-hidden="true">↓</span></a>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <main id="everbranch-public" class="fb-public-main" tabindex="-1">
-            <section class="fb-public-tabs" aria-label="Everbranch overview tabs" data-public-tabs data-reveal>
-                <div class="fb-public-tabs__panels">
-                    <article id="panel-product" class="fb-public-tab-panel is-active" role="tabpanel" aria-labelledby="tab-product" data-public-tab-panel="product">
-                        <header id="splash" class="fb-splash fb-splash--intro-only fb-product-hero" aria-label="Everbranch entry">
-                            <div class="fb-product-hero__copy" data-reveal>
-                                <p class="fb-section-kicker">Small-business work, finally in one place</p>
-                                <h1>{{ $headline }}</h1>
-                                <p>{{ $summary }}</p>
-                                <div class="fb-flat-pricing-callout" aria-label="Everbranch flat business pricing">
-                                    <span>One flat price for the business</span>
-                                    <strong>No per-user fees.</strong>
-                                    <small>Your monthly price does not climb one seat at a time.</small>
-                                </div>
-                                <div class="fb-hero-cta">
-                                    <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-primary">Become a launch partner with Everbranch</a>
-                                    <a href="#everbranch-public" class="fb-btn fb-btn-secondary" data-public-tab-jump="workflows">See Everbranch in action</a>
-                                    <a href="{{ route('login') }}" class="fb-btn fb-btn-secondary">Login</a>
-                                </div>
-                            </div>
-
-                            <div class="fb-product-hero__visual" data-depth="12" data-reveal>
-                                <div class="fb-iphone-demo" data-public-phone-demo data-active-phone-tab="home" aria-label="Everbranch mobile app preview">
-                                    <div class="fb-iphone-demo__top">
-                                        <span>9:41</span>
-                                        <span></span>
-                                        <span>5G</span>
-                                    </div>
-                                    <div class="fb-iphone-demo__screen">
-                                        <div class="fb-iphone-demo__brand">
-                                            <span class="fb-iphone-demo__menu">≡</span>
-                                            <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
-                                            <span class="fb-iphone-demo__avatar">JC</span>
-                                        </div>
-
-                                        <div class="fb-iphone-demo__panels">
-                                            <section id="fb-phone-home" class="fb-iphone-demo__panel is-active" data-phone-panel="home" role="tabpanel" aria-label="Everbranch home preview">
-                                                <section class="fb-iphone-demo__metric fb-iphone-demo__metric--marketing">
-                                                    <span>Marketing lift</span>
-                                                    <strong>$4,280</strong>
-                                                    <p>made from Everbranch marketing this month</p>
-                                                </section>
-
-                                                <section class="fb-iphone-demo__metric fb-iphone-demo__metric--jobs">
-                                                    <span>Completed work</span>
-                                                    <strong>$18,640</strong>
-                                                    <p>jobs completed in the last 30 days</p>
-                                                </section>
-
-                                                <section class="fb-iphone-demo__workflow" aria-label="Everbranch job completion workflow">
-                                                    <div class="fb-iphone-demo__message">
-                                                        <span>Message customer</span>
-                                                        <p>Hi Maya, your panel upgrade is wrapped up. Invoice and photos are in your portal.</p>
-                                                    </div>
-                                                    <div class="fb-iphone-demo__job">
-                                                        <span>Job</span>
-                                                        <strong>Monroe Ave Service Call</strong>
-                                                        <small>Ready to complete</small>
-                                                    </div>
-                                                    <div class="fb-iphone-demo__complete" aria-label="Job complete">
-                                                        <span>✓</span>
-                                                        <strong>Job complete</strong>
-                                                    </div>
-                                                </section>
-                                            </section>
-
-                                            <section id="fb-phone-work" class="fb-iphone-demo__panel" data-phone-panel="work" role="tabpanel" aria-label="Everbranch work preview" hidden>
-                                                <div class="fb-iphone-demo__section-head">
-                                                    <span>Work</span>
-                                                    <strong>Today on the board</strong>
-                                                </div>
-                                                <div class="fb-iphone-demo__job-grid">
-                                                    <article class="fb-iphone-demo__work-card fb-iphone-demo__work-card--live">
-                                                        <span>In process</span>
-                                                        <strong>Monroe Ave panel upgrade</strong>
-                                                        <p>$6,840 scheduled today</p>
-                                                    </article>
-                                                    <article class="fb-iphone-demo__work-card">
-                                                        <span>Quoting</span>
-                                                        <strong>Kitchen lighting package</strong>
-                                                        <p>$4,200 waiting on approval</p>
-                                                    </article>
-                                                    <article class="fb-iphone-demo__work-card">
-                                                        <span>Contract signed</span>
-                                                        <strong>Retail maintenance plan</strong>
-                                                        <p>$9,600 monthly service</p>
-                                                    </article>
-                                                    <article class="fb-iphone-demo__work-card">
-                                                        <span>Finished</span>
-                                                        <strong>Breaker replacement</strong>
-                                                        <p>$1,180 invoice ready</p>
-                                                    </article>
-                                                </div>
-                                                <div class="fb-iphone-demo__check-row">
-                                                    <span>1</span>
-                                                    <p>Customer update delivered</p>
-                                                </div>
-                                                <div class="fb-iphone-demo__check-row">
-                                                    <span>2</span>
-                                                    <p>Job marked complete</p>
-                                                </div>
-                                                <div class="fb-iphone-demo__complete fb-iphone-demo__complete--panel">
-                                                    <span>✓</span>
-                                                    <strong>Green check, done</strong>
-                                                </div>
-                                            </section>
-
-                                            <section id="fb-phone-branches" class="fb-iphone-demo__panel" data-phone-panel="branches" role="tabpanel" aria-label="Everbranch branches preview" hidden>
-                                                <div class="fb-iphone-demo__section-head">
-                                                    <span>Branches</span>
-                                                    <strong>Ways this workspace grows</strong>
-                                                </div>
-                                                <div class="fb-iphone-demo__finance-grid">
-                                                    <article>
-                                                        <span>Supplies used this month</span>
-                                                        <strong>$3,842.19</strong>
-                                                        <p>tracked from completed work</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Employee spend</span>
-                                                        <strong>$12,960.00</strong>
-                                                        <p>28% of gross revenue</p>
-                                                    </article>
-                                                </div>
-                                                <div class="fb-iphone-demo__branch-grid">
-                                                    <article>
-                                                        <span>Rewards</span>
-                                                        <strong>1,250 pts</strong>
-                                                        <p>loyalty ready</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Birthday</span>
-                                                        <strong>24</strong>
-                                                        <p>offers queued</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Marketing</span>
-                                                        <strong>3</strong>
-                                                        <p>campaign ideas</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Follow-ups</span>
-                                                        <strong>8</strong>
-                                                        <p>need a nudge</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Supplies</span>
-                                                        <strong>42</strong>
-                                                        <p>items logged</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Employees</span>
-                                                        <strong>28%</strong>
-                                                        <p>labor ratio</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Reviews</span>
-                                                        <strong>11</strong>
-                                                        <p>asks ready</p>
-                                                    </article>
-                                                    <article>
-                                                        <span>Invoices</span>
-                                                        <strong>$7.8k</strong>
-                                                        <p>ready to send</p>
-                                                    </article>
-                                                </div>
-                                            </section>
-
-                                            <section id="fb-phone-account" class="fb-iphone-demo__panel" data-phone-panel="account" role="tabpanel" aria-label="Everbranch account preview" hidden>
-                                                <div class="fb-iphone-demo__section-head">
-                                                    <span>Account</span>
-                                                    <strong>Apex Electrical</strong>
-                                                </div>
-                                                <div class="fb-iphone-demo__account-card">
-                                                    <span>Plan</span>
-                                                    <strong>Launch Partner</strong>
-                                                    <p>Starter tools live, growth features ready when you are.</p>
-                                                </div>
-                                                <div class="fb-iphone-demo__setting-row">
-                                                    <span>Birthday rewards</span>
-                                                    <strong>On</strong>
-                                                </div>
-                                                <div class="fb-iphone-demo__setting-row">
-                                                    <span>Job-complete messages</span>
-                                                    <strong>On</strong>
-                                                </div>
-                                                <div class="fb-iphone-demo__setting-row">
-                                                    <span>Team access</span>
-                                                    <strong>6 users</strong>
-                                                </div>
-                                                <div class="fb-iphone-demo__setting-row">
-                                                    <span>Supplies tracking</span>
-                                                    <strong>On</strong>
-                                                </div>
-                                                <div class="fb-iphone-demo__setting-row">
-                                                    <span>Review requests</span>
-                                                    <strong>Auto</strong>
-                                                </div>
-                                            </section>
-                                        </div>
-
-                                        <div class="fb-iphone-demo__tabs" role="tablist" aria-label="Everbranch phone preview tabs">
-                                            <button type="button" class="is-active" data-phone-tab="home" role="tab" aria-selected="true" aria-controls="fb-phone-home">
-                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">⌂</span>
-                                                Home
-                                            </button>
-                                            <button type="button" data-phone-tab="work" role="tab" aria-selected="false" aria-controls="fb-phone-work" tabindex="-1">
-                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">▤</span>
-                                                Work
-                                            </button>
-                                            <button type="button" data-phone-tab="branches" role="tab" aria-selected="false" aria-controls="fb-phone-branches" tabindex="-1">
-                                                <span class="phone-tree-icon" aria-hidden="true"></span>
-                                                Branches
-                                            </button>
-                                            <button type="button" data-phone-tab="account" role="tab" aria-selected="false" aria-controls="fb-phone-account" tabindex="-1">
-                                                <span class="fb-iphone-demo__tab-icon" aria-hidden="true">◎</span>
-                                                Account
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </header>
-
-                        <section class="fb-home-tiers" aria-label="Everbranch launch tiers" data-reveal>
-                            <div class="fb-home-tiers__head">
-                                <p class="fb-section-kicker">New launch tiers</p>
-                                <h2>Start lean. Grow when the system proves itself.</h2>
-                            </div>
-                            <div class="fb-home-tiers__grid">
-                                @foreach($planOrder as $planKey)
-                                    @php($plan = is_array($planCards[$planKey] ?? null) ? $planCards[$planKey] : null)
-                                    @continue(!$plan)
-                                    <article class="fb-home-tier-card {{ $planKey === $recommendedPlanKey ? 'is-recommended' : '' }}">
-                                        @if($planKey === $recommendedPlanKey)
-                                            <span class="fb-home-tier-card__badge">Limited to 10</span>
-                                        @endif
-                                        <h3>{{ $plan['name'] ?? ucfirst((string) $planKey) }}</h3>
-                                        <strong>{{ $plan['price_display'] ?? '' }}</strong>
-                                        <p>{{ $plan['summary'] ?? '' }}</p>
-                                        @if(!empty($plan['highlights']) && is_array($plan['highlights']))
-                                            <ul>
-                                                @foreach(array_slice($homepagePlanHighlights[$planKey] ?? $plan['highlights'], 0, 3) as $highlight)
-                                                    <li>{{ $highlight }}</li>
-                                                @endforeach
-                                            </ul>
-                                        @endif
-                                    </article>
-                                @endforeach
-                            </div>
-                        </section>
-                    </article>
-
-                    <article id="panel-workflows" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-workflows" data-public-tab-panel="workflows" hidden>
-                        <div class="fb-section fb-section--public fb-section--theater" aria-label="See Everbranch work">
-                            <div class="fb-section-header fb-section-header--centered">
-                                <p class="fb-section-kicker">See it work</p>
-                                <h2>Too many apps for my small business.</h2>
-                                <p>Everbranch gives you one place for your brain to focus.</p>
-                            </div>
-
-                            <aside class="fb-product-demo fb-product-demo--wide fb-product-demo--slideshow" data-demo-stage="choose" data-demo-mode="problem" data-premium-surface data-public-product-demo aria-label="Everbranch workflow example">
-                                <div class="fb-product-demo__stage fb-product-demo__stage--choose" data-demo-stage-panel="choose">
-                                    <div class="fb-product-demo__question">
-                                        <p class="fb-section-kicker">Step 1</p>
-                                        <h3>What is your business?</h3>
-                                    </div>
-                                    <div class="fb-product-demo__category-grid" aria-label="Choose a business type">
-                                        <button type="button" class="is-active" data-product-demo-scenario="retail" data-demo-customer="Pine &amp; Porch" data-demo-type="Retail" data-demo-primary="Wholesale request" data-demo-note="Buyer, order, inventory, and follow-up in one view." data-demo-task="Send line sheet and approve wholesale access" data-demo-owner="Sarah" data-demo-stats="Customers::18::4 ready to reorder|Orders::$6.8k::this week|Follow-ups::6::2 due today" data-demo-links="Pine &amp; Porch buyer::Customer|Fall Harvest reorder::Task|Case pricing sheet::File" data-demo-jobs="Approve wholesale login::Due today|Prep market reorder set::Assigned to Omar|Friday reorder reminder::Scheduled" data-demo-mobile="Retail dashboard|6 follow-ups due|Wholesale request ready|Inventory question flagged">
-                                            <span>Retail</span>
-                                            <strong>Products, orders, customers, reorders.</strong>
-                                        </button>
-                                        <button type="button" data-product-demo-scenario="trades" data-demo-customer="Monroe Ave Service Call" data-demo-type="Trades" data-demo-primary="Job note" data-demo-note="Customer, crew, parts, and schedule together." data-demo-task="Confirm parts and assign crew next step" data-demo-owner="Eli" data-demo-stats="Jobs::14::3 parts questions|Visits::9::2 arrivals pending|On time::96%::last 7 days" data-demo-links="Monroe Ave customer::Service|40A breaker quote::Estimate|Panel photo set::Files" data-demo-jobs="Confirm breaker size::Due 11 AM|Dispatch crew next step::Assigned to Eli|Customer update::Before 3 PM" data-demo-mobile="Trades dashboard|9 visits today|Parts question active|Crew note saved">
-                                            <span>Trades</span>
-                                            <strong>Jobs, crews, estimates, parts.</strong>
-                                        </button>
-                                        <button type="button" data-product-demo-scenario="construction" data-demo-customer="Maple Street Remodel" data-demo-type="Projects" data-demo-primary="Approval needed" data-demo-note="Approvals, materials, and punch-list items connected." data-demo-task="Update materials and owner punch-list" data-demo-owner="Maya" data-demo-stats="Punch items::27::5 ownerless|Materials::5::2 vendor replies|Booked::$42k::3 changes" data-demo-links="Maple Street client::Project|Fixture approval::Change order|Tile schedule::Material" data-demo-jobs="Update fixture takeoff::Assigned to Maya|Confirm supplier lead time::Due Friday|Owner walkthrough recap::Queued" data-demo-mobile="Project dashboard|5 material holds|Approval saved|Punch list ready">
-                                            <span>Projects</span>
-                                            <strong>Approvals, materials, subs, files.</strong>
-                                        </button>
-                                        <button type="button" data-product-demo-scenario="service" data-demo-customer="Northline Maintenance" data-demo-type="Service" data-demo-primary="Client record" data-demo-note="Appointments, reminders, questions, and handoffs aligned." data-demo-task="Schedule visit and send reminder" data-demo-owner="Jordan" data-demo-stats="Accounts::32::9 visits today|Reminders::91%::hit rate|Questions::4::1 overdue" data-demo-links="Northline maintenance::Customer|Monday visit block::Schedule|Open question::Note" data-demo-jobs="Confirm gate access::Before 8 AM|Send visit reminder::Assigned to Jordan|Route recurring call::Queued" data-demo-mobile="Service dashboard|9 visits today|Reminder ready|Question routed">
-                                            <span>Service</span>
-                                            <strong>Clients, visits, reminders, handoffs.</strong>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="fb-product-demo__stage fb-product-demo__stage--problem" data-demo-stage-panel="problem" hidden>
-                                    <div class="fb-product-demo__problem-copy">
-                                        <p data-product-demo-field="type">Retail</p>
-                                        <h3>If you're like us this is what you are working in and paying for</h3>
-                                    </div>
-                                    <div class="fb-product-demo__app-screen" aria-label="Apps scattered across a small business">
-                                        <div class="fb-product-demo__app-cloud" data-product-demo-app-cloud>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--shopify"><b>S</b>Shopify</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--instagram"><b>IG</b>Instagram</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--gmail"><b>G</b>Gmail</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--phone"><b>P</b>Phone</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--quickbooks"><b>QB</b>QuickBooks</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--square"><b>SQ</b>Square</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--stripe"><b>ST</b>Stripe</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--slack"><b>#</b>Slack</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--calendar"><b>31</b>Calendar</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--drive"><b>D</b>Drive</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--excel"><b>X</b>Excel</span>
-                                            <span class="fb-product-demo__app-bubble fb-product-demo__app-bubble--mailchimp"><b>MC</b>Mailchimp</span>
-                                        </div>
-                                        <div class="fb-product-demo__center-mark" aria-hidden="true">
-                                            <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                        </div>
-                                    </div>
-                                    <div class="fb-product-demo__problem-actions">
-                                        <button type="button" class="fb-product-demo__problem-button">THE PROBLEM</button>
-                                        <button type="button" class="fb-btn fb-btn-primary" data-demo-start-solution>Let's put everything in one place.</button>
-                                    </div>
-                                </div>
-
-                                <div class="fb-product-demo__stage fb-product-demo__stage--explainer" data-demo-stage-panel="explainer" hidden>
-                                    <div class="fb-product-demo__slides" aria-live="polite">
-                                        <article class="fb-product-demo__story-slide is-active" data-demo-story-slide="0">
-                                            <div class="fb-product-demo__story-copy">
-                                                <p class="fb-section-kicker">Slide 1 of 6</p>
-                                                <h3>We know the ten-app headache.</h3>
-                                                <p>We are small business owners too. Ten apps, ten billings, ten logins, and somehow the one thing you need is still hiding.</p>
-                                            </div>
-                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--apps" aria-hidden="true">
-                                                <div class="fb-story-app-stack">
-                                                    <article><span>Shopify</span><strong>Order #1842</strong><small>Needs install date</small></article>
-                                                    <article><span>Gmail</span><strong>4 customer replies</strong><small>Scattered inbox</small></article>
-                                                    <article><span>QuickBooks</span><strong>$7,840 open</strong><small>Invoices pending</small></article>
-                                                    <article><span>Calendar</span><strong>3 job windows</strong><small>No notes attached</small></article>
-                                                </div>
-                                                <div class="fb-story-command-card">
-                                                    <span>What Everbranch gathers</span>
-                                                    <strong>Customer, job, money, message</strong>
-                                                    <p>One clean view for the next decision.</p>
-                                                </div>
-                                            </div>
-                                        </article>
-                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="1" hidden>
-                                            <div class="fb-product-demo__story-copy">
-                                                <p class="fb-section-kicker">Slide 2 of 6</p>
-                                                <h3>Business got complicated. We simplify it.</h3>
-                                                <p>Not by forcing you into another generic tool. Everbranch custom makes the workspace around how your business actually runs.</p>
-                                            </div>
-                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--build" aria-hidden="true">
-                                                <div class="fb-story-build-flow">
-                                                    <article>
-                                                        <span>Input</span>
-                                                        <strong>Real workflow notes</strong>
-                                                        <p>Calls, quotes, supplies, crew handoffs.</p>
-                                                    </article>
-                                                    <div class="fb-story-build-map">
-                                                        <span>Custom workspace</span>
-                                                        <strong>Apex Electrical</strong>
-                                                        <div>
-                                                            <small>Jobs</small>
-                                                            <small>Customers</small>
-                                                            <small>Materials</small>
-                                                            <small>Team</small>
-                                                        </div>
-                                                    </div>
-                                                    <article>
-                                                        <span>Output</span>
-                                                        <strong>Simple daily board</strong>
-                                                        <p>What to quote, finish, collect, and follow up.</p>
-                                                    </article>
-                                                </div>
-                                            </div>
-                                        </article>
-                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="2" hidden>
-                                            <div class="fb-product-demo__story-copy">
-                                                <p class="fb-section-kicker">Slide 3 of 6</p>
-                                                <h3>All your branches, one dashboard.</h3>
-                                                <p>Invoicing, supplies, customers, employees, and messaging live together so your next move is easier to see.</p>
-                                            </div>
-                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--branches" aria-hidden="true">
-                                                <div class="fb-story-branch-board">
-                                                    <div class="fb-story-branch-brand">
-                                                        <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                                        <strong>Branch board</strong>
-                                                    </div>
-                                                    <article><span>Revenue</span><strong>$18,640</strong><small>last 30 days</small></article>
-                                                    <article><span>Supplies</span><strong>$3,842.19</strong><small>used this month</small></article>
-                                                    <article><span>Employees</span><strong>28%</strong><small>of gross revenue</small></article>
-                                                    <article><span>Reviews</span><strong>11</strong><small>asks ready</small></article>
-                                                </div>
-                                            </div>
-                                        </article>
-                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="3" hidden>
-                                            <div class="fb-product-demo__story-copy">
-                                                <p class="fb-section-kicker">Slide 4 of 6</p>
-                                                <h3>Stop trying apps that do not fit.</h3>
-                                                <p>Do not be another lost business owner hopping from subscription to subscription. Let us design the system around you.</p>
-                                            </div>
-                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--fit" aria-hidden="true">
-                                                <div class="fb-story-fit-board">
-                                                    <article>
-                                                        <span>Generic app</span>
-                                                        <strong>Work squeezed into someone else's labels</strong>
-                                                        <small>Tasks without job value</small>
-                                                        <small>Customers without context</small>
-                                                        <small>Reports nobody opens</small>
-                                                    </article>
-                                                    <article>
-                                                        <span>Everbranch fit</span>
-                                                        <strong>Built around how the shop runs</strong>
-                                                        <small>Quote value beside status</small>
-                                                        <small>Materials tied to jobs</small>
-                                                        <small>Follow-ups ready after work</small>
-                                                    </article>
-                                                </div>
-                                            </div>
-                                        </article>
-                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="4" hidden>
-                                            <div class="fb-product-demo__story-copy">
-                                                <p class="fb-section-kicker">Slide 5 of 6</p>
-                                                <h3>Your online app and phone app stay together.</h3>
-                                                <p>Use the dashboard at your desk, then keep the same customers, jobs, notes, and next steps in your pocket.</p>
-                                            </div>
-                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--devices" aria-hidden="true">
-                                                <div class="fb-story-device-desktop">
-                                                    <div class="fb-story-window-bar"><span></span><span></span><span></span></div>
-                                                    <strong>Dashboard</strong>
-                                                    <div class="fb-story-device-grid">
-                                                        <span>Jobs $18.6k</span>
-                                                        <span>Quotes 7</span>
-                                                        <span>Supplies $3.8k</span>
-                                                        <span>Messages 9</span>
-                                                    </div>
-                                                </div>
-                                                <div class="fb-story-device-phone">
-                                                    <span></span>
-                                                    <strong>Today</strong>
-                                                    <small>Panel upgrade</small>
-                                                    <small>Customer messaged</small>
-                                                    <small>Invoice ready</small>
-                                                </div>
-                                            </div>
-                                        </article>
-                                        <article class="fb-product-demo__story-slide" data-demo-story-slide="5" hidden>
-                                            <div class="fb-product-demo__story-copy">
-                                                <p class="fb-section-kicker">Slide 6 of 6</p>
-                                                <h3>Pick what matters first.</h3>
-                                                <p>Website, app, sales conversations, billing, customers, jobs, files, employees, and more can all become part of one Everbranch home.</p>
-                                            </div>
-                                            <div class="fb-product-demo__story-picture fb-product-demo__story-picture--modules" aria-hidden="true">
-                                                <article><span>Website</span><strong>Lead capture</strong></article>
-                                                <article><span>App</span><strong>Customer view</strong></article>
-                                                <article><span>Sales</span><strong>Quote follow-up</strong></article>
-                                                <article><span>Billing</span><strong>Invoice queue</strong></article>
-                                                <article><span>Customers</span><strong>History</strong></article>
-                                                <article><span>Jobs</span><strong>Status board</strong></article>
-                                                <article><span>Files</span><strong>Photos and docs</strong></article>
-                                                <article><span>Team</span><strong>Assignments</strong></article>
-                                            </div>
-                                        </article>
-                                    </div>
-                                    <div class="fb-product-demo__slide-controls">
-                                        <button type="button" class="fb-btn fb-btn-secondary" data-demo-slide-prev>Back</button>
-                                        <div class="fb-product-demo__slide-dots" aria-label="Explainer slide progress">
-                                            <button type="button" class="is-active" aria-label="Open slide 1" data-demo-slide-dot="0"></button>
-                                            <button type="button" aria-label="Open slide 2" data-demo-slide-dot="1"></button>
-                                            <button type="button" aria-label="Open slide 3" data-demo-slide-dot="2"></button>
-                                            <button type="button" aria-label="Open slide 4" data-demo-slide-dot="3"></button>
-                                            <button type="button" aria-label="Open slide 5" data-demo-slide-dot="4"></button>
-                                            <button type="button" aria-label="Open slide 6" data-demo-slide-dot="5"></button>
-                                        </div>
-                                        <button type="button" class="fb-btn fb-btn-primary" data-demo-slide-next>Next</button>
-                                        <button type="button" class="fb-btn fb-btn-primary" data-demo-show-solution hidden>Show me Everbranch</button>
-                                    </div>
-                                </div>
-
-                                <div class="fb-product-demo__stage fb-product-demo__stage--solution" data-demo-stage-panel="solution" hidden>
-                                    <div class="fb-product-demo__solution-copy">
-                                        <p class="fb-section-kicker">The solution</p>
-                                        <h3>Everbranch gives you one place for your brain to focus</h3>
-                                    </div>
-                                    <div class="fb-product-demo__solution-grid" aria-live="polite">
-                                        <div class="fb-product-demo__frame">
-                                            <div class="fb-product-demo__topbar">
-                                                <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
-                                                <strong>{{ $productName }}</strong>
-                                                <em data-product-demo-field="type">Retail</em>
-                                            </div>
-                                            <div class="fb-product-demo__workspace">
-                                        <nav class="fb-product-demo__sidebar" aria-label="Example workspace sections">
-                                                    <button type="button" class="is-active" data-product-demo-pane="home">Home</button>
-                                                    <button type="button" data-product-demo-pane="customers">Customers</button>
-                                                    <button type="button" data-product-demo-pane="work">Work</button>
-                                                    <button type="button" data-product-demo-pane="tasks">Tasks</button>
-                                                    <button type="button" data-product-demo-pane="files">Files</button>
-                                        </nav>
-                                        <section class="fb-product-demo__record" aria-label="Example record">
-                                            <div class="fb-product-demo__record-head">
-                                                <div>
-                                                    <h3 data-product-demo-field="customer">Pine &amp; Porch</h3>
-                                                </div>
-                                                <span data-product-demo-field="primary">Wholesale request</span>
-                                            </div>
-                                            <div class="fb-product-demo__stats" aria-label="Example workspace metrics" data-product-demo-pane-panel="home customers reports">
-                                                <button type="button" class="fb-product-demo__stat" data-product-demo-stat>
-                                                    <small data-product-demo-stat-label>Active buyers</small>
-                                                    <strong data-product-demo-stat-value>18</strong>
-                                                    <span data-product-demo-stat-meta>4 ready to reorder</span>
-                                                </button>
-                                                <button type="button" class="fb-product-demo__stat" data-product-demo-stat>
-                                                    <small data-product-demo-stat-label>Queued follow-ups</small>
-                                                    <strong data-product-demo-stat-value>6</strong>
-                                                    <span data-product-demo-stat-meta>2 due today</span>
-                                                </button>
-                                                <button type="button" class="fb-product-demo__stat" data-product-demo-stat>
-                                                    <small data-product-demo-stat-label>This week revenue</small>
-                                                    <strong data-product-demo-stat-value>$6.8k</strong>
-                                                    <span data-product-demo-stat-meta>92% on time</span>
-                                                </button>
-                                            </div>
-                                            <p data-product-demo-field="note" data-product-demo-pane-panel="home customers work">Buyer, order, inventory, and follow-up in one view.</p>
-                                            <div class="fb-product-demo__record-grid" data-product-demo-pane-panel="home customers files tasks">
-                                                <div class="fb-product-demo__task-card" data-product-demo-pane-panel="home tasks">
-                                                    <span>Next step</span>
-                                                    <strong data-product-demo-field="task">Send line sheet and approve wholesale access</strong>
-                                                    <small>Assigned to <b data-product-demo-field="owner">Sarah</b></small>
-                                                </div>
-                                                <div class="fb-product-demo__related-card" data-product-demo-pane-panel="home customers files">
-                                                    <p>Related links</p>
-                                                    <div class="fb-product-demo__link-list">
-                                                        <button type="button" class="fb-product-demo__mini-link" data-product-demo-link>
-                                                            <strong data-product-demo-link-title>Pine &amp; Porch buyer</strong>
-                                                            <span data-product-demo-link-meta>Customer record</span>
-                                                        </button>
-                                                        <button type="button" class="fb-product-demo__mini-link" data-product-demo-link>
-                                                            <strong data-product-demo-link-title>Fall Harvest reorder</strong>
-                                                            <span data-product-demo-link-meta>Follow-up task</span>
-                                                        </button>
-                                                        <button type="button" class="fb-product-demo__mini-link" data-product-demo-link>
-                                                            <strong data-product-demo-link-title>Case pricing sheet</strong>
-                                                            <span data-product-demo-link-meta>Shared file</span>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="fb-product-demo__jobs-card" data-product-demo-pane-panel="home work tasks">
-                                                <p>Live work</p>
-                                                <div class="fb-product-demo__job-list">
-                                                    <button type="button" class="fb-product-demo__job-item" data-product-demo-job>
-                                                        <strong data-product-demo-job-title>Approve wholesale login</strong>
-                                                        <span data-product-demo-job-meta>Due today</span>
-                                                    </button>
-                                                    <button type="button" class="fb-product-demo__job-item" data-product-demo-job>
-                                                        <strong data-product-demo-job-title>Prep market reorder set</strong>
-                                                        <span data-product-demo-job-meta>Assigned to Omar</span>
-                                                    </button>
-                                                    <button type="button" class="fb-product-demo__job-item" data-product-demo-job>
-                                                        <strong data-product-demo-job-title>Friday reorder reminder</strong>
-                                                        <span data-product-demo-job-meta>Scheduled</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </section>
-                                    </div>
-                                        </div>
-                                        <aside class="fb-product-demo__solution-phone-stage" aria-label="Everbranch mobile app preview">
-                                            <div class="fb-iphone-demo" data-public-phone-demo data-active-phone-tab="home" aria-label="Everbranch mobile app preview">
-                                                <div class="fb-iphone-demo__top">
-                                                    <span>9:41</span>
-                                                    <span></span>
-                                                    <span>5G</span>
-                                                </div>
-                                                <div class="fb-iphone-demo__screen">
-                                                    <div class="fb-iphone-demo__brand">
-                                                        <span class="fb-iphone-demo__menu">≡</span>
-                                                        <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" />
-                                                        <span class="fb-iphone-demo__avatar">JC</span>
-                                                    </div>
-
-                                                    <div class="fb-iphone-demo__panels">
-                                                        <section id="solution-phone-home" class="fb-iphone-demo__panel is-active" data-phone-panel="home" role="tabpanel" aria-label="Everbranch home preview">
-                                                            <section class="fb-iphone-demo__metric fb-iphone-demo__metric--marketing">
-                                                                <span>Marketing lift</span>
-                                                                <strong>$4,280</strong>
-                                                                <p>made from Everbranch marketing this month</p>
-                                                            </section>
-
-                                                            <section class="fb-iphone-demo__metric fb-iphone-demo__metric--jobs">
-                                                                <span>Completed work</span>
-                                                                <strong>$18,640</strong>
-                                                                <p>jobs completed in the last 30 days</p>
-                                                            </section>
-
-                                                            <section class="fb-iphone-demo__workflow" aria-label="Everbranch job completion workflow">
-                                                                <div class="fb-iphone-demo__message">
-                                                                    <span>Message customer</span>
-                                                                    <p>Hi Maya, your panel upgrade is wrapped up. Invoice and photos are in your portal.</p>
-                                                                </div>
-                                                                <div class="fb-iphone-demo__job">
-                                                                    <span>Job</span>
-                                                                    <strong>Monroe Ave Service Call</strong>
-                                                                    <small>Ready to complete</small>
-                                                                </div>
-                                                                <div class="fb-iphone-demo__complete" aria-label="Job complete">
-                                                                    <span>✓</span>
-                                                                    <strong>Job complete</strong>
-                                                                </div>
-                                                            </section>
-                                                        </section>
-
-                                                        <section id="solution-phone-work" class="fb-iphone-demo__panel" data-phone-panel="work" role="tabpanel" aria-label="Everbranch work preview" hidden>
-                                                            <div class="fb-iphone-demo__section-head">
-                                                                <span>Work</span>
-                                                                <strong>Today on the board</strong>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__job-grid">
-                                                                <article class="fb-iphone-demo__work-card fb-iphone-demo__work-card--live">
-                                                                    <span>In process</span>
-                                                                    <strong>Monroe Ave panel upgrade</strong>
-                                                                    <p>$6,840 scheduled today</p>
-                                                                </article>
-                                                                <article class="fb-iphone-demo__work-card">
-                                                                    <span>Quoting</span>
-                                                                    <strong>Kitchen lighting package</strong>
-                                                                    <p>$4,200 waiting on approval</p>
-                                                                </article>
-                                                                <article class="fb-iphone-demo__work-card">
-                                                                    <span>Contract signed</span>
-                                                                    <strong>Retail maintenance plan</strong>
-                                                                    <p>$9,600 monthly service</p>
-                                                                </article>
-                                                                <article class="fb-iphone-demo__work-card">
-                                                                    <span>Finished</span>
-                                                                    <strong>Breaker replacement</strong>
-                                                                    <p>$1,180 invoice ready</p>
-                                                                </article>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__check-row">
-                                                                <span>1</span>
-                                                                <p>Customer update delivered</p>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__check-row">
-                                                                <span>2</span>
-                                                                <p>Job marked complete</p>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__complete fb-iphone-demo__complete--panel">
-                                                                <span>✓</span>
-                                                                <strong>Green check, done</strong>
-                                                            </div>
-                                                        </section>
-
-                                                        <section id="solution-phone-branches" class="fb-iphone-demo__panel" data-phone-panel="branches" role="tabpanel" aria-label="Everbranch branches preview" hidden>
-                                                            <div class="fb-iphone-demo__section-head">
-                                                                <span>Branches</span>
-                                                                <strong>Ways this workspace grows</strong>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__finance-grid">
-                                                                <article>
-                                                                    <span>Supplies used this month</span>
-                                                                    <strong>$3,842.19</strong>
-                                                                    <p>tracked from completed work</p>
-                                                                </article>
-                                                                <article>
-                                                                    <span>Employee spend</span>
-                                                                    <strong>$12,960.00</strong>
-                                                                    <p>28% of gross revenue</p>
-                                                                </article>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__branch-grid">
-                                                                <article><span>Rewards</span><strong>1,250 pts</strong><p>loyalty ready</p></article>
-                                                                <article><span>Birthday</span><strong>24</strong><p>offers queued</p></article>
-                                                                <article><span>Marketing</span><strong>3</strong><p>campaign ideas</p></article>
-                                                                <article><span>Follow-ups</span><strong>8</strong><p>need a nudge</p></article>
-                                                                <article><span>Supplies</span><strong>42</strong><p>items logged</p></article>
-                                                                <article><span>Employees</span><strong>28%</strong><p>labor ratio</p></article>
-                                                                <article><span>Reviews</span><strong>11</strong><p>asks ready</p></article>
-                                                                <article><span>Invoices</span><strong>$7.8k</strong><p>ready to send</p></article>
-                                                            </div>
-                                                        </section>
-
-                                                        <section id="solution-phone-account" class="fb-iphone-demo__panel" data-phone-panel="account" role="tabpanel" aria-label="Everbranch account preview" hidden>
-                                                            <div class="fb-iphone-demo__section-head">
-                                                                <span>Account</span>
-                                                                <strong>Apex Electrical</strong>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__account-card">
-                                                                <span>Plan</span>
-                                                                <strong>Launch Partner</strong>
-                                                                <p>Starter tools live, growth features ready when you are.</p>
-                                                            </div>
-                                                            <div class="fb-iphone-demo__setting-row"><span>Birthday rewards</span><strong>On</strong></div>
-                                                            <div class="fb-iphone-demo__setting-row"><span>Job-complete messages</span><strong>On</strong></div>
-                                                            <div class="fb-iphone-demo__setting-row"><span>Team access</span><strong>6 users</strong></div>
-                                                            <div class="fb-iphone-demo__setting-row"><span>Supplies tracking</span><strong>On</strong></div>
-                                                            <div class="fb-iphone-demo__setting-row"><span>Review requests</span><strong>Auto</strong></div>
-                                                        </section>
-                                                    </div>
-
-                                                    <div class="fb-iphone-demo__tabs" role="tablist" aria-label="Everbranch phone preview tabs">
-                                                        <button type="button" class="is-active" data-phone-tab="home" role="tab" aria-selected="true" aria-controls="solution-phone-home">
-                                                            <span class="fb-iphone-demo__tab-icon" aria-hidden="true">⌂</span>
-                                                            Home
-                                                        </button>
-                                                        <button type="button" data-phone-tab="work" role="tab" aria-selected="false" aria-controls="solution-phone-work" tabindex="-1">
-                                                            <span class="fb-iphone-demo__tab-icon" aria-hidden="true">▤</span>
-                                                            Work
-                                                        </button>
-                                                        <button type="button" data-phone-tab="branches" role="tab" aria-selected="false" aria-controls="solution-phone-branches" tabindex="-1">
-                                                            <span class="phone-tree-icon" aria-hidden="true"></span>
-                                                            Branches
-                                                        </button>
-                                                        <button type="button" data-phone-tab="account" role="tab" aria-selected="false" aria-controls="solution-phone-account" tabindex="-1">
-                                                            <span class="fb-iphone-demo__tab-icon" aria-hidden="true">◎</span>
-                                                            Account
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </aside>
-                                    </div>
-                                    <div class="fb-product-demo__solution-actions">
-                                        <button type="button" class="fb-btn fb-btn-secondary" data-demo-back-categories>Choose another business</button>
-                                        <a class="fb-btn fb-btn-primary" href="{{ route('login') }}">Lets get started</a>
-                                    </div>
-                                </div>
-                            </aside>
-                        </div>
-                    </article>
-
-                    <article id="panel-customers" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-customers" data-public-tab-panel="customers" hidden>
-                        <div class="fb-section fb-section--public" aria-label="Who Everbranch helps">
-                            <div class="fb-section-header fb-section-header--centered">
-                                <p class="fb-section-kicker">Who it helps</p>
-                                <h2>Built for the messy middle of small business.</h2>
-                                <p>Everbranch does not replace the way your business works. It gives that work a home.</p>
-                            </div>
-                            <div class="fb-industry-switcher fb-industry-switcher--clean" aria-label="Everbranch industry examples">
-                                @foreach($industryCards as $industry)
-                                    <article class="fb-industry-card fb-industry-card--clean" data-premium-surface>
-                                        <div>
-                                            <p>{{ $industry['title'] }}</p>
-                                            <h3>{{ $industry['summary'] }}</h3>
-                                        </div>
-                                        <p>{{ $industry['outcome'] }}</p>
-                                        <ul>
-                                            @foreach($industry['chips'] as $chip)
-                                                <li>{{ $chip }}</li>
-                                            @endforeach
-                                        </ul>
-                                    </article>
-                                @endforeach
-                            </div>
-                        </div>
-                    </article>
-
-                    <article id="panel-contact" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-contact" data-public-tab-panel="contact" hidden>
-                        <div class="fb-section fb-section--public" aria-label="Contact Everbranch">
-                            <div class="fb-contact-panel" data-premium-surface>
-                                <div>
-                                    <p class="fb-section-kicker">Contact</p>
-                                    <h2>Tell us what keeps getting lost.</h2>
-                                    <p>Send the messy version. Everbranch will help you find the clean starting point.</p>
-                                </div>
-                                @include('platform.partials.contact-form', ['sourcePage' => 'everbranch_home_contact'])
-                            </div>
-                        </div>
-                    </article>
-                </div>
-            </section>
-        </main>
-
-        <div class="fb-bud" data-public-bud data-bud-endpoint="{{ route('platform.bud.conversations') }}">
-            <button type="button" class="fb-bud__toggle" data-bud-toggle aria-expanded="false" aria-controls="fb-bud-panel">
-                <span class="fb-bud__toggle-dot"></span>
-                <span>Chat with Bud</span>
-            </button>
-
-            <section id="fb-bud-panel" class="fb-bud__panel" data-bud-panel hidden aria-label="Chat with Bud">
-                <div class="fb-bud__head">
-                    <div>
-                        <p class="fb-bud__eyebrow">Bud</p>
-                        <h2>Ask Bud anything about Everbranch.</h2>
+        <section id="how-it-works" class="eb-studio-story" aria-labelledby="story-title" data-studio-story>
+            <div class="eb-studio-container eb-studio-story__grid">
+                <div class="eb-studio-story__copy">
+                    <p class="eb-studio-eyebrow">One clear picture</p>
+                    <h2 id="story-title">From a new question to a finished job, nothing has to disappear between people.</h2>
+                    <p>Choose a moment in the day to see how Everbranch holds the customer, the work, and the follow-up together.</p>
+                    <div class="eb-studio-story__steps" aria-label="Everbranch workflow moments">
+                        <button class="is-active" type="button" aria-pressed="true" data-studio-step="inbox">01 <span>A customer asks</span></button>
+                        <button type="button" aria-pressed="false" data-studio-step="work">02 <span>Your team moves</span></button>
+                        <button type="button" aria-pressed="false" data-studio-step="followup">03 <span>The relationship continues</span></button>
                     </div>
-                    <button type="button" class="fb-bud__close" data-bud-close aria-label="Close Bud">Close</button>
                 </div>
-
-                <div class="fb-bud__messages" data-bud-messages>
-                    <article class="fb-bud__message fb-bud__message--bud">
-                        <p>I’m Bud. I can explain what Everbranch is, help you think through business workflows, and I’ll be honest when I don’t know enough to answer precisely.</p>
-                    </article>
+                <div class="eb-studio-product-frame" aria-live="polite" data-studio-frame>
+                    <div class="eb-studio-product-frame__topbar">
+                        <img src="{{ asset($brandMarkPath) }}?v={{ $brandAssetVersion }}" alt="" />
+                        <span>Everbranch workspace</span>
+                        <span class="eb-studio-product-frame__presence">3 teammates online</span>
+                    </div>
+                    <div class="eb-studio-product-frame__body">
+                        <aside aria-label="Example workspace navigation">
+                            <span class="is-active">Overview</span><span>Customers</span><span>Work</span><span>Messages</span><span>Files</span>
+                        </aside>
+                        <div class="eb-studio-product-frame__canvas">
+                            <div class="eb-studio-product-frame__label" data-studio-frame-label>Customer question</div>
+                            <div class="eb-studio-product-frame__headline" data-studio-frame-headline>“Can we get this ready for the fall market?”</div>
+                            <div class="eb-studio-product-frame__person"><span>MR</span><div><strong data-studio-frame-name>Maple &amp; Reed</strong><small data-studio-frame-subtitle>Wholesale buyer · first order</small></div></div>
+                            <div class="eb-studio-product-frame__cards">
+                                <article><small data-studio-card-one-label>REQUEST</small><strong data-studio-card-one>Line sheet + delivery question</strong><span data-studio-card-one-meta>Received just now</span></article>
+                                <article><small data-studio-card-two-label>NEXT STEP</small><strong data-studio-card-two>Reply with current collection</strong><span data-studio-card-two-meta>Assigned to Jordan</span></article>
+                            </div>
+                            <div class="eb-studio-product-frame__activity" data-studio-frame-activity><span></span>Customer, context, and next step are already in the same place.</div>
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </section>
 
-                <div class="fb-bud__prompts">
-                    <button type="button" class="fb-bud__prompt" data-bud-prompt="What is Everbranch?">What is Everbranch?</button>
-                    <button type="button" class="fb-bud__prompt" data-bud-prompt="Who is Everbranch best for?">Who is it best for?</button>
-                    <button type="button" class="fb-bud__prompt" data-bud-prompt="Could Everbranch help my business?">Could it help my business?</button>
-                    <button type="button" class="fb-bud__prompt" data-bud-prompt="What would Bud help me organize first?">What would Bud organize first?</button>
+        <section class="eb-studio-proof" aria-label="Everbranch outcomes">
+            <div class="eb-studio-container">
+                <div class="eb-studio-proof__heading">
+                    <p class="eb-studio-eyebrow">Calm is operational</p>
+                    <h2>Less context switching. More things actually getting done.</h2>
                 </div>
+                <div class="eb-studio-proof__grid">
+                    <article><strong>One place</strong><span>for the customer record, open work, and conversation.</span></article>
+                    <article><strong>Built to grow</strong><span>from a clear daily rhythm into the modules your business needs.</span></article>
+                    <article><strong>Made for people</strong><span>so the owner, office, and team can work from the same truth.</span></article>
+                </div>
+            </div>
+        </section>
 
-                <form class="fb-bud__composer" data-bud-form>
-                    <label class="sr-only" for="bud-question">Ask Bud</label>
-                    <input id="bud-question" type="text" class="fb-bud__input" data-bud-input placeholder="Ask Bud about customers, jobs, tasks, follow-ups, or your business..." />
-                    <button type="submit" class="fb-bud__send">Send</button>
-                </form>
-            </section>
+        <section id="industries" class="eb-studio-industries" aria-labelledby="industries-title">
+            <div class="eb-studio-container">
+                <div class="eb-studio-section-heading">
+                    <p class="eb-studio-eyebrow">Built around real work</p>
+                    <h2 id="industries-title">A system that can meet your business where it is.</h2>
+                    <p>Every business has a different rhythm. Everbranch starts with the work you do now and grows only where it helps.</p>
+                </div>
+                <div class="eb-studio-industry-grid">
+                    <article class="eb-studio-industry-card eb-studio-industry-card--retail" tabindex="0"><div><small>01 · Wholesale · loyalty · follow-ups</small><h3>Retail &amp; product brands</h3><p>Keep buyer questions, customer context, events, and reorders moving.</p></div></article>
+                    <article class="eb-studio-industry-card eb-studio-industry-card--service" tabindex="0"><div><small>02 · Jobs · schedules · customer updates</small><h3>Field &amp; service teams</h3><p>Give office and field teams one living record for every job.</p></div></article>
+                    <article class="eb-studio-industry-card eb-studio-industry-card--projects" tabindex="0"><div><small>03 · Projects · files · handoffs</small><h3>Project work</h3><p>Bring approvals, materials, notes, and next steps out of the cracks.</p></div></article>
+                    <article class="eb-studio-industry-card eb-studio-industry-card--studio" tabindex="0"><div><small>04 · Clients · tasks · messages</small><h3>Independent studios</h3><p>Make room for the craft without losing the business behind it.</p></div></article>
+                </div>
+            </div>
+        </section>
+
+        <section id="modules" class="eb-studio-modules" aria-labelledby="modules-title">
+            <div class="eb-studio-container eb-studio-modules__grid">
+                <figure class="eb-studio-photo-card">
+                    <img src="{{ asset('images/public-site/everbranch-field-team.jpg') }}" alt="A field-service team coordinating the next job" loading="lazy" />
+                    <figcaption>Work follows the team—not the other way around.</figcaption>
+                </figure>
+                <div class="eb-studio-modules__copy">
+                    <p class="eb-studio-eyebrow">A platform that expands with you</p>
+                    <h2 id="modules-title">Start with a steadier day. Add what makes it stronger.</h2>
+                    <p>Everbranch is intentionally modular. Your workspace can become more capable without becoming harder to understand.</p>
+                    <div class="eb-studio-module-list">
+                        <a href="{{ route('platform.modules.explore') }}#customers"><span>Customers</span><small>Keep every relationship in context</small><b>↗</b></a>
+                        <a href="{{ route('platform.modules.explore') }}#work"><span>Work</span><small>Turn the next step into shared action</small><b>↗</b></a>
+                        <a href="{{ route('platform.modules.explore') }}#marketing"><span>Growth</span><small>Keep the right customers close</small><b>↗</b></a>
+                    </div>
+                    <a class="eb-studio-inline-link" href="{{ route('platform.modules.explore') }}">Explore the module library <span aria-hidden="true">↗</span></a>
+                </div>
+            </div>
+        </section>
+
+        <section class="eb-studio-pricing" aria-labelledby="pricing-title">
+            <div class="eb-studio-container eb-studio-pricing__card">
+                <div><p class="eb-studio-eyebrow eb-studio-eyebrow--light">Launch with intention</p><h2 id="pricing-title">One flat business price.<br>No seat-count surprises.</h2></div>
+                <div><p>We start with your actual operating rhythm, set up the pieces that matter, and leave the rest out of the way.</p><a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Become a launch partner <span aria-hidden="true">↗</span></a><a class="eb-studio-pricing__link" href="{{ route('platform.plans') }}">View plans and add-ons</a></div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="eb-studio-footer">
+        <div class="eb-studio-container eb-studio-footer__grid">
+            <div><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" /><p>One place to run the work that matters.</p></div>
+            <div><a href="#how-it-works">How it works</a><a href="{{ route('platform.modules.explore') }}">Modules</a><a href="{{ route('platform.plans') }}">Plans</a></div>
+            <div><a href="{{ route('platform.contact') }}">Contact</a><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a></div>
         </div>
-    </div>
+    </footer>
+
+    <dialog class="eb-studio-film" data-studio-film aria-labelledby="film-title">
+        <button class="eb-studio-film__close" type="button" data-studio-film-close aria-label="Close Everbranch story">×</button>
+        <div class="eb-studio-film__frame">
+            <img src="{{ asset('images/public-site/everbranch-studio-hero.jpg') }}" alt="Small-business owners reviewing work together" />
+            <div class="eb-studio-film__copy"><p class="eb-studio-eyebrow eb-studio-eyebrow--light">The Everbranch story</p><h2 id="film-title">A better business day begins when the next thing is clear.</h2><p>Everbranch is built to make the day more connected—not more complicated. A full sound-on product film and transcript can be dropped into this accessible film frame when approved production footage is ready.</p></div>
+        </div>
+    </dialog>
 </body>
 </html>

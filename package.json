@@ -4,6 +4,9 @@
   "type": "module",
   "scripts": {
     "build": "npm run typecheck && vite build",
+    "media:optimize-public": "node scripts/media/optimize-public-image.mjs",
+    "test:visual": "playwright test --config=playwright.public.config.ts",
+    "test:lighthouse:public": "lhci autorun --config=lighthouserc.public.cjs",
     "typecheck": "tsc -p tsconfig.workflows.json --noEmit",
     "dev": "vite",
     "serve": "php artisan serve",
@@ -29,9 +32,11 @@
     "chart.js": "^4.5.1",
     "cmdk": "^1.1.1",
     "fuse.js": "^7.2.0",
+    "gsap": "^3.15.0",
     "laravel-vite-plugin": "^2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "sharp": "^0.35.3",
     "sortablejs": "^1.15.7",
     "tailwindcss": "^4.0.7",
     "vite": "^7.0.4"
@@ -42,6 +47,8 @@
     "lightningcss-linux-x64-gnu": "^1.29.1"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.62.1",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.7.0",

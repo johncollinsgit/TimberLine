@@ -1,5 +1,23 @@
 # SYSTEM SNAPSHOT
 
+## Everbranch public-site studio redesign (2026-08-07)
+
+- The canonical public Everbranch marketing surface (`/`, Plans, access/demo,
+  Contact, and the Module Explorer) now uses a shared warm product-studio
+  design system. The redesign is public-only: it does not alter authenticated
+  workspaces, tenant websites, Shopify integrations or embedded apps, pricing
+  logic, or the `platform.access-request` conversion path.
+- The homepage uses approved/public-safe editorial media and fictional product
+  data. Hero video is muted WebM with H.264 fallback and a poster; public-only
+  GSAP motion is dynamically loaded and reduced-motion aware. See
+  `docs/operations/public-site-media-runbook.md` for media provenance,
+  caption/transcript, derivative, and release requirements.
+- Visual checks live in `tests/e2e/public` and run with
+  `npm run test:visual`; `npm run test:lighthouse:public` enforces the public
+  accessibility, layout-stability, and performance budgets. Focused server
+  checks protect primary navigation and launch-partner links. Production
+  remains gated by the existing Forge/GitHub release process.
+
 ## Shopify bundle scent checkout enforcement (2026-07-30)
 
 - Everbranch Product Options remains a Shopify-only, tenant-scoped module.
