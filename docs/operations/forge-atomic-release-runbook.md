@@ -55,7 +55,10 @@ The handoff is complete.
 1. The `main` GitHub Actions workflow runs Composer install, frontend build,
    and Pest before production deployment.
 2. After the gate succeeds, it POSTs to the protected GitHub production secret
-   `FORGE_DEPLOY_HOOK_URL`. Never commit or print that URL.
+   `FORGE_DEPLOY_HOOK_URL`. Never commit or print that URL. The workflow then
+   polls `/ready` for the exact GitHub commit for up to three minutes. A hook
+   acknowledgment alone is not deployment evidence; the workflow fails if the
+   active release identifier remains stale.
 3. Forge creates the release and runs the deployment script above. The first
    fully automatic run activated Forge release `73789933` for commit
    `c272464230f4c83366f8d57a635ac4c38876c5c8` on 2026-07-21; `/ready` returned
