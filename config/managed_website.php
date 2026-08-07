@@ -18,6 +18,18 @@ $tenantIds = static function (string $key): array {
 return [
     // Every gate defaults to false. Empty allowlists never mean "everyone".
     'commerce_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_ENABLED'),
+    // Native retail operations, shipping, and connected-store imports each have
+    // their own gate and allowlist. Enabling the Website editor or a legacy
+    // Shopify connection can never implicitly enable one of these lanes.
+    'commerce_operations_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_OPERATIONS_ENABLED'),
+    'commerce_operations_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_OPERATIONS_TENANT_IDS'),
+    'commerce_shipping_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_SHIPPING_ENABLED'),
+    'commerce_shipping_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_SHIPPING_TENANT_IDS'),
+    'commerce_imports_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_IMPORTS_ENABLED'),
+    'commerce_imports_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_IMPORTS_TENANT_IDS'),
+    'easypost_api_key' => env('MANAGED_WEBSITE_EASYPOST_API_KEY'),
+    'easypost_webhook_secret' => env('MANAGED_WEBSITE_EASYPOST_WEBHOOK_SECRET'),
+    'easypost_api_base' => rtrim((string) env('MANAGED_WEBSITE_EASYPOST_API_BASE', 'https://api.easypost.com/v2'), '/'),
     'editor_enabled' => $bool('MANAGED_WEBSITE_EDITOR_ENABLED'),
     'publishing_enabled' => $bool('MANAGED_WEBSITE_PUBLISHING_ENABLED'),
     'public_render_enabled' => $bool('MANAGED_WEBSITE_PUBLIC_RENDER_ENABLED'),

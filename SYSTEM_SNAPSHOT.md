@@ -174,8 +174,16 @@
   provider connections.
 - Merchant checkout is fail-closed: the Website commercial gate, entitlement,
   tenant allowlist, Stripe Connect account, verified webhook policy, and tax
-  decision must pass. Physical orders support pickup/manual local delivery;
-  shipping carriers and rates remain deferred.
+  decision must pass. Physical orders support pickup/manual local delivery.
+  Native US-domestic shipping is a separate default-disabled,
+  tenant-allowlisted EasyPost pilot: the tenant must own its connection,
+  location, and package setup. It is isolated from Modern Forestry shipping
+  and legacy orders.
+- The separate default-disabled, tenant-allowlisted connected-commerce lane
+  supports Shopify, WooCommerce, Squarespace, and Wix mapping reports.
+  Provider-specific adapters normalize IDs into encrypted source snapshots;
+  they never write native Website, Shopify/Modern Forestry, legacy-order, or
+  marketing-eligibility data.
 - Sales-channel reporting exposes a tenant-scoped, read-only summary of
   confirmed sources, including native Website payments alongside existing
   provider sales. It never copies Website records into legacy `orders`, merges

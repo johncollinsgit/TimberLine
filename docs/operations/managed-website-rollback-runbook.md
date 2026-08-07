@@ -91,3 +91,15 @@ last public page. For an isolation/security incident, also disable public
 Managed Website rendering; do not alter Shopify, Modern Forestry, legacy
 orders, customers, rewards, or provider connections. Re-enable only the tested
 tenant after the ordinary Forge release and readiness checks pass.
+
+For a native shipping incident, also disable the shipping feature gate or
+remove only the affected tenant from its shipping allowlist. Preserve native
+shipment and event evidence, then verify no EasyPost request targeted a Modern
+Forestry account. Do not void, create, or edit a Shopify/Modern Forestry
+shipment as part of the rollback.
+
+For a connected-import incident, disable the imports gate or remove the
+affected tenant from its import allowlist. Pause the import run, preserve its
+mapping and audit events, and verify no record was written outside the
+read-only commerce lane. Do not delete source snapshots until incident evidence
+and the tenant retention policy have been reviewed.

@@ -12,10 +12,12 @@ use App\Models\WebsiteFulfillment;
 use App\Models\WebsiteInventoryMovement;
 use App\Models\WebsiteInventoryReservation;
 use App\Models\WebsiteOrder;
+use App\Models\WebsiteOrderEvent;
 use App\Models\WebsiteOrderLine;
 use App\Models\WebsitePayment;
 use App\Models\WebsiteProduct;
 use App\Models\WebsiteProductVariant;
+use App\Models\WebsiteShippingRateQuote;
 use App\Models\WebsiteStripeWebhookEvent;
 use App\Services\Billing\TenantPaymentsReadinessService;
 use Illuminate\Http\Client\PendingRequest;
@@ -89,6 +91,10 @@ class WebsiteCommerceService
             'wholesale_price_cents' => ($data['wholesale_price'] ?? null) !== null && $data['wholesale_price'] !== '' ? $this->dollarsToCents((string) $data['wholesale_price']) : null,
             'compare_at_price_cents' => ($data['compare_at_price'] ?? null) !== null && $data['compare_at_price'] !== '' ? $this->dollarsToCents((string) $data['compare_at_price']) : null,
             'inventory_quantity' => $product->track_inventory ? max(0, (int) ($data['inventory_quantity'] ?? 0)) : null,
+            'shipping_weight_ounces' => $product->product_type === 'physical' && filled($data['shipping_weight_ounces'] ?? null) ? max(1, (int) $data['shipping_weight_ounces']) : null,
+            'shipping_length_inches' => $product->product_type === 'physical' && filled($data['shipping_length_inches'] ?? null) ? max(1, (int) $data['shipping_length_inches']) : null,
+            'shipping_width_inches' => $product->product_type === 'physical' && filled($data['shipping_width_inches'] ?? null) ? max(1, (int) $data['shipping_width_inches']) : null,
+            'shipping_height_inches' => $product->product_type === 'physical' && filled($data['shipping_height_inches'] ?? null) ? max(1, (int) $data['shipping_height_inches']) : null,
             'is_available' => $product->status === 'archived' ? false : (bool) ($data['is_available'] ?? true),
         ]);
         $wasNew = ! $variant->exists;
@@ -173,6 +179,13 @@ class WebsiteCommerceService
         $order = DB::transaction(function () use ($cart, $site, $buyer): WebsiteOrder {
             $cart = WebsiteCart::query()->lockForUpdate()->with('items.variant.product')->findOrFail($cart->id);
             abort_if($cart->status !== 'active' || $cart->items->isEmpty(), 422, 'Your cart is empty or no longer active.');
+            $fulfillmentMethod = in_array(($buyer['fulfillment_method'] ?? ''), ['ship', 'pickup', 'local_delivery'], true) ? $buyer['fulfillment_method'] : 'pickup';
+            $shippingQuote = null;
+            if ($fulfillmentMethod === 'ship') {
+                $shippingQuote = WebsiteShippingRateQuote::query()->forTenantId($site->tenant_id)
+                    ->where('website_cart_id', $cart->id)->whereKey((int) ($buyer['shipping_rate_quote_id'] ?? 0))->where('expires_at', '>', now())->firstOrFail();
+                abort_if(empty($buyer['shipping_address']) || ! is_array($buyer['shipping_address']), 422, 'A shipping address is required.');
+            }
 
             $customer = WebsiteCustomer::query()->firstOrCreate(
                 ['tenant_id' => $site->tenant_id, 'email' => strtolower(trim((string) $buyer['email']))],
@@ -203,10 +216,17 @@ class WebsiteCommerceService
                 'currency' => 'usd',
                 'payment_status' => 'pending',
                 'fulfillment_status' => 'unfulfilled',
-                'fulfillment_method' => in_array(($buyer['fulfillment_method'] ?? ''), ['pickup', 'local_delivery'], true) ? $buyer['fulfillment_method'] : 'pickup',
+                'fulfillment_method' => $fulfillmentMethod,
+                'order_status' => 'open',
+                'source' => 'native',
                 'subtotal_cents' => $subtotal,
-                'total_cents' => $subtotal,
+                'discount_cents' => 0,
+                'shipping_cents' => $shippingQuote?->amount_cents ?? 0,
+                'total_cents' => $subtotal + ($shippingQuote?->amount_cents ?? 0),
                 'customer_snapshot' => ['name' => trim((string) $buyer['name']), 'email' => strtolower(trim((string) $buyer['email'])), 'phone' => trim((string) ($buyer['phone'] ?? ''))],
+                'shipping_address' => $shippingQuote ? $buyer['shipping_address'] : null,
+                'billing_address' => null,
+                'shipping_rate_snapshot' => $shippingQuote ? ['quote_id' => $shippingQuote->id, 'carrier' => $shippingQuote->carrier, 'service' => $shippingQuote->service, 'amount_cents' => $shippingQuote->amount_cents, 'provider_shipment_id' => $shippingQuote->provider_shipment_id] : null,
                 'service_request' => ['preferred_at' => trim((string) ($buyer['preferred_at'] ?? '')), 'notes' => trim((string) ($buyer['notes'] ?? ''))],
             ]);
             foreach ($lines as $line) {
@@ -225,6 +245,8 @@ class WebsiteCommerceService
                     ]);
                 }
             }
+
+            $this->event($order, 'order_created', 'Order created from native Website checkout.', null, ['cart_id' => $cart->id]);
 
             return $order->load('lines');
         });
@@ -275,6 +297,7 @@ class WebsiteCommerceService
                         }
                     }
                     WebsiteInventoryReservation::query()->where('website_order_id', $order->id)->where('status', 'active')->update(['status' => 'confirmed']);
+                    $this->event($order, 'payment_paid', 'Stripe confirmed payment.', null, ['amount_cents' => $order->total_cents]);
                 }
                 $payment?->forceFill(['status' => 'paid', 'provider_payment_intent_id' => $object['payment_intent'] ?? null])->save();
                 if ($payment?->metadata['cart_id'] ?? null) {
@@ -284,9 +307,12 @@ class WebsiteCommerceService
                 $order->forceFill(['payment_status' => 'failed'])->save();
                 $payment?->forceFill(['status' => 'failed'])->save();
                 WebsiteInventoryReservation::query()->where('website_order_id', $order->id)->where('status', 'active')->update(['status' => 'released']);
+                $this->event($order, 'payment_failed', 'Payment was not completed.', null);
             } elseif ($type === 'charge.refunded') {
-                $order->forceFill(['payment_status' => 'refunded'])->save();
+                $refunded = (int) ($object['amount_refunded'] ?? $order->total_cents);
+                $order->forceFill(['payment_status' => $refunded >= $order->total_cents ? 'refunded' : 'partially_refunded', 'refunded_cents' => $refunded])->save();
                 $payment?->forceFill(['status' => 'refunded'])->save();
+                $this->event($order, 'payment_refunded', 'Stripe confirmed a refund.', null, ['refunded_cents' => $refunded]);
             }
             $event->forceFill(['status' => 'processed', 'processed_at' => now()])->save();
         });
@@ -297,11 +323,57 @@ class WebsiteCommerceService
         abort_unless($order->payment_status === 'paid', 422, 'Only paid Website orders can be fulfilled.');
 
         return DB::transaction(function () use ($order, $actor, $note): WebsiteOrder {
+            $order->loadMissing('lines');
             $order->forceFill(['fulfillment_status' => 'fulfilled', 'fulfilled_at' => now()])->save();
-            WebsiteFulfillment::query()->create(['tenant_id' => $order->tenant_id, 'website_order_id' => $order->id, 'status' => 'fulfilled', 'method' => $order->fulfillment_method ?: 'pickup', 'note' => trim($note), 'fulfilled_by_user_id' => $actor->id, 'fulfilled_at' => now()]);
+            $fulfillment = WebsiteFulfillment::query()->create(['tenant_id' => $order->tenant_id, 'website_order_id' => $order->id, 'status' => 'fulfilled', 'method' => $order->fulfillment_method ?: 'pickup', 'note' => trim($note), 'fulfilled_by_user_id' => $actor->id, 'fulfilled_at' => now()]);
+            foreach ($order->lines as $line) {
+                \App\Models\WebsiteFulfillmentLine::query()->create(['tenant_id' => $order->tenant_id, 'website_fulfillment_id' => $fulfillment->id, 'website_order_line_id' => $line->id, 'quantity' => $line->quantity]);
+            }
+            $this->event($order, 'fulfilled', 'Order marked fulfilled.'.(trim($note) !== '' ? ' '.trim($note) : ''), $actor);
 
             return $order->fresh('fulfillments');
         });
+    }
+
+    public function cancel(WebsiteOrder $order, User $actor, string $reason = ''): WebsiteOrder
+    {
+        abort_if($order->payment_status === 'paid', 422, 'Paid orders must be refunded through the payment action before cancellation.');
+        abort_if($order->cancelled_at !== null, 422, 'This order is already cancelled.');
+
+        return DB::transaction(function () use ($order, $actor, $reason): WebsiteOrder {
+            $order->forceFill(['order_status' => 'cancelled', 'cancelled_at' => now(), 'fulfillment_status' => 'cancelled'])->save();
+            WebsiteInventoryReservation::query()->where('website_order_id', $order->id)->where('status', 'active')->update(['status' => 'released']);
+            $this->event($order, 'cancelled', 'Order cancelled.'.(trim($reason) !== '' ? ' '.trim($reason) : ''), $actor);
+
+            return $order->fresh();
+        });
+    }
+
+    public function refund(WebsiteOrder $order, User $actor, int $amountCents, string $reason = ''): WebsiteOrder
+    {
+        abort_unless($order->payment_status === 'paid' || $order->payment_status === 'partially_refunded', 422, 'Only paid orders can be refunded.');
+        $remaining = $order->total_cents - $order->refunded_cents;
+        abort_if($amountCents < 1 || $amountCents > $remaining, 422, 'Refund amount must be within the remaining paid balance.');
+        $payment = WebsitePayment::query()->where('website_order_id', $order->id)->where('provider', 'stripe')->whereNotNull('provider_payment_intent_id')->latest('id')->first();
+        abort_unless($payment, 422, 'This Website order has no refundable Stripe payment.');
+        $response = $this->stripe()->withHeaders(['Idempotency-Key' => 'website-refund-'.$order->id.'-'.$amountCents.'-'.$order->refunded_cents])
+            ->post('https://api.stripe.com/v1/refunds', ['payment_intent' => $payment->provider_payment_intent_id, 'amount' => $amountCents]);
+        abort_if($response->failed() || blank($response->json('id')), 502, 'Stripe could not create the refund.');
+
+        return DB::transaction(function () use ($order, $actor, $amountCents, $reason, $payment): WebsiteOrder {
+            $totalRefunded = $order->refunded_cents + $amountCents;
+            $order->forceFill(['refunded_cents' => $totalRefunded, 'payment_status' => $totalRefunded >= $order->total_cents ? 'refunded' : 'partially_refunded'])->save();
+            $payment->forceFill(['status' => $order->payment_status])->save();
+            $this->event($order, 'refund_requested', 'Refund created in Stripe.'.(trim($reason) !== '' ? ' '.trim($reason) : ''), $actor, ['amount_cents' => $amountCents]);
+
+            return $order->fresh();
+        });
+    }
+
+    public function addNote(WebsiteOrder $order, User $actor, string $note): void
+    {
+        abort_if(trim($note) === '', 422, 'Enter a note.');
+        $this->event($order, 'staff_note', trim($note), $actor);
     }
 
     /** @return array{id:string,url:string} */
@@ -316,6 +388,13 @@ class WebsiteCommerceService
             $payload["line_items[{$index}][price_data][product_data][name]"] = $line->title;
             $payload["line_items[{$index}][price_data][unit_amount]"] = $line->unit_price_cents;
             $payload["line_items[{$index}][quantity]"] = $line->quantity;
+        }
+        if ($order->shipping_cents > 0) {
+            $index = $order->lines->count();
+            $payload["line_items[{$index}][price_data][currency]"] = $order->currency;
+            $payload["line_items[{$index}][price_data][product_data][name]"] = 'Shipping';
+            $payload["line_items[{$index}][price_data][unit_amount]"] = $order->shipping_cents;
+            $payload["line_items[{$index}][quantity]"] = 1;
         }
         $response = $this->stripe()->withHeaders(['Idempotency-Key' => 'website-order-'.$order->id])->post('https://api.stripe.com/v1/checkout/sessions', $payload);
         $json = (array) $response->json();
@@ -367,5 +446,19 @@ class WebsiteCommerceService
             'payment_intent' => (string) ($object['payment_intent'] ?? ''),
             'website_order_id' => (string) data_get($object, 'metadata.website_order_id', ''),
         ];
+    }
+
+    /** @param array<string,mixed> $data */
+    private function event(WebsiteOrder $order, string $type, string $message, ?User $actor = null, array $data = []): void
+    {
+        WebsiteOrderEvent::query()->create([
+            'tenant_id' => $order->tenant_id,
+            'website_order_id' => $order->id,
+            'user_id' => $actor?->id,
+            'event_type' => $type,
+            'visibility' => 'staff',
+            'message' => $message,
+            'data' => $data,
+        ]);
     }
 }

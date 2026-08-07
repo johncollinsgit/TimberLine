@@ -81,6 +81,32 @@ If payment confirmation or tax readiness is uncertain, leave catalog editing
 available but keep checkout gated. Do not substitute a Shopify checkout or
 modify legacy orders as a workaround.
 
+## Native shipping readiness
+
+Native shipping is a separate retail-pilot gate. Do not enable it for Modern
+Forestry. For a non-Modern-Forestry tenant, verify Website Commerce checkout,
+entitlement, editor allowlist, Stripe Connect, tax decision, and signed Stripe
+webhook are already ready. Then verify the dedicated shipping gate and exact
+tenant allowlist, a tenant-owned connected EasyPost account, an active US
+ship-from location, and an active package preset.
+
+In a non-production or pilot account, quote a US rate, complete a low-value
+paid order, buy then void a label, validate label/tracking links, and replay a
+signed webhook to prove idempotency. Keep international shipping, customs,
+subscriptions, and returns-label automation disabled. A shipping discrepancy
+must stop only native Website shipping; do not repair it by editing Shopify
+fulfillment or the legacy shipping queue.
+
+## Connected-store import readiness
+
+Connected imports require their independent gate and explicit tenant
+allowlist. The wizard must produce a dry-run mapping report before data is
+fetched or staged. Review selected resources, provider capability gaps,
+unsupported content, consent handling, and no-write-back status. Source data
+remains read-only and encrypted in the commerce lane. Do not enable a cutover
+until the owner signs off on reconciliation, payment/tax readiness, EasyPost,
+locations, and a production-site preview.
+
 # Sales-channel reporting
 
 Sales channels is read-only operational reporting. Confirm that a Website order

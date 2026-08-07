@@ -129,6 +129,35 @@ query, or webhook path with legacy `orders`, `order_lines`, Shopify catalog,
 Shopify checkout, or marketing customer data. A Website order is therefore not
 a Modern Forestry order by another name.
 
+## Retail operations, shipping, and connected stores (2026-08-07)
+
+Website Commerce is optional retail infrastructure. A service or trade tenant
+continues to operate through estimates, jobs, and invoices; Website Commerce
+does not replace those flows or appear as a cross-tenant default.
+
+Native retail operations extend only the Website data lane. A Website order
+holds independent lifecycle, financial, fulfillment, risk/review, exception,
+and shipment state. Price, line-item, customer, address, and selected-rate
+snapshots are immutable. Fulfillments can contain individual line quantities;
+packages and shipment events provide a durable shipment timeline. Stripe
+remains payment authority, EasyPost remains postage authority, and neither
+changes a legacy order or Shopify object.
+
+US-domestic EasyPost shipping has its own global gate and tenant allowlist,
+requires a tenant-owned connection, active fulfillment location, and active
+package preset. Rate quote, label purchase, void, and tracking events are
+supported only for native Website orders. Webhook evidence is signature-checked
+and de-duplicated in the shipment-event ledger.
+
+Commerce sources, import runs/events, and external records form a distinct
+connected-operations lane. Shopify, WooCommerce, Squarespace, and Wix adapters
+normalize provider IDs and retain encrypted read-only snapshots. They never
+copy data to native Website, legacy provider, customer, or marketing tables.
+The first user action is always a capability-aware dry-run report. An explicit
+owner-approved native cutover remains a later, reversible pre-publish
+operation; no bidirectional catalog, inventory, order, or fulfillment sync
+exists in v1.
+
 The full-screen Website editor persists only ordinary immutable draft page
 versions through `ManagedWebsiteService`; publish still copies draft snapshots
 into immutable published versions. The editor may be frozen without taking the

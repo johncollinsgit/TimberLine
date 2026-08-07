@@ -132,6 +132,24 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   limited to 1,000 rows. Invalid rows roll back the full file. "Delete" in the
   UI is history-safe archival: keep product, variant, and order references, set
   the product archived, and make its variants unavailable.
+- Native retail operations use dedicated Website tables for fulfillment
+  locations, package presets, rate quotes, fulfillment lines, shipments, an
+  immutable shipment-event ledger, and staff order events. Order lifecycle,
+  financial, fulfillment, and shipment state are separate; keep customer,
+  address, line-item, and price snapshots immutable. Do not turn a native
+  Website refund, cancellation, label, or tracking event into a legacy or
+  Shopify record.
+- EasyPost is available only through a tenant-owned IntegrationConnection,
+  the dedicated shipping gate, and a shipping tenant allowlist. It is
+  US-domestic only. Never reuse Modern Forestry's shipping account or routes.
+  EasyPost webhooks require a valid signature and are idempotent before they
+  can change a native shipment.
+- Connected-store migration is a separate, read-only commerce lane for
+  Shopify, WooCommerce, Squarespace, and Wix. Provider adapters normalize
+  stable IDs before persisting encrypted source snapshots. The mapping wizard
+  must explain unavailable provider content, never silently fabricate it, and
+  never write to native Website, legacy Shopify, Modern Forestry, or marketing
+  tables. Imported consent remains source evidence only.
 
 ## Accounting Command Center guardrails (2026-07-23)
 

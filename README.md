@@ -2207,4 +2207,25 @@ Website payments appear beside existing sources only after payment confirmation;
 the summary never copies Website orders into legacy `orders`, merges shoppers,
 or changes Shopify checkout and fulfillment workflows.
 
-Physical Website orders currently support pickup or manually coordinated local delivery. Carrier rates, labels, tracking, and shipping integrations are intentionally deferred. Checkout stays unavailable until the workspace has passed the existing Stripe Connect and tax readiness gates.
+Website Commerce is an optional retail branch, not the default workflow for
+service businesses. Jobs, estimates, and invoices remain the primary path for
+field-service tenants. Native orders retain separate order, payment,
+fulfillment, shipment, refund, and timeline state with immutable customer,
+address, price, and line-item snapshots.
+
+For an explicitly allowlisted retail tenant, native checkout supports shipping,
+pickup, and local delivery. US-domestic shipping uses that tenant's EasyPost
+connection, ship-from locations, and package presets for live rates, label
+purchase/void, tracking links, and signed idempotent carrier events.
+International shipping, customs, subscriptions, and automated return labels
+remain out of scope. The shipping gate is independent of Website Commerce and
+defaults to disabled.
+
+Connected commerce is a separate, read-only lane for Shopify, WooCommerce,
+Squarespace, and Wix. The import wizard starts with a capability-aware mapping
+report; imported source snapshots remain in commerce tables and never write to
+native Website Commerce, legacy Shopify/Modern Forestry, or marketing
+eligibility. Consent is evidence only. A native cutover is a future,
+owner-approved operation after reconciliation and payment, tax, shipping,
+fulfillment-location, and production-preview readiness checks; v1 has no
+two-way catalog, inventory, order, or fulfillment sync.

@@ -693,8 +693,10 @@ Route::post('/products/{handle}/quote', [WebsiteCommerceController::class, 'requ
 Route::get('/cart', [WebsiteCommerceController::class, 'cart'])->name('managed-website.store.cart');
 Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
 Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
+Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shippingRates'])->middleware('throttle:10,1')->name('managed-website.store.shipping-rates');
 Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
 Route::post('/webhooks/website-stripe', [WebsiteCommerceController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.webhook');
+Route::post('/webhooks/website-easypost', [WebsiteCommerceController::class, 'shippingWebhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.shipping-webhook');
 
 Route::prefix('signup/classes/{tenant:slug}')
     ->name('public.classes.')
@@ -741,6 +743,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');
             Route::get('/thumbnails/{siteVersion}', [ManagedWebsiteController::class, 'showThumbnail'])->name('thumbnails.show');
             Route::get('/products', [WebsiteCommerceController::class, 'products'])->name('products.index');
+            Route::get('/commerce/imports', [WebsiteCommerceController::class, 'imports'])->name('commerce.imports');
+            Route::post('/commerce/imports/dry-run', [WebsiteCommerceController::class, 'createImportDryRun'])->name('commerce.imports.dry-run');
+            Route::get('/commerce/shipping', [WebsiteCommerceController::class, 'shippingSettings'])->name('commerce.shipping');
+            Route::post('/commerce/shipping/locations', [WebsiteCommerceController::class, 'saveFulfillmentLocation'])->name('commerce.shipping.locations.store');
+            Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
             Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
             Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
             Route::post('/products', [WebsiteCommerceController::class, 'storeProduct'])->name('products.store');
@@ -750,7 +757,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/customers', [WebsiteCommerceController::class, 'storeCustomer'])->name('customers.store');
             Route::put('/customers/{customer}', [WebsiteCommerceController::class, 'updateCustomer'])->name('customers.update');
             Route::get('/orders', [WebsiteCommerceController::class, 'orders'])->name('orders.index');
+            Route::get('/orders/{order}', [WebsiteCommerceController::class, 'showOrder'])->name('orders.show');
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
+            Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
+            Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');
+            Route::post('/orders/{order}/notes', [WebsiteCommerceController::class, 'addOrderNote'])->name('orders.notes.store');
+            Route::post('/orders/{order}/labels', [WebsiteCommerceController::class, 'purchaseLabel'])->name('orders.labels.purchase');
+            Route::post('/shipments/{shipment}/void', [WebsiteCommerceController::class, 'voidLabel'])->name('shipments.void');
             Route::post('/pages', [ManagedWebsiteController::class, 'storePage'])->name('pages.store');
             Route::delete('/pages/{page}', [ManagedWebsiteController::class, 'destroyPage'])->name('pages.destroy');
             Route::put('/pages/{page}', [ManagedWebsiteController::class, 'savePage'])->name('pages.update');
