@@ -162,6 +162,14 @@ The Collins operations pass was production-verified on 2026-07-21 through
 `a99fa84f910cef0545918e23f807e8452e999033`, `/up` HTTP 200, and `/ready`
 HTTP 200 reporting that exact release identifier.
 
+Every additive production migration must be restart-safe: Forge can complete
+one database DDL statement before a candidate fails, while Laravel has not yet
+recorded the migration. Migration-recovery tests reproduce that partial state
+so the next protected release resumes rather than retrying an existing table.
+Forge API observability is a planned read-only production integration for
+linking failed deployment logs and status to GitHub; it will never replace the
+exact-release `/ready` verification or authorize deployment changes.
+
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
 - Status: direct invoices are production-ready pending live gates after an internal paid Stripe sandbox invoice smoke test. Live customer invoicing remains blocked until production secrets, webhook signing, Relay payout verification, tax/accounting approval, production mail, and first-tenant allowlisting pass. Evidence: `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.

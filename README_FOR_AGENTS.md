@@ -193,6 +193,15 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   the protected `FORGE_DEPLOY_HOOK_URL` production secret; Forge then performs
   the atomic release. The first automatic hook release was Forge release
   `73789933` for commit `c272464…` and passed `/ready` on 2026-07-21.
+- Treat every additive migration as restart-safe, not merely non-destructive.
+  A release may complete early DDL before Laravel records its migration batch.
+  Add a MySQL recovery test that reconstructs that partial state and make each
+  independent schema step safely resumable. Never delete a production table to
+  force a retry. The Customer Loop migration recovery test is the reference.
+- Forge API observability is a planned **read-only** integration: a production
+  secret may retrieve deployment status/log links for a failed GitHub release,
+  but may not create a deploy, change site settings, or replace the exact-SHA
+  `/ready` activation check.
 - Never run `git reset --hard`, `git clean`, in-place frontend replacement, or
   cache-clearing as a normal production deploy. The approved Forge runbook uses
   a fresh release, build/test preparation before activation, compatible

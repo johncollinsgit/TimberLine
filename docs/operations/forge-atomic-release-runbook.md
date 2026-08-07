@@ -59,6 +59,10 @@ The handoff is complete.
    polls `/ready` for the exact GitHub commit for up to three minutes. A hook
    acknowledgment alone is not deployment evidence; the workflow fails if the
    active release identifier remains stale.
+   A future read-only Forge API token will add deployment-log/status links to
+   that failed workflow run. It must be stored as a production secret, must not
+   trigger or alter deployments, and does not replace the exact-SHA `/ready`
+   check.
 3. Forge creates the release and runs the deployment script above. The first
    fully automatic run activated Forge release `73789933` for commit
    `c272464230f4c83366f8d57a635ac4c38876c5c8` on 2026-07-21; `/ready` returned
@@ -82,6 +86,11 @@ test/build gate.
   release window. Automatic releases may use only additive,
   backward-compatible migrations; backfills and destructive schema work are
   separate, planned releases.
+- Additive migrations must also be restart-safe. A release can create one
+  table and fail before Laravel writes its migration record. Each independent
+  table/index step must detect the durable partial state and resume safely.
+  Reproduce that state in the MySQL migration-recovery suite before release;
+  never manually delete a production table simply to retry a migration.
 
 ## Smoke checks
 
