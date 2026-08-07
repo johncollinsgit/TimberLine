@@ -3,7 +3,7 @@
 use App\Services\Bud\BudConversationService;
 
 test('bud answers product questions in a conversational way', function (): void {
-    $service = new BudConversationService();
+    $service = new BudConversationService;
 
     $response = $service->respond('What is Everbranch?');
 
@@ -14,7 +14,7 @@ test('bud answers product questions in a conversational way', function (): void 
 });
 
 test('bud answers who made everbranch directly', function (): void {
-    $service = new BudConversationService();
+    $service = new BudConversationService;
 
     $response = $service->respond('who made everbranch?');
 
@@ -25,7 +25,7 @@ test('bud answers who made everbranch directly', function (): void {
 });
 
 test('bud answers onboarding and pricing questions with a real next step', function (): void {
-    $service = new BudConversationService();
+    $service = new BudConversationService;
 
     $response = $service->respond('how can i get on board and what does it cost?');
 
@@ -36,7 +36,7 @@ test('bud answers onboarding and pricing questions with a real next step', funct
 });
 
 test('bud is honest when it does not know enough', function (): void {
-    $service = new BudConversationService();
+    $service = new BudConversationService;
 
     $response = $service->respond('What is the exact shipping cost for my current subscription?');
 
@@ -46,7 +46,7 @@ test('bud is honest when it does not know enough', function (): void {
 });
 
 test('bud uses page context to make the answer specific', function (): void {
-    $service = new BudConversationService();
+    $service = new BudConversationService;
 
     $response = $service->respond('How could this help?', [
         'scenario' => 'service',
@@ -58,4 +58,17 @@ test('bud uses page context to make the answer specific', function (): void {
     expect($response['confidence'])->toBe('high')
         ->and($response['reply'])->toContain('Northline Maintenance')
         ->and($response['reply'])->toContain('customer notes');
+});
+
+test('bud handles a misspelled practical Customer Loop question without claiming it sent anything', function (): void {
+    $service = new BudConversationService;
+
+    $response = $service->respond('wat custmer folow ups need attention?', [
+        'workspace_summary' => ['open_customer_loop_actions' => 2],
+    ]);
+
+    expect($response['confidence'])->toBe('high')
+        ->and($response['uncertain'])->toBeFalse()
+        ->and($response['reply'])->toContain('2 open Customer Loop actions')
+        ->and($response['reply'])->toContain('never send or publish');
 });

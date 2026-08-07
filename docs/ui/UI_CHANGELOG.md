@@ -2244,3 +2244,22 @@
 
 - Archiving retains linked invoices, tasks, time, notes, photos, and audit history; it only removes the job from Current Work.
 - Invoice and financial access remain owner/admin-gated. Current production clients require the matching API deployment before the new Invoice Desk endpoint can return data.
+# 2026-08-07 — Customer Loop and Bud Core
+
+- Added the authenticated Customer Loop queue for human-reviewed follow-up,
+  review, email, text, and social drafts, plus simple template creation,
+  prepare, snooze, and complete controls.
+- Added the Workflow Studio action and starter templates that create a
+  review-only Customer Loop draft from a completed job or connected Shopify
+  order. The action never sends or publishes.
+- Added a compact public Customer Loop story section so the public site explains
+  the relationship layer without promising automated delivery.
+- Expanded Bud Core with tenant-scoped next-attention summaries, Customer Loop
+  and social-draft guidance, and common typo handling.
+
+### Safety posture
+
+- Bud AI and speech-to-speech remain disabled-by-default future paid layers;
+  no provider call or usage charge is introduced here.
+- No social connection, message delivery, marketing-consent change, Shopify
+  write, Website Commerce mutation, or Modern Forestry behavior changed.

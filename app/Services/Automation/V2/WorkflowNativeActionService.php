@@ -7,6 +7,7 @@ use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceTask;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\CustomerLoop\CustomerLoopService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobTransitionService;
 use App\Services\FieldService\FieldServiceTaskAssignmentService;
@@ -20,6 +21,7 @@ class WorkflowNativeActionService
         protected FieldServiceTaskAssignmentService $assignments,
         protected FieldServiceJobNotificationService $notifications,
         protected FieldServiceJobTransitionService $transitions,
+        protected CustomerLoopService $customerLoop,
     ) {}
 
     /**
@@ -199,6 +201,57 @@ class WorkflowNativeActionService
             'job_id' => (int) $result['job']->id,
             'status' => (string) $result['job']->operational_status,
             'note_id' => (int) $result['note']->id,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    public function prepareCustomerLoopDraft(
+        int $tenantId,
+        User $actor,
+        array $payload,
+        string $idempotencyKey,
+        bool $dryRun = false,
+    ): array {
+        $template = trim((string) ($payload['template'] ?? 'follow_up'));
+        $title = trim((string) ($payload['title'] ?? 'Customer follow-up needs review'));
+        $summary = $this->nullableString($payload['summary'] ?? null);
+        if (! array_key_exists($template, $this->customerLoop->templates())) {
+            throw new \InvalidArgumentException('Choose a supported Customer Loop draft template.');
+        }
+        if ($title === '') {
+            throw new \InvalidArgumentException('Prepare Customer Loop draft requires a title.');
+        }
+        if ($dryRun) {
+            return [
+                'validated' => true,
+                'template' => $template,
+                'title' => $title,
+                'draft_only' => true,
+                'dry_run' => true,
+            ];
+        }
+
+        $action = $this->customerLoop->prepareFromWorkflow(
+            tenantId: $tenantId,
+            actor: $actor,
+            template: $template,
+            title: $title,
+            summary: $summary,
+            eventKey: $idempotencyKey,
+            safeContext: [
+                'workflow_idempotency_key' => $idempotencyKey,
+                'source' => 'workflow_automation_v2',
+            ],
+        );
+
+        return [
+            'customer_loop_action_id' => (int) $action->id,
+            'template' => $action->action_type,
+            'status' => $action->status,
+            'draft_only' => true,
         ];
     }
 

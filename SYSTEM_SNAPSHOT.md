@@ -267,6 +267,25 @@
   Existing ledgers and balances remain authoritative; this identity rule does
   not authorize a Growave re-import, balance recalculation, or data migration.
 
+## Customer Loop and Bud foundation (2026-08-07)
+
+- Customer Loop is the tenant-scoped, review-first queue for a useful next
+  follow-up, review request, email, text, or social draft. Its activities and
+  actions are additive Everbranch records; they do not write back to Shopify,
+  Modern Forestry, Website Commerce, or marketing-delivery lanes.
+- The simple path is template-based. The advanced path is the existing
+  drag-and-drop Workflow Studio, which can create an idempotent,
+  review-only Customer Loop draft from a supported trigger. No Customer Loop
+  action sends or publishes anything.
+- Bud Core remains deterministic and can read only safe, tenant-scoped
+  workspace summaries and registered capabilities. `BudCapabilityRegistry` is
+  the required handoff point for every new user-facing capability.
+- Bud AI and speech-to-speech are planned paid tiers, not live external-model
+  features: both flags default off, and neither has a provider call, voice
+  stream, or bill until its tenant/budget/confirmation contract is released.
+- Full architecture and future-tool constraints:
+  `docs/architecture/customer-loop-and-bud.md`.
+
 ## Workflow Studio v2 (2026-07-24)
 
 - `/workflows` is now an operational workspace with Workflows, Runs,

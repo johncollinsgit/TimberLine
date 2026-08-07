@@ -28,6 +28,7 @@
             <div class="eb-studio-nav__links" aria-label="Explore Everbranch">
                 <a href="#how-it-works">How it works</a>
                 <a href="#industries">Who it helps</a>
+                <a href="#customer-loop">Customer Loop</a>
                 <a class="eb-studio-nav__demo-link" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
                 <a href="#modules">Modules</a>
                 <a href="{{ route('platform.plans') }}">Plans</a>
@@ -77,6 +78,22 @@
                     <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'practice']) }}" data-industry-option="practice"><img src="{{ asset('images/public-site/everbranch-field-owner-office.jpg') }}" alt="" /><span><small>05 · Consultations · records · guidance</small><strong>Professional practices</strong><em>Make the first conversation, preparation, and follow-up feel considered.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
                     <a class="eb-studio-industry-card" href="{{ route('platform.industry-demo', ['discipline' => 'community']) }}" data-industry-option="community"><img src="{{ asset('images/public-site/everbranch-field-team.jpg') }}" alt="" /><span><small>06 · Programs · people · invitations</small><strong>Community teams</strong><em>Keep people, gatherings, and the next useful message connected.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></a>
                 </div>
+            </div>
+        </section>
+
+        <section id="customer-loop" class="eb-studio-loop" aria-labelledby="customer-loop-title">
+            <div class="eb-studio-container eb-studio-loop__grid">
+                <div>
+                    <p class="eb-studio-eyebrow eb-studio-eyebrow--light">Customer Loop</p>
+                    <h2 id="customer-loop-title">Good work should make the next relationship easier.</h2>
+                    <p>Everbranch turns a real customer moment into a clear human next step: a follow-up, review request, text, email, or social draft. Your team reviews every message before it goes out.</p>
+                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Plan your Customer Loop <span aria-hidden="true">↗</span></a>
+                </div>
+                <ol class="eb-studio-loop__steps">
+                    <li><span>01</span><div><strong>Something real happens</strong><p>A job wraps, an order arrives, a customer asks, or a great result is worth sharing.</p></div></li>
+                    <li><span>02</span><div><strong>Everbranch prepares the next step</strong><p>Start from useful templates or shape your own if/then flow in Workflow Studio.</p></div></li>
+                    <li><span>03</span><div><strong>A person stays in control</strong><p>Review the draft, adjust it, and decide whether to send or publish. Nothing leaves on autopilot.</p></div></li>
+                </ol>
             </div>
         </section>
 

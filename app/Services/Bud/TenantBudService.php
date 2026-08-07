@@ -12,6 +12,7 @@ class TenantBudService
 {
     public function __construct(
         private BudConversationService $bud,
+        private BudWorkspaceContextService $workspaceContext,
         private TenantMobileSupportService $support,
         private OperatorAlertService $alerts,
     ) {}
@@ -26,6 +27,7 @@ class TenantBudService
                 'tenant_id' => $tenant->id, 'target_type' => 'tenant_bud_setting', 'target_id' => $setting->id,
             ]);
         }
+
         return $setting->fresh(['requester']);
     }
 
@@ -37,6 +39,7 @@ class TenantBudService
             'reviewed_at' => now(),
             'review_notes' => $notes,
         ])->save();
+
         return $setting->fresh(['tenant', 'requester']);
     }
 
@@ -45,12 +48,17 @@ class TenantBudService
     {
         $setting = TenantBudSetting::query()->firstOrCreate(['tenant_id' => $tenant->id], ['status' => 'disabled']);
         abort_unless($setting->status === 'approved', 403, 'Bud needs Everbranch approval before it can be used in this workspace.');
-        $answer = $this->bud->respond($question, ['tenant' => $tenant->name, 'surface' => 'account_help'], $transcript);
+        $answer = $this->bud->respond($question, array_merge([
+            'tenant' => $tenant->name,
+            'surface' => 'account_help',
+            'bud_tier' => config('bud.ai_enabled') ? 'Bud AI' : 'Bud',
+        ], $this->workspaceContext->forTenant($tenant)), $transcript);
         if (($answer['uncertain'] ?? false) === true) {
             $ticket = $this->support->createBudEscalation($tenant, $user, $question, (string) $answer['reply'], (string) $answer['confidence'], $transcript);
             $answer['reply'] = "I’m not sure that I’ve been programmed to answer that. I’ll create a ticket so the Everbranch team can follow up.\n\n".$answer['reply'];
             $answer['ticket_id'] = $ticket['ticket']['id'] ?? null;
         }
+
         return $answer;
     }
 }

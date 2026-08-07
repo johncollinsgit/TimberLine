@@ -430,6 +430,29 @@ UI maintenance rules:
 
 ## Current Release State (Scan First)
 
+### Customer Loop and Bud handoff (2026-08-07)
+
+- Customer Loop is a tenant-scoped, review-only follow-up queue. It may create
+  Everbranch-owned activities and draft actions only; it must never send email
+  or SMS, publish social content, alter consent, or write to Shopify, Website
+  Commerce, or Modern Forestry lanes without a separately approved delivery
+  capability.
+- Use the existing Workflow Studio for advanced if/then customization. The
+  `everbranch.customer_loop.draft.prepare` action is intentionally
+  idempotent and draft-only. Do not build another automation editor.
+- Bud Core is deterministic and included. Every new tenant-facing capability
+  must update `BudCapabilityRegistry`, add a minimal tenant-scoped context path
+  in `BudWorkspaceContextService` only when needed, and add regression tests
+  before saying Bud understands it.
+- Bud Core and future Bud AI must never edit files, execute code, access
+  credentials, cross tenant boundaries, send/publish automatically, or bypass
+  typed UI permissions. Every delivery or publish action needs a visible final
+  human confirmation.
+- Bud AI and voice flags default off. Do not add a provider call, speech stream,
+  or paid claim until tenant pricing, budget caps, audit logs, data minimization,
+  authorization, and safety tests are implemented. The governing architecture
+  is `docs/architecture/customer-loop-and-bud.md`.
+
 Current implemented shell/diagnostics checkpoint:
 - Phase 2 instrumentation hardening checkpoint (2026-04-20):
   - fixed embedded React runtime crash on messaging analytics path by stabilizing action-search store snapshots
