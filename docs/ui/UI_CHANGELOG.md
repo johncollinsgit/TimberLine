@@ -14,6 +14,15 @@
 - This change does not touch Shopify apps, embedded surfaces, tenant websites,
   authenticated workspaces, or Modern Forestry operations.
 
+### Follow-up: field-service hero sequence
+
+- The public hero now crossfades through original HVAC/electrical field scenes
+  and an owner planning work in the office, with a subtle camera drift rather
+  than a static background.
+- Technician polos use a small original lightning-and-airflow trade emblem.
+  The rotating treatment respects reduced-motion preferences and leaves the
+  first still visible if JavaScript is unavailable.
+
 ## 2026-08-02 — Instant Website addresses and simpler custom domains
 
 - Website now shows the automatically reserved `<workspace>.theeverbranch.com` address as a first-class live/reserved status card.

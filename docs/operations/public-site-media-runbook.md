@@ -15,6 +15,11 @@ data. Product walkthrough captures use demo or anonymized data.
   npm run media:optimize-public -- path/to/approved-source.jpg everbranch-story
   ```
 
+- The hero may use a small crossfading still-image sequence. Keep the first
+  image eager with `fetchpriority="high"`, use no more than three scenes, and
+  retain a static first frame when JavaScript or motion is unavailable. Disable
+  the sequence entirely for `prefers-reduced-motion`.
+
 - For essential muted loops, produce WebM first and H.264 MP4 fallback with
   deterministic FFmpeg settings. Include a poster image, `playsinline`, and
   `preload="metadata"`. Do not autoplay sound.

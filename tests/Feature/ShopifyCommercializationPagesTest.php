@@ -22,6 +22,8 @@ test('promo page renders the public studio story and preserves conversion paths'
         ->assertSee('data-studio-film', false)
         ->assertSee('everbranch-hvac-electrical-hero.jpg', false)
         ->assertSee('everbranch-hvac-electrical-field.jpg', false)
+        ->assertSee('everbranch-field-owner-office.jpg', false)
+        ->assertSee('data-studio-hero-slide', false)
         ->assertSeeText('Your business has a rhythm.')
         ->assertSeeText('Everbranch helps you keep it.')
         ->assertSeeText('One flat price for the business. No per-user fees.')

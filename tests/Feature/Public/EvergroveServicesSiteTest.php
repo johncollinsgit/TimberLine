@@ -62,6 +62,8 @@ test('everbranch public host keeps the everbranch product surface', function ():
         ->assertSee('data-studio-film', false)
         ->assertSee('everbranch-hvac-electrical-hero.jpg', false)
         ->assertSee('everbranch-hvac-electrical-field.jpg', false)
+        ->assertSee('everbranch-field-owner-office.jpg', false)
+        ->assertSee('data-studio-hero-slide', false)
         ->assertSeeText('Retail & product brands')
         ->assertSeeText('Field & service teams')
         ->assertSee(route('platform.plans'), false)
