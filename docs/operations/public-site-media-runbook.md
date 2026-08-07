@@ -1,0 +1,34 @@
+# Public-site media runbook
+
+The Everbranch public marketing site may use only owned footage, licensed
+stock, or customer material with written approval. It is never a source for
+tenant/workspace screenshots, customer names, orders, contact data, or Shopify
+data. Product walkthrough captures use demo or anonymized data.
+
+## Preparing media
+
+- Keep an original, rights-tracked source outside `public/`. Commit only the
+  compressed derivatives needed by the page.
+- Create responsive image derivatives with:
+
+  ```bash
+  npm run media:optimize-public -- path/to/approved-source.jpg everbranch-story
+  ```
+
+- For essential muted loops, produce WebM first and H.264 MP4 fallback with
+  deterministic FFmpeg settings. Include a poster image, `playsinline`, and
+  `preload="metadata"`. Do not autoplay sound.
+- Non-hero video must be lazy-loaded. Any sound-on film needs visible captions,
+  a transcript, and a static fallback before it can replace the current story
+  dialog.
+
+## Release checks
+
+- Run `npm run build`, focused public feature tests, `npm run test:visual`, and
+  `npm run test:lighthouse:public`. Lighthouse blocks accessibility or layout
+  instability regressions and warns before performance/SEO budgets are crossed.
+- Review desktop Chrome and mobile-Safari baselines with reduced motion enabled.
+- Confirm the access-request form still posts to `platform.access-request` and
+  that Plans, Modules, Contact, and Login retain their public routes.
+- Public-site work must not change Shopify apps, embedded apps, tenant websites,
+  authenticated workspace UI, pricing source data, or access-request handling.

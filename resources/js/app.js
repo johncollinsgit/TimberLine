@@ -22,6 +22,12 @@ const contextualModules = [
     mountExport: "mountOnboardingGateNow",
   },
   {
+    key: "publicStudio",
+    selectors: ["[data-studio-story]"],
+    load: () => import("./public-studio"),
+    mountExport: "mountPublicStudioNow",
+  },
+  {
     key: "publicTabs",
     selectors: ["[data-public-tabs]"],
     load: () => import("./public-tabs"),

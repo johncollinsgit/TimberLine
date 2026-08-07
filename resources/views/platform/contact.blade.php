@@ -11,10 +11,10 @@
 <head>
     @include('partials.head', ['title' => 'Contact '.config('everbranch.product_name', 'Everbranch')])
 </head>
-<body class="fb-public-body" data-premium-motion="public">
+<body class="fb-public-body eb-studio-support-body" data-premium-motion="public">
     @include('platform.partials.premium-motion')
 
-    <main class="fb-public-shell fb-contact-shell">
+    <main class="fb-public-shell fb-contact-shell eb-studio-support-shell">
         <nav class="fb-site-nav fb-site-nav--premium" aria-label="Everbranch contact navigation">
             <a href="{{ route('platform.promo') }}" class="fb-site-brand fb-site-brand--lockup">
                 <img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ config('everbranch.product_name', 'Everbranch') }}" />

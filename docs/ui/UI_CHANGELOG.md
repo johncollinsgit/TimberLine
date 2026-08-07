@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-08-07 — Everbranch public-site studio redesign
+
+- Replaced the old tab-heavy Everbranch landing page with a continuous,
+  media-led public product story: customer question, team work, follow-up,
+  industries, modules, and the launch-partner invitation.
+- Added a small public-only interaction layer with dynamically loaded GSAP
+  workflow transitions, responsive/reduced-motion handling, a native accessible
+  story dialog, and a WebM-first hero loop with H.264 fallback and poster.
+- Plans, access requests, contact, and the public Module Explorer now share the
+  studio palette and navigation language while retaining their existing routes,
+  forms, pricing data, and access-request behavior.
+- This change does not touch Shopify apps, embedded surfaces, tenant websites,
+  authenticated workspaces, or Modern Forestry operations.
+
 ## 2026-08-02 — Instant Website addresses and simpler custom domains
 
 - Website now shows the automatically reserved `<workspace>.theeverbranch.com` address as a first-class live/reserved status card.
