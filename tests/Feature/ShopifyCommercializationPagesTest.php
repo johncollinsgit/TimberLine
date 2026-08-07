@@ -14,47 +14,29 @@ beforeEach(function () {
     $this->withoutVite();
 });
 
-test('promo page renders premium Everbranch splash and public tabs', function () {
-    config()->set('product_surfaces.plans.cards.starter.price_display', 'From $777/mo');
-
+test('promo page renders the public studio story and preserves conversion paths', function () {
     $this->get(route('platform.promo'))
         ->assertOk()
         ->assertSee('data-premium-motion="public"', false)
-        ->assertSee('id="intro-logo"', false)
-        ->assertSee('id="site-ambient"', false)
-        ->assertSeeText('Less Problems. More peace. The one place to run your business.')
-        ->assertSeeText('Small-business work, finally in one place')
-        ->assertSeeText('One flat price for the business')
-        ->assertSeeText('No per-user fees.')
-        ->assertSeeText('See it work')
-        ->assertSeeText('one place for your brain to focus')
-        ->assertSeeText('Custom workspace')
-        ->assertSeeText('Branch board')
-        ->assertSee('id="solution-phone-home"', false)
-        ->assertSeeText('Supplies used this month')
-        ->assertSeeText('28% of gross revenue')
+        ->assertSee('data-studio-story', false)
+        ->assertSee('data-studio-film', false)
+        ->assertSee('everbranch-studio-hero-loop.webm', false)
+        ->assertSee('everbranch-studio-hero-loop.mp4', false)
+        ->assertSeeText('Your business has a rhythm.')
+        ->assertSeeText('Everbranch helps you keep it.')
+        ->assertSeeText('One flat price for the business. No per-user fees.')
+        ->assertSeeText('A customer asks')
+        ->assertSeeText('Your team moves')
+        ->assertSeeText('The relationship continues')
         ->assertSeeText('Who it helps')
-        ->assertSeeText('Built for the messy middle of small business.')
-        ->assertSeeText('Tell us what keeps getting lost.')
-        ->assertSee('data-public-tabs', false)
-        ->assertSee('data-public-mobile-nav-toggle', false)
-        ->assertSee('data-public-mobile-nav-drawer hidden', false)
-        ->assertSee('data-public-tab-trigger="workflows"', false)
-        ->assertSee('data-public-tab-trigger="contact"', false)
-        ->assertDontSee('data-public-tab-trigger="integrations"', false)
-        ->assertDontSee('data-public-tab-trigger="security"', false)
-        ->assertDontSee('data-public-tab-trigger="plans"', false)
-        ->assertDontSee('data-public-tab-panel="integrations"', false)
-        ->assertDontSee('data-public-tab-panel="security"', false)
-        ->assertDontSee('data-public-tab-panel="plans"', false)
-        ->assertDontSee('fb-public-tabs__nav', false)
-        ->assertDontSeeText('Explore Everbranch')
-        ->assertDontSeeText('Shopify is supported. It is not the whole product.')
-        ->assertDontSeeText('Pricing')
-        ->assertDontSee('href="/platform/plans"', false)
-        ->assertSeeText('New launch tiers')
-        ->assertSeeText('From $777/mo')
-        ->assertSeeText('Start as a client');
+        ->assertSeeText('A platform that expands with you')
+        ->assertSeeText('One flat business price.')
+        ->assertSeeText('Become a launch partner')
+        ->assertSee(route('platform.plans'), false)
+        ->assertSee(route('platform.start'), false)
+        ->assertDontSee('data-public-tabs', false)
+        ->assertDontSee('data-public-tab-trigger', false)
+        ->assertDontSee('fb-public-tabs__nav', false);
 });
 
 test('contact placeholder page renders configured channels', function () {

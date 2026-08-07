@@ -2,6 +2,18 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Everbranch public-site redesign boundary (2026-08-07)
+
+- The public marketing redesign is limited to the canonical Everbranch pages:
+  `/`, Plans, demo/start access, Contact, and the public Module Explorer. Keep
+  it separate from tenant websites, authenticated workspaces, Shopify apps and
+  embeds, Modern Forestry commercial flows, pricing source data, and the
+  access-request handler.
+- Public media must be rights-tracked and customer-safe. Product captures use
+  demo/anonymized data; sound-on film requires captions and a transcript. Use
+  `docs/operations/public-site-media-runbook.md` and the public Playwright
+  checks before release.
+
 ## Modern Forestry production guard (2026-08-06)
 
 - The verified production baseline is documented in

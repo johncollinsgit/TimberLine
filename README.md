@@ -1,5 +1,15 @@
 # Modern Forestry Backstage
 
+## Everbranch public marketing site
+
+The platform marketing site is a separate public-only surface with a warm
+product-studio visual system. Its launch-partner request remains the primary
+conversion path; plans, demo/start access, contact, and the public module
+explorer share its navigation language. This work must never change Modern
+Forestry Shopify, embedded apps, tenant sites, customers, orders, rewards, or
+workspace behavior. See `docs/operations/public-site-media-runbook.md` before
+adding public media or releasing visual changes.
+
 ## Modern Forestry production guard (audit updated 2026-08-06)
 
 The live Everbranch service, storefront search, and retail/wholesale Shopify
