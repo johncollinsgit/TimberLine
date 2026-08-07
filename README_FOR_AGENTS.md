@@ -197,7 +197,9 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   A release may complete early DDL before Laravel records its migration batch.
   Add a MySQL recovery test that reconstructs that partial state and make each
   independent schema step safely resumable. Never delete a production table to
-  force a retry. The Customer Loop migration recovery test is the reference.
+  force a retry. The pending-release MySQL recovery cases for Customer Loop and
+  Commerce are the reference. Use explicit short names for indexes and foreign
+  keys that could exceed MySQL's 64-character identifier limit.
 - Forge API observability is a planned **read-only** integration: a production
   secret may retrieve deployment status/log links for a failed GitHub release,
   but may not create a deploy, change site settings, or replace the exact-SHA
