@@ -141,6 +141,16 @@ class UnifiedAppNavigationService
             ];
         }
 
+        if (($canAccessOps || $roleCanAccessMarketing) && $tenantId !== null && Route::has('customer-loop.index')) {
+            $items[] = [
+                'key' => 'customer-loop',
+                'icon' => 'arrow-path-rounded-square',
+                'href' => route('customer-loop.index'),
+                'label' => 'Follow-up',
+                'current' => request()->routeIs('customer-loop.*'),
+            ];
+        }
+
         if ($canAccessOps) {
             $workItems = [];
 

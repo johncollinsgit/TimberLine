@@ -1,0 +1,23 @@
+<x-app-layout>
+    <div class="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        <section class="overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-950 via-teal-900 to-emerald-800 p-7 text-white shadow-sm">
+            <p class="text-xs font-semibold uppercase tracking-[.2em] text-orange-200">Everbranch Customer Loop</p>
+            <div class="mt-3 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><h1 class="font-display text-4xl tracking-tight">Do the work. Keep the relationship.</h1><p class="mt-3 max-w-2xl text-sm leading-6 text-emerald-50">What needs a person today: the right next follow-up, review request, update, or marketing draft. Nothing sends or publishes without a clear human review.</p></div><a href="{{ route('workflows.index') }}" class="inline-flex rounded-full border border-white/35 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">Build a custom workflow →</a></div>
+        </section>
+
+        @if(session('success'))<div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">{{ session('success') }}</div>@endif
+
+        <section class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-lg font-semibold text-zinc-950">Start with a useful next step</h2><p class="mt-1 text-sm text-zinc-600">Templates are the easy path. Your team can customize the workflow later.</p></div></div>
+            <form method="post" action="{{ route('customer-loop.store') }}" class="mt-4 grid gap-3 md:grid-cols-[1fr_1.1fr_1.2fr_auto]">@csrf
+                <select name="template" class="rounded-xl border-zinc-300 text-sm">@foreach($templates as $key => $template)<option value="{{ $key }}">{{ $template['label'] }}</option>@endforeach</select>
+                <input name="title" required maxlength="190" placeholder="What happened or needs attention?" class="rounded-xl border-zinc-300 text-sm" />
+                <select name="marketing_profile_id" class="rounded-xl border-zinc-300 text-sm"><option value="">No customer selected yet</option>@foreach($profiles as $profile)<option value="{{ $profile->id }}">{{ trim($profile->first_name.' '.$profile->last_name) ?: $profile->email }}</option>@endforeach</select>
+                <button class="rounded-xl bg-emerald-900 px-4 py-2 text-sm font-semibold text-white">Create draft</button>
+            </form>
+        </section>
+
+        <section class="rounded-3xl border border-zinc-200 bg-white shadow-sm"><div class="border-b border-zinc-100 px-5 py-4"><h2 class="text-lg font-semibold text-zinc-950">What needs attention</h2></div><div class="divide-y divide-zinc-100">
+            @forelse($actions as $action)<article class="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between"><div><div class="flex flex-wrap items-center gap-2"><span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">{{ str_replace('_', ' ', $action->action_type) }}</span><span class="text-xs font-medium text-zinc-500">{{ ucfirst($action->status) }}</span></div><h3 class="mt-2 font-semibold text-zinc-950">{{ $action->title }}</h3><p class="mt-1 text-sm text-zinc-600">{{ $action->reason }}</p>@if($action->profile)<p class="mt-2 text-xs text-zinc-500">Customer: {{ trim($action->profile->first_name.' '.$action->profile->last_name) ?: $action->profile->email }}</p>@endif@if($action->draft_body)<details class="mt-3 text-sm text-zinc-600"><summary class="cursor-pointer font-medium text-emerald-800">View prepared wording</summary><p class="mt-2 whitespace-pre-line rounded-xl bg-zinc-50 p-3">{{ $action->draft_body }}</p></details>@endif</div><div class="flex shrink-0 flex-wrap gap-2">@if($action->status !== 'prepared')<form method="post" action="{{ route('customer-loop.prepare', $action) }}">@csrf<button class="rounded-xl border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-800">Prepare</button></form>@endif<form method="post" action="{{ route('customer-loop.snooze', $action) }}">@csrf<button class="rounded-xl border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700">Snooze</button></form><form method="post" action="{{ route('customer-loop.complete', $action) }}">@csrf<button class="rounded-xl bg-zinc-950 px-3 py-2 text-sm font-semibold text-white">Complete</button></form></div></article>@empty<div class="p-8 text-sm text-zinc-600">Nothing is waiting right now. Start with a template above or build a custom Customer Loop workflow.</div>@endforelse
+        </div><div class="px-5 py-4">{{ $actions->links() }}</div></section>
+    </div>
+</x-app-layout>

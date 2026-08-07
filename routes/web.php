@@ -975,6 +975,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{customModuleRequest}', [CustomModuleRequestController::class, 'show'])->name('show');
         });
 
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->prefix('customer-loop')
+        ->name('customer-loop.')
+        ->controller(\App\Http\Controllers\CustomerLoopController::class)
+        ->group(function (): void {
+            Route::get('/', 'index')->name('index');
+            Route::post('/', 'store')->name('store');
+            Route::post('/{action}/prepare', 'prepare')->name('prepare');
+            Route::post('/{action}/complete', 'complete')->name('complete');
+            Route::post('/{action}/snooze', 'snooze')->name('snooze');
+        });
+
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:workflow_automations'])
         ->prefix('workflows')
         ->name('workflows.')

@@ -202,6 +202,42 @@ test('backfilled legacy links and birthday history merge without unique collisio
         ->and(DB::table('customer_birthday_audits')->where('customer_birthday_profile_id', $survivorBirthday)->count())->toBe(2);
 });
 
+test('Customer Loop history follows the surviving profile when customers merge', function (): void {
+    $survivor = MarketingProfile::factory()->create(['tenant_id' => 1]);
+    $donor = MarketingProfile::factory()->create(['tenant_id' => 1]);
+    $now = now();
+    $activityId = DB::table('customer_loop_activities')->insertGetId([
+        'tenant_id' => 1,
+        'marketing_profile_id' => $donor->id,
+        'source_type' => 'manual',
+        'event_key' => 'merge-customer-loop-'.$donor->id,
+        'title' => 'Review a follow-up',
+        'summary' => 'A safe, review-only Customer Loop draft.',
+        'safe_context' => json_encode(['draft_only' => true]),
+        'occurred_at' => $now,
+        'created_at' => $now,
+        'updated_at' => $now,
+    ]);
+    DB::table('customer_loop_actions')->insert([
+        'tenant_id' => 1,
+        'customer_loop_activity_id' => $activityId,
+        'marketing_profile_id' => $donor->id,
+        'action_type' => 'follow_up',
+        'status' => 'suggested',
+        'title' => 'Review a follow-up',
+        'reason' => 'Prepared for a person to review.',
+        'safe_context' => json_encode(['draft_only' => true]),
+        'created_at' => $now,
+        'updated_at' => $now,
+    ]);
+
+    $operation = app(CustomerMergeService::class)->createOperation(1, [$survivor->id, $donor->id], $survivor->id, 'retail', 'customer-loop-history');
+    app(CustomerMergeService::class)->apply($operation);
+
+    expect(DB::table('customer_loop_activities')->where('id', $activityId)->value('marketing_profile_id'))->toBe($survivor->id)
+        ->and(DB::table('customer_loop_actions')->where('customer_loop_activity_id', $activityId)->value('marketing_profile_id'))->toBe($survivor->id);
+});
+
 test('every profile-owned foreign key has an explicit merge policy', function (): void {
     $registry = app(MarketingProfileMergeReferenceRegistry::class);
     $handled = collect($registry->directReferences())->flatMap(fn (array $columns, string $table) => collect($columns)->map(fn (string $column) => $table.'.'.$column))

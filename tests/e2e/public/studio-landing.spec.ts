@@ -6,6 +6,8 @@ test.describe("Everbranch public studio", () => {
         await expect(page.getByRole("heading", { name: /your business has a rhythm/i })).toBeVisible();
         await expect(page.getByRole("link", { name: /become a launch partner/i }).first()).toHaveAttribute("href", /start/);
         await expect(page.getByRole("link", { name: "Plans" }).first()).toBeVisible();
+        await expect(page.getByRole("link", { name: "Customer Loop", exact: true, includeHidden: true })).toHaveAttribute("href", "#customer-loop");
+        await expect(page.getByRole("link", { name: /plan your customer loop/i })).toHaveAttribute("href", /start/);
         await expect(page.locator("[data-studio-story]")).toBeVisible();
     });
 

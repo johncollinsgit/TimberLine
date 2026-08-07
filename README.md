@@ -1456,6 +1456,24 @@ Notes:
 - Asana polling uses `modified_since` with a small overlap window to avoid missed updates.
 - Event upserts are idempotent via the `automation_workflow_links` table (`asana_task` -> `google_calendar_event` mapping).
 
+## Customer Loop and Bud (2026-08-07)
+
+Customer Loop is a person-first action queue for the relationship after the
+work: follow-ups, review requests, emails, texts, and social drafts. It starts
+with templates and grows into a custom if/then path in the existing visual
+Workflow Studio. The first release is deliberately draft-only: no Customer
+Loop action sends a message or publishes a post.
+
+Bud Core is the included deterministic workspace guide. It can explain what
+the workspace can do and safely summarize registered, tenant-scoped signals;
+it cannot send, publish, edit files, run code, access credentials, or work
+outside the current tenant. Bud AI and speech-to-speech are separate paid
+capabilities and remain disabled by default until their provider, workspace
+budget, audit, and final-human-confirmation gates are complete.
+
+See `docs/architecture/customer-loop-and-bud.md` for the data, workflow,
+Modern Forestry, and future-provider contract.
+
 ## Auth Redirect Diagnostics (2026-03-26)
 
 Ship-readiness manual validation and release checklist:
