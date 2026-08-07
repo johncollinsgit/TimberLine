@@ -8,8 +8,10 @@
   workspaces, tenant websites, Shopify integrations or embedded apps, pricing
   logic, or the `platform.access-request` conversion path.
 - The homepage uses approved/public-safe editorial media and fictional product
-  data. Hero video is muted WebM with H.264 fallback and a poster; public-only
-  GSAP motion is dynamically loaded and reduced-motion aware. See
+  data. Its hero crossfades between three lightweight still scenes, including
+  field technicians and a business owner planning work in the office. The
+  movement is disabled for reduced-motion users; public-only GSAP motion is
+  dynamically loaded for the product story. See
   `docs/operations/public-site-media-runbook.md` for media provenance,
   caption/transcript, derivative, and release requirements.
 - Visual checks live in `tests/e2e/public` and run with

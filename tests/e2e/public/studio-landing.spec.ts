@@ -31,7 +31,16 @@ test.describe("Everbranch public studio", () => {
         await page.emulateMedia({ reducedMotion: "reduce" });
         await page.goto("/platform/promo");
         await expect(page.locator("[data-studio-story]")).toHaveAttribute("data-studio-mounted", "true");
-        await expect(page.locator(".eb-studio-hero video")).toHaveJSProperty("paused", true);
+        await expect(page.locator("[data-studio-hero]")).toHaveAttribute("data-studio-hero-rotation", "reduced");
+        await expect(page.locator("[data-studio-hero-slide]")).toHaveCount(3);
+        await expect(page.locator("[data-studio-hero-slide].is-active")).toHaveCount(1);
+    });
+
+    test("rotates the field-service and owner hero scenes", async ({ page }) => {
+        await page.goto("/platform/promo");
+        await expect(page.locator("[data-studio-hero]")).toHaveAttribute("data-studio-hero-rotation", "active");
+        await expect(page.locator("[data-studio-hero-slide]")).toHaveCount(3);
+        await expect(page.locator("[data-studio-hero-slide]").nth(2)).toHaveAttribute("src", /everbranch-field-owner-office\.jpg/);
     });
 
     test("has a stable public landing visual", async ({ page }) => {

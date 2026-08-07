@@ -39,9 +39,11 @@
     </header>
 
     <main id="main-content">
-        <section id="top" class="eb-studio-hero" aria-labelledby="hero-title">
+        <section id="top" class="eb-studio-hero" aria-labelledby="hero-title" data-studio-hero>
             <div class="eb-studio-hero__media" aria-hidden="true">
-                <img src="{{ asset('images/public-site/everbranch-hvac-electrical-hero.jpg') }}" alt="" fetchpriority="high" />
+                <img class="eb-studio-hero__slide is-active" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-hvac-electrical-hero.jpg') }}" alt="" fetchpriority="high" decoding="async" />
+                <img class="eb-studio-hero__slide eb-studio-hero__slide--field" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-hvac-electrical-field.jpg') }}" alt="" decoding="async" />
+                <img class="eb-studio-hero__slide eb-studio-hero__slide--owner" data-studio-hero-slide src="{{ asset('images/public-site/everbranch-field-owner-office.jpg') }}" alt="" decoding="async" />
             </div>
             <div class="eb-studio-hero__shade"></div>
             <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>

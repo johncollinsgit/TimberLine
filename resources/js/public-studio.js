@@ -64,6 +64,33 @@ function mountFilm(root) {
     dialog.addEventListener("close", () => restoreFocusTo?.focus());
 }
 
+function mountHeroSceneRotation(reducedMotion) {
+    const hero = document.querySelector("[data-studio-hero]");
+    const slides = hero ? [...hero.querySelectorAll("[data-studio-hero-slide]")] : [];
+    if (!hero || slides.length < 2) return;
+
+    let activeIndex = slides.findIndex((slide) => slide.classList.contains("is-active"));
+    activeIndex = activeIndex >= 0 ? activeIndex : 0;
+    const activate = (index) => {
+        slides.forEach((slide, slideIndex) => slide.classList.toggle("is-active", slideIndex === index));
+    };
+
+    activate(activeIndex);
+    hero.dataset.studioHeroRotation = reducedMotion ? "reduced" : "active";
+    if (reducedMotion) return;
+
+    const advance = () => {
+        activeIndex = (activeIndex + 1) % slides.length;
+        activate(activeIndex);
+    };
+
+    let interval = window.setInterval(advance, 7000);
+    document.addEventListener("visibilitychange", () => {
+        window.clearInterval(interval);
+        if (!document.hidden) interval = window.setInterval(advance, 7000);
+    });
+}
+
 export async function mountPublicStudioNow() {
     const root = document.querySelector("[data-studio-story]");
     if (!root || root.dataset.studioMounted === "true") return;
@@ -72,6 +99,8 @@ export async function mountPublicStudioNow() {
     const frame = root.querySelector("[data-studio-frame]");
     const triggers = [...root.querySelectorAll("[data-studio-step]")];
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    mountHeroSceneRotation(reducedMotion);
 
     const applyMoment = async (key, animate = !reducedMotion) => {
         const moment = workflowMoments[key];
@@ -112,10 +141,7 @@ export async function mountPublicStudioNow() {
     triggers.forEach((trigger) => trigger.addEventListener("click", () => applyMoment(trigger.dataset.studioStep)));
     mountFilm(document);
 
-    if (reducedMotion) {
-        document.querySelectorAll(".eb-studio-hero video").forEach((video) => video.pause());
-        return;
-    }
+    if (reducedMotion) return;
 
     const [{ gsap }, { ScrollTrigger }] = await Promise.all([import("gsap"), import("gsap/ScrollTrigger")]);
     gsap.registerPlugin(ScrollTrigger);
