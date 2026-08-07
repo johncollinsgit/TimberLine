@@ -23,6 +23,17 @@
   The rotating treatment respects reduced-motion preferences and leaves the
   first still visible if JavaScript is unavailable.
 
+### Follow-up: interactive industry examples
+
+- Each public industry card now opens a fictional website-to-workspace example
+  for retail, field service, projects, and independent studios. The experience
+  begins on a public website, presents a brief cursor handoff, and allows
+  visitors to explore the matching workspace, customer, work, messages, email,
+  and text-marketing views.
+- The examples are client-side demos only. They do not enable Managed Website,
+  publish a site, send a message or campaign, access tenant data, or change
+  Shopify and Modern Forestry surfaces.
+
 ## 2026-08-02 — Instant Website addresses and simpler custom domains
 
 - Website now shows the automatically reserved `<workspace>.theeverbranch.com` address as a first-class live/reserved status card.

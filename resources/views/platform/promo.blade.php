@@ -88,6 +88,7 @@
                         <button type="button" aria-pressed="false" data-studio-step="work">02 <span>Your team moves</span></button>
                         <button type="button" aria-pressed="false" data-studio-step="followup">03 <span>The relationship continues</span></button>
                     </div>
+                    <p class="eb-studio-sr-status" data-studio-step-status aria-live="polite">Choose a workflow moment.</p>
                 </div>
                 <div class="eb-studio-product-frame" aria-live="polite" data-studio-frame>
                     <div class="eb-studio-product-frame__topbar">
@@ -135,12 +136,42 @@
                     <h2 id="industries-title">A system that can meet your business where it is.</h2>
                     <p>Every business has a different rhythm. Everbranch starts with the work you do now and grows only where it helps.</p>
                 </div>
-                <div class="eb-studio-industry-grid">
-                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-retail.jpg') }}" alt="" /><div><small>01 · Wholesale · loyalty · follow-ups</small><h3>Retail &amp; product brands</h3><p>Keep buyer questions, customer context, events, and reorders moving.</p></div></article>
-                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-field-service.jpg') }}" alt="" /><div><small>02 · Jobs · schedules · customer updates</small><h3>Field &amp; service teams</h3><p>Give office and field teams one living record for every job.</p></div></article>
-                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-projects.jpg') }}" alt="" /><div><small>03 · Projects · files · handoffs</small><h3>Project work</h3><p>Bring approvals, materials, notes, and next steps out of the cracks.</p></div></article>
-                    <article class="eb-studio-industry-card" tabindex="0"><img src="{{ asset('images/public-site/everbranch-industry-studios.jpg') }}" alt="" /><div><small>04 · Clients · tasks · messages</small><h3>Independent studios</h3><p>Make room for the craft without losing the business behind it.</p></div></article>
+                <div class="eb-studio-industry-grid" data-industry-options>
+                    <button class="eb-studio-industry-card" type="button" data-industry-option="retail" aria-controls="industry-demo" aria-pressed="false"><img src="{{ asset('images/public-site/everbranch-industry-retail.jpg') }}" alt="" /><span><small>01 · Wholesale · loyalty · follow-ups</small><strong>Retail &amp; product brands</strong><em>Keep buyer questions, customer context, events, and reorders moving.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></button>
+                    <button class="eb-studio-industry-card" type="button" data-industry-option="field" aria-controls="industry-demo" aria-pressed="false"><img src="{{ asset('images/public-site/everbranch-industry-field-service.jpg') }}" alt="" /><span><small>02 · Jobs · schedules · customer updates</small><strong>Field &amp; service teams</strong><em>Give office and field teams one living record for every job.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></button>
+                    <button class="eb-studio-industry-card" type="button" data-industry-option="projects" aria-controls="industry-demo" aria-pressed="false"><img src="{{ asset('images/public-site/everbranch-industry-projects.jpg') }}" alt="" /><span><small>03 · Projects · files · handoffs</small><strong>Project work</strong><em>Bring approvals, materials, notes, and next steps out of the cracks.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></button>
+                    <button class="eb-studio-industry-card" type="button" data-industry-option="studio" aria-controls="industry-demo" aria-pressed="false"><img src="{{ asset('images/public-site/everbranch-industry-studios.jpg') }}" alt="" /><span><small>04 · Clients · tasks · messages</small><strong>Independent studios</strong><em>Make room for the craft without losing the business behind it.</em><b>Explore the example <i aria-hidden="true">↗</i></b></span></button>
                 </div>
+                <section id="industry-demo" class="eb-studio-industry-demo" data-industry-demo aria-labelledby="industry-demo-title" hidden tabindex="-1">
+                    <div class="eb-studio-industry-demo__intro">
+                        <div><p class="eb-studio-eyebrow">A connected example</p><h3 id="industry-demo-title" data-industry-demo-title>Explore a business in motion.</h3></div>
+                        <p>Start with the public website, then step into the shared context behind it. Everything here is fictional demo data.</p>
+                    </div>
+                    <div class="eb-studio-industry-demo__tabs" role="tablist" aria-label="Example software views">
+                        <button type="button" role="tab" id="industry-demo-website-tab" aria-controls="industry-demo-website" aria-selected="true" data-industry-view="website">Website</button>
+                        <button type="button" role="tab" id="industry-demo-workspace-tab" aria-controls="industry-demo-workspace" aria-selected="false" data-industry-view="workspace">Everbranch workspace</button>
+                    </div>
+                    <p class="eb-studio-industry-demo__status" aria-live="polite" data-industry-status></p>
+                    <div class="eb-studio-demo-frame" data-industry-frame>
+                        <div class="eb-studio-demo-cursor" data-industry-cursor aria-hidden="true"><span></span></div>
+                        <section id="industry-demo-website" class="eb-studio-demo-pane is-active" role="tabpanel" aria-labelledby="industry-demo-website-tab" data-industry-pane="website">
+                            <div class="eb-studio-demo-site">
+                                <header><strong data-industry-site-brand>Everbranch example</strong><nav aria-label="Example website navigation"><button type="button" data-industry-site-nav>Services</button><button type="button" data-industry-site-nav>About</button><button type="button" data-industry-site-nav>Contact</button></nav><button type="button" class="eb-studio-demo-site__admin" data-industry-admin>Manage business <span aria-hidden="true">↗</span></button></header>
+                                <div class="eb-studio-demo-site__hero"><img data-industry-site-image alt="" /><div><p data-industry-site-kicker>Made for real work</p><h4 data-industry-site-title>Your website, built around your business.</h4><p data-industry-site-copy>Show the right next step without losing the relationship behind it.</p><div><button type="button" class="eb-studio-demo-site__primary" data-industry-site-action>Start a request</button><button type="button" class="eb-studio-demo-site__secondary" data-industry-site-nav>See the details</button></div></div></div>
+                                <footer><span data-industry-site-proof>A thoughtful public front door, connected to the work behind it.</span><b data-industry-site-result>Fictional website example</b></footer>
+                            </div>
+                        </section>
+                        <section id="industry-demo-workspace" class="eb-studio-demo-pane" role="tabpanel" aria-labelledby="industry-demo-workspace-tab" data-industry-pane="workspace" hidden>
+                            <div class="eb-studio-demo-workspace">
+                                <header><span aria-hidden="true">◒</span><strong data-industry-workspace-brand>Everbranch workspace</strong><small>Demo workspace</small></header>
+                                <div class="eb-studio-demo-workspace__body">
+                                    <nav aria-label="Example workspace navigation"><button type="button" data-industry-workspace-nav="inbox" aria-pressed="true">Inbox</button><button type="button" data-industry-workspace-nav="customers" aria-pressed="false">Customers</button><button type="button" data-industry-workspace-nav="work" aria-pressed="false">Work</button><button type="button" data-industry-workspace-nav="messages" aria-pressed="false">Messages</button><button type="button" data-industry-workspace-nav="marketing" aria-pressed="false">Marketing</button><button type="button" data-industry-workspace-nav="followup" aria-pressed="false" data-industry-workspace-fifth>Follow-up</button></nav>
+                                    <div class="eb-studio-demo-workspace__canvas" aria-live="polite"><p data-industry-workspace-label>Inbox</p><h4 data-industry-workspace-title>A customer question is already in context.</h4><div class="eb-studio-demo-workspace__cards"><article><small data-industry-card-one-label>REQUEST</small><strong data-industry-card-one>New question from a customer</strong><span data-industry-card-one-meta>Ready for the team</span></article><article><small data-industry-card-two-label>NEXT STEP</small><strong data-industry-card-two>Reply with the right detail</strong><span data-industry-card-two-meta>Assigned to the owner</span></article></div><div class="eb-studio-demo-message" data-industry-workspace-message><span aria-hidden="true"></span><p data-industry-message>Message activity appears here.</p><button type="button" data-industry-message-action>Open conversation</button></div></div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </section>
             </div>
         </section>
 

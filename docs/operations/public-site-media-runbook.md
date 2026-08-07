@@ -37,3 +37,7 @@ data. Product walkthrough captures use demo or anonymized data.
   that Plans, Modules, Contact, and Login retain their public routes.
 - Public-site work must not change Shopify apps, embedded apps, tenant websites,
   authenticated workspace UI, pricing source data, or access-request handling.
+- Interactive marketing demos must use fictional, public-safe data and remain
+  entirely client-side. They may illustrate a website, workspace, email, or
+  text workflow, but cannot send, store, publish, resolve a tenant, or call
+  Managed Website, Shopify, customer, messaging, or marketing APIs.
