@@ -33,9 +33,9 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   Operations workspace. They may show workspace, messaging, email, and
   consent-safe text-marketing states, but must never send, store, publish,
   resolve a tenant, create a customer, or call Managed Website, Shopify,
-  messaging, or marketing APIs. Keep the controls keyboard accessible, use the
-  deliberate four-second view handoff only when motion is allowed, and switch
-  immediately for reduced-motion visitors.
+  messaging, or marketing APIs. Keep the controls keyboard accessible and
+  switch Website / Operations workspace views immediately; a brief entrance
+  transition may not delay controls or content.
 - For a public-site interaction change, run `npm run test:visual`,
   `CLICK_PATH_CONFIG=tests/e2e/click-path-public-routes.json npm run qa:click-path`,
   and `npm run test:lighthouse:public` in addition to the normal PHP checks.

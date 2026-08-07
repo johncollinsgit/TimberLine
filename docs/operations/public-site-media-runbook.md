@@ -43,5 +43,5 @@ data. Product walkthrough captures use demo or anonymized data.
   Managed Website, Shopify, customer, messaging, or marketing APIs.
 - Industry-example pages must retain their contextual top control bar: return
   to Everbranch, business-type switcher, and Website / Operations workspace
-  view control. The view handoff is four seconds for ordinary-motion visitors
-  and immediate for reduced-motion visitors.
+  view control. Views switch immediately; a short entrance transition may not
+  delay controls or content.

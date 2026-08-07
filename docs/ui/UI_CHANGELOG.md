@@ -51,9 +51,11 @@
   six disciplines in a two-by-three grid, while each example has a persistent
   contextual control bar for Back to Everbranch, business type, and Website /
   Operations workspace views.
-- Website-to-workspace changes use a deliberate four-second handoff that is
-  bypassed for reduced-motion visitors. The page remains fictional and
-  client-side only.
+- The homepage now moves the six industry examples directly below the hero and
+  removes the separate manifesto, pricing panel, and hidden duplicate demo.
+- Dedicated examples now label both Website and Operations workspace as
+  fictional, public-only demonstrations, switch immediately, and use a
+  launch-partner access request as their closing CTA.
 
 ## 2026-08-02 — Instant Website addresses and simpler custom domains
 

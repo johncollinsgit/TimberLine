@@ -20,7 +20,7 @@ test('promo page renders the public studio story and preserves conversion paths'
         ->assertSee('data-premium-motion="public"', false)
         ->assertSee('data-studio-story', false)
         ->assertSee('data-studio-film', false)
-        ->assertSee('data-industry-demo', false)
+        ->assertDontSee('data-industry-demo', false)
         ->assertSee('data-industry-option="retail"', false)
         ->assertSee('data-industry-option="field"', false)
         ->assertSee('data-industry-option="projects"', false)
@@ -33,13 +33,12 @@ test('promo page renders the public studio story and preserves conversion paths'
         ->assertSee('data-studio-hero-slide', false)
         ->assertSeeText('Your business has a rhythm.')
         ->assertSeeText('Everbranch helps you keep it.')
-        ->assertSeeText('One flat price for the business. No per-user fees.')
         ->assertSeeText('A customer asks')
         ->assertSeeText('Your team moves')
         ->assertSeeText('The relationship continues')
         ->assertSeeText('Who it helps')
         ->assertSeeText('A platform that expands with you')
-        ->assertSeeText('One flat business price.')
+        ->assertSeeText('Open a fictional website and operations-workspace example')
         ->assertSeeText('Become a launch partner')
         ->assertSee(route('platform.plans'), false)
         ->assertSee(route('platform.start'), false)
@@ -55,6 +54,8 @@ test('industry example route is public presentation only', function () {
         ->assertSee('data-industry-key="community"', false)
         ->assertSeeText('Community teams')
         ->assertSeeText('Fictional workspace')
+        ->assertSeeText('not a live customer website or workspace')
+        ->assertSeeText('Request launch-partner access')
         ->assertDontSee('shopify.app', false);
 });
 

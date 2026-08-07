@@ -85,14 +85,11 @@ export function mountPublicIndustryDemosNow() {
 
     const example = examples[root.dataset.industryKey];
     if (!example) return;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const frame = root.querySelector("[data-industry-page-frame]");
     const status = root.querySelector("[data-industry-page-status]");
     const panes = [...root.querySelectorAll("[data-industry-page-pane]")];
     const views = [...root.querySelectorAll("[data-industry-page-view]")];
     const workspaceNavigation = [...root.querySelectorAll("[data-industry-page-nav]")];
     let activeView = "website";
-    let transitionTimer = null;
 
     const renderWorkspace = (key) => {
         const values = example.modules[key];
@@ -119,30 +116,17 @@ export function mountPublicIndustryDemosNow() {
             pane.classList.toggle("is-active", visible);
         });
         views.forEach((button) => button.setAttribute("aria-selected", String(button.dataset.industryPageView === view)));
-        frame?.classList.remove("is-switching");
         root.removeAttribute("aria-busy");
-        status.textContent = view === "website" ? "Showing the fictional website example." : "Showing the fictional operations workspace example.";
+        status.textContent = view === "website"
+            ? "Showing a fictional website example. No live customer data is shown."
+            : "Showing a fictional operations workspace example. No live customer data is shown.";
     };
     const changeView = (view) => {
-        if (transitionTimer) {
-            status.textContent = "The selected view is still coming into focus.";
-            return;
-        }
         if (view === activeView) {
             status.textContent = view === "website" ? "The fictional website is already active." : "The fictional operations workspace is already active.";
             return;
         }
-        if (reducedMotion) {
-            paintView(view);
-            return;
-        }
-        root.setAttribute("aria-busy", "true");
-        frame?.classList.add("is-switching");
-        status.textContent = view === "workspace" ? "Bringing the operations workspace into view." : "Returning to the public website.";
-        transitionTimer = window.setTimeout(() => {
-            transitionTimer = null;
-            paintView(view);
-        }, 4000);
+        paintView(view);
     };
 
     setText(root, "[data-industry-page-title]", example.title);

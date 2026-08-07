@@ -18,10 +18,10 @@
     <header class="eb-industry-page-header">
         <a class="eb-industry-page-back" href="{{ route('platform.promo') }}#industries"><span aria-hidden="true">←</span> Back to Everbranch</a>
         <a class="eb-industry-page-brand" href="{{ route('platform.promo') }}" aria-label="Everbranch home"><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="Everbranch" /></a>
-        <a class="eb-industry-page-cta" href="{{ route('platform.start') }}">Become a launch partner <span aria-hidden="true">↗</span></a>
+        <a class="eb-industry-page-cta" href="{{ route('platform.start') }}">Request launch-partner access <span aria-hidden="true">↗</span></a>
         <section class="eb-industry-page-controls" aria-label="Example controls">
             <div class="eb-industry-page-control-group">
-                <span>Business type</span>
+                <span>Example business type</span>
                 <div class="eb-industry-page-disciplines" aria-label="Choose a business type">
                     @foreach ($disciplines as $key => $label)
                         <a href="{{ route('platform.industry-demo', ['discipline' => $key]) }}" @if ($key === $discipline) aria-current="page" @endif>{{ $label }}</a>
@@ -29,7 +29,7 @@
                 </div>
             </div>
             <div class="eb-industry-page-control-group">
-                <span>View</span>
+                <span>Example view</span>
                 <div class="eb-industry-page-views" role="tablist" aria-label="Example system view">
                     <button type="button" role="tab" id="industry-page-website-tab" aria-controls="industry-page-website" aria-selected="true" data-industry-page-view="website">Website</button>
                     <button type="button" role="tab" id="industry-page-workspace-tab" aria-controls="industry-page-workspace" aria-selected="false" data-industry-page-view="workspace">Operations workspace</button>
@@ -42,13 +42,12 @@
         <section class="eb-industry-page-intro" aria-labelledby="industry-page-title">
             <p class="eb-studio-eyebrow">A connected example</p>
             <h1 id="industry-page-title" data-industry-page-title>{{ $disciplines[$discipline] }} in motion.</h1>
-            <p>Explore the customer-facing website and the shared operating system behind it. Every name, request, message, and campaign on this page is fictional.</p>
+            <p>This is a fictional Everbranch demonstration, not a live customer website or workspace. Explore the customer-facing website and the shared operating system behind it using demo-only content.</p>
         </section>
 
-        <p class="eb-industry-page-status" aria-live="polite" data-industry-page-status>Showing the fictional website example.</p>
+        <p class="eb-industry-page-status" aria-live="polite" data-industry-page-status>Showing a fictional website example. No live customer data is shown.</p>
 
         <section class="eb-industry-page-frame" data-industry-page-frame aria-label="{{ $disciplines[$discipline] }} fictional Everbranch example">
-            <div class="eb-industry-page-progress" aria-hidden="true"><span></span></div>
             <section id="industry-page-website" class="eb-industry-page-pane is-active" role="tabpanel" aria-labelledby="industry-page-website-tab" data-industry-page-pane="website">
                 <div class="eb-industry-page-site">
                     <header><strong data-industry-page-site-brand>Everbranch example</strong><nav aria-label="Fictional website navigation"><button type="button" data-industry-page-site-nav>Services</button><button type="button" data-industry-page-site-nav>Our approach</button><button type="button" data-industry-page-site-nav>Contact</button></nav><button type="button" data-industry-page-admin>Open operations workspace <span aria-hidden="true">↗</span></button></header>
@@ -67,7 +66,7 @@
             </section>
         </section>
 
-        <aside class="eb-industry-page-note"><strong>Built to be linkable.</strong><span>This fictional example has its own public address, so it can be used as a clear call to action without opening a real customer workspace.</span><a href="{{ route('platform.start') }}">Talk about your business <span aria-hidden="true">↗</span></a></aside>
+        <aside class="eb-industry-page-note"><strong>Ready to see this for your business?</strong><span>This is a fictional, public-only example. A launch partner gets a system shaped around the way their team actually works.</span><a href="{{ route('platform.start') }}">Request launch-partner access <span aria-hidden="true">↗</span></a></aside>
     </main>
 </body>
 </html>

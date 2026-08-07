@@ -32,7 +32,7 @@
 - Six industry cards link to public-only, fictional website-to-workspace pages
   for retail, field service, project work, independent studios, professional
   practices, and community teams. Each page has a contextual return/type/view
-  control bar and uses a four-second handoff unless reduced motion is selected.
+  control bar and switches Website / Operations workspace views immediately.
   The website, workspace, messaging, email, and text-marketing examples are
   client-side presentation only and never enable Managed Website, Shopify, or
   delivery lanes.

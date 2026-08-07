@@ -52,8 +52,7 @@ test.describe("Everbranch public studio", () => {
         }
     });
 
-    test("opens a linkable example with a persistent control bar and a four-second handoff", async ({ page }) => {
-        test.setTimeout(20_000);
+    test("opens a clearly fictional linkable example with immediate view controls", async ({ page }) => {
         await page.goto("/platform/examples/projects");
         const demo = page.locator("[data-industry-page]");
         await expect(demo).toHaveAttribute("data-industry-mounted", "true");
@@ -61,12 +60,12 @@ test.describe("Everbranch public studio", () => {
         await expect(page.getByRole("link", { name: "Project work" })).toHaveAttribute("aria-current", "page");
         await expect(page.getByRole("tab", { name: "Website" })).toHaveAttribute("aria-selected", "true");
         await expect(page.getByText("Northline Build", { exact: true })).toBeVisible();
+        await expect(page.getByText(/not a live customer website or workspace/i)).toBeVisible();
+        await expect(page.getByRole("link", { name: /request launch-partner access/i }).first()).toHaveAttribute("href", /start/);
 
         await page.getByRole("button", { name: /start a project conversation/i }).click();
         await expect(page.getByText(/request received/i)).toBeVisible();
         await page.getByRole("button", { name: /open operations workspace/i }).click();
-        await expect(page.locator("[data-industry-page-frame]")).toHaveClass(/is-switching/);
-        await page.waitForTimeout(4_100);
         await expect(page.getByRole("tab", { name: /operations workspace/i })).toHaveAttribute("aria-selected", "true");
 
         await page.getByRole("button", { name: "Messages" }).click();

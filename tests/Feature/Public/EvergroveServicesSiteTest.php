@@ -60,7 +60,7 @@ test('everbranch public host keeps the everbranch product surface', function ():
         ->assertSeeText('Contact')
         ->assertSee('data-studio-story', false)
         ->assertSee('data-studio-film', false)
-        ->assertSee('data-industry-demo', false)
+        ->assertDontSee('data-industry-demo', false)
         ->assertSee('data-industry-option="retail"', false)
         ->assertSee('data-industry-option="field"', false)
         ->assertSee('data-industry-option="projects"', false)
