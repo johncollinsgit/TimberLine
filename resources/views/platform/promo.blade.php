@@ -50,7 +50,7 @@
             <div class="eb-studio-container eb-studio-hero__content" data-studio-reveal>
                 <p class="eb-studio-eyebrow eb-studio-eyebrow--light">A calmer way to run the work</p>
                 <h1 id="hero-title">Your business has a rhythm.<br>Everbranch helps you keep it.</h1>
-                <p class="eb-studio-hero__lede">Customers, work, messages, files, and the next thing that needs attention—connected in one place that feels like it was made for how your team actually operates.</p>
+                <p class="eb-studio-hero__lede">Customers, work, messages, files, and the next thing that needs attention, connected in one place that feels like it was made for how your team actually operates.</p>
                 <div class="eb-studio-hero__actions">
                     <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Become a launch partner <span aria-hidden="true">↗</span></a>
                     <button class="eb-studio-play" type="button" data-studio-film-open aria-haspopup="dialog">
@@ -144,7 +144,7 @@
             <div class="eb-studio-container eb-studio-modules__grid">
                 <figure class="eb-studio-photo-card">
                     <img src="{{ asset('images/public-site/everbranch-field-team.jpg') }}" alt="A field-service team coordinating the next job" loading="lazy" />
-                    <figcaption>Work follows the team—not the other way around.</figcaption>
+                    <figcaption>Work follows the team, not the other way around.</figcaption>
                 </figure>
                 <div class="eb-studio-modules__copy">
                     <p class="eb-studio-eyebrow">A platform that expands with you</p>
@@ -180,7 +180,7 @@
         <button class="eb-studio-film__close" type="button" data-studio-film-close aria-label="Close Everbranch story">×</button>
         <div class="eb-studio-film__frame">
             <img src="{{ asset('images/public-site/everbranch-studio-hero.jpg') }}" alt="Small-business owners reviewing work together" />
-            <div class="eb-studio-film__copy"><p class="eb-studio-eyebrow eb-studio-eyebrow--light">The Everbranch story</p><h2 id="film-title">A better business day begins when the next thing is clear.</h2><p>Everbranch is built to make the day more connected—not more complicated. A full sound-on product film and transcript can be dropped into this accessible film frame when approved production footage is ready.</p></div>
+                <div class="eb-studio-film__copy"><p class="eb-studio-eyebrow eb-studio-eyebrow--light">The Everbranch story</p><h2 id="film-title">A better business day begins when the next thing is clear.</h2><p>Everbranch is built to make the day more connected, not more complicated. A full sound-on product film and transcript can be dropped into this accessible film frame when approved production footage is ready.</p></div>
         </div>
     </dialog>
 </body>

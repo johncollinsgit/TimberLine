@@ -18,7 +18,7 @@ const workflowMoments = {
         name: "Monroe Avenue",
         subtitle: "Active customer · service visit",
         oneLabel: "WORK",
-        one: "Panel upgrade — 2 hours on site",
+        one: "Panel upgrade, 2 hours on site",
         oneMeta: "Materials confirmed",
         twoLabel: "OWNER",
         two: "Jordan will lead the visit",
