@@ -519,6 +519,9 @@ Route::post('/platform/bud/conversations', [PublicBudConversationController::cla
     ->middleware('throttle:20,1')
     ->name('platform.bud.conversations');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
+Route::get('/platform/examples/{discipline?}', [PlatformProductPagesController::class, 'industryDemo'])
+    ->where('discipline', 'retail|field|projects|studio|practice|community')
+    ->name('platform.industry-demo');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');

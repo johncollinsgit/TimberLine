@@ -34,6 +34,16 @@
   publish a site, send a message or campaign, access tenant data, or change
   Shopify and Modern Forestry surfaces.
 
+### Follow-up: linkable industry systems
+
+- Industry cards now link to dedicated public example pages. The homepage has
+  six disciplines in a two-by-three grid, while each example has a persistent
+  contextual control bar for Back to Everbranch, business type, and Website /
+  Operations workspace views.
+- Website-to-workspace changes use a deliberate four-second handoff that is
+  bypassed for reduced-motion visitors. The page remains fictional and
+  client-side only.
+
 ## 2026-08-02 — Instant Website addresses and simpler custom domains
 
 - Website now shows the automatically reserved `<workspace>.theeverbranch.com` address as a first-class live/reserved status card.

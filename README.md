@@ -10,6 +10,22 @@ Forestry Shopify, embedded apps, tenant sites, customers, orders, rewards, or
 workspace behavior. See `docs/operations/public-site-media-runbook.md` before
 adding public media or releasing visual changes.
 
+The six industry cards on the home page link to dedicated, fictional examples
+for retail, field service, project work, independent studios, professional
+practices, and community teams. Every example has a persistent contextual
+control bar for returning to Everbranch, changing the business type, and
+switching between a simulated customer website and operations workspace. The
+four-second Website-to-workspace handoff, customer, work, messaging, email,
+and consent-safe text-marketing states are client-side presentation only: they
+do not create a tenant,
+publish a website, send a campaign or text, access customer records, or call
+Managed Website, Shopify, messaging, or marketing APIs.
+
+For public-site changes, run the focused visual and interaction suite with
+`npm run test:visual`, the public click audit with
+`CLICK_PATH_CONFIG=tests/e2e/click-path-public-routes.json npm run qa:click-path`,
+and the Lighthouse budgets with `npm run test:lighthouse:public`.
+
 ## Modern Forestry production guard (audit updated 2026-08-06)
 
 The live Everbranch service, storefront search, and retail/wholesale Shopify

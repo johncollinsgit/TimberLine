@@ -28,6 +28,12 @@ const contextualModules = [
     mountExport: "mountPublicStudioNow",
   },
   {
+    key: "publicIndustryDemos",
+    selectors: ["[data-industry-page]"],
+    load: () => import("./public-industry-demos"),
+    mountExport: "mountPublicIndustryDemosNow",
+  },
+  {
     key: "publicTabs",
     selectors: ["[data-public-tabs]"],
     load: () => import("./public-tabs"),

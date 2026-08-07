@@ -3,6 +3,10 @@
     {
       "path": "/platform/promo",
       "label": "Everbranch Public Studio"
+    },
+    {
+      "path": "/platform/examples/field",
+      "label": "Everbranch Field Service Example"
     }
   ],
   "dangerousActionGuards": [
@@ -29,5 +33,5 @@
     "reprocess"
   ],
   "maxLinksPerPage": 80,
-  "maxButtonsPerPage": 35
+  "maxButtonsPerPage": 40
 }

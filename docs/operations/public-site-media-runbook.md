@@ -41,3 +41,7 @@ data. Product walkthrough captures use demo or anonymized data.
   entirely client-side. They may illustrate a website, workspace, email, or
   text workflow, but cannot send, store, publish, resolve a tenant, or call
   Managed Website, Shopify, customer, messaging, or marketing APIs.
+- Industry-example pages must retain their contextual top control bar: return
+  to Everbranch, business-type switcher, and Website / Operations workspace
+  view control. The view handoff is four seconds for ordinary-motion visitors
+  and immediate for reduced-motion visitors.

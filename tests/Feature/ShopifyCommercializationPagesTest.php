@@ -25,6 +25,8 @@ test('promo page renders the public studio story and preserves conversion paths'
         ->assertSee('data-industry-option="field"', false)
         ->assertSee('data-industry-option="projects"', false)
         ->assertSee('data-industry-option="studio"', false)
+        ->assertSee('data-industry-option="practice"', false)
+        ->assertSee('data-industry-option="community"', false)
         ->assertSee('everbranch-hvac-electrical-hero.jpg', false)
         ->assertSee('everbranch-hvac-electrical-field.jpg', false)
         ->assertSee('everbranch-field-owner-office.jpg', false)
@@ -44,6 +46,16 @@ test('promo page renders the public studio story and preserves conversion paths'
         ->assertDontSee('data-public-tabs', false)
         ->assertDontSee('data-public-tab-trigger', false)
         ->assertDontSee('fb-public-tabs__nav', false);
+});
+
+test('industry example route is public presentation only', function () {
+    $this->get(route('platform.industry-demo', ['discipline' => 'community']))
+        ->assertOk()
+        ->assertSee('data-industry-page', false)
+        ->assertSee('data-industry-key="community"', false)
+        ->assertSeeText('Community teams')
+        ->assertSeeText('Fictional workspace')
+        ->assertDontSee('shopify.app', false);
 });
 
 test('contact placeholder page renders configured channels', function () {
