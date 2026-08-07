@@ -450,6 +450,13 @@
   commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
+- **Migration-resume guard:** additive migrations must tolerate the state where
+  Forge has committed an early DDL statement but Laravel has not recorded the
+  migration. MySQL recovery tests reproduce that state; no operator may delete
+  production tables to retry it. Customer Loop is the first enforced example.
+- **Next observability lift:** add a read-only Forge API integration, held in a
+  production secret, to surface candidate status and log links in GitHub. It
+  must not trigger deployments or replace the exact-SHA `/ready` proof.
 - **Default delivery:** completed scoped features merge to `main` and deploy
   through the protected GitHub/Forge path unless John requests review-only
   handling, a release gate fails, or a customer-data/isolation concern requires

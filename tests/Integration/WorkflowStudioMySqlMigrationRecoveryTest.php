@@ -162,3 +162,80 @@ it('recovers Website Commerce after MySQL retains a partial reservation table', 
             ->where('CONSTRAINT_NAME', 'website_reservations_order_fk')
             ->exists())->toBeTrue();
 });
+
+it('resumes Customer Loop after a release created its first table before migration recording', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('customer_loop_actions');
+    Schema::dropIfExists('customer_loop_activities');
+
+    if (! Schema::hasTable('tenants')) {
+        Schema::create('tenants', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (! Schema::hasTable('marketing_profiles')) {
+        Schema::create('marketing_profiles', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (! Schema::hasTable('users')) {
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    // This is the exact durable state Forge left behind: the first DDL
+    // completed, but the migration itself was never recorded as complete.
+    Schema::create('customer_loop_activities', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('marketing_profile_id')->nullable();
+        $table->timestamp('occurred_at');
+    });
+
+    $migration = require database_path('migrations/2026_08_07_180000_create_customer_loop_tables.php');
+    $migration->up();
+
+    expect(Schema::hasTable('customer_loop_activities'))->toBeTrue()
+        ->and(Schema::hasTable('customer_loop_actions'))->toBeTrue();
+});
+
+it('repairs the trailing Customer Loop index after MySQL stopped during action-table creation', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('customer_loop_actions');
+    Schema::dropIfExists('customer_loop_activities');
+
+    Schema::create('customer_loop_activities', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('marketing_profile_id')->nullable();
+        $table->timestamp('occurred_at');
+    });
+    Schema::create('customer_loop_actions', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('marketing_profile_id')->nullable();
+        $table->string('status', 32);
+        $table->timestamp('due_at')->nullable();
+        // This was the last successful automatic index before MySQL rejected
+        // the following generated index name as too long.
+        $table->index(
+            ['tenant_id', 'status', 'due_at'],
+            'customer_loop_actions_tenant_id_status_due_at_index'
+        );
+    });
+
+    $migration = require database_path('migrations/2026_08_07_180000_create_customer_loop_tables.php');
+    $migration->up();
+
+    expect(Schema::hasIndex('customer_loop_actions', 'customer_loop_actions_tenant_id_status_due_at_index'))->toBeTrue()
+        ->and(Schema::hasIndex('customer_loop_actions', 'cl_action_tenant_profile_status_idx'))->toBeTrue();
+});
