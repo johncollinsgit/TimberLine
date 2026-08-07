@@ -91,6 +91,12 @@ test/build gate.
   table/index step must detect the durable partial state and resume safely.
   Reproduce that state in the MySQL migration-recovery suite before release;
   never manually delete a production table simply to retry a migration.
+- MySQL identifiers are limited to 64 characters. Do not rely on Laravel's
+  generated index or foreign-key names when a table/column combination can
+  approach that limit. The 2026-08-07 Customer Loop/Commerce incident was
+  caused by a 65-character generated action index and exposed a 68-character
+  generated shipping-rate foreign key. Both migrations now use explicit short
+  names and repair the durable partial schema on retry.
 
 ## Smoke checks
 

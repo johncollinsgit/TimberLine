@@ -453,7 +453,8 @@
 - **Migration-resume guard:** additive migrations must tolerate the state where
   Forge has committed an early DDL statement but Laravel has not recorded the
   migration. MySQL recovery tests reproduce that state; no operator may delete
-  production tables to retry it. Customer Loop is the first enforced example.
+  production tables to retry it. Customer Loop and Commerce are enforced
+  examples, including explicit short names for MySQL indexes and foreign keys.
 - **Next observability lift:** add a read-only Forge API integration, held in a
   production secret, to surface candidate status and log links in GitHub. It
   must not trigger deployments or replace the exact-SHA `/ready` proof.

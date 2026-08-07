@@ -239,3 +239,100 @@ it('repairs the trailing Customer Loop index after MySQL stopped during action-t
     expect(Schema::hasIndex('customer_loop_actions', 'customer_loop_actions_tenant_id_status_due_at_index'))->toBeTrue()
         ->and(Schema::hasIndex('customer_loop_actions', 'cl_action_tenant_profile_status_idx'))->toBeTrue();
 });
+
+it('resumes the complete Commerce foundation from durable partial MySQL state', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    foreach (['website_shipment_events', 'website_shipments', 'website_order_events', 'website_fulfillment_lines', 'website_shipping_rate_quotes', 'website_shipping_packages', 'website_fulfillment_locations', 'commerce_import_events', 'commerce_external_records', 'commerce_import_runs', 'commerce_sources'] as $table) {
+        Schema::dropIfExists($table);
+    }
+
+    foreach (['tenants', 'users', 'tenant_sites'] as $tableName) {
+        if (! Schema::hasTable($tableName)) {
+            Schema::create($tableName, function (Blueprint $table): void {
+                $table->id();
+            });
+        }
+    }
+
+    if (! Schema::hasTable('website_carts')) {
+        Schema::create('website_carts', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+    if (! Schema::hasTable('website_fulfillments')) {
+        Schema::create('website_fulfillments', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+    if (! Schema::hasTable('website_order_lines')) {
+        Schema::create('website_order_lines', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+    if (! Schema::hasTable('website_product_variants')) {
+        Schema::create('website_product_variants', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedInteger('inventory_quantity')->default(0);
+        });
+    }
+    if (! Schema::hasTable('website_orders')) {
+        Schema::create('website_orders', function (Blueprint $table): void {
+            $table->id();
+            $table->string('currency', 3)->default('usd');
+            $table->unsignedInteger('subtotal_cents')->default(0);
+            $table->unsignedInteger('tax_cents')->default(0);
+            $table->unsignedInteger('total_cents')->default(0);
+            $table->json('customer_snapshot')->nullable();
+            $table->timestamp('fulfilled_at')->nullable();
+        });
+    }
+
+    // The production database reached this durable first-table state during
+    // an earlier failed Commerce candidate, without a migration-batch record.
+    Schema::create('commerce_sources', function (Blueprint $table): void {
+        $table->id();
+    });
+
+    $migration = require database_path(
+        'migrations/2026_08_07_190000_add_commerce_operations_and_shipping_foundation.php'
+    );
+    $migration->up();
+
+    expect(Schema::hasTable('commerce_import_runs'))->toBeTrue()
+        ->and(Schema::hasTable('website_shipment_events'))->toBeTrue()
+        ->and(Schema::hasColumn('website_product_variants', 'shipping_height_inches'))->toBeTrue()
+        ->and(Schema::hasColumn('website_orders', 'closed_at'))->toBeTrue()
+        ->and(collect(Schema::getForeignKeys('website_shipping_rate_quotes'))
+            ->contains(fn (array $foreignKey): bool => ($foreignKey['columns'] ?? []) === ['website_fulfillment_location_id']))
+        ->toBeTrue();
+
+    // Reconstruct the later failure point directly. MySQL had created the
+    // table and its earlier foreign keys, then rejected Laravel's 68-character
+    // location FK name before the trailing indexes were added.
+    Schema::drop('website_shipping_rate_quotes');
+    Schema::create('website_shipping_rate_quotes', function (Blueprint $table): void {
+        $table->id();
+        $table->foreignId('tenant_id');
+        $table->foreignId('tenant_site_id');
+        $table->foreignId('website_cart_id');
+        $table->foreignId('website_fulfillment_location_id');
+        $table->timestamp('expires_at');
+        $table->foreign('tenant_id', 'website_rate_quotes_tenant_fk')
+            ->references('id')->on('tenants')->cascadeOnDelete();
+        $table->foreign('tenant_site_id', 'website_rate_quotes_site_fk')
+            ->references('id')->on('tenant_sites')->cascadeOnDelete();
+        $table->foreign('website_cart_id', 'website_rate_quotes_cart_fk')
+            ->references('id')->on('website_carts')->cascadeOnDelete();
+    });
+
+    $migration->up();
+
+    expect(collect(Schema::getForeignKeys('website_shipping_rate_quotes'))
+        ->contains(fn (array $foreignKey): bool => ($foreignKey['columns'] ?? []) === ['website_fulfillment_location_id']))
+        ->toBeTrue()
+        ->and(Schema::hasIndex('website_shipping_rate_quotes', 'website_rate_quotes_expires_idx'))->toBeTrue()
+        ->and(Schema::hasIndex('website_shipping_rate_quotes', 'website_rate_quotes_tenant_cart_expiry_idx'))->toBeTrue();
+});
