@@ -15,6 +15,26 @@ class PlatformProductPagesController extends Controller
         return response()->view('platform.promo', $experienceService->promoPayload());
     }
 
+    public function industryDemo(?string $discipline = 'retail'): Response
+    {
+        $disciplines = [
+            'retail' => 'Retail & product brands',
+            'field' => 'Field & service teams',
+            'projects' => 'Project work',
+            'studio' => 'Independent studios',
+            'practice' => 'Professional practices',
+            'community' => 'Community teams',
+        ];
+        $discipline = strtolower(trim((string) $discipline));
+
+        abort_unless(array_key_exists($discipline, $disciplines), 404);
+
+        return response()->view('platform.industry-demo', [
+            'discipline' => $discipline,
+            'disciplines' => $disciplines,
+        ]);
+    }
+
     public function contact(Request $request): Response
     {
         $intent = strtolower(trim((string) $request->query('intent', 'contact')));

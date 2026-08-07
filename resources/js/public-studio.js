@@ -283,8 +283,6 @@ export async function mountPublicStudioNow() {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     mountHeroSceneRotation(reducedMotion);
-    mountIndustryDemo(reducedMotion);
-
     const applyMoment = async (key, animate = !reducedMotion) => {
         const moment = workflowMoments[key];
         if (!moment || !frame) return;

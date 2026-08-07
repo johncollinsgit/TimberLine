@@ -43,78 +43,49 @@ test.describe("Everbranch public studio", () => {
         await expect(page.locator("[data-studio-hero-slide]").nth(2)).toHaveAttribute("src", /everbranch-field-owner-office\.jpg/);
     });
 
-    test("opens a click-through website and workspace example", async ({ page }) => {
+    test("links every industry card to a dedicated example page", async ({ page }) => {
         await page.goto("/platform/promo");
-        const projectCard = page.getByRole("button", { name: /project work/i });
-        await projectCard.focus();
-        await page.keyboard.press("Enter");
-
-        const demo = page.locator("[data-industry-demo]");
-        await expect(demo).toBeVisible();
-        await expect(projectCard).toHaveAttribute("aria-pressed", "true");
-        await expect(demo.getByRole("tab", { name: "Website" })).toHaveAttribute("aria-selected", "true");
-        await expect(demo.getByText("Northline Build", { exact: true })).toBeVisible();
-
-        await demo.getByRole("tab", { name: "Website" }).click();
-        await demo.getByRole("button", { name: /start a project conversation/i }).click();
-        await expect(demo.getByText(/request received/i)).toBeVisible();
-        await demo.getByRole("button", { name: /manage business/i }).click();
-        await expect(demo.getByRole("tab", { name: /everbranch workspace/i })).toHaveAttribute("aria-selected", "true");
-
-        await demo.getByRole("button", { name: "Messages" }).click();
-        await expect(demo.getByRole("heading", { name: /project update gives/i })).toBeVisible();
-        await demo.getByRole("button", { name: /send project update/i }).click();
-        await expect(demo.getByRole("button", { name: "Reply prepared" })).toBeVisible();
-
-        await demo.getByRole("button", { name: "Marketing" }).click();
-        await expect(demo.getByRole("heading", { name: /email and text/i })).toBeVisible();
-        await expect(demo.getByText(/before-and-after project journal/i)).toBeVisible();
-    });
-
-    test("keeps the selected website static when reduced motion is requested", async ({ page }) => {
-        await page.emulateMedia({ reducedMotion: "reduce" });
-        await page.goto("/platform/promo");
-        const fieldCard = page.getByRole("button", { name: /field & service teams/i });
-        await fieldCard.click();
-        const demo = page.locator("[data-industry-demo]");
-        await page.waitForTimeout(1500);
-        await expect(demo.getByRole("tab", { name: "Website" })).toHaveAttribute("aria-selected", "true");
-        await expect(demo.getByRole("tab", { name: /everbranch workspace/i })).toHaveAttribute("aria-selected", "false");
-    });
-
-    test("makes every public industry example and workspace control reachable", async ({ page }) => {
-        test.setTimeout(60_000);
-        await page.goto("/platform/promo");
-        const demo = page.locator("[data-industry-demo]");
-        const examples = [
-            { card: /retail & product brands/i, brand: "Juniper & Wick", fifth: "Follow-up" },
-            { card: /field & service teams/i, brand: "Current & Air", fifth: "Schedule" },
-            { card: /project work/i, brand: "Northline Build", fifth: "Projects" },
-            { card: /independent studios/i, brand: "Field Notes Studio", fifth: "Pipeline" },
-        ];
-
-        for (const example of examples) {
-            await page.getByRole("button", { name: example.card }).click();
-            await demo.getByRole("tab", { name: "Website" }).click();
-            await expect(demo.getByText(example.brand, { exact: true })).toBeVisible();
-
-            const siteControls = demo.locator("[data-industry-site-nav]");
-            for (let index = 0; index < await siteControls.count(); index += 1) {
-                if (await siteControls.nth(index).isVisible()) await siteControls.nth(index).click();
-            }
-            await expect(demo.getByText(/interactive example keeps visitors/i)).toBeVisible();
-            await demo.locator("[data-industry-site-action]").click();
-            await expect(demo.getByText(/request received/i)).toBeVisible();
-
-            await demo.locator("[data-industry-admin]").click();
-            for (const name of ["Inbox", "Customers", "Work", "Messages", "Marketing", example.fifth]) {
-                const control = demo.getByRole("button", { name, exact: true });
-                await control.click();
-                await expect(control).toHaveAttribute("aria-pressed", "true");
-            }
-            await demo.locator("[data-industry-message-action]").click();
-            await expect(demo.getByRole("button", { name: "Reply prepared" })).toBeVisible();
+        const examples = ["retail", "field", "projects", "studio", "practice", "community"];
+        await expect(page.locator("[data-industry-option]")).toHaveCount(6);
+        for (const discipline of examples) {
+            await expect(page.locator(`[data-industry-option="${discipline}"]`)).toHaveAttribute("href", new RegExp(`/platform/examples/${discipline}`));
         }
+    });
+
+    test("opens a linkable example with a persistent control bar and a four-second handoff", async ({ page }) => {
+        test.setTimeout(20_000);
+        await page.goto("/platform/examples/projects");
+        const demo = page.locator("[data-industry-page]");
+        await expect(demo).toHaveAttribute("data-industry-mounted", "true");
+        await expect(page.getByRole("link", { name: /back to everbranch/i })).toHaveAttribute("href", /promo#industries/);
+        await expect(page.getByRole("link", { name: "Project work" })).toHaveAttribute("aria-current", "page");
+        await expect(page.getByRole("tab", { name: "Website" })).toHaveAttribute("aria-selected", "true");
+        await expect(page.getByText("Northline Build", { exact: true })).toBeVisible();
+
+        await page.getByRole("button", { name: /start a project conversation/i }).click();
+        await expect(page.getByText(/request received/i)).toBeVisible();
+        await page.getByRole("button", { name: /open operations workspace/i }).click();
+        await expect(page.locator("[data-industry-page-frame]")).toHaveClass(/is-switching/);
+        await page.waitForTimeout(4_100);
+        await expect(page.getByRole("tab", { name: /operations workspace/i })).toHaveAttribute("aria-selected", "true");
+
+        await page.getByRole("button", { name: "Messages" }).click();
+        await expect(page.getByRole("heading", { name: /project update gives/i })).toBeVisible();
+        await page.getByRole("button", { name: /send project update/i }).click();
+        await expect(page.getByRole("button", { name: "Reply prepared" })).toBeVisible();
+        await page.getByRole("button", { name: "Marketing" }).click();
+        await expect(page.getByText(/before-and-after project journal/i)).toBeVisible();
+    });
+
+    test("keeps example controls immediate for reduced-motion visitors and exposes all disciplines", async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        for (const discipline of ["retail", "field", "projects", "studio", "practice", "community"]) {
+            await page.goto(`/platform/examples/${discipline}`);
+            await expect(page.locator("[data-industry-page]")).toHaveAttribute("data-industry-mounted", "true");
+            await expect(page.getByRole("tab", { name: "Website" })).toHaveAttribute("aria-selected", "true");
+        }
+        await page.getByRole("button", { name: /open operations workspace/i }).click();
+        await expect(page.getByRole("tab", { name: /operations workspace/i })).toHaveAttribute("aria-selected", "true");
     });
 
     test("has a stable public landing visual", async ({ page }) => {
@@ -123,5 +94,12 @@ test.describe("Everbranch public studio", () => {
         await page.locator(".eb-studio-photo-card").scrollIntoViewIfNeeded();
         await expect(page.locator(".eb-studio-photo-card img")).toBeVisible();
         await expect(page).toHaveScreenshot("studio-landing.png", { fullPage: true, animations: "disabled" });
+    });
+
+    test("has a stable public industry-system visual", async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await page.goto("/platform/examples/field");
+        await expect(page.locator("[data-industry-page-frame]")).toBeVisible();
+        await expect(page).toHaveScreenshot("industry-system.png", { fullPage: true, animations: "disabled" });
     });
 });

@@ -21,6 +21,8 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('data-industry-option="field"', false)
         ->assertSee('data-industry-option="projects"', false)
         ->assertSee('data-industry-option="studio"', false)
+        ->assertSee('data-industry-option="practice"', false)
+        ->assertSee('data-industry-option="community"', false)
         ->assertSee('data-industry-view="website"', false)
         ->assertSee('data-industry-view="workspace"', false)
         ->assertSee('everbranch-hvac-electrical-hero.jpg', false)
@@ -69,4 +71,18 @@ test('public home route keeps field-service examples available', function (): vo
         ->assertOk()
         ->assertSeeText('Field & service teams')
         ->assertSeeText('Give office and field teams one living record for every job.');
+});
+
+test('public industry example pages remain isolated from tenant and Shopify surfaces', function (): void {
+    $this->get(route('platform.industry-demo', ['discipline' => 'field']))
+        ->assertOk()
+        ->assertSee('data-industry-page', false)
+        ->assertSee('data-industry-key="field"', false)
+        ->assertSeeText('Back to Everbranch')
+        ->assertSeeText('Business type')
+        ->assertSeeText('Operations workspace')
+        ->assertSeeText('Field & service teams')
+        ->assertSee(route('platform.promo').'#industries', false)
+        ->assertDontSee('shopify.app', false)
+        ->assertDontSee('tenant.access', false);
 });

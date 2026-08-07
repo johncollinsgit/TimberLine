@@ -14,10 +14,12 @@
   dynamically loaded for the product story. See
   `docs/operations/public-site-media-runbook.md` for media provenance,
   caption/transcript, derivative, and release requirements.
-- The industry cards open a public-only, fictional website-to-workspace demo
-  for retail, field service, project work, and independent studios. It includes
-  website, workspace, messaging, email, and text-marketing examples, but it is
-  client-side presentation only and never enables Managed Website, Shopify, or
+- Six industry cards link to public-only, fictional website-to-workspace pages
+  for retail, field service, project work, independent studios, professional
+  practices, and community teams. Each page has a contextual return/type/view
+  control bar and uses a four-second handoff unless reduced motion is selected.
+  The website, workspace, messaging, email, and text-marketing examples are
+  client-side presentation only and never enable Managed Website, Shopify, or
   delivery lanes.
 - Visual checks live in `tests/e2e/public` and run with
   `npm run test:visual`; `npm run test:lighthouse:public` enforces the public

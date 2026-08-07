@@ -13,6 +13,18 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   demo/anonymized data; sound-on film requires captions and a transcript. Use
   `docs/operations/public-site-media-runbook.md` and the public Playwright
   checks before release.
+- The six home-page industry cards open fictional, linkable website-to-
+  workspace presentation pages. Their persistent control bar lets a visitor
+  return to Everbranch, choose a business type, and switch between Website and
+  Operations workspace. They may show workspace, messaging, email, and
+  consent-safe text-marketing states, but must never send, store, publish,
+  resolve a tenant, create a customer, or call Managed Website, Shopify,
+  messaging, or marketing APIs. Keep the controls keyboard accessible, use the
+  deliberate four-second view handoff only when motion is allowed, and switch
+  immediately for reduced-motion visitors.
+- For a public-site interaction change, run `npm run test:visual`,
+  `CLICK_PATH_CONFIG=tests/e2e/click-path-public-routes.json npm run qa:click-path`,
+  and `npm run test:lighthouse:public` in addition to the normal PHP checks.
 
 ## Modern Forestry production guard (2026-08-06)
 
