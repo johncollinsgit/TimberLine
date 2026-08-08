@@ -254,27 +254,10 @@
             data-recommended='@json($recommendedTools)'
             class="mx-auto w-full max-w-5xl p-8 sm:p-14 lg:p-16"
         >
-            <div class="flex items-start justify-between gap-6">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Workspace setup</p>
-                    <h1 class="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">Start with the right foundation.</h1>
-                    <p class="mt-3 max-w-2xl text-base leading-7 text-zinc-600">Five quick choices help us show the work that belongs in your workspace—and leave out the work that does not.</p>
-                </div>
-                <span class="shrink-0 text-sm font-medium text-zinc-500">
-                    <span data-step-num>1</span>/<span>{{ count($steps) }}</span>
-                </span>
-            </div>
-
-            <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-zinc-500">
-                <span>About two minutes</span>
-                <span>No billing or invitations yet</span>
-                <span>Change it later</span>
-            </div>
-
             {{-- Progress dots --}}
-            <div class="mt-5 flex items-center gap-1.5" aria-hidden="true">
+            <div class="flex items-center gap-1.5" aria-label="Setup progress">
                 @foreach ($steps as $i => $label)
-                    <span data-dot="{{ $i + 1 }}" class="h-1.5 flex-1 rounded-full bg-zinc-200 transition-colors"></span>
+                    <span data-dot="{{ $i + 1 }}" class="h-1.5 flex-1 rounded-full bg-zinc-200 transition-colors" title="{{ $label }}"></span>
                 @endforeach
             </div>
 
@@ -284,7 +267,7 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('workspace.first-login.store') }}" class="mt-6">
+            <form method="POST" action="{{ route('workspace.first-login.store') }}" class="mt-10">
                 @csrf
                 <input type="hidden" name="workspace_name" value="{{ $workspaceName }}">
                 <input type="hidden" name="template_key" value="">
@@ -303,8 +286,8 @@
                 {{-- Step 1: name --}}
                 <section data-step="1" class="space-y-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">Name your workspace</h2>
-                        <p class="mt-1 text-sm text-zinc-500">You can change this later.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">Name your workspace</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to label the place where your team works. You can change it later.</p>
                     </div>
                     <input
                         data-name-input type="text" value="{{ $workspaceName }}" maxlength="120"
@@ -316,8 +299,8 @@
                 {{-- Step 2: business type --}}
                 <section data-step="2" class="space-y-4" hidden>
                     <div class="max-w-xl">
-                        <h2 class="text-2xl font-semibold tracking-tight text-zinc-900">What kind of business are you building?</h2>
-                        <p class="mt-1.5 text-sm leading-6 text-zinc-600">Choose the closest fit. Apps and connections will not change this choice for you.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What kind of business is this?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to start with the tools that fit your work.</p>
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">
                         @foreach ($businessTypes as $type)
@@ -347,8 +330,8 @@
                 {{-- Step 3: team size --}}
                 <section data-step="3" class="space-y-7" hidden>
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">How big is your team right now?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">This helps us keep the first setup practical instead of overbuilt.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">How many people will use this?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to set up the workspace for your team.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         @foreach ($teamSizes as $key => $label)
@@ -359,8 +342,8 @@
                         @endforeach
                     </div>
                     <div class="border-t border-zinc-200 pt-7">
-                        <h2 class="text-lg font-semibold text-zinc-900">What would you most like help with?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We will make this easier to find first.</p>
+                        <h2 class="text-xl font-semibold text-zinc-900">What do you need help with first?</h2>
+                        <p class="mt-1 text-sm text-zinc-600">We use this to make the first screen useful.</p>
                         <div class="mt-4 space-y-2">
                             @foreach ($hardestParts as $key => $opt)
                                 <button
@@ -378,8 +361,8 @@
                 {{-- Step 4: tools --}}
                 <section data-step="4" class="space-y-4" hidden>
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">Pick the tools that sound useful</h2>
-                        <p class="mt-1 text-sm text-zinc-500">Recommended tools are a launch plan, not a checkout screen. We will activate what is ready.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What do you want to manage here?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to prepare the right starting tools.</p>
                         <p data-neutral-tools-note class="mt-2 hidden text-sm leading-6 text-emerald-800">Your first workspace includes customers, messages, and reporting. We will add other tools after we have reviewed the fit.</p>
                     </div>
                     <div class="grid max-h-[42vh] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
@@ -405,8 +388,8 @@
                 {{-- Step 5: concierge and review --}}
                 <section data-step="5" class="space-y-5" hidden>
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">Would you like a hand?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">Choose the kind of start you prefer. You can change your mind later.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">How would you like to get started?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to know how much help you want.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         <button type="button" data-pick-help="guided" class="flw-help rounded-xl border-2 border-emerald-500 bg-emerald-50 p-4 text-left transition">
@@ -555,7 +538,8 @@
                     d.classList.toggle('bg-emerald-500', on);
                     d.classList.toggle('bg-zinc-200', !on);
                 });
-                $('[data-step-num]').textContent = step;
+                var stepNumber = $('[data-step-num]');
+                if (stepNumber) stepNumber.textContent = step;
                 $('[data-back]').hidden = step === 1;
                 $('[data-next]').hidden = step === TOTAL;
                 $('[data-submit]').hidden = step !== TOTAL;

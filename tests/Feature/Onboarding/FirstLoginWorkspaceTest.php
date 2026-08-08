@@ -18,11 +18,8 @@ test('first-login workspace flow opens for a verified user with no tenants', fun
     $response = $this->actingAs($user)->get(route('workspace.first-login'));
 
     $response->assertOk()
-        ->assertSeeText('Start with the right foundation.')
-        ->assertSeeText('About two minutes')
-        ->assertSeeText('No billing or invitations yet')
-        ->assertSeeText('Change it later')
         ->assertSeeText('Name your workspace')
+        ->assertSeeText('We use this to label the place where your team works.')
         ->assertSeeText('Field-service trades');
 });
 
