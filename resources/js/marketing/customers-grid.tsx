@@ -148,6 +148,8 @@ function alphaColor(rgbTriplet: string, alpha: number): string {
 
 function resolveGridTheme(): Theme {
     const accent = readCssVar("--shopify-accent", "0, 128, 96");
+    const panelBorder = readCssVar("--shopify-panel-border", "#e1e3e5");
+    const panelBorderStrong = readCssVar("--shopify-panel-strong-border", "#c9cccf");
     const fontBody = readCssVar("--shopify-font-body", "Inter, ui-sans-serif, system-ui, sans-serif");
 
     return {
