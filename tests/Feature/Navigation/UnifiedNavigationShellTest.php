@@ -132,7 +132,7 @@ test('tenant settings stays immediately above workspace guide', function () {
         ->and($settings)->toBeLessThan($guide);
 });
 
-test('marketing modules route keeps Marketing available and marks Branches active', function () {
+test('marketing modules route keeps Marketing available and marks the compact Branches group active', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Navigation Tenant',
         'slug' => 'navigation-tenant',
@@ -159,7 +159,8 @@ test('marketing modules route keeps Marketing available and marks Branches activ
 
     $html = $response->getContent();
 
-    expect(preg_match('/data-sidebar-key="branches"[\s\S]{0,500}data-current="data-current"/', $html))->toBe(1)
+    expect(preg_match('/data-sidebar-key="branches"[\s\S]{0,1200}mf-admin-group-summary is-current-group/', $html))->toBe(1)
+        ->and(preg_match('/data-sidebar-child-key="branches-browse"[^>]*mf-admin-subnav-link-active/', $html))->toBe(1)
         ->and(preg_match('/data-sidebar-child-key="customers"[^>]*mf-admin-subnav-link-active/', $html))->toBe(0);
 });
 

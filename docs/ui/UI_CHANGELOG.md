@@ -2285,3 +2285,22 @@
 - The persistent Bud button in authenticated tenant workspaces now opens the
   included Ask Bud experience directly instead of the legacy Shopify AI module.
 - Shopify's embedded assistant routes remain unchanged for installed stores.
+# 2026-08-08 — Operational UI standardization
+
+- Added the required operational design contract and authenticated-surface
+  audit: compact Inter headers, scan-first tables, restrained state badges,
+  right-rail detail layouts, question-first wizards, and real three-pane
+  builders.
+- Reworked the shared tenant/landlord shell and embedded Backstage chrome into
+  a quieter, denser operational frame. Core work remains first; enabled
+  optional products are grouped under **Branches** near Settings.
+- Moved Customer Loop into Marketing and replaced its hero/form stack with a
+  question-first review-draft launcher. It remains review-only and cannot send
+  email, SMS, social content, consent changes, Shopify writes, or Website
+  Commerce writes.
+- Reworked Website and native Website Commerce screens around operational
+  headers, toolbars, tables, object rails, and focused forms. Added native
+  staff draft orders plus dedicated Website customer create/detail views.
+- A staff draft order is structurally isolated: it creates no Stripe checkout,
+  EasyPost request, inventory reservation, label, customer communication, or
+  legacy/Shopify/Modern Forestry record.

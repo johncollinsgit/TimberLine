@@ -82,7 +82,7 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
         ->and($homePosition)->toBeLessThan($workPosition);
 });
 
-test('entitled Website is the first workspace link after Home', function (): void {
+test('entitled Website lives in the compact Branches group near Settings', function (): void {
     $tenant = pr27ShellTenant('website-client', 'Website Client');
     $user = User::factory()->tenantAdmin()->create();
     $user->tenants()->attach((int) $tenant->id, ['role' => 'admin']);
@@ -99,17 +99,21 @@ test('entitled Website is the first workspace link after Home', function (): voi
     $html = $this->actingAs($user)
         ->get('http://website-client.theeverbranch.com/dashboard')
         ->assertOk()
-        ->assertSee('data-sidebar-key="managed-website"', false)
+        ->assertSee('data-sidebar-key="branches"', false)
+        ->assertSee('data-sidebar-child-key="branch-website"', false)
         ->getContent();
 
     preg_match_all('/data-sidebar-key="([^"]+)"/', $html, $matches);
     $keys = $matches[1];
     $homeIndex = array_search('home', $keys, true);
-    $websiteIndex = array_search('managed-website', $keys, true);
+    $branchesIndex = array_search('branches', $keys, true);
+    $settingsIndex = array_search('administration', $keys, true);
 
     expect($homeIndex)->not->toBeFalse()
-        ->and($websiteIndex)->not->toBeFalse()
-        ->and($websiteIndex)->toBe($homeIndex + 1);
+        ->and($branchesIndex)->not->toBeFalse()
+        ->and($settingsIndex)->not->toBeFalse()
+        ->and($homeIndex)->toBeLessThan($branchesIndex)
+        ->and($branchesIndex)->toBeLessThan($settingsIndex);
 });
 
 test('landlord shell keeps Home first and uses Everbranch Admin navigation', function (): void {
@@ -147,20 +151,20 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
     $html = $response->getContent();
     $expectedOrder = [
         'home',
+        'workspaces',
         'access-requests',
-        'agreements',
-        'branches',
-        'custom-requests',
-        'developer',
-        'features',
-        'invoices',
-        'plan-billing-readiness',
-        'settings',
         'setup-reviews',
+        'branches',
+        'features',
+        'custom-requests',
+        'tickets',
+        'plan-billing-readiness',
+        'invoices',
+        'agreements',
         'shopify-readiness',
         'system-readiness',
-        'tickets',
-        'workspaces',
+        'developer',
+        'settings',
     ];
     $positions = collect($expectedOrder)->mapWithKeys(
         fn (string $key): array => [$key => strpos($html, 'data-sidebar-key="'.$key.'"')]

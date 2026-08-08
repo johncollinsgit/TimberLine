@@ -1,11 +1,10 @@
 <x-layouts::app.sidebar title="Website">
     <flux:main>
-        <div class="mx-auto max-w-6xl space-y-6 pb-12">
+        <div class="mx-auto max-w-6xl space-y-5 pb-12">
             @if(session('status'))<div class="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950" role="status">{{ session('status') }}</div>@endif
-            <header class="flex flex-col gap-4 border-b border-zinc-200 pb-6 sm:flex-row sm:items-end sm:justify-between">
-                <div><p class="text-xs font-bold uppercase tracking-[.16em] text-emerald-800">Website Branch · quote-first pilot</p><h1 class="mt-2 text-3xl font-bold tracking-tight text-zinc-950">Your electrician website</h1><p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Give customers a clear way to request electrical work or call your business. Payments, domains, booking, and customer systems are not part of this pilot.</p></div>
+            <x-ui.operational-header eyebrow="Website branch" title="Website" description="Manage your draft, address, pages, and publishing in one place.">
                 @if($isEditorEnabled)<button class="fb-btn fb-btn-primary" type="button" onclick="document.getElementById('website-setup').showModal()">{{ $site ? 'Continue setup' : 'Set up website' }}</button>@endif
-            </header>
+            </x-ui.operational-header>
             @if(! $isEditorEnabled)
                 <section class="border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Website access is still being approved for this workspace. Nothing public, billable, or connected has been created.</section>
             @else
@@ -13,17 +12,17 @@
                     $draftTheme = $site->draftSiteVersion;
                     $previewPage = $pages->firstWhere('slug', '/') ?: $pages->first();
                 @endphp
-                <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div><p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website</p><h1 class="mt-1 text-3xl font-bold tracking-tight text-zinc-950">Your business website</h1><p class="mt-1 text-sm text-zinc-600">Build a clear, mobile-ready site with editable pages, menus, images, and lead forms.</p></div>
-                    <div class="flex flex-wrap gap-2">@if($site->status === 'published' && $isPublicRenderEnabled)<a class="fb-btn fb-btn-secondary" target="_blank" rel="noopener" href="{{ $publicUrl }}">View live site</a>@endif</div>
-                </header>
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-3">
+                    <div class="flex min-w-0 items-center gap-2"><span class="text-sm font-medium text-zinc-950">{{ parse_url($platformUrl, PHP_URL_HOST) }}</span><x-ui.status-badge :tone="$site->status === 'published' && $site->public_enabled ? 'success' : 'warning'">{{ $site->status === 'published' && $site->public_enabled ? 'Live' : 'Draft' }}</x-ui.status-badge></div>
+                    <div class="flex flex-wrap gap-2">@if($site->status === 'published' && $isPublicRenderEnabled)<a class="fb-btn fb-btn-secondary" target="_blank" rel="noopener" href="{{ $publicUrl }}">View site</a>@endif @if($pages->first())<a class="fb-btn fb-btn-primary" href="{{ route('managed-website.editor', ['page' => $pages->first()]) }}">Edit website</a>@endif</div>
+                </div>
 
                 <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm" aria-labelledby="website-address-heading">
                     <div class="flex flex-col gap-4 border-b border-zinc-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Included Everbranch address</p>
-                            <h2 id="website-address-heading" class="mt-1 text-xl font-bold tracking-tight text-zinc-950">{{ parse_url($platformUrl, PHP_URL_HOST) }}</h2>
-                            <p class="mt-1 text-sm leading-6 text-zinc-600">Reserved automatically. No DNS setup is needed; it goes live the moment this Website is published.</p>
+                            <p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Included address</p>
+                            <h2 id="website-address-heading" class="mt-1 text-base font-semibold tracking-tight text-zinc-950">{{ parse_url($platformUrl, PHP_URL_HOST) }}</h2>
+                            <p class="mt-1 text-sm leading-5 text-zinc-600">Reserved automatically and ready when your Website is published.</p>
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $site->status === 'published' && $site->public_enabled ? 'bg-emerald-100 text-emerald-900' : 'bg-zinc-100 text-zinc-700' }}">{{ $site->status === 'published' && $site->public_enabled ? 'Live now' : 'Reserved' }}</span>

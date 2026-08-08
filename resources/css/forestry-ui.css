@@ -5957,6 +5957,37 @@ body.mf-app-shell {
   }
 }
 
+/* The embedded Backstage uses the same operational density without copying
+   Shopify's visual identity. */
+.app-shell,
+.app-shell * {
+  font-family: var(--eb-font-ui);
+}
+
+.app-sidebar-panel {
+  background: #f7f8f8;
+  gap: 0.45rem;
+}
+
+.app-sidebar-brand {
+  background: transparent;
+  border: 0;
+  border-radius: 0.45rem;
+  padding: 0.2rem;
+}
+
+.app-sidebar-brand-copy strong { font-family: var(--eb-font-ui); font-size: 0.9rem; }
+.app-sidebar-link,
+.app-sidebar-child-link { border-radius: 0.45rem; font-size: 0.82rem; padding: 0.45rem 0.55rem; }
+.app-sidebar-link:hover,
+.app-sidebar-child-link:hover,
+.app-sidebar-link.is-active,
+.app-sidebar-child-link.is-active { background: #e8efed; border-color: transparent; }
+.app-sidebar-children { margin-block: 0.16rem 0.36rem; }
+
+.app-shell-content { padding-top: 1rem; }
+.app-topbar-subnav-link { border-radius: 0.45rem; font-size: 0.78rem; }
+
 @media (max-width: 640px) {
   .mf-app-main {
     padding-inline: 0.8rem;
@@ -10993,6 +11024,91 @@ body.fb-public-body--splash[data-premium-motion="public"].has-premium-motion .fb
   padding: 0;
 }
 
+/* Operational UI v2 ------------------------------------------------------
+   Shared tenant, landlord, and embedded back-office chrome. Public pages
+   keep the editorial system; authenticated work stays compact and scanable. */
+.mf-app-shell {
+  font-family: var(--eb-font-ui);
+}
+
+.mf-sidebar-theme-shell {
+  background: #f7f8f8 !important;
+  border-color: #dfe5e4 !important;
+}
+
+.mf-sidebar-glow::before,
+.mf-tenant-themed[data-tenant-decor="signal"] .mf-app-main::before,
+.mf-tenant-themed[data-tenant-decor="dawn"] .mf-app-main::before,
+.mf-tenant-themed[data-tenant-decor="grid"] .mf-app-main::before {
+  display: none;
+}
+
+.mf-sidebar-header {
+  padding-block: calc(0.7rem + var(--app-shell-safe-top)) 0.48rem;
+}
+
+.mf-sidebar-group-balanced > .space-y-1 {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.mf-sidebar-main-list { gap: 0.08rem; }
+
+.mf-sidebar-theme-shell [data-flux-sidebar-item],
+.mf-admin-group-summary {
+  border-radius: 0.45rem;
+  min-height: 2.2rem;
+  padding-inline: 0.58rem;
+}
+
+.mf-sidebar-theme-shell [data-flux-sidebar-item]:hover,
+.mf-sidebar-theme-shell [data-flux-sidebar-item][data-current],
+.mf-active-pill [data-flux-sidebar-item],
+.mf-admin-group-summary:hover,
+.mf-admin-group-summary.is-current-group {
+  background: #e8efed;
+  border-color: transparent;
+}
+
+.mf-active-pill::after { display: none; }
+.mf-nav-label { font-size: 0.84rem; font-weight: 600; }
+.mf-leaf-icon-badge { opacity: 0.82; }
+
+.mf-app-main {
+  background: #f6f7f7;
+  padding: 0.9rem clamp(1rem, 2.4vw, 2rem) 2rem;
+}
+
+.mf-shell-topbar {
+  border-bottom: 1px solid #e0e5e4;
+  margin-bottom: 1.25rem;
+  max-width: 1440px;
+  padding-bottom: 0.8rem;
+}
+
+.mf-shell-search {
+  border-radius: 0.55rem;
+  box-shadow: none;
+  min-height: 2.45rem;
+}
+
+.mf-shell-location-title { font-size: 0.94rem; font-weight: 650; }
+.mf-shell-location-eyebrow { font-size: 0.6rem; letter-spacing: 0.13em; }
+
+.mf-app-shell :is(.rounded-3xl, .rounded-2xl) {
+  border-radius: 0.65rem;
+}
+
+.mf-app-shell :is(.shadow-sm, .shadow-md) { box-shadow: none; }
+
+@media (max-width: 1023px) {
+  .mf-app-main { padding: 0.75rem 1rem 1.5rem; }
+  .mf-shell-topbar { margin-bottom: 0.9rem; }
+}
+
 #app-main:has([data-workflow-studio-root]) > .mf-shell-topbar,
 #app-main:has([data-workflow-studio-root]) > [data-access-lane-banner],
 #app-main:has([data-workflow-studio-root]) > .mf-announcement {
@@ -13867,3 +13983,63 @@ body.eb-workflow-picker-open {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Final operational-shell cascade ---------------------------------------
+   This deliberately comes after product-specific styles so the signed-in
+   tenant, landlord, and Shopify-embedded Backstage all retain the same
+   compact navigation and control density. */
+.app-shell,
+.app-shell * {
+  font-family: var(--eb-font-ui);
+}
+
+.app-shell {
+  --app-shell-bg: #f6f7f7;
+  --app-main-bg: #f6f7f7;
+}
+
+.app-sidebar-panel {
+  background: #f7f8f8;
+  gap: 0.42rem;
+  padding-top: calc(0.72rem + var(--app-shell-safe-top));
+}
+
+.app-sidebar-brand {
+  background: transparent;
+  border: 0;
+  border-radius: 0.45rem;
+  box-shadow: none;
+  padding: 0.2rem;
+}
+
+.app-sidebar-brand-copy strong {
+  font-family: var(--eb-font-ui);
+  font-size: 0.9rem;
+}
+
+.app-sidebar-link,
+.app-sidebar-child-link,
+.app-topbar-subnav-link {
+  border-radius: 0.45rem;
+  font-size: 0.82rem;
+}
+
+.app-sidebar-link {
+  min-height: 2.2rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.app-sidebar-child-link { padding: 0.38rem 0.55rem; }
+
+.app-sidebar-link:hover,
+.app-sidebar-child-link:hover,
+.app-sidebar-link.is-active,
+.app-sidebar-child-link.is-active,
+.app-topbar-subnav-link.is-active {
+  background: #e8efed;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.app-sidebar-children { margin-block: 0.16rem 0.36rem; }
+.app-shell-content { padding-top: 1rem; }

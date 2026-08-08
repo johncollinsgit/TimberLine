@@ -124,6 +124,79 @@ class WebsiteCommerceService
         });
     }
 
+    /**
+     * Create an internal native-commerce draft. Drafts deliberately do not
+     * reserve stock, create a Stripe session, request a shipping rate, or
+     * communicate with a customer.
+     *
+     * @param array{customer:?WebsiteCustomer,customer_name:string,customer_email:string,customer_phone:string,website_product_variant_id:int,quantity:int,fulfillment_method:string,note?:string} $data
+     */
+    public function createDraftOrder(TenantSite $site, array $data, User $actor): WebsiteOrder
+    {
+        return DB::transaction(function () use ($site, $data, $actor): WebsiteOrder {
+            $variant = WebsiteProductVariant::query()
+                ->forTenantId($site->tenant_id)
+                ->with('product')
+                ->findOrFail((int) $data['website_product_variant_id']);
+
+            abort_unless((int) $variant->product?->tenant_site_id === (int) $site->id, 404);
+            abort_if($variant->product?->product_type === 'quote', 422, 'Quote-only services cannot be added to a draft order.');
+            abort_unless($variant->is_available && $variant->product?->status === 'active', 422, 'This item is not available.');
+
+            $customer = $data['customer'] ?? null;
+            $customerName = trim((string) ($data['customer_name'] ?? ''));
+            $customerEmail = strtolower(trim((string) ($data['customer_email'] ?? '')));
+            $customerPhone = trim((string) ($data['customer_phone'] ?? ''));
+            if ($customer instanceof WebsiteCustomer) {
+                $customerName = trim($customer->first_name.' '.$customer->last_name) ?: $customerName;
+                $customerEmail = $customer->email ?: $customerEmail;
+                $customerPhone = $customer->phone ?: $customerPhone;
+            } elseif ($customerEmail !== '') {
+                $customer = WebsiteCustomer::query()->firstOrCreate(
+                    ['tenant_id' => $site->tenant_id, 'email' => $customerEmail],
+                    ['first_name' => $customerName, 'phone' => $customerPhone, 'status' => 'active']
+                );
+            }
+
+            $quantity = max(1, min(100, (int) $data['quantity']));
+            $subtotal = $variant->price_cents * $quantity;
+            $order = WebsiteOrder::query()->create([
+                'tenant_id' => $site->tenant_id,
+                'tenant_site_id' => $site->id,
+                'website_customer_id' => $customer?->id,
+                'number' => 'WEB-DRAFT-'.strtoupper(Str::random(7)),
+                'lookup_token' => Str::random(56),
+                'currency' => 'usd',
+                'order_status' => 'draft',
+                'source' => 'staff_draft',
+                'payment_status' => 'pending',
+                'fulfillment_status' => 'unfulfilled',
+                'fulfillment_method' => $data['fulfillment_method'],
+                'subtotal_cents' => $subtotal,
+                'discount_cents' => 0,
+                'tax_cents' => 0,
+                'shipping_cents' => 0,
+                'total_cents' => $subtotal,
+                'customer_snapshot' => ['name' => $customerName, 'email' => $customerEmail, 'phone' => $customerPhone],
+                'service_request' => ['staff_note' => trim((string) ($data['note'] ?? ''))],
+            ]);
+            WebsiteOrderLine::query()->create([
+                'tenant_id' => $site->tenant_id,
+                'website_order_id' => $order->id,
+                'website_product_variant_id' => $variant->id,
+                'title' => $variant->product->title,
+                'product_type' => $variant->product->product_type,
+                'quantity' => $quantity,
+                'unit_price_cents' => $variant->price_cents,
+                'line_total_cents' => $subtotal,
+                'snapshot' => ['variant_title' => $variant->title, 'sku' => $variant->sku, 'product_handle' => $variant->product->handle],
+            ]);
+            $this->event($order, 'draft_order_created', 'Draft order created by staff. No payment, inventory, shipping, or customer communication was started.', $actor);
+
+            return $order->fresh(['lines', 'events']);
+        });
+    }
+
     public function cartFor(TenantSite $site, ?string $token): WebsiteCart
     {
         if ($token) {

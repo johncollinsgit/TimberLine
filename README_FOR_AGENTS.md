@@ -440,6 +440,10 @@ Read these before any UI/theme change:
 1. `docs/ui/UI_SYSTEM.md`
 2. `docs/ui/UI_CHANGELOG.md`
 
+The **Operational UI Standard** in `docs/ui/UI_SYSTEM.md` is mandatory for all
+authenticated tenant, landlord, and Shopify-embedded changes. Do not add a
+page-local card/hero treatment when one of its canonical page shapes applies.
+
 Canonical UI ownership:
 - Canonical backstage shell: `resources/views/layouts/app/sidebar.blade.php`
 - Public landing pages: `resources/views/platform/promo.blade.php` and `resources/views/platform/contact.blade.php`
