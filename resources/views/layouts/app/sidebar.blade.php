@@ -60,7 +60,9 @@
   $brandDarkLogoSrc = (string) $tenantBrand['dark_logo_url'];
   $brandHasFullLogo = ! $isLandlordShell && ! $isNeutralTenantSurface && (bool) ($tenantBrand['has_light_logo'] ?? false);
   $brandWordmark = trim((string) $tenantBrand['display_name']);
-  $assistantHref = route('shopify.embedded.assistant', absolute: false);
+  $assistantHref = $isLandlordShell
+      ? route('shopify.embedded.assistant', absolute: false)
+      : route('account-help.index', absolute: false);
   $footerUserName = trim((string) ($user?->name ?? '')) !== ''
       ? trim((string) $user?->name)
       : trim((string) ($user?->email ?? 'User'));

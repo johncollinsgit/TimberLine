@@ -55,7 +55,7 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
         ->assertSee('data-app-shell-topbar', false)
         ->assertSee('Search or ask what you want to do...', false)
         ->assertSee('data-assistant-entry', false)
-        ->assertSee('href="/assistant"', false)
+        ->assertSee('href="/account-help"', false)
         ->assertSee('data-shell-context="tenant"', false)
         ->assertSee('mf-sidebar-brand-wordmark', false)
         ->assertSeeText('Everbranch')

@@ -2279,3 +2279,9 @@
 - Bud Core remains deterministic, tenant-scoped, read-only, and unable to send
   or publish. This change does not enable Bud AI, voice, provider calls, or
   automatic delivery.
+
+### Workspace shortcut correction
+
+- The persistent Bud button in authenticated tenant workspaces now opens the
+  included Ask Bud experience directly instead of the legacy Shopify AI module.
+- Shopify's embedded assistant routes remain unchanged for installed stores.
