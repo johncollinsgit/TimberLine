@@ -13,6 +13,11 @@
   control is the existing Livewire range filter. The live visitor count refreshes
   while the strip is visible, with no external write, Shopify request, or
   cross-tenant query.
+- The metrics are now in-place controls: selecting one keeps the user on Home
+  and replaces the chart below with that measure across the chosen window,
+  compared with the equivalent preceding period. The solid/dashed graph uses
+  the same tenant-scoped read-only sources as the summary values and respects
+  reduced-motion preferences.
 
 ## 2026-08-08 — Mobile operational shell and customer administration
 

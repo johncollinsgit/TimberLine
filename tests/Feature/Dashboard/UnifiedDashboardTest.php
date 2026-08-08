@@ -190,10 +190,12 @@ test('dashboard shows a tenant-scoped, functional channel pulse above workspace 
         ->assertSeeText('Orders')
         ->assertSeeText('Conversion rate')
         ->assertSeeText('Live visitors')
+        ->assertSeeText('Total sales over time')
         ->assertSeeText('Tracked storefront sessions')
         ->assertSeeText('Orders ÷ tracked sessions')
         ->assertSeeText('50.00%')
         ->assertSee('wire:poll.30s.visible', false)
+        ->assertSee('selectPulseMetric', false)
         ->assertSee(route('sales-channels.index', ['range' => '1d']));
 });
 
