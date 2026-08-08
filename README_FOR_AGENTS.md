@@ -236,9 +236,13 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   emergency path only.
 - CI is deliberately split by purpose. Pull requests run one full PHP 8.4
   asset-build/test gate plus the MySQL migration-safety job; superseded runs
-  are canceled. A push to `main` tests the exact merge commit and independently
-  runs the non-bypassable migration-safety job before it can call Forge.
-  Composer and npm downloads are cached and Node installs use `npm ci`.
+  are canceled. On `main`, the deploy workflow can reuse those checks only
+  when GitHub proves the merged commit has the exact same tree as its merged
+  PR and the named `quality`, `ci (8.4)`, and `mysql migration recovery` checks
+  passed. Direct pushes, unverifiable merges, and manual standard releases run
+  both gates again; schema/migration-related changes always repeat the MySQL
+  rehearsal on the merged release. Composer and npm downloads are cached and
+  Node installs use `npm ci`.
 - Default delivery preference: when a scoped feature is complete and its
   protected GitHub checks pass, merge it to `main` and allow the normal Forge
   release to deploy it. Keep a change on a feature branch only when John asks

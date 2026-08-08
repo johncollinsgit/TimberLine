@@ -22,8 +22,7 @@ The gate addresses five recurring production risks:
 
 ## Required CI sequence
 
-Pull requests and production releases use MySQL 8.4 and run these checks in
-order:
+Pull requests use MySQL 8.4 and run these checks in order:
 
 1. `scripts/ci/lint-migrations.php` inspects migration files changed since the
    target release.
@@ -36,9 +35,14 @@ order:
    migration tree and a blank database booted from the committed MySQL schema
    dump match the approved, data-free schema fingerprint.
 
-The production `Migration Safety Gate` always runs. A manually approved
-emergency deployment may skip the full application test/build job, but it may
-not skip migration safety.
+For a production release, GitHub reruns this gate whenever the merged release
+changes migrations, the schema baseline, database configuration, migration
+tooling, or the recovery contract. A verified non-schema merge may reuse its
+already-passed PR MySQL gate only after GitHub proves its final tree is exactly
+the reviewed PR tree and all named PR checks passed. Direct pushes,
+unverifiable merges, and every manual emergency run execute the gate. A
+manually approved emergency deployment may skip the full application test/build
+job, but it may not skip migration safety.
 
 ## Linter contract
 
