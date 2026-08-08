@@ -51,4 +51,11 @@ final class LegacyMigrationCompatibility
 
         return $errors;
     }
+
+    public function isAlreadyCorrected(string $path, string $source): bool
+    {
+        $entry = $this->manifest[$path] ?? null;
+
+        return $entry !== null && hash_equals($entry['after_sha256'], hash('sha256', $source));
+    }
 }
