@@ -161,5 +161,23 @@ jobs:
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
 
+      - name: Build a baseline candidate when one is missing
+        if: ${{ !hashFiles('database/schema/mysql-schema.sql') || !hashFiles('database/schema/mysql-schema.sha256') }}
+        run: scripts/ci/refresh-mysql-schema-baseline.sh
+
       - name: Verify committed MySQL schema baseline
         run: scripts/ci/verify-mysql-schema-baseline.sh
+
+      - name: Upload MySQL schema baseline candidate
+        if: always() && hashFiles('database/schema/mysql-schema.sql') && hashFiles('database/schema/mysql-schema.sha256')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-schema-baseline-${{ github.run_id }}
+          path: database/schema/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Require the reviewed baseline in source control
+        run: |
+          set -euo pipefail
+          git ls-files --error-unmatch database/schema/mysql-schema.sql database/schema/mysql-schema.sha256 >/dev/null
