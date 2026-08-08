@@ -453,7 +453,10 @@
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
 - **Migration-resume guard:** the dedicated MySQL 8.4 Migration Safety Gate is
-  mandatory for pull requests and production, including the emergency path.
+  mandatory for pull requests, direct/unverifiable production releases, every
+  schema-related release, and the emergency path. A verified non-schema merge
+  may reuse the passed PR gate only when its final tree exactly matches the
+  reviewed PR tree and the named PR checks passed.
   It rejects edits to released migrations except exact checksum-pinned
   clean-install compatibility repairs, unguarded table creation, generated or
   explicit identifiers over MySQL's 64-character limit, and multi-step
@@ -479,9 +482,10 @@
 - **Optimized CI posture:** pull requests run changed-file Pint plus one cached,
   parallel PHP 8.4 build/test gate, and superseded runs cancel automatically.
   PHP 8.5 compatibility runs nightly and whenever dependency/runtime inputs
-  change. The `main` push skips duplicate PR workflows, but the production
-  workflow still rebuilds and runs the full parallel suite against the exact
-  merge commit before it can call the protected Forge hook.
+  change. A `main` deploy proves merge provenance and exact tree identity before
+  reusing those named checks; otherwise it rebuilds and reruns the full suite.
+  This removes duplicate work without allowing an unreviewed or different tree
+  to reach Forge.
 - Normal release rules: additive/backward-compatible migrations only; build
   before activation; never use in-place `git reset`, `git clean`, cache clears,
   or public asset replacement as a standard deploy; use an audited emergency
