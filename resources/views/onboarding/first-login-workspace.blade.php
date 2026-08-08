@@ -5,31 +5,66 @@
     $hardestParts = is_array($hardestParts ?? null) ? $hardestParts : [];
     $toolOptions = is_array($toolOptions ?? null) ? $toolOptions : [];
     $recommendedTools = is_array($recommendedTools ?? null) ? $recommendedTools : [];
-    $steps = ['Name', 'Business', 'Team', 'Focus', 'Tools', 'Help', 'Ready'];
+    $steps = ['Name', 'Business', 'Priorities', 'Tools', 'Ready'];
 @endphp
 
-<x-layouts::auth.simple :title="__('Create your workspace')">
+<x-layouts::auth.simple :title="__('Create your workspace')" :auth-tenant-presentation="$authTenantPresentation ?? []">
     <style>
+        body:has([data-flw-shell]) .fb-auth-shell {
+            grid-template-columns: minmax(300px, 0.7fr) minmax(620px, 1.3fr);
+            max-width: 1320px;
+        }
+
+        body:has([data-flw-shell]) .fb-auth-card {
+            max-width: none;
+            padding: 0;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+        }
+
         [data-flw-shell] {
             background:
-                linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 246, 0.74)),
-                radial-gradient(120% 120% at 50% -8%, rgba(224, 241, 236, 0.9) 0%, rgba(248, 250, 250, 0.72) 48%, rgba(255, 255, 255, 1) 100%);
+                radial-gradient(70rem 42rem at 88% -16%, rgba(188, 232, 216, 0.68), transparent 62%),
+                radial-gradient(52rem 38rem at 12% 108%, rgba(206, 225, 248, 0.52), transparent 64%),
+                linear-gradient(145deg, #ffffff 0%, #f7fbf9 46%, #f6f9fc 100%);
+            position: relative;
+        }
+
+        [data-flw-shell]::before,
+        [data-flw-shell]::after {
+            border-radius: 999px;
+            content: '';
+            filter: blur(42px);
+            opacity: 0.35;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        [data-flw-shell]::before {
+            background: linear-gradient(135deg, rgba(105, 192, 155, 0.56), rgba(105, 176, 214, 0));
+            height: 19rem;
+            right: -7rem;
+            top: 19%;
+            width: 19rem;
+        }
+
+        [data-flw-shell]::after {
+            background: linear-gradient(135deg, rgba(121, 175, 221, 0.32), rgba(167, 220, 184, 0.05));
+            bottom: 4%;
+            height: 15rem;
+            left: -6rem;
+            width: 15rem;
         }
 
         [data-flw] {
             animation: flw-shell-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+            position: relative;
+            z-index: 1;
         }
 
         [data-step]:not([hidden]) {
             animation: flw-step-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-
-        .flw-card,
-        .flw-team,
-        .flw-focus,
-        .flw-tool,
-        .flw-help {
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
         }
 
         .flw-card:hover,
@@ -80,6 +115,13 @@
                 transform: none;
             }
         }
+
+        @media (max-width: 900px) {
+            body:has([data-flw-shell]) .fb-auth-shell {
+                grid-template-columns: 1fr;
+                max-width: 760px;
+            }
+        }
     </style>
 
     <div data-flw-shell class="min-h-[80vh] w-full px-3 py-8 sm:py-10">
@@ -87,32 +129,23 @@
             data-flw
             data-workspace-name="{{ $workspaceName }}"
             data-recommended='@json($recommendedTools)'
-            class="mx-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,28,31,0.10)] sm:p-8"
+            class="mx-auto w-full max-w-3xl p-6 sm:p-10"
         >
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex items-start justify-between gap-6">
                 <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Everbranch setup</p>
-                    <h1 class="mt-1 text-xl font-semibold text-zinc-950 sm:text-2xl">Set up your workspace</h1>
-                    <p class="mt-1 max-w-md text-sm text-zinc-500">Answer a few things and we will shape the first version around the work your team actually does.</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Workspace setup</p>
+                    <h1 class="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">Start with the right foundation.</h1>
+                    <p class="mt-2 max-w-xl text-sm leading-6 text-zinc-600">Five quick choices help us show the work that belongs in your workspace—and leave out the work that does not.</p>
                 </div>
-                <span class="shrink-0 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500">
-                    Step <span data-step-num>1</span> of {{ count($steps) }}
+                <span class="shrink-0 text-sm font-medium text-zinc-500">
+                    <span data-step-num>1</span>/<span>{{ count($steps) }}</span>
                 </span>
             </div>
 
-            <div class="mt-5 grid gap-2 rounded-2xl border border-zinc-200/80 bg-zinc-50/80 p-2 text-xs text-zinc-600 sm:grid-cols-3">
-                <div class="rounded-xl bg-white/80 px-3 py-2 shadow-sm">
-                    <span class="block font-semibold text-zinc-950">Guided launch</span>
-                    <span>We review before real use.</span>
-                </div>
-                <div class="rounded-xl bg-white/80 px-3 py-2 shadow-sm">
-                    <span class="block font-semibold text-zinc-950">No surprise billing</span>
-                    <span>Tools are recorded first.</span>
-                </div>
-                <div class="rounded-xl bg-white/80 px-3 py-2 shadow-sm">
-                    <span class="block font-semibold text-zinc-950">Safe starter base</span>
-                    <span>Customers, context, reporting.</span>
-                </div>
+            <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-zinc-500">
+                <span>About two minutes</span>
+                <span>No billing or invitations yet</span>
+                <span>Change it later</span>
             </div>
 
             {{-- Progress dots --}}
@@ -159,44 +192,37 @@
 
                 {{-- Step 2: business type --}}
                 <section data-step="2" class="space-y-4" hidden>
-                    <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">What kind of business are you building?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">Choose the closest fit. This sets the workspace boundary; a connection or app never changes it later.</p>
+                    <div class="max-w-xl">
+                        <h2 class="text-2xl font-semibold tracking-tight text-zinc-900">What kind of business are you building?</h2>
+                        <p class="mt-1.5 text-sm leading-6 text-zinc-600">Choose the closest fit. Apps and connections will not change this choice for you.</p>
                     </div>
-                    <div class="grid gap-2.5 sm:grid-cols-2">
+                    <div class="grid gap-3 sm:grid-cols-2">
                         @foreach ($businessTypes as $type)
                             <button
                                 type="button" data-pick-type="{{ $type['key'] }}"
-                                class="flw-card rounded-xl border border-zinc-200 bg-white p-4 text-left transition hover:border-emerald-300 hover:shadow-sm"
+                                class="flw-card rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
                             >
-                                <span class="mb-2 inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-zinc-500">{{ $type['profile'] ?? 'Workspace' }}</span>
-                                <span class="block text-sm font-semibold text-zinc-900">{{ $type['label'] }}</span>
-                                <span class="mt-1 block text-xs text-zinc-500">{{ $type['blurb'] }}</span>
+                                <span class="text-sm font-semibold text-zinc-900">{{ $type['label'] }}</span>
+                                <span class="mt-1 block text-sm leading-5 text-zinc-500">{{ $type['blurb'] }}</span>
                             </button>
                         @endforeach
                     </div>
-                    <div data-custom-context hidden class="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                        <p class="text-sm font-semibold text-zinc-900">Tell us the shape of your business</p>
-                        <p class="mt-1 text-xs leading-5 text-zinc-600">We will create a neutral workspace first. Specialised tools stay off until you and an Everbranch operator approve them.</p>
-                        <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                            <label class="block text-xs font-medium text-zinc-700">Business type <span class="text-rose-600">*</span>
-                                <input data-custom-business-type type="text" maxlength="120" placeholder="e.g. nonprofit, studio, property manager" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">
+                    <div data-custom-context hidden class="border-l-2 border-emerald-500 pl-5">
+                        <p class="text-base font-semibold text-zinc-900">Tell us about your business.</p>
+                        <p class="mt-1 text-sm leading-6 text-zinc-600">We will start with a simple workspace for contacts and updates. The right tools get added after we have confirmed the fit together.</p>
+                        <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                            <label class="block text-sm font-medium text-zinc-800">What type of business is it? <span class="text-rose-600">*</span>
+                                <input data-custom-business-type type="text" maxlength="120" placeholder="Nonprofit, studio, property manager…" class="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">
                             </label>
-                            <label class="block text-xs font-medium text-zinc-700">What do you call the people you serve?
-                                <input data-customer-label type="text" maxlength="80" placeholder="Customers, members, patients…" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">
-                            </label>
-                            <label class="block text-xs font-medium text-zinc-700 sm:col-span-2">What work should we help organize first?
-                                <textarea data-business-description rows="2" maxlength="500" placeholder="A sentence is enough — for example, memberships, property inspections, client projects, or classes." class="mt-1.5 w-full resize-y rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"></textarea>
-                            </label>
-                            <label class="block text-xs font-medium text-zinc-700">What do you call that work? <span class="text-zinc-400">Optional</span>
-                                <input data-work-label type="text" maxlength="80" placeholder="Projects, visits, cases…" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">
+                            <label class="block text-sm font-medium text-zinc-800">Anything we should know? <span class="font-normal text-zinc-400">Optional</span>
+                                <textarea data-business-description rows="2" maxlength="500" placeholder="For example: memberships, inspections, client projects, or classes." class="mt-2 w-full resize-none rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"></textarea>
                             </label>
                         </div>
                     </div>
                 </section>
 
                 {{-- Step 3: team size --}}
-                <section data-step="3" class="space-y-4" hidden>
+                <section data-step="3" class="space-y-7" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">How big is your team right now?</h2>
                         <p class="mt-1 text-sm text-zinc-500">This helps us keep the first setup practical instead of overbuilt.</p>
@@ -209,32 +235,29 @@
                             >{{ $label }}</button>
                         @endforeach
                     </div>
+                    <div class="border-t border-zinc-200 pt-7">
+                        <h2 class="text-lg font-semibold text-zinc-900">What would you most like help with?</h2>
+                        <p class="mt-1 text-sm text-zinc-500">We will make this easier to find first.</p>
+                        <div class="mt-4 space-y-2">
+                            @foreach ($hardestParts as $key => $opt)
+                                <button
+                                    type="button" data-pick-focus="{{ $key }}"
+                                    class="flw-focus block w-full rounded-xl border border-zinc-200 bg-white p-3.5 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
+                                >
+                                    <span class="block text-sm font-semibold text-zinc-900">{{ $opt['label'] }}</span>
+                                    <span class="mt-0.5 block text-xs text-zinc-500">{{ $opt['description'] }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
                 </section>
 
-                {{-- Step 4: hardest part --}}
+                {{-- Step 4: tools --}}
                 <section data-step="4" class="space-y-4" hidden>
-                    <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">What's the biggest headache right now?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We'll put the fix for this front and center.</p>
-                    </div>
-                    <div class="space-y-2">
-                        @foreach ($hardestParts as $key => $opt)
-                            <button
-                                type="button" data-pick-focus="{{ $key }}"
-                                class="flw-focus block w-full rounded-xl border border-zinc-200 bg-white p-3.5 text-left transition hover:border-emerald-300 hover:shadow-sm"
-                            >
-                                <span class="block text-sm font-semibold text-zinc-900">{{ $opt['label'] }}</span>
-                                <span class="mt-0.5 block text-xs text-zinc-500">{{ $opt['description'] }}</span>
-                            </button>
-                        @endforeach
-                    </div>
-                </section>
-
-                {{-- Step 5: tools --}}
-                <section data-step="5" class="space-y-4" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">Pick the tools that sound useful</h2>
                         <p class="mt-1 text-sm text-zinc-500">Recommended tools are a launch plan, not a checkout screen. We will activate what is ready.</p>
+                        <p data-neutral-tools-note class="mt-2 hidden text-sm leading-6 text-emerald-800">Your first workspace includes customers, messages, and reporting. We will add other tools after we have reviewed the fit.</p>
                     </div>
                     <div class="grid max-h-[42vh] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
                         @foreach ($toolOptions as $key => $tool)
@@ -256,20 +279,20 @@
                     </div>
                 </section>
 
-                {{-- Step 6: concierge --}}
-                <section data-step="6" class="space-y-4" hidden>
+                {{-- Step 5: concierge and review --}}
+                <section data-step="5" class="space-y-5" hidden>
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">Want a hand setting it up?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">For early launch partners, guided setup is the default. Self-serve can come after the workflow is proven.</p>
+                        <h2 class="text-lg font-semibold text-zinc-900">Would you like a hand?</h2>
+                        <p class="mt-1 text-sm text-zinc-500">Choose the kind of start you prefer. You can change your mind later.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         <button type="button" data-pick-help="guided" class="flw-help rounded-xl border-2 border-emerald-500 bg-emerald-50 p-4 text-left transition">
-                            <span class="block text-sm font-semibold text-zinc-900">Set this up with me</span>
-                            <span class="mt-1 block text-xs text-zinc-500">We will help import data, enable messaging, and shape the first dashboard.</span>
+                            <span class="block text-sm font-semibold text-zinc-900">Set it up with me</span>
+                            <span class="mt-1 block text-xs text-zinc-500">We will help bring in contacts and choose your first tools.</span>
                         </button>
                         <button type="button" data-pick-help="self" class="flw-help rounded-xl border-2 border-zinc-200 bg-white p-4 text-left transition">
                             <span class="block text-sm font-semibold text-zinc-900">Let me explore first</span>
-                            <span class="mt-1 block text-xs text-zinc-500">Open the workspace now and finish setup later.</span>
+                            <span class="mt-1 block text-xs text-zinc-500">Open your workspace, then reach out when you want help.</span>
                         </button>
                     </div>
                     <div data-help-contact class="space-y-2.5 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
@@ -278,13 +301,9 @@
                         <input data-help-email type="email" placeholder="Email" maxlength="255" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
                         <input data-help-phone type="text" placeholder="Phone" maxlength="40" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
                     </div>
-                </section>
-
-                {{-- Step 7: review --}}
-                <section data-step="7" class="space-y-4" hidden>
-                    <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">Ready to create the workspace</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We will open the first version now and keep the launch items queued for review.</p>
+                    <div class="border-t border-zinc-200 pt-5">
+                        <h3 class="text-lg font-semibold text-zinc-900">Ready when you are</h3>
+                        <p class="mt-1 text-sm text-zinc-500">We will open your first workspace and check in before adding extra tools.</p>
                     </div>
                     <dl class="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm">
                         <div class="flex justify-between gap-4"><dt class="text-zinc-500">Workspace</dt><dd data-review-name class="font-medium text-zinc-900"></dd></div>
@@ -292,7 +311,7 @@
                         <div class="flex justify-between gap-4"><dt class="text-zinc-500">Team</dt><dd data-review-team class="font-medium text-zinc-900"></dd></div>
                         <div class="flex justify-between gap-4"><dt class="text-zinc-500">Tools</dt><dd data-review-tools class="text-right font-medium text-zinc-900"></dd></div>
                     </dl>
-                    <p class="text-xs text-zinc-400">Your tool picks are saved as recommendations. This does not start billing, send messages, or invite anyone.</p>
+                    <p class="text-xs text-zinc-400">Your choices do not start billing, send messages, or invite anyone.</p>
                 </section>
 
                 {{-- Nav --}}
@@ -315,7 +334,7 @@
             if (!root) return;
             var recommended = {};
             try { recommended = JSON.parse(root.getAttribute('data-recommended') || '{}'); } catch (e) {}
-            var TOTAL = 7;
+            var TOTAL = 5;
             var step = 1;
             var state = {
                 workspace_name: root.getAttribute('data-workspace-name') || '',
@@ -366,8 +385,7 @@
             function canNext() {
                 if (step === 1) return state.workspace_name.trim().length > 0;
                 if (step === 2) return state.template_key !== '' && (state.template_key !== 'custom' || state.custom_business_type.trim().length > 0);
-                if (step === 3) return state.team_size !== '';
-                if (step === 4) return state.hardest_part !== '';
+                if (step === 3) return state.team_size !== '' && state.hardest_part !== '';
                 return true;
             }
 
@@ -382,8 +400,11 @@
 
             function refreshTools() {
                 var rec = recommended[state.template_key] || [];
+                var neutralBase = ['customers', 'messaging', 'reporting'];
+                var isNeutralWorkspace = state.template_key === 'generic' || state.template_key === 'custom';
                 $$('[data-tool]').forEach(function (el) {
                     var k = el.getAttribute('data-tool');
+                    el.hidden = isNeutralWorkspace && neutralBase.indexOf(k) === -1;
                     var picked = state.module_choices.indexOf(k) !== -1;
                     el.classList.toggle('border-emerald-500', picked);
                     el.classList.toggle('bg-emerald-50', picked);
@@ -393,6 +414,8 @@
                     var badge = el.querySelector('[data-rec-badge]');
                     if (badge) badge.classList.toggle('hidden', rec.indexOf(k) === -1);
                 });
+                var neutralNote = $('[data-neutral-tools-note]');
+                if (neutralNote) neutralNote.classList.toggle('hidden', !isNeutralWorkspace);
             }
 
             function updateReview() {
@@ -414,7 +437,7 @@
                 $('[data-next]').hidden = step === TOTAL;
                 $('[data-submit]').hidden = step !== TOTAL;
                 $('[data-next]').disabled = !canNext();
-                if (step === 7) updateReview();
+                if (step === TOTAL) updateReview();
             }
 
             // Name

@@ -17,11 +17,11 @@ test('the popup workspace flow renders for a memberless user when the flag is on
     $this->actingAs($user)
         ->get(route('workspace.first-login'))
         ->assertOk()
-        ->assertSeeText('Set up your workspace')
-        ->assertSeeText('Guided launch')
+        ->assertSeeText('Start with the right foundation.')
+        ->assertSeeText('About two minutes')
         ->assertSeeText('What kind of business are you building?')
         ->assertSeeText('Pick the tools that sound useful')
-        ->assertSeeText('Want a hand setting it up?');
+        ->assertSeeText('Would you like a hand?');
 });
 
 test('the popup creates a domain-neutral workspace and records tool picks as interests only', function (): void {

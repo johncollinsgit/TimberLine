@@ -33,6 +33,12 @@ class FirstLoginWorkspaceController extends Controller
         // original full-page guide while the flag is off.
         if (config('features.first_login_modal')) {
             return response()->view('onboarding.first-login-workspace', [
+                'authTenantPresentation' => [
+                    'tenant_label' => 'Everbranch workspace',
+                    'hero_title' => 'Start with a workspace that fits your work.',
+                    'hero_subtitle' => 'A few clear choices now keep the right tools in front of your team later.',
+                    'hero_tagline' => 'Guided setup',
+                ],
                 'workspaceName' => $this->defaultWorkspaceName($user),
                 'businessTypes' => $this->businessTypeCards($blueprintService),
                 'teamSizes' => $this->teamSizeOptions(),
@@ -101,7 +107,10 @@ class FirstLoginWorkspaceController extends Controller
         ]);
 
         $workspaceName = trim((string) $validated['workspace_name']);
-        $selectedModuleKeys = $this->normalizeSelectedModules((array) ($validated['module_choices'] ?? []));
+        $selectedModuleKeys = $this->normalizeSelectedModules(
+            (array) ($validated['module_choices'] ?? []),
+            (string) $validated['template_key']
+        );
         $guideAnswers = $this->guideAnswerPayload($validated, $selectedModuleKeys);
 
         try {
@@ -155,10 +164,11 @@ class FirstLoginWorkspaceController extends Controller
     protected function toolRecommendationMap(): array
     {
         $common = ['customers', 'billing', 'messaging', 'reporting'];
+        $neutralBase = ['customers', 'messaging', 'reporting'];
 
         return [
-            'generic' => $common,
-            'custom' => $common,
+            'generic' => $neutralBase,
+            'custom' => $neutralBase,
             'candle_maker' => ['customers', 'billing', 'shopify', 'campaigns', 'reporting'],
             'apparel' => ['customers', 'billing', 'shopify', 'campaigns', 'reporting'],
             'landscaping' => ['customers', 'field_service', 'billing', 'messaging', 'reporting'],
@@ -230,9 +240,14 @@ class FirstLoginWorkspaceController extends Controller
      * @param  array<int,mixed>  $selectedModules
      * @return array<int,string>
      */
-    protected function normalizeSelectedModules(array $selectedModules): array
+    protected function normalizeSelectedModules(array $selectedModules, string $templateKey): array
     {
         $allowed = array_keys($this->moduleOptions());
+        $normalizedTemplate = Str::slug(strtolower(trim($templateKey)), '_');
+
+        if (in_array($normalizedTemplate, ['generic', 'custom'], true)) {
+            $allowed = ['customers', 'messaging', 'reporting'];
+        }
 
         return array_values(array_intersect(array_unique(array_filter(array_map(
             static fn (mixed $value): string => strtolower(trim((string) $value)),
