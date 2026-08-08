@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -102,6 +104,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -136,5 +140,23 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
+      - name: Resolve migration rehearsal baseline
+        id: migration-base
+        env:
+          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          base_sha="$PULL_REQUEST_BASE"
+          if [ -z "$base_sha" ]; then
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Lint changed migrations
+        run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
+
       - name: Verify clean and partial migration paths
         run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php --compact
+
+      - name: Rehearse prior production schema upgrade
+        run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

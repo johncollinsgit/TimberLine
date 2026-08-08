@@ -43,6 +43,14 @@
 - Releases A through E are complete on `main`; the next standalone backend track is email/provider reliability. Keep that work isolated from App Store, shell, dashboard, search, commercialization, and deferred expansion scope.
 - Collins Electric (`collins-electric`) is a guided electrician launch workspace, not a trial or live billing customer. Keep `everbranch:prepare-collins-electric` idempotent, keep QuickBooks as CSV/XLSX concierge import, keep Apple Photos manual, and keep SMS sends blocked until provider/consent/delivery readiness is verified.
 - MySQL limits identifiers to 64 characters. In migrations, never rely on Laravel-generated foreign-key or index names when the table and column names could approach that limit; assign concise explicit names (preferably 60 characters or fewer) before deployment.
+- Every new migration must pass `scripts/ci/lint-migrations.php`. Released
+  migrations are immutable; add a new idempotent repair migration instead of
+  editing one. Guard every table creation with `Schema::hasTable()`, and
+  register every multi-step migration in
+  `tests/Integration/migration-recovery-manifest.php` with a real MySQL
+  durable-partial-state recovery test. The production Migration Safety Gate is
+  mandatory even when the full emergency test/build gate is explicitly
+  skipped. See `docs/operations/migration-safety-gate.md`.
 - The `accounting_command_center` Branch is QuickBooks-authoritative,
   owner/admin-only, tenant-scoped, and disabled by default. Shopify, Square, and
   event spreadsheets are reconciliation sources, not additive ledger revenue.

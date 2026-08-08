@@ -450,14 +450,20 @@
   commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
-- **Migration-resume guard:** additive migrations must tolerate the state where
-  Forge has committed an early DDL statement but Laravel has not recorded the
-  migration. MySQL recovery tests reproduce that state; no operator may delete
-  production tables to retry it. Customer Loop and Commerce are enforced
-  examples, including explicit short names for MySQL indexes and foreign keys.
-- **Next observability lift:** add a read-only Forge API integration, held in a
-  production secret, to surface candidate status and log links in GitHub. It
-  must not trigger deployments or replace the exact-SHA `/ready` proof.
+- **Migration-resume guard:** the dedicated MySQL 8.4 Migration Safety Gate is
+  mandatory for pull requests and production, including the emergency path.
+  It rejects edits to released migrations, unguarded table creation, generated
+  or explicit identifiers over MySQL's 64-character limit, and multi-step
+  migrations without a registered durable-partial-state recovery test. It then
+  rebuilds the prior commit's schema and rehearses the current upgrade twice.
+  No operator may delete production tables to force a retry. The full contract
+  lives in `docs/operations/migration-safety-gate.md`.
+- **Forge observability:** an optional failure-only diagnostic uses Forge's
+  current API to retrieve `latestDeployment` after exact-SHA `/ready`
+  verification fails. Its code performs one GET and emits only allowlisted
+  commit/status/timestamp fields. It cannot deploy, retry, reset, or edit Forge,
+  and `/ready` remains the activation proof. Token creation and minimum read
+  scope selection are still an explicit operator configuration step.
 - **Default delivery:** completed scoped features merge to `main` and deploy
   through the protected GitHub/Forge path unless John requests review-only
   handling, a release gate fails, or a customer-data/isolation concern requires

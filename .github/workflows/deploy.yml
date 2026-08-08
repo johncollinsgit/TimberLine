@@ -104,23 +104,113 @@ jobs:
       - name: Run tests in parallel
         run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
 
+  migration_safety:
+    name: Migration Safety Gate
+    runs-on: ubuntu-latest
+    environment: Testing
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: everbranch_ci
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --password=root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: everbranch_ci
+      DB_USERNAME: root
+      DB_PASSWORD: root
+
+    steps:
+      - name: Checkout code with release history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Locate Composer cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-8.4-composer-
+
+      - name: Configure Flux composer auth
+        env:
+          FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+          FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare app key for migration rehearsal
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Resolve previous production commit
+        id: migration-base
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base_sha="$PUSH_BEFORE"
+          if [ -z "$base_sha" ] || printf '%s' "$base_sha" | grep --quiet '^0\{40\}$'; then
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Lint changed migrations
+        run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
+
+      - name: Verify interrupted migration recovery
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php --compact
+
+      - name: Rehearse prior production schema upgrade
+        run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
     needs:
       - setup
       - test_and_build
+      - migration_safety
     # Deploy only when the gate passed. A 'skipped' gate is allowed ONLY for the
     # manual emergency-hotfix path (workflow_dispatch with run_tests unchecked);
     # on a normal push the gate runs, so a test failure here blocks the deploy.
     if: >
       always() &&
       needs.setup.result == 'success' &&
+      needs.migration_safety.result == 'success' &&
       (needs.test_and_build.result == 'success' ||
         (needs.test_and_build.result == 'skipped' && github.event_name == 'workflow_dispatch'))
     environment:
       name: production
     steps:
+      - name: Checkout deployment diagnostics
+        uses: actions/checkout@v6
+
       - name: Validate deployment secrets
         env:
           FORGE_DEPLOY_HOOK_URL: ${{ secrets.FORGE_DEPLOY_HOOK_URL }}
@@ -159,3 +249,14 @@ jobs:
 
           echo "::error::Forge did not activate the expected release $EXPECTED_RELEASE. Production remains protected, but this deployment must be investigated before it can be called live."
           exit 1
+
+      - name: Report latest Forge deployment after a verification failure
+        if: failure()
+        continue-on-error: true
+        env:
+          EXPECTED_RELEASE: ${{ github.sha }}
+          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
+          FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
+          FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
+        run: php scripts/ci/report-forge-deployment.php
