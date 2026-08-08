@@ -1784,9 +1784,14 @@ What Flux is doing in this project:
 - If you do not want to buy Flux, the alternative is to remove/replace those Flux components and styles across the app with another UI system.
 
 Release sequence:
-- GitHub runs the full PHP/asset test gate.
-- A separate MySQL 8.4 gate lints changed migrations, simulates interrupted
-  migration recovery, and rehearses the prior-release schema upgrade.
+- Pull requests run the full PHP/asset test gate and a separate MySQL 8.4
+  gate that lints changed migrations, simulates interrupted migration
+  recovery, and rehearses the prior-release schema upgrade.
+- On merge, GitHub reuses that result only when the release tree is identical
+  to the merged PR tree and the named PR checks succeeded. Direct pushes,
+  unverifiable merges, and ordinary manual releases run the complete gates
+  again. Any schema, migration, database-config, or migration-tooling change
+  always repeats the MySQL gate on the merged release.
 - Only then does GitHub POST to the protected Forge deployment hook.
 - Forge builds in a new release directory, runs compatible migrations, and
   atomically activates the candidate.
@@ -1819,8 +1824,9 @@ Known release failure paths:
 Manual deploy:
 1. Go to GitHub -> Actions -> `Deploy Production`.
 2. Click `Run workflow`.
-3. Choose `main`. Only an explicitly approved emergency may set `run_tests` to
-   false; the MySQL Migration Safety Gate still runs.
+3. Choose `main`. The standard path runs the full test/build and MySQL gates.
+   Only an explicitly approved emergency may set `run_tests` to false; the
+   MySQL Migration Safety Gate still runs.
 
 Temporarily disable deploy:
 - In GitHub -> Actions -> `Deploy Production` -> `...` menu -> `Disable workflow`.

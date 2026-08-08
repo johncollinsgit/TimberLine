@@ -52,14 +52,21 @@ part of the release process.
 
 The handoff is complete.
 
-1. The `main` GitHub Actions workflow runs the full application test/build job
-   and an independent MySQL 8.4 Migration Safety Gate. Migration safety cannot
-   be skipped by the emergency dispatch. It lints changed migrations, runs the
-   partial-state recovery suite, and rehearses the schema upgrade from the
-   prior released commit.
-2. After the gate succeeds, it POSTs to the protected GitHub production secret
+1. Pull requests run the full application test/build job and an independent
+   MySQL 8.4 Migration Safety Gate. A `main` deployment reuses those exact PR
+   checks only when GitHub verifies all of the following: the commit came from
+   a merged PR targeting `main`, the merged release tree equals that PR head
+   tree, and `quality`, `ci (8.4)`, and `mysql migration recovery` all passed.
+   Direct pushes, unverifiable merges, and ordinary manual runs execute the
+   full gates again. Any schema, migration, database-config, or migration
+   tooling change repeats the MySQL gate on the merged release. Migration
+   safety cannot be skipped by the emergency dispatch; it lints changed
+   migrations, runs the partial-state recovery suite, and rehearses the schema
+   upgrade from the prior released commit.
+2. After the required gate succeeds, it POSTs to the protected GitHub production secret
    `FORGE_DEPLOY_HOOK_URL`. Never commit or print that URL. The workflow then
-   polls `/ready` for the exact GitHub commit for up to three minutes. A hook
+   polls `/ready` every three seconds for the exact GitHub commit for up to two
+   minutes. A hook
    acknowledgment alone is not deployment evidence; the workflow fails if the
    active release identifier remains stale.
    If optional Forge observer credentials are configured, a failed verification
