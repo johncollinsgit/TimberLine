@@ -303,8 +303,8 @@
                 {{-- Step 1: name --}}
                 <section data-step="1" class="space-y-4">
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">What should we call it?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">This becomes the name your team sees in the app. You can change it later.</p>
+                        <h2 class="text-lg font-semibold text-zinc-900">Name your workspace</h2>
+                        <p class="mt-1 text-sm text-zinc-500">You can change this later.</p>
                     </div>
                     <input
                         data-name-input type="text" value="{{ $workspaceName }}" maxlength="120"

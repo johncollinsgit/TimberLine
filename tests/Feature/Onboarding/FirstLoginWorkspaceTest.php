@@ -22,7 +22,7 @@ test('first-login workspace flow opens for a verified user with no tenants', fun
         ->assertSeeText('About two minutes')
         ->assertSeeText('No billing or invitations yet')
         ->assertSeeText('Change it later')
-        ->assertSeeText('What should we call it?')
+        ->assertSeeText('Name your workspace')
         ->assertSeeText('Field-service trades');
 });
 
