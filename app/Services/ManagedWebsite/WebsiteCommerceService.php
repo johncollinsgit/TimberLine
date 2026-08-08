@@ -129,7 +129,7 @@ class WebsiteCommerceService
      * reserve stock, create a Stripe session, request a shipping rate, or
      * communicate with a customer.
      *
-     * @param array{customer:?WebsiteCustomer,customer_name:string,customer_email:string,customer_phone:string,website_product_variant_id:int,quantity:int,fulfillment_method:string,note?:string} $data
+     * @param  array{customer:?WebsiteCustomer,customer_name:string,customer_email:string,customer_phone:string,website_product_variant_id:int,quantity:int,fulfillment_method:string,note?:string}  $data
      */
     public function createDraftOrder(TenantSite $site, array $data, User $actor): WebsiteOrder
     {
