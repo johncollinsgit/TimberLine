@@ -14465,6 +14465,67 @@ body.eb-workflow-picker-open {
   margin: 0.15rem 0 0;
 }
 
+/* Channel pulse is deliberately an operational strip, not another dashboard
+   card: every number is linked and drawn from tenant-scoped sales or tracked
+   storefront data. */
+.eb-channel-pulse {
+  align-items: stretch;
+  background: #ffffff;
+  border-bottom: 1px solid #d8dddd;
+  border-top: 1px solid #d8dddd;
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.8fr) minmax(0, 4.2fr);
+}
+.eb-channel-pulse__context {
+  align-items: flex-start;
+  border-right: 1px solid #d8dddd;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 5.35rem;
+  padding: 0.85rem 1rem;
+}
+.eb-channel-pulse__context a {
+  color: #242a2c;
+  font-size: 0.77rem;
+  font-weight: 720;
+  text-decoration: none;
+}
+.eb-channel-pulse__context a:hover { text-decoration: underline; }
+.eb-channel-pulse__context select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #343a3c;
+  cursor: pointer;
+  font: 690 0.82rem/1.2 var(--eb-font-ui);
+  margin: 0.15rem 0 0 -0.2rem;
+  padding: 0.14rem 1.1rem 0.14rem 0.2rem;
+}
+.eb-channel-pulse__context select:focus-visible { outline: 2px solid #176b4d; outline-offset: 2px; }
+.eb-channel-pulse__metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.eb-channel-pulse__metric {
+  color: #282f31;
+  display: block;
+  min-width: 0;
+  padding: 0.85rem 0.85rem 0.72rem;
+  text-decoration: none;
+}
+.eb-channel-pulse__metric + .eb-channel-pulse__metric { border-left: 1px solid #eceeee; }
+.eb-channel-pulse__metric:hover { background: #f5f8f7; }
+.eb-channel-pulse__metric:focus-visible { outline: 2px solid #176b4d; outline-offset: -2px; }
+.eb-channel-pulse__metric span,
+.eb-channel-pulse__metric strong,
+.eb-channel-pulse__metric small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eb-channel-pulse__metric span { color: #6b7173; font-size: 0.67rem; font-weight: 650; }
+.eb-channel-pulse__metric strong { color: #202627; font-size: 1.05rem; font-weight: 760; letter-spacing: -0.025em; line-height: 1.2; margin-top: 0.35rem; }
+.eb-channel-pulse__metric small { color: #747b7d; font-size: 0.63rem; line-height: 1.3; margin-top: 0.22rem; }
+.eb-channel-pulse__trend { font-weight: 720; margin-right: 0.25rem; }
+.eb-channel-pulse__trend--positive { color: #14804f; }
+.eb-channel-pulse__trend--negative { color: #b42318; }
+.eb-channel-pulse__trend--neutral { color: #747b7d; }
+.eb-channel-pulse__live { background: #16a05f; border-radius: 50%; display: inline-block; height: 0.42rem; margin: 0 0.28rem 0.04rem 0; width: 0.42rem; }
+
 .eb-dashboard-notice,
 .eb-dashboard-panel {
   background: #ffffff;
@@ -14752,6 +14813,10 @@ body.eb-workflow-picker-open {
   .eb-dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .eb-dashboard-metrics > a:nth-child(2) { border-right: 0; }
   .eb-dashboard-metrics > a:nth-child(-n+2) { border-bottom: 1px solid #dedede; }
+  .eb-channel-pulse { grid-template-columns: minmax(8.5rem, 0.9fr) minmax(0, 3.1fr); }
+  .eb-channel-pulse__metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .eb-channel-pulse__metric:nth-child(4) { border-left: 0; }
+  .eb-channel-pulse__metric:nth-child(-n+3) { border-bottom: 1px solid #eceeee; }
 }
 
 @media (max-width: 640px) {
@@ -14771,6 +14836,13 @@ body.eb-workflow-picker-open {
   .eb-dashboard-pulse-art { opacity: 0.4; width: 100%; }
   .eb-dashboard-kpi-controls { justify-content: space-between; width: 100%; }
   .eb-dashboard-kpi-value { min-width: 0; }
+  .eb-channel-pulse { display: block; }
+  .eb-channel-pulse__context { align-items: center; border-bottom: 1px solid #d8dddd; border-right: 0; flex-direction: row; justify-content: space-between; min-height: 3.25rem; padding: 0.6rem 0.8rem; }
+  .eb-channel-pulse__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eb-channel-pulse__metric { padding: 0.75rem 0.8rem; }
+  .eb-channel-pulse__metric:nth-child(4) { border-left: 1px solid #eceeee; }
+  .eb-channel-pulse__metric:nth-child(odd) { border-left: 0; }
+  .eb-channel-pulse__metric:nth-child(-n+4) { border-bottom: 1px solid #eceeee; }
   .eb-dashboard-columns { grid-template-columns: minmax(0, 1fr); }
   .eb-dashboard-metrics > a { min-height: 6.6rem; padding: 0.8rem; }
   .eb-landlord-header__main { align-items: flex-start; flex-direction: column; }

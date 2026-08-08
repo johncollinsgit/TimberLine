@@ -11,6 +11,7 @@ use App\Models\FieldServiceVehicle;
 use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\ScheduledClass;
 use App\Models\Tenant;
@@ -74,6 +75,7 @@ class UnifiedDashboardService
 
             return $card;
         }, $summaryCards);
+        $channelPulse = $this->channelPulse($tenantId, $canAccessMarketing || $canAccessOps, $range);
 
         return [
             'tenant_id' => $tenantId,
@@ -89,6 +91,7 @@ class UnifiedDashboardService
             'experience_profile' => $profile,
             'hero' => $hero,
             'summary_cards' => $summaryCards,
+            'channel_pulse' => $channelPulse,
             'upcoming_jobs' => $clientFacingFieldService ? ($ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant)) : [],
             'class_calendar' => $this->classCalendar($tenant),
             'front_yard_launch' => $this->frontYardLaunch($tenant),
@@ -97,6 +100,161 @@ class UnifiedDashboardService
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
+    }
+
+    /**
+     * A compact, tenant-scoped version of the sales-channel pulse used at the
+     * top of Home. Storefront sessions come only from recorded events; when a
+     * tenant has not connected tracking, the UI says so instead of implying
+     * that a zero is a measured conversion result.
+     *
+     * @param  array{key:string,label:string,short_label:string,starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable,options:array<string,string>}  $range
+     * @return array<string,mixed>|null
+     */
+    protected function channelPulse(?int $tenantId, bool $roleAllowed, array $range): ?array
+    {
+        if (! $roleAllowed || $tenantId === null) {
+            return null;
+        }
+
+        $sales = $this->salesChannels->forTenant($tenantId, $range['starts_at'], $range['ends_at']);
+        $priorRange = $this->previousRange($range);
+        $priorSales = $this->salesChannels->forTenant($tenantId, $priorRange['starts_at'], $priorRange['ends_at']);
+        $sessions = $this->storefrontSessionCount($tenantId, $range['starts_at'], $range['ends_at']);
+        $priorSessions = $this->storefrontSessionCount($tenantId, $priorRange['starts_at'], $priorRange['ends_at']);
+        $liveVisitors = $this->liveStorefrontVisitorCount($tenantId);
+        $conversion = $sessions === null || $sessions === 0
+            ? null
+            : (($sales['order_count'] / $sessions) * 100);
+        $priorConversion = $priorSessions === null || $priorSessions === 0
+            ? null
+            : (($priorSales['order_count'] / $priorSessions) * 100);
+        $href = route('sales-channels.index', ['range' => $range['key']]);
+
+        return [
+            'range_label' => $range['key'] === '1d' ? 'Today' : $range['label'],
+            'href' => $href,
+            'metrics' => [
+                [
+                    'label' => 'Sessions',
+                    'value' => $sessions === null ? '—' : number_format($sessions),
+                    'detail' => $sessions === null ? 'Tracking not connected' : 'Tracked storefront sessions',
+                    'trend' => $sessions === null ? null : $this->percentageTrend($sessions, $priorSessions),
+                    'href' => $href,
+                ],
+                [
+                    'label' => 'Total sales',
+                    'value' => '$'.number_format($sales['revenue_cents'] / 100, 2),
+                    'detail' => $this->channelDetail($sales),
+                    'trend' => $this->percentageTrend($sales['revenue_cents'], $priorSales['revenue_cents']),
+                    'href' => $href,
+                ],
+                [
+                    'label' => 'Orders',
+                    'value' => number_format($sales['order_count']),
+                    'detail' => 'Confirmed sales across channels',
+                    'trend' => $this->percentageTrend($sales['order_count'], $priorSales['order_count']),
+                    'href' => $href,
+                ],
+                [
+                    'label' => 'Conversion rate',
+                    'value' => $conversion === null ? '—' : number_format($conversion, 2).'%',
+                    'detail' => $conversion === null ? 'Needs tracked sessions' : 'Orders ÷ tracked sessions',
+                    'trend' => $conversion === null ? null : $this->percentageTrend($conversion, $priorConversion),
+                    'href' => $href,
+                ],
+                [
+                    'label' => 'Live visitors',
+                    'value' => $liveVisitors === null ? '—' : number_format($liveVisitors),
+                    'detail' => $liveVisitors === null ? 'Tracking not connected' : 'Active in the last 5 minutes',
+                    'live' => $liveVisitors !== null,
+                    'href' => $href,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array{starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable}  $range
+     * @return array{starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable}
+     */
+    protected function previousRange(array $range): array
+    {
+        $seconds = max(1, $range['ends_at']->diffInSeconds($range['starts_at']));
+        $endsAt = $range['starts_at']->subSecond();
+
+        return [
+            'starts_at' => $endsAt->subSeconds($seconds),
+            'ends_at' => $endsAt,
+        ];
+    }
+
+    protected function storefrontSessionCount(int $tenantId, \Carbon\CarbonImmutable $startsAt, \Carbon\CarbonImmutable $endsAt): ?int
+    {
+        if (! Schema::hasTable('marketing_storefront_events')) {
+            return null;
+        }
+
+        return (int) MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
+            ->where('event_type', 'session_started')
+            ->whereBetween('occurred_at', [$startsAt, $endsAt])
+            ->where('source_id', 'like', 'session_started:%')
+            ->distinct()
+            ->count('source_id');
+    }
+
+    protected function liveStorefrontVisitorCount(int $tenantId): ?int
+    {
+        if (! Schema::hasTable('marketing_storefront_events')) {
+            return null;
+        }
+
+        return (int) MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
+            ->where('event_type', 'session_started')
+            ->where('occurred_at', '>=', now()->subMinutes(5))
+            ->where('source_id', 'like', 'session_started:%')
+            ->distinct()
+            ->count('source_id');
+    }
+
+    /** @return array{label:string,tone:string}|null */
+    protected function percentageTrend(int|float $current, int|float|null $previous): ?array
+    {
+        if ($previous === null) {
+            return null;
+        }
+
+        if ($previous <= 0) {
+            return $current > 0 ? ['label' => 'New', 'tone' => 'positive'] : null;
+        }
+
+        $change = (($current - $previous) / $previous) * 100;
+        $rounded = (int) round(abs($change));
+
+        if ($rounded === 0) {
+            return ['label' => 'No change', 'tone' => 'neutral'];
+        }
+
+        return [
+            'label' => ($change > 0 ? '+' : '−').number_format($rounded).'%',
+            'tone' => $change > 0 ? 'positive' : 'negative',
+        ];
+    }
+
+    /** @param array{channel_count:int,channels:array<int,array{label:string}>} $sales */
+    protected function channelDetail(array $sales): string
+    {
+        if ($sales['channel_count'] === 0) {
+            return 'No confirmed sales in this period';
+        }
+
+        if ($sales['channel_count'] === 1) {
+            return (string) ($sales['channels'][0]['label'] ?? 'Sales channel');
+        }
+
+        return number_format($sales['channel_count']).' sales channels';
     }
 
     /** @return array<string,mixed>|null */

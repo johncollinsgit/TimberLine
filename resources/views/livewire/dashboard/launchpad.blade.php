@@ -12,6 +12,7 @@
     $classCalendar = is_array($dashboard['class_calendar'] ?? null) ? $dashboard['class_calendar'] : null;
     $frontYardLaunch = is_array($dashboard['front_yard_launch'] ?? null) ? $dashboard['front_yard_launch'] : null;
     $workflowHealth = is_array($dashboard['workflow_automation_health'] ?? null) ? $dashboard['workflow_automation_health'] : null;
+    $channelPulse = is_array($dashboard['channel_pulse'] ?? null) ? $dashboard['channel_pulse'] : null;
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 md:px-6 min-w-0">
@@ -24,6 +25,37 @@
                 @endif
             </div>
         </header>
+
+        @if($channelPulse)
+            <section class="eb-channel-pulse" aria-label="Channel performance" wire:poll.30s.visible>
+                <div class="eb-channel-pulse__context">
+                    <a href="{{ $channelPulse['href'] ?? route('sales-channels.index') }}">All channels</a>
+                    <label>
+                        <span class="sr-only">Time window</span>
+                        <select wire:model.live="range" aria-label="Time window">
+                            @foreach($rangeOptions as $value => $label)
+                                <option value="{{ $value }}">{{ $value === '1d' ? 'Today' : $label }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
+                <div class="eb-channel-pulse__metrics">
+                    @foreach(($channelPulse['metrics'] ?? []) as $metric)
+                        <a href="{{ $metric['href'] ?? ($channelPulse['href'] ?? route('sales-channels.index')) }}" class="eb-channel-pulse__metric">
+                            <span>{{ $metric['label'] ?? 'Metric' }}</span>
+                            <strong>{{ $metric['value'] ?? '—' }}</strong>
+                            <small>
+                                @if(is_array($metric['trend'] ?? null))
+                                    <b class="eb-channel-pulse__trend eb-channel-pulse__trend--{{ $metric['trend']['tone'] ?? 'neutral' }}">{{ $metric['trend']['label'] ?? '' }}</b>
+                                @endif
+                                @if($metric['live'] ?? false)<i class="eb-channel-pulse__live" aria-hidden="true"></i>@endif
+                                {{ $metric['detail'] ?? '' }}
+                            </small>
+                        </a>
+                    @endforeach
+                </div>
+            </section>
+        @endif
 
         @if($workflowHealth)
             <section class="eb-dashboard-notice" aria-labelledby="workflow-health-title">
@@ -143,39 +175,13 @@
             </section>
         @endif
 
-        <section class="eb-dashboard-panel eb-dashboard-panel--pulse">
-            <div class="eb-dashboard-pulse-art" aria-hidden="true">
-                <svg viewBox="0 0 640 250" role="presentation">
-                    <defs>
-                        <pattern id="everbranch-dot-grid" width="14" height="14" patternUnits="userSpaceOnUse">
-                            <circle cx="2" cy="2" r="1.15" fill="currentColor" />
-                        </pattern>
-                    </defs>
-                    <path class="eb-dashboard-pulse-grid" d="M305 22c123 0 225 55 225 123s-102 82-225 82S81 213 81 145 182 22 305 22Z" />
-                    <path class="eb-dashboard-pulse-line" d="M392 61c-28 33-38 61-30 83 10 28 49 20 74 45" />
-                    <path class="eb-dashboard-pulse-line eb-dashboard-pulse-line--two" d="M362 144c-42 3-76-14-104-50-20-26-48-34-84-25" />
-                    <circle class="eb-dashboard-pulse-ring" cx="362" cy="144" r="12" />
-                    <circle class="eb-dashboard-pulse-node" cx="362" cy="144" r="5" />
-                    <circle class="eb-dashboard-pulse-node eb-dashboard-pulse-node--quiet" cx="436" cy="189" r="3.5" />
-                    <circle class="eb-dashboard-pulse-node eb-dashboard-pulse-node--quiet" cx="174" cy="69" r="3.5" />
-                </svg>
-            </div>
+        <section class="eb-dashboard-panel">
             <div class="eb-dashboard-panel__header">
                 <div>
                     <h2>{{ $hero['label'] ?? 'Workspace readiness' }}</h2>
                     <p>{{ $hero['supporting'] ?? '' }}</p>
                 </div>
-                <div class="eb-dashboard-kpi-controls">
-                    <label>
-                        <span class="sr-only">Time window</span>
-                        <select wire:model.live="range">
-                            @foreach($rangeOptions as $value => $label)
-                                <option value="{{ $value }}">{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                    <a href="{{ $hero['href'] ?? route('dashboard') }}" class="eb-dashboard-kpi-value">{{ $hero['value'] ?? 'Ready' }}</a>
-                </div>
+                <a href="{{ $hero['href'] ?? route('dashboard') }}" class="eb-dashboard-kpi-value">{{ $hero['value'] ?? 'Ready' }}</a>
             </div>
 
             @if($summaryCards !== [])

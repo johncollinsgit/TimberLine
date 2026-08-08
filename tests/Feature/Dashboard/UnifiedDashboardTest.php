@@ -2,6 +2,7 @@
 
 use App\Models\FieldServiceJob;
 use App\Models\MarketingProfile;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\QuickBooksReportingSetting;
 use App\Models\ShopifyStore;
@@ -46,7 +47,7 @@ test('dashboard renders customer-focused hero metric for direct crm tenants', fu
         ->assertSeeText('Reachable customers')
         ->assertSeeText('Customer workspace')
         ->assertSee('data-app-shell-topbar', false)
-        ->assertSee('eb-dashboard-panel--pulse', false)
+        ->assertSee('eb-channel-pulse', false)
         ->assertDontSeeText('Search your workspace');
 });
 
@@ -132,6 +133,68 @@ test('dashboard range defaults to current month and filters a selected one day w
         ->assertSeeText('Sales-channel revenue · 1 day')
         ->assertSeeText('$125.00')
         ->assertDontSeeText('$425.00');
+});
+
+test('dashboard shows a tenant-scoped, functional channel pulse above workspace content', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Pulse Tenant', 'slug' => 'pulse-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'growth',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'pulse-dashboard.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
+    Order::query()->create([
+        'tenant_id' => $tenant->id,
+        'order_number' => 'PULSE-1',
+        'status' => 'paid',
+        'total_price' => 75,
+        'ordered_at' => now(),
+    ]);
+    foreach (['session-a', 'session-b'] as $session) {
+        MarketingStorefrontEvent::query()->create([
+            'tenant_id' => $tenant->id,
+            'event_type' => 'session_started',
+            'status' => 'ok',
+            'source_id' => 'session_started:'.$session,
+            'occurred_at' => now()->subMinute(),
+            'resolution_status' => 'resolved',
+        ]);
+    }
+    $otherTenant = Tenant::query()->create(['name' => 'Other Pulse Tenant', 'slug' => 'other-pulse-tenant']);
+    MarketingStorefrontEvent::query()->create([
+        'tenant_id' => $otherTenant->id,
+        'event_type' => 'session_started',
+        'status' => 'ok',
+        'source_id' => 'session_started:other-tenant',
+        'occurred_at' => now()->subMinute(),
+        'resolution_status' => 'resolved',
+    ]);
+
+    $user = User::factory()->create(['role' => 'admin']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard', ['range' => '1d']))
+        ->assertOk()
+        ->assertSeeText('All channels')
+        ->assertSeeText('Today')
+        ->assertSeeText('Sessions')
+        ->assertSeeText('Total sales')
+        ->assertSeeText('Orders')
+        ->assertSeeText('Conversion rate')
+        ->assertSeeText('Live visitors')
+        ->assertSeeText('Tracked storefront sessions')
+        ->assertSeeText('Orders ÷ tracked sessions')
+        ->assertSeeText('50.00%')
+        ->assertSee('wire:poll.30s.visible', false)
+        ->assertSee(route('sales-channels.index', ['range' => '1d']));
 });
 
 test('dashboard recognizes confirmed native Website sales as a separate channel', function (): void {
