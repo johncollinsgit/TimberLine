@@ -7,7 +7,7 @@ entitlement or billing state, and does not read or mutate customer data. It
 protects every Everbranch tenant, including Modern Forestry, by stopping an
 unsafe database candidate before Forge receives a deployment request.
 
-The gate addresses four recurring production risks:
+The gate addresses five recurring production risks:
 
 1. MySQL rejects an automatically generated index or foreign-key identifier
    longer than 64 characters.
@@ -32,6 +32,9 @@ order:
 3. `scripts/ci/rehearse-migrations.sh` builds the prior commit's schema in a
    disposable database, applies the current migrations, and runs the migrator
    again to prove the result is settled.
+4. `scripts/ci/verify-mysql-schema-baseline.sh` proves that both the complete
+   migration tree and a blank database booted from the committed MySQL schema
+   dump match the approved, data-free schema fingerprint.
 
 The production `Migration Safety Gate` always runs. A manually approved
 emergency deployment may skip the full application test/build job, but it may

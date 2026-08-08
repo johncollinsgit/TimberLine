@@ -59,6 +59,10 @@
   durable-partial-state recovery test. The production Migration Safety Gate is
   mandatory even when the full emergency test/build gate is explicitly
   skipped. See `docs/operations/migration-safety-gate.md`.
+- The MySQL schema dump and fingerprint are data-free release artifacts, not
+  backups. Refresh them only via the disposable MySQL baseline workflow and
+  review both files with the migration. Production drift checks and restore
+  drills are governed by `docs/operations/release-observability-and-recovery.md`.
 - The `accounting_command_center` Branch is QuickBooks-authoritative,
   owner/admin-only, tenant-scoped, and disabled by default. Shopify, Square, and
   event spreadsheets are reconciliation sources, not additive ledger revenue.
