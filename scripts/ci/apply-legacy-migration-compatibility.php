@@ -43,6 +43,17 @@ foreach (array_keys($manifest) as $path) {
         exit(1);
     }
 
+    // Once a compatibility correction has itself been released, the chosen
+    // baseline already contains the corrected migration. Replacing it again is
+    // unnecessary, but accepting it is essential: otherwise every later
+    // release attempts to validate the corrected file as if it were the old
+    // broken checksum and permanently blocks migration rehearsal.
+    if ($compatibility->isAlreadyCorrected($path, $beforeSource) && $compatibility->isAlreadyCorrected($path, $afterSource)) {
+        fwrite(STDOUT, 'Baseline already contains checksum-pinned compatibility: '.basename($path)."\n");
+
+        continue;
+    }
+
     $errors = $compatibility->validate($path, $beforeSource, $afterSource);
 
     if ($errors !== []) {

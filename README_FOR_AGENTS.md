@@ -217,6 +217,12 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   create a deploy, reset status, change site settings, or replace `/ready`.
   Credential creation and least-privilege scope selection remain an explicit
   operator task.
+- Release observability also includes a configured operations-webhook alert,
+  nightly data-free `schema:fingerprint` drift checking, a reviewed MySQL
+  schema baseline, and a deliberately isolated backup/restore drill script.
+  Follow `docs/operations/release-observability-and-recovery.md`; never put a
+  production backup, database credential, Forge token, or alert webhook in the
+  repository.
 - Never run `git reset --hard`, `git clean`, in-place frontend replacement, or
   cache-clearing as a normal production deploy. The approved Forge runbook uses
   a fresh release, build/test preparation before activation, compatible

@@ -33,3 +33,21 @@ it('rejects an unapproved edit to a released migration', function (): void {
     expect($compatibility->validate($path, 'before', 'after'))
         ->toContain("{$path}: an existing migration was changed. Add a new restart-safe repair migration instead; production may already have recorded the original.");
 });
+
+it('allows a rehearsal baseline that already contains the pinned correction', function (): void {
+    $path = 'database/migrations/legacy.php';
+    $source = '<?php // corrected';
+    $manifest = [
+        $path => [
+            'before_sha256' => hash('sha256', '<?php // broken'),
+            'after_sha256' => hash('sha256', $source),
+            'reason' => 'A generated MySQL identifier blocks clean installation.',
+            'test' => 'tests/Unit/Infrastructure/LegacyMigrationCompatibilityTest.php',
+        ],
+    ];
+
+    $compatibility = new LegacyMigrationCompatibility(dirname(__DIR__, 3), $manifest);
+
+    expect($compatibility->isAlreadyCorrected($path, $source))->toBeTrue()
+        ->and($compatibility->isAlreadyCorrected($path, '<?php // changed'))->toBeFalse();
+});

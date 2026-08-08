@@ -59,6 +59,13 @@ Schedule::command('scheduler:heartbeat')
     ->withoutOverlapping(5)
     ->runInBackground();
 
+// A data-free information_schema signature catches unexpected live DDL. It is
+// intentionally read-only and shares the existing Forge scheduler heartbeat.
+Schedule::command('schema:fingerprint')
+    ->dailyAt('03:10')
+    ->withoutOverlapping(20)
+    ->runInBackground();
+
 // Shopify webhook subscription drift audit for BOTH storefronts (non-destructive;
 // repair is manual). Auditing wholesale too keeps its real-time order webhooks healthy.
 foreach (['retail', 'wholesale'] as $shopifyStoreKey) {

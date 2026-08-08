@@ -1761,6 +1761,10 @@ plus production variables `FORGE_ORGANIZATION_SLUG`, `FORGE_SERVER_ID`, and
 `FORGE_SITE_ID`. Use the narrowest read scopes Forge offers. The diagnostic
 only runs after deployment verification fails and never changes Forge state.
 
+Release failure alerts, nightly data-free MySQL schema-drift checks, approved
+schema-baseline refreshes, and safe staging restore drills are documented in
+`docs/operations/release-observability-and-recovery.md`.
+
 What Flux is doing in this project:
 - The app depends on the private `livewire/flux` UI package from Composer.
 - Flux provides the Blade UI components used throughout the Laravel/Livewire shell, including login/auth screens, settings pages, headers, sidebars, nav, modals, badges, buttons, inputs, and other shared interface pieces.

@@ -50,7 +50,7 @@ jobs:
           coverage: none
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -60,7 +60,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Composer downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
@@ -147,7 +147,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Composer downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
@@ -189,6 +189,9 @@ jobs:
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
 
+      - name: Verify committed MySQL schema baseline
+        run: scripts/ci/verify-mysql-schema-baseline.sh
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
@@ -220,6 +223,15 @@ jobs:
             echo "::error::Missing required production secret: FORGE_DEPLOY_HOOK_URL"
             exit 1
           fi
+
+      - name: Report operational observer configuration
+        continue-on-error: true
+        env:
+          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
+          FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
+          FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
+        run: php scripts/ci/verify-forge-observer-config.php
 
       - name: Trigger Forge atomic release
         env:
