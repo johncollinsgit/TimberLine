@@ -35,7 +35,7 @@ foreach ([$organization, $server, $site] as $identifier) {
 }
 
 $url = sprintf(
-    'https://forge.laravel.com/api/orgs/%s/servers/%s/sites/%s?include=latestDeployment',
+    'https://forge.laravel.com/api/orgs/%s/servers/%s/sites/%s/deployments?page%%5Bsize%%5D=1&sort=-created_at',
     rawurlencode($organization),
     rawurlencode($server),
     rawurlencode($site),
@@ -63,7 +63,6 @@ curl_setopt_array($curl, [
 $response = curl_exec($curl);
 $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
 $curlError = curl_error($curl);
-curl_close($curl);
 
 if (! is_string($response) || $status < 200 || $status >= 300) {
     fwrite(STDERR, "Forge diagnostic GET failed with HTTP {$status}".($curlError !== '' ? ": {$curlError}" : '').".\n");
@@ -77,33 +76,12 @@ if (! is_array($document)) {
     exit(1);
 }
 
-$deployment = null;
-
-foreach (($document['included'] ?? []) as $included) {
-    if (! is_array($included)) {
-        continue;
-    }
-
-    $type = strtolower((string) ($included['type'] ?? ''));
-
-    if (str_contains($type, 'deployment')) {
-        $deployment = $included;
-        break;
-    }
-}
+$deployment = is_array($document['data'][0] ?? null)
+    ? $document['data'][0]
+    : null;
 
 if ($deployment === null) {
-    $candidate = $document['data']['attributes']['latest_deployment']
-        ?? $document['data']['attributes']['latestDeployment']
-        ?? null;
-
-    if (is_array($candidate)) {
-        $deployment = $candidate;
-    }
-}
-
-if ($deployment === null) {
-    $writeSummary('Forge diagnostic: the site was reachable through the API, but no latest deployment was included.');
+    $writeSummary('Forge diagnostic: the site was reachable through the API, but Forge returned no deployments.');
     exit(0);
 }
 
@@ -121,7 +99,8 @@ $firstValue = static function (array $values, array $keys): string {
     return 'unknown';
 };
 
-$actualRelease = $firstValue($attributes, ['commit_hash', 'commit', 'hash', 'commit_sha']);
+$commit = is_array($attributes['commit'] ?? null) ? $attributes['commit'] : [];
+$actualRelease = $firstValue($commit, ['hash']);
 $statusLabel = $firstValue($attributes, ['status', 'state']);
 $startedAt = $firstValue($attributes, ['started_at', 'created_at', 'deployed_at']);
 $endedAt = $firstValue($attributes, ['ended_at', 'finished_at', 'updated_at']);
