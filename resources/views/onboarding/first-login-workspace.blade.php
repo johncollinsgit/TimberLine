@@ -10,55 +10,96 @@
 
 <x-layouts::auth.simple :title="__('Create your workspace')" :auth-tenant-presentation="$authTenantPresentation ?? []">
     <style>
+        body:has([data-flw-shell]) {
+            background: #f8fbfa;
+        }
+
         body:has([data-flw-shell]) .fb-auth-shell {
-            grid-template-columns: minmax(300px, 0.7fr) minmax(620px, 1.3fr);
-            max-width: 1320px;
-        }
-
-        body:has([data-flw-shell]) .fb-auth-card {
+            display: block;
+            isolation: isolate;
             max-width: none;
+            min-height: 100vh;
+            overflow: hidden;
             padding: 0;
-            background: transparent;
-            border: 0;
-            box-shadow: none;
-        }
-
-        [data-flw-shell] {
-            background:
-                radial-gradient(70rem 42rem at 88% -16%, rgba(188, 232, 216, 0.68), transparent 62%),
-                radial-gradient(52rem 38rem at 12% 108%, rgba(206, 225, 248, 0.52), transparent 64%),
-                linear-gradient(145deg, #ffffff 0%, #f7fbf9 46%, #f6f9fc 100%);
             position: relative;
         }
 
-        [data-flw-shell]::before,
-        [data-flw-shell]::after {
+        body:has([data-flw-shell]) .fb-auth-brand-panel {
+            display: none;
+        }
+
+        body:has([data-flw-shell]) .fb-auth-card-wrap {
+            align-items: stretch;
+            display: flex;
+            justify-content: stretch;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        body:has([data-flw-shell]) .fb-auth-card {
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            max-width: none;
+            padding: 0;
+            width: 100%;
+        }
+
+        body:has([data-flw-shell]) .fb-auth-shell::before,
+        body:has([data-flw-shell]) .fb-auth-shell::after,
+        body:has([data-flw-shell]) .fb-auth-card-wrap::before {
             border-radius: 999px;
             content: '';
-            filter: blur(42px);
-            opacity: 0.35;
+            filter: blur(58px);
+            inset: auto;
+            opacity: 0.58;
             pointer-events: none;
             position: absolute;
+            z-index: -1;
         }
 
-        [data-flw-shell]::before {
-            background: linear-gradient(135deg, rgba(105, 192, 155, 0.56), rgba(105, 176, 214, 0));
-            height: 19rem;
-            right: -7rem;
-            top: 19%;
-            width: 19rem;
+        body:has([data-flw-shell]) .fb-auth-shell::before {
+            background: rgba(103, 210, 166, 0.48);
+            height: min(42vw, 38rem);
+            left: -12rem;
+            top: -13rem;
+            width: min(42vw, 38rem);
         }
 
-        [data-flw-shell]::after {
-            background: linear-gradient(135deg, rgba(121, 175, 221, 0.32), rgba(167, 220, 184, 0.05));
-            bottom: 4%;
-            height: 15rem;
-            left: -6rem;
-            width: 15rem;
+        body:has([data-flw-shell]) .fb-auth-shell::after {
+            background: rgba(126, 176, 237, 0.42);
+            bottom: -15rem;
+            height: min(45vw, 42rem);
+            right: -14rem;
+            width: min(45vw, 42rem);
+        }
+
+        body:has([data-flw-shell]) .fb-auth-card-wrap::before {
+            background: rgba(215, 184, 245, 0.28);
+            height: min(32vw, 30rem);
+            right: 18%;
+            top: -14rem;
+            width: min(32vw, 30rem);
+        }
+
+        [data-flw-shell] {
+            align-items: center;
+            background:
+                radial-gradient(42rem 28rem at 98% 46%, rgba(225, 247, 238, 0.66), transparent 72%),
+                radial-gradient(38rem 30rem at 2% 74%, rgba(226, 238, 253, 0.64), transparent 72%),
+                linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(247, 251, 249, 0.58));
+            display: flex;
+            min-height: 100vh;
+            padding: 2rem;
+            position: relative;
         }
 
         [data-flw] {
             animation: flw-shell-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+            background: rgba(255, 255, 255, 0.84);
+            border: 1px solid rgba(255, 255, 255, 0.76);
+            border-radius: 2rem;
+            box-shadow: 0 24px 80px rgba(21, 55, 48, 0.09), 0 2px 8px rgba(21, 55, 48, 0.04);
             position: relative;
             z-index: 1;
         }
@@ -101,6 +142,35 @@
             }
         }
 
+        @keyframes flw-edge-green {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(9vw, 7vh, 0) scale(1.12); }
+        }
+
+        @keyframes flw-edge-blue {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(-8vw, -6vh, 0) scale(1.1); }
+        }
+
+        @keyframes flw-edge-lilac {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(4vw, 10vh, 0) scale(1.08); }
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            body:has([data-flw-shell]) .fb-auth-shell::before {
+                animation: flw-edge-green 22s ease-in-out infinite;
+            }
+
+            body:has([data-flw-shell]) .fb-auth-shell::after {
+                animation: flw-edge-blue 26s ease-in-out infinite;
+            }
+
+            body:has([data-flw-shell]) .fb-auth-card-wrap::before {
+                animation: flw-edge-lilac 30s ease-in-out infinite;
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             [data-flw],
             [data-step]:not([hidden]) {
@@ -116,20 +186,24 @@
             }
         }
 
-        @media (max-width: 900px) {
-            body:has([data-flw-shell]) .fb-auth-shell {
-                grid-template-columns: 1fr;
-                max-width: 760px;
+        @media (max-width: 640px) {
+            [data-flw-shell] {
+                align-items: flex-start;
+                padding: 1rem;
+            }
+
+            [data-flw] {
+                border-radius: 1.5rem;
             }
         }
     </style>
 
-    <div data-flw-shell class="min-h-[80vh] w-full px-3 py-8 sm:py-10">
+    <div data-flw-shell class="w-full">
         <div
             data-flw
             data-workspace-name="{{ $workspaceName }}"
             data-recommended='@json($recommendedTools)'
-            class="mx-auto w-full max-w-3xl p-6 sm:p-10"
+            class="mx-auto w-full max-w-3xl p-7 sm:p-10"
         >
             <div class="flex items-start justify-between gap-6">
                 <div>
