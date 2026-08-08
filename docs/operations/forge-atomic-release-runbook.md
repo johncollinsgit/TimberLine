@@ -120,17 +120,18 @@ The production workflow can add Forge-side context after a failed `/ready`
 exact-release check. Configure the following in GitHub's `production`
 environment:
 
-- secret `FORGE_API_TOKEN`, created with the narrowest site/deployment read
-  scopes Forge offers and an expiration date;
+- secret `FORGE_API_TOKEN`, created with Forge's `server:view` scope only and
+  an owner-visible expiration or review date;
 - variable `FORGE_ORGANIZATION_SLUG`;
 - variable `FORGE_SERVER_ID`;
 - variable `FORGE_SITE_ID`.
 
-The reporter at `scripts/ci/report-forge-deployment.php` uses the current Forge
-`/api` endpoint with `include=latestDeployment`. It contains one GET operation
-and prints only commit, match, status, and timestamps. Missing configuration is
-non-fatal. Never give this diagnostic write scopes merely for convenience, and
-never replace exact-SHA `/ready` verification with Forge's status alone.
+The reporter at `scripts/ci/report-forge-deployment.php` uses Forge's current
+deployment-list endpoint, requests one newest deployment, and performs one GET
+operation only. It prints only commit, match, status, and timestamps. Missing
+configuration is non-fatal. Never give this diagnostic write scopes merely for
+convenience, and never replace exact-SHA `/ready` verification with Forge's
+status alone.
 
 ## Smoke checks
 

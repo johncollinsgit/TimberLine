@@ -30,16 +30,16 @@ source control or a local `.env` file:
 | Setting | Purpose | Status |
 | --- | --- | --- |
 | Secret `FORGE_DEPLOY_HOOK_URL` | Required atomic-release trigger | already required |
-| Secret `FORGE_API_TOKEN` | Optional, least-privilege read-only failure diagnosis | operator must create and add |
+| Secret `FORGE_API_TOKEN` | Optional, least-privilege read-only failure diagnosis | configured (`server:view` only); review before 2027-08-08 |
 | Variable `FORGE_ORGANIZATION_SLUG` | Forge organization identifier | configured |
 | Variable `FORGE_SERVER_ID` | Forge server identifier | configured |
 | Variable `FORGE_SITE_ID` | Forge site identifier | configured |
 | Secret `RELEASE_ALERT_WEBHOOK_URL` | Optional Slack/Teams/Discord-compatible operations alert endpoint | operator must choose and add |
 
-Create the Forge token with the narrowest site/deployment read scope Forge
-offers, an owner-visible expiration/review date, and no write/deploy/reset
-permission. Creating a credential is an operator action because it creates
-persistent access. Once the secret is present, the next failed readiness check
+Create the Forge token with `server:view` only, an owner-visible
+expiration/review date, and no write/deploy/reset permission. Creating a
+credential is an operator action because it creates persistent access. Once
+the secret is present, the next failed readiness check
 will confirm the observer path without exposing the token.
 
 The alert secret receives a minimal JSON body shaped as `{ "text": "..." }`.
