@@ -210,9 +210,10 @@ class FirstLoginWorkspaceController extends Controller
 
     protected function defaultWorkspaceName(User $user): string
     {
-        $name = trim((string) $user->name);
-
-        return $name !== '' ? $name : 'My workspace';
+        // A person's account name is rarely the name of their business. Start
+        // empty so the first thing a prospective tenant sees is an intentional
+        // request for the name they want their workspace to have.
+        return '';
     }
 
     /**

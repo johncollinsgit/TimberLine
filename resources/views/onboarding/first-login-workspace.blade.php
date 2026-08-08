@@ -11,7 +11,7 @@
 <x-layouts::auth.simple :title="__('Create your workspace')" :auth-tenant-presentation="$authTenantPresentation ?? []">
     <style>
         body:has([data-flw-shell]) {
-            background: #f8fbfa;
+            background: #eff8f5;
         }
 
         body:has([data-flw-shell]) .fb-auth-shell {
@@ -59,35 +59,37 @@
         }
 
         body:has([data-flw-shell]) .fb-auth-shell::before {
-            background: rgba(103, 210, 166, 0.48);
-            height: min(42vw, 38rem);
-            left: -12rem;
-            top: -13rem;
-            width: min(42vw, 38rem);
+            background: rgba(50, 194, 142, 0.7);
+            height: min(55vw, 48rem);
+            left: -17rem;
+            top: -18rem;
+            width: min(55vw, 48rem);
         }
 
         body:has([data-flw-shell]) .fb-auth-shell::after {
-            background: rgba(126, 176, 237, 0.42);
-            bottom: -15rem;
-            height: min(45vw, 42rem);
-            right: -14rem;
-            width: min(45vw, 42rem);
+            background: rgba(39, 153, 168, 0.58);
+            bottom: -19rem;
+            height: min(58vw, 52rem);
+            right: -18rem;
+            width: min(58vw, 52rem);
         }
 
         body:has([data-flw-shell]) .fb-auth-card-wrap::before {
-            background: rgba(215, 184, 245, 0.28);
-            height: min(32vw, 30rem);
-            right: 18%;
-            top: -14rem;
-            width: min(32vw, 30rem);
+            background: rgba(109, 225, 180, 0.54);
+            height: min(40vw, 36rem);
+            right: 13%;
+            top: -17rem;
+            width: min(40vw, 36rem);
         }
 
         [data-flw-shell] {
             align-items: center;
             background:
-                radial-gradient(48rem 36rem at 100% 0%, rgba(226, 250, 240, 0.74), transparent 68%),
-                radial-gradient(44rem 34rem at 0% 100%, rgba(227, 239, 255, 0.74), transparent 70%),
-                linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(247, 251, 249, 0.64));
+                radial-gradient(54rem 42rem at 108% -12%, rgba(47, 190, 143, 0.46), transparent 67%),
+                radial-gradient(48rem 40rem at -8% 112%, rgba(50, 170, 187, 0.42), transparent 68%),
+                radial-gradient(36rem 32rem at 50% 112%, rgba(155, 237, 185, 0.34), transparent 70%),
+                linear-gradient(135deg, #f7fffc 0%, #effaf6 48%, #eefaf9 100%);
+            background-size: 125% 125%;
             display: flex;
             min-height: 100vh;
             overflow: hidden;
@@ -105,30 +107,30 @@
 
         [data-flw-shell]::before {
             background:
-                conic-gradient(from 185deg at 50% 50%, transparent 0deg, rgba(135, 227, 183, 0.22) 58deg, transparent 132deg, rgba(155, 192, 248, 0.2) 204deg, transparent 286deg, rgba(223, 183, 247, 0.17) 338deg, transparent 360deg);
-            filter: blur(74px);
-            opacity: 0.72;
+                conic-gradient(from 168deg at 50% 50%, transparent 0deg, rgba(20, 150, 108, 0.48) 54deg, transparent 115deg, rgba(24, 125, 143, 0.44) 182deg, transparent 245deg, rgba(115, 219, 167, 0.5) 307deg, transparent 360deg);
+            filter: blur(70px);
+            opacity: 0.92;
             z-index: 0;
         }
 
         [data-flw-shell]::after {
             background-image:
-                radial-gradient(circle, rgba(58, 139, 106, 0.22) 0 1px, transparent 1.75px),
-                radial-gradient(circle, rgba(100, 150, 217, 0.18) 0 1px, transparent 1.5px);
+                radial-gradient(circle, rgba(15, 111, 90, 0.38) 0 1px, transparent 1.75px),
+                radial-gradient(circle, rgba(24, 126, 151, 0.32) 0 1px, transparent 1.5px);
             background-position: 0 0, 42px 72px;
             background-size: 142px 142px, 191px 191px;
             mask-image: radial-gradient(ellipse 94% 80% at 50% 50%, transparent 36%, #000 100%);
-            opacity: 0.5;
+            opacity: 0.68;
             z-index: 0;
         }
 
         [data-flw] {
             animation: flw-shell-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
             backdrop-filter: blur(16px);
-            background: rgba(255, 255, 255, 0.86);
-            border: 1px solid rgba(255, 255, 255, 0.88);
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.96);
             border-radius: 2.25rem;
-            box-shadow: 0 30px 100px rgba(21, 55, 48, 0.11), 0 2px 12px rgba(21, 55, 48, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.84);
+            box-shadow: 0 34px 110px rgba(10, 67, 62, 0.18), 0 4px 14px rgba(21, 55, 48, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
             position: relative;
             z-index: 1;
         }
@@ -188,7 +190,12 @@
 
         @keyframes flw-aurora {
             0%, 100% { transform: rotate(0deg) scale(1); }
-            50% { transform: rotate(18deg) scale(1.08); }
+            50% { transform: rotate(24deg) scale(1.12); }
+        }
+
+        @keyframes flw-canvas-shift {
+            0%, 100% { background-position: 0% 0%; }
+            50% { background-position: 100% 100%; }
         }
 
         @keyframes flw-glints {
@@ -213,6 +220,10 @@
                 animation: flw-aurora 34s ease-in-out infinite;
             }
 
+            [data-flw-shell] {
+                animation: flw-canvas-shift 24s ease-in-out infinite;
+            }
+
             [data-flw-shell]::after {
                 animation: flw-glints 18s ease-in-out infinite;
             }
@@ -221,6 +232,7 @@
         @media (prefers-reduced-motion: reduce) {
             [data-flw],
             [data-step]:not([hidden]),
+            [data-flw-shell],
             [data-flw-shell]::before,
             [data-flw-shell]::after {
                 animation: none;
@@ -254,6 +266,9 @@
             data-recommended='@json($recommendedTools)'
             class="mx-auto w-full max-w-5xl p-8 sm:p-14 lg:p-16"
         >
+            <div class="mb-9 flex justify-center sm:mb-11">
+                <img src="{{ asset('brand/everbranch-lockup.svg') }}" alt="Everbranch" class="h-auto w-44 sm:w-52" />
+            </div>
             {{-- Progress dots --}}
             <div class="flex items-center gap-1.5" aria-label="Setup progress">
                 @foreach ($steps as $i => $label)
@@ -291,7 +306,7 @@
                     </div>
                     <input
                         data-name-input type="text" value="{{ $workspaceName }}" maxlength="120"
-                        placeholder="e.g. Collins Electric"
+                                placeholder="Your business name"
                         class="w-full rounded-xl border border-zinc-300 px-4 py-3 text-base text-zinc-900 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
                     >
                 </section>
