@@ -88,6 +88,8 @@ class TenantMobileResourceService
         return [
             'customer' => [
                 ...$this->customerSummary($profile),
+                'first_name' => $profile->first_name,
+                'last_name' => $profile->last_name,
                 'email' => $profile->email,
                 'phone' => $profile->phone,
                 'address' => array_filter([

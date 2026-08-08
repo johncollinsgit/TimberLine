@@ -58,7 +58,10 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/support-tickets/{ticket}/reply', [EverbranchMobileController::class, 'replySupportTicket'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('ticket')->name('workspace.support.reply');
                 Route::get('/search', [EverbranchMobileController::class, 'search'])->middleware('abilities:mobile:read')->name('workspace.search');
                 Route::get('/customers', [EverbranchMobileController::class, 'customers'])->middleware('abilities:mobile:read')->name('workspace.customers');
+                Route::post('/customers', [EverbranchMobileController::class, 'storeCustomer'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.customers.store');
                 Route::get('/customers/{customer}', [EverbranchMobileController::class, 'customer'])->middleware('abilities:mobile:read')->whereNumber('customer')->name('workspace.customers.show');
+                Route::patch('/customers/{customer}', [EverbranchMobileController::class, 'updateCustomer'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('customer')->name('workspace.customers.update');
+                Route::delete('/customers/{customer}', [EverbranchMobileController::class, 'destroyCustomer'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->whereNumber('customer')->name('workspace.customers.destroy');
                 Route::get('/work', [EverbranchMobileController::class, 'work'])->middleware('abilities:mobile:read')->name('workspace.work');
                 Route::get('/work/{kind}/{resource}', [EverbranchMobileController::class, 'workDetail'])->middleware('abilities:mobile:read')->whereIn('kind', ['orders', 'jobs', 'clients'])->whereNumber('resource')->name('workspace.work.show');
                 Route::get('/field-service', [EverbranchMobileFieldServiceController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.index');

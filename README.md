@@ -255,6 +255,12 @@ authorizes deployment changes.
   search. Address suggestions use Google Places only when a server-side key is
   configured, otherwise the ordinary address field remains available.
 
+### Native customer administration and operational shell (2026-08-08)
+
+- The Everbranch tenant app uses the same compact operational hierarchy as the web workspace: charcoal command bar, clear workspace context, row-first navigation, and focused forms. Collins Upstate Electric is visible through John's explicit membership and the standard workspace switcher, not a tenant-specific client rule.
+- Entitled members may search and view customer details. Only the current tenant's owner/admin may add or edit a customer. Safe delete is limited to app-created records without connected jobs, messages, provider identities, consent, rewards, birthdays, or delivery history; retained business history is never silently removed.
+- Customer writes require a live `mobile:write` token, repeat tenant/Branch/role checks in Laravel, normalize contact identities, reject tenant-local duplicates, and create audit records. They are not placed in the offline queue and do not write to Shopify or the separate Modern Forestry consumer app.
+
 ## Shared Dashboard Time Windows (2026-07-13)
 
 - Everbranch dashboard statistics use one server-owned range contract: `1d`, `1w`, `1m`, `30d`, and `ytd`.

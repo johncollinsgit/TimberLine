@@ -40,6 +40,12 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   `CLICK_PATH_CONFIG=tests/e2e/click-path-public-routes.json npm run qa:click-path`,
   and `npm run test:lighthouse:public` in addition to the normal PHP checks.
 
+## Everbranch mobile customer administration (2026-08-08)
+
+- The cross-tenant native app lives in `../everbranch-mobile`. Its compact charcoal command bar and dense operational screens follow `docs/ui/UI_SYSTEM.md`; do not copy public marketing typography into the work app.
+- Workspace visibility comes only from authenticated memberships returned by `/api/mobile/v1/workspaces`. Collins Upstate Electric must remain discoverable for explicitly attached users, but the app must never hardcode its slug, tenant ID, or operator email.
+- Customer create/update/delete are live-only, tenant-scoped, audited owner/admin actions. Delete must stay limited to app-created profiles with no connected provider, work, message, consent, delivery, reward, birthday, or group history. Client permission flags never replace the server gate.
+
 ## Modern Forestry production guard (2026-08-06)
 
 - The verified production baseline is documented in

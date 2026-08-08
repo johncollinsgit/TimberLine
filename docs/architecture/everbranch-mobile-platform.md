@@ -8,6 +8,14 @@
 - Tenant-facing payloads and copy use Branches. Bootstrap returns `branches`; `modules` and `/modules/{key}` remain compatibility aliases through the next app release.
 - Landlord access is independent from workspace membership and exposes audited triage only. Destructive tenant/configuration and live billing changes remain web-only.
 
+## Customer Administration Contract (2026-08-08)
+
+- The Customers Branch list and detail remain available to entitled workspace members. The API returns `permissions.manage` for presentation, but Laravel independently requires `mobile:write`, current tenant membership, the Customers Branch, and owner/admin equivalence on every mutation.
+- Owner/admin users may create and edit tenant-owned customer profiles from the native app. Email and phone identities are normalized and duplicates are rejected inside the current tenant.
+- Hard delete is not general customer management. It is allowed only for an app-created `mobile_manual` profile with no connected provider, work, messaging, consent, delivery, reward, birthday, or group history. Connected profiles return `409` and remain available for editing.
+- Every create, update, and safe delete writes an immutable operator audit record. The mobile app never queues customer mutations offline.
+- Collins Upstate Electric appears through ordinary authenticated workspace membership and the workspace switcher. No Collins slug, user email, or tenant ID is a client authorization rule.
+
 ## Field Service Contract v4 / Work 2.0
 
 - Work 2.0 extends the existing Field Service aggregate. It does not add `WorkOrder`, `Appointment`, or a universal task table.
