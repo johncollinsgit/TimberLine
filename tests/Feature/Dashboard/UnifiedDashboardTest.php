@@ -44,7 +44,10 @@ test('dashboard renders customer-focused hero metric for direct crm tenants', fu
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSeeText('Reachable customers')
-        ->assertSeeText('Customer workspace');
+        ->assertSeeText('Customer workspace')
+        ->assertSee('data-app-shell-topbar', false)
+        ->assertSee('eb-dashboard-panel--pulse', false)
+        ->assertDontSeeText('Search your workspace');
 });
 
 test('dashboard renders commerce hero metric for shopify-connected tenants', function () {

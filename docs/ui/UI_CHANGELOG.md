@@ -2304,3 +2304,28 @@
 - A staff draft order is structurally isolated: it creates no Stripe checkout,
   EasyPost request, inventory reservation, label, customer communication, or
   legacy/Shopify/Modern Forestry record.
+
+## Follow-up — Shopify-reference shell and Website hierarchy
+
+- Replaced the pale workspace header with a persistent charcoal command bar:
+  Everbranch at left, command search centered, and workspace/Bud controls at
+  right. Tenant and landlord content now starts directly on the application
+  canvas instead of inside a redundant outer card.
+- Tightened the shared sidebar to a neutral, high-contrast rail with unboxed
+  icons, smaller rows, quieter nesting, and only one selected state. Branches
+  remain capability-gated, but no longer render as a second oversized menu.
+- Rebuilt Website around the real website object: compact page actions, a
+  browser-framed draft/live preview, theme status and publish/edit actions in
+  one footer, page rows, collapsed domain management, and a dense theme list.
+  Domain verification, activation, disabling, immutable versions, and the
+  included Everbranch address keep their existing behavior.
+- Added the observed Shopify-to-Everbranch control map to the required UI
+  standard so later authenticated work follows the same placement and
+  interaction grammar instead of making page-local card layouts.
+- Removed Home's duplicate workspace search and rebuilt its routine metrics,
+  recommendations, jobs, and Branches as compact panels and rows. A restrained,
+  reduced-motion-aware branch-network pulse gives the real KPI area a distinct
+  Everbranch moment without fabricating visitors or activity.
+- Reduced the landlord dashboard's ten-way action wall to one primary workspace
+  action, one intake action, and a compact overflow menu. Landlord section links
+  now use a conventional tab row beneath the header.

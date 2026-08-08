@@ -15,52 +15,39 @@
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 md:px-6 min-w-0">
-    <div class="space-y-6 sm:space-y-8 min-w-0">
-        <section class="mx-auto w-full max-w-3xl" aria-label="Workspace search">
-            <form wire:submit="submitSearch" class="relative">
-                <label for="dashboard-launchpad-search" class="sr-only">Search the workspace</label>
-                <input
-                    id="dashboard-launchpad-search"
-                    type="search"
-                    wire:model.defer="search"
-                    placeholder="Search your workspace"
-                    class="h-12 w-full rounded-full border border-[var(--fb-border)] bg-white pl-5 pr-14 text-sm text-[var(--fb-text)] placeholder:text-[var(--fb-muted)] focus:border-[var(--fb-brand)] focus:outline-none focus:ring-4 focus:ring-emerald-900/5"
-                    style="box-shadow: var(--fb-shadow-soft);"
-                    autocomplete="off"
-                />
-                <button type="submit" class="absolute right-1.5 top-1.5 inline-flex size-9 items-center justify-center rounded-full bg-[var(--fb-brand)] text-white transition hover:bg-[var(--fb-brand-2)]" aria-label="Search">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                </button>
-            </form>
-        </section>
+    <div class="space-y-4 min-w-0">
+        <header class="eb-dashboard-header">
+            <div>
+                <h1>Home</h1>
+                @if(filled($workspace['label'] ?? null))
+                    <p>{{ $workspace['label'] }}</p>
+                @endif
+            </div>
+        </header>
 
         @if($workflowHealth)
-            <section class="overflow-hidden rounded-3xl border border-emerald-200/70 bg-gradient-to-br from-[#fffaf0] via-white to-sky-50 shadow-sm" aria-labelledby="workflow-health-title">
-                <div class="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-                    <div class="flex min-w-0 items-start gap-4">
-                        <span class="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-900 text-white shadow-sm" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="size-6"><path d="M13 2 4.5 13H11l-1 9 8.5-12H12l1-8Z"/></svg>
-                        </span>
-                        <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-800">Workflow Automations health</p>
-                            <h2 id="workflow-health-title" class="mt-1 text-xl font-semibold text-zinc-950">
-                                {{ $workflowHealth['active'] }} active of {{ $workflowHealth['total'] }} workflow{{ $workflowHealth['total'] === 1 ? '' : 's' }}
-                            </h2>
-                            <p class="mt-1 text-sm text-zinc-600">
-                                @if(($workflowHealth['needs_attention'] ?? 0) > 0)
-                                    {{ $workflowHealth['needs_attention'] }} run{{ $workflowHealth['needs_attention'] === 1 ? '' : 's' }} need attention from the last 7 days.
-                                @elseif($workflowHealth['total'] > 0)
-                                    Your recent workflow runs are healthy.
-                                @else
-                                    Connect Asana and Google Calendar to build your first workflow.
-                                @endif
-                            </p>
-                        </div>
+            <section class="eb-dashboard-notice" aria-labelledby="workflow-health-title">
+                <div class="eb-dashboard-notice__copy">
+                    <span class="eb-dashboard-notice__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4.5 13H11l-1 9 8.5-12H12l1-8Z"/></svg>
+                    </span>
+                    <div>
+                        <h2 id="workflow-health-title">Workflow automations</h2>
+                        <p>
+                            {{ $workflowHealth['active'] }} active of {{ $workflowHealth['total'] }} workflow{{ $workflowHealth['total'] === 1 ? '' : 's' }}.
+                            @if(($workflowHealth['needs_attention'] ?? 0) > 0)
+                                {{ $workflowHealth['needs_attention'] }} run{{ $workflowHealth['needs_attention'] === 1 ? '' : 's' }} need attention.
+                            @elseif($workflowHealth['total'] > 0)
+                                Recent runs are healthy.
+                            @else
+                                Connect Asana and Google Calendar to build your first workflow.
+                            @endif
+                        </p>
                     </div>
-                    <div class="flex shrink-0 flex-wrap gap-2">
-                        <a href="{{ $workflowHealth['history_href'] }}" class="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-zinc-300">Run history</a>
-                        <a href="{{ $workflowHealth['href'] }}" class="rounded-full bg-emerald-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800">Open automations</a>
-                    </div>
+                </div>
+                <div class="eb-dashboard-notice__actions">
+                    <a href="{{ $workflowHealth['history_href'] }}">Run history</a>
+                    <a href="{{ $workflowHealth['href'] }}" class="eb-dashboard-notice__primary">Open automations</a>
                 </div>
             </section>
         @endif
@@ -156,35 +143,47 @@
             </section>
         @endif
 
-        <section class="mf-app-card rounded-3xl p-5 sm:p-6">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <section class="eb-dashboard-panel eb-dashboard-panel--pulse">
+            <div class="eb-dashboard-pulse-art" aria-hidden="true">
+                <svg viewBox="0 0 640 250" role="presentation">
+                    <defs>
+                        <pattern id="everbranch-dot-grid" width="14" height="14" patternUnits="userSpaceOnUse">
+                            <circle cx="2" cy="2" r="1.15" fill="currentColor" />
+                        </pattern>
+                    </defs>
+                    <path class="eb-dashboard-pulse-grid" d="M305 22c123 0 225 55 225 123s-102 82-225 82S81 213 81 145 182 22 305 22Z" />
+                    <path class="eb-dashboard-pulse-line" d="M392 61c-28 33-38 61-30 83 10 28 49 20 74 45" />
+                    <path class="eb-dashboard-pulse-line eb-dashboard-pulse-line--two" d="M362 144c-42 3-76-14-104-50-20-26-48-34-84-25" />
+                    <circle class="eb-dashboard-pulse-node" cx="362" cy="144" r="5" />
+                    <circle class="eb-dashboard-pulse-node eb-dashboard-pulse-node--quiet" cx="436" cy="189" r="3.5" />
+                    <circle class="eb-dashboard-pulse-node eb-dashboard-pulse-node--quiet" cx="174" cy="69" r="3.5" />
+                </svg>
+            </div>
+            <div class="eb-dashboard-panel__header">
                 <div>
-                    <div class="text-[11px] uppercase tracking-[0.24em] text-[var(--fb-muted)]">Primary KPI</div>
-                    <h2 class="mt-2 text-xl font-semibold text-[var(--fb-text)]">{{ $hero['label'] ?? 'Workspace readiness' }}</h2>
-                    <p class="mt-2 text-sm text-[var(--fb-muted)]">{{ $hero['supporting'] ?? '' }}</p>
+                    <h2>{{ $hero['label'] ?? 'Workspace readiness' }}</h2>
+                    <p>{{ $hero['supporting'] ?? '' }}</p>
                 </div>
-                <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
-                    <label class="block min-w-[11rem] text-xs font-medium text-[var(--fb-muted)]">
-                        <span class="mb-1.5 block">Time window</span>
-                        <select wire:model.live="range" class="w-full rounded-lg border border-[var(--fb-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--fb-text)] focus:outline-none">
+                <div class="eb-dashboard-kpi-controls">
+                    <label>
+                        <span class="sr-only">Time window</span>
+                        <select wire:model.live="range">
                             @foreach($rangeOptions as $value => $label)
                                 <option value="{{ $value }}">{{ $label }}</option>
                             @endforeach
                         </select>
                     </label>
-                    <a href="{{ $hero['href'] ?? route('dashboard') }}" class="min-w-[10rem] rounded-lg border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] px-5 py-4 transition hover:-translate-y-0.5">
-                        <div class="text-3xl font-semibold text-[var(--fb-text)]">{{ $hero['value'] ?? 'Ready' }}</div>
-                    </a>
+                    <a href="{{ $hero['href'] ?? route('dashboard') }}" class="eb-dashboard-kpi-value">{{ $hero['value'] ?? 'Ready' }}</a>
                 </div>
             </div>
 
             @if($summaryCards !== [])
-                <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div class="eb-dashboard-metrics">
                     @foreach($summaryCards as $card)
-                        <a href="{{ $card['href'] ?? route('dashboard') }}" class="block rounded-3xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 transition hover:-translate-y-0.5 sm:p-5">
-                            <div class="text-xs uppercase tracking-[0.24em] text-[var(--fb-muted)]">{{ $card['label'] ?? 'Metric' }}</div>
-                            <div class="mt-3 text-3xl font-semibold text-[var(--fb-text)]">{{ $card['value'] ?? '0' }}</div>
-                            <div class="mt-2 text-xs text-[var(--fb-muted)]">{{ $card['detail'] ?? '' }}</div>
+                        <a href="{{ $card['href'] ?? route('dashboard') }}">
+                            <span>{{ $card['label'] ?? 'Metric' }}</span>
+                            <strong>{{ $card['value'] ?? '0' }}</strong>
+                            <small>{{ $card['detail'] ?? '' }}</small>
                         </a>
                     @endforeach
                 </div>
@@ -192,79 +191,70 @@
         </section>
 
         @if($upcomingJobs !== [] || $ownerReporting)
-            <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <section class="mf-app-card rounded-3xl p-5 sm:p-6">
-                    <div class="flex items-center justify-between gap-3">
-                        <div><h2 class="text-lg font-semibold text-[var(--fb-text)]">Next jobs</h2><p class="mt-1 text-sm text-[var(--fb-muted)]">Upcoming incomplete work, address, and assignment.</p></div>
-                        <a href="{{ route('field-service.calendar') }}" class="text-sm font-semibold text-[var(--fb-brand)]">Open calendar</a>
+            <div class="eb-dashboard-columns">
+                <section class="eb-dashboard-panel">
+                    <div class="eb-dashboard-panel__header">
+                        <div><h2>Next jobs</h2><p>Upcoming incomplete work, address, and assignment.</p></div>
+                        <a href="{{ route('field-service.calendar') }}" class="eb-dashboard-text-link">Open calendar</a>
                     </div>
-                    <div class="mt-4 divide-y divide-[var(--fb-border)]">
+                    <div class="eb-dashboard-rows">
                         @forelse($upcomingJobs as $job)
-                            <a href="{{ $job['href'] ?? route('field-service.jobs.show', ['job' => $job['id']]) }}" class="flex items-center justify-between gap-4 py-3">
-                                <div class="min-w-0"><div class="truncate text-sm font-semibold text-[var(--fb-text)]">{{ $job['title'] }}</div><div class="mt-1 truncate text-xs text-[var(--fb-muted)]">{{ $job['address'] ?: 'Address not set' }} · {{ $job['assigned_to'] ?: 'Unassigned' }}</div></div>
-                                <time class="shrink-0 text-xs font-semibold text-[var(--fb-muted)]">{{ filled($job['scheduled_for'] ?? null) ? \Illuminate\Support\Carbon::parse($job['scheduled_for'])->format('M j, g:i A') : 'Unscheduled' }}</time>
+                            <a href="{{ $job['href'] ?? route('field-service.jobs.show', ['job' => $job['id']]) }}">
+                                <div><strong>{{ $job['title'] }}</strong><small>{{ $job['address'] ?: 'Address not set' }} · {{ $job['assigned_to'] ?: 'Unassigned' }}</small></div>
+                                <time>{{ filled($job['scheduled_for'] ?? null) ? \Illuminate\Support\Carbon::parse($job['scheduled_for'])->format('M j, g:i A') : 'Unscheduled' }}</time>
                             </a>
                         @empty
-                            <div class="py-6 text-sm text-[var(--fb-muted)]">No upcoming jobs are scheduled.</div>
+                            <div class="eb-dashboard-empty">No upcoming jobs are scheduled.</div>
                         @endforelse
                     </div>
                 </section>
                 @if($ownerReporting)
-                    <a href="{{ route('quickbooks.reports.index', ['tenant' => $dashboard['tenant_slug'], 'range' => $dateRange['key'] ?? '1m']) }}" class="mf-app-card block rounded-3xl p-5 transition hover:-translate-y-0.5 sm:p-6">
-                        <h2 class="text-lg font-semibold text-[var(--fb-text)]">Owner reporting</h2>
-                        <p class="mt-1 text-sm text-[var(--fb-muted)]">Detailed labor, supplies, receivables, comparisons, and sync health.</p>
-                        <span class="mt-5 inline-flex rounded-lg border border-[var(--fb-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--fb-brand)]">Open financial reporting</span>
+                    <a href="{{ route('quickbooks.reports.index', ['tenant' => $dashboard['tenant_slug'], 'range' => $dateRange['key'] ?? '1m']) }}" class="eb-dashboard-panel eb-dashboard-link-panel">
+                        <div><h2>Owner reporting</h2><p>Labor, supplies, receivables, comparisons, and sync health.</p></div>
+                        <span>Open reporting <span aria-hidden="true">→</span></span>
                     </a>
                 @endif
             </div>
         @endif
 
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <section class="mf-app-card rounded-3xl p-5 sm:p-6">
-                <div class="mb-5">
-                    <h2 class="text-lg font-semibold text-[var(--fb-text)] sm:text-xl">Recommended next actions</h2>
-                    <p class="mt-1 text-sm text-[var(--fb-muted)]">Actions shift with tenant mode, current signals, and module availability.</p>
+        <div class="eb-dashboard-columns">
+            <section class="eb-dashboard-panel">
+                <div class="eb-dashboard-panel__header">
+                    <div>
+                        <h2>Recommended next actions</h2>
+                        <p>Based on your workspace and recent activity.</p>
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="eb-dashboard-rows">
                     @foreach($nextActions as $action)
-                        <a
-                            href="{{ $action['href'] ?? route('dashboard') }}"
-                            class="group relative overflow-hidden rounded-3xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 transition hover:-translate-y-0.5 focus:outline-none"
-                            style="box-shadow: var(--fb-shadow-soft);"
-                        >
-                            <div class="text-sm font-semibold text-[var(--fb-text)]">{{ $action['label'] ?? 'Action' }}</div>
-                            <div class="mt-2 text-sm leading-6 text-[var(--fb-muted)]">{{ $action['description'] ?? '' }}</div>
+                        <a href="{{ $action['href'] ?? route('dashboard') }}">
+                            <div><strong>{{ $action['label'] ?? 'Action' }}</strong><small>{{ $action['description'] ?? '' }}</small></div>
+                            <span aria-hidden="true">›</span>
                         </a>
                     @endforeach
                 </div>
             </section>
 
-            <section class="mf-app-card rounded-3xl p-5 sm:p-6">
-                <div class="mb-5 flex items-center justify-between gap-3">
+            <section class="eb-dashboard-panel">
+                <div class="eb-dashboard-panel__header">
                     <div>
-                        <h2 class="text-lg font-semibold text-[var(--fb-text)] sm:text-xl">Your Branches</h2>
-                        <p class="mt-1 text-sm text-[var(--fb-muted)]">See what is active, included, available to buy, or ready to request.</p>
+                        <h2>Your branches</h2>
+                        <p>Enabled tools and available additions.</p>
                     </div>
                     @if(auth()->user()?->canAccessMarketing())
-                        <a href="{{ route('marketing.modules') }}" class="inline-flex items-center rounded-full border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] px-3 py-1.5 text-xs font-semibold text-[var(--fb-brand)]">Open Branches</a>
+                        <a href="{{ route('marketing.modules') }}" class="eb-dashboard-text-link">Browse branches</a>
                     @endif
                 </div>
 
-                <div class="space-y-3">
+                <div class="eb-dashboard-rows">
                     @forelse($pinnedModules as $module)
-                        <a href="{{ $module['href'] ?? '#' }}" class="block rounded-3xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 transition hover:-translate-y-0.5">
-                            <div class="flex items-start justify-between gap-3">
-                                <div>
-                                    <div class="text-sm font-semibold text-[var(--fb-text)]">{{ $module['display_name'] ?? 'Module' }}</div>
-                                    <div class="mt-1 text-sm leading-6 text-[var(--fb-muted)]">{{ $module['description'] ?? '' }}</div>
-                                    <div class="mt-2 text-xs font-semibold text-[var(--fb-brand)]">{{ $module['price_label'] ?? 'View access options' }}</div>
-                                </div>
-                                <span class="rounded-full border border-[var(--fb-border)] bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--fb-muted)]">{{ $module['state_label'] ?? 'Module' }}</span>
-                            </div>
+                        <a href="{{ $module['href'] ?? '#' }}">
+                            <div><strong>{{ $module['display_name'] ?? 'Module' }}</strong><small>{{ $module['description'] ?? '' }}</small></div>
+                            <span class="eb-dashboard-status">{{ $module['state_label'] ?? 'Module' }}</span>
                         </a>
                     @empty
-                        <div class="rounded-3xl border border-dashed border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 text-sm text-[var(--fb-muted)]">
+                        <div class="eb-dashboard-empty">
                             Branch recommendations will appear here as workspace access and catalog availability evolve.
                         </div>
                     @endforelse

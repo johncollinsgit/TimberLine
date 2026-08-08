@@ -77,8 +77,8 @@ test('landlord dashboard displays Everbranch Admin while landlord route guard st
     $this->actingAs($user)
         ->get('http://app.theeverbranch.com/landlord')
         ->assertOk()
-        ->assertSeeText('Everbranch Admin Console')
-        ->assertSeeText('Open Tenant Directory');
+        ->assertSeeText('Everbranch Admin')
+        ->assertSeeText('Open workspaces');
 });
 
 test('Modern Forestry mobile API routes remain explicitly tenant scoped', function (): void {

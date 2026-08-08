@@ -105,7 +105,45 @@
   class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }}"
 >
 
-<div class="min-h-screen flex">
+<header class="mf-global-bar" data-app-shell-topbar>
+  <div class="mf-global-brand">
+    <flux:sidebar.toggle class="lg:hidden mf-global-sidebar-toggle" icon="bars-2" />
+    <a href="{{ $hrefDashboard }}" wire:navigate class="mf-global-brand-link" aria-label="Open Everbranch home">
+      <span class="mf-global-brand-mark" aria-hidden="true"><img src="{{ asset('brand/everbranch-mark.svg') }}" alt="" /></span>
+      <span>Everbranch</span>
+    </a>
+  </div>
+
+  <button
+    type="button"
+    data-command-trigger
+    class="mf-global-search"
+    aria-label="Search or ask what you want to do..."
+  >
+    <flux:icon.magnifying-glass class="size-4" aria-hidden="true" />
+    <span class="mf-global-search-placeholder">Search</span>
+    <span class="mf-global-search-shortcut">⌘ K</span>
+  </button>
+
+  <div class="mf-global-actions">
+    @foreach($topbarContextPills as $pill)
+      <span class="mf-global-context">{{ $pill }}</span>
+    @endforeach
+    <a
+      href="{{ $assistantHref }}"
+      wire:navigate
+      class="mf-global-bud"
+      data-assistant-entry
+      aria-label="Open Bud assistant"
+      title="Open Bud assistant"
+    >
+      <img src="{{ $brandMarkSrc }}" alt="" aria-hidden="true" />
+      <span>Bud</span>
+    </a>
+  </div>
+</header>
+
+<div class="mf-global-layout flex">
 
   {{-- Sidebar --}}
   <flux:sidebar
@@ -267,52 +305,8 @@
   {{-- Right side --}}
   <div class="flex-1 min-w-0 flex flex-col">
 
-    {{-- Mobile Header --}}
-    <flux:header class="lg:hidden mf-fade-in">
-      <flux:sidebar.toggle class="lg:hidden mf-transition" icon="bars-2" inset="left" />
-      <flux:spacer />
-      {{-- keep your auth dropdown --}}
-    </flux:header>
-
     {{-- Main content --}}
     <main id="app-main" class="mf-app-main flex-1 min-w-0 overflow-y-auto">
-      <div class="mf-shell-topbar" data-app-shell-topbar>
-        <div class="mf-shell-location">
-          <span class="mf-shell-location-eyebrow">{{ $isLandlordShell ? 'Everbranch Admin' : 'Everbranch Workspace' }}</span>
-          <span class="mf-shell-location-title">{{ $workspaceLabel }}</span>
-        </div>
-
-        <button
-          type="button"
-          data-command-trigger
-          class="mf-shell-search"
-          aria-label="Search or ask what you want to do..."
-        >
-          <span class="mf-shell-search-icon" aria-hidden="true">
-            <x-brand.leaf-icon />
-          </span>
-          <span class="mf-shell-search-placeholder">Search or ask what you want to do...</span>
-          <span class="mf-shell-search-shortcut">Cmd K</span>
-        </button>
-
-        <div class="mf-shell-actions">
-          @foreach($topbarContextPills as $pill)
-            <span class="mf-shell-context-pill">{{ $pill }}</span>
-          @endforeach
-          <a
-            href="{{ $assistantHref }}"
-            wire:navigate
-            class="mf-bud-entry"
-            data-assistant-entry
-            aria-label="Open Bud assistant"
-            title="Open Bud assistant"
-          >
-            <img src="{{ $brandMarkSrc }}" alt="" aria-hidden="true" />
-            <span>Bud</span>
-          </a>
-        </div>
-      </div>
-
       @if(is_array($accessLaneBanner))
         <div
           class="mx-auto mb-4 max-w-[1180px] rounded-2xl border px-4 py-3 text-sm {{ $accessLaneBanner['classes'] }}"
