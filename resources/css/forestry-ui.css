@@ -14505,14 +14505,22 @@ body.eb-workflow-picker-open {
 .eb-channel-pulse__context select:focus-visible { outline: 2px solid #176b4d; outline-offset: 2px; }
 .eb-channel-pulse__metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .eb-channel-pulse__metric {
+  appearance: none;
+  background: transparent;
+  border: 0;
   color: #282f31;
+  cursor: pointer;
   display: block;
+  font: inherit;
   min-width: 0;
   padding: 0.85rem 0.85rem 0.72rem;
+  text-align: left;
   text-decoration: none;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
 }
 .eb-channel-pulse__metric + .eb-channel-pulse__metric { border-left: 1px solid #eceeee; }
 .eb-channel-pulse__metric:hover { background: #f5f8f7; }
+.eb-channel-pulse__metric.is-selected { background: #edf5f1; box-shadow: inset 0 -2px #176b4d; }
 .eb-channel-pulse__metric:focus-visible { outline: 2px solid #176b4d; outline-offset: -2px; }
 .eb-channel-pulse__metric span,
 .eb-channel-pulse__metric strong,
@@ -14525,6 +14533,39 @@ body.eb-workflow-picker-open {
 .eb-channel-pulse__trend--negative { color: #b42318; }
 .eb-channel-pulse__trend--neutral { color: #747b7d; }
 .eb-channel-pulse__live { background: #16a05f; border-radius: 50%; display: inline-block; height: 0.42rem; margin: 0 0.28rem 0.04rem 0; width: 0.42rem; }
+
+.eb-channel-chart {
+  background: #ffffff;
+  border: 1px solid #d8dddd;
+  border-radius: 0.65rem;
+  overflow: hidden;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.eb-channel-chart__header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.6rem;
+}
+.eb-channel-chart__header h2 { color: #252b2d; font: 720 1rem/1.25 var(--eb-font-ui); letter-spacing: -0.018em; margin: 0; }
+.eb-channel-chart__header strong { color: #202627; display: block; font: 760 1.65rem/1.1 var(--eb-font-ui); letter-spacing: -0.04em; margin-top: 0.34rem; }
+.eb-channel-chart__header p { color: #747b7d; font-size: 0.68rem; margin: 0.28rem 0 0; }
+.eb-channel-chart__legend { align-items: center; color: #747b7d; display: flex; flex: 0 0 auto; font-size: 0.66rem; gap: 0.9rem; padding-top: 0.26rem; }
+.eb-channel-chart__legend span { align-items: center; display: inline-flex; gap: 0.32rem; }
+.eb-channel-chart__legend-line { background: #149dd8; border-radius: 999px; display: inline-block; height: 0.16rem; width: 1.05rem; }
+.eb-channel-chart__legend-line--prior { background: repeating-linear-gradient(90deg, #9bcce7 0 0.3rem, transparent 0.3rem 0.52rem); }
+.eb-channel-chart__plot { padding: 0 0.5rem 0.65rem; }
+.eb-channel-chart__plot svg { display: block; height: 13.5rem; overflow: visible; width: 100%; }
+.eb-channel-chart__plot line { stroke: #e5e9e9; stroke-width: 1; }
+.eb-channel-chart__current,
+.eb-channel-chart__prior { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.eb-channel-chart__current { stroke: #149dd8; }
+.eb-channel-chart__prior { stroke: #9bcce7; stroke-dasharray: 4 6; }
+.eb-channel-chart__area { fill: url(#eb-channel-chart-area); opacity: 0.14; }
+.eb-channel-chart__axis { color: #767d80; display: flex; font-size: 0.62rem; justify-content: space-between; padding: 0.1rem 0.85rem 0; }
+.eb-channel-chart__empty { align-items: center; border-top: 1px solid #eceeee; color: #747b7d; display: flex; font-size: 0.72rem; min-height: 11rem; padding: 1rem; }
+.eb-channel-chart.is-loading { opacity: 0.58; transform: translateY(2px); }
 
 .eb-dashboard-notice,
 .eb-dashboard-panel {
@@ -14843,6 +14884,9 @@ body.eb-workflow-picker-open {
   .eb-channel-pulse__metric:nth-child(4) { border-left: 1px solid #eceeee; }
   .eb-channel-pulse__metric:nth-child(odd) { border-left: 0; }
   .eb-channel-pulse__metric:nth-child(-n+4) { border-bottom: 1px solid #eceeee; }
+  .eb-channel-chart__header { flex-direction: column; gap: 0.45rem; }
+  .eb-channel-chart__legend { flex-wrap: wrap; padding-top: 0; }
+  .eb-channel-chart__plot svg { height: 10.5rem; }
   .eb-dashboard-columns { grid-template-columns: minmax(0, 1fr); }
   .eb-dashboard-metrics > a { min-height: 6.6rem; padding: 0.8rem; }
   .eb-landlord-header__main { align-items: flex-start; flex-direction: column; }
@@ -14855,4 +14899,7 @@ body.eb-workflow-picker-open {
   .eb-dashboard-pulse-ring { animation: none; }
 
   .eb-dashboard-pulse-ring { display: none; }
+
+  .eb-channel-pulse__metric,
+  .eb-channel-chart { transition: none; }
 }

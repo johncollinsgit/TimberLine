@@ -13,6 +13,23 @@
     $frontYardLaunch = is_array($dashboard['front_yard_launch'] ?? null) ? $dashboard['front_yard_launch'] : null;
     $workflowHealth = is_array($dashboard['workflow_automation_health'] ?? null) ? $dashboard['workflow_automation_health'] : null;
     $channelPulse = is_array($dashboard['channel_pulse'] ?? null) ? $dashboard['channel_pulse'] : null;
+    $channelChart = is_array($channelPulse['chart'] ?? null) ? $channelPulse['chart'] : [];
+    $chartLabels = is_array($channelChart['labels'] ?? null) ? array_values($channelChart['labels']) : [];
+    $chartCurrent = is_array($channelChart['current'] ?? null) ? array_values($channelChart['current']) : [];
+    $chartPrevious = is_array($channelChart['previous'] ?? null) ? array_values($channelChart['previous']) : [];
+    $chartCount = max(2, count($chartCurrent));
+    $chartMax = max(array_merge([1], array_map('abs', array_merge($chartCurrent, $chartPrevious))));
+    $chartPoints = static function (array $values) use ($chartCount, $chartMax): string {
+        return collect($values)->map(function ($value, $index) use ($chartCount, $chartMax): string {
+            $x = 24 + (($index / ($chartCount - 1)) * 676);
+            $y = 190 - (((float) $value / $chartMax) * 156);
+
+            return number_format($x, 2, '.', '').','.number_format($y, 2, '.', '');
+        })->implode(' ');
+    };
+    $chartCurrentPoints = $chartPoints($chartCurrent);
+    $chartPreviousPoints = $chartPoints($chartPrevious);
+    $chartAxisIndexes = array_values(array_unique([0, (int) floor(($chartCount - 1) * 0.25), (int) floor(($chartCount - 1) * 0.5), (int) floor(($chartCount - 1) * 0.75), $chartCount - 1]));
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 md:px-6 min-w-0">
@@ -41,7 +58,12 @@
                 </div>
                 <div class="eb-channel-pulse__metrics">
                     @foreach(($channelPulse['metrics'] ?? []) as $metric)
-                        <a href="{{ $metric['href'] ?? ($channelPulse['href'] ?? route('sales-channels.index')) }}" class="eb-channel-pulse__metric">
+                        <button
+                            type="button"
+                            class="eb-channel-pulse__metric {{ ($channelChart['key'] ?? 'sales') === ($metric['key'] ?? '') ? 'is-selected' : '' }}"
+                            wire:click="selectPulseMetric('{{ $metric['key'] ?? 'sales' }}')"
+                            aria-pressed="{{ ($channelChart['key'] ?? 'sales') === ($metric['key'] ?? '') ? 'true' : 'false' }}"
+                        >
                             <span>{{ $metric['label'] ?? 'Metric' }}</span>
                             <strong>{{ $metric['value'] ?? '—' }}</strong>
                             <small>
@@ -51,9 +73,49 @@
                                 @if($metric['live'] ?? false)<i class="eb-channel-pulse__live" aria-hidden="true"></i>@endif
                                 {{ $metric['detail'] ?? '' }}
                             </small>
-                        </a>
+                        </button>
                     @endforeach
                 </div>
+            </section>
+
+            <section class="eb-channel-chart" wire:key="channel-chart-{{ $channelChart['key'] ?? 'sales' }}-{{ $dateRange['key'] ?? '1m' }}" wire:transition wire:loading.class="is-loading" wire:target="selectPulseMetric,range" aria-labelledby="channel-chart-title">
+                <header class="eb-channel-chart__header">
+                    <div>
+                        <h2 id="channel-chart-title">{{ $channelChart['title'] ?? 'Channel performance over time' }}</h2>
+                        <strong>{{ $channelChart['value'] ?? '—' }}</strong>
+                        <p>{{ $channelChart['subtitle'] ?? '' }}</p>
+                    </div>
+                    <div class="eb-channel-chart__legend" aria-label="Chart comparison">
+                        <span><i class="eb-channel-chart__legend-line"></i>{{ $channelChart['current_label'] ?? $dateRange['label'] ?? 'Current period' }}</span>
+                        <span><i class="eb-channel-chart__legend-line eb-channel-chart__legend-line--prior"></i>{{ $channelChart['previous_label'] ?? 'Prior period' }}</span>
+                    </div>
+                </header>
+                @if($channelChart['has_data'] ?? false)
+                    <div class="eb-channel-chart__plot" role="img" aria-label="{{ $channelChart['title'] ?? 'Channel performance' }} line chart">
+                        <svg viewBox="0 0 724 210" preserveAspectRatio="none" aria-hidden="true">
+                            <defs>
+                                <linearGradient id="eb-channel-chart-area" x1="0" x2="0" y1="0" y2="1">
+                                    <stop offset="0%" stop-color="#149dd8" stop-opacity="0.42" />
+                                    <stop offset="100%" stop-color="#149dd8" stop-opacity="0" />
+                                </linearGradient>
+                            </defs>
+                            <line x1="24" x2="700" y1="34" y2="34" />
+                            <line x1="24" x2="700" y1="86" y2="86" />
+                            <line x1="24" x2="700" y1="138" y2="138" />
+                            <line x1="24" x2="700" y1="190" y2="190" />
+                            <polyline class="eb-channel-chart__prior" points="{{ $chartPreviousPoints }}" />
+                            <polygon class="eb-channel-chart__area" points="24,190 {{ $chartCurrentPoints }} 700,190" />
+                            <polyline class="eb-channel-chart__current" points="{{ $chartCurrentPoints }}" />
+                        </svg>
+                        <div class="eb-channel-chart__axis" aria-hidden="true">
+                            @foreach($chartAxisIndexes as $index)
+                                <span>{{ $chartLabels[$index] ?? '' }}</span>
+                            @endforeach
+                        </div>
+                    </div>
+                @else
+                    <div class="eb-channel-chart__empty">{{ $channelChart['empty_message'] ?? 'No data is available for this period yet.' }}</div>
+                @endif
             </section>
         @endif
 
