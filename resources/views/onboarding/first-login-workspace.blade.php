@@ -85,21 +85,50 @@
         [data-flw-shell] {
             align-items: center;
             background:
-                radial-gradient(42rem 28rem at 98% 46%, rgba(225, 247, 238, 0.66), transparent 72%),
-                radial-gradient(38rem 30rem at 2% 74%, rgba(226, 238, 253, 0.64), transparent 72%),
-                linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(247, 251, 249, 0.58));
+                radial-gradient(48rem 36rem at 100% 0%, rgba(226, 250, 240, 0.74), transparent 68%),
+                radial-gradient(44rem 34rem at 0% 100%, rgba(227, 239, 255, 0.74), transparent 70%),
+                linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(247, 251, 249, 0.64));
             display: flex;
             min-height: 100vh;
+            overflow: hidden;
             padding: 2rem;
             position: relative;
         }
 
+        [data-flw-shell]::before,
+        [data-flw-shell]::after {
+            content: '';
+            inset: -18%;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        [data-flw-shell]::before {
+            background:
+                conic-gradient(from 185deg at 50% 50%, transparent 0deg, rgba(135, 227, 183, 0.22) 58deg, transparent 132deg, rgba(155, 192, 248, 0.2) 204deg, transparent 286deg, rgba(223, 183, 247, 0.17) 338deg, transparent 360deg);
+            filter: blur(74px);
+            opacity: 0.72;
+            z-index: 0;
+        }
+
+        [data-flw-shell]::after {
+            background-image:
+                radial-gradient(circle, rgba(58, 139, 106, 0.22) 0 1px, transparent 1.75px),
+                radial-gradient(circle, rgba(100, 150, 217, 0.18) 0 1px, transparent 1.5px);
+            background-position: 0 0, 42px 72px;
+            background-size: 142px 142px, 191px 191px;
+            mask-image: radial-gradient(ellipse 94% 80% at 50% 50%, transparent 36%, #000 100%);
+            opacity: 0.5;
+            z-index: 0;
+        }
+
         [data-flw] {
             animation: flw-shell-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-            background: rgba(255, 255, 255, 0.84);
-            border: 1px solid rgba(255, 255, 255, 0.76);
-            border-radius: 2rem;
-            box-shadow: 0 24px 80px rgba(21, 55, 48, 0.09), 0 2px 8px rgba(21, 55, 48, 0.04);
+            backdrop-filter: blur(16px);
+            background: rgba(255, 255, 255, 0.86);
+            border: 1px solid rgba(255, 255, 255, 0.88);
+            border-radius: 2.25rem;
+            box-shadow: 0 30px 100px rgba(21, 55, 48, 0.11), 0 2px 12px rgba(21, 55, 48, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.84);
             position: relative;
             z-index: 1;
         }
@@ -157,6 +186,16 @@
             50% { transform: translate3d(4vw, 10vh, 0) scale(1.08); }
         }
 
+        @keyframes flw-aurora {
+            0%, 100% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(18deg) scale(1.08); }
+        }
+
+        @keyframes flw-glints {
+            0%, 100% { background-position: 0 0, 42px 72px; opacity: 0.27; }
+            50% { background-position: 32px -26px, 10px 98px; opacity: 0.48; }
+        }
+
         @media (prefers-reduced-motion: no-preference) {
             body:has([data-flw-shell]) .fb-auth-shell::before {
                 animation: flw-edge-green 22s ease-in-out infinite;
@@ -169,11 +208,21 @@
             body:has([data-flw-shell]) .fb-auth-card-wrap::before {
                 animation: flw-edge-lilac 30s ease-in-out infinite;
             }
+
+            [data-flw-shell]::before {
+                animation: flw-aurora 34s ease-in-out infinite;
+            }
+
+            [data-flw-shell]::after {
+                animation: flw-glints 18s ease-in-out infinite;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
             [data-flw],
-            [data-step]:not([hidden]) {
+            [data-step]:not([hidden]),
+            [data-flw-shell]::before,
+            [data-flw-shell]::after {
                 animation: none;
             }
 
@@ -203,13 +252,13 @@
             data-flw
             data-workspace-name="{{ $workspaceName }}"
             data-recommended='@json($recommendedTools)'
-            class="mx-auto w-full max-w-3xl p-7 sm:p-10"
+            class="mx-auto w-full max-w-5xl p-8 sm:p-14 lg:p-16"
         >
             <div class="flex items-start justify-between gap-6">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Workspace setup</p>
-                    <h1 class="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">Start with the right foundation.</h1>
-                    <p class="mt-2 max-w-xl text-sm leading-6 text-zinc-600">Five quick choices help us show the work that belongs in your workspace—and leave out the work that does not.</p>
+                    <h1 class="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">Start with the right foundation.</h1>
+                    <p class="mt-3 max-w-2xl text-base leading-7 text-zinc-600">Five quick choices help us show the work that belongs in your workspace—and leave out the work that does not.</p>
                 </div>
                 <span class="shrink-0 text-sm font-medium text-zinc-500">
                     <span data-step-num>1</span>/<span>{{ count($steps) }}</span>
