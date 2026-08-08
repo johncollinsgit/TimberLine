@@ -18,7 +18,7 @@
     $chartCurrent = is_array($channelChart['current'] ?? null) ? array_values($channelChart['current']) : [];
     $chartPrevious = is_array($channelChart['previous'] ?? null) ? array_values($channelChart['previous']) : [];
     $chartCount = max(2, count($chartCurrent));
-    $chartMax = max(1, ...array_map('abs', array_merge($chartCurrent, $chartPrevious)));
+    $chartMax = max(array_merge([1], array_map('abs', array_merge($chartCurrent, $chartPrevious))));
     $chartPoints = static function (array $values) use ($chartCount, $chartMax): string {
         return collect($values)->map(function ($value, $index) use ($chartCount, $chartMax): string {
             $x = 24 + (($index / ($chartCount - 1)) * 676);
