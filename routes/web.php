@@ -343,6 +343,8 @@ $landlordRoutes = static function (): void {
         ->name('support-tickets.update');
     Route::post('/landlord/bud-settings/{setting}/review', [LandlordSupportTicketController::class, 'reviewBud'])
         ->name('bud-settings.review');
+    Route::post('/landlord/bud-settings/{setting}/ai-review', [LandlordSupportTicketController::class, 'reviewBudAi'])
+        ->name('bud-settings.ai-review');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
     Route::get('/landlord/branches', LandlordBranchPreviewController::class)
@@ -908,6 +910,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/tickets/{ticket}/reply', [TenantSupportTicketController::class, 'reply'])->name('reply');
             Route::post('/bud/request', [TenantSupportTicketController::class, 'requestBud'])->name('bud.request');
             Route::post('/bud/ask', [TenantSupportTicketController::class, 'askBud'])->name('bud.ask');
+            Route::post('/bud/ai/request', [TenantSupportTicketController::class, 'requestBudAi'])->name('bud.ai.request');
         });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])

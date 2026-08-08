@@ -1483,6 +1483,11 @@ outside the current tenant. Bud AI and speech-to-speech are separate paid
 capabilities and remain disabled by default until their provider, workspace
 budget, audit, and final-human-confirmation gates are complete.
 
+Bud AI now has a separate workspace request and operator approval record with a
+hard monthly cap. That approval does not itself call a model or create a bill:
+the global provider switch, secret, audit ledger, typed tools, and final human
+confirmation still have to be in place before usage can begin.
+
 See `docs/architecture/customer-loop-and-bud.md` for the data, workflow,
 Modern Forestry, and future-provider contract.
 

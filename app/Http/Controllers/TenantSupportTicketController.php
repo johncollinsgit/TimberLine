@@ -17,6 +17,7 @@ class TenantSupportTicketController extends Controller
     public function index(Request $request): View
     {
         $tenant = $this->tenant($request);
+
         return view('account-help.index', ['tickets' => $this->support->index($tenant->id)['tickets'], 'budSetting' => TenantBudSetting::query()->firstOrCreate(['tenant_id' => $tenant->id], ['status' => 'disabled'])]);
     }
 
@@ -24,6 +25,7 @@ class TenantSupportTicketController extends Controller
     {
         $data = $request->validate(['subject' => ['required', 'string', 'max:180'], 'category' => ['required', 'in:help,bug,billing,feature,account'], 'priority' => ['required', 'in:low,normal,high,urgent'], 'body' => ['required', 'string', 'max:8000']]);
         $this->support->create($this->tenant($request), $request->user(), $data);
+
         return back()->with('success', 'Your ticket is in the Everbranch support queue.');
     }
 
@@ -36,12 +38,14 @@ class TenantSupportTicketController extends Controller
     {
         $data = $request->validate(['body' => ['required', 'string', 'max:8000']]);
         $this->support->reply($this->tenant($request)->id, $ticket, $request->user(), $data['body'], 'tenant');
+
         return back()->with('success', 'Reply sent.');
     }
 
     public function requestBud(Request $request): RedirectResponse
     {
         $this->bud->request($this->tenant($request), $request->user());
+
         return back()->with('success', 'Bud activation was requested from Everbranch.');
     }
 
@@ -49,13 +53,22 @@ class TenantSupportTicketController extends Controller
     {
         $data = $request->validate(['question' => ['required', 'string', 'max:3000']]);
         $answer = $this->bud->respond($this->tenant($request), $request->user(), $data['question']);
+
         return back()->with('bud_answer', $answer);
+    }
+
+    public function requestBudAi(Request $request): RedirectResponse
+    {
+        $this->bud->requestAi($this->tenant($request), $request->user());
+
+        return back()->with('success', 'Bud AI was requested. Everbranch will confirm the paid plan, workspace cap, and provider before it is enabled.');
     }
 
     private function tenant(Request $request): Tenant
     {
         $tenant = $request->attributes->get('current_tenant');
         abort_unless($tenant instanceof Tenant, 404);
+
         return $tenant;
     }
 }

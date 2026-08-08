@@ -55,6 +55,11 @@ for metered model and future voice use.
   workspace, and require a final visible human confirmation before any send,
   publish, or material state change. Model context must use a minimal,
   permission-checked snapshot rather than raw database access.
+- A workspace requests **Bud AI** separately from included Bud Core. An operator
+  must approve it and set a hard monthly dollar cap before any provider is even
+  eligible to run. Provider credentials remain global deployment secrets, never
+  tenant data. The current release stores this paid-cap decision but does not
+  make a provider call yet.
 - Future speech-to-speech support is an adapter on top of the same typed tool
   contract. It requires explicit microphone permission, live transcript/status,
   user interruption, a usage cap, and the same final confirmation rule.
