@@ -37,8 +37,11 @@ fi
 
 cd "$repository_root"
 
+echo "Clearing the disposable schema left by interruption-recovery fixtures..."
+php artisan db:wipe --force --no-interaction
+
 echo "Building the prior-release schema from ${base_sha}..."
-php artisan migrate:fresh \
+php artisan migrate \
     --force \
     --no-interaction \
     --path="$rehearsal_dir/database/migrations" \

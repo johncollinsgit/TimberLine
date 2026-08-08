@@ -104,8 +104,10 @@ DB_PASSWORD=root \
 scripts/ci/rehearse-migrations.sh origin/main
 ```
 
-The script runs `migrate:fresh` and is intentionally hard-locked to a test-like
-database name. Never weaken that name check or point it at production.
+The script explicitly wipes the disposable schema before building the prior
+release because interruption fixtures do not create Laravel's migration
+bookkeeping table. It is intentionally hard-locked to a test-like database
+name. Never weaken that name check or point it at production.
 
 ## Optional Forge deployment visibility
 
