@@ -27,19 +27,19 @@ class MySqlSchemaFingerprint
         }
 
         $tables = $connection->select(
-            'SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = ? ORDER BY table_name',
+            'SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? AND table_type = ? ORDER BY table_name',
             [$database, 'BASE TABLE'],
         );
 
         $schema = [];
 
         foreach ($tables as $table) {
-            $name = (string) $table->table_name;
+            $name = (string) $table->name;
             $schema[] = [
                 'table' => $name,
-                'columns' => $this->rows($connection, 'SELECT column_name, column_type, is_nullable, column_default, extra FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position', [$database, $name]),
-                'indexes' => $this->rows($connection, 'SELECT index_name, non_unique, seq_in_index, column_name, sub_part FROM information_schema.statistics WHERE table_schema = ? AND table_name = ? ORDER BY index_name, seq_in_index', [$database, $name]),
-                'foreign_keys' => $this->rows($connection, 'SELECT constraint_name, column_name, referenced_table_name, referenced_column_name FROM information_schema.key_column_usage WHERE table_schema = ? AND table_name = ? AND referenced_table_name IS NOT NULL ORDER BY constraint_name, ordinal_position', [$database, $name]),
+                'columns' => $this->rows($connection, 'SELECT column_name AS name, column_type AS type, is_nullable AS nullable, column_default AS default_value, extra FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position', [$database, $name]),
+                'indexes' => $this->rows($connection, 'SELECT index_name AS name, non_unique, seq_in_index AS position, column_name AS column_name, sub_part AS prefix_length FROM information_schema.statistics WHERE table_schema = ? AND table_name = ? ORDER BY index_name, seq_in_index', [$database, $name]),
+                'foreign_keys' => $this->rows($connection, 'SELECT constraint_name AS name, column_name AS column_name, referenced_table_name AS referenced_table, referenced_column_name AS referenced_column FROM information_schema.key_column_usage WHERE table_schema = ? AND table_name = ? AND referenced_table_name IS NOT NULL ORDER BY constraint_name, ordinal_position', [$database, $name]),
             ];
         }
 
