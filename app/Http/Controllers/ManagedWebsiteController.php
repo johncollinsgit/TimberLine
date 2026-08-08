@@ -151,10 +151,14 @@ class ManagedWebsiteController extends Controller
         $payload = $websites->draftPage($site, $page);
         abort_unless($payload !== null, 404);
 
+        $previewMode = ! $interactive && $request->boolean('overview')
+            ? 'thumbnail'
+            : ($interactive ? 'site' : 'editor');
+
         $response = response()
             ->view('managed-website.public', $payload + [
                 'tenant' => $tenant,
-                'previewMode' => $interactive ? 'site' : 'editor',
+                'previewMode' => $previewMode,
                 'previewLinks' => $this->draftPreviewLinks($site),
                 'editorUrl' => route('managed-website.editor', ['page' => $page]),
             ])

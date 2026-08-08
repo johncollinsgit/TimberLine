@@ -64,6 +64,29 @@ test('quote-first setup stays within its active tenant and has a truthful checkl
         ->and($other->managedSiteSetup)->toBeNull();
 });
 
+test('website admin leads with the live preview and keeps domain details secondary', function (): void {
+    $tenant = websitePilotTenant('website-admin-layout');
+    $actor = websitePilotUser($tenant);
+    completedWebsitePilot($tenant, $actor);
+
+    $response = $this->actingAs($actor)
+        ->get('https://website-admin-layout.theeverbranch.com/website')
+        ->assertOk()
+        ->assertSee('eb-admin-page-header', false)
+        ->assertSee('eb-site-theme-card', false)
+        ->assertSee('eb-site-browser-frame', false)
+        ->assertSee('eb-admin-panel eb-admin-disclosure', false)
+        ->assertSeeText('Edit website')
+        ->assertSeeText('Pages')
+        ->assertSeeText('Domains')
+        ->assertDontSeeText('How this stays safe');
+
+    $html = $response->getContent();
+
+    expect(strpos($html, 'eb-site-theme-card'))
+        ->toBeLessThan(strpos($html, 'id="website-domains"'));
+});
+
 test('only tenant owner or admin can publish while a manager can still save a draft', function (): void {
     $tenant = websitePilotTenant('publish-pilot');
     $admin = websitePilotUser($tenant, 'admin');

@@ -98,9 +98,14 @@ Shopify Admin is a usability reference only. Everbranch keeps its own identity,
 colors, copy, and accessibility system while following these operational norms
 across tenant workspaces, Everbranch Admin, and Shopify-embedded Backstage:
 
-- **Header:** use an optional breadcrumb/context label, a 24–28px Inter title,
-  at most one next-action sentence, and one primary action. Do not lead routine
-  pages with a display hero or a repeated title/subtitle card.
+- **Global command bar:** authenticated workspace and landlord pages use the
+  persistent charcoal command bar owned by the shared shell. Everbranch sits
+  at the left, command search is centered, and workspace/Bud controls sit at
+  the right. Do not add a second page-level search banner or workspace title.
+- **Header:** use a 20–24px Inter title at the left and cluster utilities plus
+  one primary action at the right. Add a sentence only when it changes the
+  user's next decision. Do not lead routine pages with a display hero, eyebrow,
+  repeated URL, or title/subtitle card.
 - **Density:** body text is 14–15px, metadata and labels are 12–13px, and
   textual actions are quiet medium-weight links. Status is a compact badge;
   it must not become an explanatory paragraph.
@@ -119,12 +124,35 @@ across tenant workspaces, Everbranch Admin, and Shopify-embedded Backstage:
 - **Builders:** use a compact product header, left outline, central real canvas,
   right inspector, and persistent save/publish status. A canvas click edits the
   matching item; it does not fake customer navigation.
-- **Navigation:** core work comes first. Enabled optional products live in the
-  compact **Branches** group near Settings with **Browse branches**. Customer
-  Loop is part of Marketing, not a disconnected follow-up module.
+- **Navigation:** core work comes first. Rows use unboxed 16px icons, 32px
+  targets, 13px labels, and one quiet selected background. A parent with a
+  selected child does not receive a second active pill. Enabled optional
+  products live in the compact **Branches** group near Settings with **Browse
+  branches**. Customer Loop is part of Marketing, not a disconnected follow-up
+  module.
 - **Typography:** Fraunces is reserved for public storytelling and rare
   intentional empty states. Everyday work, controls, tables, forms, landlord,
   and embedded surfaces use Inter.
+
+### Shopify-reference control map
+
+This map records the interaction patterns observed in Shopify Admin. Future
+work should reproduce the placement and task hierarchy, while retaining
+Everbranch names, colors, permissions, and data contracts.
+
+| Shopify pattern | Everbranch standard |
+| --- | --- |
+| Black global bar with centered search | Shared charcoal command bar with command palette |
+| Neutral left rail with expandable channels/apps | Core navigation followed by quiet Branches and Settings groups |
+| Title left; export/more/create right | Compact object/page header with utilities then one primary action |
+| Search/filter/display row above a table | One reusable list toolbar immediately above dense rows |
+| Online Store leads with active theme preview | Website leads with its real draft/live preview and Edit Website |
+| Theme state and actions in preview footer | Website name, live/draft state, publish, and edit in one footer |
+| Pages/preferences are subordinate destinations | Pages are rows; domains and safety guidance use progressive disclosure |
+| Object details keep work central and context at right | Main operational column plus compact customer/settings rail |
+
+Do not copy Shopify trademarks, icons, wording, or proprietary styling. The
+reference is the placement and interaction grammar, not a visual clone.
 
 ### Authenticated surface audit
 

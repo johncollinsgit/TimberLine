@@ -6,86 +6,38 @@
         <h1 class="text-xl font-semibold text-zinc-900">{{ config('everbranch.landlord_portal_name', 'Everbranch Admin') }}</h1>
     </x-slot>
 
-    <div class="space-y-6">
-        <section class="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-            <header class="sticky top-0 z-20 border-b border-zinc-200 bg-white/95 backdrop-blur">
-                <div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+    <div class="space-y-4">
+        <section class="eb-landlord-console">
+            <header class="eb-landlord-header">
+                <div class="eb-landlord-header__main">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Landlord</p>
-                        <h2 class="mt-1 text-2xl font-semibold text-zinc-950">{{ config('everbranch.landlord_portal_name', 'Everbranch Admin') }} Console</h2>
-                        <p class="mt-1 max-w-3xl text-sm text-zinc-600">
-                            Operational overview for tenant health, commercial configuration access, and guarded landlord-only actions.
-                        </p>
+                        <h2>{{ config('everbranch.landlord_portal_name', 'Everbranch Admin') }}</h2>
+                        <p>Workspace health, onboarding, support, and commercial operations.</p>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <a
-                            href="{{ route('landlord.commercial.index') }}"
-                            class="inline-flex items-center rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800"
-                        >
-                            Open Commercial Config
-                        </a>
-                        <a
-                            href="{{ route('landlord.readiness') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Readiness
-                        </a>
-                        <a
-                            href="{{ route('landlord.onboarding.intake') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Intake Queue
-                        </a>
-                        <a
-                            href="{{ route('landlord.onboarding.prospects.index') }}"
-                            class="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
-                        >
-                            Launch Partner Onboarding
-                        </a>
-                        <a
-                            href="{{ route('landlord.commercial-intent.index') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Commercial Intent
-                        </a>
-                        <a
-                            href="{{ route('landlord.onboarding.journey') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Onboarding Diagnostics
-                        </a>
-                        <a
-                            href="{{ route('landlord.custom-module-requests.index') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Custom Requests
-                        </a>
-                        <a
-                            href="{{ route('landlord.service-inquiries.index') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Service Inquiries
-                        </a>
-                        <a
-                            href="{{ route('landlord.tenants.index') }}"
-                            class="inline-flex items-center rounded-lg border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
-                        >
-                            Open Tenant Directory
-                        </a>
-                        <a
-                            href="{{ route('landlord.transactions.index') }}"
-                            class="inline-flex items-center rounded-lg border border-emerald-700 bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-800"
-                        >
-                            Transactions
-                        </a>
+                    <div class="eb-landlord-header__actions">
+                        <a href="{{ route('landlord.onboarding.prospects.index') }}" class="eb-admin-button">Launch partner intake</a>
+                        <a href="{{ route('landlord.tenants.index') }}" class="eb-admin-button eb-admin-button--primary">Open workspaces</a>
+                        <details class="eb-admin-overflow">
+                            <summary aria-label="More landlord actions">•••</summary>
+                            <nav aria-label="More landlord actions">
+                                <a href="{{ route('landlord.commercial.index') }}">Commercial configuration</a>
+                                <a href="{{ route('landlord.transactions.index') }}">Transactions</a>
+                                <a href="{{ route('landlord.readiness') }}">Readiness</a>
+                                <a href="{{ route('landlord.onboarding.intake') }}">Intake queue</a>
+                                <a href="{{ route('landlord.commercial-intent.index') }}">Commercial intent</a>
+                                <a href="{{ route('landlord.onboarding.journey') }}">Onboarding diagnostics</a>
+                                <a href="{{ route('landlord.custom-module-requests.index') }}">Custom requests</a>
+                                <a href="{{ route('landlord.service-inquiries.index') }}">Service inquiries</a>
+                            </nav>
+                        </details>
                     </div>
                 </div>
-                <nav class="overflow-x-auto border-t border-zinc-200 px-6 py-3">
-                    <ul class="flex min-w-max items-center gap-2 text-xs font-medium text-zinc-600">
-                        <li><a href="#overview" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Overview</a></li>
-                        <li><a href="#owner-intake" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Owner intake</a></li>
-                        <li><a href="#onboarding-triage" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Onboarding triage</a></li>
-                        <li><a href="#recent-tenants" class="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100">Workspace switcher</a></li>
+                <nav class="eb-landlord-tabs">
+                    <ul>
+                        <li><a href="#overview" aria-current="page">Overview</a></li>
+                        <li><a href="#owner-intake">Owner intake</a></li>
+                        <li><a href="#onboarding-triage">Onboarding triage</a></li>
+                        <li><a href="#recent-tenants">Workspace switcher</a></li>
                     </ul>
                 </nav>
             </header>
