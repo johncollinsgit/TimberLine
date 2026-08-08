@@ -797,7 +797,7 @@ function scheduleIdleTask(callback: () => void): void {
     window.setTimeout(callback, 200);
 }
 
-function mountMarketingCustomersGrid() {
+export function mountMarketingCustomersGrid() {
     const root = document.getElementById("marketing-customers-grid");
     if (!root || root.dataset.gridMounted === "true") {
         return;
@@ -817,8 +817,3 @@ if (document.readyState === "loading") {
 } else {
     mountMarketingCustomersGrid();
 }
-
-// Livewire's wire:navigate swaps the page without re-evaluating an already
-// loaded Vite module. Mount again after each swap so returning to Customers
-// always restores the interactive grid and fetches its rows.
-document.addEventListener("livewire:navigated", mountMarketingCustomersGrid);
