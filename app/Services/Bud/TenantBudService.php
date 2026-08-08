@@ -84,12 +84,11 @@ class TenantBudService
     /** @param array<int,array<string,mixed>> $transcript */
     public function respond(Tenant $tenant, User $user, string $question, array $transcript = []): array
     {
-        $setting = TenantBudSetting::query()->firstOrCreate(['tenant_id' => $tenant->id], ['status' => 'disabled']);
-        abort_unless($setting->status === 'approved', 403, 'Bud needs Everbranch approval before it can be used in this workspace.');
+        abort_unless((bool) config('bud.core_enabled', true), 503, 'Bud is temporarily unavailable.');
         $answer = $this->bud->respond($question, array_merge([
             'tenant' => $tenant->name,
             'surface' => 'account_help',
-            'bud_tier' => config('bud.ai_enabled') ? 'Bud AI' : 'Bud',
+            'bud_tier' => 'Bud Core',
         ], $this->workspaceContext->forTenant($tenant)), $transcript);
         if (($answer['uncertain'] ?? false) === true) {
             $ticket = $this->support->createBudEscalation($tenant, $user, $question, (string) $answer['reply'], (string) $answer['confidence'], $transcript);

@@ -18,7 +18,11 @@ class TenantSupportTicketController extends Controller
     {
         $tenant = $this->tenant($request);
 
-        return view('account-help.index', ['tickets' => $this->support->index($tenant->id)['tickets'], 'budSetting' => TenantBudSetting::query()->firstOrCreate(['tenant_id' => $tenant->id], ['status' => 'disabled'])]);
+        return view('account-help.index', [
+            'tickets' => $this->support->index($tenant->id)['tickets'],
+            'budSetting' => TenantBudSetting::query()->firstOrCreate(['tenant_id' => $tenant->id], ['status' => 'disabled']),
+            'budCoreEnabled' => (bool) config('bud.core_enabled', true),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -44,9 +48,9 @@ class TenantSupportTicketController extends Controller
 
     public function requestBud(Request $request): RedirectResponse
     {
-        $this->bud->request($this->tenant($request), $request->user());
+        $this->tenant($request);
 
-        return back()->with('success', 'Bud activation was requested from Everbranch.');
+        return back()->with('success', 'Bud is already included with your workspace. You can ask it a question now.');
     }
 
     public function askBud(Request $request): RedirectResponse

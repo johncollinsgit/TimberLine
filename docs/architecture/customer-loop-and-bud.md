@@ -40,6 +40,11 @@ for metered model and future voice use.
   available capabilities and read tenant-scoped summaries supplied by
   `BudWorkspaceContextService`; it must not invent record details it has not
   been given.
+- Bud Core is included for every authenticated workspace while the global
+  `EVERBRANCH_BUD_CORE_ENABLED` safety switch is on. It must not depend on a
+  tenant request, operator approval, paid plan, provider credential, or the
+  legacy `tenant_bud_settings.status` field. Bud AI keeps its separate tenant,
+  budget, and provider gates.
 - `BudCapabilityRegistry` is the release handoff registry. Any new
   tenant-facing capability must add a plain-language label, example questions,
   and its allowed actions there, then add only the minimum safe context query

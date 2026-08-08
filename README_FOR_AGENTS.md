@@ -468,7 +468,10 @@ UI maintenance rules:
 - Use the existing Workflow Studio for advanced if/then customization. The
   `everbranch.customer_loop.draft.prepare` action is intentionally
   idempotent and draft-only. Do not build another automation editor.
-- Bud Core is deterministic and included. Every new tenant-facing capability
+- Bud Core is deterministic and included. It is available to authenticated
+  workspaces whenever the global Core incident switch is on; never gate it on
+  a tenant request, operator approval, paid plan, provider credential, or the
+  legacy `tenant_bud_settings.status` field. Every new tenant-facing capability
   must update `BudCapabilityRegistry`, add a minimal tenant-scoped context path
   in `BudWorkspaceContextService` only when needed, and add regression tests
   before saying Bud understands it.

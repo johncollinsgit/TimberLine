@@ -4,6 +4,7 @@ use App\Models\CustomerLoopAction;
 use App\Models\CustomerLoopActivity;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
+use App\Models\TenantBudSetting;
 use App\Models\User;
 use App\Services\Automation\V2\WorkflowNativeActionService;
 use App\Services\Bud\TenantBudService;
@@ -96,4 +97,15 @@ test('Bud AI requires an explicit workspace request and an operator-set cap', fu
         ->and($approved->ai_monthly_budget_cents)->toBe(2500)
         ->and($approved->ai_used_cents)->toBe(0)
         ->and($approved->ai_period_started_at)->not->toBeNull();
+});
+
+test('Bud Core is included without a workspace approval record', function (): void {
+    [$tenant, $user] = customerLoopTenant('bud-core-'.Str::lower((string) Str::ulid()));
+    config()->set('bud.core_enabled', true);
+
+    $answer = app(TenantBudService::class)->respond($tenant, $user, 'wat needs my attention');
+
+    expect($answer['confidence'])->toBe('high')
+        ->and($answer['reply'])->toContain('Customer Loop')
+        ->and(TenantBudSetting::query()->count())->toBe(0);
 });
