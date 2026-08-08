@@ -10,6 +10,7 @@ use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
 use App\Support\Marketing\CandleCashMeasurement;
 use App\Support\Marketing\MarketingIdentityNormalizer;
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Config;
@@ -20,6 +21,7 @@ class MarketingMergeGrowaveSnapshot extends Command
 {
     protected $signature = 'marketing:merge-growave-snapshot
         {snapshot : Path to the donor SQLite database}
+        {--tenant-id= : Required Modern Forestry tenant ID for this legacy recovery command}
         {--store= : Optional store_key filter}
         {--chunk=500 : Chunk size for donor reads}
         {--dry-run : Preview actions without writing to the target database}';
@@ -27,13 +29,22 @@ class MarketingMergeGrowaveSnapshot extends Command
     protected $description = 'Merge Growave-derived snapshot rows from a donor SQLite database into the current database using provider-stable keys.';
 
     public function __construct(
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected ModernForestryLegacyAccessService $legacyAccess
     ) {
         parent::__construct();
     }
 
     public function handle(): int
     {
+        $tenantId = is_numeric($this->option('tenant-id')) ? (int) $this->option('tenant-id') : null;
+        if ($tenantId === null || $tenantId <= 0) {
+            $this->error('A Modern Forestry --tenant-id is required for legacy Growave recovery.');
+
+            return self::FAILURE;
+        }
+        $this->legacyAccess->assertTenantId($tenantId);
+
         $snapshotPath = $this->resolveSnapshotPath((string) $this->argument('snapshot'));
         if ($snapshotPath === null) {
             $this->error('snapshot database not found');

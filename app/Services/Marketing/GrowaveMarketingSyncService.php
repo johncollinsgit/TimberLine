@@ -12,6 +12,7 @@ use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
 use App\Support\Marketing\CandleCashMeasurement;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,7 +24,8 @@ class GrowaveMarketingSyncService
 {
     public function __construct(
         protected GrowaveClient $client,
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected ModernForestryLegacyAccessService $legacyAccess
     ) {
     }
 
@@ -1065,6 +1067,8 @@ class GrowaveMarketingSyncService
         if ($tenantId === null) {
             throw new RuntimeException("Shopify store '{$normalized}' is not assigned to a tenant.");
         }
+
+        $this->legacyAccess->assertTenantId($tenantId);
 
         return $tenantId;
     }

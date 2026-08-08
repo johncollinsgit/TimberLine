@@ -1,5 +1,11 @@
 # Modern Forestry Backstage
 
+## Profile-aware Workspaces and Safe Custom Onboarding (2026-08-08)
+
+- The tenant blueprint is now the authority for workspace context. Six profiles are supported: retail commerce, maker/production, field-service trades, professional services, appointment/inventory, and generic/custom. Integrations never grant a profile or retail tools.
+- New first-login onboarding presents those six choices plus **Other / Custom**. Other/custom collects plain-language business terminology and starts with a neutral customers/CRM/messaging/reporting base; it never inherits retail, loyalty, or legacy features.
+- Customer-selected profiles remain in operator review until explicitly confirmed. Modern Forestry and Collins Electric are the only identity-locked approved contexts. See `docs/architecture/workspace-capability-policy.md`.
+
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
 - Status: direct invoices are production-ready pending live gates after an internal paid Stripe sandbox invoice smoke test. Live customer invoicing remains blocked until production secrets, webhook signing, Relay payout verification, tax/accounting approval, production mail, and first-tenant allowlisting pass. Evidence: `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.

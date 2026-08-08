@@ -7,6 +7,7 @@
         $blueprintOptions = is_array($blueprintOptions ?? null) ? $blueprintOptions : [];
         $accountModes = is_array($blueprintOptions['account_modes'] ?? null) ? $blueprintOptions['account_modes'] : [];
         $businessTemplates = is_array($blueprintOptions['business_templates'] ?? null) ? $blueprintOptions['business_templates'] : [];
+        $workspaceProfiles = is_array($blueprintOptions['workspace_profiles'] ?? null) ? $blueprintOptions['workspace_profiles'] : [];
         $operatingModes = is_array($blueprintOptions['operating_modes'] ?? null) ? $blueprintOptions['operating_modes'] : [];
         $dataSourcePreferences = is_array($blueprintOptions['data_source_preferences'] ?? null) ? $blueprintOptions['data_source_preferences'] : [];
         $starterModules = is_array($blueprintOptions['starter_modules'] ?? null) ? $blueprintOptions['starter_modules'] : [];
@@ -75,7 +76,8 @@
 
             <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
                 <h3 class="text-base font-semibold text-zinc-950">Setup profile</h3>
-                <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                <p class="mt-1 text-sm text-zinc-600">Confirm the workspace profile explicitly. Connections and imports never choose it for you.</p>
+                <div class="mt-4 grid gap-4 lg:grid-cols-4">
                     <label class="block text-sm text-zinc-700">
                         Business template
                         <select name="business_template" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
@@ -83,6 +85,16 @@
                                 <option value="{{ $value }}" @selected(old('business_template', $defaultBusinessTemplate ?? 'generic') === $value)>{{ $label }}</option>
                             @endforeach
                         </select>
+                    </label>
+                    <label class="block text-sm text-zinc-700">
+                        Workspace profile
+                        <select name="workspace_profile" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
+                            <option value="">Choose a profile</option>
+                            @foreach ($workspaceProfiles as $value => $label)
+                                <option value="{{ $value }}" @selected(old('workspace_profile') === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <span class="mt-1 block text-xs text-zinc-500">This is the access boundary, not just a label.</span>
                     </label>
                     <label class="block text-sm text-zinc-700">
                         Operating mode
@@ -100,6 +112,15 @@
                             @endforeach
                         </select>
                     </label>
+                </div>
+
+                <div class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-sm font-semibold text-zinc-900">Optional capability packs</p>
+                    <p class="mt-1 text-xs text-zinc-600">Use only when the confirmed workspace needs the matching experience. Retail is automatic for retail commerce; service reputation is automatic for field-service trades.</p>
+                    <div class="mt-3 flex flex-wrap gap-4 text-sm text-zinc-700">
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="capability_packs[]" value="retail_commerce" @checked(in_array('retail_commerce', (array) old('capability_packs', []), true))> Retail commerce</label>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="capability_packs[]" value="service_reputation" @checked(in_array('service_reputation', (array) old('capability_packs', []), true))> Service reputation</label>
+                    </div>
                 </div>
 
                 <label class="mt-4 block text-sm text-zinc-700">

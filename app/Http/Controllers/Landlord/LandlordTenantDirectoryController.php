@@ -179,12 +179,14 @@ class LandlordTenantDirectoryController extends Controller
     {
         $blueprintOptions = $blueprintService->formOptions();
         $operatingModeKeys = array_keys((array) ($blueprintOptions['operating_modes'] ?? []));
+        $workspaceProfileKeys = array_keys((array) ($blueprintOptions['workspace_profiles'] ?? []));
 
         $validated = $request->validate(array_merge([
             'name' => ['required', 'string', 'max:120'],
             'slug' => ['nullable', 'string', 'max:120', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/'],
             'primary_contact_email' => ['nullable', 'email', 'max:255'],
             'tenant_type' => ['nullable', 'string', Rule::in($operatingModeKeys)],
+            'workspace_profile' => ['required', 'string', Rule::in($workspaceProfileKeys)],
         ], $blueprintService->validationRules(), [
             'role' => ['required', 'string', 'in:'.implode(',', array_keys($this->tenantRoleOptions()))],
             'status' => ['required', 'string', 'in:'.implode(',', array_keys($this->tenantStatusOptions()))],

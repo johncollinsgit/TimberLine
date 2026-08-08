@@ -94,6 +94,10 @@ class FirstLoginWorkspaceController extends Controller
             'appointment_phone' => ['nullable', 'string', 'max:40'],
             'module_choices' => ['nullable', 'array', 'max:20'],
             'module_choices.*' => ['string', Rule::in(array_keys($this->moduleOptions()))],
+            'custom_business_type' => ['nullable', 'string', 'max:120', 'required_if:template_key,custom'],
+            'business_description' => ['nullable', 'string', 'max:500'],
+            'customer_label' => ['nullable', 'string', 'max:80'],
+            'work_label' => ['nullable', 'string', 'max:80'],
         ]);
 
         $workspaceName = trim((string) $validated['workspace_name']);
@@ -122,34 +126,24 @@ class FirstLoginWorkspaceController extends Controller
     }
 
     /**
-     * Domain-neutral business types for the popup, sourced from config-driven
-     * blueprint templates (candle maker, landscaping, electrician, law, apparel,
-     * generic, custom) so it works for any business without code changes.
+     * The six profile choices are intentionally independent of integrations.
+     * "Other" is a generic/custom base, not an implied retail workspace.
      *
      * @return array<int,array{key:string,label:string,blurb:string}>
      */
     protected function businessTypeCards(TenantBlueprintProfileService $blueprintService): array
     {
-        $blurbs = [
-            'generic' => 'A clean, flexible workspace for any small business.',
-            'candle_maker' => 'Orders, batches, products, and the makers behind them.',
-            'landscaping' => 'Jobs, crews, properties, and seasonal work.',
-            'electrician' => 'Jobs, estimates, parts, and scheduling for the field.',
-            'law' => 'Clients, matters, and the work that moves them forward.',
-            'apparel' => 'Products, orders, and the customers who love them.',
-            'custom' => 'Not sure yet — we will shape it around how you work.',
+        $templates = $blueprintService->templateOptions();
+
+        return [
+            ['key' => 'apparel', 'label' => 'Retail commerce', 'blurb' => 'Products, orders, and retail customers.', 'profile' => 'Retail'],
+            ['key' => 'candle_maker', 'label' => 'Maker / production', 'blurb' => 'Batches, materials, inventory, and production.', 'profile' => 'Production'],
+            ['key' => 'electrician', 'label' => 'Field-service trades', 'blurb' => 'Customers, jobs, estimates, dispatch, and field work.', 'profile' => 'Service'],
+            ['key' => 'law', 'label' => 'Professional services', 'blurb' => 'Clients, matters, documents, time, and billing.', 'profile' => 'Services'],
+            ['key' => 'appointment_inventory', 'label' => 'Appointments / inventory', 'blurb' => 'Bookings, classes, events, supplies, and customer updates.', 'profile' => 'Bookings'],
+            ['key' => 'generic', 'label' => 'General business', 'blurb' => 'A neutral starting point for customers, communication, and reporting.', 'profile' => 'Flexible'],
+            ['key' => 'custom', 'label' => (string) ($templates['custom'] ?? 'Other / Custom'), 'blurb' => 'Tell us what you do. We will start safely and shape the workflow with you.', 'profile' => 'Custom', 'is_custom' => true],
         ];
-
-        $cards = [];
-        foreach ($blueprintService->templateOptions() as $key => $label) {
-            $cards[] = [
-                'key' => (string) $key,
-                'label' => (string) $label,
-                'blurb' => (string) ($blurbs[$key] ?? 'Shaped around how your business works.'),
-            ];
-        }
-
-        return $cards;
     }
 
     /**
@@ -170,6 +164,7 @@ class FirstLoginWorkspaceController extends Controller
             'landscaping' => ['customers', 'field_service', 'billing', 'messaging', 'reporting'],
             'electrician' => ['customers', 'field_service', 'billing', 'messaging', 'reporting'],
             'law' => ['customers', 'billing', 'messaging', 'reporting'],
+            'appointment_inventory' => ['customers', 'billing', 'messaging', 'reporting'],
         ];
     }
 
@@ -278,6 +273,12 @@ class FirstLoginWorkspaceController extends Controller
                     ])
                     ->values()
                     ->all(),
+            ],
+            'workspace_context' => [
+                'custom_business_type' => trim((string) ($validated['custom_business_type'] ?? '')),
+                'business_description' => trim((string) ($validated['business_description'] ?? '')),
+                'customer_label' => trim((string) ($validated['customer_label'] ?? '')),
+                'work_label' => trim((string) ($validated['work_label'] ?? '')),
             ],
             'start_path' => $startPath,
             'appointment' => $startPath === 'guided' ? [

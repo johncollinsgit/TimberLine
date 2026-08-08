@@ -28,6 +28,32 @@ return [
         'undecided' => 'Not sure yet',
     ],
 
+    /*
+     * A workspace profile describes the kind of business operating the
+     * workspace. It is deliberately separate from the connection rail: a
+     * Shopify connection is not evidence that a field-service workspace
+     * should receive retail tooling.
+     */
+    'workspace_profiles' => [
+        'generic_custom' => 'Generic / custom',
+        'retail_commerce' => 'Retail commerce',
+        'maker_production' => 'Maker / production',
+        'field_service_trades' => 'Field-service trades',
+        'professional_services' => 'Professional services',
+        'appointment_inventory' => 'Appointments / inventory',
+    ],
+
+    'template_workspace_profiles' => [
+        'generic' => 'generic_custom',
+        'custom' => 'generic_custom',
+        'apparel' => 'retail_commerce',
+        'candle_maker' => 'maker_production',
+        'landscaping' => 'field_service_trades',
+        'electrician' => 'field_service_trades',
+        'law' => 'professional_services',
+        'appointment_inventory' => 'appointment_inventory',
+    ],
+
     'starter_modules' => [
         'assignments' => 'Assignments',
         'batches' => 'Batches',
@@ -69,17 +95,19 @@ return [
             'assignee_label' => 'Assignee',
             'communication_label' => 'Updates',
             'upload_label' => 'Files / Photos',
-            'starter_modules' => ['customers', 'work', 'money', 'projects', 'tasks', 'assignments', 'files', 'reports'],
-            'work_management_modules' => ['projects', 'tasks', 'assignments', 'files'],
-            'wants_project_workspace' => true,
-            'wants_task_management' => true,
+            // This is the intentionally small, safe base for an unclassified
+            // business. Vertical workflows are enabled only after review.
+            'starter_modules' => ['customers', 'reports'],
+            'work_management_modules' => [],
+            'wants_project_workspace' => false,
+            'wants_task_management' => false,
             'wants_user_assignments' => false,
             'wants_team_communication' => false,
             'wants_client_communication' => false,
             'wants_photo_uploads' => false,
-            'wants_file_uploads' => true,
+            'wants_file_uploads' => false,
             'wants_mobile_field_capture' => false,
-            'primary_outcome' => 'Understand customers, work, revenue, costs, and next operational steps.',
+            'primary_outcome' => 'Start with customers, communication, reporting, and a reviewed custom workflow.',
         ],
         'candle_maker' => [
             'label' => 'Candle / Maker',
@@ -203,7 +231,7 @@ return [
             'primary_outcome' => 'Track customers, orders, products, inventory/resource needs, fulfillment stages, revenue, and campaigns.',
         ],
         'custom' => [
-            'label' => 'Custom',
+            'label' => 'Other / Custom',
             'customer_label' => 'Customer',
             'work_label' => 'Work',
             'money_label' => 'Money',
@@ -214,8 +242,11 @@ return [
             'assignee_label' => 'Assignee',
             'communication_label' => 'Updates',
             'upload_label' => 'Files / Photos',
-            'starter_modules' => ['customers', 'projects', 'tasks', 'files', 'reports'],
-            'work_management_modules' => ['projects', 'tasks', 'files'],
+            // An "other" business begins with neutral customer and reporting
+            // context. Its specialised modules require an operator-approved
+            // custom workflow; it never inherits retail capabilities.
+            'starter_modules' => ['customers', 'reports'],
+            'work_management_modules' => [],
             'wants_project_workspace' => false,
             'wants_task_management' => false,
             'wants_user_assignments' => false,
@@ -224,7 +255,32 @@ return [
             'wants_photo_uploads' => false,
             'wants_file_uploads' => false,
             'wants_mobile_field_capture' => false,
-            'primary_outcome' => 'Define the customer, work, money, resource, and workflow model before automation is activated.',
+            'primary_outcome' => 'Capture the business context, then review and approve the first custom workflow.',
+        ],
+        'appointment_inventory' => [
+            'label' => 'Appointments / Inventory',
+            'aliases' => ['appointment', 'appointments', 'booking', 'classes', 'events'],
+            'customer_label' => 'Customer',
+            'work_label' => 'Booking',
+            'money_label' => 'Revenue',
+            'material_label' => 'Inventory / Supplies',
+            'stage_label' => 'Booking Status',
+            'project_label' => 'Event / Class',
+            'task_label' => 'Preparation Task',
+            'assignee_label' => 'Team Member',
+            'communication_label' => 'Booking Updates',
+            'upload_label' => 'Files',
+            'starter_modules' => ['customers', 'inventory', 'reports'],
+            'work_management_modules' => [],
+            'wants_project_workspace' => false,
+            'wants_task_management' => false,
+            'wants_user_assignments' => false,
+            'wants_team_communication' => false,
+            'wants_client_communication' => true,
+            'wants_photo_uploads' => false,
+            'wants_file_uploads' => false,
+            'wants_mobile_field_capture' => false,
+            'primary_outcome' => 'Keep bookings, customer communication, inventory, and preparation visible without assuming a retail loyalty program.',
         ],
     ],
 ];

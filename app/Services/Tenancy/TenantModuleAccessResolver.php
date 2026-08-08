@@ -65,7 +65,8 @@ class TenantModuleAccessResolver
     public function __construct(
         protected TenantResolver $tenantResolver,
         protected SchemaCapabilityMap $schemaCapabilities,
-        protected ModernForestryAlphaBootstrapService $alphaBootstrapService
+        protected ModernForestryAlphaBootstrapService $alphaBootstrapService,
+        protected TenantWorkspaceCapabilityService $workspaceCapabilities
     ) {}
 
     /**
@@ -80,6 +81,10 @@ class TenantModuleAccessResolver
     public function resolveForTenant(?int $tenantId, ?array $moduleKeys = null): array
     {
         $profile = $this->profileForTenant($tenantId);
+        $tenant = $tenantId !== null
+            ? Tenant::query()->with('accessProfile')->find($tenantId)
+            : null;
+        $workspaceContext = $this->workspaceCapabilities->forTenant($tenant);
         $planKey = $this->canonicalPlanKey((string) ($profile['plan_key'] ?? $this->defaultPlanKey()));
         $operatingMode = (string) ($profile['operating_mode'] ?? $this->defaultOperatingMode());
 
@@ -166,6 +171,10 @@ class TenantModuleAccessResolver
                 'shopify_store_keys' => $this->normalizedIdentifierList((array) ($definition['shopify_store_keys'] ?? [])),
                 'required_shopify_store_role' => strtolower(trim((string) ($definition['required_shopify_store_role'] ?? ''))),
                 'tenant_allowed' => $this->tenantAllowedForDefinition($definition, $tenantSlug),
+                'workspace_allowed' => $this->workspaceCapabilities->supportsDefinition($tenant, $definition),
+                'workspace_profiles' => $this->normalizedStringList((array) ($definition['workspace_profiles'] ?? [])),
+                'required_capability_packs' => $this->normalizedStringList((array) ($definition['required_capability_packs'] ?? [])),
+                'required_legacy_overlays' => $this->normalizedStringList((array) ($definition['required_legacy_overlays'] ?? [])),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
                 'dependencies' => $this->normalizedStringList((array) ($definition['dependencies'] ?? [])),
                 'capabilities' => $this->normalizedCapabilityList((array) ($definition['capabilities'] ?? [])),
@@ -225,6 +234,9 @@ class TenantModuleAccessResolver
                 'tenant_slugs' => (array) ($rawModule['tenant_slugs'] ?? []),
                 'shopify_store_keys' => (array) ($rawModule['shopify_store_keys'] ?? []),
                 'required_shopify_store_role' => (string) ($rawModule['required_shopify_store_role'] ?? ''),
+                'workspace_profiles' => (array) ($rawModule['workspace_profiles'] ?? []),
+                'required_capability_packs' => (array) ($rawModule['required_capability_packs'] ?? []),
+                'required_legacy_overlays' => (array) ($rawModule['required_legacy_overlays'] ?? []),
                 'billing_mode' => (string) ($rawModule['billing_mode'] ?? 'unavailable'),
                 'dependencies' => (array) ($rawModule['dependencies'] ?? []),
                 'capabilities' => (array) ($rawModule['capabilities'] ?? []),
@@ -252,6 +264,7 @@ class TenantModuleAccessResolver
             'tenant_id' => $tenantId,
             'operating_mode' => $operatingMode,
             'plan_key' => $planKey,
+            'workspace' => $workspaceContext,
             'modules' => $modules,
         ];
     }
@@ -694,6 +707,16 @@ class TenantModuleAccessResolver
             return [
                 'enabled' => false,
                 'reason' => 'tenant_not_supported',
+                'source' => 'flag',
+                'cta' => 'none',
+                'cta_routing' => $ctaRouting,
+            ];
+        }
+
+        if (! (bool) ($module['workspace_allowed'] ?? true)) {
+            return [
+                'enabled' => false,
+                'reason' => 'workspace_not_supported',
                 'source' => 'flag',
                 'cta' => 'none',
                 'cta_routing' => $ctaRouting,
@@ -1298,6 +1321,9 @@ class TenantModuleAccessResolver
             'tenant_slugs' => $canonicalArray('tenant_slugs'),
             'shopify_store_keys' => $canonicalArray('shopify_store_keys'),
             'shopify_embedded_surfaces' => $canonicalArray('shopify_embedded_surfaces'),
+            'workspace_profiles' => $canonicalArray('workspace_profiles'),
+            'required_capability_packs' => $canonicalArray('required_capability_packs'),
+            'required_legacy_overlays' => $canonicalArray('required_legacy_overlays'),
             'required_shopify_store_role' => $canonicalString('required_shopify_store_role'),
             'billing_mode' => $canonicalString('billing_mode', 'unavailable'),
             'dependencies' => $canonicalArray('dependencies'),

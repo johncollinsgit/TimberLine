@@ -8,6 +8,7 @@ use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingProfileWishlistItem;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -19,7 +20,8 @@ class GrowaveWishlistBackfillService
 {
     public function __construct(
         protected GrowaveClient $client,
-        protected MarketingIdentityNormalizer $normalizer
+        protected MarketingIdentityNormalizer $normalizer,
+        protected ModernForestryLegacyAccessService $legacyAccess
     ) {
     }
 
@@ -1231,6 +1233,8 @@ class GrowaveWishlistBackfillService
         }
 
         if ($tenantId !== null) {
+            $this->legacyAccess->assertTenantId($tenantId);
+
             return $tenantId;
         }
 
@@ -1238,7 +1242,10 @@ class GrowaveWishlistBackfillService
             throw new RuntimeException('Growave wishlist backfill requires a tenant context or store key.');
         }
 
-        return $this->tenantIdFromStoreKey($normalized);
+        $tenantId = $this->tenantIdFromStoreKey($normalized);
+        $this->legacyAccess->assertTenantId($tenantId);
+
+        return $tenantId;
     }
 
     protected function tenantIdFromStoreKey(string $storeKey): int

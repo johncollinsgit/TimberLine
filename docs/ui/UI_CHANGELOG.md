@@ -1710,3 +1710,20 @@
 - Live checkout defaults off and is tenant-allowlisted.
 - Acceptance alone creates no charge, pending ACH is not treated as paid, and implementation-only payments cannot change module access.
 - Tax collection, Relay payout verification, webhook signing, and production credentials remain explicit launch blockers.
+## 2026-08-08 — Profile-aware customer and onboarding surfaces
+
+### What changed
+
+- Rebuilt the customer management grid in the shared light Everbranch system: white surfaces, calm borders, readable table colors, and no dark/black container treatment.
+- Removed the duplicate card-style header above the live customer grid and kept the primary customer controls in the grid itself.
+- Updated first-login onboarding to present six business-profile choices plus an explicit Other / Custom path with plain-language context fields and a clear review boundary.
+
+### Why
+
+- Customer and onboarding UI now matches the premium white backend/auth system while making it clear that profile selection shapes context rather than instantly activating specialised tooling.
+
+### Files touched
+
+- `resources/js/marketing/customers-grid.tsx`
+- `resources/views/marketing/customers/index.blade.php`
+- `resources/views/onboarding/first-login-workspace.blade.php`

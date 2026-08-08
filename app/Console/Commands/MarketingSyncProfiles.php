@@ -11,6 +11,7 @@ use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingProfileSyncService;
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,11 +25,12 @@ class MarketingSyncProfiles extends Command
         {--chunk=500 : Chunk size for candidate streaming}
         {--since= : Process records updated on/after this datetime}
         {--order-id= : Process a single Shopify order row by ID}
+        {--tenant-id= : Required when explicitly processing legacy Growave records}
         {--dry-run : Preview changes without writing}';
 
     protected $description = 'Backfill/sync canonical marketing profiles from Shopify, Growave, and Square source layers.';
 
-    public function handle(MarketingProfileSyncService $syncService, MarketingConsentService $consentService): int
+    public function handle(MarketingProfileSyncService $syncService, MarketingConsentService $consentService, ModernForestryLegacyAccessService $legacyAccess): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $verbose = $this->getOutput()->isVerbose();
@@ -39,6 +41,17 @@ class MarketingSyncProfiles extends Command
             $this->error('Invalid --source value. Use all|shopify|growave|square.');
 
             return self::FAILURE;
+        }
+
+        $growaveTenantId = null;
+        if ($source === 'growave') {
+            $growaveTenantId = $this->integerOption('tenant-id');
+            if ($growaveTenantId === null) {
+                $this->error('Legacy Growave processing requires an explicit Modern Forestry --tenant-id.');
+
+                return self::FAILURE;
+            }
+            $legacyAccess->assertTenantId($growaveTenantId);
         }
 
         $limit = $this->integerOption('limit');
@@ -97,7 +110,7 @@ class MarketingSyncProfiles extends Command
                     );
                 }
 
-                if (in_array($source, ['all', 'growave'], true)) {
+                if ($source === 'growave') {
                     $this->syncExternalCandidates(
                         $syncService,
                         $summary,
@@ -107,7 +120,8 @@ class MarketingSyncProfiles extends Command
                         $chunk,
                         $remaining,
                         $dryRun,
-                        $verbose
+                        $verbose,
+                        $growaveTenantId
                     );
                 }
 
@@ -166,7 +180,8 @@ class MarketingSyncProfiles extends Command
         int $chunk,
         ?int &$remaining,
         bool $dryRun,
-        bool $verbose
+        bool $verbose,
+        ?int $tenantId = null
     ): void {
         $query = Order::query()
             ->where(function (Builder $builder): void {
@@ -212,6 +227,7 @@ class MarketingSyncProfiles extends Command
 
         $query = CustomerExternalProfile::query()
             ->whereIn('integration', $integrations)
+            ->when($tenantId !== null, fn (Builder $builder) => $builder->where('tenant_id', $tenantId))
             ->when($since, fn (Builder $builder) => $builder->where('updated_at', '>=', $since))
             ->orderBy('id');
 

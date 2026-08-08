@@ -1,5 +1,13 @@
 # SYSTEM SNAPSHOT
 
+## Profile-aware Workspaces and Modern Forestry Legacy Isolation (2026-08-08)
+
+- `TenantWorkspaceCapabilityService` resolves the workspace profile before entitlement, channel, navigation, and capability decisions. A Shopify connection, marketing activity, or legacy module record cannot infer retail access. Unreviewed and unknown tenants fail closed to `generic_custom` with no retail or legacy pack.
+- Modern Forestry is explicitly `maker_production` with the `retail_commerce` pack and an identity-locked `modern_forestry_legacy` overlay. Collins Electric is explicitly `field_service_trades` with `service_reputation`. The Growave overlay is never a user-editable integration setting.
+- First-login onboarding now offers the six supported profile choices plus an Other/Custom path. It records business vocabulary and keeps all new selections in `needs_follow_up` until landlord/operator review; a custom workspace begins with a neutral base only.
+- Product reviews, wishlists, rewards, birthdays, referrals, Shopify retail surfaces, and legacy Growave context are catalog-gated by the retail pack. Service reviews are a distinct field-service catalog capability. The customer index now consumes profile-aware server columns and uses the light Everbranch UI system.
+- Policy, assignment process, and release checklist: `docs/architecture/workspace-capability-policy.md`.
+
 ## Agreements and Provider-Neutral Billing Authorization (2026-07-16)
 
 - Everbranch now has tenant-scoped agreements, immutable versions/content hashes, password-protected Evergrove proposal links, electronic acceptance evidence, permanent HTML snapshots, subscription authorizations, append-only events, termination/export tracking, and provider-confirmed receipt mirrors.

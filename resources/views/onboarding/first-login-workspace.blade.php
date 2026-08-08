@@ -87,7 +87,7 @@
             data-flw
             data-workspace-name="{{ $workspaceName }}"
             data-recommended='@json($recommendedTools)'
-            class="mx-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/80 bg-white/80 p-6 shadow-[0_24px_80px_rgba(15,28,31,0.16)] backdrop-blur-2xl sm:p-8"
+            class="mx-auto w-full max-w-2xl overflow-hidden rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,28,31,0.10)] sm:p-8"
         >
             <div class="flex items-center justify-between gap-3">
                 <div>
@@ -95,7 +95,7 @@
                     <h1 class="mt-1 text-xl font-semibold text-zinc-950 sm:text-2xl">Set up your workspace</h1>
                     <p class="mt-1 max-w-md text-sm text-zinc-500">Answer a few things and we will shape the first version around the work your team actually does.</p>
                 </div>
-                <span class="shrink-0 rounded-full border border-white/80 bg-white/70 px-3 py-1 text-xs font-medium text-zinc-500 shadow-sm">
+                <span class="shrink-0 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500">
                     Step <span data-step-num>1</span> of {{ count($steps) }}
                 </span>
             </div>
@@ -110,8 +110,8 @@
                     <span>Tools are recorded first.</span>
                 </div>
                 <div class="rounded-xl bg-white/80 px-3 py-2 shadow-sm">
-                    <span class="block font-semibold text-zinc-950">Field-ready base</span>
-                    <span>Jobs, customers, photos.</span>
+                    <span class="block font-semibold text-zinc-950">Safe starter base</span>
+                    <span>Customers, context, reporting.</span>
                 </div>
             </div>
 
@@ -138,6 +138,10 @@
                 <input type="hidden" name="appointment_name" value="">
                 <input type="hidden" name="appointment_email" value="">
                 <input type="hidden" name="appointment_phone" value="">
+                <input type="hidden" name="custom_business_type" value="">
+                <input type="hidden" name="business_description" value="">
+                <input type="hidden" name="customer_label" value="">
+                <input type="hidden" name="work_label" value="">
                 <span data-modules-holder></span>
 
                 {{-- Step 1: name --}}
@@ -156,8 +160,8 @@
                 {{-- Step 2: business type --}}
                 <section data-step="2" class="space-y-4" hidden>
                     <div>
-                        <h2 class="text-lg font-semibold text-zinc-900">What kind of work do you do?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We will tune the labels, starter tools, and first dashboard around this.</p>
+                        <h2 class="text-lg font-semibold text-zinc-900">What kind of business are you building?</h2>
+                        <p class="mt-1 text-sm text-zinc-500">Choose the closest fit. This sets the workspace boundary; a connection or app never changes it later.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         @foreach ($businessTypes as $type)
@@ -165,10 +169,29 @@
                                 type="button" data-pick-type="{{ $type['key'] }}"
                                 class="flw-card rounded-xl border border-zinc-200 bg-white p-4 text-left transition hover:border-emerald-300 hover:shadow-sm"
                             >
+                                <span class="mb-2 inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-zinc-500">{{ $type['profile'] ?? 'Workspace' }}</span>
                                 <span class="block text-sm font-semibold text-zinc-900">{{ $type['label'] }}</span>
                                 <span class="mt-1 block text-xs text-zinc-500">{{ $type['blurb'] }}</span>
                             </button>
                         @endforeach
+                    </div>
+                    <div data-custom-context hidden class="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                        <p class="text-sm font-semibold text-zinc-900">Tell us the shape of your business</p>
+                        <p class="mt-1 text-xs leading-5 text-zinc-600">We will create a neutral workspace first. Specialised tools stay off until you and an Everbranch operator approve them.</p>
+                        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                            <label class="block text-xs font-medium text-zinc-700">Business type <span class="text-rose-600">*</span>
+                                <input data-custom-business-type type="text" maxlength="120" placeholder="e.g. nonprofit, studio, property manager" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">
+                            </label>
+                            <label class="block text-xs font-medium text-zinc-700">What do you call the people you serve?
+                                <input data-customer-label type="text" maxlength="80" placeholder="Customers, members, patients…" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">
+                            </label>
+                            <label class="block text-xs font-medium text-zinc-700 sm:col-span-2">What work should we help organize first?
+                                <textarea data-business-description rows="2" maxlength="500" placeholder="A sentence is enough — for example, memberships, property inspections, client projects, or classes." class="mt-1.5 w-full resize-y rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"></textarea>
+                            </label>
+                            <label class="block text-xs font-medium text-zinc-700">What do you call that work? <span class="text-zinc-400">Optional</span>
+                                <input data-work-label type="text" maxlength="80" placeholder="Projects, visits, cases…" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200">
+                            </label>
+                        </div>
                     </div>
                 </section>
 
@@ -297,6 +320,7 @@
             var state = {
                 workspace_name: root.getAttribute('data-workspace-name') || '',
                 template_key: '', template_label: '',
+                custom_business_type: '', business_description: '', customer_label: '', work_label: '',
                 team_size: '', team_label: '',
                 hardest_part: '',
                 module_choices: [],
@@ -314,6 +338,10 @@
                 appointment_name: $('input[name="appointment_name"]'),
                 appointment_email: $('input[name="appointment_email"]'),
                 appointment_phone: $('input[name="appointment_phone"]'),
+                custom_business_type: $('input[name="custom_business_type"]'),
+                business_description: $('input[name="business_description"]'),
+                customer_label: $('input[name="customer_label"]'),
+                work_label: $('input[name="work_label"]'),
             };
             var modulesHolder = $('[data-modules-holder]');
 
@@ -323,6 +351,10 @@
                 hidden.team_size.value = state.team_size;
                 hidden.hardest_part.value = state.hardest_part;
                 hidden.start_path.value = state.start_path;
+                hidden.custom_business_type.value = state.custom_business_type;
+                hidden.business_description.value = state.business_description;
+                hidden.customer_label.value = state.customer_label;
+                hidden.work_label.value = state.work_label;
                 modulesHolder.innerHTML = '';
                 state.module_choices.forEach(function (k) {
                     var i = document.createElement('input');
@@ -333,7 +365,7 @@
 
             function canNext() {
                 if (step === 1) return state.workspace_name.trim().length > 0;
-                if (step === 2) return state.template_key !== '';
+                if (step === 2) return state.template_key !== '' && (state.template_key !== 'custom' || state.custom_business_type.trim().length > 0);
                 if (step === 3) return state.team_size !== '';
                 if (step === 4) return state.hardest_part !== '';
                 return true;
@@ -399,8 +431,19 @@
                     state.template_key = el.getAttribute('data-pick-type');
                     state.template_label = el.querySelector('.text-sm') ? el.querySelector('.text-sm').textContent : state.template_key;
                     state.module_choices = (recommended[state.template_key] || []).slice();
+                    $('[data-custom-context]').hidden = state.template_key !== 'custom';
                     selectOne($$('[data-pick-type]'), el);
                     refreshTools();
+                    syncHidden();
+                    $('[data-next]').disabled = !canNext();
+                });
+            });
+
+            [['[data-custom-business-type]', 'custom_business_type'], ['[data-business-description]', 'business_description'], ['[data-customer-label]', 'customer_label'], ['[data-work-label]', 'work_label']].forEach(function (pair) {
+                var input = $(pair[0]);
+                if (!input) return;
+                input.addEventListener('input', function () {
+                    state[pair[1]] = input.value;
                     syncHidden();
                     $('[data-next]').disabled = !canNext();
                 });

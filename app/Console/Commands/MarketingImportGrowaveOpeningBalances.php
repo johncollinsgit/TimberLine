@@ -10,6 +10,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use App\Support\Marketing\CandleCashMeasurement;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -24,7 +25,7 @@ class MarketingImportGrowaveOpeningBalances extends Command
 
     protected $description = 'Import latest Growave points snapshots into Candle Cash as opening-balance ledger entries.';
 
-    public function handle(): int
+    public function handle(ModernForestryLegacyAccessService $legacyAccess): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $limit = max(1, (int) $this->option('limit'));
@@ -34,6 +35,7 @@ class MarketingImportGrowaveOpeningBalances extends Command
 
         try {
             $tenantId = $this->resolveBackfillTenant($store, $providedTenantId);
+            $legacyAccess->assertTenantId($tenantId);
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
 

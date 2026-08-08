@@ -7,6 +7,7 @@ use App\Models\MarketingImportRun;
 use App\Models\Tenant;
 use App\Services\Shopify\ShopifyCustomerMetafieldFetcher;
 use App\Services\Shopify\ShopifyGraphqlClient;
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,8 @@ class ShopifyCustomerMetafieldSyncService
     public function __construct(
         protected GrowaveCustomerMetafieldParser $parser,
         protected MarketingIdentityNormalizer $normalizer,
-        protected MarketingProfileSyncService $profileSyncService
+        protected MarketingProfileSyncService $profileSyncService,
+        protected ModernForestryLegacyAccessService $legacyAccess
     ) {}
 
     /**
@@ -179,7 +181,15 @@ class ShopifyCustomerMetafieldSyncService
     protected function syncCustomerRecord(string $storeKey, array $customer, array &$summary, bool $dryRun, ?int $tenantId): void
     {
         $parsed = $this->parser->parse((array) ($customer['metafields'] ?? []));
-        $hasGrowaveMetafields = $parsed['raw_metafields'] !== [];
+        $hasGrowaveMetafields = $this->legacyAccess->allowsTenantId($tenantId) && $parsed['raw_metafields'] !== [];
+        if (! $hasGrowaveMetafields) {
+            $parsed = [
+                'raw_metafields' => [],
+                'points_balance' => null,
+                'vip_tier' => null,
+                'referral_link' => null,
+            ];
+        }
         if ($hasGrowaveMetafields) {
             $summary['records_with_growave_metafields']++;
         }

@@ -21,9 +21,9 @@ test('first-login workspace flow opens for a verified user with no tenants', fun
         ->assertSeeText('Set up your workspace')
         ->assertSeeText('Guided launch')
         ->assertSeeText('No surprise billing')
-        ->assertSeeText('Field-ready base')
+        ->assertSeeText('Safe starter base')
         ->assertSeeText('What should we call it?')
-        ->assertSeeText('Electrician');
+        ->assertSeeText('Field-service trades');
 });
 
 test('first-login workspace flow creates a trades workspace and lands the user inside it', function (): void {

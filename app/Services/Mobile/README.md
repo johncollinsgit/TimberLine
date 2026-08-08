@@ -1,5 +1,9 @@
 # Mobile Catalog Services
 
+## Profile-aware mobile boundary (2026-08-08)
+
+Mobile bootstrap and Branch discovery must use `TenantWorkspaceCapabilityService` through `TenantModuleAccessResolver`. A connection or legacy module record is not proof that a workspace is retail. Unreviewed/unknown tenants resolve as `generic_custom`; retail-only product reviews, wishlists, loyalty/rewards, birthdays, Shopify product context, and Modern Forestry legacy data must be omitted. Modern Forestry's legacy overlay is identity-locked; Collins Electric resolves as field-service with service reputation. See `docs/architecture/workspace-capability-policy.md` before adding a mobile Branch or payload field.
+
 ## Class Scheduling Contract (2026-07-15)
 
 `TenantMobileClassSchedulingController` exposes the tenant calendar, class detail/attendees, customer/message destinations, and consent-gated reminder scheduling. Every request is protected by mobile authentication and workspace membership, then explicitly validates tenant ownership and the canonical `class_scheduling` Branch manifest. The native client must not infer tenant or resource access from identifiers supplied by the device.

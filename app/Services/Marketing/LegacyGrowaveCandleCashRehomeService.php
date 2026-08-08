@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
 use App\Support\Marketing\CandleCashMeasurement;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,10 @@ class LegacyGrowaveCandleCashRehomeService
 {
     protected const BALANCE_TOLERANCE = 0.0005;
 
+    public function __construct(
+        protected ModernForestryLegacyAccessService $legacyAccess
+    ) {}
+
     /**
      * @param  array<string,mixed>  $options
      * @return array<string,mixed>
@@ -18,6 +23,7 @@ class LegacyGrowaveCandleCashRehomeService
     public function run(array $options = []): array
     {
         $tenantId = $this->positiveInt($options['tenant_id'] ?? null) ?? 1;
+        $this->legacyAccess->assertTenantId($tenantId);
         $store = $this->normalizedStore($options['store'] ?? null) ?? 'retail';
         $includeWholesale = (bool) ($options['include_wholesale'] ?? false);
         $profileId = $this->positiveInt($options['profile_id'] ?? null);

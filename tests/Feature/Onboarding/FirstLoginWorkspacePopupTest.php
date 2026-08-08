@@ -19,7 +19,7 @@ test('the popup workspace flow renders for a memberless user when the flag is on
         ->assertOk()
         ->assertSeeText('Set up your workspace')
         ->assertSeeText('Guided launch')
-        ->assertSeeText('What kind of work do you do?')
+        ->assertSeeText('What kind of business are you building?')
         ->assertSeeText('Pick the tools that sound useful')
         ->assertSeeText('Want a hand setting it up?');
 });
@@ -75,6 +75,40 @@ test('the popup creates a domain-neutral workspace and records tool picks as int
         'status' => 'final',
     ]);
 
+    expect(data_get($tenant->fresh()->accessProfile?->metadata, 'tenant_blueprint.workspace_profile'))->toBe('field_service_trades')
+        ->and(data_get($tenant->fresh()->accessProfile?->metadata, 'tenant_blueprint.blueprint_review_status'))->toBe('needs_follow_up');
+
     // The user is now an admin of their OWN new workspace (never Modern Forestry).
     expect($user->fresh()->tenants()->whereKey($tenant->id)->exists())->toBeTrue();
+});
+
+test('other business onboarding stores a neutral custom base and its plain-language context', function (): void {
+    $user = User::factory()->tenantAdmin()->create([
+        'email_verified_at' => now(),
+        'is_active' => true,
+        'approved_at' => now(),
+    ]);
+
+    $this->actingAs($user)->post(route('workspace.first-login.store'), [
+        'workspace_name' => 'Northside Community Studio',
+        'template_key' => 'custom',
+        'custom_business_type' => 'Community arts nonprofit',
+        'business_description' => 'We organize member workshops and shared studio time.',
+        'customer_label' => 'Members',
+        'work_label' => 'Workshop',
+        'team_size' => '2_5',
+        'hardest_part' => 'team_and_work_tracking',
+        'start_path' => 'guided',
+    ])->assertRedirect();
+
+    $tenant = Tenant::query()->where('slug', 'northside-community-studio')->firstOrFail();
+    $blueprint = data_get($tenant->fresh()->accessProfile?->metadata, 'tenant_blueprint');
+
+    expect(data_get($blueprint, 'workspace_profile'))->toBe('generic_custom')
+        ->and(data_get($blueprint, 'custom_business_type'))->toBe('Community arts nonprofit')
+        ->and(data_get($blueprint, 'business_description'))->toBe('We organize member workshops and shared studio time.')
+        ->and(data_get($blueprint, 'customer_label'))->toBe('Members')
+        ->and(data_get($blueprint, 'work_label'))->toBe('Workshop')
+        ->and((array) data_get($blueprint, 'capability_packs'))->toBe([])
+        ->and(data_get($blueprint, 'blueprint_review_status'))->toBe('needs_follow_up');
 });

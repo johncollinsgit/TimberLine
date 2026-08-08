@@ -134,6 +134,13 @@ test('base workspace grants field service without shopify access', function (): 
         'plan_key' => 'base',
         'operating_mode' => 'direct',
         'source' => 'test',
+        'metadata' => [
+            'tenant_blueprint' => [
+                'workspace_profile' => 'field_service_trades',
+                'capability_packs' => ['service_reputation'],
+                'blueprint_review_status' => 'reviewed',
+            ],
+        ],
     ]);
 
     $resolved = app(TenantModuleAccessResolver::class)->resolveForTenant($tenant->id, [
@@ -149,7 +156,7 @@ test('base workspace grants field service without shopify access', function (): 
         ->and($resolved['modules']['customers']['enabled'])->toBeTrue()
         ->and($resolved['modules']['field_service']['enabled'])->toBeTrue()
         ->and($resolved['modules']['shopify']['enabled'])->toBeFalse()
-        ->and($resolved['modules']['shopify']['reason'])->toBe('channel_not_supported')
+        ->and($resolved['modules']['shopify']['reason'])->toBe('workspace_not_supported')
         ->and($resolved['modules']['reviews']['enabled'])->toBeFalse()
         ->and($resolved['modules']['campaigns']['enabled'])->toBeFalse();
 });

@@ -41,7 +41,7 @@ test('tenant experience profile derives direct crm workspaces from direct tenant
         ->and(data_get($profile, 'workspace.label'))->toBe('Customer workspace');
 });
 
-test('tenant experience profile derives shopify marketing workspaces from connected commerce tenants', function () {
+test('a shopify connection cannot infer a retail workspace for an unreviewed tenant', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Shopify Marketing Tenant',
         'slug' => 'shopify-marketing-tenant',
@@ -74,11 +74,13 @@ test('tenant experience profile derives shopify marketing workspaces from connec
     $profile = app(TenantExperienceProfileService::class)->forTenant($tenant->id);
 
     expect($profile['channel_type'])->toBe('shopify')
-        ->and($profile['use_case_profile'])->toBe('marketing')
-        ->and(data_get($profile, 'workspace.label'))->toBe('Commerce workspace');
+        ->and($profile['workspace_profile'])->toBe('generic_custom')
+        ->and($profile['workspace_profile_reviewed'])->toBeFalse()
+        ->and($profile['use_case_profile'])->toBe('crm')
+        ->and(data_get($profile, 'workspace.label'))->toBe('Customer workspace');
 });
 
-test('tenant experience profile derives hybrid workspaces when direct mode and shopify coexist', function () {
+test('a hybrid connection state cannot infer vertical capabilities for an unreviewed tenant', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Hybrid Tenant',
         'slug' => 'hybrid-tenant',
@@ -102,6 +104,7 @@ test('tenant experience profile derives hybrid workspaces when direct mode and s
     $profile = app(TenantExperienceProfileService::class)->forTenant($tenant->id);
 
     expect($profile['channel_type'])->toBe('hybrid')
-        ->and($profile['use_case_profile'])->toBe('hybrid')
-        ->and(data_get($profile, 'workspace.label'))->toBe('Unified workspace');
+        ->and($profile['workspace_profile'])->toBe('generic_custom')
+        ->and($profile['use_case_profile'])->toBe('crm')
+        ->and(data_get($profile, 'workspace.label'))->toBe('Customer workspace');
 });

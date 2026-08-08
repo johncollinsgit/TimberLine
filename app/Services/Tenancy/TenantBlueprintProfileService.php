@@ -74,6 +74,12 @@ class TenantBlueprintProfileService
         return $this->stringMap((array) config('tenant_blueprints.data_source_preferences', []));
     }
 
+    /** @return array<string,string> */
+    public function workspaceProfileOptions(): array
+    {
+        return $this->stringMap((array) config('tenant_blueprints.workspace_profiles', []));
+    }
+
     /**
      * @return array<string,string>
      */
@@ -122,6 +128,7 @@ class TenantBlueprintProfileService
             'account_modes' => $this->accountModeOptions(),
             'operating_modes' => $this->operatingModeOptions(),
             'data_source_preferences' => $this->dataSourcePreferenceOptions(),
+            'workspace_profiles' => $this->workspaceProfileOptions(),
             'business_templates' => $this->templateOptions(),
             'starter_modules' => $this->starterModuleOptions(),
             'work_management_intents' => self::WORK_MANAGEMENT_INTENT_LABELS,
@@ -147,7 +154,12 @@ class TenantBlueprintProfileService
             'business_template' => ['nullable', 'string', Rule::in($this->acceptedTemplateKeys())],
             'operating_mode' => ['nullable', 'string', Rule::in(array_keys($this->operatingModeOptions()))],
             'data_source_preference' => ['nullable', 'string', Rule::in(array_keys($this->dataSourcePreferenceOptions()))],
+            'workspace_profile' => ['nullable', 'string', Rule::in(array_keys($this->workspaceProfileOptions()))],
+            'capability_packs' => ['nullable', 'array'],
+            'capability_packs.*' => ['string', Rule::in(['retail_commerce', 'service_reputation'])],
             'primary_outcome' => ['nullable', 'string', 'max:500'],
+            'custom_business_type' => ['nullable', 'string', 'max:120'],
+            'business_description' => ['nullable', 'string', 'max:500'],
             'customer_label' => ['nullable', 'string', 'max:80'],
             'work_label' => ['nullable', 'string', 'max:80'],
             'money_label' => ['nullable', 'string', 'max:80'],
@@ -192,6 +204,8 @@ class TenantBlueprintProfileService
     {
         $templateKey = $this->normalizeTemplate((string) ($input['business_template'] ?? 'generic'));
         $template = $this->templateDefinition($templateKey);
+        $workspaceProfile = $this->workspaceProfileForTemplate($templateKey, (string) ($input['workspace_profile'] ?? ''));
+        $capabilityPacks = $this->capabilityPacksForProfile($workspaceProfile, (array) ($input['capability_packs'] ?? []));
 
         $operatingMode = $this->optionOrDefault(
             (string) ($input['operating_mode'] ?? ''),
@@ -211,12 +225,17 @@ class TenantBlueprintProfileService
         return [
             'business_template' => $templateKey,
             'business_template_label' => (string) ($template['label'] ?? Str::headline($templateKey)),
+            'workspace_profile' => $workspaceProfile,
+            'workspace_profile_label' => (string) data_get($this->workspaceProfileOptions(), $workspaceProfile, Str::headline($workspaceProfile)),
+            'capability_packs' => $capabilityPacks,
             'operating_mode' => $operatingMode,
             'operating_mode_label' => (string) data_get($this->operatingModeOptions(), $operatingMode, Str::headline($operatingMode)),
             'data_source_preference' => $dataSourcePreference,
             'data_source_preference_label' => (string) data_get($this->dataSourcePreferenceOptions(), $dataSourcePreference, Str::headline($dataSourcePreference)),
             'primary_outcome' => $this->nullableText((string) ($input['primary_outcome'] ?? ''), 500)
                 ?: (string) ($template['primary_outcome'] ?? ''),
+            'custom_business_type' => $this->nullableText((string) ($input['custom_business_type'] ?? ''), 120),
+            'business_description' => $this->nullableText((string) ($input['business_description'] ?? ''), 500),
             'customer_label' => $this->labelOrDefault((string) ($input['customer_label'] ?? ''), (string) ($template['customer_label'] ?? 'Customer')),
             'work_label' => $this->labelOrDefault((string) ($input['work_label'] ?? ''), (string) ($template['work_label'] ?? 'Work')),
             'money_label' => $this->labelOrDefault((string) ($input['money_label'] ?? ''), (string) ($template['money_label'] ?? 'Revenue')),
@@ -468,6 +487,38 @@ class TenantBlueprintProfileService
     protected function templateDefinition(string $templateKey): array
     {
         return (array) data_get((array) config('tenant_blueprints.templates', []), $templateKey, []);
+    }
+
+    protected function workspaceProfileForTemplate(string $templateKey, string $requested): string
+    {
+        $allowed = array_keys($this->workspaceProfileOptions());
+        $requested = Str::slug(strtolower(trim($requested)), '_');
+        if (in_array($requested, $allowed, true)) {
+            return $requested;
+        }
+
+        $mapped = Str::slug(strtolower(trim((string) config('tenant_blueprints.template_workspace_profiles.'.$templateKey, 'generic_custom'))), '_');
+
+        return in_array($mapped, $allowed, true) ? $mapped : 'generic_custom';
+    }
+
+    /** @param array<int,mixed> $requested */
+    protected function capabilityPacksForProfile(string $workspaceProfile, array $requested): array
+    {
+        $packs = collect($requested)
+            ->map(fn (mixed $pack): string => Str::slug(strtolower(trim((string) $pack)), '_'))
+            ->filter(fn (string $pack): bool => in_array($pack, ['retail_commerce', 'service_reputation'], true))
+            ->values()
+            ->all();
+
+        if ($workspaceProfile === 'retail_commerce') {
+            $packs[] = 'retail_commerce';
+        }
+        if ($workspaceProfile === 'field_service_trades') {
+            $packs[] = 'service_reputation';
+        }
+
+        return array_values(array_unique($packs));
     }
 
     protected function normalizeTemplate(string $template): string

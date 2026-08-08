@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Services\Marketing\ProductReviewService;
+use App\Services\Tenancy\ModernForestryLegacyAccessService;
+use App\Services\Shopify\ShopifyStores;
 use Illuminate\Console\Command;
 
 class MarketingImportReplacementReviews extends Command
@@ -11,8 +13,12 @@ class MarketingImportReplacementReviews extends Command
 
     protected $description = 'Import the requested Growave replacement product reviews into the internal review system.';
 
-    public function handle(ProductReviewService $productReviewService): int
+    public function handle(ProductReviewService $productReviewService, ModernForestryLegacyAccessService $legacyAccess): int
     {
+        $retailStore = ShopifyStores::find('retail');
+        $tenantId = is_numeric($retailStore['tenant_id'] ?? null) ? (int) $retailStore['tenant_id'] : 0;
+        $legacyAccess->assertTenantId($tenantId);
+
         $summary = [
             'processed' => 0,
             'created' => 0,

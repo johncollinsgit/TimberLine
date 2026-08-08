@@ -925,12 +925,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::patch('/customers/{marketingProfile}', [MarketingCustomersController::class, 'update'])->name('customers.update');
                 Route::post('/customers/{marketingProfile}/birthday', [MarketingCustomersController::class, 'updateBirthday'])->name('customers.update-birthday');
                 Route::post('/customers/{marketingProfile}/consent', [MarketingCustomersController::class, 'updateConsent'])->name('customers.update-consent');
-                Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->name('customers.candle-cash.grant');
-                Route::post('/customers/{marketingProfile}/candle-cash/redeem', [MarketingCustomersController::class, 'redeemCandleCash'])->name('customers.candle-cash.redeem');
+                Route::post('/customers/{marketingProfile}/candle-cash/grant', [MarketingCustomersController::class, 'grantCandleCash'])->middleware('module:rewards')->name('customers.candle-cash.grant');
+                Route::post('/customers/{marketingProfile}/candle-cash/redeem', [MarketingCustomersController::class, 'redeemCandleCash'])->middleware('module:rewards')->name('customers.candle-cash.redeem');
                 Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/mark-redeemed', [MarketingCustomersController::class, 'markCandleCashRedemptionRedeemed'])
-                    ->name('customers.candle-cash.redemptions.mark-redeemed');
+                    ->middleware('module:rewards')->name('customers.candle-cash.redemptions.mark-redeemed');
                 Route::post('/customers/{marketingProfile}/candle-cash/redemptions/{redemption}/cancel', [MarketingCustomersController::class, 'cancelCandleCashRedemption'])
-                    ->name('customers.candle-cash.redemptions.cancel');
+                    ->middleware('module:rewards')->name('customers.candle-cash.redemptions.cancel');
             });
             Route::middleware(['role:admin,marketing_manager'])->group(function (): void {
                 Route::get('/', [MarketingPagesController::class, 'show'])
@@ -1018,8 +1018,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/recommendations/{recommendation}/approve', [MarketingRecommendationsController::class, 'approve'])->name('recommendations.approve');
                 Route::post('/recommendations/{recommendation}/reject', [MarketingRecommendationsController::class, 'reject'])->name('recommendations.reject');
                 Route::post('/recommendations/{recommendation}/dismiss', [MarketingRecommendationsController::class, 'dismiss'])->name('recommendations.dismiss');
-                Route::get('/candle-cash', [CandleCashPagesController::class, 'dashboard'])->name('candle-cash');
+                Route::get('/candle-cash', [CandleCashPagesController::class, 'dashboard'])->middleware(['tenant.access', 'module:rewards'])->name('candle-cash');
                 Route::prefix('candle-cash')
+                    ->middleware(['tenant.access', 'module:rewards'])
                     ->name('candle-cash.')
                     ->group(function () {
                         Route::get('/tasks', [CandleCashPagesController::class, 'tasks'])->name('tasks');
@@ -1065,6 +1066,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                         ->name('operations.storefront-redemption-debug');
                 });
                 Route::get('/reviews', [MarketingPagesController::class, 'show'])
+                    ->middleware(['tenant.access', 'module:reviews'])
                     ->defaults('section', 'reviews')
                     ->name('reviews');
                 Route::middleware(['tenant.access'])->group(function (): void {
@@ -1072,9 +1074,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     Route::post('/modules/{moduleKey}/activate', [MarketingModuleStoreController::class, 'activate'])->name('modules.activate');
                     Route::post('/modules/{moduleKey}/request', [MarketingModuleStoreController::class, 'requestAccess'])->name('modules.request');
                 });
-                Route::get('/wishlist', [MarketingWishlistController::class, 'index'])->name('wishlist');
-                Route::post('/wishlist/items/{item}/prepare-outreach', [MarketingWishlistController::class, 'prepareOutreach'])->name('wishlist.prepare-outreach');
-                Route::post('/wishlist/queue/{queue}/send', [MarketingWishlistController::class, 'sendOutreach'])->name('wishlist.send-outreach');
+                Route::get('/wishlist', [MarketingWishlistController::class, 'index'])->middleware(['tenant.access', 'module:wishlist'])->name('wishlist');
+                Route::post('/wishlist/items/{item}/prepare-outreach', [MarketingWishlistController::class, 'prepareOutreach'])->middleware(['tenant.access', 'module:wishlist'])->name('wishlist.prepare-outreach');
+                Route::post('/wishlist/queue/{queue}/send', [MarketingWishlistController::class, 'sendOutreach'])->middleware(['tenant.access', 'module:wishlist'])->name('wishlist.send-outreach');
                 Route::get('/settings', [MarketingPagesController::class, 'show'])
                     ->defaults('section', 'settings')
                     ->name('settings');
@@ -1122,7 +1124,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/apps/forestry/google/oauth/callback', [GoogleBusinessProfileController::class, 'callback'])
         ->name('marketing.candle-cash.google-business.callback.legacy-callback');
 
-    Route::middleware(['role:admin,marketing_manager'])
+    Route::middleware(['role:admin,marketing_manager', 'tenant.access', 'module:birthdays'])
         ->prefix('birthdays')
         ->name('birthdays.')
         ->group(function () {

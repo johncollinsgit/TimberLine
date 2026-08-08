@@ -98,11 +98,22 @@ class FirstLoginWorkspaceProvisioner
                 'business_template' => $normalizedTemplate,
                 'operating_mode' => 'direct',
                 'data_source_preference' => 'manual',
+                'custom_business_type' => data_get($guideAnswers, 'workspace_context.custom_business_type'),
+                'business_description' => data_get($guideAnswers, 'workspace_context.business_description'),
+                'customer_label' => data_get($guideAnswers, 'workspace_context.customer_label'),
+                'work_label' => data_get($guideAnswers, 'workspace_context.work_label'),
+                'setup_notes' => $normalizedTemplate === 'custom'
+                    ? data_get($guideAnswers, 'workspace_context.business_description')
+                    : null,
             ]);
-            $blueprint['blueprint_review_status'] = 'reviewed';
-            $blueprint['blueprint_review_status_label'] = 'Reviewed';
-            $blueprint['blueprint_reviewed_by'] = (int) $user->id;
-            $blueprint['blueprint_reviewed_at'] = now()->toIso8601String();
+            // A customer can choose the closest fit during onboarding, but a
+            // landlord/operator confirms the profile before vertical packs are
+            // activated. This keeps a Shopify choice from becoming retail by
+            // accident and gives custom workspaces a safe neutral start.
+            $blueprint['blueprint_review_status'] = 'needs_follow_up';
+            $blueprint['blueprint_review_status_label'] = 'Needs follow-up';
+            $blueprint['blueprint_reviewed_by'] = null;
+            $blueprint['blueprint_reviewed_at'] = null;
 
             $setupStatus = $this->setupStatusService->forTenant($tenant);
             $this->blueprintService->applyBlueprint($tenant, $profile->refresh(), $setupStatus, $blueprint, 'production', true);

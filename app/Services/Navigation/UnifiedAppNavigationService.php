@@ -74,7 +74,7 @@ class UnifiedAppNavigationService
             $birthdaysRelevant = $tenantId === null
                 || $this->moduleStateRelevant($moduleStates['birthdays'] ?? null);
 
-            $marketingChildren = $this->marketingNavigationChildren($tenantId !== null, $birthdaysRelevant);
+            $marketingChildren = $this->marketingNavigationChildren($tenantId !== null, $birthdaysRelevant, $moduleStates, $profile);
             $marketingCurrent = collect($marketingChildren)->contains(
                 fn (array $child): bool => (bool) ($child['current'] ?? false)
             );
@@ -198,8 +198,8 @@ class UnifiedAppNavigationService
         $items = $this->orderedItems($items, $preferredSidebarOrder);
 
         $adminSubItems = $canAccessOps ? $this->adminSubItems($isAdmin, $tenant) : [];
-        $marketingSubGroups = $canAccessMarketing ? $this->marketingSubGroups() : [];
-        $birthdaySubGroups = $canAccessMarketing ? $this->birthdaySubGroups() : [];
+        $marketingSubGroups = $canAccessMarketing ? $this->marketingSubGroups($moduleStates, $profile) : [];
+        $birthdaySubGroups = $canAccessMarketing && $birthdaysRelevant ? $this->birthdaySubGroups() : [];
 
         return [
             'tenant' => $tenant,
@@ -530,9 +530,10 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array<string,mixed>>
      */
-    protected function marketingSubGroups(): array
+    protected function marketingSubGroups(array $moduleStates = [], array $profile = []): array
     {
         $items = collect(MarketingSectionRegistry::sections())
+            ->filter(fn (array $section, string $key): bool => $this->marketingSectionAllowed($key, $moduleStates, $profile))
             ->map(function (array $section, string $key): array {
                 return [
                     'key' => $key,
@@ -550,10 +551,11 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array{key:string,label:string,href:string,current:bool}>
      */
-    protected function marketingNavigationChildren(bool $includeFeatures, bool $includeBirthdays): array
+    protected function marketingNavigationChildren(bool $includeFeatures, bool $includeBirthdays, array $moduleStates = [], array $profile = []): array
     {
         $items = collect(MarketingSectionRegistry::sections())
             ->reject(fn (array $section, string $key): bool => $key === 'modules' && ! $includeFeatures)
+            ->filter(fn (array $section, string $key): bool => $this->marketingSectionAllowed($key, $moduleStates, $profile))
             ->map(function (array $section, string $key): array {
                 $label = $key === 'modules'
                     ? 'Features'
@@ -610,6 +612,20 @@ class UnifiedAppNavigationService
             })
             ->values()
             ->all();
+    }
+
+    /** @param array<string,array<string,mixed>> $moduleStates */
+    protected function marketingSectionAllowed(string $key, array $moduleStates, array $profile): bool
+    {
+        $retail = in_array('retail_commerce', (array) ($profile['capability_packs'] ?? []), true);
+
+        return match ($key) {
+            'candle-cash' => $this->moduleStateEnabled($moduleStates['rewards'] ?? null),
+            'reviews' => $this->moduleStateEnabled($moduleStates['reviews'] ?? null),
+            'wishlist' => $this->moduleStateEnabled($moduleStates['wishlist'] ?? null),
+            'orders' => $retail,
+            default => true,
+        };
     }
 
     /**

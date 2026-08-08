@@ -41,6 +41,7 @@ use App\Services\Marketing\MarketingSegmentEvaluator;
 use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
+use App\Services\Tenancy\TenantWorkspaceCapabilityService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Carbon\CarbonInterface;
@@ -75,13 +76,15 @@ class MarketingCustomersController extends Controller
         protected ShopifyBirthdayMetafieldService $shopifyBirthdayMetafieldService,
         protected GrowaveProjectionService $growaveProjectionService,
         protected MarketingWishlistService $wishlistService,
-        protected MarketingEmailDeliveryProviderContext $emailDeliveryProviderContextResolver
+        protected MarketingEmailDeliveryProviderContext $emailDeliveryProviderContextResolver,
+        protected TenantWorkspaceCapabilityService $workspaceCapabilities
     ) {
     }
 
     public function index(Request $request): View
     {
         $tenantId = $this->currentTenantId($request);
+        $workspaceContext = $this->workspaceContext($tenantId);
         $filters = $this->normalizeIndexFilters($request);
         $totalProfiles = MarketingProfile::query()
             ->forTenantId($tenantId)
@@ -103,6 +106,7 @@ class MarketingCustomersController extends Controller
             'hasPhoneFilter' => (string) $filters['has_phone'],
             'emptyStateDiagnostics' => $emptyStateDiagnostics,
             'quickStats' => $quickStats,
+            'workspaceContext' => $workspaceContext,
             'customerGrid' => [
                 'endpoint' => route('marketing.customers.data'),
                 'detail_base_url' => url('/marketing/customers'),
@@ -115,6 +119,7 @@ class MarketingCustomersController extends Controller
     public function data(Request $request): JsonResponse
     {
         $tenantId = $this->currentTenantId($request);
+        $workspaceContext = $this->workspaceContext($tenantId);
         $filters = $this->normalizeIndexFilters($request);
         $profiles = $this->customerIndexQuery($filters, $tenantId)
             ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
@@ -123,15 +128,19 @@ class MarketingCustomersController extends Controller
             ->withQueryString();
 
         $derivedStats = $this->buildDerivedStats($profiles->getCollection());
-        $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
+        $loyaltyStats = $this->isRetailWorkspace($workspaceContext)
+            ? $this->buildLoyaltyEnrichment($profiles->getCollection())
+            : [];
 
         $rows = $profiles->getCollection()
-            ->map(function (MarketingProfile $profile) use ($derivedStats, $loyaltyStats): array {
-                return $this->serializeCustomerGridRow(
+            ->map(function (MarketingProfile $profile) use ($derivedStats, $loyaltyStats, $workspaceContext): array {
+                $row = $this->serializeCustomerGridRow(
                     $profile,
                     $derivedStats[(int) $profile->id] ?? null,
                     $loyaltyStats[(int) $profile->id] ?? null
                 );
+
+                return $this->filterCustomerGridRowForWorkspace($row, $workspaceContext);
             })
             ->values()
             ->all();
@@ -140,7 +149,7 @@ class MarketingCustomersController extends Controller
             'data' => $rows,
             'rows' => $rows,
             'meta' => [
-                'columns' => $this->customerGridColumns(),
+                'columns' => $this->customerGridColumns($workspaceContext),
                 'pagination' => [
                     'page' => $profiles->currentPage(),
                     'per_page' => $profiles->perPage(),
@@ -351,27 +360,36 @@ class MarketingCustomersController extends Controller
     /**
      * @return array<int,array{key:string,label:string,type:string}>
      */
-    protected function customerGridColumns(): array
+    protected function customerGridColumns(array $workspaceContext = []): array
     {
         $rewardsLabel = $this->displayLabel('rewards_label', 'Rewards');
 
-        return [
+        $columns = [
             ['key' => 'customer', 'label' => 'Customer', 'type' => 'text'],
             ['key' => 'email', 'label' => 'Email', 'type' => 'text'],
             ['key' => 'phone', 'label' => 'Phone', 'type' => 'text'],
-            ['key' => 'candle_cash_points', 'label' => $rewardsLabel, 'type' => 'number'],
-            ['key' => 'candle_cash_amount', 'label' => 'Value ($)', 'type' => 'number'],
-            ['key' => 'legacy_growave_points', 'label' => 'Legacy Growave', 'type' => 'number'],
-            ['key' => 'tier', 'label' => 'Tier', 'type' => 'text'],
-            ['key' => 'referrals', 'label' => 'Referrals', 'type' => 'number'],
-            ['key' => 'review_count', 'label' => 'Reviews', 'type' => 'number'],
-            ['key' => 'average_rating', 'label' => 'Avg Rating', 'type' => 'number'],
             ['key' => 'order_count', 'label' => 'Orders', 'type' => 'number'],
             ['key' => 'last_order_at', 'label' => 'Last Order', 'type' => 'text'],
-            ['key' => 'birthday', 'label' => 'Birthday', 'type' => 'text'],
             ['key' => 'sources', 'label' => 'Sources', 'type' => 'text'],
             ['key' => 'updated_at', 'label' => 'Updated', 'type' => 'text'],
         ];
+
+        if ($this->isRetailWorkspace($workspaceContext)) {
+            array_splice($columns, 3, 0, [
+                ['key' => 'candle_cash_points', 'label' => $rewardsLabel, 'type' => 'number'],
+                ['key' => 'candle_cash_amount', 'label' => 'Value ($)', 'type' => 'number'],
+                ['key' => 'tier', 'label' => 'Tier', 'type' => 'text'],
+                ['key' => 'referrals', 'label' => 'Referrals', 'type' => 'number'],
+                ['key' => 'review_count', 'label' => 'Product reviews', 'type' => 'number'],
+                ['key' => 'average_rating', 'label' => 'Avg rating', 'type' => 'number'],
+            ]);
+
+            if (in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true)) {
+                array_splice($columns, 5, 0, [['key' => 'legacy_growave_points', 'label' => 'Legacy Growave', 'type' => 'number']]);
+            }
+        }
+
+        return $columns;
     }
 
     /**
@@ -603,6 +621,8 @@ class MarketingCustomersController extends Controller
     {
         $this->assertProfileInTenantScope($marketingProfile, $request);
         $tenantId = $this->currentTenantId($request);
+        $workspaceContext = $this->workspaceContext($tenantId);
+        $hasModernForestryLegacy = in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true);
         $marketingProfile->load([
             'links' => fn ($query) => $query->orderByDesc('id'),
             'groups:id,name,is_internal',
@@ -707,18 +727,25 @@ class MarketingCustomersController extends Controller
             ->orderByDesc('id')
             ->limit(30)
             ->get();
-        $latestGrowaveExternal = $this->growaveProjectionService->preferredExternal(
-            $externalProfiles->filter(fn (CustomerExternalProfile $row): bool => (string) $row->integration === 'growave')
-        );
-        $latestGrowaveReviewSummary = $this->growaveProjectionService->preferredReviewSummary(
-            $marketingProfile->reviewSummaries()
-                ->where('provider', 'growave')
-                ->where('integration', 'growave')
-                ->get(),
-            $latestGrowaveExternal
-        );
+        if (! $hasModernForestryLegacy) {
+            $externalProfiles = $externalProfiles->reject(fn (CustomerExternalProfile $row): bool => (string) $row->integration === 'growave')->values();
+        }
+        $latestGrowaveExternal = $hasModernForestryLegacy
+            ? $this->growaveProjectionService->preferredExternal(
+                $externalProfiles->filter(fn (CustomerExternalProfile $row): bool => (string) $row->integration === 'growave')
+            )
+            : null;
+        $latestGrowaveReviewSummary = $hasModernForestryLegacy
+            ? $this->growaveProjectionService->preferredReviewSummary(
+                $marketingProfile->reviewSummaries()
+                    ->where('provider', 'growave')
+                    ->where('integration', 'growave')
+                    ->get(),
+                $latestGrowaveExternal
+            )
+            : null;
 
-        if (! $latestGrowaveReviewSummary && $latestGrowaveExternal) {
+        if ($hasModernForestryLegacy && ! $latestGrowaveReviewSummary && $latestGrowaveExternal) {
             $latestGrowaveReviewSummary = MarketingReviewSummary::query()
                 ->where('provider', 'growave')
                 ->where('integration', 'growave')
@@ -729,13 +756,15 @@ class MarketingCustomersController extends Controller
                 ->first();
         }
 
-        $growaveReviewHistory = $marketingProfile->reviewHistory()
-            ->where('provider', 'growave')
-            ->where('integration', 'growave')
-            ->orderByDesc('reviewed_at')
-            ->orderByDesc('id')
-            ->limit(25)
-            ->get();
+        $growaveReviewHistory = $hasModernForestryLegacy
+            ? $marketingProfile->reviewHistory()
+                ->where('provider', 'growave')
+                ->where('integration', 'growave')
+                ->orderByDesc('reviewed_at')
+                ->orderByDesc('id')
+                ->limit(25)
+                ->get()
+            : collect();
 
         $nativeReviewHistory = $marketingProfile->reviewHistory()
             ->where('provider', 'backstage')
@@ -745,7 +774,7 @@ class MarketingCustomersController extends Controller
             ->limit(25)
             ->get();
 
-        if ($growaveReviewHistory->isEmpty() && $latestGrowaveReviewSummary) {
+        if ($hasModernForestryLegacy && $growaveReviewHistory->isEmpty() && $latestGrowaveReviewSummary) {
             $growaveReviewHistory = MarketingReviewHistory::query()
                 ->where('marketing_review_summary_id', $latestGrowaveReviewSummary->id)
                 ->orderByDesc('reviewed_at')
@@ -888,20 +917,24 @@ class MarketingCustomersController extends Controller
             ->orderByDesc('id')
             ->limit(25)
             ->get();
-        $growaveLoyaltyTransactions = $this->normalizeGrowaveLoyaltyTransactions(
-            $marketingProfile->candleCashTransactions()
+        $growaveLoyaltyTransactions = $hasModernForestryLegacy
+            ? $this->normalizeGrowaveLoyaltyTransactions(
+                $marketingProfile->candleCashTransactions()
+                    ->where('source', 'growave_activity')
+                    ->orderByDesc('id')
+                    ->limit(120)
+                    ->get()
+            )
+            : collect();
+        $legacyReviewRewardRows = $hasModernForestryLegacy
+            ? $marketingProfile->candleCashTransactions()
                 ->where('source', 'growave_activity')
+                ->where('candle_cash_delta', '>', 0)
+                ->where('description', 'like', '%review%')
                 ->orderByDesc('id')
                 ->limit(120)
-                ->get()
-        );
-        $legacyReviewRewardRows = $marketingProfile->candleCashTransactions()
-            ->where('source', 'growave_activity')
-            ->where('candle_cash_delta', '>', 0)
-            ->where('description', 'like', '%review%')
-            ->orderByDesc('id')
-            ->limit(120)
-            ->get(['id', 'candle_cash_delta', 'created_at']);
+                ->get(['id', 'candle_cash_delta', 'created_at'])
+            : collect();
         $legacyReviewRewardStatus = [
             'count' => (int) $legacyReviewRewardRows->count(),
             'last_rewarded_at' => optional($legacyReviewRewardRows->first()?->created_at)->toDateTimeString(),
@@ -1037,6 +1070,7 @@ class MarketingCustomersController extends Controller
             'allGroups' => $allGroups,
             'birthdayProfile' => $birthdayProfile,
             'birthdayRewardStatus' => $birthdayRewardStatus,
+            'workspaceContext' => $workspaceContext,
         ]);
     }
 
@@ -3008,6 +3042,53 @@ class MarketingCustomersController extends Controller
         $resolver = app(TenantDisplayLabelResolver::class);
 
         return $resolver->label($this->currentTenantId(request()), $key, $fallback);
+    }
+
+    /** @return array<string,mixed> */
+    protected function workspaceContext(?int $tenantId): array
+    {
+        $tenant = $tenantId !== null
+            ? Tenant::query()->with('accessProfile')->find($tenantId)
+            : null;
+
+        return $this->workspaceCapabilities->forTenant($tenant);
+    }
+
+    /** @param array<string,mixed> $workspaceContext */
+    protected function isRetailWorkspace(array $workspaceContext): bool
+    {
+        return in_array('retail_commerce', (array) ($workspaceContext['capability_packs'] ?? []), true);
+    }
+
+    /**
+     * Keep retail enrichment out of API payloads, not merely out of table
+     * columns. This prevents a stale browser client from restoring a hidden
+     * Growave or reward value in a non-retail workspace.
+     *
+     * @param array<string,mixed> $row
+     * @param array<string,mixed> $workspaceContext
+     * @return array<string,mixed>
+     */
+    protected function filterCustomerGridRowForWorkspace(array $row, array $workspaceContext): array
+    {
+        $retailKeys = [
+            'candle_cash_points', 'candle_cash_amount', 'legacy_growave_points',
+            'tier', 'referrals', 'review_count', 'average_rating',
+        ];
+
+        if (! $this->isRetailWorkspace($workspaceContext)) {
+            foreach ($retailKeys as $key) {
+                unset($row[$key]);
+            }
+
+            return $row;
+        }
+
+        if (! in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true)) {
+            unset($row['legacy_growave_points']);
+        }
+
+        return $row;
     }
 
     protected function assertProfileInTenantScope(MarketingProfile $profile, Request $request): void

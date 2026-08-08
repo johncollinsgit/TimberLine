@@ -69,6 +69,8 @@ type RootDataset = {
     addCustomerUrl: string;
     initialFilters: FilterState;
     sortOptions: SortOption[];
+    retailWorkspace: boolean;
+    modernForestryLegacy: boolean;
 };
 
 type ElementSize = {
@@ -148,8 +150,8 @@ function alphaColor(rgbTriplet: string, alpha: number): string {
 function resolveGridTheme(): Theme {
     const accent = readCssVar("--mf-accent", "16, 185, 129");
     const accentSoft = readCssVar("--mf-accent-2", accent);
-    const panelBorder = readCssVar("--mf-panel-border", "rgba(110, 231, 183, 0.12)");
-    const panelBorderStrong = readCssVar("--mf-panel-strong-border", "rgba(110, 231, 183, 0.22)");
+    const panelBorder = readCssVar("--fb-border", "#e7eceb");
+    const panelBorderStrong = readCssVar("--fb-border", "#d5dfdd");
     const fontBody = readCssVar(
         "--mf-font-body",
         "Manrope, ui-sans-serif, system-ui, sans-serif"
@@ -157,25 +159,25 @@ function resolveGridTheme(): Theme {
 
     return {
         accentColor: alphaColor(accent, 1),
-        accentFg: "#ecfdf5",
-        accentLight: alphaColor(accentSoft, 0.16),
-        textDark: "#e8fff5",
-        textMedium: "#b8d8ca",
-        textLight: "#7ca997",
-        textBubble: "#e8fff5",
-        bgIconHeader: alphaColor(accentSoft, 0.18),
-        fgIconHeader: "#d1fae5",
-        textHeader: "#e8fff5",
-        textGroupHeader: "#7ca997",
-        textHeaderSelected: "#ecfdf5",
-        bgCell: "#091510",
-        bgCellMedium: "#0d1b15",
-        bgHeader: "#113428",
-        bgHeaderHasFocus: "#164235",
-        bgHeaderHovered: "#153d30",
-        bgBubble: "#163d31",
-        bgBubbleSelected: "#1d4b3c",
-        bgSearchResult: "#194536",
+        accentFg: "#ffffff",
+        accentLight: alphaColor(accentSoft, 0.12),
+        textDark: "#0d1b1e",
+        textMedium: "#445553",
+        textLight: "#6f807d",
+        textBubble: "#123c43",
+        bgIconHeader: "#edf5f2",
+        fgIconHeader: "#1e5a63",
+        textHeader: "#17383c",
+        textGroupHeader: "#5d6b6a",
+        textHeaderSelected: "#123c43",
+        bgCell: "#ffffff",
+        bgCellMedium: "#f7faf9",
+        bgHeader: "#eff5f3",
+        bgHeaderHasFocus: "#e2efeb",
+        bgHeaderHovered: "#e8f2ee",
+        bgBubble: "#e5f3ed",
+        bgBubbleSelected: "#d6ebe2",
+        bgSearchResult: "#f0f8f4",
         borderColor: panelBorder,
         drilldownBorder: panelBorderStrong,
         linkColor: alphaColor(accent, 1),
@@ -242,6 +244,8 @@ function parseRootDataset(root: HTMLElement): RootDataset {
     return {
         endpoint: root.dataset.endpoint || "/marketing/customers/data",
         addCustomerUrl: root.dataset.addCustomerUrl || "/marketing/customers/create",
+        retailWorkspace: root.dataset.retailWorkspace === "1",
+        modernForestryLegacy: root.dataset.modernForestryLegacy === "1",
         initialFilters: {
             search: initialFilters.search || "",
             sort: initialFilters.sort || "updated_at",
@@ -298,29 +302,29 @@ function buildColumns(meta: ResponseMeta | null): GridColumn[] {
 }
 
 function fieldClass(): string {
-    return "h-11 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-300/25 focus:bg-black/35";
+    return "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
 }
 
 function buttonClass(): string {
-    return "inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10";
+    return "inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50";
 }
 
 function primaryButtonClass(): string {
-    return "inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25";
+    return "inline-flex h-11 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-100 px-4 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-200";
 }
 
 function filterChipClass(active = true): string {
     return active
-        ? "inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-50"
-        : "inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65";
+        ? "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800"
+        : "inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600";
 }
 
 function paginationButtonClass(): string {
-    return "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
+    return "inline-flex h-10 items-center justify-center rounded-xl border border-zinc-300 bg-white px-3 text-xs font-semibold uppercase tracking-wider text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40";
 }
 
 function pageSizeSelectClass(): string {
-    return "h-9 min-w-[80px] rounded-xl border border-white/10 bg-black/25 px-2 text-xs text-white outline-none transition focus:border-emerald-300/25 focus:bg-black/35";
+    return "h-9 min-w-[80px] rounded-xl border border-zinc-300 bg-white px-2 text-xs text-zinc-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
 }
 
 function formatCellValue(column: ColumnMeta | null, rawValue: unknown): string {
@@ -358,9 +362,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const deferredSearch = useDeferredValue(searchInput);
     const search = useDebouncedValue(deferredSearch, 250);
     const [source, setSource] = useState(props.initialFilters.source);
-    const [hasPoints, setHasPoints] = useState(props.initialFilters.has_points);
+    const [hasPoints, setHasPoints] = useState(props.retailWorkspace ? props.initialFilters.has_points : "all");
     const [hasPhone, setHasPhone] = useState(props.initialFilters.has_phone);
-    const [birthdayFilter, setBirthdayFilter] = useState(props.initialFilters.birthday_filter);
+    const [birthdayFilter, setBirthdayFilter] = useState(props.retailWorkspace ? props.initialFilters.birthday_filter : "all");
     const [sortField, setSortField] = useState(props.initialFilters.sort);
     const [sortDir, setSortDir] = useState<"asc" | "desc">(props.initialFilters.dir);
     const [perPage, setPerPage] = useState(props.initialFilters.per_page);
@@ -543,7 +547,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
         : 0;
     const activeFilters = [
         source !== "all" ? `Source: ${source}` : null,
-        hasPoints !== "all" ? (hasPoints === "yes" ? "Has Candle Cash" : "No Candle Cash") : null,
+        props.retailWorkspace && hasPoints !== "all" ? (hasPoints === "yes" ? "Has rewards" : "No rewards") : null,
         hasPhone !== "all" ? (hasPhone === "yes" ? "Has phone" : "Missing phone") : null,
         birthdayFilter !== "all" ? `Birthday: ${birthdayFilter}` : null,
         sortField !== "updated_at" ? `Sort: ${sortField}` : null,
@@ -553,16 +557,16 @@ function MarketingCustomersGridApp(props: RootDataset) {
 
     return (
         <div className="space-y-4">
-            <section className="rounded-3xl border border-white/10 bg-black/15 p-5 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-6">
+            <section className="border-b border-zinc-200 pb-6">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
-                        <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">
+                        <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-800">
                             Customer index
                         </div>
-                        <h2 className="mt-2 text-2xl font-semibold text-white">Manage Customers</h2>
-                        <p className="mt-2 max-w-3xl text-sm text-emerald-50/70">
-                            Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance,
-                            and open full customer records without fighting a long static table.
+                        <h2 className="mt-2 text-2xl font-semibold text-zinc-950">Manage Customers</h2>
+                        <p className="mt-2 max-w-3xl text-sm text-zinc-600">
+                            Search customer profiles and open full customer records without fighting a long static table.
+                            {props.retailWorkspace ? " Retail loyalty and product context appear only where this workspace supports them." : " Service and operational workspaces stay focused on customer and work context."}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -631,33 +635,35 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     </div>
 
                     {filtersOpen ? (
-                        <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-2 xl:grid-cols-6">
+                        <div className="grid gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-2 xl:grid-cols-6">
                             <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
                                 <option value="all">All sources</option>
                                 <option value="shopify">Shopify</option>
-                                <option value="growave">Growave</option>
+                                {props.modernForestryLegacy ? <option value="growave">Growave</option> : null}
                                 <option value="square">Square</option>
                                 <option value="wholesale">Wholesale</option>
                                 <option value="event">Event</option>
                                 <option value="manual">Manual</option>
                             </select>
-                            <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
-                                <option value="all">All Candle Cash states</option>
-                                <option value="yes">Has Candle Cash</option>
-                                <option value="no">No Candle Cash</option>
-                            </select>
+                            {props.retailWorkspace ? (
+                                <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
+                                    <option value="all">All reward states</option>
+                                    <option value="yes">Has rewards</option>
+                                    <option value="no">No rewards</option>
+                                </select>
+                            ) : null}
                             <select value={hasPhone} onChange={(event) => setHasPhone(event.target.value)} className={fieldClass()}>
                                 <option value="all">All phone states</option>
                                 <option value="yes">Has phone</option>
                                 <option value="no">No phone</option>
                             </select>
-                            <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
+                            {props.retailWorkspace ? <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
                                 <option value="all">All birthdays</option>
                                 <option value="today">Birthday today</option>
                                 <option value="week">Birthday this week</option>
                                 <option value="month">Birthday this month</option>
                                 <option value="missing">Birthday missing</option>
-                            </select>
+                            </select> : null}
                             <select value={sortField} onChange={(event) => setSortField(event.target.value)} className={fieldClass()}>
                                 {(meta?.sort_options ?? props.sortOptions).map((option) => (
                                     <option key={option.value} value={option.value}>
@@ -673,8 +679,8 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     ) : null}
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-100/60">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <div className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-600">
                         {loading
                             ? "Loading customers…"
                             : pagination
@@ -682,7 +688,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 : "Customer results"}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/60">
+                        <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600">
                             Advanced filters are tucked away until you need them.
                         </span>
                     </div>
@@ -690,12 +696,12 @@ function MarketingCustomersGridApp(props: RootDataset) {
             </section>
 
             {error !== "" ? (
-                <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                     {error}
                 </div>
             ) : null}
 
-            <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white">
                 <div
                     ref={gridWrapRef}
                     className="relative flex-1 min-h-[36rem] w-full"
@@ -719,27 +725,27 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             theme={gridTheme}
                         />
                     ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-emerald-50/60">
+                        <div className="flex h-full items-center justify-center text-sm text-zinc-500">
                             Loading customer grid…
                         </div>
                     )}
                     {loading ? (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white/90">
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/80 text-sm font-semibold text-zinc-700 backdrop-blur-[1px]">
                             Loading customers…
                         </div>
                     ) : null}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-200 bg-zinc-50 px-4 py-3">
                     <div className="flex flex-col gap-1">
-                        <div className="text-sm font-semibold text-white">
+                        <div className="text-sm font-semibold text-zinc-950">
                             {loading
                                 ? "Loading customers…"
                                 : pagination
                                     ? `Showing ${resultStart.toLocaleString()}-${resultEnd.toLocaleString()} of ${pagination.total.toLocaleString()} customers`
                                     : "Showing 0 customers"}
                         </div>
-                        <div className="text-xs text-white/60">
+                        <div className="text-xs text-zinc-500">
                             Click any row to open the full customer record.
                         </div>
                     </div>
@@ -752,7 +758,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         >
                             Previous
                         </button>
-                        <div className="text-sm text-white/70">
+                        <div className="text-sm text-zinc-600">
                             {pagination ? `Page ${pagination.page} of ${pagination.last_page}` : "Page 1"}
                         </div>
                         <button
@@ -766,7 +772,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         >
                             Next
                         </button>
-                        <label className="ml-2 flex items-center gap-2 text-xs text-white/60">
+                        <label className="ml-2 flex items-center gap-2 text-xs text-zinc-600">
                             Rows
                             <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value) || 25)} className={pageSizeSelectClass()}>
                                 {[25, 50, 100].map((value) => (

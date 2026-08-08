@@ -35,6 +35,7 @@
             </div>
 
             <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                @if(in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true))
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Email</div>
                     <div class="mt-2 text-sm text-zinc-950">{{ $profile->email ?: '—' }}</div>
@@ -73,6 +74,7 @@
                 </article>
             </div>
         </section>
+        @endif
 
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6">
             <h2 class="text-lg font-semibold text-zinc-950">Identity + Address Update</h2>
@@ -99,6 +101,7 @@
             </form>
         </section>
 
+        @if(in_array('retail_commerce', (array) ($workspaceContext['capability_packs'] ?? []), true))
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <h2 class="text-lg font-semibold text-zinc-950">External Enrichment (Read-Only)</h2>
             <p class="text-sm text-zinc-600">These values come from linked external systems and are displayed for context. Edit core identity fields in the section above.</p>
@@ -146,6 +149,7 @@
                         Last reward: {{ $preferredReviewRewardStatus['last_rewarded_at'] ?? '—' }}
                     </div>
                 </article>
+                @if(in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true))
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Legacy Growave Balance</div>
                     <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($latestGrowaveExternal?->points_balance ?? 0)) }}</div>
@@ -168,6 +172,7 @@
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Legacy Growave Reviews</div>
                     <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($latestGrowaveReviewSummary?->review_count ?? 0)) }}</div>
                 </article>
+                @endif
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Active Wishlist Source</div>
                     <div class="mt-2 text-sm text-zinc-950">
@@ -195,6 +200,7 @@
                         Removed items: {{ number_format((int) ($preferredWishlistSummary['removed_count'] ?? 0)) }}
                     </div>
                 </article>
+                @if(in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true))
                 <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Last Growave Sync</div>
                     <div class="mt-2 text-sm text-zinc-950">{{ $growaveSourceMeta['last_synced_at'] ?? '—' }}</div>
@@ -207,6 +213,7 @@
                     <div class="mt-1 text-xs text-zinc-700">Store: {{ $growaveSourceMeta['store_key'] ?: '—' }}</div>
                     <div class="mt-1 text-xs text-zinc-700">External ID: {{ $growaveSourceMeta['external_customer_id'] ?: '—' }}</div>
                 </article>
+                @endif
             </div>
 
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
@@ -287,6 +294,7 @@
                 </table>
             </div>
 
+            @if(in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true))
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
                 <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-500">
                     Legacy Growave Reviews (Read-Only)
@@ -318,6 +326,7 @@
                     </tbody>
                 </table>
             </div>
+            @endif
 
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
                 <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-500">
@@ -353,6 +362,7 @@
                 </table>
             </div>
 
+            @if(in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true))
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
                 <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-500">
                     Legacy Wishlist Rows (Read-Only)
@@ -384,7 +394,9 @@
                     </tbody>
                 </table>
             </div>
+            @endif
 
+            @if(in_array('modern_forestry_legacy', (array) ($workspaceContext['legacy_overlays'] ?? []), true))
             <div class="overflow-x-auto rounded-2xl border border-zinc-200">
                 <div class="border-b border-zinc-200 bg-zinc-50 px-4 py-3 text-xs uppercase tracking-[0.2em] text-zinc-500">
                     Legacy Growave Loyalty Activity (Read-Only)
@@ -422,8 +434,11 @@
                     </tbody>
                 </table>
             </div>
+            @endif
         </section>
+        @endif
 
+        @if(in_array('retail_commerce', (array) ($workspaceContext['capability_packs'] ?? []), true))
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <h2 class="text-lg font-semibold text-zinc-950">Birthday Management</h2>
             <p class="text-sm text-zinc-600">Everbranch is the source for customer birthdays and annual reward issuance guardrails.</p>
@@ -531,6 +546,8 @@
                 </article>
             </div>
         </section>
+
+        @endif
 
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6">
             <h2 class="text-lg font-semibold text-zinc-950">Linked Source Records</h2>
@@ -1025,6 +1042,7 @@
                 </div>
             </article>
         </section>
+        @endif
 
         <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-5 sm:p-6 space-y-4">
             <h3 class="text-sm font-semibold text-zinc-950">Groups</h3>

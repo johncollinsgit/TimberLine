@@ -9,6 +9,7 @@
         $testAccess = is_array($testAccess ?? null) ? $testAccess : [];
         $accountModes = is_array($blueprintOptions['account_modes'] ?? null) ? $blueprintOptions['account_modes'] : [];
         $businessTemplates = is_array($blueprintOptions['business_templates'] ?? null) ? $blueprintOptions['business_templates'] : [];
+        $workspaceProfiles = is_array($blueprintOptions['workspace_profiles'] ?? null) ? $blueprintOptions['workspace_profiles'] : [];
         $operatingModes = is_array($blueprintOptions['operating_modes'] ?? null) ? $blueprintOptions['operating_modes'] : [];
         $dataSourcePreferences = is_array($blueprintOptions['data_source_preferences'] ?? null) ? $blueprintOptions['data_source_preferences'] : [];
         $starterModules = is_array($blueprintOptions['starter_modules'] ?? null) ? $blueprintOptions['starter_modules'] : [];
@@ -66,14 +67,14 @@
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h3 class="text-base font-semibold text-zinc-950">Blueprint profile</h3>
-                        <p class="mt-1 text-sm text-zinc-600">Templates change labels and recommendations only. They do not create separate industry route systems.</p>
+                        <p class="mt-1 text-sm text-zinc-600">Templates change labels and recommendations. The confirmed workspace profile controls which capability packs can be considered.</p>
                     </div>
                     <span class="rounded-full border border-zinc-300 bg-zinc-50 px-3 py-1 text-xs font-semibold text-zinc-700">
                         Account mode: {{ $accountModes[$accountMode] ?? str_replace('_', ' ', $accountMode) }}
                     </span>
                 </div>
 
-                <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                <div class="mt-4 grid gap-4 lg:grid-cols-4">
                     <label class="block text-sm text-zinc-700">
                         Business template
                         <select name="business_template" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
@@ -81,6 +82,15 @@
                                 <option value="{{ $value }}" @selected(old('business_template', $tenantBlueprint['business_template'] ?? 'generic') === $value)>{{ $label }}</option>
                             @endforeach
                         </select>
+                    </label>
+                    <label class="block text-sm text-zinc-700">
+                        Workspace profile
+                        <select name="workspace_profile" required class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">
+                            @foreach ($workspaceProfiles as $value => $label)
+                                <option value="{{ $value }}" @selected(old('workspace_profile', $tenantBlueprint['workspace_profile'] ?? 'generic_custom') === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <span class="mt-1 block text-xs text-zinc-500">Confirm this before marking the blueprint reviewed.</span>
                     </label>
                     <label class="block text-sm text-zinc-700">
                         Operating mode
@@ -98,6 +108,16 @@
                             @endforeach
                         </select>
                     </label>
+                </div>
+
+                @php $selectedCapabilityPacks = array_values((array) old('capability_packs', $tenantBlueprint['capability_packs'] ?? [])); @endphp
+                <div class="mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <p class="text-sm font-semibold text-zinc-900">Capability packs</p>
+                    <p class="mt-1 text-xs text-zinc-600">These are explicit. A connection does not make a workspace retail, and legacy data is never a selectable pack.</p>
+                    <div class="mt-3 flex flex-wrap gap-4 text-sm text-zinc-700">
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="capability_packs[]" value="retail_commerce" @checked(in_array('retail_commerce', $selectedCapabilityPacks, true))> Retail commerce</label>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="capability_packs[]" value="service_reputation" @checked(in_array('service_reputation', $selectedCapabilityPacks, true))> Service reputation</label>
+                    </div>
                 </div>
 
                 <label class="mt-4 block text-sm text-zinc-700">

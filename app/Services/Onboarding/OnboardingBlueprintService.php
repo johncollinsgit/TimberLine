@@ -263,6 +263,15 @@ class OnboardingBlueprintService
             }
         }
 
+        // First-login uses the canonical tenant blueprint templates. Keep the
+        // final immutable onboarding record aligned with that safe, reviewed
+        // selection instead of rejecting generic/custom and other profiles.
+        foreach ((array) config('tenant_blueprints.templates', []) as $key => $definition) {
+            if (is_array($definition)) {
+                $allowed[] = strtolower(trim((string) $key));
+            }
+        }
+
         $allowed = array_values(array_filter($allowed, static fn (string $key): bool => $key !== ''));
         if ($allowed === []) {
             return;

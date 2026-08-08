@@ -23,7 +23,8 @@ class TenantExperienceProfileService
     public function __construct(
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
         protected TenantModuleAccessResolver $moduleAccessResolver,
-        protected SchemaCapabilityMap $schemaCapabilities
+        protected SchemaCapabilityMap $schemaCapabilities,
+        protected TenantWorkspaceCapabilityService $workspaceCapabilities
     ) {
     }
 
@@ -76,12 +77,14 @@ class TenantExperienceProfileService
         $hasShopifyConnection = $this->hasShopifyConnection($tenantId, $tenant);
         $hasDirectSignals = $this->hasDirectSignals($tenantId, $operatingMode);
         $channelType = $this->deriveChannelType($operatingMode, $hasShopifyConnection, $hasDirectSignals);
+        $workspaceContext = $this->workspaceCapabilities->forTenant($tenant);
 
         $moduleStates = $this->moduleAccessResolver->resolveForTenant($tenantId, [
             'customers',
             'campaigns',
             'rewards',
             'reviews',
+            'service_reviews',
             'birthdays',
             'wishlist',
             'bulk_email_marketing',
@@ -94,15 +97,14 @@ class TenantExperienceProfileService
         $hasCustomerSignals = $this->tenantHasRows(MarketingProfile::class, $tenantId);
         $hasOrderSignals = $this->tenantHasRows(Order::class, $tenantId);
         $hasImportSignals = $this->tenantHasRows(MarketingImportRun::class, $tenantId);
-        $useCaseProfile = $this->deriveUseCaseProfile(
-            channelType: $channelType,
-            resolvedModules: $resolvedModules,
-            hasCustomerSignals: $hasCustomerSignals,
-            hasOrderSignals: $hasOrderSignals
-        );
+        $workspaceProfile = (string) ($workspaceContext['workspace_profile'] ?? 'generic_custom');
+        // Keep this legacy presentation field stable for existing dashboard and
+        // mobile renderers. Its value now derives only from the authoritative
+        // workspace profile, never connection or activity heuristics.
+        $useCaseProfile = $this->useCaseProfileForWorkspace($workspaceProfile);
 
         $powerUserMode = $this->powerUserMode($user);
-        $workspace = $this->workspacePresentation($channelType, $useCaseProfile, $powerUserMode);
+        $workspace = $this->workspacePresentation($channelType, $workspaceProfile, $powerUserMode);
 
         return $this->cache[$cacheKey] = [
             'tenant_id' => $tenantId,
@@ -111,6 +113,10 @@ class TenantExperienceProfileService
             'account_mode' => $accountMode,
             'channel_type' => $channelType,
             'use_case_profile' => $useCaseProfile,
+            'workspace_profile' => $workspaceProfile,
+            'capability_packs' => (array) ($workspaceContext['capability_packs'] ?? []),
+            'legacy_overlays' => (array) ($workspaceContext['legacy_overlays'] ?? []),
+            'workspace_profile_reviewed' => (bool) ($workspaceContext['is_reviewed'] ?? false),
             'power_user_mode' => $powerUserMode,
             'data_availability' => [
                 'customers' => $hasCustomerSignals,
@@ -126,6 +132,8 @@ class TenantExperienceProfileService
                 'rewards_enabled' => $this->moduleEnabled($resolvedModules, 'rewards'),
                 'birthdays_enabled' => $this->moduleEnabled($resolvedModules, 'birthdays'),
                 'wishlist_enabled' => $this->moduleEnabled($resolvedModules, 'wishlist'),
+                'product_reviews_enabled' => $this->moduleEnabled($resolvedModules, 'reviews'),
+                'service_reviews_enabled' => $this->moduleEnabled($resolvedModules, 'service_reviews'),
                 'field_service_enabled' => $this->moduleEnabled($resolvedModules, 'field_service'),
                 'reporting_enabled' => $this->moduleEnabled($resolvedModules, 'reporting')
                     || $this->moduleEnabled($resolvedModules, 'diagnostics_advanced'),
@@ -221,23 +229,14 @@ class TenantExperienceProfileService
      */
     protected function workspacePresentation(string $channelType, string $useCaseProfile, bool $powerUserMode): array
     {
-        $label = match ($channelType) {
-            'shopify' => 'Commerce workspace',
-            'hybrid' => 'Unified workspace',
-            default => 'Customer workspace',
+        [$label, $subtitle] = match ($useCaseProfile) {
+            'retail_commerce' => ['Retail workspace', 'Products, customers, and retail retention tools in one place.'],
+            'maker_production' => ['Production workspace', 'Production, inventory, and approved commerce tools in one place.'],
+            'field_service_trades' => ['Field service workspace', 'Customers, jobs, materials, and field work in one place.'],
+            'professional_services' => ['Professional workspace', 'Clients, documents, matters, and follow-up in one place.'],
+            'appointment_inventory' => ['Appointments workspace', 'Classes, reservations, inventory, and customer follow-up in one place.'],
+            default => ['Customer workspace', 'Operational tools, data, and next actions in one place.'],
         };
-
-        $subtitle = match ($useCaseProfile) {
-            'marketing' => 'Shopify-aware customer growth and retention workflows.',
-            'field_service' => 'Customers, jobs, materials, and field work in one place.',
-            'crm' => 'Customer operations, follow-up, and module-driven workflows.',
-            'hybrid' => 'Customers, commerce, and operations in one working surface.',
-            default => 'Operational tools, data, and next actions in one place.',
-        };
-
-        if ($useCaseProfile === 'field_service') {
-            $label = 'Field service workspace';
-        }
 
         return [
             'label' => $label,
@@ -246,6 +245,17 @@ class TenantExperienceProfileService
                 ? 'Search customers, orders, modules, and actions'
                 : 'Search the workspace or jump to a task',
         ];
+    }
+
+    protected function useCaseProfileForWorkspace(string $workspaceProfile): string
+    {
+        return match ($workspaceProfile) {
+            'retail_commerce', 'maker_production' => 'marketing',
+            'field_service_trades' => 'field_service',
+            'professional_services' => 'crm',
+            'appointment_inventory' => 'ops',
+            default => 'crm',
+        };
     }
 
     protected function powerUserMode(?User $user): bool
