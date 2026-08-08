@@ -124,6 +124,22 @@
             z-index: 0;
         }
 
+        .flw-stage {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(1.4rem, 3.5vh, 2.75rem);
+            position: relative;
+            width: 100%;
+            z-index: 1;
+        }
+
+        .flw-stage__brand {
+            filter: drop-shadow(0 12px 28px rgba(9, 67, 62, 0.16));
+            height: auto;
+            width: min(30rem, 82vw);
+        }
+
         [data-flw] {
             animation: flw-shell-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
             backdrop-filter: blur(16px);
@@ -260,15 +276,15 @@
     </style>
 
     <div data-flw-shell class="w-full">
-        <div
-            data-flw
-            data-workspace-name="{{ $workspaceName }}"
-            data-recommended='@json($recommendedTools)'
-            class="mx-auto w-full max-w-5xl p-8 sm:p-14 lg:p-16"
-        >
-            <div class="mb-9 flex justify-center sm:mb-11">
-                <img src="{{ asset('brand/everbranch-lockup.svg') }}" alt="Everbranch" class="h-auto w-44 sm:w-52" />
-            </div>
+        <div class="flw-stage">
+            <img src="{{ asset('brand/everbranch-lockup.svg') }}" alt="Everbranch" class="flw-stage__brand" />
+
+            <div
+                data-flw
+                data-workspace-name="{{ $workspaceName }}"
+                data-recommended='@json($recommendedTools)'
+                class="mx-auto w-full max-w-5xl p-8 sm:p-14 lg:p-16"
+            >
             {{-- Progress dots --}}
             <div class="flex items-center gap-1.5" aria-label="Setup progress">
                 @foreach ($steps as $i => $label)
@@ -443,6 +459,7 @@
                     <button type="submit" data-submit class="rounded-full bg-zinc-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800" hidden>Create workspace</button>
                 </div>
             </form>
+            </div>
         </div>
     </div>
 
