@@ -147,38 +147,32 @@ function alphaColor(rgbTriplet: string, alpha: number): string {
 }
 
 function resolveGridTheme(): Theme {
-    const accent = readCssVar("--mf-accent", "16, 185, 129");
-    const accentSoft = readCssVar("--mf-accent-2", accent);
-    const panelBorder = readCssVar("--mf-panel-border", "rgba(110, 231, 183, 0.12)");
-    const panelBorderStrong = readCssVar("--mf-panel-strong-border", "rgba(110, 231, 183, 0.22)");
-    const fontBody = readCssVar(
-        "--mf-font-body",
-        "Manrope, ui-sans-serif, system-ui, sans-serif"
-    );
+    const accent = readCssVar("--shopify-accent", "0, 128, 96");
+    const fontBody = readCssVar("--shopify-font-body", "Inter, ui-sans-serif, system-ui, sans-serif");
 
     return {
         accentColor: alphaColor(accent, 1),
-        accentFg: "#ecfdf5",
-        accentLight: alphaColor(accentSoft, 0.16),
-        textDark: "#e8fff5",
-        textMedium: "#b8d8ca",
-        textLight: "#7ca997",
-        textBubble: "#e8fff5",
-        bgIconHeader: alphaColor(accentSoft, 0.18),
-        fgIconHeader: "#d1fae5",
-        textHeader: "#e8fff5",
-        textGroupHeader: "#7ca997",
-        textHeaderSelected: "#ecfdf5",
-        bgCell: "#091510",
-        bgCellMedium: "#0d1b15",
-        bgHeader: "#113428",
-        bgHeaderHasFocus: "#164235",
-        bgHeaderHovered: "#153d30",
-        bgBubble: "#163d31",
-        bgBubbleSelected: "#1d4b3c",
-        bgSearchResult: "#194536",
-        borderColor: panelBorder,
-        drilldownBorder: panelBorderStrong,
+        accentFg: "#ffffff",
+        accentLight: "#e3f1df",
+        textDark: "#202223",
+        textMedium: "#6d7175",
+        textLight: "#8c9196",
+        textBubble: "#202223",
+        bgIconHeader: "#f1f2f3",
+        fgIconHeader: "#5c5f62",
+        textHeader: "#202223",
+        textGroupHeader: "#6d7175",
+        textHeaderSelected: "#202223",
+        bgCell: "#ffffff",
+        bgCellMedium: "#f6f6f7",
+        bgHeader: "#f6f6f7",
+        bgHeaderHasFocus: "#edeeef",
+        bgHeaderHovered: "#edeeef",
+        bgBubble: "#f1f2f3",
+        bgBubbleSelected: "#d9f3ec",
+        bgSearchResult: "#fff5ea",
+        borderColor: "#e1e3e5",
+        drilldownBorder: "#c9cccf",
         linkColor: alphaColor(accent, 1),
         cellHorizontalPadding: 14,
         cellVerticalPadding: 8,
@@ -300,29 +294,29 @@ function buildColumns(meta: ResponseMeta | null): GridColumn[] {
 }
 
 function fieldClass(): string {
-    return "h-11 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-300/25 focus:bg-black/35";
+    return "h-10 w-full rounded-lg border border-[#c9cccf] bg-white px-3 text-sm text-[#202223] outline-none transition placeholder:text-[#8c9196] focus:border-[#008060] focus:ring-2 focus:ring-[#008060]/20";
 }
 
 function buttonClass(): string {
-    return "inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10";
+    return "inline-flex h-10 items-center justify-center rounded-lg border border-[#c9cccf] bg-white px-3.5 text-sm font-medium text-[#202223] shadow-sm transition hover:bg-[#f6f6f7]";
 }
 
 function primaryButtonClass(): string {
-    return "inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25";
+    return "inline-flex h-10 items-center justify-center rounded-lg border border-[#008060] bg-[#008060] px-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#006e52]";
 }
 
 function filterChipClass(active = true): string {
     return active
-        ? "inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-50"
-        : "inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65";
+        ? "inline-flex items-center rounded-full border border-[#aee9d1] bg-[#e3f1df] px-3 py-1 text-xs font-medium text-[#006e52]"
+        : "inline-flex items-center rounded-full border border-[#e1e3e5] bg-[#f6f6f7] px-3 py-1 text-xs font-medium text-[#5c5f62]";
 }
 
 function paginationButtonClass(): string {
-    return "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
+    return "inline-flex h-9 items-center justify-center rounded-lg border border-[#c9cccf] bg-white px-3 text-xs font-semibold uppercase tracking-wider text-[#202223] shadow-sm transition hover:bg-[#f6f6f7] disabled:cursor-not-allowed disabled:opacity-40";
 }
 
 function pageSizeSelectClass(): string {
-    return "h-9 min-w-[80px] rounded-xl border border-white/10 bg-black/25 px-2 text-xs text-white outline-none transition focus:border-emerald-300/25 focus:bg-black/35";
+    return "h-9 min-w-[80px] rounded-lg border border-[#c9cccf] bg-white px-2 text-xs text-[#202223] outline-none transition focus:border-[#008060] focus:ring-2 focus:ring-[#008060]/20";
 }
 
 function formatCellValue(column: ColumnMeta | null, rawValue: unknown): string {
@@ -555,14 +549,14 @@ function MarketingCustomersGridApp(props: RootDataset) {
 
     return (
         <div className="space-y-4">
-            <section className="rounded-3xl border border-white/10 bg-black/15 p-5 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-6">
+            <section className="border-b border-[#e1e3e5] pb-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
-                        <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#6d7175]">
                             Customer index
                         </div>
-                        <h2 className="mt-2 text-2xl font-semibold text-white">Manage Customers</h2>
-                        <p className="mt-2 max-w-3xl text-sm text-emerald-50/70">
+                        <h2 className="mt-1 text-xl font-semibold tracking-[-0.01em] text-[#202223]">Manage Customers</h2>
+                        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#6d7175]">
                             Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance,
                             and open full customer records without fighting a long static table.
                         </p>
@@ -638,7 +632,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     </div>
 
                     {filtersOpen ? (
-                        <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-2 xl:grid-cols-6">
+                        <div className="grid gap-3 border-y border-[#e1e3e5] py-4 md:grid-cols-2 xl:grid-cols-6">
                             <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
                                 <option value="all">All sources</option>
                                 <option value="shopify">Shopify</option>
@@ -680,8 +674,8 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     ) : null}
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-100/60">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <div className="font-medium text-[#5c5f62]">
                         {loading
                             ? "Loading customers…"
                             : pagination
@@ -689,7 +683,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 : "Customer results"}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/60">
+                        <span className="inline-flex items-center rounded-full bg-[#f1f2f3] px-3 py-1 text-xs text-[#5c5f62]">
                             Advanced filters are tucked away until you need them.
                         </span>
                     </div>
@@ -697,12 +691,12 @@ function MarketingCustomersGridApp(props: RootDataset) {
             </section>
 
             {error !== "" ? (
-                <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
+                <div className="rounded-lg border border-[#fecaca] bg-[#fff4f4] px-4 py-3 text-sm text-[#b91c1c]">
                     {error}
                 </div>
             ) : null}
 
-            <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-lg border border-[#e1e3e5] bg-white">
                 <div
                     ref={gridWrapRef}
                     className="relative flex-1 min-h-[36rem] w-full"
@@ -726,27 +720,27 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             theme={gridTheme}
                         />
                     ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-emerald-50/60">
+                        <div className="flex h-full items-center justify-center text-sm text-[#6d7175]">
                             Loading customer grid…
                         </div>
                     )}
                     {loading ? (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white/90">
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-sm font-semibold text-[#202223]">
                             Loading customers…
                         </div>
                     ) : null}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#e1e3e5] bg-[#f6f6f7] px-4 py-3">
                     <div className="flex flex-col gap-1">
-                        <div className="text-sm font-semibold text-white">
+                        <div className="text-sm font-semibold text-[#202223]">
                             {loading
                                 ? "Loading customers…"
                                 : pagination
                                     ? `Showing ${resultStart.toLocaleString()}-${resultEnd.toLocaleString()} of ${pagination.total.toLocaleString()} customers`
                                     : "Showing 0 customers"}
                         </div>
-                        <div className="text-xs text-white/60">
+                        <div className="text-xs text-[#6d7175]">
                             Click any row to open the full customer record.
                         </div>
                     </div>
@@ -759,7 +753,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         >
                             Previous
                         </button>
-                        <div className="text-sm text-white/70">
+                        <div className="text-sm text-[#5c5f62]">
                             {pagination ? `Page ${pagination.page} of ${pagination.last_page}` : "Page 1"}
                         </div>
                         <button
@@ -773,7 +767,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         >
                             Next
                         </button>
-                        <label className="ml-2 flex items-center gap-2 text-xs text-white/60">
+                        <label className="ml-2 flex items-center gap-2 text-xs text-[#5c5f62]">
                             Rows
                             <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value) || 25)} className={pageSizeSelectClass()}>
                                 {[25, 50, 100].map((value) => (
@@ -805,9 +799,11 @@ function scheduleIdleTask(callback: () => void): void {
 
 function mountMarketingCustomersGrid() {
     const root = document.getElementById("marketing-customers-grid");
-    if (!root) {
+    if (!root || root.dataset.gridMounted === "true") {
         return;
     }
+
+    root.dataset.gridMounted = "true";
 
     const mount = () => {
         createRoot(root).render(<MarketingCustomersGridApp {...parseRootDataset(root)} />);
@@ -821,3 +817,8 @@ if (document.readyState === "loading") {
 } else {
     mountMarketingCustomersGrid();
 }
+
+// Livewire's wire:navigate swaps the page without re-evaluating an already
+// loaded Vite module. Mount again after each swap so returning to Customers
+// always restores the interactive grid and fetches its rows.
+document.addEventListener("livewire:navigated", mountMarketingCustomersGrid);
