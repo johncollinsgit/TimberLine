@@ -111,6 +111,12 @@ const contextualModules = [
     load: () => import("./managed-website/editor"),
     mountExport: "mountManagedWebsiteEditorNow",
   },
+  {
+    key: "marketingCustomersGrid",
+    selectors: ["#marketing-customers-grid"],
+    load: () => import("./marketing/customers-grid"),
+    mountExport: "mountMarketingCustomersGrid",
+  },
 ];
 
 const contextualModuleState = new Map();
