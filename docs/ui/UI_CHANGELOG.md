@@ -2263,3 +2263,19 @@
   no provider call or usage charge is introduced here.
 - No social connection, message delivery, marketing-consent change, Shopify
   write, Website Commerce mutation, or Modern Forestry behavior changed.
+
+## 2026-08-08 - Bud Core included-access correction
+
+### What changed
+
+- Removed the stale workspace approval state from the Ask Bud card and showed
+  the included question box immediately for authenticated workspaces.
+- Removed the obsolete Bud Core approval queue from the landlord dashboard.
+- Kept a single global incident switch for temporary Core shutdown while Bud AI
+  remains a separate paid, tenant-approved, capped, and provider-gated tier.
+
+### Safety posture
+
+- Bud Core remains deterministic, tenant-scoped, read-only, and unable to send
+  or publish. This change does not enable Bud AI, voice, provider calls, or
+  automatic delivery.

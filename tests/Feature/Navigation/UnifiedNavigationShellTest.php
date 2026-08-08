@@ -3,6 +3,7 @@
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantBudSetting;
 use App\Models\User;
 
 test('unified shell surfaces Branches and customer hub for tenant-aware marketing users', function () {
@@ -80,13 +81,22 @@ test('account help uses a readable light support hero', function () {
     ]);
     $user = User::factory()->create(['role' => 'admin']);
     $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+    TenantBudSetting::query()->create(['tenant_id' => $tenant->id, 'status' => 'disabled']);
 
     $this->actingAs($user)
         ->get(route('account-help.index'))
         ->assertOk()
         ->assertSeeText('What do you need help with?')
+        ->assertSeeText('Included')
+        ->assertSeeText('Ask Bud')
+        ->assertDontSeeText('Request Bud activation')
         ->assertSee('from-blue-50', false)
         ->assertDontSee('from-zinc-950', false);
+
+    $this->actingAs($user)
+        ->post(route('account-help.bud.ask'), ['question' => 'wat needs my attention'])
+        ->assertRedirect()
+        ->assertSessionHas('bud_answer', fn (array $answer): bool => str_contains($answer['reply'], 'Customer Loop'));
 });
 
 test('tenant settings stays immediately above workspace guide', function () {

@@ -7702,17 +7702,31 @@ CREATE TABLE `tenant_bud_settings` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'disabled',
+  `ai_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'disabled',
+  `ai_monthly_budget_cents` int unsigned NOT NULL DEFAULT '0',
+  `ai_used_cents` int unsigned NOT NULL DEFAULT '0',
+  `ai_period_started_at` timestamp NULL DEFAULT NULL,
   `requested_by_user_id` bigint unsigned DEFAULT NULL,
   `reviewed_by_user_id` bigint unsigned DEFAULT NULL,
   `requested_at` timestamp NULL DEFAULT NULL,
+  `ai_requested_at` timestamp NULL DEFAULT NULL,
   `reviewed_at` timestamp NULL DEFAULT NULL,
+  `ai_reviewed_at` timestamp NULL DEFAULT NULL,
   `review_notes` text COLLATE utf8mb4_unicode_ci,
+  `ai_review_notes` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `ai_requested_by_user_id` bigint unsigned DEFAULT NULL,
+  `ai_reviewed_by_user_id` bigint unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tenant_bud_settings_tenant_id_unique` (`tenant_id`),
   KEY `tenant_bud_settings_requested_by_user_id_foreign` (`requested_by_user_id`),
   KEY `tenant_bud_settings_reviewed_by_user_id_foreign` (`reviewed_by_user_id`),
+  KEY `tenant_bud_settings_ai_requested_by_user_id_foreign` (`ai_requested_by_user_id`),
+  KEY `tenant_bud_settings_ai_reviewed_by_user_id_foreign` (`ai_reviewed_by_user_id`),
+  KEY `bud_ai_status_idx` (`ai_status`),
+  CONSTRAINT `tenant_bud_settings_ai_requested_by_user_id_foreign` FOREIGN KEY (`ai_requested_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `tenant_bud_settings_ai_reviewed_by_user_id_foreign` FOREIGN KEY (`ai_reviewed_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tenant_bud_settings_requested_by_user_id_foreign` FOREIGN KEY (`requested_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tenant_bud_settings_reviewed_by_user_id_foreign` FOREIGN KEY (`reviewed_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tenant_bud_settings_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
@@ -10097,3 +10111,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (247,'2026_08_01_18
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (248,'2026_08_02_200000_add_wholesale_price_to_website_product_variants',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (249,'2026_08_07_180000_create_customer_loop_tables',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (250,'2026_08_07_190000_add_commerce_operations_and_shipping_foundation',1);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (251,'2026_08_08_030000_add_paid_ai_controls_to_tenant_bud_settings',2);

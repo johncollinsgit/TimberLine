@@ -277,9 +277,11 @@
   drag-and-drop Workflow Studio, which can create an idempotent,
   review-only Customer Loop draft from a supported trigger. No Customer Loop
   action sends or publishes anything.
-- Bud Core remains deterministic and can read only safe, tenant-scoped
-  workspace summaries and registered capabilities. `BudCapabilityRegistry` is
-  the required handoff point for every new user-facing capability.
+- Bud Core remains deterministic, included without tenant/operator approval,
+  and can read only safe, tenant-scoped workspace summaries and registered
+  capabilities. Only the global incident switch can make Core unavailable.
+  `BudCapabilityRegistry` is the required handoff point for every new
+  user-facing capability.
 - Bud AI and speech-to-speech are planned paid tiers, not live external-model
   features: both flags default off, and neither has a provider call, voice
   stream, or bill until its tenant/budget/confirmation contract is released.

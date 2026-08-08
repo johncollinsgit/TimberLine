@@ -4,8 +4,10 @@ use App\Models\CustomerLoopAction;
 use App\Models\CustomerLoopActivity;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
+use App\Models\TenantBudSetting;
 use App\Models\User;
 use App\Services\Automation\V2\WorkflowNativeActionService;
+use App\Services\Bud\TenantBudService;
 use Illuminate\Support\Str;
 
 /** @return array{Tenant,User} */
@@ -80,4 +82,30 @@ test('Customer Loop actions are not accessible from another workspace', function
         ->withSession(['tenant_id' => $otherTenant->id])
         ->post(route('customer-loop.prepare', $action))
         ->assertNotFound();
+});
+
+test('Bud AI requires an explicit workspace request and an operator-set cap', function (): void {
+    [$tenant, $user] = customerLoopTenant('bud-ai-'.Str::lower((string) Str::ulid()));
+    $service = app(TenantBudService::class);
+
+    $requested = $service->requestAi($tenant, $user);
+    expect($requested->ai_status)->toBe('pending');
+
+    $approved = $service->reviewAi($requested, $user, true, 2500, 'Paid pilot with a hard monthly cap.');
+
+    expect($approved->ai_status)->toBe('approved')
+        ->and($approved->ai_monthly_budget_cents)->toBe(2500)
+        ->and($approved->ai_used_cents)->toBe(0)
+        ->and($approved->ai_period_started_at)->not->toBeNull();
+});
+
+test('Bud Core is included without a workspace approval record', function (): void {
+    [$tenant, $user] = customerLoopTenant('bud-core-'.Str::lower((string) Str::ulid()));
+    config()->set('bud.core_enabled', true);
+
+    $answer = app(TenantBudService::class)->respond($tenant, $user, 'wat needs my attention');
+
+    expect($answer['confidence'])->toBe('high')
+        ->and($answer['reply'])->toContain('Customer Loop')
+        ->and(TenantBudSetting::query()->count())->toBe(0);
 });
