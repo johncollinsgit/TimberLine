@@ -202,7 +202,8 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   keys that could exceed MySQL's 64-character identifier limit.
 - Migration safety is an always-on production job, including an emergency
   dispatch that skips the broader test/build job. It lints changed migrations,
-  rejects edits to released migrations, requires guarded table creation and
+  rejects edits to released migrations unless an exact before/after checksum
+  pair declares a narrow clean-install compatibility repair, requires guarded table creation and
   short MySQL identifiers, runs registered partial-state recovery tests, and
   rehearses the prior commit's schema upgrade on MySQL 8.4. Multi-step
   migrations must be registered in

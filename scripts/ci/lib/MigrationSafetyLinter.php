@@ -101,8 +101,25 @@ final class MigrationSafetyLinter
         $errors = [];
 
         foreach (['index', 'unique', 'primary', 'fullText', 'spatialIndex', 'foreign'] as $method) {
-            foreach ($this->methodCalls($body, $method) as $arguments) {
-                $parts = $this->splitArguments($arguments);
+            foreach ($this->methodCalls($body, $method) as $call) {
+                $parts = $this->splitArguments($call['arguments']);
+
+                // Column builder calls use their first argument as the explicit
+                // identifier (`$table->string('status')->index('status_idx')`).
+                // Standalone Blueprint calls use the first argument for columns
+                // and the second for the identifier. Treating both signatures as
+                // identical creates false 64-character warnings for short,
+                // intentionally named chained indexes.
+                if ($method !== 'foreign' && $this->isColumnBuilderCall($body, $call['offset'])) {
+                    $explicitName = $this->literalString($parts[0] ?? '');
+
+                    if ($explicitName !== null) {
+                        $errors = [...$errors, ...$this->identifierErrors($basename, $explicitName, "explicit {$method} identifier")];
+                    }
+
+                    continue;
+                }
+
                 $columns = $this->quotedStrings($parts[0] ?? '');
                 $explicitName = $this->literalString($parts[1] ?? '');
 
@@ -154,7 +171,7 @@ final class MigrationSafetyLinter
     }
 
     /**
-     * @return list<string>
+     * @return list<array{arguments: string, offset: int}>
      */
     private function methodCalls(string $body, string $method): array
     {
@@ -169,11 +186,26 @@ final class MigrationSafetyLinter
             $close = $this->findMatchingDelimiter($body, $open, '(', ')');
 
             if ($close !== null) {
-                $calls[] = substr($body, $open + 1, $close - $open - 1);
+                $calls[] = [
+                    'arguments' => substr($body, $open + 1, $close - $open - 1),
+                    'offset' => $offset,
+                ];
             }
         }
 
         return $calls;
+    }
+
+    private function isColumnBuilderCall(string $body, int $methodOffset): bool
+    {
+        $prefix = substr($body, 0, $methodOffset);
+        $statementStart = strrpos($prefix, ';');
+
+        if ($statementStart !== false) {
+            $prefix = substr($prefix, $statementStart + 1);
+        }
+
+        return preg_match('/\$table\s*->\s*[A-Za-z_][A-Za-z0-9_]*\s*\(.*\)\s*$/s', trim($prefix)) === 1;
     }
 
     /**

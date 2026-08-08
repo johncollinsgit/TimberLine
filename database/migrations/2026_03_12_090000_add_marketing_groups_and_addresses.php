@@ -82,7 +82,9 @@ return new class extends Migration
         if (! Schema::hasTable('marketing_group_import_rows')) {
             Schema::create('marketing_group_import_rows', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('marketing_group_import_run_id')->constrained('marketing_group_import_runs')->cascadeOnDelete();
+                $table->foreignId('marketing_group_import_run_id')
+                    ->constrained('marketing_group_import_runs', 'id', 'mgir_import_run_fk')
+                    ->cascadeOnDelete();
                 $table->unsignedInteger('row_number')->nullable()->index();
                 $table->string('status')->default('pending')->index();
                 $table->string('external_key')->nullable()->index();

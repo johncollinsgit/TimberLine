@@ -452,10 +452,14 @@
   retired to an explicitly approved emergency-only recovery path.
 - **Migration-resume guard:** the dedicated MySQL 8.4 Migration Safety Gate is
   mandatory for pull requests and production, including the emergency path.
-  It rejects edits to released migrations, unguarded table creation, generated
-  or explicit identifiers over MySQL's 64-character limit, and multi-step
+  It rejects edits to released migrations except exact checksum-pinned
+  clean-install compatibility repairs, unguarded table creation, generated or
+  explicit identifiers over MySQL's 64-character limit, and multi-step
   migrations without a registered durable-partial-state recovery test. It then
   rebuilds the prior commit's schema and rehearses the current upgrade twice.
+  The historical marketing import, message-group, Candle Cash override, and
+  billing-refund identifiers are pinned to explicit short names with MySQL
+  restart tests; any other edit to those migration files fails the checksum.
   No operator may delete production tables to force a retry. The full contract
   lives in `docs/operations/migration-safety-gate.md`.
 - **Forge observability:** an optional failure-only diagnostic uses Forge's

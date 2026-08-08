@@ -3,13 +3,17 @@
 
 declare(strict_types=1);
 
+use Everbranch\Ci\LegacyMigrationCompatibility;
 use Everbranch\Ci\MigrationSafetyLinter;
 
 require __DIR__.'/lib/MigrationSafetyLinter.php';
+require __DIR__.'/lib/LegacyMigrationCompatibility.php';
 
 $repositoryRoot = dirname(__DIR__, 2);
 $manifestPath = $repositoryRoot.'/tests/Integration/migration-recovery-manifest.php';
 $manifest = is_file($manifestPath) ? require $manifestPath : [];
+$compatibilityManifestPath = __DIR__.'/legacy-migration-compatibility-manifest.php';
+$compatibilityManifest = is_file($compatibilityManifestPath) ? require $compatibilityManifestPath : [];
 $base = null;
 $workingTree = false;
 
@@ -62,6 +66,7 @@ if ($workingTree) {
 }
 
 $linter = new MigrationSafetyLinter($repositoryRoot);
+$legacyCompatibility = new LegacyMigrationCompatibility($repositoryRoot, $compatibilityManifest);
 $errors = [];
 $checked = 0;
 
@@ -85,8 +90,8 @@ foreach ($diffLines as $line) {
         continue;
     }
 
-    if ($status[0] === 'M' || $status[0] === 'R') {
-        $errors[] = "{$path}: an existing migration was changed. Add a new restart-safe repair migration instead; production may already have recorded the original.";
+    if ($status[0] === 'R') {
+        $errors[] = "{$path}: released migrations are immutable and may not be renamed.";
     }
 
     $absolutePath = $repositoryRoot.'/'.$path;
@@ -103,6 +108,36 @@ foreach ($diffLines as $line) {
         $errors[] = "{$path}: changed migration could not be read.";
 
         continue;
+    }
+
+    if ($status[0] === 'M') {
+        $process = proc_open(
+            ['git', '-C', $repositoryRoot, 'show', $base.':'.$path],
+            [
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+        );
+
+        if (! is_resource($process)) {
+            $errors[] = "{$path}: could not read the released migration for compatibility verification.";
+        } else {
+            $beforeSource = stream_get_contents($pipes[1]);
+            $gitError = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $gitStatus = proc_close($process);
+
+            if ($gitStatus !== 0 || $beforeSource === false) {
+                $errors[] = "{$path}: could not read the released migration for compatibility verification".($gitError === false || trim($gitError) === '' ? '.' : ': '.trim($gitError));
+            } else {
+                $errors = [
+                    ...$errors,
+                    ...$legacyCompatibility->validate($path, $beforeSource, $source),
+                ];
+            }
+        }
     }
 
     $checked++;

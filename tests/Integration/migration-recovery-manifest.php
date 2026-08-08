@@ -3,6 +3,22 @@
 declare(strict_types=1);
 
 return [
+    '2026_03_12_090000_add_marketing_groups_and_addresses.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['earlier marketing tables retained before import-row table creation'],
+    ],
+    '2026_03_19_090000_create_marketing_message_group_tables.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['message-group table retained before member-table creation'],
+    ],
+    '2026_03_30_100000_create_tenant_rewards_editor_isolation_tables.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['earlier reward settings tables retained before reward overrides'],
+    ],
+    '2026_07_20_230000_create_tenant_billing_refunds_table.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['clean retry after MySQL rejects the table identifier'],
+    ],
     '2026_07_24_120000_add_workflow_studio_v2_foundation.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['partial additive columns and indexes', 'trailing table not created'],

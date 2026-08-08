@@ -35,6 +35,12 @@ if [[ ! -d "$rehearsal_dir/database/migrations" ]]; then
     exit 2
 fi
 
+# A later repair migration cannot help when a historical migration cannot
+# create a clean MySQL schema at all. Replace only exact checksum-pinned legacy
+# files in this disposable extraction; the production repository and database
+# are never mutated by this preparation step.
+php "$repository_root/scripts/ci/apply-legacy-migration-compatibility.php" "$rehearsal_dir"
+
 cd "$repository_root"
 
 echo "Clearing the disposable schema left by interruption-recovery fixtures..."

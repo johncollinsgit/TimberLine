@@ -104,7 +104,11 @@ test/build gate.
 The enforced checks and developer workflow are documented in
 `docs/operations/migration-safety-gate.md`. In particular, do not edit or delete
 a migration that may have shipped. Add a new idempotent repair migration and a
-durable partial-state test.
+durable partial-state test. A historical migration that cannot execute on a
+clean supported MySQL database is the sole exception: its minimal compatibility
+change must have exact before/after checksums in
+`scripts/ci/legacy-migration-compatibility-manifest.php` and a named MySQL
+restart test. Any later edit fails closed.
 
 ## Optional Forge observer setup
 

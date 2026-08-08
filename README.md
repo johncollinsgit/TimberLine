@@ -167,8 +167,10 @@ one database DDL statement before a candidate fails, while Laravel has not yet
 recorded the migration. Migration-recovery tests reproduce that partial state
 so the next protected release resumes rather than retrying an existing table.
 Forge API observability is a planned read-only production integration for
-linking failed deployment logs and status to GitHub; it will never replace the
-exact-release `/ready` verification or authorize deployment changes.
+linking failed deployment status to GitHub. The failure-only observer is now
+implemented and remains inert until its read-scoped token and site identifiers
+are configured; it never replaces exact-release `/ready` verification or
+authorizes deployment changes.
 
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
@@ -1779,6 +1781,12 @@ Release sequence:
 For migration development, run `composer lint:migrations` and follow
 `docs/operations/migration-safety-gate.md`. The full release and rollback
 procedure is in `docs/operations/forge-atomic-release-runbook.md`.
+- Released migrations remain immutable by default. The four historical
+  clean-install identifier repairs discovered by the MySQL rehearsal are
+  constrained by exact before/after SHA-256 values in
+  `scripts/ci/legacy-migration-compatibility-manifest.php`; any further byte
+  change fails CI. This mechanism is only for a migration that cannot execute
+  on supported MySQL, never for ordinary schema evolution.
 - Production deploys are concurrency-guarded so only one candidate runs at a
   time. Direct Forge push-to-deploy remains off.
 

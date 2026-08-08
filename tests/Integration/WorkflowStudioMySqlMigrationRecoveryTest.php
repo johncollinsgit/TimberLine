@@ -336,3 +336,127 @@ it('resumes the complete Commerce foundation from durable partial MySQL state', 
         ->and(Schema::hasIndex('website_shipping_rate_quotes', 'website_rate_quotes_expires_idx'))->toBeTrue()
         ->and(Schema::hasIndex('website_shipping_rate_quotes', 'website_rate_quotes_tenant_cart_expiry_idx'))->toBeTrue();
 });
+
+it('resumes marketing groups after MySQL rejects the legacy import-row foreign-key name', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    foreach (['marketing_group_import_rows', 'marketing_group_import_runs', 'marketing_campaign_groups', 'marketing_group_members', 'marketing_groups'] as $table) {
+        Schema::dropIfExists($table);
+    }
+
+    if (! Schema::hasTable('users')) {
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (! Schema::hasTable('marketing_profiles')) {
+        Schema::create('marketing_profiles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('normalized_phone')->nullable();
+        });
+    } elseif (! Schema::hasColumn('marketing_profiles', 'normalized_phone')) {
+        Schema::table('marketing_profiles', function (Blueprint $table): void {
+            $table->string('normalized_phone')->nullable();
+        });
+    }
+
+    if (! Schema::hasTable('marketing_campaigns')) {
+        Schema::create('marketing_campaigns', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    $migrationPath = 'migrations/2026_03_12_090000_add_marketing_groups_and_addresses.php';
+    $migration = require database_path($migrationPath);
+    $migration->up();
+
+    // The first four CREATE TABLE statements are durable if MySQL rejects the
+    // final table. Recreate that exact retry boundary.
+    Schema::drop('marketing_group_import_rows');
+    $migration->up();
+
+    expect(Schema::hasTable('marketing_group_import_rows'))->toBeTrue()
+        ->and(collect(Schema::getForeignKeys('marketing_group_import_rows'))
+            ->contains(fn (array $foreignKey): bool => ($foreignKey['name'] ?? null) === 'mgir_import_run_fk'))
+        ->toBeTrue();
+});
+
+it('resumes message groups after MySQL rejects the legacy member foreign-key name', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('marketing_message_group_members');
+    Schema::dropIfExists('marketing_message_groups');
+
+    $migrationPath = 'migrations/2026_03_19_090000_create_marketing_message_group_tables.php';
+    $migration = require database_path($migrationPath);
+    $migration->up();
+
+    // The first table remains after the second CREATE TABLE statement fails.
+    Schema::drop('marketing_message_group_members');
+    $migration->up();
+
+    expect(Schema::hasTable('marketing_message_groups'))->toBeTrue()
+        ->and(Schema::hasTable('marketing_message_group_members'))->toBeTrue()
+        ->and(collect(Schema::getForeignKeys('marketing_message_group_members'))
+            ->contains(fn (array $foreignKey): bool => ($foreignKey['name'] ?? null) === 'mmgm_message_group_fk'))
+        ->toBeTrue();
+});
+
+it('resumes tenant reward overrides after MySQL rejects the legacy reward foreign-key name', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    foreach (['tenant_candle_cash_reward_overrides', 'tenant_candle_cash_task_overrides', 'tenant_marketing_settings'] as $table) {
+        Schema::dropIfExists($table);
+    }
+
+    foreach (['tenants', 'candle_cash_tasks', 'candle_cash_rewards'] as $tableName) {
+        if (! Schema::hasTable($tableName)) {
+            Schema::create($tableName, function (Blueprint $table): void {
+                $table->id();
+            });
+        }
+    }
+
+    $migrationPath = 'migrations/2026_03_30_100000_create_tenant_rewards_editor_isolation_tables.php';
+    $migration = require database_path($migrationPath);
+    $migration->up();
+
+    // The first two settings tables remain if creation of the third fails.
+    Schema::drop('tenant_candle_cash_reward_overrides');
+    $migration->up();
+
+    expect(Schema::hasTable('tenant_candle_cash_reward_overrides'))->toBeTrue()
+        ->and(collect(Schema::getForeignKeys('tenant_candle_cash_reward_overrides'))
+            ->contains(fn (array $foreignKey): bool => ($foreignKey['name'] ?? null) === 'tenant_cc_reward_override_reward_fk'))
+        ->toBeTrue();
+});
+
+it('creates billing refunds with an identifier below the MySQL limit', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('tenant_billing_refunds');
+
+    foreach (['tenants', 'tenant_billing_receipts', 'tenant_billing_orders', 'tenant_direct_invoices', 'users'] as $tableName) {
+        if (! Schema::hasTable($tableName)) {
+            Schema::create($tableName, function (Blueprint $table): void {
+                $table->id();
+            });
+        }
+    }
+
+    $migrationPath = 'migrations/2026_07_20_230000_create_tenant_billing_refunds_table.php';
+    $migration = require database_path($migrationPath);
+    $migration->up();
+    $migration->up();
+
+    expect(Schema::hasIndex('tenant_billing_refunds', 'billing_refunds_receipt_created_idx'))->toBeTrue();
+});

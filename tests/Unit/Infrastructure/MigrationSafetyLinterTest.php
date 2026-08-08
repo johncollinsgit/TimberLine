@@ -104,6 +104,33 @@ PHP;
         ->and($errors[0])->toContain('MySQL permits at most 64');
 });
 
+it('recognizes explicit names on chained column indexes', function (): void {
+    $source = <<<'PHP'
+<?php
+Schema::table('google_business_profile_connections', function (Blueprint $table): void {
+    $table->string('status')->index('gbp_connections_status_idx');
+});
+PHP;
+
+    expect(migrationSafetyLinter()->lintMigration('chained-explicit.php', $source, []))->toBe([]);
+});
+
+it('rejects overlong explicit names on chained column indexes', function (): void {
+    $identifier = str_repeat('chained_identifier_', 4);
+    $source = <<<PHP
+<?php
+Schema::table('orders', function (Blueprint \$table): void {
+    \$table->string('status')->index('{$identifier}');
+});
+PHP;
+
+    $errors = migrationSafetyLinter()->lintMigration('chained-overlong.php', $source, []);
+
+    expect($errors)->toHaveCount(1)
+        ->and($errors[0])->toContain('explicit index identifier')
+        ->and($errors[0])->toContain('MySQL permits at most 64');
+});
+
 it('rejects overlong identifiers in literal raw DDL', function (): void {
     $identifier = str_repeat('raw_constraint_', 5);
     $source = <<<PHP

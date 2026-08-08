@@ -52,6 +52,22 @@ could approach the limit. Fix a released migration by adding a new idempotent
 repair migration. Do not edit the released migration and do not delete a
 production table to make Laravel retry it.
 
+There is one deliberately narrow exception: a historical migration that cannot
+create a clean database on the supported MySQL version cannot be repaired by a
+later migration, because execution never reaches that later file. Such a
+compatibility correction must:
+
+- change only the blocking identifier or the minimum restart guard;
+- pin the exact released and proposed SHA-256 checksums in
+  `scripts/ci/legacy-migration-compatibility-manifest.php`;
+- name a MySQL test that executes that exact migration from its durable retry
+  boundary; and
+- pass the full baseline-to-current MySQL rehearsal.
+
+Any unlisted edit or one-byte deviation from an approved checksum still fails.
+Do not use this exception for new columns, data changes, product behavior, or
+ordinary schema evolution; those always require a new migration.
+
 Run the changed-migration linter locally while editing with:
 
 ```bash
@@ -92,6 +108,13 @@ It extracts only the baseline commit's migrations, builds that historical
 schema using the current Laravel runtime, and then upgrades it with the current
 migration directory. This catches dependencies and ordering problems that an
 empty-database migration cannot reveal.
+
+Before building, the rehearsal replaces only checksum-matched historical files
+listed in `scripts/ci/legacy-migration-compatibility-manifest.php` inside the
+temporary extraction. This is necessary when the released source itself cannot
+create a clean MySQL schema. The helper refuses repository paths, verifies both
+checksums and the named recovery test, and never changes production files or a
+database. A mismatch stops the rehearsal.
 
 Example against a disposable MySQL database:
 
@@ -142,8 +165,10 @@ When the gate fails:
 1. Leave the active Forge release in place.
 2. Read the exact lint, recovery-test, or rehearsal error in GitHub Actions.
 3. Add a new restart-safe repair migration when a released schema needs repair.
-4. Reproduce any new durable partial state in the MySQL recovery suite.
-5. Re-run protected CI and release only after all three migration checks pass.
+4. If the released file itself prevents every clean MySQL install, use the
+   checksum-pinned compatibility process above rather than weakening the gate.
+5. Reproduce any new durable partial state in the MySQL recovery suite.
+6. Re-run protected CI and release only after all three migration checks pass.
 
 See `docs/operations/forge-atomic-release-runbook.md` for activation, readiness,
 and rollback procedure.
