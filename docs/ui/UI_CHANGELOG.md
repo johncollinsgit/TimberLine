@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-08-08 — Home channel pulse
+
+- Moved the channel-performance readout to the top of Home in a compact,
+  Shopify-inspired operational strip: time window, sessions, sales, orders,
+  conversion, and live visitors now scan in one line before workspace notices.
+- Sales and order values use the existing read-only tenant sales-channel
+  summary. Sessions and live visitors use only recorded tenant storefront
+  events; workspaces without tracking show a clear unavailable state instead
+  of fabricated activity or a misleading conversion rate.
+- Every metric remains a link to the existing sales-channel view, and the time
+  control is the existing Livewire range filter. The live visitor count refreshes
+  while the strip is visible, with no external write, Shopify request, or
+  cross-tenant query.
+
 ## 2026-08-08 — Mobile operational shell and customer administration
 
 - Brought the Everbranch tenant app into the operational UI system with a compact charcoal command bar, clearer tenant context, denser customer rows, and focused create/edit screens.
