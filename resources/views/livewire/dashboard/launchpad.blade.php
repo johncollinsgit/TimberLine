@@ -154,6 +154,7 @@
                     <path class="eb-dashboard-pulse-grid" d="M305 22c123 0 225 55 225 123s-102 82-225 82S81 213 81 145 182 22 305 22Z" />
                     <path class="eb-dashboard-pulse-line" d="M392 61c-28 33-38 61-30 83 10 28 49 20 74 45" />
                     <path class="eb-dashboard-pulse-line eb-dashboard-pulse-line--two" d="M362 144c-42 3-76-14-104-50-20-26-48-34-84-25" />
+                    <circle class="eb-dashboard-pulse-ring" cx="362" cy="144" r="12" />
                     <circle class="eb-dashboard-pulse-node" cx="362" cy="144" r="5" />
                     <circle class="eb-dashboard-pulse-node eb-dashboard-pulse-node--quiet" cx="436" cy="189" r="3.5" />
                     <circle class="eb-dashboard-pulse-node eb-dashboard-pulse-node--quiet" cx="174" cy="69" r="3.5" />

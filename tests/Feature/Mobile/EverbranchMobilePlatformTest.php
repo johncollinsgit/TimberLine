@@ -412,6 +412,82 @@ test('mobile customer work and preferences endpoints stay membership scoped', fu
         ->and(EverbranchMobilePushDevice::query()->first()?->device_token)->toBe('operator-apns-token');
 });
 
+test('only workspace admins can create update and safely delete mobile customers', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Collins Upstate Electric', 'slug' => 'collins-mobile-customers']);
+    $other = Tenant::query()->create(['name' => 'Other Workspace', 'slug' => 'other-mobile-customers']);
+    foreach ([$tenant, $other] as $workspace) {
+        TenantAccessProfile::query()->create(['tenant_id' => $workspace->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    }
+    $manager = User::factory()->create(['role' => 'manager', 'is_active' => true, 'email_verified_at' => now()]);
+    $manager->tenants()->attach($tenant->id, ['role' => 'manager']);
+    Sanctum::actingAs($manager, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces')
+        ->assertOk()
+        ->assertJsonPath('workspaces.0.name', 'Collins Upstate Electric')
+        ->assertJsonPath('workspaces.0.slug', 'collins-mobile-customers');
+
+    $this->postJson('/api/mobile/v1/workspaces/collins-mobile-customers/customers', [
+        'first_name' => 'Ada',
+        'email' => 'ada@example.com',
+    ])->assertForbidden();
+
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'owner']);
+    Sanctum::actingAs($admin, ['mobile:read', 'mobile:write']);
+
+    $created = $this->postJson('/api/mobile/v1/workspaces/collins-mobile-customers/customers', [
+        'first_name' => 'Ada',
+        'last_name' => 'Lovelace',
+        'email' => 'ADA@example.com',
+        'phone' => '(864) 555-0102',
+        'address_line_1' => '12 Main Street',
+        'city' => 'Pendleton',
+        'state' => 'SC',
+        'postal_code' => '29670',
+        'notes' => 'Prefers morning appointments.',
+    ])->assertCreated()
+        ->assertJsonPath('customer.name', 'Ada Lovelace')
+        ->assertJsonPath('customer.first_name', 'Ada')
+        ->assertJsonPath('customer.last_name', 'Lovelace')
+        ->assertJsonPath('permissions.manage', true)
+        ->assertJsonPath('permissions.delete', true);
+    $customerId = (int) $created->json('customer.id');
+
+    $this->patchJson('/api/mobile/v1/workspaces/collins-mobile-customers/customers/'.$customerId, [
+        'first_name' => 'Ada',
+        'last_name' => 'Byron',
+        'email' => 'ada@example.com',
+        'phone' => '864-555-0102',
+        'city' => 'Pendleton',
+        'state' => 'SC',
+        'notes' => 'Call before arrival.',
+    ])->assertOk()->assertJsonPath('customer.name', 'Ada Byron');
+    $this->patchJson('/api/mobile/v1/workspaces/other-mobile-customers/customers/'.$customerId, ['first_name' => 'Nope'])->assertNotFound();
+
+    FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $customerId,
+        'title' => 'Connected service call',
+        'status' => 'scheduled',
+    ]);
+    $this->deleteJson('/api/mobile/v1/workspaces/collins-mobile-customers/customers/'.$customerId)
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'Only app-created customers without connected history can be deleted.');
+
+    $deletable = $this->postJson('/api/mobile/v1/workspaces/collins-mobile-customers/customers', [
+        'first_name' => 'Temporary',
+        'phone' => '864-555-0199',
+    ])->assertCreated();
+    $deletableId = (int) $deletable->json('customer.id');
+    $this->deleteJson('/api/mobile/v1/workspaces/collins-mobile-customers/customers/'.$deletableId)->assertOk();
+
+    $this->assertDatabaseMissing('marketing_profiles', ['id' => $deletableId]);
+    expect(LandlordOperatorAction::query()->where('action_type', 'tenant.mobile_customer.created')->count())->toBe(2)
+        ->and(LandlordOperatorAction::query()->where('action_type', 'tenant.mobile_customer.updated')->count())->toBe(1)
+        ->and(LandlordOperatorAction::query()->where('action_type', 'tenant.mobile_customer.deleted')->count())->toBe(1);
+});
+
 test('mobile branding is displayed for the tenant and only workspace admins can update it', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Branded Workspace', 'slug' => 'branded-workspace']);
     TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);

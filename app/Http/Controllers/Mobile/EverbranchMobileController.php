@@ -8,6 +8,8 @@ use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobPhoto;
+use App\Models\MarketingProfile;
+use App\Models\MessagingConversation;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantDiscoveryProfile;
@@ -27,9 +29,11 @@ use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantModuleCatalogService;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class EverbranchMobileController extends Controller
 {
@@ -96,6 +100,7 @@ class EverbranchMobileController extends Controller
             'permissions' => [
                 'manage_billing' => $this->canManageBilling($user, $tenant),
                 'request_modules' => in_array($this->tenantRole($user, $tenant), ['admin', 'manager', 'marketing_manager'], true),
+                'manage_customers' => $role === 'admin',
             ],
         ])->setEtag(hash('sha256', (string) $user->id.'|'.$tenant->id.'|'.now()->format('Y-m-d-H-i')));
     }
@@ -117,7 +122,10 @@ class EverbranchMobileController extends Controller
         $fieldServiceEnabled = collect($registry->manifest((int) $tenant->id, $request->user(), $request->header('X-Everbranch-App-Version')))
             ->contains('module_key', 'field_service');
 
-        return response()->json($resources->customers((int) $tenant->id, (string) ($validated['q'] ?? ''), $validated['cursor'] ?? null, (int) ($validated['limit'] ?? 25), $fieldServiceEnabled));
+        return response()->json([
+            ...$resources->customers((int) $tenant->id, (string) ($validated['q'] ?? ''), $validated['cursor'] ?? null, (int) ($validated['limit'] ?? 25), $fieldServiceEnabled),
+            'permissions' => ['manage' => $this->tenantRole($this->user($request), $tenant) === 'admin'],
+        ]);
     }
 
     public function customer(Request $request, string $tenant, int $customer, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
@@ -125,7 +133,84 @@ class EverbranchMobileController extends Controller
         $tenantModel = $this->tenant($request);
         $this->requireBranch($registry, (int) $tenantModel->id, 'customers');
 
-        return response()->json($resources->customer((int) $tenantModel->id, $customer));
+        $profile = MarketingProfile::query()->forTenantId((int) $tenantModel->id)->findOrFail($customer);
+
+        $canManage = $this->tenantRole($this->user($request), $tenantModel) === 'admin';
+
+        return response()->json([
+            ...$resources->customer((int) $tenantModel->id, $customer),
+            'permissions' => [
+                'manage' => $canManage,
+                'delete' => $canManage && $this->customerCanBeDeleted($profile),
+            ],
+        ]);
+    }
+
+    public function storeCustomer(
+        Request $request,
+        TenantMobileResourceService $resources,
+        TenantMobileModuleRegistry $registry,
+        MarketingIdentityNormalizer $normalizer,
+        LandlordOperatorActionAuditService $audit,
+    ): JsonResponse {
+        $tenant = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenant->id, 'customers');
+        $this->requireCustomerAdmin($request, $tenant);
+        $values = $this->validatedCustomerValues($request, $normalizer, (int) $tenant->id);
+
+        $profile = MarketingProfile::query()->create([
+            'tenant_id' => (int) $tenant->id,
+            ...$values,
+            'source_channels' => ['mobile_manual'],
+        ]);
+        $audit->record((int) $tenant->id, (int) $this->user($request)->id, 'tenant.mobile_customer.created', targetType: 'marketing_profile', targetId: $profile->id, context: ['surface' => 'everbranch_mobile'], afterState: $this->customerAuditState($profile));
+
+        return response()->json([
+            ...$resources->customer((int) $tenant->id, (int) $profile->id),
+            'permissions' => ['manage' => true, 'delete' => true],
+        ], 201);
+    }
+
+    public function updateCustomer(
+        Request $request,
+        string $tenant,
+        int $customer,
+        TenantMobileResourceService $resources,
+        TenantMobileModuleRegistry $registry,
+        MarketingIdentityNormalizer $normalizer,
+        LandlordOperatorActionAuditService $audit,
+    ): JsonResponse {
+        $tenantModel = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenantModel->id, 'customers');
+        $this->requireCustomerAdmin($request, $tenantModel);
+        $profile = MarketingProfile::query()->forTenantId((int) $tenantModel->id)->findOrFail($customer);
+        $before = $this->customerAuditState($profile);
+        $profile->forceFill($this->validatedCustomerValues($request, $normalizer, (int) $tenantModel->id, (int) $profile->id))->save();
+        $audit->record((int) $tenantModel->id, (int) $this->user($request)->id, 'tenant.mobile_customer.updated', targetType: 'marketing_profile', targetId: $profile->id, context: ['surface' => 'everbranch_mobile'], beforeState: $before, afterState: $this->customerAuditState($profile));
+
+        return response()->json([
+            ...$resources->customer((int) $tenantModel->id, (int) $profile->id),
+            'permissions' => ['manage' => true, 'delete' => $this->customerCanBeDeleted($profile)],
+        ]);
+    }
+
+    public function destroyCustomer(
+        Request $request,
+        string $tenant,
+        int $customer,
+        TenantMobileModuleRegistry $registry,
+        LandlordOperatorActionAuditService $audit,
+    ): JsonResponse {
+        $tenantModel = $this->tenant($request);
+        $this->requireBranch($registry, (int) $tenantModel->id, 'customers');
+        $this->requireCustomerAdmin($request, $tenantModel);
+        $profile = MarketingProfile::query()->forTenantId((int) $tenantModel->id)->findOrFail($customer);
+        abort_unless($this->customerCanBeDeleted($profile), 409, 'Only app-created customers without connected history can be deleted.');
+        $before = $this->customerAuditState($profile);
+        $profile->delete();
+        $audit->record((int) $tenantModel->id, (int) $this->user($request)->id, 'tenant.mobile_customer.deleted', targetType: 'marketing_profile', targetId: $customer, context: ['surface' => 'everbranch_mobile'], beforeState: $before);
+
+        return response()->json(['ok' => true]);
     }
 
     public function work(Request $request, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
@@ -580,6 +665,96 @@ class EverbranchMobileController extends Controller
             'owner', 'tenant_owner' => 'admin',
             default => $role !== '' ? $role : 'member',
         };
+    }
+
+    protected function requireCustomerAdmin(Request $request, Tenant $tenant): void
+    {
+        abort_unless(
+            $this->tenantRole($this->user($request), $tenant) === 'admin',
+            403,
+            'Only a workspace admin can change customers.'
+        );
+    }
+
+    /** @return array<string,string|null> */
+    protected function validatedCustomerValues(
+        Request $request,
+        MarketingIdentityNormalizer $normalizer,
+        int $tenantId,
+        ?int $exceptProfileId = null,
+    ): array {
+        $validated = $request->validate([
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'address_line_1' => ['nullable', 'string', 'max:255'],
+            'address_line_2' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:120'],
+            'state' => ['nullable', 'string', 'max:120'],
+            'postal_code' => ['nullable', 'string', 'max:40'],
+            'country' => ['nullable', 'string', 'max:120'],
+            'notes' => ['nullable', 'string', 'max:4000'],
+        ]);
+        $clean = collect($validated)->map(fn (mixed $value): ?string => trim((string) $value) ?: null)->all();
+        if (collect(['first_name', 'last_name', 'email', 'phone'])->every(fn (string $key): bool => blank($clean[$key] ?? null))) {
+            throw ValidationException::withMessages(['first_name' => 'Add a name, email address, or phone number.']);
+        }
+
+        $normalizedEmail = filled($clean['email'] ?? null) ? $normalizer->normalizeEmail((string) $clean['email']) : null;
+        $normalizedPhone = filled($clean['phone'] ?? null) ? $normalizer->normalizePhone((string) $clean['phone']) : null;
+        foreach (array_filter(['normalized_email' => $normalizedEmail, 'normalized_phone' => $normalizedPhone]) as $column => $value) {
+            $duplicate = MarketingProfile::query()->forTenantId($tenantId)->where($column, $value)
+                ->when($exceptProfileId, fn ($query) => $query->where('id', '!=', $exceptProfileId))
+                ->exists();
+            if ($duplicate) {
+                throw ValidationException::withMessages([$column === 'normalized_email' ? 'email' : 'phone' => 'A customer with this contact information already exists.']);
+            }
+        }
+
+        return [
+            'first_name' => $clean['first_name'] ?? null,
+            'last_name' => $clean['last_name'] ?? null,
+            'email' => $clean['email'] ?? null,
+            'normalized_email' => $normalizedEmail,
+            'phone' => $clean['phone'] ?? null,
+            'normalized_phone' => $normalizedPhone,
+            'address_line_1' => $clean['address_line_1'] ?? null,
+            'address_line_2' => $clean['address_line_2'] ?? null,
+            'city' => $clean['city'] ?? null,
+            'state' => $clean['state'] ?? null,
+            'postal_code' => $clean['postal_code'] ?? null,
+            'country' => $clean['country'] ?? null,
+            'notes' => $clean['notes'] ?? null,
+        ];
+    }
+
+    protected function customerCanBeDeleted(MarketingProfile $profile): bool
+    {
+        if (! in_array('mobile_manual', (array) $profile->source_channels, true)) {
+            return false;
+        }
+
+        return ! $profile->links()->exists()
+            && ! $profile->externalProfiles()->exists()
+            && ! $profile->groups()->exists()
+            && ! $profile->consentEvents()->exists()
+            && ! $profile->messageDeliveries()->exists()
+            && ! $profile->emailDeliveries()->exists()
+            && ! $profile->candleCashBalance()->exists()
+            && ! $profile->candleCashTransactions()->exists()
+            && ! $profile->birthdayProfile()->exists()
+            && ! FieldServiceJob::query()->forTenantId((int) $profile->tenant_id)->where('marketing_profile_id', $profile->id)->exists()
+            && ! MessagingConversation::query()->forTenantId((int) $profile->tenant_id)->where('marketing_profile_id', $profile->id)->exists();
+    }
+
+    /** @return array<string,mixed> */
+    protected function customerAuditState(MarketingProfile $profile): array
+    {
+        return $profile->only([
+            'id', 'tenant_id', 'first_name', 'last_name', 'email', 'phone', 'address_line_1',
+            'address_line_2', 'city', 'state', 'postal_code', 'country', 'notes', 'source_channels',
+        ]);
     }
 
     /** @param array<string,array<string,mixed>> $modules

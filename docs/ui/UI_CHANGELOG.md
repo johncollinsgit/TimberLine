@@ -1,5 +1,12 @@
 # UI Changelog
 
+## 2026-08-08 — Mobile operational shell and customer administration
+
+- Brought the Everbranch tenant app into the operational UI system with a compact charcoal command bar, clearer tenant context, denser customer rows, and focused create/edit screens.
+- Collins Upstate Electric remains discoverable through the authenticated workspace switcher and explicit membership rather than a client-side tenant shortcut.
+- Added admin-only customer create and edit actions. Safe delete appears only for app-created customers without connected history; Laravel repeats every role, tenant, Branch, and history check and audits successful writes.
+- No customer mutation is queued offline, and this work does not change the separate Modern Forestry consumer app or Shopify customer records.
+
 ## 2026-07-30 — Required bundle scents across Shop Pay
 
 - Assigned Everbranch Product Option rules render through the active storefront
