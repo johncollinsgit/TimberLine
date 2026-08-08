@@ -9,6 +9,8 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\TenantPaymentAccount;
 use App\Models\User;
 use App\Models\WebsiteFulfillmentLocation;
+use App\Models\WebsiteInventoryReservation;
+use App\Models\WebsiteOrder;
 use App\Models\WebsiteProduct;
 use App\Models\WebsiteShippingPackage;
 use App\Services\Commerce\CommerceImportService;
@@ -89,6 +91,82 @@ test('commerce import gates and source records are tenant isolated', function ()
     $run = $imports->createDryRun($tenant, $actor, 'shopify', ['catalog']);
     expect($run->tenant_id)->toBe($tenant->id)
         ->and(CommerceImportRun::query()->forTenant($other)->count())->toBe(0);
+});
+
+test('staff draft orders stay inside native commerce and never begin payment, shipping, inventory, or delivery', function (): void {
+    $tenant = commerceOpsTenant();
+    $actor = commerceOpsActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    $commerce = app(WebsiteCommerceService::class);
+    $product = $commerce->saveProduct($site, [
+        'title' => 'Studio mug', 'product_type' => 'physical', 'status' => 'active', 'price' => '18.00',
+        'track_inventory' => true, 'inventory_quantity' => 8, 'is_available' => true,
+    ]);
+    $legacyOrders = Order::query()->count();
+    Http::fake();
+
+    $draft = $commerce->createDraftOrder($site, [
+        'customer' => null,
+        'customer_name' => 'Morgan River',
+        'customer_email' => 'morgan@example.test',
+        'customer_phone' => '555-0100',
+        'website_product_variant_id' => $product->variants->firstOrFail()->id,
+        'quantity' => 2,
+        'fulfillment_method' => 'pickup',
+        'note' => 'Set aside for Friday.',
+    ], $actor);
+
+    expect($draft->order_status)->toBe('draft')
+        ->and($draft->source)->toBe('staff_draft')
+        ->and($draft->payment_status)->toBe('pending')
+        ->and($draft->total_cents)->toBe(3600)
+        ->and($draft->lines)->toHaveCount(1)
+        ->and(WebsiteInventoryReservation::query()->count())->toBe(0)
+        ->and(Order::query()->count())->toBe($legacyOrders)
+        ->and(WebsiteOrder::query()->forTenant($tenant)->sole()->events()->where('event_type', 'draft_order_created')->exists())->toBeTrue();
+    Http::assertNothingSent();
+});
+
+test('native draft order and customer routes are tenant scoped operational screens', function (): void {
+    $tenant = commerceOpsTenant();
+    $actor = commerceOpsActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    $site = app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+    $product = app(WebsiteCommerceService::class)->saveProduct($site, [
+        'title' => 'Service kit', 'product_type' => 'physical', 'status' => 'active', 'price' => '42.00',
+        'track_inventory' => false, 'is_available' => true,
+    ]);
+    $customer = \App\Models\WebsiteCustomer::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'River',
+        'last_name' => 'Shaw',
+        'email' => 'river@example.test',
+        'status' => 'active',
+    ]);
+    $host = 'http://'.$tenant->slug.'.theeverbranch.com';
+
+    $this->actingAs($actor)
+        ->get($host.'/website/orders/create')
+        ->assertOk()
+        ->assertSeeText('Create draft order')
+        ->assertSeeText('Nothing starts automatically');
+
+    $this->actingAs($actor)
+        ->post($host.'/website/orders/drafts', [
+            'website_customer_id' => $customer->id,
+            'website_product_variant_id' => $product->variants->firstOrFail()->id,
+            'quantity' => 1,
+            'fulfillment_method' => 'pickup',
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($actor)
+        ->get($host.'/website/customers/'.$customer->id)
+        ->assertOk()
+        ->assertSeeText('River Shaw')
+        ->assertSeeText('Native Website orders');
 });
 
 test('native US shipping quotes, purchases labels, voids safely, and leaves legacy orders alone', function (): void {

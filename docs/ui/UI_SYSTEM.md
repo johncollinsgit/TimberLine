@@ -92,6 +92,59 @@ Cards are not a page shape. Use them only when an item needs independent visual
 identity or as a small dashboard summary. Prefer rows, sections, and separators
 for information that users need to scan or compare.
 
+## Operational UI Standard (Required)
+
+Shopify Admin is a usability reference only. Everbranch keeps its own identity,
+colors, copy, and accessibility system while following these operational norms
+across tenant workspaces, Everbranch Admin, and Shopify-embedded Backstage:
+
+- **Header:** use an optional breadcrumb/context label, a 24–28px Inter title,
+  at most one next-action sentence, and one primary action. Do not lead routine
+  pages with a display hero or a repeated title/subtitle card.
+- **Density:** body text is 14–15px, metadata and labels are 12–13px, and
+  textual actions are quiet medium-weight links. Status is a compact badge;
+  it must not become an explanatory paragraph.
+- **Surfaces:** a row, divider, toolbar, or right rail is preferred to a card.
+  Cards are reserved for an independent decision, summary, or exception. Avoid
+  nested cards and decorative shadows in operational work.
+- **Lists:** use one header toolbar for search, filters, display choices, and
+  the primary create action; use sortable/scannable rows with status columns;
+  open a shareable detail page for deeper work.
+- **Detail:** retain the object’s key state and actions in a compact header;
+  place the active work/timeline in the main column and customer/context/settings
+  in a narrow right rail.
+- **Wizards:** ask one useful question per step, keep safe guidance contextual,
+  and use a stable footer for Back/Cancel/Continue/Save. Do not leave an
+  onboarding tutorial permanently occupying the work surface.
+- **Builders:** use a compact product header, left outline, central real canvas,
+  right inspector, and persistent save/publish status. A canvas click edits the
+  matching item; it does not fake customer navigation.
+- **Navigation:** core work comes first. Enabled optional products live in the
+  compact **Branches** group near Settings with **Browse branches**. Customer
+  Loop is part of Marketing, not a disconnected follow-up module.
+- **Typography:** Fraunces is reserved for public storytelling and rare
+  intentional empty states. Everyday work, controls, tables, forms, landlord,
+  and embedded surfaces use Inter.
+
+### Authenticated surface audit
+
+Every UI change must classify its destination before implementation:
+
+| Surface | Required shape | Current operational owner |
+| --- | --- | --- |
+| Workspace and landlord home | Dashboard | Shared shell + dashboard views |
+| Website overview and domains | Dashboard / focused wizard | Managed Website |
+| Website editor | Immersive builder | Managed Website editor |
+| Website products, orders, customers | Searchable list / object detail | Website Commerce |
+| Customer Loop | Searchable/actionable list + guided launcher | Marketing |
+| Workflow Studio | Immersive builder | Workflow Studio |
+| Shopify Backstage | Shared shell / list / detail | Embedded shell |
+
+Future changes must extend this table rather than inventing a page-local visual
+language. Modern Forestry is covered by the same presentation rules, but its
+Shopify credentials, checkout, orders, rewards, shipping, and customer lanes
+remain behaviorally isolated.
+
 ## Semantic Interaction Rules
 
 - The same action hierarchy is used everywhere: one primary action, quiet

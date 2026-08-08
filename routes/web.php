@@ -756,9 +756,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('/products/{product}', [WebsiteCommerceController::class, 'updateProduct'])->name('products.update');
             Route::delete('/products/{product}', [WebsiteCommerceController::class, 'archiveProduct'])->name('products.destroy');
             Route::get('/customers', [WebsiteCommerceController::class, 'customers'])->name('customers.index');
+            Route::get('/customers/create', [WebsiteCommerceController::class, 'createCustomer'])->name('customers.create');
             Route::post('/customers', [WebsiteCommerceController::class, 'storeCustomer'])->name('customers.store');
+            Route::get('/customers/{customer}', [WebsiteCommerceController::class, 'showCustomer'])->name('customers.show');
             Route::put('/customers/{customer}', [WebsiteCommerceController::class, 'updateCustomer'])->name('customers.update');
             Route::get('/orders', [WebsiteCommerceController::class, 'orders'])->name('orders.index');
+            Route::get('/orders/create', [WebsiteCommerceController::class, 'createOrder'])->name('orders.create');
+            Route::post('/orders/drafts', [WebsiteCommerceController::class, 'storeDraftOrder'])->name('orders.drafts.store');
             Route::get('/orders/{order}', [WebsiteCommerceController::class, 'showOrder'])->name('orders.show');
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');

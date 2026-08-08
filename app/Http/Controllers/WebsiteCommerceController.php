@@ -117,18 +117,47 @@ class WebsiteCommerceController extends Controller
     public function customers(Request $request, ManagedWebsiteService $websites, CommerceImportService $imports): View
     {
         $tenant = $this->tenant($request);
-        $customers = WebsiteCustomer::query()->forTenant($tenant)->latest()->paginate(25);
+        $customerQuery = (string) ($request->validate(['q' => ['nullable', 'string', 'max:190']])['q'] ?? '');
+        $customers = WebsiteCustomer::query()->forTenant($tenant)
+            ->when(filled($customerQuery), function ($query) use ($customerQuery): void {
+                $like = '%'.addcslashes($customerQuery, '%_\\').'%';
+                $query->where(function ($customers) use ($like): void {
+                    $customers->where('first_name', 'like', $like)
+                        ->orWhere('last_name', 'like', $like)
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('phone', 'like', $like);
+                });
+            })
+            ->latest()->paginate(25)->withQueryString();
 
-        return view('managed-website.commerce.index', compact('tenant', 'customers') + ['site' => $this->site($tenant), 'screen' => 'customers', 'isEditorEnabled' => $websites->editorEnabledFor($tenant), 'importsEnabled' => $imports->enabledFor($tenant)]);
+        return view('managed-website.commerce.index', compact('tenant', 'customers', 'customerQuery') + ['site' => $this->site($tenant), 'screen' => 'customers', 'isEditorEnabled' => $websites->editorEnabledFor($tenant), 'importsEnabled' => $imports->enabledFor($tenant)]);
+    }
+
+    public function createCustomer(Request $request, WebsiteCommerceService $commerce): View
+    {
+        $tenant = $this->tenant($request);
+        $this->requireCommerce($tenant, $commerce);
+
+        return view('managed-website.commerce.customer', ['site' => $this->site($tenant), 'customer' => null, 'orders' => collect()]);
+    }
+
+    public function showCustomer(Request $request, WebsiteCustomer $customer, WebsiteCommerceService $commerce): View
+    {
+        $tenant = $this->tenant($request);
+        abort_unless((int) $customer->tenant_id === (int) $tenant->id, 404);
+        $this->requireCommerce($tenant, $commerce);
+        $orders = WebsiteOrder::query()->forTenant($tenant)->where('website_customer_id', $customer->id)->latest()->paginate(20);
+
+        return view('managed-website.commerce.customer', compact('customer', 'orders') + ['site' => $this->site($tenant)]);
     }
 
     public function storeCustomer(Request $request, WebsiteCommerceService $commerce): RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->requireCommerce($tenant, $commerce);
-        WebsiteCustomer::query()->create($this->customerData($request) + ['tenant_id' => $tenant->id, 'status' => 'active']);
+        $customer = WebsiteCustomer::query()->create($this->customerData($request) + ['tenant_id' => $tenant->id, 'status' => 'active']);
 
-        return back()->with('status', 'Website customer saved.');
+        return redirect()->route('managed-website.customers.show', $customer)->with('status', 'Website customer saved.');
     }
 
     public function updateCustomer(Request $request, WebsiteCustomer $customer, WebsiteCommerceService $commerce): RedirectResponse
@@ -144,15 +173,56 @@ class WebsiteCommerceController extends Controller
     public function orders(Request $request, ManagedWebsiteService $websites, CommerceImportService $imports): View
     {
         $tenant = $this->tenant($request);
-        $filters = $request->validate(['payment' => ['nullable', 'string', 'max:32'], 'fulfillment' => ['nullable', 'string', 'max:32'], 'shipment' => ['nullable', 'string', 'max:32'], 'source' => ['nullable', 'string', 'max:32']]);
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:64'], 'payment' => ['nullable', 'string', 'max:32'], 'fulfillment' => ['nullable', 'string', 'max:32'], 'shipment' => ['nullable', 'string', 'max:32'], 'source' => ['nullable', 'string', 'max:32'], 'risk' => ['nullable', 'string', 'max:32'], 'review' => ['nullable', 'string', 'max:32'], 'exception' => ['nullable', 'string', 'max:32']]);
         $orders = WebsiteOrder::query()->forTenant($tenant)->with('lines', 'shipments')
+            ->when(filled($filters['q'] ?? null), fn ($query) => $query->where('number', 'like', '%'.addcslashes((string) $filters['q'], '%_\\').'%'))
             ->when(filled($filters['payment'] ?? null), fn ($query) => $query->where('payment_status', $filters['payment']))
             ->when(filled($filters['fulfillment'] ?? null), fn ($query) => $query->where('fulfillment_status', $filters['fulfillment']))
             ->when(filled($filters['shipment'] ?? null), fn ($query) => $query->whereHas('shipments', fn ($shipments) => $shipments->where('status', $filters['shipment'])))
             ->when(filled($filters['source'] ?? null), fn ($query) => $query->where('source', $filters['source']))
+            ->when(filled($filters['risk'] ?? null), fn ($query) => $query->where('risk_status', $filters['risk']))
+            ->when(filled($filters['review'] ?? null), fn ($query) => $query->where('review_status', $filters['review']))
+            ->when(filled($filters['exception'] ?? null), fn ($query) => $query->where('exception_status', $filters['exception']))
             ->latest()->paginate(25)->withQueryString();
 
         return view('managed-website.commerce.index', compact('tenant', 'orders', 'filters') + ['site' => $this->site($tenant), 'screen' => 'orders', 'isEditorEnabled' => $websites->editorEnabledFor($tenant), 'importsEnabled' => $imports->enabledFor($tenant)]);
+    }
+
+    public function createOrder(Request $request, WebsiteCommerceService $commerce): View
+    {
+        $tenant = $this->tenant($request);
+        $this->requireCommerce($tenant, $commerce);
+        $site = $this->site($tenant);
+        $customers = WebsiteCustomer::query()->forTenant($tenant)->orderBy('first_name')->limit(200)->get();
+        $variants = WebsiteProductVariant::query()->forTenant($tenant)->with('product')
+            ->whereHas('product', fn ($query) => $query->where('tenant_site_id', $site->id)->where('status', 'active')->where('product_type', '!=', 'quote'))
+            ->where('is_available', true)->orderBy('id')->get();
+
+        return view('managed-website.commerce.draft-order', compact('site', 'customers', 'variants'));
+    }
+
+    public function storeDraftOrder(Request $request, WebsiteCommerceService $commerce): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->requireCommerce($tenant, $commerce);
+        $data = $request->validate([
+            'website_customer_id' => ['nullable', 'integer'],
+            'customer_name' => ['nullable', 'string', 'max:190'],
+            'customer_email' => ['nullable', 'email:rfc,dns', 'max:190'],
+            'customer_phone' => ['nullable', 'string', 'max:80'],
+            'website_product_variant_id' => ['required', 'integer'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100'],
+            'fulfillment_method' => ['required', 'in:ship,pickup,local_delivery'],
+            'note' => ['nullable', 'string', 'max:4000'],
+        ]);
+        $customer = filled($data['website_customer_id'] ?? null)
+            ? WebsiteCustomer::query()->forTenant($tenant)->findOrFail((int) $data['website_customer_id'])
+            : null;
+        abort_if($customer === null && blank($data['customer_name'] ?? null) && blank($data['customer_email'] ?? null), 422, 'Choose a customer or add a name or email for this draft.');
+        $data['customer'] = $customer;
+        $order = $commerce->createDraftOrder($this->site($tenant), $data, $request->user());
+
+        return redirect()->route('managed-website.orders.show', $order)->with('status', 'Draft order saved. Nothing has been charged, reserved, shipped, or sent.');
     }
 
     public function showOrder(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): View
