@@ -199,23 +199,34 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   independent schema step safely resumable. Never delete a production table to
   force a retry. The pending-release MySQL recovery cases for Customer Loop and
   Commerce are the reference. Use explicit short names for indexes and foreign
-  keys that could exceed MySQL's 64-character identifier limit.
-- Forge API observability is a planned **read-only** integration: a production
-  secret may retrieve deployment status/log links for a failed GitHub release,
-  but may not create a deploy, change site settings, or replace the exact-SHA
-  `/ready` activation check.
+  keys that could exceed MySQL's 64-character identifier limit, and keep
+  composite `utf8mb4` keys below MySQL's 3072-byte InnoDB limit.
+- Migration safety is an always-on production job, including an emergency
+  dispatch that skips the broader test/build job. It lints changed migrations,
+  rejects edits to released migrations unless an exact before/after checksum
+  pair declares a narrow clean-install compatibility repair, requires guarded table creation and
+  short MySQL identifiers, runs registered partial-state recovery tests, and
+  rehearses the prior commit's schema upgrade on MySQL 8.4. Multi-step
+  migrations must be registered in
+  `tests/Integration/migration-recovery-manifest.php`. See
+  `docs/operations/migration-safety-gate.md`.
+- Forge API observability is implemented as an optional **read-only** failure
+  diagnostic. When exact-SHA `/ready` verification fails, GitHub may query the
+  current Forge API for `latestDeployment` and print an allowlisted commit,
+  status, and timestamp summary. The script performs GET only and cannot
+  create a deploy, reset status, change site settings, or replace `/ready`.
+  Credential creation and least-privilege scope selection remain an explicit
+  operator task.
 - Never run `git reset --hard`, `git clean`, in-place frontend replacement, or
   cache-clearing as a normal production deploy. The approved Forge runbook uses
   a fresh release, build/test preparation before activation, compatible
   migrations, atomic activation, then queue restart. Retain an audited
   emergency path only.
-- CI is deliberately split by purpose. Pull requests run a real Pint `--test`
-  check only on changed PHP files plus one full PHP 8.4 asset-build/test gate;
-  superseded runs are canceled. PHP 8.5 runs nightly and on pull requests that
-  change Composer or PHPUnit compatibility inputs. A push to `main` does not
-  repeat the pull-request workflow: the production workflow tests the exact
-  merge commit in parallel, builds assets, and only then calls Forge. Composer
-  and npm downloads are cached and Node installs use `npm ci`.
+- CI is deliberately split by purpose. Pull requests run one full PHP 8.4
+  asset-build/test gate plus the MySQL migration-safety job; superseded runs
+  are canceled. A push to `main` tests the exact merge commit and independently
+  runs the non-bypassable migration-safety job before it can call Forge.
+  Composer and npm downloads are cached and Node installs use `npm ci`.
 - Default delivery preference: when a scoped feature is complete and its
   protected GitHub checks pass, merge it to `main` and allow the normal Forge
   release to deploy it. Keep a change on a feature branch only when John asks

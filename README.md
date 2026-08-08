@@ -167,8 +167,10 @@ one database DDL statement before a candidate fails, while Laravel has not yet
 recorded the migration. Migration-recovery tests reproduce that partial state
 so the next protected release resumes rather than retrying an existing table.
 Forge API observability is a planned read-only production integration for
-linking failed deployment logs and status to GitHub; it will never replace the
-exact-release `/ready` verification or authorize deployment changes.
+linking failed deployment status to GitHub. The failure-only observer is now
+implemented and remains inert until its read-scoped token and site identifiers
+are configured; it never replaces exact-release `/ready` verification or
+authorizes deployment changes.
 
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
@@ -1736,7 +1738,8 @@ This repository deploys with `.github/workflows/deploy.yml`.
 
 Triggers:
 - Push to `main` (automatic deploy)
-- Manual run via `workflow_dispatch` in GitHub Actions (with optional `run_tests` toggle)
+- Manual run via `workflow_dispatch` in GitHub Actions (with an emergency
+  `run_tests` toggle; migration safety is never skipped)
 
 Owner workflow:
 ```bash
@@ -1745,18 +1748,18 @@ git commit -m "Describe change"
 git push origin main
 ```
 
-Required GitHub secrets (configure in the `production` environment):
-- `DEPLOY_HOST`
-- `DEPLOY_USER`
-- `DEPLOY_PORT`
-- `DEPLOY_PATH`
-- `DEPLOY_SSH_KEY` (private key for SSH access to the server)
+Required GitHub secret (configure in the `production` environment):
+- `FORGE_DEPLOY_HOOK_URL`
 
-Optional test prerequisites:
+Required test prerequisites (configure in the `Testing` environment when the
+private package is present):
 - `FLUX_USERNAME`
 - `FLUX_LICENSE_KEY`
 
-These are only needed for CI test/build when private Flux packages are required.
+Optional read-only Forge diagnostics use production secret `FORGE_API_TOKEN`
+plus production variables `FORGE_ORGANIZATION_SLUG`, `FORGE_SERVER_ID`, and
+`FORGE_SITE_ID`. Use the narrowest read scopes Forge offers. The diagnostic
+only runs after deployment verification fails and never changes Forge state.
 
 What Flux is doing in this project:
 - The app depends on the private `livewire/flux` UI package from Composer.
@@ -1765,65 +1768,44 @@ What Flux is doing in this project:
 - Practically, buying Flux is paying for the UI component library and private package access that this app already uses, plus the ability for GitHub Actions and fresh environments to run `composer install` without failing on that private dependency.
 - If you do not want to buy Flux, the alternative is to remove/replace those Flux components and styles across the app with another UI system.
 
-Server prerequisites:
-- Git with the app already cloned at `DEPLOY_PATH`
-- PHP 8.2+ and required extensions
-- Composer 2
-- Node.js + npm (this app uses Vite)
-- Writable Laravel directories (`storage`, `bootstrap/cache`)
-- Database connectivity from the server
-- Queue worker process manager (Supervisor/systemd) if queues are active
+Release sequence:
+- GitHub runs the full PHP/asset test gate.
+- A separate MySQL 8.4 gate lints changed migrations, simulates interrupted
+  migration recovery, and rehearses the prior-release schema upgrade.
+- Only then does GitHub POST to the protected Forge deployment hook.
+- Forge builds in a new release directory, runs compatible migrations, and
+  atomically activates the candidate.
+- GitHub polls `https://app.theeverbranch.com/ready` until it reports the exact
+  GitHub commit. A hook acknowledgment or Forge status is not activation proof.
 
-Server deploy command sequence:
-- `git fetch origin main`
-- `git checkout main`
-- `git pull --ff-only origin main`
-- `composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev`
-- `mv node_modules node_modules.__old__.$(date +%s) 2>/dev/null || true`
-- `mv public/build public/build.__old__.$(date +%s) 2>/dev/null || true`
-- `npm install --no-audit --no-fund`
-- if npm still hits an `ENOTEMPTY` cleanup race, clear the fresh partial `node_modules`/`public/build` tree, run `npm cache verify`, and retry the install once
-- `npm run build`
-- `rm -f public/hot`
-- `php artisan migrate --force`
-- `php artisan route:clear`
-- `php artisan config:cache`
-- `php artisan view:cache`
-- `php artisan queue:restart`
+For migration development, run `composer lint:migrations` and follow
+`docs/operations/migration-safety-gate.md`. The full release and rollback
+procedure is in `docs/operations/forge-atomic-release-runbook.md`.
+- Released migrations remain immutable by default. The five historical
+  clean-install identifier/key repairs discovered by the MySQL rehearsal are
+  constrained by exact before/after SHA-256 values in
+  `scripts/ci/legacy-migration-compatibility-manifest.php`; any further byte
+  change fails CI. This mechanism is only for a migration that cannot execute
+  on supported MySQL, never for ordinary schema evolution.
+- Production deploys are concurrency-guarded so only one candidate runs at a
+  time. Direct Forge push-to-deploy remains off.
 
-Notes:
-- `route:cache` is intentionally not used because the app currently has closure routes.
-- Deploy is fail-fast and concurrency-guarded so only one production deploy runs at a time.
-- Forge currently reruns deploys against the active release directory, so moving `node_modules` and `public/build` out of the way before the asset install is intentional. On this server `npm install --no-audit --no-fund` is the safer path, and the old directories should be left parked during deploy rather than deleted in the background because concurrent cleanup still triggers npm `ENOTEMPTY` errors on this filesystem.
-- `scripts/deploy_backstage.sh` now retries one failed npm install after deleting the new partial asset tree and verifying the npm cache, which is the convergent path when Forge leaves a half-built `node_modules` tree behind.
-
-Known push/deploy pitfalls (2026-03-26):
-- GitHub Action fails before deploy steps with missing-input errors:
-  - Cause: one or more required `DEPLOY_*` secrets are missing in the `production` environment.
-  - Check: GitHub -> Settings -> Environments -> `production` -> Secrets and variables.
-  - Required: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY`.
-- Deploy runs but production code is stale:
-  - Cause: server repo is not on `main` (for example, left on a temporary branch).
-  - Check on server:
-    - `cd "$DEPLOY_PATH"`
-    - `git branch --show-current`
-    - `git rev-parse --short HEAD`
-    - `git rev-parse --short origin/main`
-  - Recovery:
-    - `git fetch origin main`
-    - `git checkout main`
-    - `git pull --ff-only origin main`
-- Push succeeds but no production rollout occurs:
-  - Check whether the `Deploy Production` workflow is disabled.
-  - Check Actions run status and inspect the first failed step (most failures here are config/secrets, not app code).
-- Security hygiene for server remotes:
-  - Do not keep personal access tokens embedded in `origin` URLs on production.
-  - If a tokenized remote URL is found, rotate the token and switch to SSH/deploy-key auth.
+Known release failure paths:
+- If the workflow stops at secret validation, configure
+  `FORGE_DEPLOY_HOOK_URL` in GitHub's `production` environment.
+- If Migration Safety fails, leave production on its current release and fix
+  the named lint, partial-state, or schema-rehearsal error. Do not bypass it.
+- If Forge accepts the hook but `/ready` remains stale, inspect the optional
+  Forge deployment summary in the failed GitHub job. The old release remains
+  authoritative until `/ready` reports the exact candidate SHA.
+- If a newly activated release is unhealthy, use Forge's retained prior release
+  for rollback, then investigate without deleting or rewriting customer data.
 
 Manual deploy:
 1. Go to GitHub -> Actions -> `Deploy Production`.
 2. Click `Run workflow`.
-3. Choose `main` and (optionally) set `run_tests` to false.
+3. Choose `main`. Only an explicitly approved emergency may set `run_tests` to
+   false; the MySQL Migration Safety Gate still runs.
 
 Temporarily disable deploy:
 - In GitHub -> Actions -> `Deploy Production` -> `...` menu -> `Disable workflow`.

@@ -63,6 +63,9 @@
         "test:lint": [
             "pint --parallel --test"
         ],
+        "lint:migrations": [
+            "@php scripts/ci/lint-migrations.php --base=HEAD --working-tree"
+        ],
         "test": [
             "@php artisan config:clear --ansi",
             "@test:lint",

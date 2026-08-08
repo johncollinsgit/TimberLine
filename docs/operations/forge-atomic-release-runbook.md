@@ -52,17 +52,20 @@ part of the release process.
 
 The handoff is complete.
 
-1. The `main` GitHub Actions workflow runs Composer install, frontend build,
-   and Pest before production deployment.
+1. The `main` GitHub Actions workflow runs the full application test/build job
+   and an independent MySQL 8.4 Migration Safety Gate. Migration safety cannot
+   be skipped by the emergency dispatch. It lints changed migrations, runs the
+   partial-state recovery suite, and rehearses the schema upgrade from the
+   prior released commit.
 2. After the gate succeeds, it POSTs to the protected GitHub production secret
    `FORGE_DEPLOY_HOOK_URL`. Never commit or print that URL. The workflow then
    polls `/ready` for the exact GitHub commit for up to three minutes. A hook
    acknowledgment alone is not deployment evidence; the workflow fails if the
    active release identifier remains stale.
-   A future read-only Forge API token will add deployment-log/status links to
-   that failed workflow run. It must be stored as a production secret, must not
-   trigger or alter deployments, and does not replace the exact-SHA `/ready`
-   check.
+   If optional Forge observer credentials are configured, a failed verification
+   makes one GET request to Forge's current API and prints an allowlisted latest
+   deployment summary in the GitHub job. It does not retry, reset, or alter a
+   deployment and does not replace the exact-SHA `/ready` check.
 3. Forge creates the release and runs the deployment script above. The first
    fully automatic run activated Forge release `73789933` for commit
    `c272464230f4c83366f8d57a635ac4c38876c5c8` on 2026-07-21; `/ready` returned
@@ -97,6 +100,37 @@ test/build gate.
   caused by a 65-character generated action index and exposed a 68-character
   generated shipping-rate foreign key. Both migrations now use explicit short
   names and repair the durable partial schema on retry.
+- InnoDB keys are limited to 3072 bytes under the production MySQL contract.
+  Four default-width `utf8mb4` strings can exceed that even when the index name
+  is short. Declare bounded lengths and let the migration linter calculate the
+  worst-case byte width before release.
+
+The enforced checks and developer workflow are documented in
+`docs/operations/migration-safety-gate.md`. In particular, do not edit or delete
+a migration that may have shipped. Add a new idempotent repair migration and a
+durable partial-state test. A historical migration that cannot execute on a
+clean supported MySQL database is the sole exception: its minimal compatibility
+change must have exact before/after checksums in
+`scripts/ci/legacy-migration-compatibility-manifest.php` and a named MySQL
+restart test. Any later edit fails closed.
+
+## Optional Forge observer setup
+
+The production workflow can add Forge-side context after a failed `/ready`
+exact-release check. Configure the following in GitHub's `production`
+environment:
+
+- secret `FORGE_API_TOKEN`, created with the narrowest site/deployment read
+  scopes Forge offers and an expiration date;
+- variable `FORGE_ORGANIZATION_SLUG`;
+- variable `FORGE_SERVER_ID`;
+- variable `FORGE_SITE_ID`.
+
+The reporter at `scripts/ci/report-forge-deployment.php` uses the current Forge
+`/api` endpoint with `include=latestDeployment`. It contains one GET operation
+and prints only commit, match, status, and timestamps. Missing configuration is
+non-fatal. Never give this diagnostic write scopes merely for convenience, and
+never replace exact-SHA `/ready` verification with Forge's status alone.
 
 ## Smoke checks
 
