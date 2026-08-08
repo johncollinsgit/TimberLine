@@ -7,6 +7,10 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['earlier marketing tables retained before import-row table creation'],
     ],
+    '2026_03_16_090000_create_customer_external_profiles_table.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['clean retry after MySQL rejects an over-wide composite key'],
+    ],
     '2026_03_19_090000_create_marketing_message_group_tables.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['message-group table retained before member-table creation'],

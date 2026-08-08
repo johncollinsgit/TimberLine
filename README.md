@@ -1781,8 +1781,8 @@ Release sequence:
 For migration development, run `composer lint:migrations` and follow
 `docs/operations/migration-safety-gate.md`. The full release and rollback
 procedure is in `docs/operations/forge-atomic-release-runbook.md`.
-- Released migrations remain immutable by default. The four historical
-  clean-install identifier repairs discovered by the MySQL rehearsal are
+- Released migrations remain immutable by default. The five historical
+  clean-install identifier/key repairs discovered by the MySQL rehearsal are
   constrained by exact before/after SHA-256 values in
   `scripts/ci/legacy-migration-compatibility-manifest.php`; any further byte
   change fails CI. This mechanism is only for a migration that cannot execute

@@ -144,3 +144,41 @@ PHP;
         ->and($errors[0])->toContain('raw SQL identifier')
         ->and($errors[0])->toContain('MySQL permits at most 64');
 });
+
+it('rejects a composite utf8mb4 key wider than MySQL permits', function (): void {
+    $source = <<<'PHP'
+<?php
+if (! Schema::hasTable('external_profiles')) {
+    Schema::create('external_profiles', function (Blueprint $table): void {
+        $table->string('provider');
+        $table->string('integration');
+        $table->string('store_key');
+        $table->string('external_id');
+        $table->unique(['provider', 'integration', 'store_key', 'external_id'], 'external_profile_identity_uq');
+    });
+}
+PHP;
+
+    $errors = migrationSafetyLinter()->lintMigration('wide-key.php', $source, []);
+
+    expect($errors)->toHaveCount(1)
+        ->and($errors[0])->toContain('can require 4080 bytes under utf8mb4')
+        ->and($errors[0])->toContain('MySQL permits at most 3072');
+});
+
+it('accepts a bounded composite utf8mb4 key', function (): void {
+    $source = <<<'PHP'
+<?php
+if (! Schema::hasTable('external_profiles')) {
+    Schema::create('external_profiles', function (Blueprint $table): void {
+        $table->string('provider', 80);
+        $table->string('integration', 80);
+        $table->string('store_key', 80);
+        $table->string('external_id', 120);
+        $table->unique(['provider', 'integration', 'store_key', 'external_id'], 'external_profile_identity_uq');
+    });
+}
+PHP;
+
+    expect(migrationSafetyLinter()->lintMigration('bounded-key.php', $source, []))->toBe([]);
+});

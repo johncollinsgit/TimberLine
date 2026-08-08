@@ -99,6 +99,7 @@ final class MigrationSafetyLinter
     private function lintSchemaBlock(string $basename, string $table, string $body): array
     {
         $errors = [];
+        $characterColumnWidths = $this->characterColumnWidths($body);
 
         foreach (['index', 'unique', 'primary', 'fullText', 'spatialIndex', 'foreign'] as $method) {
             foreach ($this->methodCalls($body, $method) as $call) {
@@ -122,6 +123,13 @@ final class MigrationSafetyLinter
 
                 $columns = $this->quotedStrings($parts[0] ?? '');
                 $explicitName = $this->literalString($parts[1] ?? '');
+
+                if ($columns !== [] && in_array($method, ['index', 'unique', 'primary'], true)) {
+                    $errors = [
+                        ...$errors,
+                        ...$this->indexByteWidthErrors($basename, $table, $columns, $characterColumnWidths),
+                    ];
+                }
 
                 if ($explicitName !== null) {
                     $errors = [...$errors, ...$this->identifierErrors($basename, $explicitName, "explicit {$method} identifier")];
@@ -168,6 +176,47 @@ final class MigrationSafetyLinter
         }
 
         return $errors;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function characterColumnWidths(string $body): array
+    {
+        $widths = [];
+        $pattern = '/\$table->(?:string|char)\(\s*([\'\"])([^\'\"]+)\1(?:\s*,\s*(\d+))?/';
+
+        if (! preg_match_all($pattern, $body, $matches, PREG_SET_ORDER)) {
+            return [];
+        }
+
+        foreach ($matches as $match) {
+            $widths[$match[2]] = isset($match[3]) && $match[3] !== '' ? (int) $match[3] : 255;
+        }
+
+        return $widths;
+    }
+
+    /**
+     * @param  list<string>  $columns
+     * @param  array<string, int>  $characterColumnWidths
+     * @return list<string>
+     */
+    private function indexByteWidthErrors(string $basename, string $table, array $columns, array $characterColumnWidths): array
+    {
+        $characterCount = array_sum(array_map(
+            fn (string $column): int => $characterColumnWidths[$column] ?? 0,
+            $columns,
+        ));
+        $maximumBytes = $characterCount * 4;
+
+        if ($maximumBytes <= 3072) {
+            return [];
+        }
+
+        return [
+            "{$basename}: index on {$table} (".implode(', ', $columns).") can require {$maximumBytes} bytes under utf8mb4; MySQL permits at most 3072. Shorten the indexed string columns or redesign the key.",
+        ];
     }
 
     /**

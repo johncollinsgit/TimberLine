@@ -11,11 +11,13 @@ The gate addresses four recurring production risks:
 
 1. MySQL rejects an automatically generated index or foreign-key identifier
    longer than 64 characters.
-2. MySQL commits an early DDL statement, the migration later fails, and Laravel
+2. MySQL rejects a composite `utf8mb4` key wider than InnoDB's 3072-byte
+   maximum.
+3. MySQL commits an early DDL statement, the migration later fails, and Laravel
    never records the migration as complete.
-3. A migration works on a new empty database but cannot upgrade the schema from
+4. A migration works on a new empty database but cannot upgrade the schema from
    the previously released commit.
-4. GitHub sees a stale `/ready` release but has no Forge-side status to explain
+5. GitHub sees a stale `/ready` release but has no Forge-side status to explain
    whether the candidate is queued, running, failed, or complete.
 
 ## Required CI sequence
@@ -43,7 +45,9 @@ The migration linter fails when a changed migration:
   production;
 - creates a table without a same-migration `Schema::hasTable()` recovery guard;
 - declares or would generate an index or foreign-key name longer than MySQL's
-  64-character identifier limit; or
+  64-character identifier limit;
+- declares a same-table composite character key whose maximum `utf8mb4` width
+  exceeds MySQL's 3072-byte InnoDB limit; or
 - contains more than one schema/DDL step without a registered interruption
   recovery scenario.
 

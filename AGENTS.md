@@ -43,6 +43,9 @@
 - Releases A through E are complete on `main`; the next standalone backend track is email/provider reliability. Keep that work isolated from App Store, shell, dashboard, search, commercialization, and deferred expansion scope.
 - Collins Electric (`collins-electric`) is a guided electrician launch workspace, not a trial or live billing customer. Keep `everbranch:prepare-collins-electric` idempotent, keep QuickBooks as CSV/XLSX concierge import, keep Apple Photos manual, and keep SMS sends blocked until provider/consent/delivery readiness is verified.
 - MySQL limits identifiers to 64 characters. In migrations, never rely on Laravel-generated foreign-key or index names when the table and column names could approach that limit; assign concise explicit names (preferably 60 characters or fewer) before deployment.
+- MySQL also limits an InnoDB index to 3072 bytes. Keep composite `utf8mb4`
+  string keys within the declared column lengths; the migration linter treats
+  each indexed character as up to four bytes.
 - Every new migration must pass `scripts/ci/lint-migrations.php`. Released
   migrations are immutable; add a new idempotent repair migration instead of
   editing one. The only exception is an audited clean-install compatibility

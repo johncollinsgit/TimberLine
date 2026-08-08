@@ -9,6 +9,12 @@ return [
         'reason' => 'MySQL rejects the generated 65-character import-run foreign-key name on a clean install.',
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
     ],
+    'database/migrations/2026_03_16_090000_create_customer_external_profiles_table.php' => [
+        'before_sha256' => 'b9f3aed61c32ea0e78b39028f48729badff34b7662538ab491a49da04d6925b8',
+        'after_sha256' => 'c790d4860d2eedf8ade400a7aeca261189b95edbf0b7088be954a08add275bcf',
+        'reason' => 'MySQL rejects the original four-column utf8mb4 unique key because it can exceed 3072 bytes.',
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+    ],
     'database/migrations/2026_03_19_090000_create_marketing_message_group_tables.php' => [
         'before_sha256' => '6aebb3cfa0b7d11c6dd981fad6db317db2490bb4aa6cca7f26588a8ea9cf48ea',
         'after_sha256' => '5bb78cc87817a16ab9b4c6eb130b57a2d43c473730d2fa03820d983f54d603f1',

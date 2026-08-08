@@ -100,6 +100,10 @@ test/build gate.
   caused by a 65-character generated action index and exposed a 68-character
   generated shipping-rate foreign key. Both migrations now use explicit short
   names and repair the durable partial schema on retry.
+- InnoDB keys are limited to 3072 bytes under the production MySQL contract.
+  Four default-width `utf8mb4` strings can exceed that even when the index name
+  is short. Declare bounded lengths and let the migration linter calculate the
+  worst-case byte width before release.
 
 The enforced checks and developer workflow are documented in
 `docs/operations/migration-safety-gate.md`. In particular, do not edit or delete

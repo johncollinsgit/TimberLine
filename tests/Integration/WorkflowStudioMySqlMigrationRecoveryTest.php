@@ -407,6 +407,31 @@ it('resumes message groups after MySQL rejects the legacy member foreign-key nam
         ->toBeTrue();
 });
 
+it('creates external customer profiles with a composite key below the MySQL byte limit', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('customer_external_profiles');
+
+    $migrationPath = 'migrations/2026_03_16_090000_create_customer_external_profiles_table.php';
+    $migration = require database_path($migrationPath);
+    $migration->up();
+    $migration->up();
+
+    $lengths = DB::table('information_schema.COLUMNS')
+        ->where('TABLE_SCHEMA', DB::getDatabaseName())
+        ->where('TABLE_NAME', 'customer_external_profiles')
+        ->whereIn('COLUMN_NAME', ['provider', 'integration', 'store_key', 'external_customer_id'])
+        ->pluck('CHARACTER_MAXIMUM_LENGTH', 'COLUMN_NAME');
+
+    expect(Schema::hasIndex('customer_external_profiles', 'cep_provider_integration_store_customer_unique'))->toBeTrue()
+        ->and((int) $lengths['provider'])->toBe(80)
+        ->and((int) $lengths['integration'])->toBe(80)
+        ->and((int) $lengths['store_key'])->toBe(80)
+        ->and((int) $lengths['external_customer_id'])->toBe(120);
+});
+
 it('resumes tenant reward overrides after MySQL rejects the legacy reward foreign-key name', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

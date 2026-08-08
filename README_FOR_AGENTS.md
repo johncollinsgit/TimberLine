@@ -199,7 +199,8 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   independent schema step safely resumable. Never delete a production table to
   force a retry. The pending-release MySQL recovery cases for Customer Loop and
   Commerce are the reference. Use explicit short names for indexes and foreign
-  keys that could exceed MySQL's 64-character identifier limit.
+  keys that could exceed MySQL's 64-character identifier limit, and keep
+  composite `utf8mb4` keys below MySQL's 3072-byte InnoDB limit.
 - Migration safety is an always-on production job, including an emergency
   dispatch that skips the broader test/build job. It lints changed migrations,
   rejects edits to released migrations unless an exact before/after checksum
