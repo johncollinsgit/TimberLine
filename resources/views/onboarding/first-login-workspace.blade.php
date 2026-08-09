@@ -332,7 +332,7 @@
                         @foreach ($businessTypes as $type)
                             <button
                                 type="button" data-pick-type="{{ $type['key'] }}"
-                                class="flw-card rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
+                                class="flw-card {{ ($type['key'] ?? '') === 'custom' ? 'sm:col-span-2' : '' }} rounded-2xl border border-zinc-200 bg-white px-4 py-4 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
                             >
                                 <span class="text-sm font-semibold text-zinc-900">{{ $type['label'] }}</span>
                                 <span class="mt-1 block text-sm leading-5 text-zinc-500">{{ $type['blurb'] }}</span>
