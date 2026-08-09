@@ -4,7 +4,9 @@ export function mountRickrollStoryNow() {
     const handoff = root?.querySelector("[data-rickroll-handoff]");
     const iframe = handoff?.querySelector("iframe[data-rickroll-src]");
     const soundButton = handoff?.querySelector("[data-rickroll-sound]");
-    if (!root || !video || !handoff || !iframe || !soundButton || root.dataset.rickrollMounted === "true") return;
+    const gate = root?.querySelector("[data-rickroll-gate]");
+    const startButton = gate?.querySelector("[data-rickroll-start]");
+    if (!root || !video || !handoff || !iframe || !soundButton || !gate || !startButton || root.dataset.rickrollMounted === "true") return;
     root.dataset.rickrollMounted = "true";
 
     const reveal = () => {
@@ -14,6 +16,15 @@ export function mountRickrollStoryNow() {
             handoff.hidden = false;
         }
     };
+
+    startButton.addEventListener("click", () => {
+        gate.hidden = true;
+        video.muted = false;
+        video.play().catch(() => {
+            video.muted = true;
+            video.play();
+        });
+    }, { once: true });
 
     soundButton.addEventListener("click", () => {
         iframe.contentWindow?.postMessage(JSON.stringify({ event: "command", func: "unMute", args: [] }), "https://www.youtube-nocookie.com");
