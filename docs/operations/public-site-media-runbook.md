@@ -27,6 +27,20 @@ data. Product walkthrough captures use demo or anonymized data.
   a transcript, and a static fallback before it can replace the current story
   dialog.
 
+### Everbranch story film
+
+- The public story is a 90-second, silent-first Remotion render at
+  `public/media/everbranch-story.mp4`, with a poster image beside it. The
+  homepage dialog does not attach the source until a visitor opens it.
+- `remotion/` owns the scene plan, source composition, design tokens, and
+  replaceable narration script. It uses fictional, public-safe product data;
+  never replace those visuals with customer or tenant captures without the
+  appropriate approval and release evidence.
+- The separate `/story/field-notes-7c8b` page is deliberately unlinked and
+  `noindex`. It is a link-only surprise that uses the official YouTube embed
+  after the self-produced 10-second intro; it must not download, transcode,
+  or host third-party music-video footage.
+
 ## Release checks
 
 - Run `npm run build`, focused public feature tests, `npm run test:visual`, and

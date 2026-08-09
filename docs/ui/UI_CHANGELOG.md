@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-08-09 — Everbranch story film
+
+- Replaced the homepage story-dialog placeholder with a polished 90-second,
+  silent-first animated explainer. It opens from **See the Everbranch story**
+  and introduces the founder’s 11 years of small-business experience before
+  moving through connection, customer context, action, performance, and the
+  system end card.
+- The dialog lazy-loads the video, retains native playback controls, and
+  includes an on-page transcript summary. The Remotion source, timing plan,
+  design tokens, and replaceable voiceover are isolated under `remotion/`.
+- Added an unlinked, no-index direct-link surprise page that shows ten seconds
+  of self-produced animation before embedding the official Rick Astley video;
+  no third-party video file is hosted in the repository.
+
 ## 2026-08-08 — Home channel pulse
 
 - Moved the channel-performance readout to the top of Home in a compact,

@@ -39,6 +39,11 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - For a public-site interaction change, run `npm run test:visual`,
   `CLICK_PATH_CONFIG=tests/e2e/click-path-public-routes.json npm run qa:click-path`,
   and `npm run test:lighthouse:public` in addition to the normal PHP checks.
+- The home-page Everbranch story film is a lazy-loaded, silent-first public
+  asset. Keep its Remotion scenes deterministic and public-safe; real tenant,
+  customer, Shopify, and message data is never permitted in the render. The
+  direct-link surprise route is intentionally unlinked and `noindex`; it may
+  embed the official YouTube upload but must never copy or host the music video.
 
 ## Everbranch mobile customer administration (2026-08-08)
 
