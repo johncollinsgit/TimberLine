@@ -11,12 +11,13 @@
     <main>
         <p class="eb-story-unlisted__label">Everbranch story · private link</p>
         <div class="eb-story-unlisted__player" data-rickroll-player>
-            <video data-rickroll-intro controls autoplay playsinline preload="metadata" poster="{{ asset('media/everbranch-story-poster.jpg') }}">
+            <video data-rickroll-intro controls autoplay muted playsinline preload="metadata" poster="{{ asset('media/everbranch-story-poster.jpg') }}">
                 <source src="{{ asset('media/everbranch-story-rickroll-intro.mp4') }}" type="video/mp4">
                 Your browser does not support the Everbranch story video.
             </video>
             <div class="eb-story-unlisted__handoff" data-rickroll-handoff hidden aria-live="polite">
-                <iframe title="Rick Astley — Never Gonna Give You Up" data-rickroll-src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&amp;mute=0&amp;playsinline=1&amp;rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+                <iframe title="Rick Astley — Never Gonna Give You Up" data-rickroll-src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&amp;mute=1&amp;playsinline=1&amp;enablejsapi=1&amp;rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+                <button class="eb-story-unlisted__sound" type="button" data-rickroll-sound>Turn sound on</button>
             </div>
         </div>
         <p class="eb-story-unlisted__note">The video switches after four seconds.</p>
