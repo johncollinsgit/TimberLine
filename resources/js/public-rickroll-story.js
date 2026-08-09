@@ -3,7 +3,8 @@ export function mountRickrollStoryNow() {
     const video = root?.querySelector("[data-rickroll-intro]");
     const handoff = root?.querySelector("[data-rickroll-handoff]");
     const iframe = handoff?.querySelector("iframe[data-rickroll-src]");
-    if (!root || !video || !handoff || !iframe || root.dataset.rickrollMounted === "true") return;
+    const soundButton = handoff?.querySelector("[data-rickroll-sound]");
+    if (!root || !video || !handoff || !iframe || !soundButton || root.dataset.rickrollMounted === "true") return;
     root.dataset.rickrollMounted = "true";
 
     const reveal = () => {
@@ -13,6 +14,12 @@ export function mountRickrollStoryNow() {
             handoff.hidden = false;
         }
     };
+
+    soundButton.addEventListener("click", () => {
+        iframe.contentWindow?.postMessage(JSON.stringify({ event: "command", func: "unMute", args: [] }), "https://www.youtube-nocookie.com");
+        iframe.contentWindow?.postMessage(JSON.stringify({ event: "command", func: "playVideo", args: [] }), "https://www.youtube-nocookie.com");
+        soundButton.hidden = true;
+    });
 
     video.addEventListener("timeupdate", () => {
         if (video.currentTime >= 3.8) reveal();
