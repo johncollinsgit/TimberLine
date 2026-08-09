@@ -13,6 +13,8 @@ function mountFilm(root) {
     const dialog = document.querySelector("[data-studio-film]");
     const opener = root.querySelector("[data-studio-film-open]");
     const closeButton = dialog?.querySelector("[data-studio-film-close]");
+    const video = dialog?.querySelector("[data-studio-film-video]");
+    const source = video?.querySelector("[data-studio-film-src]");
     if (!dialog || !opener || !closeButton) return;
 
     let restoreFocusTo = null;
@@ -20,12 +22,20 @@ function mountFilm(root) {
         restoreFocusTo = opener;
         dialog.showModal();
         closeButton.focus();
+        if (source?.dataset.studioFilmSrc && !source.getAttribute("src")) {
+            source.setAttribute("src", source.dataset.studioFilmSrc);
+            video.load();
+        }
+        video?.play().catch(() => {});
     });
     closeButton.addEventListener("click", () => dialog.close());
     dialog.addEventListener("click", (event) => {
         if (event.target === dialog) dialog.close();
     });
-    dialog.addEventListener("close", () => restoreFocusTo?.focus());
+    dialog.addEventListener("close", () => {
+        video?.pause();
+        restoreFocusTo?.focus();
+    });
 }
 
 function mountHeroSceneRotation(reducedMotion) {

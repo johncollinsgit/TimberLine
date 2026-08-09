@@ -147,12 +147,15 @@
         </div>
     </footer>
 
-    <dialog class="eb-studio-film" data-studio-film aria-labelledby="film-title">
+    <dialog class="eb-studio-film" data-studio-film aria-labelledby="film-title" aria-describedby="film-description">
         <button class="eb-studio-film__close" type="button" data-studio-film-close aria-label="Close Everbranch story">×</button>
         <div class="eb-studio-film__frame">
-            <img src="{{ asset('images/public-site/everbranch-hvac-electrical-hero.jpg') }}" alt="Two HVAC and electrical technicians reviewing work beside a service panel" />
-                <div class="eb-studio-film__copy"><p class="eb-studio-eyebrow eb-studio-eyebrow--light">The Everbranch story</p><h2 id="film-title">A better business day begins when the next thing is clear.</h2><p>Everbranch is built to make the day more connected, not more complicated. A full sound-on product film and transcript can be dropped into this accessible film frame when approved production footage is ready.</p></div>
+            <video class="eb-studio-film__video" data-studio-film-video controls playsinline preload="metadata" poster="{{ asset('media/everbranch-story-poster.jpg') }}" aria-describedby="film-description">
+                <source data-studio-film-src="{{ asset('media/everbranch-story.mp4') }}" type="video/mp4" />
+                Your browser does not support the Everbranch story video.
+            </video>
         </div>
+        <div class="eb-studio-film__caption"><p class="eb-studio-eyebrow">The Everbranch story · 90 seconds</p><h2 id="film-title">Grow with the whole story.</h2><p id="film-description">A visual overview of how Everbranch connects customers, work, follow-up, and performance. A narration script is available in the transcript below; this first edition is designed to work without sound.</p><details><summary>Read the transcript</summary><p>After eleven years in small business, our founder wanted a calmer way to run the work. Everbranch connects customer context, work, marketing preparation, and performance learning, so a team can see the whole customer story, take the next thoughtful action, and understand what is driving growth.</p></details></div>
     </dialog>
 </body>
 </html>

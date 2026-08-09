@@ -521,6 +521,7 @@ Route::post('/platform/bud/conversations', [PublicBudConversationController::cla
     ->middleware('throttle:20,1')
     ->name('platform.bud.conversations');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
+Route::view('/story/field-notes-7c8b', 'platform.rickroll-story')->name('platform.story.rickroll');
 Route::get('/platform/examples/{discipline?}', [PlatformProductPagesController::class, 'industryDemo'])
     ->where('discipline', 'retail|field|projects|studio|practice|community')
     ->name('platform.industry-demo');

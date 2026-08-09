@@ -28,6 +28,12 @@ const contextualModules = [
     mountExport: "mountPublicStudioNow",
   },
   {
+    key: "publicRickrollStory",
+    selectors: ["[data-rickroll-story]"],
+    load: () => import("./public-rickroll-story"),
+    mountExport: "mountRickrollStoryNow",
+  },
+  {
     key: "publicIndustryDemos",
     selectors: ["[data-industry-page]"],
     load: () => import("./public-industry-demos"),

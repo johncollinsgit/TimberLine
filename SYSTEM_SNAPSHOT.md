@@ -41,6 +41,13 @@
   accessibility, layout-stability, and performance budgets. Focused server
   checks protect primary navigation and launch-partner links. Production
   remains gated by the existing Forge/GitHub release process.
+- The homepage’s **See the Everbranch story** control now opens a lazy-loaded,
+  silent-first 90-second Remotion explainer. Its controlled fictional visuals
+  explain founder intent, customer context, action, and performance without
+  reading tenant or customer data; source, narration, and timing live under
+  `remotion/`. An intentionally unlinked, `noindex` surprise route may be
+  shared directly; it switches after ten seconds to the official YouTube embed
+  and does not host third-party music-video content.
 
 ## Modern Forestry customer and Shopify production guard (audit updated 2026-08-06)
 

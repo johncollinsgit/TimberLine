@@ -32,6 +32,8 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('everbranch-field-owner-office.jpg', false)
         ->assertSee('data-studio-hero-slide', false)
         ->assertSeeText('Become a launch partner')
+        ->assertSeeText('See the Everbranch story')
+        ->assertSee('everbranch-story.mp4', false)
         ->assertSeeText('Log in')
         ->assertSee('brand/everbranch-lockup.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-mark.svg?v='.$cacheTag, false)
@@ -43,6 +45,18 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertDontSeeText('Forestry Backstage')
         ->assertDontSeeText('Backstage')
         ->assertDontSeeText('Welcome back');
+});
+
+test('the private surprise story is available only from its direct noindex link', function (): void {
+    $this->get('http://theeverbranch.com/story/field-notes-7c8b')
+        ->assertOk()
+        ->assertSee('noindex, nofollow, noarchive', false)
+        ->assertSee('everbranch-story-rickroll-intro.mp4', false)
+        ->assertSee('youtube-nocookie.com/embed/dQw4w9WgXcQ', false);
+
+    $this->get('http://theeverbranch.com/')
+        ->assertOk()
+        ->assertDontSee('field-notes-7c8b', false);
 });
 
 test('login route renders the dedicated light auth shell', function (): void {
