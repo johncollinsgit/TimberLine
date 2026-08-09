@@ -18,9 +18,9 @@ test('the popup workspace flow renders for a memberless user when the flag is on
         ->get(route('workspace.first-login'))
         ->assertOk()
         ->assertSeeText('Name your workspace')
-        ->assertSeeText('What kind of business is this?')
-        ->assertSeeText('What do you want to manage here?')
-        ->assertSeeText('How would you like to get started?');
+        ->assertSeeText('What kind of work do you do?')
+        ->assertSeeText('What would make your day easier?')
+        ->assertSeeText('What would you like to manage first?');
 });
 
 test('the popup creates a domain-neutral workspace and records tool picks as interests only', function (): void {

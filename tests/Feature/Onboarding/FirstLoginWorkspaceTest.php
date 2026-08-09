@@ -19,7 +19,9 @@ test('first-login workspace flow opens for a verified user with no tenants', fun
 
     $response->assertOk()
         ->assertSeeText('Name your workspace')
-        ->assertSeeText('We use this to label the place where your team works.')
+        ->assertSeeText('This is the name your team will see. You can change it later.')
+        ->assertSee('placeholder="Your business name"', false)
+        ->assertDontSee('Nathan Collins')
         ->assertSeeText('Field-service trades');
 });
 
@@ -41,7 +43,7 @@ test('first-login workspace flow creates a trades workspace and lands the user i
         'team_size' => '2_5',
         'owner_need' => ['one_dashboard', 'customer_followup'],
         'start_path' => 'self',
-        'module_choices' => ['customers', 'field_service', 'messaging', 'reporting', 'uploads', 'quickbooks'],
+        'module_choices' => ['customers', 'field_service', 'messaging', 'reporting', 'uploads', 'quickbooks', 'shopify'],
     ]);
 
     $response->assertRedirect();
@@ -88,7 +90,8 @@ test('first-login workspace flow creates a trades workspace and lands the user i
     expect($blueprint)->not->toBeNull()
         ->and(data_get($blueprint->payload, 'selected_modules'))->toContain('field_service')
         ->and(data_get($blueprint->payload, 'selected_modules'))->not->toContain('quickbooks')
-        ->and(data_get($blueprint->payload, 'selected_modules'))->not->toContain('uploads');
+        ->and(data_get($blueprint->payload, 'selected_modules'))->not->toContain('uploads')
+        ->and(data_get($blueprint->payload, 'selected_modules'))->not->toContain('shopify');
 
     $this->assertTrue($user->fresh()->tenants()->whereKey($tenant->id)->exists());
     $this->assertTrue($user->fresh()->role === 'admin');

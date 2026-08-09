@@ -45,6 +45,7 @@ class FirstLoginWorkspaceController extends Controller
                 'hardestParts' => $this->hardestPartOptions(),
                 'toolOptions' => $this->moduleOptions(),
                 'recommendedTools' => $this->toolRecommendationMap(),
+                'visibleTools' => $this->toolVisibilityMap(),
             ]);
         }
 
@@ -151,7 +152,7 @@ class FirstLoginWorkspaceController extends Controller
             ['key' => 'law', 'label' => 'Professional services', 'blurb' => 'Clients, matters, documents, time, and billing.', 'profile' => 'Services'],
             ['key' => 'appointment_inventory', 'label' => 'Appointments / inventory', 'blurb' => 'Bookings, classes, events, supplies, and customer updates.', 'profile' => 'Bookings'],
             ['key' => 'generic', 'label' => 'General business', 'blurb' => 'A neutral starting point for customers, communication, and reporting.', 'profile' => 'Flexible'],
-            ['key' => 'custom', 'label' => (string) ($templates['custom'] ?? 'Other / Custom'), 'blurb' => 'Tell us what you do. We will start safely and shape the workflow with you.', 'profile' => 'Custom', 'is_custom' => true],
+            ['key' => 'custom', 'label' => (string) ($templates['custom'] ?? 'Other / Custom'), 'blurb' => 'Tell us what you do. We will start with the basics and make sure the tools fit.', 'profile' => 'Custom', 'is_custom' => true],
         ];
     }
 
@@ -175,6 +176,40 @@ class FirstLoginWorkspaceController extends Controller
             'electrician' => ['customers', 'field_service', 'billing', 'messaging', 'reporting'],
             'law' => ['customers', 'billing', 'messaging', 'reporting'],
             'appointment_inventory' => ['customers', 'billing', 'messaging', 'reporting'],
+        ];
+    }
+
+    /**
+     * Tool interests are an onboarding prompt, never an entitlement. Keep the
+     * prompt itself relevant to the selected business type so a trade company
+     * is not asked about a retail storefront (and vice versa).
+     *
+     * @return array<string,array<int,string>>
+     */
+    protected function toolVisibilityMap(): array
+    {
+        $businessCore = [
+            'website', 'mobile_connection', 'lead_capture', 'billing', 'customers',
+            'messaging', 'email', 'sms', 'reporting', 'integrations', 'quickbooks',
+            'workflow_automations', 'uploads', 'notifications', 'settings',
+        ];
+        $retail = array_values(array_unique(array_merge($businessCore, ['shopify', 'square', 'campaigns'])));
+        $fieldService = array_values(array_unique(array_merge($businessCore, ['field_service'])));
+        $neutral = ['customers', 'messaging', 'reporting'];
+
+        return [
+            'apparel' => $retail,
+            'candle_maker' => $retail,
+            'electrician' => $fieldService,
+            'landscaping' => $fieldService,
+            'trades' => $fieldService,
+            'trades_electrical' => $fieldService,
+            'trades_plumbing' => $fieldService,
+            'home_residential' => $fieldService,
+            'law' => $businessCore,
+            'appointment_inventory' => $businessCore,
+            'generic' => $neutral,
+            'custom' => $neutral,
         ];
     }
 
@@ -243,12 +278,8 @@ class FirstLoginWorkspaceController extends Controller
      */
     protected function normalizeSelectedModules(array $selectedModules, string $templateKey): array
     {
-        $allowed = array_keys($this->moduleOptions());
         $normalizedTemplate = Str::slug(strtolower(trim($templateKey)), '_');
-
-        if (in_array($normalizedTemplate, ['generic', 'custom'], true)) {
-            $allowed = ['customers', 'messaging', 'reporting'];
-        }
+        $allowed = $this->toolVisibilityMap()[$normalizedTemplate] ?? ['customers', 'messaging', 'reporting'];
 
         return array_values(array_intersect(array_unique(array_filter(array_map(
             static fn (mixed $value): string => strtolower(trim((string) $value)),
@@ -323,27 +354,27 @@ class FirstLoginWorkspaceController extends Controller
         return [
             'too_many_apps' => [
                 'label' => 'Too many apps, tabs, and passwords',
-                'description' => 'The classic "which login did I use for that?" situation.',
+                'description' => 'Bring the systems your team uses into one place.',
             ],
             'keeping_up_with_customers' => [
                 'label' => 'Keeping up with customers',
-                'description' => 'Messages, follow-ups, notes, and the occasional "I swear I replied."',
+                'description' => 'Keep conversations, follow-ups, and context together.',
             ],
             'billing_and_cash_flow' => [
                 'label' => 'Billing and cash flow',
-                'description' => 'Invoices, payments, subscriptions, and knowing what is actually owed.',
+                'description' => 'See invoices, payments, and what needs attention.',
             ],
             'team_and_work_tracking' => [
                 'label' => 'Team and work tracking',
-                'description' => 'Who is doing what, when, and whether the sticky note survived.',
+                'description' => 'Make ownership, status, and next steps clear.',
             ],
             'marketing_and_growth' => [
                 'label' => 'Marketing and growth',
-                'description' => 'Finding the right customers without turning into a full-time ad manager.',
+                'description' => 'Turn interest into the next customer conversation.',
             ],
             'reports_and_decisions' => [
                 'label' => 'Reports and decisions',
-                'description' => 'Getting answers without building a spreadsheet monument.',
+                'description' => 'See the numbers that guide the next decision.',
             ],
         ];
     }
@@ -359,7 +390,7 @@ class FirstLoginWorkspaceController extends Controller
             '6_15' => '6-15 people',
             '16_50' => '16-50 people',
             '50_plus' => '50+ people',
-            'depends_on_the_day' => 'Depends who actually shows up today',
+            'depends_on_the_day' => 'It varies',
         ];
     }
 

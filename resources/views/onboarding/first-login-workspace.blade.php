@@ -5,6 +5,7 @@
     $hardestParts = is_array($hardestParts ?? null) ? $hardestParts : [];
     $toolOptions = is_array($toolOptions ?? null) ? $toolOptions : [];
     $recommendedTools = is_array($recommendedTools ?? null) ? $recommendedTools : [];
+    $visibleTools = is_array($visibleTools ?? null) ? $visibleTools : [];
     $steps = ['Name', 'Business', 'Priorities', 'Tools', 'Ready'];
 @endphp
 
@@ -283,28 +284,22 @@
                 data-flw
                 data-workspace-name="{{ $workspaceName }}"
                 data-recommended='@json($recommendedTools)'
+                data-visible-tools='@json($visibleTools)'
                 class="mx-auto w-full max-w-5xl p-8 sm:p-14 lg:p-16"
             >
-            {{-- Progress dots --}}
-            <div class="flex items-center gap-1.5" aria-label="Setup progress">
-                @foreach ($steps as $i => $label)
-                    <span data-dot="{{ $i + 1 }}" class="h-1.5 flex-1 rounded-full bg-zinc-200 transition-colors" title="{{ $label }}"></span>
-                @endforeach
-            </div>
-
             @if ($errors->any())
-                <div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
                     {{ $errors->first() }}
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('workspace.first-login.store') }}" class="mt-10">
+            <form method="POST" action="{{ route('workspace.first-login.store') }}">
                 @csrf
                 <input type="hidden" name="workspace_name" value="{{ $workspaceName }}">
                 <input type="hidden" name="template_key" value="">
                 <input type="hidden" name="team_size" value="">
                 <input type="hidden" name="hardest_part" value="">
-                <input type="hidden" name="start_path" value="guided">
+                <input type="hidden" name="start_path" value="self">
                 <input type="hidden" name="appointment_name" value="">
                 <input type="hidden" name="appointment_email" value="">
                 <input type="hidden" name="appointment_phone" value="">
@@ -318,7 +313,7 @@
                 <section data-step="1" class="space-y-4">
                     <div>
                         <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">Name your workspace</h1>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to label the place where your team works. You can change it later.</p>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">This is the name your team will see. You can change it later.</p>
                     </div>
                     <input
                         data-name-input type="text" value="{{ $workspaceName }}" maxlength="120"
@@ -330,8 +325,8 @@
                 {{-- Step 2: business type --}}
                 <section data-step="2" class="space-y-4" hidden>
                     <div class="max-w-xl">
-                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What kind of business is this?</h1>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to start with the tools that fit your work.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What kind of work do you do?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">Choose the closest match. It only changes the tools we suggest.</p>
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">
                         @foreach ($businessTypes as $type)
@@ -359,10 +354,10 @@
                 </section>
 
                 {{-- Step 3: team size --}}
-                <section data-step="3" class="space-y-7" hidden>
+                <section data-step="3" class="space-y-5" hidden>
                     <div>
-                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">How many people will use this?</h1>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to set up the workspace for your team.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">Who will use this workspace?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">Choose what fits today. You can invite more people later.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         @foreach ($teamSizes as $key => $label)
@@ -372,43 +367,47 @@
                             >{{ $label }}</button>
                         @endforeach
                     </div>
-                    <div class="border-t border-zinc-200 pt-7">
-                        <h2 class="text-xl font-semibold text-zinc-900">What do you need help with first?</h2>
-                        <p class="mt-1 text-sm text-zinc-600">We use this to make the first screen useful.</p>
-                        <div class="mt-4 space-y-2">
-                            @foreach ($hardestParts as $key => $opt)
-                                <button
-                                    type="button" data-pick-focus="{{ $key }}"
-                                    class="flw-focus block w-full rounded-xl border border-zinc-200 bg-white p-3.5 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
-                                >
-                                    <span class="block text-sm font-semibold text-zinc-900">{{ $opt['label'] }}</span>
-                                    <span class="mt-0.5 block text-xs text-zinc-500">{{ $opt['description'] }}</span>
-                                </button>
-                            @endforeach
-                        </div>
+                </section>
+
+                {{-- Step 4: first priority --}}
+                <section data-step="4" class="space-y-4" hidden>
+                    <div>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What would make your day easier?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">We will put this front and center when you arrive.</p>
+                    </div>
+                    <div class="grid gap-2.5 sm:grid-cols-2">
+                        @foreach ($hardestParts as $key => $opt)
+                            <button
+                                type="button" data-pick-focus="{{ $key }}"
+                                class="flw-focus rounded-xl border border-zinc-200 bg-white p-4 text-left transition hover:border-emerald-300 hover:shadow-sm"
+                            >
+                                <span class="block text-sm font-semibold text-zinc-900">{{ $opt['label'] }}</span>
+                                <span class="mt-1 block text-xs leading-5 text-zinc-500">{{ $opt['description'] }}</span>
+                            </button>
+                        @endforeach
                     </div>
                 </section>
 
-                {{-- Step 4: tools --}}
-                <section data-step="4" class="space-y-4" hidden>
+                {{-- Step 5: starting tools --}}
+                <section data-step="5" class="space-y-4" hidden>
                     <div>
-                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What do you want to manage here?</h1>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to prepare the right starting tools.</p>
-                        <p data-neutral-tools-note class="mt-2 hidden text-sm leading-6 text-emerald-800">Your first workspace includes customers, messages, and reporting. We will add other tools after we have reviewed the fit.</p>
+                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What would you like to manage first?</h1>
+                        <p class="mt-2 text-sm leading-6 text-zinc-600">Pick anything useful. You can add more later.</p>
+                        <p data-neutral-tools-note class="mt-2 hidden text-sm leading-6 text-emerald-800">Your workspace will start with customers, messages, and reporting. We will add other tools once we know they fit.</p>
                     </div>
                     <div class="grid max-h-[42vh] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
                         @foreach ($toolOptions as $key => $tool)
                             <button
                                 type="button" data-tool="{{ $key }}"
-                                class="flw-tool flex items-start gap-3 rounded-xl border border-zinc-200 bg-white p-3 text-left transition hover:border-emerald-300"
+                                class="flw-tool flex items-start gap-3 rounded-xl border border-zinc-200 bg-white p-3.5 text-left transition hover:border-emerald-300 hover:shadow-sm"
                             >
                                 <span class="text-lg leading-none">{{ $tool['icon'] ?? '•' }}</span>
                                 <span class="min-w-0">
                                     <span class="flex items-center gap-1.5">
                                         <span class="text-sm font-semibold text-zinc-900">{{ $tool['label'] }}</span>
-                                        <span data-rec-badge class="hidden rounded-full bg-emerald-100 px-1.5 py-0.5 text-[0.6rem] font-semibold text-emerald-700">Recommended</span>
+                                        <span data-rec-badge class="hidden rounded-full bg-emerald-100 px-1.5 py-0.5 text-[0.6rem] font-semibold text-emerald-700">Suggested</span>
                                     </span>
-                                    <span class="mt-0.5 block text-xs text-zinc-500">{{ $tool['description'] }}</span>
+                                    <span class="mt-0.5 block text-xs leading-5 text-zinc-500">{{ $tool['description'] }}</span>
                                 </span>
                                 <span data-tool-check class="ml-auto hidden text-emerald-600">✓</span>
                             </button>
@@ -416,47 +415,12 @@
                     </div>
                 </section>
 
-                {{-- Step 5: concierge and review --}}
-                <section data-step="5" class="space-y-5" hidden>
-                    <div>
-                        <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">How would you like to get started?</h1>
-                        <p class="mt-2 text-sm leading-6 text-zinc-600">We use this to know how much help you want.</p>
-                    </div>
-                    <div class="grid gap-2.5 sm:grid-cols-2">
-                        <button type="button" data-pick-help="guided" class="flw-help rounded-xl border-2 border-emerald-500 bg-emerald-50 p-4 text-left transition">
-                            <span class="block text-sm font-semibold text-zinc-900">Set it up with me</span>
-                            <span class="mt-1 block text-xs text-zinc-500">We will help bring in contacts and choose your first tools.</span>
-                        </button>
-                        <button type="button" data-pick-help="self" class="flw-help rounded-xl border-2 border-zinc-200 bg-white p-4 text-left transition">
-                            <span class="block text-sm font-semibold text-zinc-900">Let me explore first</span>
-                            <span class="mt-1 block text-xs text-zinc-500">Open your workspace, then reach out when you want help.</span>
-                        </button>
-                    </div>
-                    <div data-help-contact class="space-y-2.5 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                        <p class="text-xs font-medium text-zinc-600">Where can we reach you? (optional)</p>
-                        <input data-help-name type="text" placeholder="Your name" maxlength="120" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
-                        <input data-help-email type="email" placeholder="Email" maxlength="255" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
-                        <input data-help-phone type="text" placeholder="Phone" maxlength="40" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm">
-                    </div>
-                    <div class="border-t border-zinc-200 pt-5">
-                        <h3 class="text-lg font-semibold text-zinc-900">Ready when you are</h3>
-                        <p class="mt-1 text-sm text-zinc-500">We will open your first workspace and check in before adding extra tools.</p>
-                    </div>
-                    <dl class="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm">
-                        <div class="flex justify-between gap-4"><dt class="text-zinc-500">Workspace</dt><dd data-review-name class="font-medium text-zinc-900"></dd></div>
-                        <div class="flex justify-between gap-4"><dt class="text-zinc-500">Business</dt><dd data-review-type class="font-medium text-zinc-900"></dd></div>
-                        <div class="flex justify-between gap-4"><dt class="text-zinc-500">Team</dt><dd data-review-team class="font-medium text-zinc-900"></dd></div>
-                        <div class="flex justify-between gap-4"><dt class="text-zinc-500">Tools</dt><dd data-review-tools class="text-right font-medium text-zinc-900"></dd></div>
-                    </dl>
-                    <p class="text-xs text-zinc-400">Your choices do not start billing, send messages, or invite anyone.</p>
-                </section>
-
                 {{-- Nav --}}
                 <div class="mt-7 flex items-center justify-between gap-3">
                     <button type="button" data-back class="rounded-full px-4 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-800" hidden>Back</button>
                     <span class="flex-1"></span>
                     <button type="button" data-next class="rounded-full bg-zinc-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40">Continue</button>
-                    <button type="submit" data-submit class="rounded-full bg-zinc-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800" hidden>Create workspace</button>
+                    <button type="submit" data-submit class="rounded-full bg-zinc-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800" hidden>Open workspace</button>
                 </div>
             </form>
             </div>
@@ -472,6 +436,8 @@
             if (!root) return;
             var recommended = {};
             try { recommended = JSON.parse(root.getAttribute('data-recommended') || '{}'); } catch (e) {}
+            var visibleTools = {};
+            try { visibleTools = JSON.parse(root.getAttribute('data-visible-tools') || '{}'); } catch (e) {}
             var TOTAL = 5;
             var step = 1;
             var state = {
@@ -481,7 +447,7 @@
                 team_size: '', team_label: '',
                 hardest_part: '',
                 module_choices: [],
-                start_path: 'guided',
+                start_path: 'self',
             };
 
             var $ = function (sel) { return root.querySelector(sel); };
@@ -523,7 +489,8 @@
             function canNext() {
                 if (step === 1) return state.workspace_name.trim().length > 0;
                 if (step === 2) return state.template_key !== '' && (state.template_key !== 'custom' || state.custom_business_type.trim().length > 0);
-                if (step === 3) return state.team_size !== '' && state.hardest_part !== '';
+                if (step === 3) return state.team_size !== '';
+                if (step === 4) return state.hardest_part !== '';
                 return true;
             }
 
@@ -538,11 +505,11 @@
 
             function refreshTools() {
                 var rec = recommended[state.template_key] || [];
-                var neutralBase = ['customers', 'messaging', 'reporting'];
+                var allowed = visibleTools[state.template_key] || ['customers', 'messaging', 'reporting'];
                 var isNeutralWorkspace = state.template_key === 'generic' || state.template_key === 'custom';
                 $$('[data-tool]').forEach(function (el) {
                     var k = el.getAttribute('data-tool');
-                    el.hidden = isNeutralWorkspace && neutralBase.indexOf(k) === -1;
+                    el.hidden = allowed.indexOf(k) === -1;
                     var picked = state.module_choices.indexOf(k) !== -1;
                     el.classList.toggle('border-emerald-500', picked);
                     el.classList.toggle('bg-emerald-50', picked);
@@ -556,13 +523,6 @@
                 if (neutralNote) neutralNote.classList.toggle('hidden', !isNeutralWorkspace);
             }
 
-            function updateReview() {
-                $('[data-review-name]').textContent = state.workspace_name || '—';
-                $('[data-review-type]').textContent = state.template_label || '—';
-                $('[data-review-team]').textContent = state.team_label || '—';
-                $('[data-review-tools]').textContent = state.module_choices.length ? (state.module_choices.length + ' selected') : 'None yet';
-            }
-
             function render() {
                 $$('[data-step]').forEach(function (p) { p.hidden = parseInt(p.getAttribute('data-step'), 10) !== step; });
                 $$('[data-dot]').forEach(function (d) {
@@ -570,13 +530,10 @@
                     d.classList.toggle('bg-emerald-500', on);
                     d.classList.toggle('bg-zinc-200', !on);
                 });
-                var stepNumber = $('[data-step-num]');
-                if (stepNumber) stepNumber.textContent = step;
                 $('[data-back]').hidden = step === 1;
                 $('[data-next]').hidden = step === TOTAL;
                 $('[data-submit]').hidden = step !== TOTAL;
                 $('[data-next]').disabled = !canNext();
-                if (step === TOTAL) updateReview();
             }
 
             // Name
@@ -642,25 +599,6 @@
                     syncHidden();
                 });
             });
-
-            // Concierge
-            $$('[data-pick-help]').forEach(function (el) {
-                el.addEventListener('click', function () {
-                    state.start_path = el.getAttribute('data-pick-help');
-                    $$('[data-pick-help]').forEach(function (n) {
-                        n.classList.remove('border-emerald-500', 'bg-emerald-50');
-                        n.classList.add('border-zinc-200');
-                    });
-                    el.classList.remove('border-zinc-200');
-                    el.classList.add('border-emerald-500', 'bg-emerald-50');
-                    $('[data-help-contact]').hidden = state.start_path !== 'guided';
-                    syncHidden();
-                });
-            });
-            var hn = $('[data-help-name]'), he = $('[data-help-email]'), hp = $('[data-help-phone]');
-            if (hn) hn.addEventListener('input', function () { hidden.appointment_name.value = hn.value; });
-            if (he) he.addEventListener('input', function () { hidden.appointment_email.value = he.value; });
-            if (hp) hp.addEventListener('input', function () { hidden.appointment_phone.value = hp.value; });
 
             $('[data-next]').addEventListener('click', function () { if (canNext() && step < TOTAL) { step++; render(); } });
             $('[data-back]').addEventListener('click', function () { if (step > 1) { step--; render(); } });
