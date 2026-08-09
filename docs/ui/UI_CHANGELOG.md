@@ -10,7 +10,7 @@
 - The dialog lazy-loads the video, retains native playback controls, and
   includes an on-page transcript summary. The Remotion source, timing plan,
   design tokens, and replaceable voiceover are isolated under `remotion/`.
-- Added an unlinked, no-index direct-link surprise page that shows ten seconds
+- Added an unlinked, no-index direct-link surprise page that shows four seconds
   of self-produced animation before embedding the official Rick Astley video;
   no third-party video file is hosted in the repository.
 

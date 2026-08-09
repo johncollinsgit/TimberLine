@@ -16,10 +16,10 @@
                 Your browser does not support the Everbranch story video.
             </video>
             <div class="eb-story-unlisted__handoff" data-rickroll-handoff hidden aria-live="polite">
-                <iframe title="Rick Astley — Never Gonna Give You Up" src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&amp;rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+                <iframe title="Rick Astley — Never Gonna Give You Up" data-rickroll-src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&amp;mute=0&amp;playsinline=1&amp;rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
             </div>
         </div>
-        <p class="eb-story-unlisted__note">The video switches after ten seconds.</p>
+        <p class="eb-story-unlisted__note">The video switches after four seconds.</p>
     </main>
 </body>
 </html>

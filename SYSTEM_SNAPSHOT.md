@@ -46,7 +46,7 @@
   explain founder intent, customer context, action, and performance without
   reading tenant or customer data; source, narration, and timing live under
   `remotion/`. An intentionally unlinked, `noindex` surprise route may be
-  shared directly; it switches after ten seconds to the official YouTube embed
+  shared directly; it switches after four seconds to the official YouTube embed
   and does not host third-party music-video content.
 
 ## Modern Forestry customer and Shopify production guard (audit updated 2026-08-06)
