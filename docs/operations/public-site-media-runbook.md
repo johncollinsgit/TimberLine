@@ -38,9 +38,10 @@ data. Product walkthrough captures use demo or anonymized data.
   appropriate approval and release evidence.
 - The separate `/story/field-notes-7c8b` page is deliberately unlinked and
   `noindex`. It is a link-only surprise that uses the official YouTube embed
-  after four seconds of self-produced intro. Both clips start muted so the
-  handoff works on mobile; the page exposes a one-tap sound control. It must
-  not download, transcode, or host third-party music-video footage.
+  after four seconds of self-produced intro. It opens with an explicit
+  sound-on start control for mobile; the page still exposes a one-tap sound
+  fallback if a browser blocks delayed embedded audio. It must not download,
+  transcode, or host third-party music-video footage.
 
 ## Release checks
 
