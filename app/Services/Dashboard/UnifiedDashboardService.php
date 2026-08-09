@@ -248,8 +248,9 @@ class UnifiedDashboardService
      */
     protected function heroMetric(?int $tenantId, array $profile, bool $canAccessMarketing, bool $canAccessOps, array $range, ?array $tradeMetrics = null, bool $clientFacingFieldService = true): array
     {
-        $channelType = (string) ($profile['channel_type'] ?? 'direct');
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
+        $retailCommerce = $this->supportsRetailCommerce($profile);
+        $genericWorkspace = (string) ($profile['workspace_profile'] ?? 'generic_custom') === 'generic_custom';
 
         if ($canAccessOps && $tradeMetrics !== null) {
             return [
@@ -261,7 +262,7 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($tenantId !== null && Schema::hasTable('orders') && in_array($channelType, ['shopify', 'hybrid'], true) && ($canAccessMarketing || $canAccessOps)) {
+        if ($retailCommerce && $tenantId !== null && Schema::hasTable('orders') && ($canAccessMarketing || $canAccessOps)) {
             $query = Order::query()->forTenantId($tenantId);
             $revenue = (float) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->sum('total_price');
             $orders = (int) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->count();
@@ -305,15 +306,15 @@ class UnifiedDashboardService
                 ->count();
 
             return [
-                'label' => 'Reachable customers',
+                'label' => $genericWorkspace ? 'Reachable contacts' : 'Reachable customers',
                 'value' => number_format($reachable),
-                'supporting' => 'Profiles with at least one usable contact path',
+                'supporting' => $genericWorkspace ? 'Contacts with at least one usable contact path' : 'Profiles with at least one usable contact path',
                 'tone' => 'sky',
                 'destination' => ['kind' => 'customers'],
             ];
         }
 
-        if ($canAccessOps && $tenantId !== null && Schema::hasTable('orders')) {
+        if ($retailCommerce && $canAccessOps && $tenantId !== null && Schema::hasTable('orders')) {
             $openQueue = (int) Order::query()
                 ->forTenantId($tenantId)
                 ->whereIn('status', ['reviewed', 'submitted_to_pouring', 'pouring', 'brought_down', 'verified'])
@@ -344,6 +345,8 @@ class UnifiedDashboardService
     {
         $cards = [];
         $useCase = (string) ($profile['use_case_profile'] ?? 'ops');
+        $retailCommerce = $this->supportsRetailCommerce($profile);
+        $genericWorkspace = (string) ($profile['workspace_profile'] ?? 'generic_custom') === 'generic_custom';
 
         if ($canAccessOps && $tradeMetrics !== null) {
             return [
@@ -410,14 +413,14 @@ class UnifiedDashboardService
 
         if ($canAccessMarketing && $tenantId !== null && Schema::hasTable('marketing_profiles')) {
             $cards[] = [
-                'label' => 'Customers',
+                'label' => $genericWorkspace ? 'Contacts' : 'Customers',
                 'value' => number_format((int) MarketingProfile::query()->forTenantId($tenantId)->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()),
-                'detail' => 'Unified tenant-scoped profiles',
+                'detail' => $genericWorkspace ? 'People and organizations in this workspace' : 'Unified tenant-scoped profiles',
                 'destination' => ['kind' => 'customers'],
             ];
         }
 
-        if ($tenantId !== null && Schema::hasTable('orders')) {
+        if ($retailCommerce && $tenantId !== null && Schema::hasTable('orders')) {
             $cards[] = [
                 'label' => 'Orders',
                 'value' => number_format((int) Order::query()->forTenantId($tenantId)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->count()),
@@ -574,7 +577,9 @@ class UnifiedDashboardService
             return array_slice($actions, 0, 5);
         }
 
-        if ($canAccessMarketing) {
+        $messagingEnabled = $tenantId !== null && $this->moduleAccess->canAccess($tenantId, 'messaging');
+
+        if ($canAccessMarketing && $messagingEnabled) {
             $actions[] = [
                 'label' => 'Send Message to All Opted-In Customers',
                 'description' => 'Quick send to all SMS/email subscribers.',
@@ -625,15 +630,16 @@ class UnifiedDashboardService
         }
 
         if ($canAccessMarketing && in_array((string) ($profile['use_case_profile'] ?? 'ops'), ['crm', 'marketing', 'hybrid'], true)) {
+            $genericWorkspace = (string) ($profile['workspace_profile'] ?? 'generic_custom') === 'generic_custom';
             $actions[] = [
-                'label' => 'Open customers',
-                'description' => 'Go straight to customer search, follow-up, and profile detail.',
+                'label' => $genericWorkspace ? 'Open contacts' : 'Open customers',
+                'description' => $genericWorkspace ? 'Go to contacts, notes, and follow-up.' : 'Go straight to customer search, follow-up, and profile detail.',
                 'href' => route('marketing.customers'),
                 'tone' => 'success',
             ];
         }
 
-        if ($canAccessOps && $tenantId !== null && Schema::hasTable('orders')) {
+        if ($this->supportsRetailCommerce($profile) && $canAccessOps && $tenantId !== null && Schema::hasTable('orders')) {
             $openQueue = (int) Order::query()
                 ->forTenantId($tenantId)
                 ->whereIn('status', ['reviewed', 'submitted_to_pouring', 'pouring', 'brought_down', 'verified'])
@@ -660,7 +666,14 @@ class UnifiedDashboardService
     protected function pinnedModules(array $catalog): array
     {
         $active = is_array($catalog['sections']['active'] ?? null) ? $catalog['sections']['active'] : [];
-        $available = is_array($catalog['sections']['available'] ?? null) ? $catalog['sections']['available'] : [];
+        $available = collect(is_array($catalog['sections']['available'] ?? null) ? $catalog['sections']['available'] : [])
+            ->filter(function (array $module): bool {
+                $state = strtolower(trim((string) data_get($module, 'module_state.state_label', 'Available')));
+
+                return ! str_contains($state, 'locked') && ! str_contains($state, 'unavailable');
+            })
+            ->values()
+            ->all();
 
         $rows = array_merge(array_slice($active, 0, 2), array_slice($available, 0, 2));
 
@@ -673,6 +686,16 @@ class UnifiedDashboardService
                 'href' => route('marketing.modules', ['module' => (string) ($module['module_key'] ?? '')]),
             ];
         }, $rows);
+    }
+
+    /** @param array<string,mixed> $profile */
+    protected function supportsRetailCommerce(array $profile): bool
+    {
+        $workspaceProfile = (string) ($profile['workspace_profile'] ?? 'generic_custom');
+        $packs = (array) ($profile['capability_packs'] ?? []);
+
+        return $workspaceProfile === 'retail_commerce'
+            || ($workspaceProfile === 'maker_production' && in_array('retail_commerce', $packs, true));
     }
 
     protected function clientFacingFieldServiceEnabled(?Tenant $tenant): bool

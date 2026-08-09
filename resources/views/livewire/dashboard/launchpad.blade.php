@@ -5,6 +5,7 @@
     $summaryCards = is_array($dashboard['summary_cards'] ?? null) ? $dashboard['summary_cards'] : [];
     $nextActions = is_array($dashboard['next_actions'] ?? null) ? $dashboard['next_actions'] : [];
     $pinnedModules = is_array($dashboard['pinned_modules'] ?? null) ? $dashboard['pinned_modules'] : [];
+    $hasPinnedModules = $pinnedModules !== [];
     $dateRange = is_array($dashboard['date_range'] ?? null) ? $dashboard['date_range'] : [];
     $rangeOptions = is_array($dateRange['options'] ?? null) ? $dateRange['options'] : [];
     $upcomingJobs = is_array($dashboard['upcoming_jobs'] ?? null) ? $dashboard['upcoming_jobs'] : [];
@@ -147,7 +148,7 @@
             </div>
 
             @if($summaryCards !== [])
-                <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 {{ count($summaryCards) === 3 ? 'xl:grid-cols-3' : 'xl:grid-cols-4' }}">
                     @foreach($summaryCards as $card)
                         <a href="{{ $card['href'] ?? route('dashboard') }}" class="block rounded-3xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 transition hover:-translate-y-0.5 sm:p-5">
                             <div class="text-xs uppercase tracking-[0.24em] text-[var(--fb-muted)]">{{ $card['label'] ?? 'Metric' }}</div>
@@ -187,11 +188,11 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div class="grid grid-cols-1 gap-6 {{ $hasPinnedModules ? 'xl:grid-cols-[1.1fr_0.9fr]' : '' }}">
             <section class="mf-app-card rounded-3xl p-5 sm:p-6">
                 <div class="mb-5">
                     <h2 class="text-lg font-semibold text-[var(--fb-text)] sm:text-xl">Recommended next actions</h2>
-                    <p class="mt-1 text-sm text-[var(--fb-muted)]">Actions shift with tenant mode, current signals, and module availability.</p>
+                    <p class="mt-1 text-sm text-[var(--fb-muted)]">A couple of useful places to begin.</p>
                 </div>
 
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -208,6 +209,7 @@
                 </div>
             </section>
 
+            @if($hasPinnedModules)
             <section class="mf-app-card rounded-3xl p-5 sm:p-6">
                 <div class="mb-5 flex items-center justify-between gap-3">
                     <div>
@@ -220,7 +222,7 @@
                 </div>
 
                 <div class="space-y-3">
-                    @forelse($pinnedModules as $module)
+                    @foreach($pinnedModules as $module)
                         <a href="{{ $module['href'] ?? '#' }}" class="block rounded-3xl border border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 transition hover:-translate-y-0.5">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
@@ -230,13 +232,10 @@
                                 <span class="rounded-full border border-[var(--fb-border)] bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--fb-muted)]">{{ $module['state_label'] ?? 'Module' }}</span>
                             </div>
                         </a>
-                    @empty
-                        <div class="rounded-3xl border border-dashed border-[var(--fb-border)] bg-[var(--fb-surface-muted)] p-4 text-sm text-[var(--fb-muted)]">
-                            Module recommendations will appear here as workspace access and App Store availability evolve.
-                        </div>
-                    @endforelse
+                    @endforeach
                 </div>
             </section>
+            @endif
         </div>
     </div>
 </div>

@@ -235,7 +235,7 @@ class TenantExperienceProfileService
             'field_service_trades' => ['Field service workspace', 'Customers, jobs, materials, and field work in one place.'],
             'professional_services' => ['Professional workspace', 'Clients, documents, matters, and follow-up in one place.'],
             'appointment_inventory' => ['Appointments workspace', 'Classes, reservations, inventory, and customer follow-up in one place.'],
-            default => ['Customer workspace', 'Operational tools, data, and next actions in one place.'],
+            default => ['Business workspace', 'Core tools, data, and next actions in one place.'],
         };
 
         return [

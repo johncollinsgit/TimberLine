@@ -393,9 +393,9 @@
                     <div>
                         <h1 class="text-3xl font-semibold tracking-tight text-zinc-950">What would you like to manage first?</h1>
                         <p class="mt-2 text-sm leading-6 text-zinc-600">Pick anything useful. You can add more later.</p>
-                        <p data-neutral-tools-note class="mt-2 hidden text-sm leading-6 text-emerald-800">Your workspace will start with customers, messages, and reporting. We will add other tools once we know they fit.</p>
+                        <p data-neutral-tools-note class="mt-2 hidden text-sm leading-6 text-emerald-800">Your workspace will start with the essentials. When you need more, you can review the tools that fit your work.</p>
                     </div>
-                    <div class="grid max-h-[42vh] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-2">
+                    <div class="grid max-h-[42vh] gap-2.5 overflow-y-auto pr-1 sm:grid-cols-3">
                         @foreach ($toolOptions as $key => $tool)
                             <button
                                 type="button" data-tool="{{ $key }}"

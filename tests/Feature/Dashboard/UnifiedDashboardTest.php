@@ -41,8 +41,8 @@ test('dashboard renders customer-focused hero metric for direct crm tenants', fu
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSeeText('Reachable customers')
-        ->assertSeeText('Customer workspace');
+        ->assertSeeText('Reachable contacts')
+        ->assertSeeText('Business workspace');
 });
 
 test('dashboard renders commerce hero metric for shopify-connected tenants', function () {
@@ -56,6 +56,13 @@ test('dashboard renders commerce hero metric for shopify-connected tenants', fun
         'plan_key' => 'growth',
         'operating_mode' => 'shopify',
         'source' => 'test',
+        'metadata' => [
+            'tenant_blueprint' => [
+                'workspace_profile' => 'retail_commerce',
+                'blueprint_review_status' => 'reviewed',
+                'capability_packs' => ['retail_commerce'],
+            ],
+        ],
     ]);
 
     ShopifyStore::query()->create([
@@ -82,11 +89,53 @@ test('dashboard renders commerce hero metric for shopify-connected tenants', fun
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSeeText('Order-linked revenue · Current month')
-        ->assertSeeText('Commerce workspace')
+        ->assertSeeText('Retail workspace')
         ->assertSeeText('$300.00')
         ->assertSeeText('Time window')
         ->assertSeeText('Last 30 days')
         ->assertSee('wire:model.live="range"', false);
+});
+
+test('dashboard does not surface commerce metrics for an unreviewed shopify tenant', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Unreviewed Shopify Tenant',
+        'slug' => 'unreviewed-shopify-tenant',
+    ]);
+
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'growth',
+        'operating_mode' => 'shopify',
+        'source' => 'test',
+    ]);
+
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'unreviewed-retail',
+        'shop_domain' => 'unreviewed-shop.myshopify.com',
+        'access_token' => 'shpat_test',
+        'installed_at' => now(),
+    ]);
+
+    Order::query()->create([
+        'tenant_id' => $tenant->id,
+        'order_number' => 'UNREVIEWED-1',
+        'order_label' => 'Order UNREVIEWED-1',
+        'status' => 'paid',
+        'total_price' => 300,
+        'ordered_at' => now(),
+    ]);
+
+    $user = User::factory()->create(['role' => 'admin']);
+    $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSeeText('Business workspace')
+        ->assertSeeText('Reachable contacts')
+        ->assertDontSeeText('Order-linked revenue')
+        ->assertDontSeeText('Tenant-linked order records');
 });
 
 test('dashboard range defaults to current month and filters a selected one day window', function () {
@@ -96,6 +145,13 @@ test('dashboard range defaults to current month and filters a selected one day w
         'plan_key' => 'growth',
         'operating_mode' => 'shopify',
         'source' => 'test',
+        'metadata' => [
+            'tenant_blueprint' => [
+                'workspace_profile' => 'retail_commerce',
+                'blueprint_review_status' => 'reviewed',
+                'capability_packs' => ['retail_commerce'],
+            ],
+        ],
     ]);
     ShopifyStore::query()->create([
         'tenant_id' => $tenant->id,
@@ -164,7 +220,8 @@ test('dashboard hides marketing only actions and customer metrics for ops manage
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSeeText('Open operational queue')
+        ->assertSeeText('Workspace readiness')
+        ->assertDontSeeText('Open operational queue')
         ->assertDontSeeText('Reachable customers')
         ->assertDontSeeText('Open customers')
         ->assertDontSeeText('Open Modules');

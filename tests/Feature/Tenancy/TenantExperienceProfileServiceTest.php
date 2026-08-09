@@ -38,7 +38,7 @@ test('tenant experience profile derives direct crm workspaces from direct tenant
     expect($profile['channel_type'])->toBe('direct')
         ->and($profile['use_case_profile'])->toBe('crm')
         ->and($profile['power_user_mode'])->toBeTrue()
-        ->and(data_get($profile, 'workspace.label'))->toBe('Customer workspace');
+        ->and(data_get($profile, 'workspace.label'))->toBe('Business workspace');
 });
 
 test('a shopify connection cannot infer a retail workspace for an unreviewed tenant', function () {
@@ -77,7 +77,7 @@ test('a shopify connection cannot infer a retail workspace for an unreviewed ten
         ->and($profile['workspace_profile'])->toBe('generic_custom')
         ->and($profile['workspace_profile_reviewed'])->toBeFalse()
         ->and($profile['use_case_profile'])->toBe('crm')
-        ->and(data_get($profile, 'workspace.label'))->toBe('Customer workspace');
+        ->and(data_get($profile, 'workspace.label'))->toBe('Business workspace');
 });
 
 test('a hybrid connection state cannot infer vertical capabilities for an unreviewed tenant', function () {
@@ -106,5 +106,5 @@ test('a hybrid connection state cannot infer vertical capabilities for an unrevi
     expect($profile['channel_type'])->toBe('hybrid')
         ->and($profile['workspace_profile'])->toBe('generic_custom')
         ->and($profile['use_case_profile'])->toBe('crm')
-        ->and(data_get($profile, 'workspace.label'))->toBe('Customer workspace');
+        ->and(data_get($profile, 'workspace.label'))->toBe('Business workspace');
 });
