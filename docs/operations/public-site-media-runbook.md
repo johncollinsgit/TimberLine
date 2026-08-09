@@ -38,7 +38,7 @@ data. Product walkthrough captures use demo or anonymized data.
   appropriate approval and release evidence.
 - The separate `/story/field-notes-7c8b` page is deliberately unlinked and
   `noindex`. It is a link-only surprise that uses the official YouTube embed
-  after the self-produced 10-second intro; it must not download, transcode,
+  after four seconds of self-produced intro; it must not download, transcode,
   or host third-party music-video footage.
 
 ## Release checks

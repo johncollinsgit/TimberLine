@@ -52,7 +52,8 @@ test('the private surprise story is available only from its direct noindex link'
         ->assertOk()
         ->assertSee('noindex, nofollow, noarchive', false)
         ->assertSee('everbranch-story-rickroll-intro.mp4', false)
-        ->assertSee('youtube-nocookie.com/embed/dQw4w9WgXcQ', false);
+        ->assertSee('youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1', false)
+        ->assertSeeText('The video switches after four seconds.');
 
     $this->get('http://theeverbranch.com/')
         ->assertOk()
