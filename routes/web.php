@@ -304,6 +304,10 @@ $landlordRoutes = static function (): void {
         ->name('tenants.blueprint.edit');
     Route::match(['put', 'patch'], '/landlord/tenants/{tenant}/blueprint', [LandlordTenantDirectoryController::class, 'updateBlueprint'])
         ->name('tenants.blueprint.update');
+    Route::post('/landlord/tenants/{tenant}/workspace-change-requests/{workspaceChangeRequest}/approve', [LandlordTenantDirectoryController::class, 'approveWorkspaceChangeRequest'])
+        ->name('tenants.workspace-change-requests.approve');
+    Route::post('/landlord/tenants/{tenant}/workspace-change-requests/{workspaceChangeRequest}/decline', [LandlordTenantDirectoryController::class, 'declineWorkspaceChangeRequest'])
+        ->name('tenants.workspace-change-requests.decline');
     Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
         ->name('tenants.show');
     Route::post('/landlord/tenants/{tenant}/forms/templates/{templateKey}', [LandlordTenantDirectoryController::class, 'provisionFormFromTemplate'])
@@ -687,6 +691,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->post('/start/setup-status', [CustomerStartHereController::class, 'updateSetupStatus'])
         ->name('app.setup-status.update');
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->put('/start/workspace-details', [CustomerStartHereController::class, 'updateWorkspaceDetails'])
+        ->name('app.workspace-details.update');
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->post('/start/workspace-change-requests', [CustomerStartHereController::class, 'requestWorkspaceChange'])
+        ->name('app.workspace-change-requests.store');
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->delete('/start/workspace-change-requests/{workspaceChangeRequest}', [CustomerStartHereController::class, 'cancelWorkspaceChange'])
+        ->name('app.workspace-change-requests.cancel');
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->prefix('client/projects')

@@ -81,6 +81,7 @@ function everbranchReviewBlueprintUpdate(array $overrides = []): array
         'blueprint_review_status' => 'needs_follow_up',
         'blueprint_internal_notes' => 'Landlord-only: verify service area and crew roles.',
         'blueprint_next_action' => 'Schedule blueprint review call.',
+        'profile_change_reason' => 'Operator reviewed the business workflow and confirmed this setup.',
     ], $overrides);
 }
 

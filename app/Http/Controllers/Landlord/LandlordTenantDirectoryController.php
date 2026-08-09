@@ -14,6 +14,7 @@ use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantModuleState;
 use App\Models\TenantOnboardingJourneyEvent;
+use App\Models\TenantWorkspaceChangeRequest;
 use App\Models\User;
 use App\Services\Forms\TenantFormProvisioningService;
 use App\Services\Onboarding\OnboardingJourneyDiagnosticsService;
@@ -25,6 +26,7 @@ use App\Services\Tenancy\LandlordTenantOperationsService;
 use App\Services\Tenancy\TenantBlueprintModuleRecommendationService;
 use App\Services\Tenancy\TenantBlueprintProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Services\Tenancy\TenantWorkspaceChangeRequestService;
 use App\Support\Tenancy\TenantHostBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
@@ -274,6 +276,7 @@ class LandlordTenantDirectoryController extends Controller
             'blueprintOptions' => $blueprintService->formOptions(),
             'tenantBlueprint' => $blueprintService->payloadForTenant($hydratedTenant),
             'testAccess' => $this->tenantTestAccess($hydratedTenant, $summary),
+            'workspaceChangeRequest' => app(TenantWorkspaceChangeRequestService::class)->pendingForTenant($hydratedTenant),
         ]);
     }
 
@@ -289,6 +292,19 @@ class LandlordTenantDirectoryController extends Controller
         }
 
         $validated = $request->validate($blueprintService->validationRules(includeReview: true));
+        $currentBlueprint = $blueprintService->payloadForTenant($tenant->loadMissing('accessProfile'));
+        $proposedBlueprint = $blueprintService->blueprintFromInput($validated);
+        $classificationChanged = (string) ($currentBlueprint['business_template'] ?? 'generic') !== (string) ($proposedBlueprint['business_template'] ?? 'generic')
+            || (string) ($currentBlueprint['workspace_profile'] ?? 'generic_custom') !== (string) ($proposedBlueprint['workspace_profile'] ?? 'generic_custom')
+            || array_values((array) ($currentBlueprint['capability_packs'] ?? [])) !== array_values((array) ($proposedBlueprint['capability_packs'] ?? []));
+
+        if ($classificationChanged) {
+            $reason = $request->validate([
+                'profile_change_reason' => ['required', 'string', 'max:2000'],
+            ])['profile_change_reason'];
+            $existingNotes = trim((string) ($validated['blueprint_internal_notes'] ?? $currentBlueprint['blueprint_internal_notes'] ?? ''));
+            $validated['blueprint_internal_notes'] = trim($existingNotes."\n\nProfile change reason: ".trim((string) $reason));
+        }
 
         DB::transaction(function () use ($tenant, $validated, $setupStatusService, $blueprintService, $operator): void {
             $tenant->loadMissing('accessProfile');
@@ -307,6 +323,58 @@ class LandlordTenantDirectoryController extends Controller
         return redirect()
             ->route('landlord.tenants.show', ['tenant' => (int) $tenant->id, 'tab' => 'overview'])
             ->with('status', 'Tenant blueprint updated.');
+    }
+
+    public function approveWorkspaceChangeRequest(
+        Request $request,
+        Tenant $tenant,
+        TenantWorkspaceChangeRequest $workspaceChangeRequest,
+        TenantBlueprintProfileService $blueprintService,
+        TenantWorkspaceChangeRequestService $workspaceChanges
+    ): RedirectResponse {
+        abort_unless((int) $workspaceChangeRequest->tenant_id === (int) $tenant->id, 404);
+        $operator = $request->user();
+        abort_unless($operator instanceof User, 403);
+
+        $validated = $request->validate([
+            'workspace_profile' => ['required', 'string', Rule::in(array_keys($blueprintService->workspaceProfileOptions()))],
+            'capability_packs' => ['nullable', 'array'],
+            'capability_packs.*' => ['string', Rule::in(['retail_commerce', 'service_reputation'])],
+            'decision_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $workspaceChanges->approve($workspaceChangeRequest, $operator, $validated);
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['workspace_change' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'overview'])
+            ->with('status', 'Workspace change approved and the reviewed profile is now active.');
+    }
+
+    public function declineWorkspaceChangeRequest(
+        Request $request,
+        Tenant $tenant,
+        TenantWorkspaceChangeRequest $workspaceChangeRequest,
+        TenantWorkspaceChangeRequestService $workspaceChanges
+    ): RedirectResponse {
+        abort_unless((int) $workspaceChangeRequest->tenant_id === (int) $tenant->id, 404);
+        $operator = $request->user();
+        abort_unless($operator instanceof User, 403);
+
+        $validated = $request->validate([
+            'decision_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $workspaceChanges->decline($workspaceChangeRequest, $operator, $validated['decision_note'] ?? null);
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['workspace_change' => $exception->getMessage()]);
+        }
+
+        return redirect()->route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'overview'])
+            ->with('status', 'Workspace change declined. The current workspace remains active.');
     }
 
     public function provisionFormFromTemplate(

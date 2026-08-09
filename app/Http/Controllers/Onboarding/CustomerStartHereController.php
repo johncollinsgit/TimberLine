@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Onboarding;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use App\Models\TenantWorkspaceChangeRequest;
 use App\Services\Onboarding\TenantOnboardingCompletionService;
 use App\Services\Onboarding\TenantSetupStatusService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantBlueprintModuleRecommendationService;
+use App\Services\Tenancy\TenantBlueprintProfileService;
+use App\Services\Tenancy\TenantWorkspaceChangeRequestService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -19,7 +22,9 @@ class CustomerStartHereController extends Controller
         TenantCommercialExperienceService $experienceService,
         TenantSetupStatusService $setupStatusService,
         TenantBlueprintModuleRecommendationService $blueprintModuleRecommendations,
-        TenantOnboardingCompletionService $completionService
+        TenantOnboardingCompletionService $completionService,
+        TenantBlueprintProfileService $blueprints,
+        TenantWorkspaceChangeRequestService $workspaceChanges
     ): Response
     {
         /** @var Tenant|null $tenant */
@@ -40,7 +45,75 @@ class CustomerStartHereController extends Controller
             'onboardingComplete' => $onboardingComplete,
             'showElectricianTutorial' => $showElectricianTutorial,
             'completionRedirectUrl' => route('dashboard', absolute: false),
+            'ownerCanManageWorkspace' => request()->user() instanceof \App\Models\User
+                ? $workspaceChanges->canManageWorkspace(request()->user(), $tenant)
+                : false,
+            'workspaceChangeRequest' => $workspaceChanges->pendingForTenant($tenant),
+            'workspaceDetailOptions' => [
+                'templates' => $blueprints->templateOptions(),
+                'work_management_intents' => $blueprints->formOptions()['work_management_intents'] ?? [],
+            ],
         ]);
+    }
+
+    public function updateWorkspaceDetails(
+        Request $request,
+        TenantSetupStatusService $setupStatusService,
+        TenantBlueprintProfileService $blueprints,
+        TenantWorkspaceChangeRequestService $workspaceChanges
+    ): RedirectResponse {
+        /** @var Tenant|null $tenant */
+        $tenant = $request->attributes->get('current_tenant');
+        $user = $request->user();
+        abort_unless($tenant instanceof Tenant && $user instanceof \App\Models\User && $workspaceChanges->canManageWorkspace($user, $tenant), 403);
+
+        $validated = $request->validate($blueprints->ownerDetailValidationRules());
+        $profile = $tenant->accessProfile ?: $tenant->accessProfile()->create([
+            'plan_key' => 'base',
+            'operating_mode' => 'custom_or_unknown',
+            'source' => 'tenant_workspace_details',
+        ]);
+
+        $blueprints->updateOwnerDetails($tenant, $profile, $setupStatusService->forTenant($tenant), $validated);
+
+        return redirect()->route('app.start', ['tenant' => $tenant->slug])
+            ->with('status', 'Workspace details updated. Your workspace access has not changed.');
+    }
+
+    public function requestWorkspaceChange(Request $request, TenantWorkspaceChangeRequestService $workspaceChanges): RedirectResponse
+    {
+        /** @var Tenant|null $tenant */
+        $tenant = $request->attributes->get('current_tenant');
+        $user = $request->user();
+        abort_unless($tenant instanceof Tenant && $user instanceof \App\Models\User && $workspaceChanges->canManageWorkspace($user, $tenant), 403);
+
+        $validated = $request->validate($workspaceChanges->requestValidationRules());
+
+        try {
+            $workspaceChanges->request($tenant, $user, $validated);
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['workspace_change' => $exception->getMessage()])->withInput();
+        }
+
+        return redirect()->route('app.start', ['tenant' => $tenant->slug])
+            ->with('status', 'Workspace change request sent to Everbranch for review. Your current workspace is unchanged.');
+    }
+
+    public function cancelWorkspaceChange(Request $request, TenantWorkspaceChangeRequest $workspaceChangeRequest, TenantWorkspaceChangeRequestService $workspaceChanges): RedirectResponse
+    {
+        /** @var Tenant|null $tenant */
+        $tenant = $request->attributes->get('current_tenant');
+        $user = $request->user();
+        abort_unless($tenant instanceof Tenant && $user instanceof \App\Models\User, 403);
+
+        try {
+            $workspaceChanges->cancel($workspaceChangeRequest, $user, $tenant);
+        } catch (\RuntimeException $exception) {
+            abort(403, $exception->getMessage());
+        }
+
+        return redirect()->route('app.start', ['tenant' => $tenant->slug])
+            ->with('status', 'Workspace change request cancelled.');
     }
 
     public function updateSetupStatus(Request $request, TenantSetupStatusService $setupStatusService): RedirectResponse

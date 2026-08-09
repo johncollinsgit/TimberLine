@@ -48,6 +48,11 @@
     $completionRedirectUrl = (string) ($completionRedirectUrl ?? route('dashboard', absolute: false));
     $brandAssetVersion = (string) config('everbranch.brand_assets.cache_tag', 'eb1');
     $brandMark = asset((string) config('everbranch.brand_assets.mark', 'brand/everbranch-mark.svg')).'?v='.$brandAssetVersion;
+    $ownerCanManageWorkspace = (bool) ($ownerCanManageWorkspace ?? false);
+    $workspaceChangeRequest = $workspaceChangeRequest ?? null;
+    $workspaceDetailOptions = is_array($workspaceDetailOptions ?? null) ? $workspaceDetailOptions : [];
+    $workspaceTemplates = is_array($workspaceDetailOptions['templates'] ?? null) ? $workspaceDetailOptions['templates'] : [];
+    $workspaceIntentOptions = is_array($workspaceDetailOptions['work_management_intents'] ?? null) ? $workspaceDetailOptions['work_management_intents'] : [];
 @endphp
 
 <x-layouts::app.sidebar title="Start Here">
@@ -135,6 +140,105 @@
                         </div>
                     </div>
                 </header>
+            @endif
+
+            @if($ownerCanManageWorkspace)
+                <section class="fb-panel mb-6" aria-labelledby="workspace-details-title">
+                    <div class="fb-panel-head">
+                        <div>
+                            <div id="workspace-details-title" class="fb-panel-title">Workspace details</div>
+                            <div class="fb-panel-copy">Keep the language in your workspace accurate. These changes do not turn on tools or change your workspace type.</div>
+                        </div>
+                    </div>
+                    <div class="fb-panel-body space-y-8">
+                        @if ($errors->hasBag('default') && ($errors->has('workspace_change') || $errors->has('requested_template_key') || $errors->has('request_note') || $errors->has('custom_business_type')))
+                            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900" role="alert">
+                                {{ $errors->first('workspace_change') ?: $errors->first('requested_template_key') ?: $errors->first('request_note') ?: $errors->first('custom_business_type') }}
+                            </div>
+                        @endif
+                        <form method="POST" action="{{ route('app.workspace-details.update', ['tenant' => $tenant->slug]) }}" class="space-y-5">
+                            @csrf
+                            @method('PUT')
+                            <div class="grid gap-4 lg:grid-cols-2">
+                                <label class="block text-sm font-medium text-zinc-800">Business type
+                                    <input name="custom_business_type" maxlength="120" value="{{ old('custom_business_type', $tenantBlueprint['custom_business_type'] ?? '') }}" placeholder="For example, property management" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900">
+                                </label>
+                                <label class="block text-sm font-medium text-zinc-800">What are you working toward?
+                                    <input name="primary_outcome" maxlength="500" value="{{ old('primary_outcome', $tenantBlueprint['primary_outcome'] ?? '') }}" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900">
+                                </label>
+                            </div>
+                            <label class="block text-sm font-medium text-zinc-800">Tell us a little more <span class="font-normal text-zinc-500">Optional</span>
+                                <textarea name="business_description" rows="2" maxlength="500" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900">{{ old('business_description', $tenantBlueprint['business_description'] ?? '') }}</textarea>
+                            </label>
+                            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                                @foreach(['customer_label' => 'People you serve', 'work_label' => 'Work', 'money_label' => 'Money', 'material_label' => 'Resources', 'stage_label' => 'Stage'] as $field => $label)
+                                    <label class="block text-xs font-semibold text-zinc-700">{{ $label }}
+                                        <input name="{{ $field }}" maxlength="80" value="{{ old($field, $tenantBlueprint[$field] ?? '') }}" class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900">
+                                    </label>
+                                @endforeach
+                            </div>
+                            <details class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                                <summary class="cursor-pointer text-sm font-semibold text-zinc-900">Work management language and preferences</summary>
+                                <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                                    @foreach(['project_label' => 'Project/work', 'task_label' => 'Task', 'assignee_label' => 'Assignee', 'communication_label' => 'Communication', 'upload_label' => 'Uploads'] as $field => $label)
+                                        <label class="block text-xs font-semibold text-zinc-700">{{ $label }}
+                                            <input name="{{ $field }}" maxlength="80" value="{{ old($field, $tenantBlueprint[$field] ?? '') }}" class="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-normal text-zinc-900">
+                                        </label>
+                                    @endforeach
+                                </div>
+                                <div class="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                                    @foreach($workspaceIntentOptions as $field => $label)
+                                        <label class="flex items-start gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+                                            <input type="hidden" name="{{ $field }}" value="0">
+                                            <input type="checkbox" name="{{ $field }}" value="1" class="mt-1" @checked((bool) old($field, data_get($tenantBlueprint, 'work_management_intent.'.$field, false)))>
+                                            <span>{{ $label }}</span>
+                                        </label>
+                                    @endforeach
+                                </div>
+                                <label class="mt-4 block text-sm font-medium text-zinc-800">Notes for your workspace <span class="font-normal text-zinc-500">Optional</span>
+                                    <textarea name="work_management_notes" rows="2" maxlength="2000" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900">{{ old('work_management_notes', $tenantBlueprint['work_management_notes'] ?? '') }}</textarea>
+                                </label>
+                            </details>
+                            <button type="submit" class="fb-btn-primary">Save workspace details</button>
+                        </form>
+
+                        <div class="border-t border-zinc-200 pt-6">
+                            <h3 class="text-base font-semibold text-zinc-950">Need a different kind of workspace?</h3>
+                            <p class="mt-1 max-w-3xl text-sm leading-6 text-zinc-600">Ask Everbranch to review a new template. Your current workspace stays exactly as it is until we approve the change. Nothing is deleted or turned on automatically.</p>
+                            @if($workspaceChangeRequest)
+                                <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                                    <div class="font-semibold">Request awaiting review</div>
+                                    <p class="mt-1">Requested template: {{ $workspaceTemplates[$workspaceChangeRequest->requested_template_key] ?? $workspaceChangeRequest->requested_template_key }}.</p>
+                                    <p class="mt-1 text-amber-900">{{ $workspaceChangeRequest->request_note }}</p>
+                                    <form method="POST" action="{{ route('app.workspace-change-requests.cancel', ['tenant' => $tenant->slug, 'workspaceChangeRequest' => $workspaceChangeRequest->id]) }}" class="mt-3">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="text-sm font-semibold underline">Cancel request</button>
+                                    </form>
+                                </div>
+                            @else
+                                <form method="POST" action="{{ route('app.workspace-change-requests.store', ['tenant' => $tenant->slug]) }}" class="mt-4 grid gap-4 lg:grid-cols-2">
+                                    @csrf
+                                    <label class="block text-sm font-medium text-zinc-800">Closest business template
+                                        <select name="requested_template_key" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900">
+                                            @foreach($workspaceTemplates as $key => $label)<option value="{{ $key }}">{{ $label }}</option>@endforeach
+                                        </select>
+                                    </label>
+                                    <label class="block text-sm font-medium text-zinc-800">If you chose Other / Custom
+                                        <input name="custom_business_type" maxlength="120" placeholder="What kind of business are you?" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900">
+                                    </label>
+                                    <label class="block text-sm font-medium text-zinc-800 lg:col-span-2">What changed?
+                                        <textarea name="request_note" required rows="3" maxlength="2000" placeholder="Tell us what you need the workspace to support." class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900"></textarea>
+                                    </label>
+                                    <label class="block text-sm font-medium text-zinc-800 lg:col-span-2">Anything else we should know? <span class="font-normal text-zinc-500">Optional</span>
+                                        <textarea name="business_description" rows="2" maxlength="500" class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900"></textarea>
+                                    </label>
+                                    <div class="lg:col-span-2"><button type="submit" class="fb-btn-primary">Send for Everbranch review</button></div>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+                </section>
             @endif
 
             <section id="setup-status" class="fb-panel mb-6" data-everbranch-setup-status="true">

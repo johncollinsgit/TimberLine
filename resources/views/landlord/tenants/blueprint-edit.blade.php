@@ -17,6 +17,9 @@
         $reviewStatuses = is_array($blueprintOptions['blueprint_review_statuses'] ?? null) ? $blueprintOptions['blueprint_review_statuses'] : [];
         $selectedStarterModules = array_values((array) old('starter_modules', $tenantBlueprint['starter_modules'] ?? []));
         $accountMode = (string) ($tenantBlueprint['account_mode'] ?? 'production');
+        $workspaceChangeRequest = $workspaceChangeRequest ?? null;
+        $requestedContext = is_array($workspaceChangeRequest?->requested_context ?? null) ? $workspaceChangeRequest->requested_context : [];
+        $requestedProfile = (string) ($requestedContext['suggested_workspace_profile'] ?? 'generic_custom');
     @endphp
 
     <div class="space-y-6">
@@ -57,6 +60,88 @@
                 </p>
             @endif
         </section>
+
+        @if ($workspaceChangeRequest)
+            <section class="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-amber-800">Workspace change request</p>
+                        <h2 class="mt-2 text-xl font-semibold text-zinc-950">Review the requested workspace direction</h2>
+                        <p class="mt-2 max-w-3xl text-sm leading-6 text-zinc-700">
+                            The tenant's current workspace is still active. Approving this request applies the profile and capability packs you confirm below; it does not add the Modern Forestry legacy overlay.
+                        </p>
+                    </div>
+                    <span class="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900">Pending review</span>
+                </div>
+
+                <dl class="mt-5 grid gap-4 text-sm md:grid-cols-3">
+                    <div class="rounded-2xl border border-amber-200 bg-white/75 p-4">
+                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Current</dt>
+                        <dd class="mt-2 font-semibold text-zinc-950">{{ $tenantBlueprint['business_template_label'] ?? 'Custom workspace' }}</dd>
+                        <dd class="mt-1 text-zinc-600">{{ $tenantBlueprint['workspace_profile_label'] ?? 'Generic / custom' }}</dd>
+                    </div>
+                    <div class="rounded-2xl border border-amber-200 bg-white/75 p-4">
+                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Requested</dt>
+                        <dd class="mt-2 font-semibold text-zinc-950">{{ $businessTemplates[$workspaceChangeRequest->requested_template_key] ?? $workspaceChangeRequest->requested_template_key }}</dd>
+                        <dd class="mt-1 text-zinc-600">Suggested profile: {{ $workspaceProfiles[$requestedProfile] ?? 'Generic / custom' }}</dd>
+                    </div>
+                    <div class="rounded-2xl border border-amber-200 bg-white/75 p-4">
+                        <dt class="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Why they asked</dt>
+                        <dd class="mt-2 leading-6 text-zinc-700">{{ $workspaceChangeRequest->request_note }}</dd>
+                    </div>
+                </dl>
+
+                @if (filled($requestedContext['custom_business_type'] ?? null) || filled($requestedContext['business_description'] ?? null))
+                    <p class="mt-4 rounded-2xl border border-amber-200 bg-white/65 px-4 py-3 text-sm text-zinc-700">
+                        @if (filled($requestedContext['custom_business_type'] ?? null))
+                            <span class="font-semibold text-zinc-950">Business type:</span> {{ $requestedContext['custom_business_type'] }}
+                        @endif
+                        @if (filled($requestedContext['business_description'] ?? null))
+                            <span class="{{ filled($requestedContext['custom_business_type'] ?? null) ? 'ml-2' : '' }}">{{ $requestedContext['business_description'] }}</span>
+                        @endif
+                    </p>
+                @endif
+
+                <div class="mt-5 grid gap-5 lg:grid-cols-2">
+                    <form method="POST" action="{{ route('landlord.tenants.workspace-change-requests.approve', ['tenant' => $tenant->id, 'workspaceChangeRequest' => $workspaceChangeRequest->id]) }}" class="rounded-2xl border border-emerald-200 bg-white p-5">
+                        @csrf
+                        <h3 class="text-base font-semibold text-zinc-950">Approve with this workspace setup</h3>
+                        <p class="mt-1 text-sm text-zinc-600">Confirm the profile and only the packs that belong to this business.</p>
+                        <label class="mt-4 block text-sm font-medium text-zinc-800">
+                            Workspace profile
+                            <select name="workspace_profile" required class="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900">
+                                @foreach ($workspaceProfiles as $value => $label)
+                                    <option value="{{ $value }}" @selected($value === $requestedProfile)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <div class="mt-4">
+                            <p class="text-sm font-medium text-zinc-800">Capability packs</p>
+                            <div class="mt-2 flex flex-wrap gap-4 text-sm text-zinc-700">
+                                <label class="inline-flex items-center gap-2"><input type="checkbox" name="capability_packs[]" value="retail_commerce" @checked($requestedProfile === 'retail_commerce')> Retail commerce</label>
+                                <label class="inline-flex items-center gap-2"><input type="checkbox" name="capability_packs[]" value="service_reputation" @checked($requestedProfile === 'field_service_trades')> Service reputation</label>
+                            </div>
+                        </div>
+                        <label class="mt-4 block text-sm font-medium text-zinc-800">
+                            Decision note <span class="font-normal text-zinc-500">Optional</span>
+                            <textarea name="decision_note" rows="2" maxlength="2000" class="mt-1.5 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" placeholder="Tell the owner what will happen next."></textarea>
+                        </label>
+                        <button type="submit" class="mt-4 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">Approve workspace change</button>
+                    </form>
+
+                    <form method="POST" action="{{ route('landlord.tenants.workspace-change-requests.decline', ['tenant' => $tenant->id, 'workspaceChangeRequest' => $workspaceChangeRequest->id]) }}" class="rounded-2xl border border-zinc-200 bg-white p-5">
+                        @csrf
+                        <h3 class="text-base font-semibold text-zinc-950">Keep the current workspace</h3>
+                        <p class="mt-1 text-sm text-zinc-600">Declining leaves the current template, profile, and capability packs unchanged.</p>
+                        <label class="mt-4 block text-sm font-medium text-zinc-800">
+                            Note for the owner <span class="font-normal text-zinc-500">Optional</span>
+                            <textarea name="decision_note" rows="3" maxlength="2000" class="mt-1.5 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" placeholder="Explain what needs to be clarified."></textarea>
+                        </label>
+                        <button type="submit" class="mt-4 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100">Decline request</button>
+                    </form>
+                </div>
+            </section>
+        @endif
 
         <form method="POST" action="{{ route('landlord.tenants.blueprint.update', ['tenant' => $tenant->id]) }}" class="space-y-6">
             @csrf
@@ -226,6 +311,11 @@
                 <label class="mt-4 block text-sm text-zinc-700">
                     Internal notes
                     <textarea name="blueprint_internal_notes" rows="4" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900">{{ old('blueprint_internal_notes', $tenantBlueprint['blueprint_internal_notes'] ?? '') }}</textarea>
+                </label>
+                <label class="mt-4 block text-sm text-zinc-700">
+                    Why is the workspace classification changing?
+                    <textarea name="profile_change_reason" rows="2" maxlength="2000" class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-sm text-zinc-900" placeholder="Required when changing the template, profile, or capability packs.">{{ old('profile_change_reason') }}</textarea>
+                    <span class="mt-1 block text-xs text-zinc-500">This creates an operator audit trail. It is not shown to the tenant.</span>
                 </label>
             </section>
 

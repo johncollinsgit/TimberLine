@@ -141,6 +141,11 @@ class Tenant extends Model
         return $this->hasMany(TenantModuleAccessRequest::class);
     }
 
+    public function workspaceChangeRequests(): HasMany
+    {
+        return $this->hasMany(TenantWorkspaceChangeRequest::class);
+    }
+
     public function customModuleRequests(): HasMany
     {
         return $this->hasMany(CustomModuleRequest::class);

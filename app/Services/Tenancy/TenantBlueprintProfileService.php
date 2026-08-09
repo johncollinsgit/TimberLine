@@ -190,6 +190,7 @@ class TenantBlueprintProfileService
                 'blueprint_review_status' => ['required', 'string', Rule::in(array_keys($this->reviewStatusOptions()))],
                 'blueprint_internal_notes' => ['nullable', 'string', 'max:5000'],
                 'blueprint_next_action' => ['nullable', 'string', 'max:500'],
+                'profile_change_reason' => ['nullable', 'string', 'max:2000'],
             ]);
         }
 
@@ -351,6 +352,76 @@ class TenantBlueprintProfileService
             status: $status,
             blueprint: $blueprint,
             accountMode: $accountMode,
+            refreshSetupProjection: true
+        );
+
+        return $blueprint;
+    }
+
+    /**
+     * Tenant owners may maintain language and planning context, but never the
+     * profile or capability boundary that controls the live workspace.
+     *
+     * @return array<string,mixed>
+     */
+    public function ownerDetailValidationRules(): array
+    {
+        $rules = [
+            'custom_business_type' => ['nullable', 'string', 'max:120'],
+            'business_description' => ['nullable', 'string', 'max:500'],
+            'primary_outcome' => ['nullable', 'string', 'max:500'],
+            'work_management_notes' => ['nullable', 'string', 'max:2000'],
+        ];
+
+        foreach (['customer_label', 'work_label', 'money_label', 'material_label', 'stage_label', 'project_label', 'task_label', 'assignee_label', 'communication_label', 'upload_label'] as $field) {
+            $rules[$field] = ['nullable', 'string', 'max:80'];
+        }
+
+        foreach (self::WORK_MANAGEMENT_INTENT_KEYS as $field) {
+            $rules[$field] = ['nullable', 'boolean'];
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @param  array<string,mixed>  $input
+     * @return array<string,mixed>
+     */
+    public function updateOwnerDetails(
+        Tenant $tenant,
+        TenantAccessProfile $profile,
+        TenantSetupStatus $status,
+        array $input
+    ): array {
+        $blueprint = $this->payloadForTenant($tenant->loadMissing('accessProfile'));
+        $textFields = ['custom_business_type', 'business_description', 'primary_outcome', 'work_management_notes'];
+        $labelFields = ['customer_label', 'work_label', 'money_label', 'material_label', 'stage_label', 'project_label', 'task_label', 'assignee_label', 'communication_label', 'upload_label'];
+
+        foreach ($textFields as $field) {
+            if (array_key_exists($field, $input)) {
+                $blueprint[$field] = $this->nullableText((string) $input[$field], $field === 'work_management_notes' ? 2000 : ($field === 'business_description' || $field === 'primary_outcome' ? 500 : 120));
+            }
+        }
+
+        foreach ($labelFields as $field) {
+            if (array_key_exists($field, $input)) {
+                $blueprint[$field] = $this->labelOrDefault((string) $input[$field], (string) ($blueprint[$field] ?? Str::headline(str_replace('_', ' ', $field))));
+            }
+        }
+
+        $template = $this->templateDefinition((string) ($blueprint['business_template'] ?? 'generic'));
+        $intentInput = array_merge((array) ($blueprint['work_management_intent'] ?? []), $input);
+        $blueprint['work_management_intent'] = $this->workManagementIntentFromInput($intentInput, $template);
+        $blueprint['work_management_intent_labels'] = $this->workManagementIntentLabels((array) $blueprint['work_management_intent']);
+        $blueprint['has_work_management_intent'] = in_array(true, (array) $blueprint['work_management_intent'], true);
+
+        $this->applyBlueprint(
+            tenant: $tenant,
+            profile: $profile,
+            status: $status,
+            blueprint: $blueprint,
+            accountMode: (string) ($blueprint['account_mode'] ?? 'production'),
             refreshSetupProjection: true
         );
 
