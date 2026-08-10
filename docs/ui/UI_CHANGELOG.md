@@ -1,5 +1,11 @@
 # UI Changelog
 
+## 2026-08-10 — Stable landlord outreach composer
+
+- The landlord prospect email composer now keeps its subject and body in the open editor while a template is loaded, so choosing a template no longer submits the page, loses a text selection, or returns the operator to the communication timeline.
+- The composer closes only through its explicit close control or Escape. Text selection, shift-selection, and normal in-editor clicks stay in the compose surface.
+- Templates remain review-first: loading one changes only the open draft. The operator must still explicitly save the draft or confirm Send.
+
 ## 2026-08-09 — Everbranch story film
 
 - Replaced the homepage story-dialog placeholder with a polished 90-second,

@@ -53,13 +53,23 @@ class LandlordProspectOnboardingController extends Controller
             ->pluck('aggregate', 'status')
             ->map(fn ($count): int => (int) $count);
 
+        $templateService = app(LandlordProspectOutreachTemplateService::class);
+        $outreachTemplateOptions = $templateService->options();
+        $outreachTemplatePayloads = $prospects->getCollection()
+            ->mapWithKeys(fn (LandlordProspect $prospect): array => [
+                $prospect->id => collect(array_keys($outreachTemplateOptions))
+                    ->mapWithKeys(fn (string $template): array => [$template => $templateService->draft($prospect, $template)]),
+            ])
+            ->all();
+
         return view('landlord.onboarding.prospects', [
             'prospects' => $prospects,
             'filters' => $filters,
             'statusOptions' => $this->statusOptions(),
             'tradeOptions' => LandlordProspect::query()->whereNotNull('trade')->distinct()->orderBy('trade')->pluck('trade'),
             'countyOptions' => LandlordProspect::query()->whereNotNull('county')->distinct()->orderBy('county')->pluck('county'),
-            'outreachTemplateOptions' => app(LandlordProspectOutreachTemplateService::class)->options(),
+            'outreachTemplateOptions' => $outreachTemplateOptions,
+            'outreachTemplatePayloads' => $outreachTemplatePayloads,
             'outreachCadence' => (array) config('landlord_prospecting.cadence', []),
             'prospectingPhoto' => (array) config('landlord_prospecting.photo', []),
             'discoveryConfigured' => trim((string) config('services.google_places.api_key')) !== '',
