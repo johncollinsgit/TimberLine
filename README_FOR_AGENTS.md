@@ -41,8 +41,10 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   and `npm run test:lighthouse:public` in addition to the normal PHP checks.
 - The home-page Everbranch story film is a lazy-loaded, silent-first public
   asset. Keep its Remotion scenes deterministic and public-safe; real tenant,
-  customer, Shopify, and message data is never permitted in the render. The
-  direct-link surprise route is intentionally unlinked and `noindex`; it switches after four seconds and may
+  customer, Shopify, and message data is never permitted in the render. Its
+  stock-photo provenance is recorded in
+  `docs/operations/everbranch-story-photo-sources.md`. The direct-link surprise
+  route is intentionally unlinked and `noindex`; it switches after four seconds and may
   embed the official YouTube upload but must never copy or host the music video.
 
 ## Everbranch mobile customer administration (2026-08-08)

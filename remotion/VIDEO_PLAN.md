@@ -15,8 +15,8 @@ Explain how Everbranch connects customer context, real work, approved follow-up 
 
 | Time | Scene | Visual |
 | --- | --- | --- |
-| 0:00–0:08 | Problem | Founder premise, then disconnected store/customer/order/marketing signals. |
-| 0:08–0:22 | Connect | Signals travel along thin branch lines into Everbranch. |
+| 0:00–0:08 | Problem | Founder premise and the simple point of the work: caring for people. Retail, wholesale, and field-service imagery establishes the audiences Everbranch serves. |
+| 0:08–0:22 | Connect | Common business systems—including commerce, bookkeeping, email, calendar, phone, and text—connect into Everbranch without obscuring the central message. |
 | 0:22–0:42 | Customer story | A public-safe customer profile resolves event history into one timeline. |
 | 0:42–1:00 | Action | Signal → audience → approved retention campaign. |
 | 1:00–1:17 | Intelligence | Relationship-aware reporting connects performance to a next step. |

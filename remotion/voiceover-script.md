@@ -2,11 +2,11 @@
 
 ## 0:00–0:08 — Problem
 
-After eleven years in small business, our founder wanted a calmer way to run the work. Because every day creates more signals: an order, a customer question, a campaign click, a follow-up that should not be forgotten.
+After eleven years in small business, our founder saw a simple truth: being in business is about caring for people. Everbranch helps you do that to the best of your ability — without the headache.
 
 ## 0:08–0:22 — Connect
 
-Everbranch brings those moments together. Your store, website, customer activity, marketing context, and real work all connect into one view.
+Retail, wholesale, and field-service teams all run on a lot of systems. Everbranch connects commerce, bookkeeping, email, calendar, phone, and text into one view of every customer.
 
 ## 0:22–0:42 — Customer story
 
