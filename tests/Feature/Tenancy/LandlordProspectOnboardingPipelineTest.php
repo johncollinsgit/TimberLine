@@ -203,6 +203,34 @@ test('landlord can save a personalized prospect email draft before sending', fun
         ->and($draft->fresh()->status)->toBe('draft');
 });
 
+test('landlord outreach composer keeps template loading and text selection in the open editor', function (): void {
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'app.theeverbranch.com';
+    $user = User::factory()->create([
+        'role' => 'admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]);
+    $prospect = LandlordProspect::query()->where('email', 'ageehvac.llc@gmail.com')->firstOrFail();
+    $prospect->communications()->create([
+        'direction' => 'outbound',
+        'channel' => 'email',
+        'status' => 'draft',
+        'subject' => 'Original subject',
+        'body' => 'Original draft.',
+        'occurred_at' => now(),
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get("http://{$landlordHost}/landlord/onboarding")
+        ->assertOk()
+        ->assertSee('x-model="subject"', false)
+        ->assertSee('x-model="body"', false)
+        ->assertSee('@click="loadTemplate(', false)
+        ->assertSee('Template loaded — review and save or send.', false)
+        ->assertDontSee('@click.outside="composerId = 0"', false);
+});
+
 test('landlord can log an inbound email response and move the prospect to replied', function (): void {
     $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'app.theeverbranch.com';
     $user = User::factory()->create([
