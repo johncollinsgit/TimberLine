@@ -147,11 +147,12 @@
         </div>
     </footer>
 
+    @php($storyAssetVersion = '20260810-systems')
     <dialog class="eb-studio-film" data-studio-film aria-labelledby="film-title" aria-describedby="film-description">
         <button class="eb-studio-film__close" type="button" data-studio-film-close aria-label="Close Everbranch story">×</button>
         <div class="eb-studio-film__frame">
-            <video class="eb-studio-film__video" data-studio-film-video controls playsinline preload="metadata" poster="{{ asset('media/everbranch-story-poster.jpg') }}" aria-describedby="film-description">
-                <source data-studio-film-src="{{ asset('media/everbranch-story.mp4') }}" type="video/mp4" />
+            <video class="eb-studio-film__video" data-studio-film-video controls playsinline preload="metadata" poster="{{ asset('media/everbranch-story-poster.jpg').'?v='.$storyAssetVersion }}" aria-describedby="film-description">
+                <source data-studio-film-src="{{ asset('media/everbranch-story.mp4').'?v='.$storyAssetVersion }}" type="video/mp4" />
                 Your browser does not support the Everbranch story video.
             </video>
         </div>
