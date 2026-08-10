@@ -20,6 +20,17 @@
   of self-produced animation before embedding the official Rick Astley video;
   no third-party video file is hosted in the repository.
 
+## 2026-08-10 — Everbranch story systems + business context
+
+- Rebuilt the opening around the founder’s customer-care premise: retail,
+  wholesale, and field-service photos establish the people and businesses the
+  story serves.
+- Replaced the distracting source pills with an unobstructed systems map:
+  Shopify, QuickBooks, Gmail, Calendar, phone, and text flow to Everbranch at
+  center, while the main message remains clear.
+- Centered the story dialog in the viewport and refreshed the story poster,
+  transcript, source plan, and rights-tracked photo provenance.
+
 ## 2026-08-08 — Home channel pulse
 
 - Moved the channel-performance readout to the top of Home in a compact,

@@ -36,6 +36,9 @@ data. Product walkthrough captures use demo or anonymized data.
   replaceable narration script. It uses fictional, public-safe product data;
   never replace those visuals with customer or tenant captures without the
   appropriate approval and release evidence.
+- Pexels photo provenance for the story is recorded in
+  `docs/operations/everbranch-story-photo-sources.md`. Keep any replacement
+  assets rights-tracked, public-safe, and free of customer or tenant context.
 - The separate `/story/field-notes-7c8b` page is deliberately unlinked and
   `noindex`. It is a link-only surprise that uses the official YouTube embed
   after four seconds of self-produced intro. It opens with an explicit

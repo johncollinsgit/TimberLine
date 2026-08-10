@@ -23,9 +23,16 @@ test.describe("Everbranch public studio", () => {
         const storyButton = page.getByRole("button", { name: /see the everbranch story/i });
         await storyButton.focus();
         await page.keyboard.press("Enter");
-        await expect(page.getByRole("dialog")).toBeVisible();
+        const storyDialog = page.getByRole("dialog");
+        await expect(storyDialog).toBeVisible();
+        const dialogBox = await storyDialog.boundingBox();
+        const viewport = page.viewportSize();
+        expect(dialogBox).not.toBeNull();
+        expect(viewport).not.toBeNull();
+        expect(Math.abs((dialogBox!.x + dialogBox!.width / 2) - viewport!.width / 2)).toBeLessThan(3);
+        expect(Math.abs((dialogBox!.y + dialogBox!.height / 2) - viewport!.height / 2)).toBeLessThan(3);
         await page.keyboard.press("Escape");
-        await expect(page.getByRole("dialog")).not.toBeVisible();
+        await expect(storyDialog).not.toBeVisible();
         await expect(storyButton).toBeFocused();
     });
 

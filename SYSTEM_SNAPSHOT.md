@@ -42,10 +42,13 @@
   checks protect primary navigation and launch-partner links. Production
   remains gated by the existing Forge/GitHub release process.
 - The homepage’s **See the Everbranch story** control now opens a lazy-loaded,
-  silent-first 90-second Remotion explainer. Its controlled fictional visuals
-  explain founder intent, customer context, action, and performance without
-  reading tenant or customer data; source, narration, and timing live under
-  `remotion/`. An intentionally unlinked, `noindex` surprise route may be
+  silent-first 90-second Remotion explainer. Its controlled, public-safe
+  visuals show retail, wholesale, and field-service contexts, then connect
+  familiar business systems to Everbranch around one customer. It never reads
+  tenant or customer data; source, narration, timing, and photo provenance live
+  under `remotion/` and `docs/operations/everbranch-story-photo-sources.md`.
+  The centered story dialog keeps the video as the visual focus. An intentionally
+  unlinked, `noindex` surprise route may be
   shared directly; it switches after four seconds to the official YouTube embed
   and does not host third-party music-video content.
 
