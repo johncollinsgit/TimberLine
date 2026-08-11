@@ -17,6 +17,8 @@ use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\FieldServiceResourcesController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Integrations\InstagramConnectionController;
+use App\Http\Controllers\Integrations\InstagramWebhookController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
 use App\Http\Controllers\Landlord\LandlordAgreementController;
 use App\Http\Controllers\Landlord\LandlordBranchPreviewController;
@@ -843,6 +845,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])
         ->name('integrations.quickbooks.callback');
 
+    Route::middleware(['role:admin'])
+        ->get('/integrations/instagram', [InstagramConnectionController::class, 'index'])
+        ->name('integrations.instagram.index');
+
+    Route::middleware(['tenant.access', 'module:integrations'])
+        ->prefix('workspaces/{tenant:slug}/integrations/instagram')
+        ->name('integrations.instagram.')
+        ->group(function (): void {
+            Route::get('/connect', [InstagramConnectionController::class, 'connect'])->name('connect');
+        });
+
+    Route::get('/integrations/instagram/callback', [InstagramConnectionController::class, 'callback'])
+        ->name('integrations.instagram.callback');
+
     Route::middleware(['tenant.access', 'module:quickbooks'])
         ->prefix('workspaces/{tenant:slug}/reports')
         ->name('quickbooks.reports.')
@@ -1574,6 +1590,13 @@ if (app()->environment('local') && config('app.debug')) {
         });
     });
 }
+
+Route::get('/webhooks/instagram', [InstagramWebhookController::class, 'verify'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('instagram.webhooks.verify');
+Route::post('/webhooks/instagram', [InstagramWebhookController::class, 'handle'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('instagram.webhooks.handle');
 
 Route::prefix('webhooks/shopify')->group(function () {
     Route::post('/orders/create', [ShopifyWebhookController::class, 'ordersCreate'])
