@@ -4,7 +4,7 @@
 
 The Shopify embedded Backstage app now exposes a first-class `Responses` inbox beside `Message Analytics`.
 
-This inbox is the operator-facing source of truth for inbound SMS and email replies. It is not just a view of provider logs:
+This inbox is the operator-facing source of truth for inbound SMS, email, and connected Instagram professional-account replies. It is not just a view of provider logs:
 - inbound replies are persisted as tenant-scoped conversations and messages,
 - STOP/unsubscribe state is recorded in Backstage channel-state storage,
 - operator replies are sent from the inbox and appended back into the thread,
@@ -64,6 +64,24 @@ Inbound email behavior:
 - falls back again to unique sender identity when possible
 - records unsubscribe-like inbound text into email channel state
 - classifies obvious out-of-office / auto-reply messages as `auto_reply`
+
+## Instagram Messaging setup
+
+Instagram uses the Meta **Instagram API with Instagram Login**. Each professional account is connected to one Everbranch workspace through `/integrations/instagram`; tokens and the raw account identifier are encrypted in that tenant's `integration_connections` row.
+
+Configure Meta to call:
+
+- OAuth redirect: `https://app.theeverbranch.com/integrations/instagram/callback`
+- webhook verification and delivery: `https://app.theeverbranch.com/webhooks/instagram`
+
+Required server configuration:
+
+- `INSTAGRAM_MESSAGING_ENABLED=true`
+- `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, and `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`
+
+Webhook payloads must have a valid `X-Hub-Signature-256` signature. Everbranch resolves the receiving Instagram account by its keyed tenant connection and ignores unmatched events. It accepts inbound message events only.
+
+Instagram is deliberately response-only: the inbox can reply to a customer only when that conversation received an inbound message within `INSTAGRAM_REPLY_WINDOW_HOURS` (24 hours by default). It has no campaign, bulk-send, prospecting, or cold-DM route.
 
 ## Embedded API endpoints
 
