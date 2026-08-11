@@ -183,7 +183,7 @@ return [
         'token_url' => env('INSTAGRAM_TOKEN_URL', 'https://api.instagram.com/oauth/access_token'),
         'api_base' => rtrim((string) env('INSTAGRAM_API_BASE', 'https://graph.instagram.com'), '/'),
         'api_version' => trim((string) env('INSTAGRAM_API_VERSION', 'v24.0'), '/'),
-        'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_manage_comments,instagram_business_manage_messages'),
+        'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_manage_messages'),
         'oauth_state_cache_store' => env('INSTAGRAM_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
         'webhook_verify_token' => env('INSTAGRAM_WEBHOOK_VERIFY_TOKEN'),
         'reply_window_hours' => max(1, (int) env('INSTAGRAM_REPLY_WINDOW_HOURS', 24)),
