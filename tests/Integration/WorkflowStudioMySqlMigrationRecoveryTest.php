@@ -240,6 +240,35 @@ it('repairs the trailing Customer Loop index after MySQL stopped during action-t
         ->and(Schema::hasIndex('customer_loop_actions', 'cl_action_tenant_profile_status_idx'))->toBeTrue();
 });
 
+it('keeps a retained wholesale email messenger draft table safe on retry', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('wholesale_email_messenger_drafts');
+
+    // Simulate Forge completing the table DDL before the migration record was
+    // committed. The migration must remain a safe no-op on its next attempt.
+    Schema::create('wholesale_email_messenger_drafts', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->string('store_key', 80);
+        $table->string('name', 160);
+        $table->string('subject', 200);
+        $table->json('sections');
+        $table->json('personalization')->nullable();
+        $table->unsignedInteger('revision')->default(1);
+        $table->unsignedBigInteger('created_by')->nullable();
+        $table->unsignedBigInteger('updated_by')->nullable();
+        $table->timestamps();
+    });
+
+    $migration = require database_path('migrations/2026_08_11_120000_create_wholesale_email_messenger_drafts_table.php');
+    $migration->up();
+
+    expect(Schema::hasTable('wholesale_email_messenger_drafts'))->toBeTrue();
+});
+
 it('resumes the complete Commerce foundation from durable partial MySQL state', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

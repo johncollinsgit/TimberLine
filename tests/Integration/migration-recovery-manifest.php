@@ -43,4 +43,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first table retained', 'shipping-rate table retained before named foreign key'],
     ],
+    '2026_08_11_120000_create_wholesale_email_messenger_drafts_table.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['draft table retained before a migration retry'],
+    ],
 ];

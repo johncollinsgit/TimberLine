@@ -2139,6 +2139,7 @@ class ShopifyEmbeddedAppController extends Controller
         $navigation = $this->embeddedAppNavigation('home', null, $tenantId);
         $routes = [
             'home' => ['Overview', 'shopify.app.wholesale'],
+            'messaging' => ['Email Messenger', 'shopify.app.wholesale.messaging'],
             'suggestions' => ['Suggestions', 'shopify.app.wholesale.suggestions'],
             'customers' => ['Customers', 'shopify.app.wholesale.customers'],
             'orders' => ['Orders', 'shopify.app.wholesale.orders'],
