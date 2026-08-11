@@ -1,5 +1,18 @@
 # SYSTEM SNAPSHOT
 
+## Wholesale Email Messenger (2026-08-11)
+
+- MF Wholesale Backstage now exposes **Email Messenger** before Suggestions at
+  `/shopify/app/wholesale/messaging`. Its Shopify-authenticated, tenant/store
+  scoped draft is stored in `wholesale_email_messenger_drafts` and begins as
+  **Bring Modern Forestry to your store** with sixteen editable blocks.
+- The editor may send only explicitly entered test emails through the existing
+  provider path; it has no campaign or prospect send control. The compliance
+  footer stays server-locked, and any future campaign delivery must retain the
+  existing consent, unsubscribe, bounce, and suppression enforcement. See
+  `docs/operations/wholesale-email-messenger-runbook.md`.
+
+
 ## Modern Forestry App Store Customer Login Recovery (2026-07-25)
 
 - Modern Forestry's Headless Customer Account integration is a public

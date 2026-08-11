@@ -163,11 +163,11 @@ test('embedded mutation controls wait for a fresh shopify admin session token', 
         ->assertSee('getShopifySessionToken', false);
 });
 
-test('wholesale app navigation emits one hidden home link and seven visible noun links', function (): void {
+test('wholesale app navigation puts email messenger before suggestions', function (): void {
     $html = $this->get(route('shopify.app.wholesale', wholesaleEmbeddedSignedQuery()))->assertOk()->getContent();
     preg_match_all('/<s-link\b([^>]*)>(.*?)<\/s-link>/s', $html, $matches, PREG_SET_ORDER);
 
-    expect($matches)->toHaveCount(8)
+    expect($matches)->toHaveCount(9)
         ->and($matches[0][1])->toContain('rel="home"')
         ->and(trim(strip_tags($matches[0][2])))->toBe('Overview');
 
@@ -175,10 +175,16 @@ test('wholesale app navigation emits one hidden home link and seven visible noun
         ->map(fn (array $match): string => trim(strip_tags($match[2])))
         ->values()
         ->all();
-    expect($visibleLabels)->toBe(['Suggestions', 'Customers', 'Orders', 'Follow-Ups', 'Prospects', 'Discover', 'Applications']);
+    expect($visibleLabels)->toBe(['Email Messenger', 'Suggestions', 'Customers', 'Orders', 'Follow-Ups', 'Prospects', 'Discover', 'Applications']);
     foreach ($matches as $match) {
         expect($match[1])->toContain('href="/shopify/app/wholesale');
     }
+});
+
+test('wholesale email messenger creates and persists the approved sixteen-block draft', function (): void {
+    $response = $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()));
+    $response->assertOk()->assertSeeText('Email Messenger')->assertSee('Bring Modern Forestry to your store');
+    expect(\App\Models\WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail()->sections)->toHaveCount(16);
 });
 
 test('wholesale pages fail closed when the authenticated store has no tenant mapping', function (): void {

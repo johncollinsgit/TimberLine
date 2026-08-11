@@ -98,6 +98,7 @@ use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Http\Controllers\WorkspaceDocumentsController;
+use App\Http\Controllers\WholesaleEmailMessengerController;
 use App\Http\Middleware\EnsureEvergroveProposalHost;
 use App\Livewire\Admin\AdminHome;
 use App\Livewire\Admin\Catalog\CostsCrud as AdminCostsCrud;
@@ -1815,6 +1816,8 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         ->name('shopify.app.wholesale.applications.approve');
     Route::post('/app/wholesale/applications/{accessRequest}/reject', [ShopifyEmbeddedAppController::class, 'rejectWholesaleApplication'])
         ->name('shopify.app.wholesale.applications.reject');
+    Route::get('/app/wholesale/messaging', [WholesaleEmailMessengerController::class, 'show'])
+        ->name('shopify.app.wholesale.messaging');
     Route::post('/app/wholesale/applications/{accessRequest}/resend-activation', [ShopifyEmbeddedAppController::class, 'resendWholesaleApplicationActivation'])
         ->name('shopify.app.wholesale.applications.resend-activation');
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
@@ -1990,6 +1993,12 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
             ->name('messaging.responses.index');
         Route::get('/messaging/responses/{conversation}', [ShopifyEmbeddedMessagingController::class, 'responsesShow'])
             ->name('messaging.responses.show');
+        Route::post('/wholesale/messaging/draft', [WholesaleEmailMessengerController::class, 'save'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.messaging.save');
+        Route::post('/wholesale/messaging/test-send', [WholesaleEmailMessengerController::class, 'testSend'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.messaging.test-send');
         Route::post('/messaging/responses/{conversation}/actions', [ShopifyEmbeddedMessagingController::class, 'responsesUpdate'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.responses.update');
