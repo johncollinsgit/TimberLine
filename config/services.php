@@ -40,6 +40,9 @@ $defaultAsanaWorkflowRedirect = $canonicalLandlordHost !== null
 $defaultQuickBooksRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/quickbooks/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/quickbooks/callback';
+$defaultInstagramRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/instagram/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/instagram/callback';
 $workflowCommerceRedirect = static fn (string $provider): string => ($canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost
     : rtrim((string) env('APP_URL', 'http://localhost'), '/')).'/workflows/connections/'.$provider.'/callback';
@@ -163,6 +166,23 @@ return [
         'scopes' => env('QUICKBOOKS_SCOPES', 'com.intuit.quickbooks.accounting'),
         'minor_version' => (int) env('QUICKBOOKS_MINOR_VERSION', 75),
         'oauth_state_cache_store' => env('QUICKBOOKS_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+    ],
+
+    // Instagram API with Instagram Login. Credentials are application-wide while
+    // every authorized professional account is stored as a tenant connection.
+    'instagram' => [
+        'enabled' => env('INSTAGRAM_MESSAGING_ENABLED', false),
+        'client_id' => env('INSTAGRAM_APP_ID'),
+        'client_secret' => env('INSTAGRAM_APP_SECRET'),
+        'redirect_uri' => env('INSTAGRAM_REDIRECT_URI', $defaultInstagramRedirect),
+        'authorization_url' => env('INSTAGRAM_AUTHORIZATION_URL', 'https://www.instagram.com/oauth/authorize'),
+        'token_url' => env('INSTAGRAM_TOKEN_URL', 'https://api.instagram.com/oauth/access_token'),
+        'api_base' => rtrim((string) env('INSTAGRAM_API_BASE', 'https://graph.instagram.com'), '/'),
+        'api_version' => trim((string) env('INSTAGRAM_API_VERSION', 'v24.0'), '/'),
+        'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_manage_comments,instagram_business_manage_messages'),
+        'oauth_state_cache_store' => env('INSTAGRAM_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+        'webhook_verify_token' => env('INSTAGRAM_WEBHOOK_VERIFY_TOKEN'),
+        'reply_window_hours' => max(1, (int) env('INSTAGRAM_REPLY_WINDOW_HOURS', 24)),
     ],
 
     'twilio' => [

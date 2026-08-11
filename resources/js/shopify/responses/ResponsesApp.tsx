@@ -36,13 +36,14 @@ export interface ResponsesBootstrap {
   };
 }
 
-type Channel = "sms" | "email" | "all";
+type Channel = "sms" | "email" | "instagram" | "all";
 type Filter = "open" | "unread" | "opted_out" | "assigned_to_me" | "all";
 type SourceFilter = "all" | "mobile_app" | "standard";
 
 interface SummaryPayload {
   sms_unread: number;
   email_unread: number;
+  instagram_unread: number;
   open: number;
   needs_follow_up: number;
   opted_out_today: number;
@@ -158,6 +159,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
   const [summary, setSummary] = useState<SummaryPayload>({
     sms_unread: 0,
     email_unread: 0,
+    instagram_unread: 0,
     open: 0,
     needs_follow_up: 0,
     opted_out_today: 0,
@@ -265,7 +267,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
 
   const availableChannels = bootstrap.channel_options?.length
     ? bootstrap.channel_options
-    : (["sms", "email"] as Channel[]);
+    : (["sms", "email", "instagram"] as Channel[]);
 
   async function runAction(action: string) {
     if (!selectedId) {
@@ -348,7 +350,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
               <InlineStack gap="200">
                 {availableChannels.map((option) => (
                   <Button key={option} pressed={channel === option} onClick={() => setChannel(option)}>
-                    {option === "all" ? "All" : option === "sms" ? "Text" : "Email"}
+                    {option === "all" ? "All" : option === "sms" ? "Text" : option === "instagram" ? "Instagram" : "Email"}
                   </Button>
                 ))}
               </InlineStack>
@@ -365,6 +367,10 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                   <strong>{summary.email_unread}</strong>
                 </div>
                 <div className="responses-summary-card">
+                  <span>Unread Instagram</span>
+                  <strong>{summary.instagram_unread}</strong>
+                </div>
+                <div className="responses-summary-card">
                   <span>Open</span>
                   <strong>{summary.open}</strong>
                 </div>
@@ -377,7 +383,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
               <div className="responses-summary-strip">
                 <div className="responses-summary-pill">
                   <span>Unread</span>
-                  <strong>{summary.sms_unread + summary.email_unread}</strong>
+                  <strong>{summary.sms_unread + summary.email_unread + summary.instagram_unread}</strong>
                 </div>
                 <div className="responses-summary-pill">
                   <span>Open</span>
@@ -420,7 +426,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
               ) : conversations.length === 0 ? (
                 <div className="responses-empty">
                   <Text as="p" variant="bodyMd">
-                    No {channel === "sms" ? "text" : "email"} conversations match this filter.
+                    No {channel === "sms" ? "text" : channel === "instagram" ? "Instagram" : "email"} conversations match this filter.
                   </Text>
                 </div>
               ) : (
@@ -455,7 +461,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                       </BlockStack>
                     </InlineStack>
                     <InlineStack gap="200" wrap>
-                      <Badge tone="info">{conversation.channel === "sms" ? "Text" : conversation.channel === "email" ? "Email" : "All"}</Badge>
+                      <Badge tone="info">{conversation.channel === "sms" ? "Text" : conversation.channel === "instagram" ? "Instagram" : conversation.channel === "email" ? "Email" : "All"}</Badge>
                       {conversation.source_type === "modern_forestry_app" ? (
                         <Badge tone="success">App</Badge>
                       ) : null}
@@ -487,7 +493,7 @@ export function ResponsesApp({ bootstrap }: { bootstrap: ResponsesBootstrap }) {
                         {selectedConversation.display_name ?? selectedConversation.identity}
                       </Text>
                       <InlineStack gap="200" wrap>
-                        <Badge tone="info">{selectedConversation.channel === "sms" ? "Text" : "Email"}</Badge>
+                        <Badge tone="info">{selectedConversation.channel === "sms" ? "Text" : selectedConversation.channel === "instagram" ? "Instagram" : "Email"}</Badge>
                         {selectedConversation.source_type === "modern_forestry_app" ? (
                           <Badge tone="success">App</Badge>
                         ) : null}

@@ -12,6 +12,7 @@ use App\Observers\FieldServiceTaskWorkflowObserver;
 use App\Observers\MarketingProfileWorkflowObserver;
 use App\Observers\MarketingReviewHistoryObserver;
 use App\Services\Integrations\ConnectionManager;
+use App\Services\Integrations\Instagram\InstagramConnector;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use App\Services\Onboarding\Rails\DirectOnboardingRailAdapter;
 use App\Services\Onboarding\Rails\OnboardingRailAdapterRegistry;
@@ -43,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ConnectionManager::class, function ($app): ConnectionManager {
             return new ConnectionManager([
                 $app->make(QuickBooksConnector::class),
+                $app->make(InstagramConnector::class),
             ]);
         });
 

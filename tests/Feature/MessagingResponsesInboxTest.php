@@ -597,7 +597,7 @@ test('responses tab renders next to analytics with text and email toggle labels'
         ->assertOk()
         ->assertSeeText('Inbox')
         ->assertSeeText('App Messages')
-        ->assertSeeText('Review inbound SMS and email replies in one Everbranch inbox.')
+        ->assertSeeText('Review inbound SMS, email, and Instagram replies in one Everbranch inbox.')
         ->assertViewHas('pageSubnav', function (array $subnav): bool {
             $keys = array_map(static fn (array $item): string => (string) ($item['key'] ?? ''), $subnav);
 

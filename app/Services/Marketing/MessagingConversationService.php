@@ -132,6 +132,66 @@ class MessagingConversationService
     }
 
     /**
+     * Instagram sender identifiers are not contactable off-platform. They are
+     * therefore kept only in the conversation context required to reply inside
+     * the inbox, while the indexed conversation source is a keyed fingerprint.
+     *
+     * @param array<string,mixed> $context
+     */
+    public function findOrCreateInstagramConversation(
+        int $tenantId,
+        ?string $storeKey,
+        ?MarketingProfile $profile,
+        string $instagramAccountId,
+        string $instagramSenderId,
+        array $context = []
+    ): MessagingConversation {
+        $accountId = trim($instagramAccountId);
+        $senderId = trim($instagramSenderId);
+        $fingerprint = hash_hmac('sha256', $accountId.':'.$senderId, (string) config('app.key'));
+
+        $conversation = MessagingConversation::query()
+            ->forTenantId($tenantId)
+            ->where('channel', 'instagram')
+            ->where('source_type', 'instagram')
+            ->where('source_id', $fingerprint)
+            ->when(
+                $storeKey !== null,
+                fn ($query) => $query->where('store_key', $storeKey),
+                fn ($query) => $query->whereNull('store_key')
+            )
+            ->latest('id')
+            ->first();
+
+        $sourceContext = [
+            ...(is_array($context['source_context'] ?? null) ? $context['source_context'] : []),
+            'instagram_sender_id' => $senderId,
+        ];
+        if (! $conversation instanceof MessagingConversation) {
+            $conversation = MessagingConversation::query()->create([
+                'tenant_id' => $tenantId,
+                'store_key' => $storeKey,
+                'channel' => 'instagram',
+                'marketing_profile_id' => $profile?->id,
+                'phone' => null,
+                'email' => null,
+                'subject' => null,
+                'status' => 'open',
+                'source_type' => 'instagram',
+                'source_id' => $fingerprint,
+                'source_context' => $sourceContext,
+            ]);
+        } else {
+            $conversation->forceFill([
+                'marketing_profile_id' => $conversation->marketing_profile_id ?: $profile?->id,
+                'source_context' => $this->mergedContext($conversation->source_context, $sourceContext),
+            ])->save();
+        }
+
+        return $conversation;
+    }
+
+    /**
      * @param array<string,mixed> $attributes
      */
     public function appendMessage(MessagingConversation $conversation, array $attributes): MessagingConversationMessage
