@@ -1,5 +1,22 @@
 # UI Changelog
 
+## 2026-08-11 — Wholesale Email Messenger
+
+### What Changed
+
+- Added **Email Messenger** as the first MF Wholesale Backstage item before
+  Suggestions at `/shopify/app/wholesale/messaging`.
+- Added a calm embedded editor with a sixteen-block draft, desktop/mobile
+  previews, editable candle/product/CTA/location/Instagram content, and an
+  explicit test-email action.
+
+### Guardrails
+
+- Drafts persist server-side by tenant and wholesale store; browser storage is
+  not an authority.
+- The unsubscribe/privacy footer is locked and rendered by the server. This
+  surface has no campaign-send control and never targets prospects.
+
 ## 2026-08-10 — Stable landlord outreach composer
 
 - The landlord prospect email composer now keeps its subject and body in the open editor while a template is loaded, so choosing a template no longer submits the page, loses a text selection, or returns the operator to the communication timeline.

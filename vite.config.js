@@ -14,6 +14,7 @@ export default defineConfig(() => ({
         'resources/js/marketing/customers-grid.tsx',
         'resources/js/field-service/jobs-grid.tsx',
         'resources/js/shopify/dashboard.tsx',
+        'resources/js/shopify/wholesale-messaging.tsx',
       ],
       refresh: true,
     }),
