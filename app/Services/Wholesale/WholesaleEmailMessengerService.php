@@ -151,6 +151,12 @@ class WholesaleEmailMessengerService
             'https://theforestrystudio.com/products/pine-citrus-candle',
             'https://theforestrystudio.com/products/sandalwood-fig-candle',
         ];
+        $legacyProductImages = [
+            'https://theforestrystudio.com/cdn/shop/files/cedar-smoke-candle.jpg',
+            'https://theforestrystudio.com/cdn/shop/files/moss-amber-candle.jpg',
+            'https://theforestrystudio.com/cdn/shop/files/pine-citrus-candle.jpg',
+            'https://theforestrystudio.com/cdn/shop/files/sandalwood-fig-candle.jpg',
+        ];
         $sections = array_values((array) $draft->sections);
         $changed = false;
 
@@ -169,10 +175,20 @@ class WholesaleEmailMessengerService
             if ($id === 'candle-grid' && is_array($section['products'] ?? null)) {
                 $replacementProducts = (array) ($defaults->get('candle-grid')['products'] ?? []);
                 foreach ($section['products'] as $productIndex => $product) {
-                    if (is_array($product) && in_array($product['href'] ?? null, $legacyProducts, true) && isset($replacementProducts[$productIndex])) {
-                        $section['products'][$productIndex] = $replacementProducts[$productIndex];
+                    if (! is_array($product) || ! isset($replacementProducts[$productIndex])) {
+                        continue;
+                    }
+
+                    $replacement = $replacementProducts[$productIndex];
+                    if (in_array($product['imageUrl'] ?? null, $legacyProductImages, true)) {
+                        $product['imageUrl'] = $replacement['imageUrl'];
                         $changed = true;
                     }
+                    if (in_array($product['href'] ?? null, $legacyProducts, true)) {
+                        $product['href'] = $replacement['href'];
+                        $changed = true;
+                    }
+                    $section['products'][$productIndex] = $product;
                 }
                 $sections[$index] = $section;
             }

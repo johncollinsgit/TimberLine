@@ -196,10 +196,10 @@ test('wholesale email messenger repairs only the legacy placeholder candle asset
     $sections = $draft->sections;
     $sections[0]['imageUrl'] = 'https://theforestrystudio.com/cdn/shop/files/modern-forestry-wholesale-hero.jpg';
     $sections[10]['products'][0] = [
-        'title' => 'Cedar + Smoke',
+        'title' => 'Merchant-written product title',
         'imageUrl' => 'https://theforestrystudio.com/cdn/shop/files/cedar-smoke-candle.jpg',
         'href' => 'https://theforestrystudio.com/products/cedar-smoke-candle',
-        'buttonLabel' => 'View candle',
+        'buttonLabel' => 'Merchant-written link label',
     ];
     $draft->forceFill(['sections' => $sections])->save();
 
@@ -207,7 +207,9 @@ test('wholesale email messenger repairs only the legacy placeholder candle asset
 
     expect(data_get($payload, 'sections.0.imageUrl'))->toStartWith('https://cdn.shopify.com/')
         ->and(data_get($payload, 'sections.10.products.0.href'))->toBe('https://theforestrystudio.com/products/forest-spice')
-        ->and(data_get($payload, 'sections.10.products.0.imageUrl'))->toStartWith('https://cdn.shopify.com/');
+        ->and(data_get($payload, 'sections.10.products.0.imageUrl'))->toStartWith('https://cdn.shopify.com/')
+        ->and(data_get($payload, 'sections.10.products.0.title'))->toBe('Merchant-written product title')
+        ->and(data_get($payload, 'sections.10.products.0.buttonLabel'))->toBe('Merchant-written link label');
 });
 
 test('wholesale pages fail closed when the authenticated store has no tenant mapping', function (): void {
