@@ -26,6 +26,14 @@ class WholesaleEmailMessengerService
             ],
         );
 
+        // The first version of this draft used guessed `/cdn/shop/files/` names.
+        // Those were not Shopify assets, so repair only those exact legacy values
+        // when an existing tenant opens its saved draft. Merchant edits remain
+        // untouched.
+        if ($this->repairLegacyAssetUrls($draft)) {
+            $draft->save();
+        }
+
         return $this->payload($draft);
     }
 
@@ -98,30 +106,102 @@ class WholesaleEmailMessengerService
     public static function defaultSections(): array
     {
         $site = 'https://theforestrystudio.com';
+        $assets = [
+            'hero' => 'https://cdn.shopify.com/s/files/1/2081/2479/files/SaleImage-darktheme_5f5f655b-77a9-49f5-b699-037f71dee79e.png?v=1762446943',
+            'craft' => 'https://cdn.shopify.com/s/files/1/2081/2479/files/IMG_1086.jpg?v=1710945776',
+            'retail' => 'https://cdn.shopify.com/s/files/1/2081/2479/files/MagnoliaBlossom16oz.png?v=1784741108',
+        ];
 
         return [
-            ['id' => 'hero', 'type' => 'image', 'imageUrl' => $site.'/cdn/shop/files/modern-forestry-wholesale-hero.jpg', 'alt' => 'Modern Forestry candles', 'href' => $site.'/collections/wholesale', 'padding' => '0 0 18px 0'],
+            ['id' => 'hero', 'type' => 'image', 'imageUrl' => $assets['hero'], 'alt' => 'Modern Forestry candles', 'href' => $site.'/collections/all', 'padding' => '0 0 18px 0'],
             ['id' => 'welcome', 'type' => 'heading', 'text' => 'Bring Modern Forestry to your store', 'align' => 'center'],
             ['id' => 'greeting', 'type' => 'text', 'html' => 'Hi {{ first_name | default: "there" }}, we make quiet, beautiful candles for stores that value thoughtful goods.'],
-            ['id' => 'craft-image', 'type' => 'image', 'imageUrl' => $site.'/cdn/shop/files/modern-forestry-candle-pour.jpg', 'alt' => 'Hand-poured candle', 'href' => $site.'/collections/candles', 'padding' => '8px 0 18px 0'],
+            ['id' => 'craft-image', 'type' => 'image', 'imageUrl' => $assets['craft'], 'alt' => 'Hand-poured candle', 'href' => $site.'/collections/all', 'padding' => '8px 0 18px 0'],
             ['id' => 'craft-heading', 'type' => 'heading', 'text' => 'Hand-poured in small batches', 'align' => 'left'],
             ['id' => 'craft-copy', 'type' => 'text', 'html' => 'Our signature scents are designed to feel at home on a thoughtful shelf and in an everyday ritual.'],
-            ['id' => 'shop-cta', 'type' => 'button', 'label' => 'Shop the candle collection', 'href' => $site.'/collections/candles', 'align' => 'center'],
+            ['id' => 'shop-cta', 'type' => 'button', 'label' => 'Shop the candle collection', 'href' => $site.'/collections/all', 'align' => 'center'],
             ['id' => 'divider', 'type' => 'fading_divider', 'spacingTop' => 14, 'spacingBottom' => 18],
             ['id' => 'wholesale-heading', 'type' => 'heading', 'text' => 'Made for your shelves', 'align' => 'center'],
             ['id' => 'wholesale-copy', 'type' => 'text', 'html' => 'Offer your customers a modern take on forest-inspired fragrance, with merchandising support from our studio.'],
             ['id' => 'candle-grid', 'type' => 'product_grid_4', 'heading' => 'A few customer favorites', 'products' => [
-                ['title' => 'Cedar + Smoke', 'imageUrl' => $site.'/cdn/shop/files/cedar-smoke-candle.jpg', 'href' => $site.'/products/cedar-smoke-candle', 'buttonLabel' => 'View candle'],
-                ['title' => 'Moss + Amber', 'imageUrl' => $site.'/cdn/shop/files/moss-amber-candle.jpg', 'href' => $site.'/products/moss-amber-candle', 'buttonLabel' => 'View candle'],
-                ['title' => 'Pine + Citrus', 'imageUrl' => $site.'/cdn/shop/files/pine-citrus-candle.jpg', 'href' => $site.'/products/pine-citrus-candle', 'buttonLabel' => 'View candle'],
-                ['title' => 'Sandalwood + Fig', 'imageUrl' => $site.'/cdn/shop/files/sandalwood-fig-candle.jpg', 'href' => $site.'/products/sandalwood-fig-candle', 'buttonLabel' => 'View candle'],
+                ['title' => 'Forest Spice', 'imageUrl' => $assets['craft'], 'href' => $site.'/products/forest-spice', 'buttonLabel' => 'View candle'],
+                ['title' => 'Amber Fog', 'imageUrl' => 'https://cdn.shopify.com/s/files/1/2081/2479/files/AmberFog16oz.png?v=1784819810', 'href' => $site.'/products/amber-fog-new', 'buttonLabel' => 'View candle'],
+                ['title' => 'Magnolia Blossom', 'imageUrl' => $assets['retail'], 'href' => $site.'/products/magnolia-blossom', 'buttonLabel' => 'View candle'],
+                ['title' => 'Nightfall', 'imageUrl' => 'https://cdn.shopify.com/s/files/1/2081/2479/files/Nightfall16oz.png?v=1784902486', 'href' => $site.'/products/new-nightfall', 'buttonLabel' => 'View candle'],
             ]],
             ['id' => 'application-cta', 'type' => 'button', 'label' => 'Apply for wholesale', 'href' => $site.'/pages/wholesale', 'align' => 'center'],
-            ['id' => 'retail-image', 'type' => 'image', 'imageUrl' => $site.'/cdn/shop/files/modern-forestry-stockist.jpg', 'alt' => 'Modern Forestry stockist', 'href' => $site.'/pages/store-locator', 'padding' => '18px 0 12px 0'],
+            ['id' => 'retail-image', 'type' => 'image', 'imageUrl' => $assets['retail'], 'alt' => 'Modern Forestry stockist', 'href' => $site.'/pages/store-locator', 'padding' => '18px 0 12px 0'],
             ['id' => 'retail-copy', 'type' => 'text', 'html' => 'Already nearby? Find a shop carrying Modern Forestry.'],
             ['id' => 'locator-cta', 'type' => 'button', 'label' => 'Find a store', 'href' => $site.'/pages/store-locator', 'align' => 'center'],
             ['id' => 'instagram-cta', 'type' => 'button', 'label' => 'Follow Modern Forestry on Instagram', 'href' => 'https://www.instagram.com/theforestrystudio/', 'align' => 'center'],
         ];
+    }
+
+    protected function repairLegacyAssetUrls(WholesaleEmailMessengerDraft $draft): bool
+    {
+        $defaults = collect(self::defaultSections())->keyBy('id');
+        $legacyImages = [
+            'hero' => 'https://theforestrystudio.com/cdn/shop/files/modern-forestry-wholesale-hero.jpg',
+            'craft-image' => 'https://theforestrystudio.com/cdn/shop/files/modern-forestry-candle-pour.jpg',
+            'retail-image' => 'https://theforestrystudio.com/cdn/shop/files/modern-forestry-stockist.jpg',
+        ];
+        $legacyProducts = [
+            'https://theforestrystudio.com/products/cedar-smoke-candle',
+            'https://theforestrystudio.com/products/moss-amber-candle',
+            'https://theforestrystudio.com/products/pine-citrus-candle',
+            'https://theforestrystudio.com/products/sandalwood-fig-candle',
+        ];
+        $legacyProductImages = [
+            'https://theforestrystudio.com/cdn/shop/files/cedar-smoke-candle.jpg',
+            'https://theforestrystudio.com/cdn/shop/files/moss-amber-candle.jpg',
+            'https://theforestrystudio.com/cdn/shop/files/pine-citrus-candle.jpg',
+            'https://theforestrystudio.com/cdn/shop/files/sandalwood-fig-candle.jpg',
+        ];
+        $sections = array_values((array) $draft->sections);
+        $changed = false;
+
+        foreach ($sections as $index => $section) {
+            if (! is_array($section)) {
+                continue;
+            }
+
+            $id = (string) ($section['id'] ?? '');
+            if (isset($legacyImages[$id]) && ($section['imageUrl'] ?? null) === $legacyImages[$id]) {
+                $section['imageUrl'] = $defaults->get($id)['imageUrl'];
+                $sections[$index] = $section;
+                $changed = true;
+            }
+
+            if ($id === 'candle-grid' && is_array($section['products'] ?? null)) {
+                $replacementProducts = (array) ($defaults->get('candle-grid')['products'] ?? []);
+                foreach ($section['products'] as $productIndex => $product) {
+                    if (! is_array($product) || ! isset($replacementProducts[$productIndex])) {
+                        continue;
+                    }
+
+                    $replacement = $replacementProducts[$productIndex];
+                    if (in_array($product['imageUrl'] ?? null, $legacyProductImages, true)) {
+                        $product['imageUrl'] = $replacement['imageUrl'];
+                        $changed = true;
+                    }
+                    if (in_array($product['href'] ?? null, $legacyProducts, true)) {
+                        $product['href'] = $replacement['href'];
+                        $changed = true;
+                    }
+                    $section['products'][$productIndex] = $product;
+                }
+                $sections[$index] = $section;
+            }
+        }
+
+        if ($changed) {
+            $draft->forceFill([
+                'sections' => $sections,
+                'revision' => (int) $draft->revision + 1,
+            ]);
+        }
+
+        return $changed;
     }
 
     protected function lockedComplianceFooter(): string

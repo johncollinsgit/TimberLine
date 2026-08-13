@@ -1,5 +1,25 @@
 # UI Changelog
 
+## 2026-08-13 — Email Messenger canvas and asset repair
+
+### What Changed
+
+- Replaced the small iframe preview with a larger centered live email canvas;
+  the block outline remains on the left and the selected block's inspector is
+  now on the right.
+- Every visible editable email block can be clicked or keyboard-selected to
+  focus its matching inspector fields. The locked compliance footer remains
+  distinct and non-editable.
+- Replaced guessed product image URLs with verified current Shopify CDN assets
+  and repair those exact legacy placeholders in saved drafts when reopened.
+
+### Guardrails
+
+- Direct canvas interaction changes draft state only; saving continues through
+  the authenticated tenant/store-scoped backend API.
+- Preview links are represented visually and never navigate a merchant away
+  from the editor.
+
 ## 2026-08-11 — Wholesale Email Messenger
 
 ### What Changed

@@ -200,6 +200,17 @@ remain behaviorally isolated.
   the server for the current Website only, and shows a preview-only return to
   the matching editor page. Public sites never receive editor chrome.
 
+## Embedded Content Editors
+- Use a three-pane layout when an embedded editor combines an outline, a live
+  content preview, and an inspector: keep the editable artifact as the larger
+  centered pane, with the inspector on the right.
+- Preview blocks must be directly selectable and visibly show the active
+  selection. Selecting a block from either the outline or the preview opens
+  the same inspector fields; links in a preview never navigate away while
+  editing.
+- Non-editable compliance content is visually distinct and remains outside the
+  editable outline and inspector.
+
 ## Login/Auth Branding Rules
 - Keep tenant presentation hooks intact (`authTenantPresentation`, host tenant context, landlord mode flags).
 - Keep Fortify + Socialite flow intact.
