@@ -47,4 +47,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['draft table retained before a migration retry'],
     ],
+    '2026_08_13_150000_add_completion_state_to_modern_forestry_mobile_bag_snapshots.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['first completion-state column retained before the second column is added'],
+    ],
 ];

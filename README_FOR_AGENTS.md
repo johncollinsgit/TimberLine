@@ -2,6 +2,18 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Modern Forestry product options and bag reminders (2026-08-13)
+
+- Treat `ShopifyProductOptionsService` and its product-handle assignments as the
+  only Everbranch authority for bundle scent selectors. A handle has one active
+  ruleset; ambiguous mappings fail closed. The Apple bundle has fixed scents
+  and must remain unassigned.
+- The legacy Shopify Infinite Options app is external, read-only comparison
+  state. Do not disable, uninstall, or edit it without explicit owner approval.
+- `ModernForestryMobileBagReminderService` completes matching bag snapshots
+  only from a paid, non-cancelled Shopify order. Stale cart synchronization must
+  not restart completed reminders.
+
 ## Shopify bundle option checkout rule (2026-07-30)
 
 - Required bundle scent choices need both layers: the theme app extension

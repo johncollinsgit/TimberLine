@@ -1,5 +1,18 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry Product Options and Bag-Reminder Safety (2026-08-13)
+
+- `ShopifyProductOptionsService` is the Everbranch authority for Modern
+  Forestry bundle scent selectors. Each product handle may belong to one active
+  ruleset only; collisions fail closed. The mapping includes the reported-good
+  16oz `bundle` and excludes the fixed-scent Apple bundle.
+- Legacy Infinite Options remains unchanged as the read-only comparison
+  baseline. Do not alter it without explicit owner approval or enable it
+  alongside the Everbranch block on the same product template.
+- A paid, non-cancelled Shopify order completes matching Modern Forestry mobile
+  bag snapshots by customer email. Completed snapshots are excluded from
+  reminder sends and stale cart sync cannot reactivate them.
+
 ## Wholesale Email Messenger (2026-08-11)
 
 - MF Wholesale Backstage now exposes **Email Messenger** before Suggestions at

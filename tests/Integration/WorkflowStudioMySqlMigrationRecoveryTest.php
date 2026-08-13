@@ -269,6 +269,42 @@ it('keeps a retained wholesale email messenger draft table safe on retry', funct
     expect(Schema::hasTable('wholesale_email_messenger_drafts'))->toBeTrue();
 });
 
+it('resumes mobile bag completion state after the first column is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('modern_forestry_mobile_bag_snapshots')) {
+        Schema::create('modern_forestry_mobile_bag_snapshots', function (Blueprint $table): void {
+            $table->id();
+            $table->timestamp('last_synced_at')->nullable();
+            $table->timestamp('next_reminder_at')->nullable();
+        });
+    }
+
+    foreach (['cart_started_at', 'completed_at'] as $column) {
+        if (Schema::hasColumn('modern_forestry_mobile_bag_snapshots', $column)) {
+            Schema::table('modern_forestry_mobile_bag_snapshots', function (Blueprint $table) use ($column): void {
+                $table->dropColumn($column);
+            });
+        }
+    }
+
+    // Recreate the durable state left when Forge applies the first DDL but has
+    // not yet recorded the migration or added the second completion column.
+    Schema::table('modern_forestry_mobile_bag_snapshots', function (Blueprint $table): void {
+        $table->timestamp('cart_started_at')->nullable()->after('last_synced_at');
+    });
+
+    $migration = require database_path(
+        'migrations/2026_08_13_150000_add_completion_state_to_modern_forestry_mobile_bag_snapshots.php'
+    );
+    $migration->up();
+
+    expect(Schema::hasColumn('modern_forestry_mobile_bag_snapshots', 'cart_started_at'))->toBeTrue()
+        ->and(Schema::hasColumn('modern_forestry_mobile_bag_snapshots', 'completed_at'))->toBeTrue();
+});
+
 it('resumes the complete Commerce foundation from durable partial MySQL state', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');
