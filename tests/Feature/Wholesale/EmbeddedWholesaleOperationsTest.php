@@ -7,7 +7,9 @@ use App\Models\OrderLine;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WholesaleEmailMessengerDraft;
 use App\Models\WholesaleOrderClassification;
+use App\Services\Wholesale\WholesaleEmailMessengerService;
 use App\Services\Wholesale\WholesaleOrderClassificationService;
 
 beforeEach(function (): void {
@@ -183,8 +185,29 @@ test('wholesale app navigation puts email messenger before suggestions', functio
 
 test('wholesale email messenger creates and persists the approved sixteen-block draft', function (): void {
     $response = $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()));
-    $response->assertOk()->assertSeeText('Email Messenger')->assertSee('Bring Modern Forestry to your store');
-    expect(\App\Models\WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail()->sections)->toHaveCount(16);
+    $response->assertOk()->assertSeeText('Email Messenger')->assertSee('Bring Modern Forestry to your store')->assertSee('cdn.shopify.com');
+    expect(WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail()->sections)->toHaveCount(16);
+});
+
+test('wholesale email messenger repairs only the legacy placeholder candle assets in an existing draft', function (): void {
+    $service = app(WholesaleEmailMessengerService::class);
+    $service->draft($this->tenant->id, 'wholesale');
+    $draft = WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
+    $sections = $draft->sections;
+    $sections[0]['imageUrl'] = 'https://theforestrystudio.com/cdn/shop/files/modern-forestry-wholesale-hero.jpg';
+    $sections[10]['products'][0] = [
+        'title' => 'Cedar + Smoke',
+        'imageUrl' => 'https://theforestrystudio.com/cdn/shop/files/cedar-smoke-candle.jpg',
+        'href' => 'https://theforestrystudio.com/products/cedar-smoke-candle',
+        'buttonLabel' => 'View candle',
+    ];
+    $draft->forceFill(['sections' => $sections])->save();
+
+    $payload = $service->draft($this->tenant->id, 'wholesale');
+
+    expect(data_get($payload, 'sections.0.imageUrl'))->toStartWith('https://cdn.shopify.com/')
+        ->and(data_get($payload, 'sections.10.products.0.href'))->toBe('https://theforestrystudio.com/products/forest-spice')
+        ->and(data_get($payload, 'sections.10.products.0.imageUrl'))->toStartWith('https://cdn.shopify.com/');
 });
 
 test('wholesale pages fail closed when the authenticated store has no tenant mapping', function (): void {
