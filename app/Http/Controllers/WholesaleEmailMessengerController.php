@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedAppCredentials;
 use App\Services\Shopify\ShopifyEmbeddedMessagingWorkspaceService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
@@ -20,6 +21,7 @@ class WholesaleEmailMessengerController extends Controller
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $modules,
         WholesaleEmailMessengerService $drafts,
+        ShopifyEmbeddedAppCredentials $embeddedCredentials,
     ): Response {
         $context = $contextService->resolvePageContext($request);
         $authorized = (bool) ($context['ok'] ?? false);
@@ -33,7 +35,9 @@ class WholesaleEmailMessengerController extends Controller
 
         return $this->embeddedResponse(response()->view('shopify.wholesale-email-messenger', [
             'authorized' => $authorized && $tenantId !== null && $hasAccess,
-            'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
+            'shopifyApiKey' => $authorized
+                ? ($embeddedCredentials->clientIdForStore($store) ?? (string) ($store['client_id'] ?? ''))
+                : null,
             'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
             'host' => $context['host'] ?? null,
             'storeLabel' => 'MF Wholesale Backstage',

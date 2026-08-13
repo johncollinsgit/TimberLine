@@ -189,6 +189,16 @@ test('wholesale email messenger creates and persists the approved sixteen-block 
     expect(WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail()->sections)->toHaveCount(16);
 });
 
+test('wholesale email messenger uses the configured embedded app client id for Shopify Admin session tokens', function (): void {
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-admin-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_id', 'wholesale-embedded-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_secret', 'wholesale-embedded-client-secret');
+
+    $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('<meta name="shopify-api-key" content="wholesale-embedded-client-id">', false);
+});
+
 test('wholesale email messenger repairs only the legacy placeholder candle assets in an existing draft', function (): void {
     $service = app(WholesaleEmailMessengerService::class);
     $service->draft($this->tenant->id, 'wholesale');
