@@ -201,9 +201,8 @@ test('wholesale email messenger uses the configured embedded app client id for S
         ->assertSee('<meta name="shopify-api-key" content="wholesale-embedded-client-id">', false);
 });
 
-test('wholesale email messenger saves with a server-issued page context when Shopify Admin token verification is unavailable', function (): void {
-    $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()))->assertOk();
-    $draft = WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
+test('wholesale email messenger saves with a server-issued page context when Safari has no embedded session cookie', function (): void {
+    $draft = app(WholesaleEmailMessengerService::class)->draft((int) $this->tenant->id, 'wholesale');
     $store = ShopifyStores::find('wholesale', true);
     $contextToken = app(ShopifyEmbeddedAppContext::class)->issueContextToken([
         'store' => $store,
@@ -212,10 +211,10 @@ test('wholesale email messenger saves with a server-issued page context when Sho
     ]);
 
     $this->postJson(route('shopify.app.api.wholesale.messaging.save'), [
-        'subject' => $draft->subject,
-        'sections' => $draft->sections,
-        'personalization' => $draft->personalization,
-        'revision' => $draft->revision,
+        'subject' => $draft['subject'],
+        'sections' => $draft['sections'],
+        'personalization' => $draft['personalization'],
+        'revision' => $draft['revision'],
         'context_token' => $contextToken,
     ])->assertOk()->assertJsonPath('ok', true);
 });

@@ -21,6 +21,7 @@ class WholesaleEmailMessengerService
                 'subject' => 'Bring Modern Forestry to your store',
                 'sections' => self::defaultSections(),
                 'personalization' => ['first_name_token' => '{{ first_name | default: "there" }}'],
+                'revision' => 1,
                 'created_by' => $actorId,
                 'updated_by' => $actorId,
             ],

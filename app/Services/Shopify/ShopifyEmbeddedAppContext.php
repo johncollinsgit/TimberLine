@@ -180,9 +180,10 @@ class ShopifyEmbeddedAppContext
     }
 
     /**
-     * Accept either strict embedded API auth or a server-issued page context token
-     * tied to the currently stored signed/session page context. This keeps HTML
-     * form posts working without trusting raw client-provided store identifiers.
+     * Accept either strict embedded API auth or a short-lived server-issued page
+     * context token. This keeps iframe form posts working when Safari prevents a
+     * third-party session cookie, without trusting raw client-provided store
+     * identifiers.
      *
      * @return array{
      *   ok:bool,
@@ -201,21 +202,21 @@ class ShopifyEmbeddedAppContext
             return $apiContext;
         }
 
-        $pageContext = $this->resolvePageContext($request);
-        if (! ($pageContext['ok'] ?? false)) {
-            return $apiContext;
-        }
-
         $contextToken = trim((string) $request->input('context_token', ''));
         if ($contextToken === '') {
-            return [
-                'ok' => false,
-                'status' => 'missing_context_token',
-                'shop_domain' => $pageContext['shop_domain'] ?? null,
-                'host' => $pageContext['host'] ?? null,
-                'signed_query' => (array) ($pageContext['signed_query'] ?? []),
-                'auth_source' => 'none',
-            ];
+            $pageContext = $this->resolvePageContext($request);
+            if ($pageContext['ok'] ?? false) {
+                return [
+                    'ok' => false,
+                    'status' => 'missing_context_token',
+                    'shop_domain' => $pageContext['shop_domain'] ?? null,
+                    'host' => $pageContext['host'] ?? null,
+                    'signed_query' => (array) ($pageContext['signed_query'] ?? []),
+                    'auth_source' => 'none',
+                ];
+            }
+
+            return $apiContext;
         }
 
         $resolvedToken = $this->resolveContextToken($contextToken);
@@ -223,10 +224,40 @@ class ShopifyEmbeddedAppContext
             return [
                 'ok' => false,
                 'status' => 'invalid_context_token',
-                'shop_domain' => $pageContext['shop_domain'] ?? null,
-                'host' => $pageContext['host'] ?? null,
-                'signed_query' => (array) ($pageContext['signed_query'] ?? []),
+                'shop_domain' => null,
+                'host' => null,
+                'signed_query' => [],
                 'auth_source' => 'none',
+            ];
+        }
+
+        $pageContext = $this->resolvePageContext($request);
+        if (! ($pageContext['ok'] ?? false)) {
+            if ($this->requestHasSignedQuery($request)) {
+                return $apiContext;
+            }
+
+            $store = ShopifyStores::find((string) ($resolvedToken['store_key'] ?? ''), true);
+            $shopDomain = $this->normalizeShopDomain((string) ($resolvedToken['shop_domain'] ?? ''));
+            if ($store === null || $shopDomain === '' || $this->normalizeShopDomain((string) ($store['shop'] ?? '')) !== $shopDomain) {
+                return [
+                    'ok' => false,
+                    'status' => 'invalid_context_token',
+                    'shop_domain' => null,
+                    'host' => null,
+                    'signed_query' => [],
+                    'auth_source' => 'none',
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'status' => 'ok',
+                'shop_domain' => $shopDomain,
+                'host' => trim((string) ($resolvedToken['host'] ?? '')) ?: null,
+                'signed_query' => [],
+                'auth_source' => 'page_context_token',
+                'store' => $store,
             ];
         }
 

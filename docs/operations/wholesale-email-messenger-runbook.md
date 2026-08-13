@@ -14,8 +14,9 @@ the client. Product and image URLs remain part of the stored section snapshot.
 
 Editor mutations prefer a fresh Shopify Admin bearer token. When that token
 cannot be verified, the editor submits the encrypted, short-lived page-context
-token issued with the signed embedded page; the server still matches it to the
-verified wholesale store and tenant before saving or sending a test.
+token issued with the signed embedded page; this also supports Safari iframe
+sessions without a third-party cookie. The server still resolves its store and
+tenant from trusted configuration before saving or sending a test.
 
 ## Sending safety
 
