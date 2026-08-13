@@ -9,6 +9,8 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WholesaleEmailMessengerDraft;
 use App\Models\WholesaleOrderClassification;
+use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyStores;
 use App\Services\Wholesale\WholesaleEmailMessengerService;
 use App\Services\Wholesale\WholesaleOrderClassificationService;
 
@@ -197,6 +199,25 @@ test('wholesale email messenger uses the configured embedded app client id for S
     $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSee('<meta name="shopify-api-key" content="wholesale-embedded-client-id">', false);
+});
+
+test('wholesale email messenger saves with a server-issued page context when Shopify Admin token verification is unavailable', function (): void {
+    $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()))->assertOk();
+    $draft = WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
+    $store = ShopifyStores::find('wholesale', true);
+    $contextToken = app(ShopifyEmbeddedAppContext::class)->issueContextToken([
+        'store' => $store,
+        'shop_domain' => $store['shop'],
+        'host' => 'wholesale-admin-host-token',
+    ]);
+
+    $this->postJson(route('shopify.app.api.wholesale.messaging.save'), [
+        'subject' => $draft->subject,
+        'sections' => $draft->sections,
+        'personalization' => $draft->personalization,
+        'revision' => $draft->revision,
+        'context_token' => $contextToken,
+    ])->assertOk()->assertJsonPath('ok', true);
 });
 
 test('wholesale email messenger repairs only the legacy placeholder candle assets in an existing draft', function (): void {
