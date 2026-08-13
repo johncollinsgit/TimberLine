@@ -130,6 +130,7 @@ class WholesaleEmailMessengerController extends Controller
             'suggestions' => ['Suggestions', 'shopify.app.wholesale.suggestions'], 'customers' => ['Customers', 'shopify.app.wholesale.customers'],
             'orders' => ['Orders', 'shopify.app.wholesale.orders'], 'follow_ups' => ['Follow-Ups', 'shopify.app.wholesale.follow-ups'],
             'prospects' => ['Prospects', 'shopify.app.wholesale.prospects'], 'prospect_discovery' => ['Discover', 'shopify.app.wholesale.prospects.discover'],
+            'prospect_review' => ['Review next', 'shopify.app.wholesale.prospects.review'], 'prospect_report' => ['Research report', 'shopify.app.wholesale.prospects.report'],
             'applications' => ['Applications', 'shopify.app.wholesale.applications'],
         ];
 

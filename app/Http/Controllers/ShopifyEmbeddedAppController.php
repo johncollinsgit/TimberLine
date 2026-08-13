@@ -10,6 +10,7 @@ use App\Models\TenantWholesaleSetting;
 use App\Models\User;
 use App\Models\WholesaleFollowUp;
 use App\Models\WholesaleProspect;
+use App\Models\WholesaleProspectDailyUsage;
 use App\Models\WholesaleProspectDiscoveryRun;
 use App\Models\WholesaleSuggestion;
 use App\Services\Marketing\CandleCashEarnedReminderService;
@@ -33,6 +34,8 @@ use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Services\Tenancy\TenantResolver;
 use App\Services\Wholesale\WholesaleModuleSetupService;
 use App\Services\Wholesale\WholesaleOperationsService;
+use App\Services\Wholesale\WholesaleProspectOutreachDraftService;
+use App\Services\Wholesale\WholesaleProspectResearchLimitService;
 use App\Services\Wholesale\WholesaleProspectWorkflowService;
 use App\Services\Wholesale\WholesaleSuggestionDecisionService;
 use DomainException;
@@ -40,6 +43,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -674,7 +678,7 @@ class ShopifyEmbeddedAppController extends Controller
 
         $analytics = [
             'total' => $prospects->count(),
-            'new' => $prospects->where('status', 'newly_discovered')->count(),
+            'new' => $prospects->where('review_status', 'pending')->count(),
             'qualified' => $prospects->where('status', 'qualified')->count(),
             'converted' => $prospects->where('status', 'converted')->count(),
             'conversion_rate' => $prospects->count() > 0 ? round(($prospects->where('status', 'converted')->count() / $prospects->count()) * 100, 1) : 0,
@@ -688,7 +692,8 @@ class ShopifyEmbeddedAppController extends Controller
     public function showWholesaleProspectDiscovery(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
-        TenantResolver $tenantResolver
+        TenantResolver $tenantResolver,
+        WholesaleProspectResearchLimitService $limits
     ): Response {
         $resolved = $this->resolveWholesaleWorkspaceContext($request, $contextService);
         $tenantId = $this->resolvedWholesaleTenantId($resolved, $tenantResolver);
@@ -709,7 +714,38 @@ class ShopifyEmbeddedAppController extends Controller
                 'estimatedCostPerRequest' => (float) config('services.google_places.estimated_cost_per_request'),
                 'defaultSampleSize' => max(1, min(20, (int) config('services.google_places.default_sample_size', 5))),
                 'largeSearchThreshold' => (int) config('services.google_places.large_search_threshold', 40),
+                'researchAvailability' => $tenantId !== null ? $limits->availability($tenantId) : null,
                 'canRunDiscovery' => $this->canManageWholesaleApprovals($this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId)),
+            ]);
+    }
+
+    public function showWholesaleProspectReview(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver
+    ): Response {
+        $resolved = $this->resolveWholesaleWorkspaceContext($request, $contextService);
+        $tenantId = $this->resolvedWholesaleTenantId($resolved, $tenantResolver);
+        $prospect = null;
+        if (($resolved['authorized'] ?? false) && $tenantId !== null) {
+            $prospect = WholesaleProspect::query()->forAllTenants()
+                ->with(['evidence', 'activities', 'outreachDrafts'])
+                ->where('tenant_id', $tenantId)
+                ->where('review_status', 'pending')
+                ->where('do_not_contact', false)
+                ->whereNotIn('status', ['duplicate', 'converted'])
+                ->orderByDesc('fit_score')
+                ->orderByDesc('fit_confidence')
+                ->orderBy('discovered_at')
+                ->first();
+        }
+
+        return $this->wholesaleWorkspaceResponse($resolved, $tenantId, 'prospect_review', 'Review next prospect',
+            'Approve or reject one researched business at a time. Approval unlocks one Everbranch-only Instagram draft.',
+            'shopify.wholesale-prospect-review', [
+                'prospect' => $prospect,
+                'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
+                'canManage' => $this->canManageWholesaleApprovals($this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId)),
             ]);
     }
 
@@ -724,7 +760,7 @@ class ShopifyEmbeddedAppController extends Controller
         $prospect = null;
         if (($resolved['authorized'] ?? false) && $tenantId !== null) {
             $prospect = WholesaleProspect::query()->forAllTenants()
-                ->with(['evidence', 'followUps', 'convertedAccount'])
+                ->with(['evidence', 'followUps', 'convertedAccount', 'activities', 'outreachDrafts'])
                 ->where('tenant_id', $tenantId)
                 ->where('public_id', $prospectPublicId)
                 ->first();
@@ -803,11 +839,112 @@ class ShopifyEmbeddedAppController extends Controller
         return redirect()->to($redirectUrl)->with('status', 'Prospect action recorded.');
     }
 
+    public function reviewWholesaleProspect(
+        Request $request,
+        string $prospectPublicId,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        WholesaleProspectWorkflowService $workflow,
+        LandlordOperatorActionAuditService $audit
+    ): RedirectResponse|JsonResponse {
+        $context = $contextService->resolveMutationContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+        $tenantId = $this->resolvedMappedWholesaleTenantId($context, $tenantResolver);
+        $actor = $this->resolveWholesaleWorkspaceActor($context, $tenantId);
+        if ($tenantId === null || ! app(TenantModuleAccessResolver::class)->canAccess($tenantId, 'wholesale_operations') || ! $this->canManageWholesaleApprovals($actor)) {
+            return response()->json(['ok' => false, 'message' => 'Prospect review requires an authorized wholesale operator.'], 403);
+        }
+        $validated = $request->validate([
+            'decision' => ['required', 'string', 'in:approve,reject'],
+            'rejection_reason' => ['nullable', 'string', 'max:255'],
+        ]);
+        $prospect = WholesaleProspect::query()->forAllTenants()->where('tenant_id', $tenantId)->where('public_id', $prospectPublicId)->firstOrFail();
+        try {
+            $prospect = $workflow->review($prospect, $actor, $validated['decision'], $validated['rejection_reason'] ?? null);
+        } catch (DomainException $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
+        $audit->record($tenantId, (int) $actor->id, 'wholesale.prospect.reviewed', targetType: 'wholesale_prospect', targetId: $prospect->id, context: [
+            'decision' => $validated['decision'],
+            'prospect_public_id' => $prospect->public_id,
+        ], afterState: ['review_status' => $prospect->review_status, 'status' => $prospect->status]);
+        $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.prospects.review', [], (string) ($context['host'] ?? null));
+
+        return $request->expectsJson()
+            ? response()->json(['ok' => true, 'review_status' => $prospect->review_status, 'redirect_url' => $redirectUrl])
+            : redirect()->to($redirectUrl)->with('status', 'Prospect '.$validated['decision'].'d.');
+    }
+
+    public function requestWholesaleProspectInstagramDraft(
+        Request $request,
+        string $prospectPublicId,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        WholesaleProspectOutreachDraftService $drafts,
+        LandlordOperatorActionAuditService $audit
+    ): RedirectResponse|JsonResponse {
+        $context = $contextService->resolveMutationContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidContextResponse($context);
+        }
+        $tenantId = $this->resolvedMappedWholesaleTenantId($context, $tenantResolver);
+        $actor = $this->resolveWholesaleWorkspaceActor($context, $tenantId);
+        if ($tenantId === null || ! app(TenantModuleAccessResolver::class)->canAccess($tenantId, 'wholesale_operations') || ! $this->canManageWholesaleApprovals($actor)) {
+            return response()->json(['ok' => false, 'message' => 'Outreach drafts require an authorized wholesale operator.'], 403);
+        }
+        $prospect = WholesaleProspect::query()->forAllTenants()->where('tenant_id', $tenantId)->where('public_id', $prospectPublicId)->firstOrFail();
+        try {
+            $draft = $drafts->requestInstagramDraft($prospect, $actor);
+        } catch (DomainException $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
+        $audit->record($tenantId, (int) $actor->id, 'wholesale.prospect.instagram_draft_requested', targetType: 'wholesale_prospect_outreach_draft', targetId: $draft->id, context: [
+            'prospect_public_id' => $prospect->public_id,
+            'channel' => 'instagram',
+            'delivery' => 'not_sent',
+        ], afterState: ['status' => $draft->status, 'revision' => $draft->revision]);
+        $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.prospects.show', ['prospectPublicId' => $prospect->public_id], (string) ($context['host'] ?? null));
+
+        return $request->expectsJson()
+            ? response()->json(['ok' => true, 'draft_public_id' => $draft->public_id, 'redirect_url' => $redirectUrl])
+            : redirect()->to($redirectUrl)->with('status', 'Instagram draft created in Everbranch. It was not sent or pushed to Instagram.');
+    }
+
+    public function showWholesaleProspectResearchReport(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        WholesaleProspectResearchLimitService $limits
+    ): Response {
+        $resolved = $this->resolveWholesaleWorkspaceContext($request, $contextService);
+        $tenantId = $this->resolvedWholesaleTenantId($resolved, $tenantResolver);
+        $usage = collect();
+        $summary = ['approved' => 0, 'rejected' => 0, 'duplicates' => 0, 'do_not_contact' => 0, 'drafts' => 0];
+        if (($resolved['authorized'] ?? false) && $tenantId !== null) {
+            $usage = WholesaleProspectDailyUsage::query()->forAllTenants()->where('tenant_id', $tenantId)->orderByDesc('research_date')->limit(14)->get();
+            $prospects = WholesaleProspect::query()->forAllTenants()->where('tenant_id', $tenantId)->get(['review_status', 'status', 'do_not_contact']);
+            $summary = [
+                'approved' => $prospects->where('review_status', 'approved')->count(),
+                'rejected' => $prospects->where('review_status', 'rejected')->count(),
+                'duplicates' => $prospects->where('status', 'duplicate')->count(),
+                'do_not_contact' => $prospects->where('do_not_contact', true)->count(),
+                'drafts' => \App\Models\WholesaleProspectOutreachDraft::query()->forAllTenants()->where('tenant_id', $tenantId)->count(),
+            ];
+        }
+
+        return $this->wholesaleWorkspaceResponse($resolved, $tenantId, 'prospect_report', 'Research quality report',
+            'Daily limits and review outcomes keep this workflow focused on qualified prospects, not volume.',
+            'shopify.wholesale-prospect-research-report', ['usage' => $usage, 'summary' => $summary, 'availability' => $tenantId !== null ? $limits->availability($tenantId) : null]);
+    }
+
     public function runWholesaleProspectDiscovery(
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
-        LandlordOperatorActionAuditService $audit
+        LandlordOperatorActionAuditService $audit,
+        WholesaleProspectResearchLimitService $limits
     ): RedirectResponse|JsonResponse {
         $context = $contextService->resolveMutationContext($request);
         if (! ($context['ok'] ?? false)) {
@@ -852,20 +989,30 @@ class ShopifyEmbeddedAppController extends Controller
 
         $estimatedRequests = min(count($phrases), (int) ceil($maximum / 20));
         $estimatedCost = round($estimatedRequests * (float) config('services.google_places.estimated_cost_per_request'), 4);
-        $run = WholesaleProspectDiscoveryRun::query()->create([
-            'tenant_id' => $tenantId,
-            'public_id' => (string) \Illuminate\Support\Str::uuid(),
-            'status' => 'queued',
-            'search_region' => $validated['search_region'],
-            'search_phrases' => $phrases,
-            'maximum_results' => $maximum,
-            'website_enrichment' => (bool) ($validated['website_enrichment'] ?? false),
-            'instagram_enrichment' => false,
-            'campaign_name' => $validated['campaign_name'] ?? null,
-            'estimated_api_cost' => $estimatedCost,
-            'large_search_confirmed' => $confirmed,
-            'requested_by_user_id' => (int) $actor->id,
-        ]);
+        try {
+            $run = DB::transaction(function () use ($limits, $tenantId, $maximum, $validated, $phrases, $estimatedCost, $confirmed, $actor): WholesaleProspectDiscoveryRun {
+                $researchDate = now()->startOfDay();
+                $limits->reserve($tenantId, $maximum, $researchDate);
+
+                return WholesaleProspectDiscoveryRun::query()->create([
+                    'tenant_id' => $tenantId,
+                    'public_id' => (string) \Illuminate\Support\Str::uuid(),
+                    'status' => 'queued',
+                    'search_region' => $validated['search_region'],
+                    'research_date' => $researchDate->toDateString(),
+                    'search_phrases' => $phrases,
+                    'maximum_results' => $maximum,
+                    'website_enrichment' => (bool) ($validated['website_enrichment'] ?? false),
+                    'instagram_enrichment' => false,
+                    'campaign_name' => $validated['campaign_name'] ?? null,
+                    'estimated_api_cost' => $estimatedCost,
+                    'large_search_confirmed' => $confirmed,
+                    'requested_by_user_id' => (int) $actor->id,
+                ]);
+            });
+        } catch (DomainException $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
 
         $audit->record($tenantId, (int) $actor->id, 'wholesale.prospect_discovery.queued', targetType: 'wholesale_prospect_discovery_run', targetId: $run->id, context: [
             'surface' => 'shopify_embedded_wholesale',
@@ -2145,6 +2292,8 @@ class ShopifyEmbeddedAppController extends Controller
             'orders' => ['Orders', 'shopify.app.wholesale.orders'],
             'follow_ups' => ['Follow-Ups', 'shopify.app.wholesale.follow-ups'],
             'prospects' => ['Prospects', 'shopify.app.wholesale.prospects'],
+            'prospect_review' => ['Review next', 'shopify.app.wholesale.prospects.review'],
+            'prospect_report' => ['Research report', 'shopify.app.wholesale.prospects.report'],
             'prospect_discovery' => ['Discover', 'shopify.app.wholesale.prospects.discover'],
             'applications' => ['Applications', 'shopify.app.wholesale.applications'],
         ];

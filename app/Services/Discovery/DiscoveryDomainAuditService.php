@@ -2,14 +2,15 @@
 
 namespace App\Services\Discovery;
 
+use App\Services\Http\OutboundRequestPolicy;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Http;
 
 class DiscoveryDomainAuditService
 {
     public function __construct(
         protected TenantDiscoveryProfileService $discoveryProfileService,
         protected DomainCanonicalResolver $domainCanonicalResolver,
+        protected OutboundRequestPolicy $outboundRequests,
     ) {}
 
     /**
@@ -298,10 +299,9 @@ class DiscoveryDomainAuditService
     {
         try {
             /** @var Response $response */
-            $response = Http::timeout($timeout)
-                ->withHeaders([
-                    'User-Agent' => 'EverbranchDomainAudit/1.0',
-                ])
+            $response = $this->outboundRequests->request($url, timeout: $timeout, headers: [
+                'User-Agent' => 'EverbranchDomainAudit/1.0',
+            ])
                 ->get($url);
 
             $headers = [];

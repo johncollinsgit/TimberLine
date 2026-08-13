@@ -1,5 +1,24 @@
 # Modern Forestry Backstage
 
+## Service Plans & Dispatch pilots (2026-08-02)
+
+Everbranch now has two disabled, internal-only Field Service Branches:
+`service_memberships` (versioned maintenance plans, a secure customer offer
+hub, manual external activation, and idempotent recurring visits) and
+`dispatch_command_center` (conflict-aware scheduling, audit events, and mobile
+My Day). Collins Electric is the only approved pilot. Service Plans does not
+store payment methods or auto-charge customers; Dispatch does not track live
+GPS. Follow [the pilot runbook](docs/operations/service-memberships-dispatch-runbook.md)
+before enabling either module.
+
+## Dependency and egress security (2026-08-02)
+
+Composer and npm lockfiles are audited in the pull-request and production
+gates. `OutboundRequestPolicy` is the shared guard for public URLs derived from
+tenant or prospect data: it requires HTTPS, blocks private/reserved DNS targets
+and redirects, and is used by discovery, prospect enrichment, and remote asset
+imports. See `docs/operations/dependency-security-runbook.md`.
+
 ## Accounting Command Center
 
 Everbranch includes a reusable, disabled-by-default Accounting Command Center
@@ -1408,7 +1427,7 @@ Local setup note:
   - `TENANCY_LANDLORD_OPERATOR_ROLES=admin`
   - `TENANCY_LANDLORD_OPERATOR_EMAILS=`
 - Fast local login bootstrap (if your expected admin login fails):
-  - `php artisan users:ensure-approved your-email@example.com 'your-password' --name='Your Name' --role=admin`
+  - `php artisan users:ensure-approved your-email@example.com 'your-password' --name='Your Name' --role=admin --reason='INC-1234 approved access recovery' --actor='github-actions:your-github-login'`
   - then sign in at `/login` and open `/landlord`
 - Leave `TENANCY_LANDLORD_OPERATOR_EMAILS` blank unless you explicitly want an additional email allowlist on top of role checks.
 

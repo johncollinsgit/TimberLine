@@ -1,5 +1,21 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry Product Options and Bag-Reminder Safety (2026-08-13)
+
+- `ShopifyProductOptionsService` is the Everbranch authority for Modern
+  Forestry bundle scent selectors. Each product handle may belong to one active
+  ruleset only; collisions fail closed rather than rendering an arbitrary scent
+  picker. The current mapping includes the reported-good 16oz `bundle` and
+  explicitly excludes the fixed-scent Apple bundle.
+- The separately installed legacy Infinite Options app remains unchanged as the
+  read-only comparison baseline. It owns the legacy storefront selectors and
+  subscription; do not alter it without explicit owner approval, and do not
+  enable it alongside the Everbranch block on the same product template.
+- A paid, non-cancelled Shopify order completes matching Modern Forestry mobile
+  bag snapshots by customer email. Completed snapshots are excluded from
+  reminder sends and a stale post-checkout bag sync cannot reactivate them;
+  only changed bag contents begin a new reminder lifecycle.
+
 ## Wholesale Email Messenger (2026-08-11)
 
 - MF Wholesale Backstage now exposes **Email Messenger** before Suggestions at
@@ -12,6 +28,41 @@
   existing consent, unsubscribe, bounce, and suppression enforcement. See
   `docs/operations/wholesale-email-messenger-runbook.md`.
 
+## Service Plans & Dispatch Command Center (2026-08-02)
+
+- `service_memberships` and `dispatch_command_center` are canonical-catalog,
+  disabled-by-default, `INTERNAL_ONLY` tenant add-ons. Collins Electric is the
+  only permitted pilot. Their dependencies and setup status must resolve
+  through `TenantModuleAccessResolver`; do not turn them on through an ad hoc
+  state flag.
+- Service-plan versions, offers, and memberships keep immutable snapshots.
+  Customer portals use hashed, expiring, revocable offer tokens, and customer
+  photos stream only after portal authorization. Manual external payment
+  verification precedes activation; this Branch has no card capture, Stripe
+  Connect, automatic charge, or automatic renewal payment behavior.
+- `field-service:generate-membership-visits` runs daily and locks each active
+  membership before using its unique membership/period visit key. Generated
+  work remains a normal `FieldServiceJob`; pause the Branch through the module
+  resolver rather than deleting pilot data.
+- Dispatch treats `FieldServiceJob` as scheduling truth. It enforces overlap,
+  travel buffer, skill, availability, and daily-capacity checks; events and
+  internal notification are recorded after dispatcher confirmation. Customer
+  schedule notices remain consent-gated, and live GPS is deliberately absent.
+  See `docs/operations/service-memberships-dispatch-runbook.md`.
+
+## Dependency and Egress Security (2026-08-02)
+
+- Composer and npm lockfiles are now audited in the pull-request, compatibility,
+  and production test/build gates. Releases fail closed on a Composer advisory
+  or a moderate-or-higher npm advisory; do not bypass or suppress this gate.
+- `OutboundRequestPolicy` is the canonical guard for URLs derived from tenant,
+  prospect, import, or other non-code data. It requires HTTPS, rejects embedded
+  credentials, IP literals, unsafe hostnames, non-443 ports, and DNS answers
+  containing private/reserved addresses, and disables redirects. Discovery
+  audits, wholesale enrichment, and remote workspace-asset imports use it.
+- The production password-reset maintenance workflow requires a ticket/incident
+  reason and records its GitHub actor and target action in application logs.
+  Keep GitHub production-environment approval enabled.
 
 ## Modern Forestry App Store Customer Login Recovery (2026-07-25)
 

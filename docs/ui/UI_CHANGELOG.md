@@ -17,6 +17,27 @@
 - The unsubscribe/privacy footer is locked and rendered by the server. This
   surface has no campaign-send control and never targets prospects.
 
+## 2026-08-02 — Service Plans & Dispatch Pilot Surfaces
+
+### What Changed
+
+- Added the six-step Service Plans & Customer Hub setup, immutable plan
+  publishing, staff offer/activation queue, secure branded customer offer view,
+  ordered accessible plan photos, and explicit typed acceptance.
+- Added the Dispatch Command Center pilot surface with configuration controls,
+  service zones, technician capacity/skills, an auditable daily board, route
+  links, and confirmed conflict-aware scheduling.
+- Added mobile contracts for membership visit work and technician My Day.
+
+### Guardrails
+
+- Customer access is an expiring offer token, not a workspace account. The
+  portal never exposes internal notes, private photos, invoice references, or
+  payment controls.
+- Pricing and plan terms are owner/admin controlled. Customer payments remain
+  external/manual, and Dispatch sends no customer schedule notice without
+  separate consent and approved messaging readiness. Live GPS is not present.
+
 ## 2026-07-25 — Landlord Branches Preview and Alert Safety
 
 ### What Changed

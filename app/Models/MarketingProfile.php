@@ -141,6 +141,16 @@ class MarketingProfile extends Model
         return $this->hasMany(MarketingConsentRequest::class, 'marketing_profile_id');
     }
 
+    public function serviceMemberships(): HasMany
+    {
+        return $this->hasMany(CustomerServiceMembership::class, 'marketing_profile_id');
+    }
+
+    public function servicePlanOffers(): HasMany
+    {
+        return $this->hasMany(ServicePlanOffer::class, 'marketing_profile_id');
+    }
+
     public function groups(): BelongsToMany
     {
         return $this->belongsToMany(MarketingGroup::class, 'marketing_group_members', 'marketing_profile_id', 'marketing_group_id')

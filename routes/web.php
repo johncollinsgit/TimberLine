@@ -9,6 +9,7 @@ use App\Http\Controllers\ClientProjectController;
 use App\Http\Controllers\ClientProjectTicketController;
 use App\Http\Controllers\CustomModuleRequestController;
 use App\Http\Controllers\Discovery\BrandDiscoveryController;
+use App\Http\Controllers\DispatchCommandCenterController;
 use App\Http\Controllers\EquipmentMaintenanceController;
 use App\Http\Controllers\EvergroveServiceInquiryController;
 use App\Http\Controllers\EvergroveServicesController;
@@ -17,9 +18,9 @@ use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\FieldServiceResourcesController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
-use App\Http\Controllers\Integrations\QuickBooksConnectionController;
 use App\Http\Controllers\Integrations\InstagramConnectionController;
 use App\Http\Controllers\Integrations\InstagramWebhookController;
+use App\Http\Controllers\Integrations\QuickBooksConnectionController;
 use App\Http\Controllers\Landlord\LandlordAgreementController;
 use App\Http\Controllers\Landlord\LandlordBranchPreviewController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
@@ -74,6 +75,8 @@ use App\Http\Controllers\PublicBudConversationController;
 use App\Http\Controllers\PublicClassSignupController;
 use App\Http\Controllers\PublicLegalController;
 use App\Http\Controllers\QuickBooksReportsController;
+use App\Http\Controllers\ServiceMembershipController;
+use App\Http\Controllers\ServicePlanOfferPortalController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
@@ -95,10 +98,10 @@ use App\Http\Controllers\TenantEmployeeInvitationController;
 use App\Http\Controllers\TenantSupportTicketController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
+use App\Http\Controllers\WholesaleEmailMessengerController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Http\Controllers\WorkspaceDocumentsController;
-use App\Http\Controllers\WholesaleEmailMessengerController;
 use App\Http\Middleware\EnsureEvergroveProposalHost;
 use App\Livewire\Admin\AdminHome;
 use App\Livewire\Admin\Catalog\CostsCrud as AdminCostsCrud;
@@ -225,6 +228,13 @@ Route::middleware([EnsureEvergroveProposalHost::class])->prefix('proposals/{toke
     Route::post('/accept', [AgreementProposalController::class, 'accept'])->middleware('throttle:5,1')->name('accept');
     Route::post('/checkout', [AgreementProposalController::class, 'checkout'])->middleware('throttle:5,1')->name('checkout');
     Route::get('/download', [AgreementProposalController::class, 'download'])->middleware('throttle:20,1')->name('download');
+});
+
+Route::prefix('service-plan-offers/{token}')->name('service-plan-offers.')->middleware('throttle:30,1')->group(function (): void {
+    Route::get('/', [ServicePlanOfferPortalController::class, 'show'])->name('show');
+    Route::post('/accept', [ServicePlanOfferPortalController::class, 'accept'])->middleware('throttle:5,1')->name('accept');
+    Route::post('/request-invoice', [ServicePlanOfferPortalController::class, 'requestInvoice'])->middleware('throttle:5,1')->name('request-invoice');
+    Route::get('/media/{media}', [ServicePlanOfferPortalController::class, 'media'])->whereNumber('media')->name('media');
 });
 
 Route::get('/join-team', [TenantEmployeeInvitationController::class, 'show'])
@@ -837,6 +847,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/', [EquipmentMaintenanceController::class, 'store'])->name('store');
             Route::get('/{equipment}', [EquipmentMaintenanceController::class, 'show'])->name('show');
             Route::post('/{equipment}/service-jobs', [EquipmentMaintenanceController::class, 'storeServiceJob'])->name('service-jobs.store');
+        });
+
+    Route::middleware(['role:admin,manager', 'tenant.access', 'module:service_memberships'])
+        ->prefix('service-memberships')
+        ->name('service-memberships.')
+        ->group(function (): void {
+            Route::get('/', [ServiceMembershipController::class, 'index'])->name('index');
+            Route::put('/settings', [ServiceMembershipController::class, 'updateSettings'])->name('settings.update');
+            Route::post('/plans', [ServiceMembershipController::class, 'storeTemplate'])->name('plans.store');
+            Route::post('/plans/{template}/versions', [ServiceMembershipController::class, 'publishVersion'])->name('plans.versions.store');
+            Route::post('/offers', [ServiceMembershipController::class, 'storeOffer'])->name('offers.store');
+            Route::post('/offers/{offer}/activate', [ServiceMembershipController::class, 'activateOffer'])->name('offers.activate');
+            Route::post('/offers/{offer}/revoke', [ServiceMembershipController::class, 'revokeOffer'])->name('offers.revoke');
+        });
+
+    Route::middleware(['role:admin,manager', 'tenant.access', 'module:dispatch_command_center'])
+        ->prefix('dispatch')
+        ->name('dispatch.')
+        ->group(function (): void {
+            Route::get('/', [DispatchCommandCenterController::class, 'index'])->name('index');
+            Route::put('/settings', [DispatchCommandCenterController::class, 'updateSettings'])->name('settings.update');
+            Route::post('/areas', [DispatchCommandCenterController::class, 'storeArea'])->name('areas.store');
+            Route::post('/technicians', [DispatchCommandCenterController::class, 'storeTechnician'])->name('technicians.store');
+            Route::post('/jobs/{job}', [DispatchCommandCenterController::class, 'dispatch'])->name('jobs.dispatch');
         });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
@@ -1782,6 +1816,8 @@ Route::prefix('shopify/marketing/v1')
 Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group(function () {
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');
     Route::get('/app/wholesale', [ShopifyEmbeddedAppController::class, 'showWholesale'])->name('shopify.app.wholesale');
+    Route::get('/app/wholesale/messaging', [WholesaleEmailMessengerController::class, 'show'])
+        ->name('shopify.app.wholesale.messaging');
     Route::get('/app/wholesale/applications', [ShopifyEmbeddedAppController::class, 'showWholesaleApplications'])
         ->name('shopify.app.wholesale.applications');
     Route::get('/app/wholesale/customers', [ShopifyEmbeddedAppController::class, 'showWholesaleCustomers'])
@@ -1804,9 +1840,19 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         ->name('shopify.app.wholesale.prospects.discover');
     Route::post('/app/wholesale/prospects/discover', [ShopifyEmbeddedAppController::class, 'runWholesaleProspectDiscovery'])
         ->name('shopify.app.wholesale.prospects.run');
+    Route::get('/app/wholesale/prospects/review', [ShopifyEmbeddedAppController::class, 'showWholesaleProspectReview'])
+        ->name('shopify.app.wholesale.prospects.review');
+    Route::get('/app/wholesale/prospects/report', [ShopifyEmbeddedAppController::class, 'showWholesaleProspectResearchReport'])
+        ->name('shopify.app.wholesale.prospects.report');
     Route::get('/app/wholesale/prospects/{prospectPublicId}', [ShopifyEmbeddedAppController::class, 'showWholesaleProspect'])
         ->whereUuid('prospectPublicId')
         ->name('shopify.app.wholesale.prospects.show');
+    Route::post('/app/wholesale/prospects/{prospectPublicId}/review', [ShopifyEmbeddedAppController::class, 'reviewWholesaleProspect'])
+        ->whereUuid('prospectPublicId')
+        ->name('shopify.app.wholesale.prospects.review.submit');
+    Route::post('/app/wholesale/prospects/{prospectPublicId}/instagram-draft', [ShopifyEmbeddedAppController::class, 'requestWholesaleProspectInstagramDraft'])
+        ->whereUuid('prospectPublicId')
+        ->name('shopify.app.wholesale.prospects.instagram-draft');
     Route::post('/app/wholesale/prospects/{prospectPublicId}/action', [ShopifyEmbeddedAppController::class, 'updateWholesaleProspect'])
         ->whereUuid('prospectPublicId')
         ->name('shopify.app.wholesale.prospects.action');
@@ -1816,8 +1862,6 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         ->name('shopify.app.wholesale.applications.approve');
     Route::post('/app/wholesale/applications/{accessRequest}/reject', [ShopifyEmbeddedAppController::class, 'rejectWholesaleApplication'])
         ->name('shopify.app.wholesale.applications.reject');
-    Route::get('/app/wholesale/messaging', [WholesaleEmailMessengerController::class, 'show'])
-        ->name('shopify.app.wholesale.messaging');
     Route::post('/app/wholesale/applications/{accessRequest}/resend-activation', [ShopifyEmbeddedAppController::class, 'resendWholesaleApplicationActivation'])
         ->name('shopify.app.wholesale.applications.resend-activation');
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
@@ -1959,6 +2003,12 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
             ->name('customers.merge.status');
         Route::get('/messaging/bootstrap', [ShopifyEmbeddedMessagingController::class, 'bootstrap'])
             ->name('messaging.bootstrap');
+        Route::post('/wholesale/messaging/draft', [WholesaleEmailMessengerController::class, 'save'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.messaging.save');
+        Route::post('/wholesale/messaging/test-send', [WholesaleEmailMessengerController::class, 'testSend'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.messaging.test-send');
         Route::get('/messaging/audience-summary', [ShopifyEmbeddedMessagingController::class, 'audienceSummary'])
             ->name('messaging.audience.summary');
         Route::get('/messaging/customers/search', [ShopifyEmbeddedMessagingController::class, 'searchCustomers'])
@@ -1993,12 +2043,6 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
             ->name('messaging.responses.index');
         Route::get('/messaging/responses/{conversation}', [ShopifyEmbeddedMessagingController::class, 'responsesShow'])
             ->name('messaging.responses.show');
-        Route::post('/wholesale/messaging/draft', [WholesaleEmailMessengerController::class, 'save'])
-            ->withoutMiddleware([VerifyCsrfToken::class])
-            ->name('wholesale.messaging.save');
-        Route::post('/wholesale/messaging/test-send', [WholesaleEmailMessengerController::class, 'testSend'])
-            ->withoutMiddleware([VerifyCsrfToken::class])
-            ->name('wholesale.messaging.test-send');
         Route::post('/messaging/responses/{conversation}/actions', [ShopifyEmbeddedMessagingController::class, 'responsesUpdate'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.responses.update');

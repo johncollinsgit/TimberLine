@@ -20,7 +20,23 @@
   `git clean`, live-directory asset replacement, or broad cache clearing to
   production deployments.
 
+- Dependency advisories are release blockers: keep the Composer/npm audit gates
+  enabled and do not add suppressions. Use `OutboundRequestPolicy` for URLs
+  derived from tenant, prospect, import, or other non-code data; it is the
+  canonical no-redirect, public-HTTPS egress guard.
+
 - Treat `config/module_catalog.php` as the canonical source of truth for plans, modules, capabilities, visibility, billing mode, and CTA routing. Legacy `commercial.php` and `entitlements.php` are compatibility layers only.
+
+- `service_memberships` and `dispatch_command_center` are disabled,
+  `INTERNAL_ONLY` Branches for the Collins Electric pilot. Enforce tenant scope
+  for every mutation; only owner/admin may publish pricing or terms, while
+  managers may handle enrollment and external-payment activation. Keep service
+  plan, offer, and membership snapshots immutable; portal links must stay
+  hashed, expiring, revocable, rate-limited, and the only authority for
+  customer photo streaming. Never add stored cards, Stripe auto-charge, public
+  customer assets, automatic customer reschedule messages, or live GPS to this
+  workflow without a separately approved privacy/payment rollout. See
+  `docs/operations/service-memberships-dispatch-runbook.md`.
 - Use `TenantModuleAccessResolver`, `TenantExperienceProfileService`, `UnifiedAppNavigationService`, `UnifiedDashboardService`, and `TenantModuleCatalogService` instead of adding new ad hoc plan, channel, or module checks.
 - Tenant-facing mutations must verify tenant scope on the server. Never trust client-provided tenant, module, store, host, or channel identifiers without resolving them against current tenant/store context.
 - Public or self-serve surfaces must suppress modules unless they are explicitly safe and visible for that surface. Hidden, internal-only, placeholder, roadmap, or disabled modules should fail closed.

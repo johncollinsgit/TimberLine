@@ -7,15 +7,18 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkspaceAsset;
 use App\Models\WorkspaceAssetUpload;
+use App\Services\Http\OutboundRequestPolicy;
 use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class WorkspaceAssetService
 {
-    public function __construct(protected WorkspaceAssetAuditService $audit) {}
+    public function __construct(
+        protected WorkspaceAssetAuditService $audit,
+        protected OutboundRequestPolicy $outboundRequests,
+    ) {}
 
     /** @var array<int,string> */
     protected array $allowedMimes = [
@@ -67,7 +70,10 @@ class WorkspaceAssetService
         if (! str_starts_with($url, 'https://')) {
             return null;
         }
-        $response = Http::timeout(30)->retry(2, 250)->get($url)->throw();
+        $response = $this->outboundRequests->request($url, timeout: 30)
+            ->retry(2, 250)
+            ->get($url)
+            ->throw();
         $bytes = $response->body();
         if ($bytes === '' || strlen($bytes) > 25 * 1024 * 1024) {
             return null;
@@ -126,9 +132,9 @@ class WorkspaceAssetService
             return $existing;
         }
 
-        $response = Http::withHeaders([
+        $response = $this->outboundRequests->request($url, timeout: 30, headers: [
             'User-Agent' => 'Everbranch/2.0 (+https://theeverbranch.com; john@evergrovesoftware.com)',
-        ])->timeout(30)->retry(2, 250)->get($url)->throw();
+        ])->retry(2, 250)->get($url)->throw();
         $bytes = $response->body();
         abort_if($bytes === '' || strlen($bytes) > 25 * 1024 * 1024, 422, 'The remote image is empty or too large.');
         $mime = strtolower(trim((string) strtok((string) $response->header('Content-Type'), ';')));

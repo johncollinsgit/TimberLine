@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\WholesaleAccount;
 use App\Models\WholesaleFollowUp;
 use App\Models\WholesaleProspect;
+use App\Models\WholesaleProspectActivity;
 use App\Models\WholesaleProspectEvidence;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,38 @@ use Illuminate\Support\Str;
 
 class WholesaleProspectWorkflowService
 {
+    public function review(WholesaleProspect $prospect, User $actor, string $decision, ?string $reason = null): WholesaleProspect
+    {
+        return DB::transaction(function () use ($prospect, $actor, $decision, $reason): WholesaleProspect {
+            $prospect = WholesaleProspect::query()->forAllTenants()->lockForUpdate()->findOrFail($prospect->id);
+            if ($prospect->do_not_contact) {
+                throw new DomainException('Clear do not contact before reviewing this prospect.');
+            }
+            if ($prospect->duplicate_status === 'confirmed_duplicate' || $prospect->status === 'duplicate') {
+                throw new DomainException('Resolve the duplicate record before reviewing this prospect.');
+            }
+            if ($decision === 'reject' && trim((string) $reason) === '') {
+                throw new DomainException('A rejection reason is required.');
+            }
+
+            $approved = $decision === 'approve';
+            $prospect->forceFill([
+                'review_status' => $approved ? 'approved' : 'rejected',
+                'reviewed_by_user_id' => $actor->id,
+                'reviewed_at' => now(),
+                'last_reviewed_at' => now(),
+                'status' => $approved ? 'qualified' : 'rejected',
+                'rejection_reason' => $approved ? null : trim((string) $reason),
+            ])->save();
+            $this->recordActivity($prospect, $actor, $approved ? 'review_approved' : 'review_rejected', $approved
+                ? 'Operator approved this prospect for optional, draft-only outreach.'
+                : 'Operator rejected this prospect: '.trim((string) $reason));
+            $this->recordEvidence($prospect, $actor, $approved ? 'approve' : 'reject', trim((string) $reason));
+
+            return $prospect->fresh(['evidence', 'followUps', 'convertedAccount', 'activities', 'outreachDrafts']);
+        });
+    }
+
     /** @param array<string,mixed> $data */
     public function apply(WholesaleProspect $prospect, User $actor, array $data): WholesaleProspect
     {
@@ -36,6 +69,10 @@ class WholesaleProspectWorkflowService
             };
 
             $this->recordEvidence($prospect, $actor, $action, $note);
+            $this->recordActivity($prospect, $actor, $action, $this->activitySummary($action, $note), [
+                'status' => $prospect->status,
+                'do_not_contact' => $prospect->do_not_contact,
+            ]);
 
             return $prospect->fresh(['evidence', 'followUps', 'convertedAccount']);
         });
@@ -172,5 +209,27 @@ class WholesaleProspectWorkflowService
             'observed_at' => now(),
             'source_reference' => ['actor_user_id' => $actor->id, 'recorded_at' => now()->toIso8601String()],
         ]);
+    }
+
+    /** @param array<string,mixed> $metadata */
+    protected function recordActivity(WholesaleProspect $prospect, User $actor, string $action, string $summary, array $metadata = []): void
+    {
+        WholesaleProspectActivity::query()->create([
+            'tenant_id' => $prospect->tenant_id,
+            'wholesale_prospect_id' => $prospect->id,
+            'actor_user_id' => $actor->id,
+            'activity_type' => $action,
+            'channel' => in_array($action, ['record_call', 'record_contact_attempt'], true) ? 'manual' : null,
+            'summary' => $summary,
+            'metadata' => $metadata,
+            'occurred_at' => now(),
+        ]);
+    }
+
+    protected function activitySummary(string $action, string $note): string
+    {
+        $summary = 'Operator recorded '.str_replace('_', ' ', $action).'.';
+
+        return $note === '' ? $summary : $summary.' '.$note;
     }
 }

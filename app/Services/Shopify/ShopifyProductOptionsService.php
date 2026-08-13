@@ -114,7 +114,7 @@ class ShopifyProductOptionsService
             return null;
         }
 
-        $assignment = ShopifyProductOptionAssignment::query()
+        $assignments = ShopifyProductOptionAssignment::query()
             ->forTenantId($tenantId)
             ->where(function ($query) use ($productId, $productHandle): void {
                 if ($productId !== null) {
@@ -127,12 +127,27 @@ class ShopifyProductOptionsService
                 }
             })
             ->with('ruleset')
-            ->first();
+            ->get();
 
-        $ruleset = $assignment?->ruleset;
-        if (! $ruleset || ! $ruleset->enabled) {
+        // A product can never safely inherit an arbitrary ruleset.  Older imports
+        // allowed a handle to be present on more than one ruleset, which made the
+        // rendered selector depend on database row order.  Fail closed until the
+        // conflict is resolved in Everbranch instead of exposing incorrect scents.
+        $rulesets = $assignments
+            ->map(fn (ShopifyProductOptionAssignment $assignment): ?ShopifyProductOptionRuleset => $assignment->ruleset)
+            ->filter(fn (?ShopifyProductOptionRuleset $ruleset): bool => $ruleset !== null && $ruleset->enabled)
+            ->unique(fn (ShopifyProductOptionRuleset $ruleset): int => (int) $ruleset->id)
+            ->values();
+
+        if ($rulesets->count() !== 1) {
             return null;
         }
+
+        /** @var ShopifyProductOptionRuleset $ruleset */
+        $ruleset = $rulesets->first();
+        $assignment = $assignments->first(
+            fn (ShopifyProductOptionAssignment $candidate): bool => (int) $candidate->ruleset_id === (int) $ruleset->id
+        );
 
         $allowedValues = $this->normalizeValues((array) $ruleset->allowed_values);
         if ($allowedValues === []) {
@@ -186,6 +201,17 @@ class ShopifyProductOptionsService
             ->filter()
             ->unique()
             ->values();
+
+        // Product handles are owned by one ruleset. Moving a handle in the admin
+        // must remove any prior assignment, otherwise storefront lookup is
+        // ambiguous and customers can receive the wrong number of scent fields.
+        if ($normalized->isNotEmpty()) {
+            ShopifyProductOptionAssignment::query()
+                ->forTenantId($tenantId)
+                ->whereIn('product_handle', $normalized->all())
+                ->where('ruleset_id', '!=', $ruleset->id)
+                ->delete();
+        }
 
         $ruleset->assignments()->delete();
 

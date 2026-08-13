@@ -30,7 +30,7 @@ The storefront block writes the selections as Shopify line-item properties. Exis
 
 Add the app block to the product template after deploying the Shopify app extension. Rulesets with no matching product handle stay hidden on the storefront.
 
-## Initial Infinite Options migration
+## Reconciled Infinite Options migration (2026-08-13)
 
 The migration seeds the seven visible rulesets from the supplied screenshots:
 
@@ -42,7 +42,18 @@ The migration seeds the seven visible rulesets from the supplied screenshots:
 6. Wax Melt Bundle — 5 selections
 7. Bundles with 3 options — 3 selections
 
-The Room Spray Bundle and 4oz three-candle bundle receive the product handles visible in the screenshots. The remaining rulesets are intentionally marked as needing product assignments; their source URLs were truncated in the screenshots.
+The current legacy option-set URLs were reconciled into Everbranch. The 16oz
+three-candle bundle (`bundle`), the 4oz and 8oz three-candle bundles, the
+three-wax-melt bundle, Buy 2 Get 1 Free, Build Your Own Flight, all bulk
+bundles, Teacher Candles, Room Spray Bundle, and five-wax-melt bundle now have
+one exact Everbranch ruleset assignment. The Apple bundle is explicitly
+unassigned because its three fragrances are fixed: Hot Apple Cider, Harvest
+Apple, and Appalachian Maple Bourbon.
+
+The storefront resolver fails closed if an active product is assigned to more
+than one ruleset; it must never pick an arbitrary selector count based on row
+order. Saving a ruleset in Everbranch also removes a matching handle from any
+other ruleset, so the admin editor preserves this one-product/one-ruleset rule.
 
 The initial allowed scent values are the 31 values visible across the supplied Room Spray Bundle dropdown screenshots, including `Room Refresh` and `Violet Spice`. They can be replaced or expanded from the embedded editor without a deployment.
 
@@ -56,6 +67,11 @@ After the web app and Shopify extension are deployed:
 
 1. Open `/shopify/reinstall/retail` and complete OAuth for `modernforestry.myshopify.com`.
 2. Open Everbranch from Shopify Admin and select `Product Options`.
-3. Paste or confirm the product handles for the five unassigned rulesets.
+3. Confirm the reconciled product handles in the Product Options editor.
 4. Add the `Everbranch scent options` app block to the relevant product template(s).
-5. Test a bundle add-to-cart and confirm `Scent 1...N` appear on the Shopify cart line and order.
+5. Test every bundle add-to-cart and confirm the intended `Scent 1...N` fields
+   appear on the Shopify cart line and order; Apple must show no scent picker.
+6. Keep the legacy Infinite Options app unchanged as the read-only comparison
+   baseline unless its owner explicitly approves a separate removal plan. Its
+   active storefront selectors must not be enabled alongside the Everbranch
+   block on the same product template.

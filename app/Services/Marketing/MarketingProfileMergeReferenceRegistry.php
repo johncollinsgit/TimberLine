@@ -53,6 +53,10 @@ class MarketingProfileMergeReferenceRegistry
             'field_service_financial_documents' => ['marketing_profile_id'],
             'field_service_estimates' => ['marketing_profile_id'],
             'class_enrollments' => ['marketing_profile_id'],
+            // Membership terms and accepted-offer snapshots remain immutable;
+            // only the tenant-scoped customer reference follows the survivor.
+            'service_plan_offers' => ['marketing_profile_id'],
+            'customer_service_memberships' => ['marketing_profile_id'],
         ];
     }
 

@@ -17,6 +17,9 @@ class TenantWholesaleSetting extends Model
         'product_categories',
         'discovery_keywords',
         'website_enrichment_enabled',
+        'prospect_daily_research_limit',
+        'prospect_daily_run_limit',
+        'prospect_outreach_cooldown_days',
         'confirmed_at',
         'confirmed_by_user_id',
     ];
@@ -27,6 +30,9 @@ class TenantWholesaleSetting extends Model
         'product_categories' => 'array',
         'discovery_keywords' => 'array',
         'website_enrichment_enabled' => 'boolean',
+        'prospect_daily_research_limit' => 'integer',
+        'prospect_daily_run_limit' => 'integer',
+        'prospect_outreach_cooldown_days' => 'integer',
         'confirmed_at' => 'datetime',
         'confirmed_by_user_id' => 'integer',
     ];

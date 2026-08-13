@@ -2,6 +2,30 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Modern Forestry product options and bag reminders (2026-08-13)
+
+- Treat `ShopifyProductOptionsService` and its product-handle assignments as the
+  only Everbranch authority for bundle scent selectors. A handle has one active
+  ruleset; ambiguous mappings fail closed. The Apple candle bundle has fixed
+  fragrances and must remain unassigned.
+- The legacy Shopify Infinite Options app is external, read-only comparison
+  state. Do not disable, uninstall, or edit it without explicit owner approval.
+  Its active selectors must not run alongside the Everbranch block on the same
+  product template.
+- `ModernForestryMobileBagReminderService` must complete matching bag snapshots
+  only from a paid, non-cancelled Shopify order. A checkout-link event is not a
+  purchase, and stale cart synchronization must not restart completed reminders.
+
+## Service Plans and Dispatch pilot guardrail (2026-08-02)
+
+- Keep `service_memberships` and `dispatch_command_center` disabled and
+  internal-only unless an approved Collins Electric pilot step says otherwise.
+  Plan versions/offers/memberships are immutable snapshots; portal token hashes
+  and authorized media streaming are mandatory. Do not add card storage,
+  automatic charging, public asset URLs, live GPS, or customer schedule sends
+  without the separate consent/readiness approval. Use the operational runbook
+  at `docs/operations/service-memberships-dispatch-runbook.md`.
+
 ## Accounting Command Center guardrails (2026-07-23)
 
 - Keep `accounting_command_center` reusable and tenant-scoped. Modern Forestry
@@ -48,6 +72,12 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   suite is the supported fast path. Do not bulk-format inherited style debt or
   stage unrelated rewrites. Check Actions at coarse milestones instead of
   continuously polling it; canceled superseded runs are expected.
+- Dependency hygiene is a release requirement: the pull-request and production
+  gates run `composer audit --locked` and `npm audit --package-lock-only
+  --audit-level=moderate`. Do not add advisory suppressions. For tenant- or
+  prospect-derived external URLs, use `OutboundRequestPolicy`; it requires
+  HTTPS, validates public DNS targets, and disables redirects. See
+  `docs/operations/dependency-security-runbook.md`.
 
 ## Operator Alert SMS Guardrails (2026-07-25)
 

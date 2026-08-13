@@ -96,6 +96,21 @@ class Tenant extends Model
         return $this->hasMany(TenantModuleState::class);
     }
 
+    public function serviceMembershipSetting(): HasOne
+    {
+        return $this->hasOne(ServiceMembershipSetting::class);
+    }
+
+    public function servicePlanTemplates(): HasMany
+    {
+        return $this->hasMany(ServicePlanTemplate::class);
+    }
+
+    public function customerServiceMemberships(): HasMany
+    {
+        return $this->hasMany(CustomerServiceMembership::class);
+    }
+
     public function scheduledClasses(): HasMany
     {
         return $this->hasMany(ScheduledClass::class);

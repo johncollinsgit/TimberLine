@@ -23,10 +23,12 @@ class WholesaleProspectDiscoveryRun extends Model
             'estimated_api_cost' => 'decimal:4',
             'actual_api_cost' => 'decimal:4',
             'large_search_confirmed' => 'boolean',
+            'research_date' => 'date',
             'source_log' => 'array',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'research_usage_reconciled_at' => 'datetime',
         ];
     }
 

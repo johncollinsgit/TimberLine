@@ -201,6 +201,13 @@ Schedule::command('field-service:scan-equipment-maintenance')
     ->withoutOverlapping(30)
     ->runInBackground();
 
+// Membership work is generated from an immutable accepted-plan snapshot. The
+// command is idempotent, so retrying a scheduler tick cannot create duplicate jobs.
+Schedule::command('field-service:generate-membership-visits')
+    ->dailyAt('09:10')
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
 // Accepted contract allowances reset by calendar month. Once a period closes,
 // create one auditable Stripe invoice for any metered overage and link it back
 // to the immutable usage periods so retries cannot bill the same usage twice.

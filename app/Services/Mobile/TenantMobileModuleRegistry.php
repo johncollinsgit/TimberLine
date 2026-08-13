@@ -92,6 +92,8 @@ class TenantMobileModuleRegistry
         $screen = match ($moduleKey) {
             'customers' => $this->customersScreen($tenantId),
             'field_service' => $this->fieldServiceScreen($tenantId, $user),
+            'service_memberships' => $this->serviceMembershipsScreen($tenantId, $user),
+            'dispatch_command_center' => $this->dispatchMyDayScreen($tenantId, $user),
             'class_scheduling' => $this->classSchedulingScreen($tenantId),
             'estimator' => $this->estimatorScreen($tenantId, $user),
             'work_core' => $this->summaryScreen($module),
@@ -175,6 +177,78 @@ class TenantMobileModuleRegistry
                 'empty' => ['title' => 'No active jobs', 'message' => 'Accepted and scheduled work will appear here.'],
             ]],
         ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function serviceMembershipsScreen(int $tenantId, ?User $user): array
+    {
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $jobs = FieldServiceJob::query()->forTenantId($tenantId)
+            ->withCount(['tasks', 'assets'])
+            ->where('metadata->generated_by', 'service_memberships')
+            ->whereNotIn('operational_status', ['complete', 'canceled', 'history']);
+        if ($user instanceof User) {
+            $this->fieldServiceAccess->scopeVisibleJobs($jobs, $user, $tenant);
+        }
+
+        return [
+            'id' => 'service-memberships.index',
+            'kind' => 'list',
+            'title' => 'Service Plans',
+            'refreshable' => true,
+            'primary_action' => ['id' => 'recommend_plan', 'label' => 'Recommend a plan', 'icon' => 'badge-check'],
+            'sections' => [[
+                'type' => 'list',
+                'items' => $jobs->orderBy('scheduled_for')->limit(30)->get()->map(fn (FieldServiceJob $job): array => [
+                    'id' => (string) $job->id,
+                    'title' => (string) $job->title,
+                    'subtitle' => trim(implode(' | ', array_filter([$job->customer_name, $job->scheduled_for?->format('M j, g:i A')]))),
+                    'badge' => 'Membership visit',
+                    'meta' => ['tasks' => $job->tasks_count, 'photos' => $job->assets_count, 'can_complete_visit' => true],
+                    'destination' => ['kind' => 'field_service_job', 'id' => (int) $job->id],
+                ])->values(),
+                'empty' => ['title' => 'No membership visits assigned', 'message' => 'Assigned recurring service work will appear here.'],
+            ]],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function dispatchMyDayScreen(int $tenantId, ?User $user): array
+    {
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $jobs = FieldServiceJob::query()->forTenantId($tenantId)
+            ->withCount(['tasks', 'assets'])
+            ->whereDate('scheduled_for', now()->toDateString())
+            ->whereNotIn('operational_status', ['complete', 'canceled', 'history']);
+        if ($user instanceof User) {
+            $this->fieldServiceAccess->scopeVisibleJobs($jobs, $user, $tenant);
+        }
+
+        return [
+            'id' => 'dispatch.my-day',
+            'kind' => 'list',
+            'title' => 'My Day',
+            'refreshable' => true,
+            'sections' => [[
+                'type' => 'list',
+                'items' => $jobs->orderBy('scheduled_for')->limit(30)->get()->map(fn (FieldServiceJob $job): array => [
+                    'id' => (string) $job->id,
+                    'title' => (string) $job->title,
+                    'subtitle' => trim(implode(' | ', array_filter([$job->scheduled_for?->format('g:i A'), $job->customer_name]))),
+                    'badge' => ($job->scheduled_for?->format('g:i A') ?: 'Time pending').'–'.($job->scheduled_end_at?->format('g:i A') ?: 'end pending'),
+                    'meta' => ['tasks' => $job->tasks_count, 'photos' => $job->assets_count, 'route_url' => $this->routeUrl($job), 'schedule_change_notifications' => true],
+                    'destination' => ['kind' => 'field_service_job', 'id' => (int) $job->id],
+                ])->values(),
+                'empty' => ['title' => 'No work scheduled today', 'message' => 'Schedule changes will appear here when they are assigned to you.'],
+            ]],
+        ];
+    }
+
+    protected function routeUrl(FieldServiceJob $job): ?string
+    {
+        $address = trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_city, $job->service_state, $job->service_postal_code])));
+
+        return $address === '' ? null : 'https://www.google.com/maps/search/?api=1&query='.urlencode($address);
     }
 
     /** @return array<string,mixed> */

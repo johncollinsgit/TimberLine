@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class UsersEnsureApproved extends Command
@@ -13,7 +14,9 @@ class UsersEnsureApproved extends Command
         {email : User email}
         {password : Plaintext password to set}
         {--name= : Display name}
-        {--role=admin : Role (admin|manager|pouring|marketing_manager)}';
+        {--role=admin : Role (admin|manager|pouring|marketing_manager)}
+        {--reason= : Ticket or incident reference for this privileged action}
+        {--actor= : Authorized operator identity}';
 
     protected $description = 'Create or update an approved active user account.';
 
@@ -23,9 +26,24 @@ class UsersEnsureApproved extends Command
         $password = (string) $this->argument('password');
         $role = strtolower(trim((string) $this->option('role')));
         $name = trim((string) ($this->option('name') ?: $email));
+        $reason = trim((string) $this->option('reason'));
+        $actor = trim((string) $this->option('actor'));
 
-        if (!in_array($role, ['admin', 'manager', 'pouring', 'marketing_manager'], true)) {
+        if (! in_array($role, ['admin', 'manager', 'pouring', 'marketing_manager'], true)) {
             $this->error('Invalid role. Use admin, manager, pouring, or marketing_manager.');
+
+            return self::FAILURE;
+        }
+
+        if (mb_strlen($reason) < 8 || mb_strlen($reason) > 500 || preg_match('/[[:cntrl:]]/', $reason) === 1) {
+            $this->error('A printable 8-500 character reason is required.');
+
+            return self::FAILURE;
+        }
+
+        if ($actor === '' || mb_strlen($actor) > 255 || preg_match('/[[:cntrl:]]/', $actor) === 1) {
+            $this->error('A valid operator identity is required.');
+
             return self::FAILURE;
         }
 
@@ -56,6 +74,14 @@ class UsersEnsureApproved extends Command
         }
 
         $user->save();
+
+        Log::notice('users.ensure_approved.executed', [
+            'actor' => $actor,
+            'email' => $email,
+            'role' => $role,
+            'reason' => $reason,
+            'user_id' => $user->id,
+        ]);
 
         $this->info('Approved user ensured: '.$email);
 

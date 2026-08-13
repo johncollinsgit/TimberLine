@@ -5,18 +5,21 @@ namespace App\Services\Wholesale;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\WholesaleProspect;
 use App\Models\WholesaleProspectEvidence;
+use App\Services\Http\OutboundRequestPolicy;
 use DOMDocument;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Throwable;
 
 class WholesaleProspectWebsiteEnricher
 {
+    public function __construct(protected OutboundRequestPolicy $outboundRequests) {}
+
     /** @return array{enriched:bool,reason:?string} */
     public function enrich(WholesaleProspect $prospect): array
     {
-        $url = $this->safePublicUrl((string) $prospect->website);
-        if ($url === null) {
+        try {
+            $url = $this->outboundRequests->assertPublicHttpsUrl((string) $prospect->website);
+        } catch (\InvalidArgumentException) {
             return ['enriched' => false, 'reason' => 'Website URL was missing or not safe for controlled retrieval.'];
         }
 
@@ -25,10 +28,10 @@ class WholesaleProspectWebsiteEnricher
                 return ['enriched' => false, 'reason' => 'Website robots directives do not allow enrichment.'];
             }
 
-            $response = Http::timeout(8)
-                ->connectTimeout(4)
+            $response = $this->outboundRequests->request($url, timeout: 8, connectTimeout: 4, headers: [
+                'User-Agent' => 'EverbranchProspectResearch/1.0 (+https://everbranch.com)',
+            ])
                 ->retry(2, 250, throw: false)
-                ->withHeaders(['User-Agent' => 'EverbranchProspectResearch/1.0 (+https://everbranch.com)'])
                 ->get($url);
             if (! $response->successful()) {
                 return ['enriched' => false, 'reason' => 'Website did not return a successful response.'];
@@ -49,6 +52,8 @@ class WholesaleProspectWebsiteEnricher
                 'public_business_email' => $prospect->public_business_email ?: $signals['email'],
                 'contact_form_url' => $prospect->contact_form_url ?: $signals['contact_url'],
                 'instagram_handle' => $prospect->instagram_handle ?: $signals['instagram_handle'],
+                'instagram_url' => $prospect->instagram_url ?: $signals['instagram_url'],
+                'merchandising_cues' => array_values(array_unique(array_merge((array) $prospect->merchandising_cues, $signals['merchandise_signals']))),
                 'facebook_page' => $prospect->facebook_page ?: $signals['facebook_page'],
                 'fit_score' => $fit['score'],
                 'fit_confidence' => $fit['confidence'],
@@ -94,9 +99,9 @@ class WholesaleProspectWebsiteEnricher
     {
         $parts = parse_url($url);
         $robotsUrl = ($parts['scheme'] ?? 'https').'://'.$parts['host'].(isset($parts['port']) ? ':'.$parts['port'] : '').'/robots.txt';
-        $response = Http::timeout(5)
-            ->connectTimeout(3)
-            ->withHeaders(['User-Agent' => 'EverbranchProspectResearch/1.0 (+https://everbranch.com)'])
+        $response = $this->outboundRequests->request($robotsUrl, timeout: 5, connectTimeout: 3, headers: [
+            'User-Agent' => 'EverbranchProspectResearch/1.0 (+https://everbranch.com)',
+        ])
             ->get($robotsUrl);
 
         if (! $response->successful()) {
@@ -115,27 +120,6 @@ class WholesaleProspectWebsiteEnricher
         }
 
         return true;
-    }
-
-    protected function safePublicUrl(string $value): ?string
-    {
-        $url = filter_var(trim($value), FILTER_VALIDATE_URL);
-        $scheme = strtolower((string) parse_url((string) $url, PHP_URL_SCHEME));
-        $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
-        if (! $url || ! in_array($scheme, ['http', 'https'], true) || $host === '' || $host === 'localhost' || str_ends_with($host, '.local')) {
-            return null;
-        }
-
-        if (filter_var($host, FILTER_VALIDATE_IP) && ! filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-            return null;
-        }
-
-        $addresses = gethostbynamel($host);
-        if ($addresses === false || collect($addresses)->contains(fn (string $address): bool => ! filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE))) {
-            return null;
-        }
-
-        return $url;
     }
 
     /** @return array<string,mixed> */
@@ -181,6 +165,7 @@ class WholesaleProspectWebsiteEnricher
             'email' => $emailHref !== '' ? Str::lower(rawurldecode(explode('?', substr($emailHref, 7), 2)[0])) : null,
             'contact_url' => $this->absoluteUrl($contactHref, $baseUrl),
             'instagram_handle' => $instagram !== '' ? trim((string) parse_url($instagram, PHP_URL_PATH), '/') : null,
+            'instagram_url' => $instagram !== '' ? $this->absoluteUrl($instagram, $baseUrl) : null,
             'facebook_page' => $facebook !== '' ? $facebook : null,
         ];
     }

@@ -72,7 +72,9 @@ test('dashboard renders commerce hero metric for shopify-connected tenants', fun
         'order_label' => 'Order 2002',
         'status' => 'paid',
         'total_price' => 300,
-        'ordered_at' => now()->subDays(2),
+        // Keep the fixture inside the asserted current-month range even on the
+        // first two days of a month.
+        'ordered_at' => now()->startOfMonth()->addDay(),
     ]);
 
     $user = User::factory()->create(['role' => 'admin']);

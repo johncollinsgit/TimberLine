@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\WholesaleProspectDiscoveryRun;
 use App\Services\Wholesale\GooglePlacesProspectClient;
 use App\Services\Wholesale\WholesaleProspectIngestService;
+use App\Services\Wholesale\WholesaleProspectResearchLimitService;
 use App\Services\Wholesale\WholesaleProspectWebsiteEnricher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -28,12 +29,15 @@ class RunWholesaleProspectDiscovery implements ShouldQueue
     public function handle(
         GooglePlacesProspectClient $client,
         WholesaleProspectIngestService $ingest,
+        WholesaleProspectResearchLimitService $limits,
         ?WholesaleProspectWebsiteEnricher $websiteEnricher = null
     ): void {
         $run = WholesaleProspectDiscoveryRun::query()->forAllTenants()
             ->where('tenant_id', $this->tenantId)
             ->findOrFail($this->runId);
         if ($run->cancelled_at !== null) {
+            $limits->reconcile($run, 0);
+
             return;
         }
 
@@ -78,6 +82,7 @@ class RunWholesaleProspectDiscovery implements ShouldQueue
                 'source_log' => $sourceLog,
                 'completed_at' => now(),
             ])->save();
+            $limits->reconcile($run->fresh(), $discovered);
         } catch (Throwable $exception) {
             $run->forceFill([
                 'status' => 'failed',
@@ -87,6 +92,16 @@ class RunWholesaleProspectDiscovery implements ShouldQueue
                 'error_message' => $exception->getMessage(),
             ])->save();
             throw $exception;
+        }
+    }
+
+    public function failed(Throwable $exception): void
+    {
+        $run = WholesaleProspectDiscoveryRun::query()->forAllTenants()
+            ->where('tenant_id', $this->tenantId)
+            ->find($this->runId);
+        if ($run) {
+            app(WholesaleProspectResearchLimitService::class)->reconcile($run, (int) $run->results_discovered);
         }
     }
 }

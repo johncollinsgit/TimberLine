@@ -6,8 +6,9 @@ use App\Mail\ModernForestryBagReminderMail;
 use App\Models\MarketingEmailDelivery;
 use App\Models\ModernForestryMobileBagSnapshot;
 use App\Services\Shopify\ShopifyAppContentService;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 class ModernForestryMobileBagReminderService
@@ -16,8 +17,7 @@ class ModernForestryMobileBagReminderService
 
     public function __construct(
         protected ShopifyAppContentService $appContentService
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<int,array<string,mixed>>  $items
@@ -52,6 +52,8 @@ class ModernForestryMobileBagReminderService
 
         $contentChanged = $snapshot->content_hash !== $hash;
         $enabled = (bool) ($settings['enabled'] ?? true);
+        $wasCompleted = $snapshot->completed_at !== null;
+        $hasActiveBag = $enabled && $itemCount > 0 && $email !== null;
         $nextReminderAt = $enabled && $itemCount > 0 && $email !== null
             ? now()->addHours((int) ($settings['frequency_hours'] ?? 24))
             : null;
@@ -63,10 +65,18 @@ class ModernForestryMobileBagReminderService
             'subtotal_amount' => $subtotal,
             'items' => $normalizedItems,
             'content_hash' => $hash,
-            'is_active' => $enabled && $itemCount > 0 && $email !== null,
+            // A stale iOS bag can be re-synced after checkout. It must not revive
+            // a completed bag unless its contents actually changed into a new bag.
+            'is_active' => $hasActiveBag && (! $wasCompleted || $contentChanged),
             'last_synced_at' => now(),
-            'next_reminder_at' => $contentChanged ? $nextReminderAt : ($snapshot->next_reminder_at ?? $nextReminderAt),
+            'next_reminder_at' => ! $hasActiveBag
+                ? null
+                : ($contentChanged ? $nextReminderAt : ($snapshot->next_reminder_at ?? $nextReminderAt)),
             'reminder_count' => $contentChanged ? 0 : (int) ($snapshot->reminder_count ?? 0),
+            'cart_started_at' => $contentChanged && $hasActiveBag
+                ? now()
+                : $snapshot->cart_started_at,
+            'completed_at' => $contentChanged ? null : $snapshot->completed_at,
             'meta' => [
                 'source' => 'modern_forestry_ios',
                 'settings' => $settings,
@@ -114,6 +124,7 @@ class ModernForestryMobileBagReminderService
             ->where('is_active', true)
             ->whereNotNull('email')
             ->where('item_count', '>', 0)
+            ->whereNull('completed_at')
             ->whereNotNull('next_reminder_at')
             ->where('next_reminder_at', '<=', now())
             ->orderBy('next_reminder_at')
@@ -134,6 +145,7 @@ class ModernForestryMobileBagReminderService
                     'next_reminder_at' => null,
                 ])->save();
                 $skipped++;
+
                 continue;
             }
 
@@ -143,6 +155,7 @@ class ModernForestryMobileBagReminderService
                     'next_reminder_at' => null,
                 ])->save();
                 $skipped++;
+
                 continue;
             }
 
@@ -178,11 +191,70 @@ class ModernForestryMobileBagReminderService
         return ['sent' => $sent, 'skipped' => $skipped];
     }
 
+    /**
+     * Mark pre-purchase mobile bags as complete after Shopify confirms payment.
+     *
+     * The customer app may post its last local bag again after checkout.  Keeping
+     * the completion marker means that stale post-checkout sync cannot reactivate
+     * the reminder; a changed bag starts a new reminder lifecycle instead.
+     *
+     * @param  array<int,string|null>  $emails
+     */
+    public function completeBagsForConfirmedPurchase(
+        int $tenantId,
+        array $emails,
+        CarbonInterface $purchasedAt,
+        ?int $shopifyOrderId = null
+    ): int {
+        $normalizedEmails = collect($emails)
+            ->map(fn (?string $email): string => strtolower(trim((string) $email)))
+            ->filter(fn (string $email): bool => filter_var($email, FILTER_VALIDATE_EMAIL) !== false)
+            ->unique()
+            ->values();
+
+        if ($tenantId <= 0 || $normalizedEmails->isEmpty()) {
+            return 0;
+        }
+
+        $snapshots = ModernForestryMobileBagSnapshot::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->whereNull('completed_at')
+            ->whereIn(DB::raw('LOWER(email)'), $normalizedEmails->all())
+            ->get();
+
+        $completed = 0;
+        foreach ($snapshots as $snapshot) {
+            $cartStartedAt = $snapshot->cart_started_at ?? $snapshot->created_at;
+            if ($cartStartedAt instanceof CarbonInterface && $cartStartedAt->isAfter($purchasedAt)) {
+                continue;
+            }
+
+            $meta = (array) ($snapshot->meta ?? []);
+            $meta['completion'] = array_filter([
+                'source' => 'shopify_confirmed_order',
+                'purchased_at' => $purchasedAt->toIso8601String(),
+                'shopify_order_id' => $shopifyOrderId,
+            ], static fn ($value): bool => $value !== null);
+
+            $snapshot->forceFill([
+                'is_active' => false,
+                'next_reminder_at' => null,
+                'completed_at' => $purchasedAt,
+                'meta' => $meta,
+            ])->save();
+
+            $completed++;
+        }
+
+        return $completed;
+    }
+
     protected function resolvedEmail(object $profile): ?string
     {
         $email = trim((string) ($profile->normalized_email ?? $profile->email ?? ''));
 
-        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? strtolower($email) : null;
     }
 
     /**

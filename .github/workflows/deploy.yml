@@ -93,6 +93,12 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Audit locked dependencies
+        run: |
+          set -euo pipefail
+          composer audit --locked
+          npm audit --package-lock-only --audit-level=moderate
+
       - name: Prepare app key for CI
         run: |
           cp .env.example .env

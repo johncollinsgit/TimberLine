@@ -11,26 +11,26 @@
 
 <x-layouts::app :title="'Customers'">
     <div class="mx-auto w-full max-w-[1800px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 space-y-6 min-w-0">
-        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <section class="grid divide-y divide-zinc-200 border-y border-zinc-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+            <article class="px-4 py-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Total Customers</div>
-                <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['total_customers'] ?? 0)) }}</div>
+                <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['total_customers'] ?? 0)) }}</div>
             </article>
-            <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <article class="px-4 py-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">{{ $rewardsLabel }} Holders</div>
-                <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['candle_cash_holders'] ?? 0)) }}</div>
+                <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['candle_cash_holders'] ?? 0)) }}</div>
             </article>
-            <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <article class="px-4 py-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Growave Linked</div>
-                <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['growave_linked'] ?? 0)) }}</div>
+                <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['growave_linked'] ?? 0)) }}</div>
             </article>
-            <article class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <article class="px-4 py-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Missing Contact</div>
-                <div class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['missing_contact'] ?? 0)) }}</div>
+                <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['missing_contact'] ?? 0)) }}</div>
             </article>
         </section>
 
-        <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 md:p-6">
+        <section>
             <div
                 id="marketing-customers-grid"
                 data-endpoint="{{ data_get($customerGrid, 'endpoint') }}"
@@ -40,20 +40,20 @@
                 data-sort-options='@json(data_get($customerGrid, "sort_options", []))'
                 class="space-y-4"
             >
-                <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-5">
                     <div>
-                        <div class="text-xs uppercase tracking-[0.28em] text-emerald-800">Customer index</div>
-                        <h2 class="mt-2 text-lg font-semibold text-zinc-950">Manage Customers</h2>
-                        <div class="mt-1 text-sm text-zinc-600">
+                        <div class="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">Customer index</div>
+                        <h2 class="mt-1 text-xl font-semibold text-zinc-950">Manage Customers</h2>
+                        <div class="mt-1.5 text-sm text-zinc-600">
                             {{ number_format((int) ($totalProfiles ?? 0)) }} customer profile{{ (int) ($totalProfiles ?? 0) === 1 ? '' : 's' }} indexed.
                             Search-first results load in the live grid below, and {{ $rewardsLabel }} stays separate from the legacy Growave balance.
                         </div>
                     </div>
-                    <a href="{{ route('marketing.customers.create') }}" wire:navigate class="inline-flex rounded-full border border-zinc-300 bg-emerald-100 px-4 py-2 text-sm font-semibold text-zinc-950">
+                    <a href="{{ route('marketing.customers.create') }}" wire:navigate class="inline-flex h-10 items-center rounded-lg border border-emerald-700 bg-emerald-700 px-3.5 text-sm font-medium text-white shadow-sm">
                         Add Customer
                     </a>
                 </div>
-                <div class="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
+                <div class="text-sm text-zinc-500">
                     The live grid below loads rows on demand so search and filters stay fast. Use the search bar first, then open advanced filters only when you need them.
                 </div>
                 <noscript class="mt-4 block rounded-2xl border border-amber-300/25 bg-amber-100 px-4 py-3 text-sm text-amber-900">

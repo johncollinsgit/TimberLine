@@ -21,6 +21,8 @@ class ModernForestryMobileBagSnapshot extends Model
         'last_synced_at',
         'last_reminded_at',
         'next_reminder_at',
+        'cart_started_at',
+        'completed_at',
         'meta',
     ];
 
@@ -35,6 +37,8 @@ class ModernForestryMobileBagSnapshot extends Model
         'last_synced_at' => 'datetime',
         'last_reminded_at' => 'datetime',
         'next_reminder_at' => 'datetime',
+        'cart_started_at' => 'datetime',
+        'completed_at' => 'datetime',
         'meta' => 'array',
     ];
 

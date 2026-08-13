@@ -18,6 +18,9 @@ class WholesaleProspect extends Model
         return [
             'tenant_id' => 'integer',
             'secondary_categories' => 'array',
+            'observed_products' => 'array',
+            'observed_brands' => 'array',
+            'merchandising_cues' => 'array',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'discovered_at' => 'datetime',
@@ -25,8 +28,10 @@ class WholesaleProspect extends Model
             'fit_confidence' => 'integer',
             'fit_explanation' => 'array',
             'last_reviewed_at' => 'datetime',
+            'reviewed_at' => 'datetime',
             'last_contact_at' => 'datetime',
             'next_action_at' => 'datetime',
+            'outreach_cooldown_until' => 'datetime',
             'do_not_contact' => 'boolean',
             'converted_at' => 'datetime',
             'source_snapshot' => 'array',
@@ -47,6 +52,16 @@ class WholesaleProspect extends Model
     {
         return $this->hasMany(WholesaleFollowUp::class, 'target_key', 'public_id')
             ->where('target_type', 'prospect');
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(WholesaleProspectActivity::class)->orderByDesc('occurred_at');
+    }
+
+    public function outreachDrafts(): HasMany
+    {
+        return $this->hasMany(WholesaleProspectOutreachDraft::class);
     }
 
     public function convertedAccount(): BelongsTo
