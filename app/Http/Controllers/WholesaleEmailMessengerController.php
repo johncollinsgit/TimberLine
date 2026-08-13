@@ -47,6 +47,9 @@ class WholesaleEmailMessengerController extends Controller
             'wholesaleMessengerBootstrap' => [
                 'authorized' => $authorized && $tenantId !== null && $hasAccess,
                 'draft' => $bootstrap,
+                'context_token' => $authorized && $tenantId !== null && $hasAccess
+                    ? $contextService->issueContextToken($context)
+                    : null,
                 'endpoints' => [
                     'save' => route('shopify.app.api.wholesale.messaging.save', [], false),
                     'test_send' => route('shopify.app.api.wholesale.messaging.test-send', [], false),
@@ -113,7 +116,7 @@ class WholesaleEmailMessengerController extends Controller
     /** @return array{tenant_id:int,store_key:string}|JsonResponse */
     protected function apiAccess(Request $request, ShopifyEmbeddedAppContext $contexts, TenantResolver $tenants, TenantModuleAccessResolver $modules): array|JsonResponse
     {
-        $context = $contexts->resolveAuthenticatedApiContext($request);
+        $context = $contexts->resolveMutationContext($request);
         if (! ($context['ok'] ?? false)) {
             return response()->json(['ok' => false, 'status' => $context['status'] ?? 'invalid_session_token', 'message' => 'Reload this page from Shopify Admin and try again.'], 401);
         }

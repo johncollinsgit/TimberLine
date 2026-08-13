@@ -12,6 +12,11 @@ storage. Its approved sixteen content blocks are editable, while the
 unsubscribe/privacy footer is appended server-side and cannot be removed in
 the client. Product and image URLs remain part of the stored section snapshot.
 
+Editor mutations prefer a fresh Shopify Admin bearer token. When that token
+cannot be verified, the editor submits the encrypted, short-lived page-context
+token issued with the signed embedded page; the server still matches it to the
+verified wholesale store and tenant before saving or sending a test.
+
 ## Sending safety
 
 - This screen has no campaign or prospect-send capability.

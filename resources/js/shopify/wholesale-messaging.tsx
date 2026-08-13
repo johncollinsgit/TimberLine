@@ -8,7 +8,7 @@ interface Draft {
   id: number; name: string; subject: string; sections: EmailSection[]; personalization: Record<string, string>;
   revision: number; rendered_html: string; locked_footer: boolean; sender: { from_email: string; from_name: string };
 }
-interface Bootstrap { authorized: boolean; draft: Draft; endpoints: { save: string; test_send: string } }
+interface Bootstrap { authorized: boolean; draft: Draft; context_token?: string | null; endpoints: { save: string; test_send: string } }
 const node = document.getElementById("wholesale-email-messenger-bootstrap");
 const bootstrap = node?.textContent ? JSON.parse(node.textContent) as Bootstrap : null;
 
@@ -91,7 +91,7 @@ function App({ initial }: { initial: Bootstrap }) {
   const save = async (): Promise<boolean> => {
     setSaving(true); setNotice(null);
     try {
-      const response = await requestMessagingJson<Draft>(initial.endpoints.save, { method: "POST", body: JSON.stringify({ subject: draft.subject, sections: draft.sections, personalization: draft.personalization, revision: draft.revision }) });
+      const response = await requestMessagingJson<Draft>(initial.endpoints.save, { method: "POST", body: JSON.stringify({ subject: draft.subject, sections: draft.sections, personalization: draft.personalization, revision: draft.revision, context_token: initial.context_token }) });
       if (response.data) setDraft(response.data);
       setNotice("Draft saved to the wholesale workspace."); return true;
     } catch (error) { setNotice(error instanceof Error ? error.message : "Draft could not be saved."); return false; }
@@ -103,7 +103,7 @@ function App({ initial }: { initial: Bootstrap }) {
     if (!await save()) return;
     setTesting(true); setNotice(null);
     try {
-      const response = await requestMessagingJson<{ summary?: { sent?: number; failed?: number } }>(initial.endpoints.test_send, { method: "POST", body: JSON.stringify({ test_emails: recipients }) });
+      const response = await requestMessagingJson<{ summary?: { sent?: number; failed?: number } }>(initial.endpoints.test_send, { method: "POST", body: JSON.stringify({ test_emails: recipients, context_token: initial.context_token }) });
       setNotice(response.message || "Test email submitted. No campaign recipients were contacted.");
     } catch (error) { setNotice(error instanceof Error ? error.message : "Test email could not be sent."); }
     finally { setTesting(false); }
