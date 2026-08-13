@@ -5762,8 +5762,10 @@ CREATE TABLE `modern_forestry_mobile_bag_snapshots` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `reminder_count` int unsigned NOT NULL DEFAULT '0',
   `last_synced_at` timestamp NULL DEFAULT NULL,
+  `cart_started_at` timestamp NULL DEFAULT NULL,
   `last_reminded_at` timestamp NULL DEFAULT NULL,
   `next_reminder_at` timestamp NULL DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
   `meta` json DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -9510,9 +9512,9 @@ DROP TABLE IF EXISTS `wholesale_email_messenger_drafts`;
 CREATE TABLE `wholesale_email_messenger_drafts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
-  `store_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `store_key` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subject` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `sections` json NOT NULL,
   `personalization` json DEFAULT NULL,
   `revision` int unsigned NOT NULL DEFAULT '1',
@@ -10138,3 +10140,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (249,'2026_08_07_18
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (250,'2026_08_07_190000_add_commerce_operations_and_shipping_foundation',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (251,'2026_08_08_030000_add_paid_ai_controls_to_tenant_bud_settings',2);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (252,'2026_08_11_120000_create_wholesale_email_messenger_drafts_table',3);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (253,'2026_08_13_150000_add_completion_state_to_modern_forestry_mobile_bag_snapshots',4);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (254,'2026_08_13_151000_reconcile_modern_forestry_product_option_assignments',4);

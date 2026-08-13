@@ -114,7 +114,7 @@ class ShopifyProductOptionsService
             return null;
         }
 
-        $assignment = ShopifyProductOptionAssignment::query()
+        $assignments = ShopifyProductOptionAssignment::query()
             ->forTenantId($tenantId)
             ->where(function ($query) use ($productId, $productHandle): void {
                 if ($productId !== null) {
@@ -127,12 +127,26 @@ class ShopifyProductOptionsService
                 }
             })
             ->with('ruleset')
-            ->first();
+            ->get();
 
-        $ruleset = $assignment?->ruleset;
-        if (! $ruleset || ! $ruleset->enabled) {
+        // A product can never safely inherit an arbitrary ruleset. Older imports
+        // allowed a handle on more than one ruleset, making rendered selectors
+        // depend on database row order. Fail closed until the conflict is fixed.
+        $rulesets = $assignments
+            ->map(fn (ShopifyProductOptionAssignment $assignment): ?ShopifyProductOptionRuleset => $assignment->ruleset)
+            ->filter(fn (?ShopifyProductOptionRuleset $ruleset): bool => $ruleset !== null && $ruleset->enabled)
+            ->unique(fn (ShopifyProductOptionRuleset $ruleset): int => (int) $ruleset->id)
+            ->values();
+
+        if ($rulesets->count() !== 1) {
             return null;
         }
+
+        /** @var ShopifyProductOptionRuleset $ruleset */
+        $ruleset = $rulesets->first();
+        $assignment = $assignments->first(
+            fn (ShopifyProductOptionAssignment $candidate): bool => (int) $candidate->ruleset_id === (int) $ruleset->id
+        );
 
         $allowedValues = $this->normalizeValues((array) $ruleset->allowed_values);
         if ($allowedValues === []) {
@@ -186,6 +200,14 @@ class ShopifyProductOptionsService
             ->filter()
             ->unique()
             ->values();
+
+        if ($normalized->isNotEmpty()) {
+            ShopifyProductOptionAssignment::query()
+                ->forTenantId($tenantId)
+                ->whereIn('product_handle', $normalized->all())
+                ->where('ruleset_id', '!=', $ruleset->id)
+                ->delete();
+        }
 
         $ruleset->assignments()->delete();
 

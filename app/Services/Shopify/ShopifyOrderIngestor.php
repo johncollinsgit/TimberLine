@@ -11,6 +11,7 @@ use App\Models\ShopifyImportException;
 use App\Models\WholesaleCustomScent;
 use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\StorefrontOrderLinkageService;
+use App\Services\Mobile\ModernForestryMobileBagReminderService;
 use App\Services\Shipping\BusinessDayCalculator;
 use App\Support\Shopify\InfiniteOptionsParser;
 use Carbon\CarbonImmutable;
@@ -21,7 +22,8 @@ class ShopifyOrderIngestor
     public function __construct(
         protected BusinessDayCalculator $calculator,
         protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
-        protected StorefrontOrderLinkageService $storefrontOrderLinkageService
+        protected StorefrontOrderLinkageService $storefrontOrderLinkageService,
+        protected ModernForestryMobileBagReminderService $bagReminderService
     ) {}
 
     /**
@@ -242,7 +244,45 @@ class ShopifyOrderIngestor
             )->afterCommit();
         }
 
+        if ($this->isConfirmedPurchase($orderData) && $resolvedTenantId !== null) {
+            $this->bagReminderService->completeBagsForConfirmedPurchase(
+                $resolvedTenantId,
+                $this->customerEmails($orderData),
+                CarbonImmutable::parse($orderData['processed_at'] ?? $orderData['created_at'] ?? now()),
+                $shopifyOrderId
+            );
+        }
+
         return $summary;
+    }
+
+    /** @param array<string,mixed> $orderData */
+    protected function isConfirmedPurchase(array $orderData): bool
+    {
+        if (! empty($orderData['cancelled_at'])) {
+            return false;
+        }
+
+        return in_array(strtolower(trim((string) ($orderData['financial_status'] ?? ''))), [
+            'paid',
+            'partially_paid',
+            'partially_refunded',
+            'refunded',
+        ], true);
+    }
+
+    /**
+     * @param  array<string,mixed>  $orderData
+     * @return array<int,string|null>
+     */
+    protected function customerEmails(array $orderData): array
+    {
+        return [
+            $orderData['email'] ?? null,
+            data_get($orderData, 'customer.email'),
+            data_get($orderData, 'shipping_address.email'),
+            data_get($orderData, 'billing_address.email'),
+        ];
     }
 
     /**
