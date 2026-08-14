@@ -533,6 +533,8 @@ Route::get('/platform/examples/{discipline?}', [PlatformProductPagesController::
     ->name('platform.industry-demo');
 Route::get('/platform/demos/green-shield-pest-control', [PlatformProductPagesController::class, 'pestControlFleetDemo'])
     ->name('platform.pest-control-fleet-demo');
+Route::get('/platform/demos/green-shield-pest-control/login', [PlatformProductPagesController::class, 'pestControlFleetDemoLogin'])
+    ->name('platform.pest-control-fleet-demo.login');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
