@@ -128,6 +128,10 @@ npm run render:pest-control-demo
 npx remotion still src/index.ts PestControlFleetDemo ../public/media/green-shield-fleet-demo-poster.jpg --frame=150
 ```
 
+Its CTA posts with CSRF protection to a demo-only handoff that signs into the
+isolated fictional account and redirects directly to the Green Shield workspace.
+It must never be generalized to authenticate a real user or tenant.
+
 Its opening map scene uses the included, public OpenStreetMap-derived still at
 `remotion/public/maps/green-shield-fleet-map-osm.png`. Keep the visible
 `© OpenStreetMap contributors` attribution in the video. The animated route,

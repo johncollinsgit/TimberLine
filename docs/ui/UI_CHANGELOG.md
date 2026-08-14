@@ -2436,5 +2436,6 @@
   tenant data.
 - Refined the tour’s opening into an attributed OpenStreetMap-based vehicle
   view with an explicitly fictional route overlay and the title “Keep a
-  bird’s-eye view of every vehicle on your team.” The demo CTA now pre-fills
-  the isolated account and keeps the user’s Green Shield workspace destination.
+  bird’s-eye view of every vehicle on your team.” The demo CTA now uses a
+  CSRF-protected, demo-only handoff to enter the isolated fictional account
+  directly and open its Green Shield workspace.

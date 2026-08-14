@@ -533,8 +533,11 @@ Route::get('/platform/examples/{discipline?}', [PlatformProductPagesController::
     ->name('platform.industry-demo');
 Route::get('/platform/demos/green-shield-pest-control', [PlatformProductPagesController::class, 'pestControlFleetDemo'])
     ->name('platform.pest-control-fleet-demo');
-Route::get('/platform/demos/green-shield-pest-control/login', [PlatformProductPagesController::class, 'pestControlFleetDemoLogin'])
+Route::post('/platform/demos/green-shield-pest-control/login', [PlatformProductPagesController::class, 'pestControlFleetDemoLogin'])
+    ->middleware('guest')
     ->name('platform.pest-control-fleet-demo.login');
+Route::get('/platform/demos/green-shield-pest-control/login', fn () => redirect()->route('platform.pest-control-fleet-demo'))
+    ->name('platform.pest-control-fleet-demo.login.redirect');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
