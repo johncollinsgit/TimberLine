@@ -128,6 +128,12 @@ npm run render:pest-control-demo
 npx remotion still src/index.ts PestControlFleetDemo ../public/media/green-shield-fleet-demo-poster.jpg --frame=150
 ```
 
+Its opening map scene uses the included, public OpenStreetMap-derived still at
+`remotion/public/maps/green-shield-fleet-map-osm.png`. Keep the visible
+`© OpenStreetMap contributors` attribution in the video. The animated route,
+pins, service stop, and all tracking data are fictional overlays; do not use a
+Google Maps screenshot or actual customer/employee location data in this asset.
+
 The authenticated Fleet Tracking page is still governed by the global
 `FLEET_TRACKING_ENABLED` switch. Do not enable that switch merely to make a
 sales demo convenient; complete the normal controlled rollout and policy

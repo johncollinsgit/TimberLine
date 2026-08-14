@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -40,6 +41,15 @@ class PlatformProductPagesController extends Controller
         return response()->view('platform.pest-control-fleet-demo', [
             'demoEmail' => \App\Console\Commands\EverbranchPreparePestControlDemo::OWNER_EMAIL,
             'demoPassword' => \App\Console\Commands\EverbranchPreparePestControlDemo::DEFAULT_PASSWORD,
+        ]);
+    }
+
+    public function pestControlFleetDemoLogin(Request $request): RedirectResponse
+    {
+        $request->session()->put('url.intended', route('field-service.index', ['tenant' => 'green-shield-pest-control'], absolute: false));
+
+        return redirect()->route('login', [
+            'email' => \App\Console\Commands\EverbranchPreparePestControlDemo::OWNER_EMAIL,
         ]);
     }
 

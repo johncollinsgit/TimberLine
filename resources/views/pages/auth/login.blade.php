@@ -61,7 +61,7 @@
             <flux:input
                 name="email"
                 :label="__('Email address')"
-                :value="old('email')"
+                :value="old('email', request()->query('email'))"
                 type="email"
                 required
                 autofocus

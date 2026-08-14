@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, interpolate, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Img, Sequence, interpolate, staticFile, useCurrentFrame } from "remotion";
 import { brand, radius, type } from "./design/tokens";
 import { clamp, Reveal } from "./motion/primitives";
 
@@ -7,25 +7,28 @@ export const pestControlFleetFrames = 900;
 const MapScene = () => {
   const frame = useCurrentFrame();
   const dotProgress = clamp(frame - 78, [0, 220], [0, 1]);
-  const vanX = interpolate(dotProgress, [0, 1], [390, 1280]);
-  const vanY = interpolate(dotProgress, [0, 1], [590, 350]);
-  const phoneX = interpolate(dotProgress, [0, 1], [430, 1300]);
-  const phoneY = interpolate(dotProgress, [0, 1], [625, 383]);
+  const vanX = interpolate(dotProgress, [0, 1], [742, 1328]);
+  const vanY = interpolate(dotProgress, [0, 1], [744, 510]);
+  const phoneX = interpolate(dotProgress, [0, 1], [720, 1294]);
+  const phoneY = interpolate(dotProgress, [0, 1], [778, 548]);
 
   return <AbsoluteFill style={{ color: brand.ink, background: brand.paper }}>
-    <div style={{ position: "absolute", inset: 0, opacity: .38, backgroundImage: "linear-gradient(rgba(23,62,59,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(23,62,59,.07) 1px, transparent 1px)", backgroundSize: "62px 62px" }} />
-    <div style={{ position: "absolute", top: 118, left: 150, right: 150, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-      <div><Reveal at={8}><p style={{ margin: 0, color: brand.clay, fontFamily: type.sans, fontWeight: 850, fontSize: 16, letterSpacing: ".15em", textTransform: "uppercase" }}>Green Shield Pest Control · fictional demo</p></Reveal><Reveal at={27}><h1 style={{ margin: "18px 0 0", fontFamily: type.display, fontSize: 70, fontWeight: 500, letterSpacing: "-.06em" }}>See the work moving.</h1></Reveal><Reveal at={50}><p style={{ width: 780, margin: "18px 0 0", color: brand.muted, fontFamily: type.sans, fontSize: 25, lineHeight: 1.4 }}>One company van. One scheduled termite-inspection visit. Separate, clearly labeled location sources.</p></Reveal></div>
-      <Reveal at={58}><div style={{ padding: "16px 20px", border: `1px solid ${brand.line}`, borderRadius: radius.card, background: brand.bright, fontFamily: type.sans, fontSize: 16 }}><strong style={{ display: "block", color: brand.moss }}>Active job</strong><span>412 Hawthorne Lane · 10:00 AM</span></div></Reveal>
+    <Img src={staticFile("maps/green-shield-fleet-map-osm.png")} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+    <div style={{ position: "absolute", inset: 0, background: "rgba(247,244,235,.38)" }} />
+    <div style={{ position: "absolute", top: 74, left: 82, width: 765, padding: "30px 34px", border: "1px solid rgba(23,62,59,.14)", borderRadius: 22, background: "rgba(255,253,247,.94)", boxShadow: "0 20px 46px rgba(23,62,59,.14)" }}>
+      <Reveal at={8}><p style={{ margin: 0, color: brand.clay, fontFamily: type.sans, fontWeight: 850, fontSize: 16, letterSpacing: ".15em", textTransform: "uppercase" }}>Green Shield Pest Control · fictional demo</p></Reveal><Reveal at={27}><h1 style={{ margin: "18px 0 0", fontFamily: type.display, fontSize: 66, fontWeight: 500, lineHeight: .98, letterSpacing: "-.06em" }}>Keep a bird’s-eye view of every vehicle on your team.</h1></Reveal><Reveal at={50}><p style={{ width: 650, margin: "20px 0 0", color: brand.muted, fontFamily: type.sans, fontSize: 23, lineHeight: 1.4 }}>One company van. One scheduled termite-inspection visit. Separate, clearly labeled location sources.</p></Reveal>
     </div>
+    <Reveal at={58}><div style={{ position: "absolute", top: 86, right: 86, padding: "16px 20px", border: "1px solid rgba(23,62,59,.14)", borderRadius: radius.card, background: "rgba(255,253,247,.94)", boxShadow: "0 14px 34px rgba(23,62,59,.13)", fontFamily: type.sans, fontSize: 16 }}><strong style={{ display: "block", color: brand.moss }}>Active job</strong><span>Fictional service stop · 10:00 AM</span></div></Reveal>
     <svg viewBox="0 0 1920 1080" style={{ position: "absolute", inset: 0 }}>
-      <path d="M 330 675 C 650 690, 770 455, 1000 520 S 1350 505, 1490 280" fill="none" stroke="#95af99" strokeWidth="18" strokeLinecap="round" opacity=".72" />
-      <path d="M 330 675 C 650 690, 770 455, 1000 520 S 1350 505, 1490 280" fill="none" stroke="#f7f4eb" strokeWidth="7" strokeLinecap="round" />
-      <circle cx={vanX} cy={vanY} r="24" fill={brand.moss} /><circle cx={vanX} cy={vanY} r="11" fill="#fff" />
-      <circle cx={phoneX} cy={phoneY} r="16" fill={brand.clay} /><circle cx={phoneX} cy={phoneY} r="6" fill="#fff" />
-      <circle cx="1490" cy="280" r="22" fill={brand.clay} /><circle cx="1490" cy="280" r="8" fill="#fff" />
+      <path d="M 720 778 C 878 728, 986 642, 1080 650 S 1230 620, 1328 510" fill="none" stroke="rgba(255,255,255,.92)" strokeWidth="22" strokeLinecap="round" />
+      <path d="M 720 778 C 878 728, 986 642, 1080 650 S 1230 620, 1328 510" fill="none" stroke={brand.moss} strokeWidth="12" strokeLinecap="round" />
+      <path d="M 720 778 C 878 728, 986 642, 1080 650 S 1230 620, 1328 510" fill="none" stroke="#c9ded0" strokeWidth="3" strokeDasharray="10 13" strokeLinecap="round" />
+      <circle cx={vanX} cy={vanY} r="28" fill="rgba(255,255,255,.93)" /><circle cx={vanX} cy={vanY} r="20" fill={brand.moss} /><path d={`M ${vanX - 7} ${vanY + 5} h14 v-13 h-14 z`} fill="#fff" />
+      <circle cx={phoneX} cy={phoneY} r="20" fill="rgba(255,255,255,.93)" /><circle cx={phoneX} cy={phoneY} r="13" fill={brand.clay} /><circle cx={phoneX} cy={phoneY} r="4" fill="#fff" />
+      <circle cx="1328" cy="510" r="28" fill="rgba(255,255,255,.93)" /><circle cx="1328" cy="510" r="20" fill={brand.clay} /><circle cx="1328" cy="510" r="7" fill="#fff" />
     </svg>
-    <Reveal at={90}><div style={{ position: "absolute", left: 280, bottom: 105, display: "flex", gap: 16, fontFamily: type.sans, fontSize: 18 }}><span style={{ padding: "13px 17px", borderRadius: 999, background: "#e7f0e9", color: "#3f654e" }}>● Company van · Bouncie hardware</span><span style={{ padding: "13px 17px", borderRadius: 999, background: "#f8e7df", color: "#975338" }}>● Crew phone · active timer only</span></div></Reveal>
+    <Reveal at={90}><div style={{ position: "absolute", left: 82, bottom: 74, display: "flex", gap: 14, fontFamily: type.sans, fontSize: 17 }}><span style={{ padding: "13px 17px", borderRadius: 999, background: "rgba(231,240,233,.96)", color: "#3f654e", boxShadow: "0 8px 20px rgba(23,62,59,.10)" }}>● Van 17 · Bouncie hardware</span><span style={{ padding: "13px 17px", borderRadius: 999, background: "rgba(248,231,223,.96)", color: "#975338", boxShadow: "0 8px 20px rgba(23,62,59,.10)" }}>● Crew phone · active timer only</span></div></Reveal>
+    <p style={{ position: "absolute", right: 30, bottom: 22, margin: 0, padding: "6px 10px", borderRadius: 8, background: "rgba(255,253,247,.86)", color: "#3b4a45", fontFamily: type.sans, fontSize: 13 }}>Map data © OpenStreetMap contributors · fictional route overlay</p>
   </AbsoluteFill>;
 };
 
