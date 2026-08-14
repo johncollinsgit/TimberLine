@@ -11,6 +11,7 @@ $defaultBrandAssetVersion = (static function (): string {
         'favicon.ico',
         'apple-touch-icon.png',
         'og-image.png',
+        'og-image-v2.png',
     ];
 
     $latestTimestamp = 0;
@@ -57,7 +58,7 @@ return [
         'favicon_png' => 'favicon.png',
         'favicon_ico' => 'favicon.ico',
         'apple_touch_icon' => 'apple-touch-icon.png',
-        'og_image' => 'og-image.png',
+        'og_image' => 'og-image-v2.png',
     ],
     'brand_tokens' => [
         'font_display' => env('EVERBRANCH_FONT_DISPLAY', 'Fraunces'),

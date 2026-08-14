@@ -406,7 +406,8 @@ Brand asset directory: `public/brand/`
 - `everbranch-mark.svg`: primary mark for app shells, icons, and tab-sized uses
 - `everbranch-favicon.svg`: SVG favicon wrapper
 - `everbranch-auth.svg`: auth lockup variant
-- Current Everbranch asset pass is cache-tagged from `config('everbranch.brand_assets.cache_tag')`, currently `v=eb1`.
+- Public link previews use `og-image-v2.png`; the active brand-asset set is
+  cache-tagged from `config('everbranch.brand_assets.cache_tag')`.
 - Legacy `forestry-backstage-*` assets remain in `public/brand/` for compatibility/history and should not be used on Everbranch platform surfaces.
 
 Primary usage points:
