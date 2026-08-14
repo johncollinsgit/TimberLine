@@ -8,6 +8,12 @@
     $taskUpdateIds = collect($taskUpdateIds ?? []);
     $officeTeam = $team->filter(fn ($member) => in_array(strtolower((string) $member->pivot?->role), ['owner', 'tenant_owner', 'admin', 'manager'], true));
     $siteAddress = trim(implode(', ', array_filter([$job->service_address_line_1, $job->service_address_line_2, $job->service_city, $job->service_state, $job->service_postal_code, $job->service_country])));
+    $fictionalRoute = (array) data_get($job->metadata, 'fictional_route', []);
+    $fictionalRoutePoints = collect((array) data_get($fictionalRoute, 'points', []))->filter(fn ($point) => is_numeric(data_get($point, 'x')) && is_numeric(data_get($point, 'y')))->values();
+    $fictionalRoutePolyline = $fictionalRoutePoints->map(fn ($point) => data_get($point, 'x').' '.data_get($point, 'y'))->join(' ');
+    $fictionalFinance = $job->financialDocuments->filter(fn ($document) => (bool) data_get($document->metadata, 'fictional_demo'));
+    $fictionalMoneyIn = (float) $fictionalFinance->whereIn('document_type', ['invoice', 'estimate'])->sum('total_amount');
+    $fictionalMoneySpent = (float) $fictionalFinance->where('document_type', 'expense')->sum('total_amount');
 @endphp
 
 <x-layouts::app.sidebar title="Field Service Job">
@@ -59,6 +65,14 @@
                             <div class="rounded-lg border border-zinc-200 p-3 md:col-span-2"><div class="text-xs font-semibold uppercase text-zinc-500">Work</div><div class="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{{ $job->description ?: 'Description needed' }}</div></div>
                         </div>
                     </section>
+
+                    @if($fictionalRoutePolyline !== '')
+                        <section class="fb-panel overflow-hidden"><div class="fb-panel-head"><div><div class="fb-panel-title">Fictional van route</div><p class="mt-1 text-sm text-zinc-600">{{ data_get($fictionalRoute, 'vehicle', $job->vehicles->first()?->name ?? 'Company van') }} · demonstration route for this job only</p></div></div><div class="relative h-72 overflow-hidden bg-slate-100 bg-cover bg-center" style="background-image:linear-gradient(rgba(246,243,236,.38),rgba(246,243,236,.38)),url('{{ asset('media/green-shield-fleet-map-osm.png') }}')"><svg viewBox="0 0 1000 600" preserveAspectRatio="none" class="absolute inset-0 h-full w-full" aria-label="Fictional van route map"><polyline points="{{ $fictionalRoutePolyline }}" fill="none" stroke="#173e3b" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" opacity=".88"/><polyline points="{{ $fictionalRoutePolyline }}" fill="none" stroke="#f6f3ec" stroke-dasharray="18 16" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>@foreach([$fictionalRoutePoints->first(), $fictionalRoutePoints->last()] as $routePoint)<circle cx="{{ data_get($routePoint, 'x') }}" cy="{{ data_get($routePoint, 'y') }}" r="18" fill="#c96b43" stroke="#fffdf7" stroke-width="8"/>@endforeach</svg><div class="absolute bottom-2 right-3 rounded bg-white/90 px-2 py-1 text-[11px] text-zinc-600">Map data © OpenStreetMap contributors · fictional route overlay</div></div><div class="fb-panel-body text-sm text-zinc-600">This route is fictional demonstration data, not a live employee or vehicle location feed.</div></section>
+                    @endif
+
+                    @if($fictionalFinance->isNotEmpty())
+                        <section class="fb-panel"><div class="fb-panel-head"><div><div class="fb-panel-title">Fictional job financials</div><p class="mt-1 text-sm text-zinc-600">Demo-only income and cost records; not connected accounting data.</p></div></div><div class="fb-panel-body grid gap-3 sm:grid-cols-2"><div class="rounded-xl border border-emerald-100 bg-emerald-50 p-4"><div class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Money in</div><div class="mt-2 text-2xl font-semibold text-emerald-950">${{ number_format($fictionalMoneyIn, 2) }}</div></div><div class="rounded-xl border border-amber-100 bg-amber-50 p-4"><div class="text-xs font-semibold uppercase tracking-wide text-amber-700">Money spent</div><div class="mt-2 text-2xl font-semibold text-amber-950">${{ number_format($fictionalMoneySpent, 2) }}</div></div></div></section>
+                    @endif
 
                     <section class="fb-panel">
                         <div class="fb-panel-head"><div class="fb-panel-title">Updates</div></div>

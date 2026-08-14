@@ -2440,5 +2440,9 @@
   CSRF-protected, demo-only handoff to enter the isolated fictional account
   directly and open its Green Shield workspace.
 - Expanded the isolated workspace fixture with fictional team members, vans,
-  active/scheduled/quote/completed service jobs, tasks, notes, and shifts so
-  the product walkthrough opens into a populated field-operations workspace.
+  20 active/scheduled/quote/completed service jobs, tasks, notes, shifts,
+  clearly labeled income/cost values, and a seven-day home calendar so the
+  product walkthrough opens into a populated field-operations workspace.
+- Added an attributed OpenStreetMap-backed fictional van-route panel to each
+  Green Shield job detail. These route overlays are demo-only and separate
+  from the globally gated Fleet Tracking product surface.

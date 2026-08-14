@@ -44,6 +44,8 @@ class FieldServiceOwnerHomeMetricsService
         }
 
         $metrics = (array) ($snapshot?->metrics ?? []);
+        $fictionalDemoMetrics = $tenant->slug === 'green-shield-pest-control'
+            && (bool) ($metrics['fictional_demo'] ?? false);
         $completed = FieldServiceJob::query()->forTenantId((int) $tenant->id)
             ->whereNotNull('completed_at')
             ->whereBetween('completed_at', [$start->utc(), $now->utc()])
@@ -63,9 +65,11 @@ class FieldServiceOwnerHomeMetricsService
             'money_spent' => is_numeric($metrics['total_expenses'] ?? null) ? round(abs((float) $metrics['total_expenses']), 2) : null,
             'finished_jobs' => $completed,
             'quickbooks' => [
-                'state' => ! $connection ? 'disconnected' : ($fresh ? 'updated' : ($snapshot ? 'stale' : 'refreshing')),
+                'state' => $fictionalDemoMetrics ? 'fictional_demo' : (! $connection ? 'disconnected' : ($fresh ? 'updated' : ($snapshot ? 'stale' : 'refreshing'))),
                 'updated_at' => $snapshot?->observed_at?->toIso8601String(),
-                'message' => ! $connection ? 'Connect QuickBooks to see money in and money spent.' : ($fresh ? 'Updated from QuickBooks.' : 'Refreshing quietly from QuickBooks.'),
+                'message' => $fictionalDemoMetrics
+                    ? 'Fictional demo values only — not connected QuickBooks data.'
+                    : (! $connection ? 'Connect QuickBooks to see money in and money spent.' : ($fresh ? 'Updated from QuickBooks.' : 'Refreshing quietly from QuickBooks.')),
             ],
         ];
     }

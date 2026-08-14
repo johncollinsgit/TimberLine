@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\EverbranchPreparePestControlDemo;
+use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceTask;
@@ -24,11 +25,12 @@ test('the fictional pest-control command creates an isolated tracking demonstrat
         ->and(Hash::check(EverbranchPreparePestControlDemo::DEFAULT_PASSWORD, (string) $owner->password))->toBeTrue()
         ->and($owner->tenants()->pluck('tenants.id')->all())->toBe([(int) $tenant->id])
         ->and($tenant->users()->wherePivot('membership_active', true)->count())->toBe(4)
-        ->and(FieldServiceJob::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
-        ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
-        ->and(FieldServiceJobNote::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
+        ->and(FieldServiceJob::query()->forTenantId((int) $tenant->id)->count())->toBe(20)
+        ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(41)
+        ->and(FieldServiceJobNote::query()->forTenantId((int) $tenant->id)->count())->toBe(20)
+        ->and(FieldServiceFinancialDocument::query()->forTenantId((int) $tenant->id)->where('source', 'fictional_demo')->count())->toBe(40)
         ->and(FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->count())->toBe(2)
-        ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(3)
+        ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
         ->and(FleetTrackingDevice::query()->forTenantId((int) $tenant->id)->where('provider', 'bouncie')->count())->toBe(1)
         ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
         ->and(TenantFleetTrackingSetting::query()->forTenantId((int) $tenant->id)->sole()->retention_days)->toBe(30);
@@ -40,8 +42,10 @@ test('the fictional pest-control command safely refreshes the same demonstration
 
     $tenant = Tenant::query()->where('slug', 'green-shield-pest-control')->firstOrFail();
 
-    expect(FieldServiceJob::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
-        ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
-        ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(3)
+    expect(app(\App\Services\FieldService\FieldServiceOwnerHomeMetricsService::class)->build($tenant)['money_in'])->toBe(10875.0);
+
+    expect(FieldServiceJob::query()->forTenantId((int) $tenant->id)->count())->toBe(20)
+        ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(41)
+        ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
         ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5);
 });

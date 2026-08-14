@@ -68,6 +68,14 @@ class FieldServiceController extends Controller
                 'notes.createdBy',
             ]);
         $this->fieldServiceAccess->scopeVisibleJobs($jobQuery, $request->user(), $tenant);
+        $homeCalendarStart = now()->startOfDay();
+        $homeCalendarEnd = $homeCalendarStart->copy()->addDays(6)->endOfDay();
+        $homeCalendarJobs = (clone $jobQuery)
+            ->whereNotNull('scheduled_for')
+            ->whereBetween('scheduled_for', [$homeCalendarStart, $homeCalendarEnd])
+            ->orderBy('scheduled_for')
+            ->limit(50)
+            ->get();
         $jobs = $jobQuery
             ->orderByRaw('CASE WHEN scheduled_for IS NULL THEN 1 ELSE 0 END')
             ->orderBy('scheduled_for')
@@ -115,6 +123,8 @@ class FieldServiceController extends Controller
         return view('field-service.index', [
             'tenant' => $tenant,
             'jobs' => $jobs,
+            'homeCalendarStart' => $homeCalendarStart,
+            'homeCalendarJobs' => $homeCalendarJobs,
             'materials' => $materials,
             'vehicles' => $vehicles,
             'team' => $team,
@@ -373,8 +383,10 @@ class FieldServiceController extends Controller
             'tasks.assignees:id,name,email',
             'tasks.events.actor:id,name',
             'equipment',
+            'vehicles',
             'timeEntries.user',
             'materials',
+            'financialDocuments.lines',
             'photos.uploadedBy',
             'assets' => fn ($assets) => $assets->where('visibility', 'team')->orderByDesc('workspace_assets.created_at'),
             'notes' => fn ($notes) => $this->visibleNotes($notes, $includeOwnerNotes),
