@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Console\Commands\EverbranchPreparePestControlDemo;
+use App\Models\User;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 
 class PlatformProductPagesController extends Controller
 {
@@ -39,18 +42,23 @@ class PlatformProductPagesController extends Controller
     public function pestControlFleetDemo(): Response
     {
         return response()->view('platform.pest-control-fleet-demo', [
-            'demoEmail' => \App\Console\Commands\EverbranchPreparePestControlDemo::OWNER_EMAIL,
-            'demoPassword' => \App\Console\Commands\EverbranchPreparePestControlDemo::DEFAULT_PASSWORD,
+            'demoEmail' => EverbranchPreparePestControlDemo::OWNER_EMAIL,
+            'demoPassword' => EverbranchPreparePestControlDemo::DEFAULT_PASSWORD,
         ]);
     }
 
     public function pestControlFleetDemoLogin(Request $request): RedirectResponse
     {
-        $request->session()->put('url.intended', route('field-service.index', ['tenant' => 'green-shield-pest-control'], absolute: false));
+        $demoOwner = User::query()
+            ->where('email', EverbranchPreparePestControlDemo::OWNER_EMAIL)
+            ->where('requested_via', 'fictional_pest_control_demo')
+            ->where('is_active', true)
+            ->firstOrFail();
 
-        return redirect()->route('login', [
-            'email' => \App\Console\Commands\EverbranchPreparePestControlDemo::OWNER_EMAIL,
-        ]);
+        Auth::login($demoOwner);
+        $request->session()->regenerate();
+
+        return redirect()->route('field-service.index', ['tenant' => 'green-shield-pest-control']);
     }
 
     public function contact(Request $request): Response
