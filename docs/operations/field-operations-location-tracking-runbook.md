@@ -103,9 +103,11 @@ not grant those operating-system permissions.
 
 `everbranch:prepare-pest-control-demo` is idempotent and creates the isolated
 `green-shield-pest-control` tenant for sales/product walkthroughs. It contains
-only fictional people, customer/job information, five varied service jobs,
-tasks, notes, shifts, two company vans (one Bouncie-mapped), and five sample
-location points.
+only fictional people, customer/job information, 20 varied service jobs,
+tasks, notes, shifts, fictional job income/cost records, two company vans (one
+Bouncie-mapped), and five sample location points. The Work homepage's money
+cards and job-level finance panels are explicitly fictional and are never a
+QuickBooks connection, accounting conclusion, tax calculation, or payroll data.
 
 ```bash
 php artisan everbranch:prepare-pest-control-demo
@@ -138,6 +140,8 @@ Its opening map scene uses the included, public OpenStreetMap-derived still at
 `© OpenStreetMap contributors` attribution in the video. The animated route,
 pins, service stop, and all tracking data are fictional overlays; do not use a
 Google Maps screenshot or actual customer/employee location data in this asset.
+The job-detail route overlays use the same attributed map with fictional route
+coordinates stored in the isolated demo job metadata; they are not live GPS.
 
 The authenticated Fleet Tracking page is still governed by the global
 `FLEET_TRACKING_ENABLED` switch. Do not enable that switch merely to make a

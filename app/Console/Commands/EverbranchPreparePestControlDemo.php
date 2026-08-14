@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\FieldServiceFinancialDocument;
+use App\Models\FieldServiceFinancialDocumentLine;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceTask;
@@ -11,7 +13,9 @@ use App\Models\FieldServiceWorkShift;
 use App\Models\FleetLocationPoint;
 use App\Models\FleetTrackingDevice;
 use App\Models\FleetTrackingPolicyAcknowledgement;
+use App\Models\IntegrationConnection;
 use App\Models\MarketingProfile;
+use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Tenant;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantFleetTrackingSetting;
@@ -199,6 +203,7 @@ class EverbranchPreparePestControlDemo extends Command
                 'title' => 'Termite inspection and perimeter treatment',
                 'status' => 'scheduled',
                 'operational_status' => 'active',
+                'status_source' => 'manual',
                 'priority' => 'high',
                 'customer_name' => 'Lena Brooks',
                 'customer_email' => 'lena.brooks@example.com',
@@ -210,7 +215,7 @@ class EverbranchPreparePestControlDemo extends Command
                 'description' => 'Fictional inspection and treatment visit for demonstration only.',
                 'scheduled_for' => now()->startOfHour()->addHour(),
                 'scheduled_end_at' => now()->startOfHour()->addHours(3),
-                'metadata' => ['fictional_demo' => true],
+                'metadata' => ['fictional_demo' => true, 'fictional_route' => $this->fictionalRoute(0, 'Green Shield Van 17')],
             ]);
             $job->participants()->syncWithoutDetaching([(int) $owner->id => ['tenant_id' => $tenant->id, 'role' => 'dispatcher', 'following' => true]]);
             $shift = FieldServiceWorkShift::query()->updateOrCreate([
@@ -298,9 +303,25 @@ class EverbranchPreparePestControlDemo extends Command
                     'description' => 'Fictional completed quarterly exterior service.',
                     'tasks' => ['Complete exterior treatment', 'Leave fictional service summary'],
                 ],
+                ['external_id' => 'wasp-nest-larkspur', 'customer' => 'lena', 'technician' => $additionalTechnicians['eli@greenshieldpest.example'], 'vehicle' => $secondVan, 'title' => 'Wasp nest removal', 'status' => 'scheduled', 'operational_status' => 'scheduled', 'priority' => 'high', 'start' => $workStart->copy()->addDay()->setTime(13, 0), 'end' => $workStart->copy()->addDay()->setTime(14, 0), 'description' => 'Fictional wasp nest removal visit.', 'tasks' => ['Confirm exterior access', 'Remove fictional nest']],
+                ['external_id' => 'cockroach-treatment-oakview', 'customer' => 'marisol', 'technician' => $technician, 'vehicle' => $van, 'title' => 'Cockroach follow-up treatment', 'status' => 'active', 'operational_status' => 'active', 'priority' => 'high', 'start' => $workStart->copy()->addHours(2), 'end' => $workStart->copy()->addHours(3), 'description' => 'Fictional follow-up treatment for the demo schedule.', 'tasks' => ['Inspect monitor placements', 'Apply fictional follow-up treatment']],
+                ['external_id' => 'flea-inspection-brookstone', 'customer' => 'david', 'technician' => $additionalTechnicians['maya@greenshieldpest.example'], 'vehicle' => $secondVan, 'title' => 'Flea inspection', 'status' => 'scheduled', 'operational_status' => 'scheduled', 'priority' => 'normal', 'start' => $workStart->copy()->addDays(2)->setTime(10, 0), 'end' => $workStart->copy()->addDays(2)->setTime(11, 0), 'description' => 'Fictional flea inspection visit.', 'tasks' => ['Review treatment prep', 'Inspect affected rooms']],
+                ['external_id' => 'termite-monitor-meadow-run', 'customer' => 'riley', 'technician' => $technician, 'vehicle' => $van, 'title' => 'Termite monitoring station check', 'status' => 'complete', 'operational_status' => 'complete', 'priority' => 'normal', 'start' => $workStart->copy()->subDays(2)->setTime(11, 0), 'end' => $workStart->copy()->subDays(2)->setTime(12, 0), 'description' => 'Fictional completed monitoring-station check.', 'tasks' => ['Inspect fictional stations', 'Record fictional findings']],
+                ['external_id' => 'spider-sweep-cedar-lane', 'customer' => 'priya', 'technician' => $additionalTechnicians['eli@greenshieldpest.example'], 'vehicle' => $secondVan, 'title' => 'Spider exterior sweep', 'status' => 'complete', 'operational_status' => 'complete', 'priority' => 'low', 'start' => $workStart->copy()->subDays(3)->setTime(15, 0), 'end' => $workStart->copy()->subDays(3)->setTime(16, 0), 'description' => 'Fictional completed exterior sweep.', 'tasks' => ['Sweep eaves and entry points', 'Update fictional service record']],
+                ['external_id' => 'bed-bug-prep-hawthorne', 'customer' => 'lena', 'technician' => $additionalTechnicians['maya@greenshieldpest.example'], 'vehicle' => $van, 'title' => 'Bed bug preparation review', 'status' => 'quote', 'operational_status' => 'quote', 'priority' => 'normal', 'start' => null, 'end' => null, 'description' => 'Fictional preparation review awaiting approval.', 'tasks' => ['Review fictional prep checklist', 'Prepare fictional service quote']],
+                ['external_id' => 'fire-ant-treatment-oakview', 'customer' => 'marisol', 'technician' => $technician, 'vehicle' => $van, 'title' => 'Fire ant mound treatment', 'status' => 'scheduled', 'operational_status' => 'scheduled', 'priority' => 'normal', 'start' => $workStart->copy()->addDays(3)->setTime(9, 0), 'end' => $workStart->copy()->addDays(3)->setTime(10, 0), 'description' => 'Fictional yard treatment appointment.', 'tasks' => ['Locate fictional mounds', 'Apply treatment plan']],
+                ['external_id' => 'wildlife-entry-brookstone', 'customer' => 'david', 'technician' => $additionalTechnicians['eli@greenshieldpest.example'], 'vehicle' => $secondVan, 'title' => 'Wildlife entry-point assessment', 'status' => 'needs_details', 'operational_status' => 'needs_details', 'priority' => 'high', 'start' => null, 'end' => null, 'description' => 'Fictional assessment pending access details.', 'tasks' => ['Confirm attic access', 'Document fictional entry points']],
+                ['external_id' => 'mole-inspection-meadow-run', 'customer' => 'riley', 'technician' => $additionalTechnicians['maya@greenshieldpest.example'], 'vehicle' => $secondVan, 'title' => 'Mole activity inspection', 'status' => 'scheduled', 'operational_status' => 'scheduled', 'priority' => 'normal', 'start' => $workStart->copy()->addDays(4)->setTime(11, 0), 'end' => $workStart->copy()->addDays(4)->setTime(12, 0), 'description' => 'Fictional lawn inspection appointment.', 'tasks' => ['Walk lawn perimeter', 'Prepare fictional control options']],
+                ['external_id' => 'silverfish-treatment-cedar-lane', 'customer' => 'priya', 'technician' => $technician, 'vehicle' => $van, 'title' => 'Silverfish treatment', 'status' => 'complete', 'operational_status' => 'complete', 'priority' => 'normal', 'start' => $workStart->copy()->subDays(4)->setTime(10, 0), 'end' => $workStart->copy()->subDays(4)->setTime(11, 0), 'description' => 'Fictional completed interior treatment.', 'tasks' => ['Inspect humidity areas', 'Complete fictional treatment']],
+                ['external_id' => 'pantry-pest-hawthorne', 'customer' => 'lena', 'technician' => $additionalTechnicians['eli@greenshieldpest.example'], 'vehicle' => $secondVan, 'title' => 'Pantry pest inspection', 'status' => 'active', 'operational_status' => 'active', 'priority' => 'normal', 'start' => $workStart->copy()->addHours(6), 'end' => $workStart->copy()->addHours(7), 'description' => 'Fictional active pantry pest inspection.', 'tasks' => ['Inspect pantry shelves', 'Review fictional sanitation notes']],
+                ['external_id' => 'tick-treatment-oakview', 'customer' => 'marisol', 'technician' => $additionalTechnicians['maya@greenshieldpest.example'], 'vehicle' => $van, 'title' => 'Tick yard treatment', 'status' => 'scheduled', 'operational_status' => 'scheduled', 'priority' => 'normal', 'start' => $workStart->copy()->addDays(5)->setTime(13, 0), 'end' => $workStart->copy()->addDays(5)->setTime(14, 0), 'description' => 'Fictional seasonal tick treatment.', 'tasks' => ['Review yard boundaries', 'Apply fictional treatment']],
+                ['external_id' => 'rat-exclusion-brookstone', 'customer' => 'david', 'technician' => $technician, 'vehicle' => $van, 'title' => 'Rat exclusion proposal', 'status' => 'quote', 'operational_status' => 'quote', 'priority' => 'high', 'start' => null, 'end' => null, 'description' => 'Fictional exclusion proposal awaiting acceptance.', 'tasks' => ['Draft fictional exclusion scope', 'Send proposal for review']],
+                ['external_id' => 'seasonal-inspection-meadow-run', 'customer' => 'riley', 'technician' => $additionalTechnicians['eli@greenshieldpest.example'], 'vehicle' => $secondVan, 'title' => 'Seasonal perimeter inspection', 'status' => 'complete', 'operational_status' => 'complete', 'priority' => 'low', 'start' => $workStart->copy()->subDays(5)->setTime(13, 0), 'end' => $workStart->copy()->subDays(5)->setTime(14, 0), 'description' => 'Fictional completed seasonal inspection.', 'tasks' => ['Inspect exterior barrier', 'Close fictional service ticket']],
+                ['external_id' => 'yellowjacket-visit-cedar-lane', 'customer' => 'priya', 'technician' => $additionalTechnicians['maya@greenshieldpest.example'], 'vehicle' => $van, 'title' => 'Yellowjacket treatment visit', 'status' => 'scheduled', 'operational_status' => 'scheduled', 'priority' => 'high', 'start' => $workStart->copy()->addDays(6)->setTime(10, 0), 'end' => $workStart->copy()->addDays(6)->setTime(11, 0), 'description' => 'Fictional yellowjacket service appointment.', 'tasks' => ['Confirm nest location', 'Complete fictional treatment']],
             ];
 
-            foreach ($sampleJobs as $sample) {
+            $demoJobs = [$job];
+            foreach ($sampleJobs as $sampleIndex => $sample) {
                 $sampleCustomer = $customers[$sample['customer']];
                 $sampleJob = FieldServiceJob::query()->updateOrCreate([
                     'tenant_id' => (int) $tenant->id,
@@ -312,7 +333,7 @@ class EverbranchPreparePestControlDemo extends Command
                     'title' => $sample['title'],
                     'status' => $sample['status'],
                     'operational_status' => $sample['operational_status'],
-                    'status_source' => 'demo_fixture',
+                    'status_source' => 'manual',
                     'priority' => $sample['priority'],
                     'customer_name' => $sampleCustomer->first_name.' '.$sampleCustomer->last_name,
                     'customer_email' => $sampleCustomer->email,
@@ -326,8 +347,9 @@ class EverbranchPreparePestControlDemo extends Command
                     'scheduled_end_at' => $sample['end'],
                     'completed_at' => $sample['operational_status'] === 'complete' ? $sample['end'] : null,
                     'last_financial_activity_at' => $sample['start'] ?? now(),
-                    'metadata' => ['fictional_demo' => true],
+                    'metadata' => ['fictional_demo' => true, 'fictional_route' => $this->fictionalRoute($sampleIndex + 1, $sample['vehicle']->name)],
                 ]);
+                $demoJobs[] = $sampleJob;
                 $sampleJob->participants()->syncWithoutDetaching([
                     (int) $owner->id => ['tenant_id' => $tenant->id, 'role' => 'dispatcher', 'following' => true],
                     (int) $sample['technician']->id => ['tenant_id' => $tenant->id, 'role' => 'technician', 'following' => true],
@@ -376,6 +398,118 @@ class EverbranchPreparePestControlDemo extends Command
                         'notes' => 'Fictional scheduled shift for the Green Shield demonstration.',
                     ]);
                 }
+            }
+
+            foreach ($demoJobs as $jobIndex => $demoJob) {
+                $isQuote = $demoJob->operational_status === 'quote';
+                $isComplete = $demoJob->operational_status === 'complete';
+                $moneyIn = 245 + ($jobIndex * 35);
+                $invoice = FieldServiceFinancialDocument::query()->updateOrCreate([
+                    'tenant_id' => (int) $tenant->id,
+                    'source' => 'fictional_demo',
+                    'document_type' => $isQuote ? 'estimate' : 'invoice',
+                    'external_id' => 'green-shield-job-'.$demoJob->id,
+                ], [
+                    'marketing_profile_id' => $demoJob->marketing_profile_id,
+                    'field_service_job_id' => (int) $demoJob->id,
+                    'document_number' => ($isQuote ? 'EST' : 'INV').'-GSP-'.str_pad((string) ($jobIndex + 1), 3, '0', STR_PAD_LEFT),
+                    'status' => $isQuote ? 'pending' : ($isComplete ? 'paid' : 'open'),
+                    'transaction_date' => ($demoJob->scheduled_for ?? now())->toDateString(),
+                    'due_date' => ($demoJob->scheduled_for ?? now())->copy()->addDays(15)->toDateString(),
+                    'total_amount' => $moneyIn,
+                    'balance' => $isComplete ? 0 : $moneyIn,
+                    'currency' => 'USD',
+                    'private_note' => 'Fictional demo financial record. Not QuickBooks data.',
+                    'customer_memo' => 'Fictional Green Shield service record.',
+                    'metadata' => ['fictional_demo' => true],
+                ]);
+                FieldServiceFinancialDocumentLine::query()->updateOrCreate([
+                    'tenant_id' => (int) $tenant->id,
+                    'field_service_financial_document_id' => (int) $invoice->id,
+                    'source_line_id' => 'service',
+                ], [
+                    'sort_order' => 0,
+                    'detail_type' => 'service',
+                    'item_external_id' => 'fictional-service',
+                    'item_name' => $demoJob->title,
+                    'description' => 'Fictional demo service line.',
+                    'quantity' => 1,
+                    'unit_price' => $moneyIn,
+                    'amount' => $moneyIn,
+                    'metadata' => ['fictional_demo' => true],
+                ]);
+
+                $moneySpent = 42 + (($jobIndex % 5) * 18);
+                $expense = FieldServiceFinancialDocument::query()->updateOrCreate([
+                    'tenant_id' => (int) $tenant->id,
+                    'source' => 'fictional_demo',
+                    'document_type' => 'expense',
+                    'external_id' => 'green-shield-job-cost-'.$demoJob->id,
+                ], [
+                    'marketing_profile_id' => $demoJob->marketing_profile_id,
+                    'field_service_job_id' => (int) $demoJob->id,
+                    'document_number' => 'COST-GSP-'.str_pad((string) ($jobIndex + 1), 3, '0', STR_PAD_LEFT),
+                    'status' => 'paid',
+                    'transaction_date' => ($demoJob->scheduled_for ?? now())->toDateString(),
+                    'total_amount' => $moneySpent,
+                    'balance' => 0,
+                    'currency' => 'USD',
+                    'private_note' => 'Fictional demo job cost. Not QuickBooks data.',
+                    'metadata' => ['fictional_demo' => true],
+                ]);
+                FieldServiceFinancialDocumentLine::query()->updateOrCreate([
+                    'tenant_id' => (int) $tenant->id,
+                    'field_service_financial_document_id' => (int) $expense->id,
+                    'source_line_id' => 'materials',
+                ], [
+                    'sort_order' => 0,
+                    'detail_type' => 'cost',
+                    'item_external_id' => 'fictional-materials',
+                    'item_name' => 'Fictional materials and travel',
+                    'description' => 'Fictional demo cost line.',
+                    'quantity' => 1,
+                    'unit_price' => $moneySpent,
+                    'amount' => $moneySpent,
+                    'metadata' => ['fictional_demo' => true],
+                ]);
+            }
+
+            $demoConnection = IntegrationConnection::query()->updateOrCreate([
+                'tenant_id' => (int) $tenant->id,
+                'provider' => 'quickbooks',
+                'external_account_id' => 'fictional-green-shield-demo',
+            ], [
+                'external_account_label' => 'Fictional demo only — not a QuickBooks connection',
+                'status' => IntegrationConnection::STATUS_DISCONNECTED,
+                'metadata' => ['fictional_demo' => true],
+            ]);
+            foreach ([
+                'today' => [now()->startOfDay(), now(), 860.00, 172.00],
+                'week' => [now()->startOfWeek(), now(), 4235.00, 916.00],
+                'month' => [now()->startOfMonth(), now(), 10875.00, 2480.00],
+            ] as $period => [$periodStart, $periodEnd, $moneyIn, $moneySpent]) {
+                $demoSnapshot = QuickBooksReportingSnapshot::query()
+                    ->forTenantId((int) $tenant->id)
+                    ->where('range_key', 'home:cash:'.$period)
+                    ->whereDate('period_start', $periodStart->toDateString())
+                    ->whereDate('period_end', $periodEnd->toDateString())
+                    ->first();
+                $demoSnapshot ??= new QuickBooksReportingSnapshot([
+                    'tenant_id' => (int) $tenant->id,
+                    'range_key' => 'home:cash:'.$period,
+                    'period_start' => $periodStart->toDateString(),
+                    'period_end' => $periodEnd->toDateString(),
+                ]);
+                $demoSnapshot->forceFill([
+                    'integration_connection_id' => (int) $demoConnection->id,
+                    'metrics' => [
+                        'fictional_demo' => true,
+                        'accounting_method' => 'Fictional demo only',
+                        'total_income' => $moneyIn,
+                        'total_expenses' => $moneySpent,
+                    ],
+                    'observed_at' => now(),
+                ])->save();
             }
             $device = FleetTrackingDevice::query()->updateOrCreate([
                 'tenant_id' => (int) $tenant->id,
@@ -441,5 +575,22 @@ class EverbranchPreparePestControlDemo extends Command
         $this->warn('All data is fictional. The fleet page remains unavailable until the global FLEET_TRACKING_ENABLED rollout switch is intentionally enabled.');
 
         return self::SUCCESS;
+    }
+
+    /** @return array{vehicle:string,points:array<int,array{x:int,y:int}>} */
+    private function fictionalRoute(int $routeIndex, string $vehicle): array
+    {
+        $offset = ($routeIndex % 5) * 32;
+
+        return [
+            'vehicle' => $vehicle,
+            'points' => [
+                ['x' => 110 + $offset, 'y' => 500 - (($routeIndex % 3) * 36)],
+                ['x' => 260 + $offset, 'y' => 410 - (($routeIndex % 4) * 28)],
+                ['x' => 470 + $offset, 'y' => 455 - (($routeIndex % 3) * 44)],
+                ['x' => 680 + $offset, 'y' => 295 + (($routeIndex % 4) * 30)],
+                ['x' => 860 - ($offset / 2), 'y' => 185 + (($routeIndex % 3) * 40)],
+            ],
+        ];
     }
 }

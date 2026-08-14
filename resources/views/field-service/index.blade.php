@@ -30,6 +30,16 @@
                 @endif
             </header>
 
+            @php
+                $calendarStart = $homeCalendarStart ?? now()->startOfDay();
+                $calendarDays = collect(range(0, 6))->map(fn (int $offset) => $calendarStart->copy()->addDays($offset));
+                $calendarJobs = collect($homeCalendarJobs ?? []);
+            @endphp
+            <section class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-7">
+                <div class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-xl font-semibold text-zinc-950">This week</h2><p class="mt-1 text-sm text-zinc-600">A live view of the fictional Green Shield schedule.</p></div><a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-secondary">Open full calendar</a></div>
+                <div class="mt-5 overflow-x-auto"><div class="grid min-w-[880px] grid-cols-7 gap-3">@foreach($calendarDays as $day)<div class="min-h-48 rounded-2xl border border-zinc-200 bg-zinc-50 p-3"><div class="text-xs font-semibold uppercase tracking-wide text-zinc-500">{{ $day->format('D') }}</div><div class="mt-1 text-lg font-semibold text-zinc-950">{{ $day->format('M j') }}</div><div class="mt-3 space-y-2">@forelse($calendarJobs->filter(fn ($job) => $job->scheduled_for?->isSameDay($day)) as $calendarJob)<a href="{{ route('field-service.jobs.show', $calendarJob) }}" class="block rounded-xl border border-emerald-100 bg-white p-2.5 shadow-sm hover:border-emerald-300"><div class="text-xs font-semibold text-emerald-800">{{ $calendarJob->scheduled_for?->format('g:ia') }}</div><div class="mt-1 text-sm font-semibold leading-snug text-zinc-950">{{ $calendarJob->title }}</div><div class="mt-1 text-xs text-zinc-500">{{ $calendarJob->assignedUser?->name ?? 'Unassigned' }}</div></a>@empty<div class="pt-3 text-sm text-zinc-400">No visits</div>@endforelse</div></div>@endforeach</div></div>
+            </section>
+
             <section class="rounded-3xl border border-zinc-200 bg-zinc-50 p-3 shadow-sm sm:p-5">
                 <div
                     id="field-service-jobs-grid"

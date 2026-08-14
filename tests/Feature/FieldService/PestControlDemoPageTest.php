@@ -31,3 +31,22 @@ test('the demo handoff signs into the isolated fictional account and opens its w
 
     $this->assertAuthenticatedAs($owner);
 });
+
+test('the populated fictional workspace includes a home calendar and a per-job route map', function (): void {
+    $this->artisan('everbranch:prepare-pest-control-demo')->assertSuccessful();
+
+    $owner = \App\Models\User::query()->where('email', EverbranchPreparePestControlDemo::OWNER_EMAIL)->firstOrFail();
+    $job = \App\Models\FieldServiceJob::query()->where('external_id', 'termite-inspection-412-hawthorne')->firstOrFail();
+
+    $this->actingAs($owner)
+        ->get(route('field-service.index', ['tenant' => 'green-shield-pest-control']))
+        ->assertOk()
+        ->assertSee('This week')
+        ->assertSee('Money In');
+
+    $this->actingAs($owner)
+        ->get(route('field-service.jobs.show', ['job' => $job, 'tenant' => 'green-shield-pest-control']))
+        ->assertOk()
+        ->assertSee('Fictional van route')
+        ->assertSee('Fictional job financials');
+});
