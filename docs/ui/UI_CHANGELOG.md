@@ -2439,3 +2439,6 @@
   bird’s-eye view of every vehicle on your team.” The demo CTA now uses a
   CSRF-protected, demo-only handoff to enter the isolated fictional account
   directly and open its Green Shield workspace.
+- Expanded the isolated workspace fixture with fictional team members, vans,
+  active/scheduled/quote/completed service jobs, tasks, notes, and shifts so
+  the product walkthrough opens into a populated field-operations workspace.
