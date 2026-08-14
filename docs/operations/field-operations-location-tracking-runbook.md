@@ -103,8 +103,9 @@ not grant those operating-system permissions.
 
 `everbranch:prepare-pest-control-demo` is idempotent and creates the isolated
 `green-shield-pest-control` tenant for sales/product walkthroughs. It contains
-only fictional people, customer/job information, a scheduled termite visit,
-one Bouncie-mapped company van, and five sample location points.
+only fictional people, customer/job information, five varied service jobs,
+tasks, notes, shifts, two company vans (one Bouncie-mapped), and five sample
+location points.
 
 ```bash
 php artisan everbranch:prepare-pest-control-demo

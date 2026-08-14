@@ -1,6 +1,10 @@
 <?php
 
 use App\Console\Commands\EverbranchPreparePestControlDemo;
+use App\Models\FieldServiceJob;
+use App\Models\FieldServiceJobNote;
+use App\Models\FieldServiceTask;
+use App\Models\FieldServiceVehicle;
 use App\Models\FieldServiceWorkShift;
 use App\Models\FleetLocationPoint;
 use App\Models\FleetTrackingDevice;
@@ -19,7 +23,12 @@ test('the fictional pest-control command creates an isolated tracking demonstrat
     expect($tenant->name)->toBe('Green Shield Pest Control')
         ->and(Hash::check(EverbranchPreparePestControlDemo::DEFAULT_PASSWORD, (string) $owner->password))->toBeTrue()
         ->and($owner->tenants()->pluck('tenants.id')->all())->toBe([(int) $tenant->id])
-        ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(1)
+        ->and($tenant->users()->wherePivot('membership_active', true)->count())->toBe(4)
+        ->and(FieldServiceJob::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
+        ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
+        ->and(FieldServiceJobNote::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
+        ->and(FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->count())->toBe(2)
+        ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(3)
         ->and(FleetTrackingDevice::query()->forTenantId((int) $tenant->id)->where('provider', 'bouncie')->count())->toBe(1)
         ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
         ->and(TenantFleetTrackingSetting::query()->forTenantId((int) $tenant->id)->sole()->retention_days)->toBe(30);
@@ -31,6 +40,8 @@ test('the fictional pest-control command safely refreshes the same demonstration
 
     $tenant = Tenant::query()->where('slug', 'green-shield-pest-control')->firstOrFail();
 
-    expect(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(1)
+    expect(FieldServiceJob::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
+        ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
+        ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(3)
         ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5);
 });
