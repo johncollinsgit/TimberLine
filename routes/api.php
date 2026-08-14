@@ -12,6 +12,7 @@ use App\Http\Controllers\Mobile\EverbranchMobileLandlordController;
 use App\Http\Controllers\Mobile\EverbranchMobileTeamController;
 use App\Http\Controllers\Mobile\EverbranchMobileTimeClockController;
 use App\Http\Controllers\Mobile\EverbranchMobileWorkCandidateController;
+use App\Http\Controllers\Mobile\EverbranchMobileWorkforceController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
@@ -77,6 +78,11 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/field-service/clock/pause', [EverbranchMobileTimeClockController::class, 'pause'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.pause');
                 Route::post('/field-service/clock/resume', [EverbranchMobileTimeClockController::class, 'resume'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.resume');
                 Route::post('/field-service/clock/stop', [EverbranchMobileTimeClockController::class, 'stop'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.stop');
+                Route::get('/field-service/shifts', [EverbranchMobileWorkforceController::class, 'shifts'])->middleware('abilities:mobile:read')->name('workspace.field-service.shifts.index');
+                Route::post('/field-service/timecard-change-requests', [EverbranchMobileWorkforceController::class, 'requestCorrection'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.field-service.timecard-change-requests.store');
+                Route::get('/field-service/location-policy', [EverbranchMobileWorkforceController::class, 'locationPolicy'])->middleware('abilities:mobile:read')->name('workspace.field-service.location-policy.show');
+                Route::post('/field-service/location-policy/accept', [EverbranchMobileWorkforceController::class, 'acceptLocationPolicy'])->middleware(['abilities:mobile:write', 'throttle:10,1'])->name('workspace.field-service.location-policy.accept');
+                Route::post('/field-service/location-points', [EverbranchMobileWorkforceController::class, 'storeLocation'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.field-service.location-points.store');
                 Route::get('/field-service/channels', [EverbranchMobileTeamController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.channels.index');
                 Route::get('/field-service/work-candidates', [EverbranchMobileWorkCandidateController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.work-candidates.index');
                 Route::post('/field-service/work-candidates/{candidate}/review', [EverbranchMobileWorkCandidateController::class, 'review'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('candidate')->name('workspace.field-service.work-candidates.review');

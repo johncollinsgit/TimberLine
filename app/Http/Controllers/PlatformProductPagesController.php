@@ -35,6 +35,14 @@ class PlatformProductPagesController extends Controller
         ]);
     }
 
+    public function pestControlFleetDemo(): Response
+    {
+        return response()->view('platform.pest-control-fleet-demo', [
+            'demoEmail' => \App\Console\Commands\EverbranchPreparePestControlDemo::OWNER_EMAIL,
+            'demoPassword' => \App\Console\Commands\EverbranchPreparePestControlDemo::DEFAULT_PASSWORD,
+        ]);
+    }
+
     public function contact(Request $request): Response
     {
         $intent = strtolower(trim((string) $request->query('intent', 'contact')));

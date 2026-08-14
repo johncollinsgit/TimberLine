@@ -8,10 +8,12 @@ use App\Models\FieldServiceJobPhoto;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
+use App\Models\FieldServiceTimeChangeRequest;
 use App\Models\FieldServiceTimeEntry;
 use App\Models\FieldServiceTimeSession;
 use App\Models\FieldServiceVehicle;
 use App\Models\FieldServiceWorkCandidate;
+use App\Models\FieldServiceWorkShift;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
@@ -22,6 +24,7 @@ use App\Services\FieldService\FieldServiceJobTransitionService;
 use App\Services\FieldService\FieldServiceOwnerHomeMetricsService;
 use App\Services\FieldService\FieldServiceTaskAssignmentService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
+use App\Services\FieldService\FieldServiceWorkforceService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -122,6 +125,7 @@ class FieldServiceController extends Controller
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
             'canManageJobDrafts' => $financialAccess->allows($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
+            'fleetTrackingEnabled' => (bool) config('services.fleet_tracking.enabled', false) && $this->moduleEnabled($tenant, 'fleet_tracking') && in_array($this->fieldServiceAccess->role($request->user(), $tenant), ['owner', 'tenant_owner', 'admin'], true),
             'ownerMetrics' => $financialAccess->allows($request->user(), $tenant) ? $homeMetrics->build($tenant, $period) : null,
             'assignedTasks' => $assignedTasks,
             'assignedTaskTotal' => $assignedTaskTotal,
@@ -401,7 +405,7 @@ class FieldServiceController extends Controller
         ]);
     }
 
-    public function payrollHours(Request $request): View
+    public function payrollHours(Request $request, FieldServiceWorkforceService $workforce): View
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
@@ -414,9 +418,17 @@ class FieldServiceController extends Controller
             ->with(['user:id,name,email', 'job:id,title'])
             ->when(! $canManage, fn ($query) => $query->where('user_id', $request->user()->id))
             ->orderByDesc('clocked_in_at')->limit(250)->get();
+        $shifts = FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)
+            ->with(['user:id,name,email', 'job:id,title'])
+            ->when(! $canManage, fn ($query) => $query->where('user_id', $request->user()->id))
+            ->where('ends_at', '>=', now()->subDays(7))->orderBy('starts_at')->limit(250)->get();
+        $changeRequests = FieldServiceTimeChangeRequest::query()->forTenantId((int) $tenant->id)
+            ->with(['session:id,user_id,clocked_in_at,clocked_out_at', 'requestedBy:id,name,email', 'reviewedBy:id,name'])
+            ->when(! $canManage, fn ($query) => $query->where('requested_by_user_id', $request->user()->id))
+            ->latest('id')->limit(100)->get();
 
         return view('field-service.payroll-hours', [
-            'tenant' => $tenant, 'entries' => $entries, 'timerSessions' => $timerSessions, 'canManage' => $canManage,
+            'tenant' => $tenant, 'entries' => $entries, 'timerSessions' => $timerSessions, 'shifts' => $shifts, 'changeRequests' => $changeRequests, 'workforceSettings' => $workforce->settings($tenant), 'timeTrackingEnabled' => $this->moduleEnabled($tenant, 'time_tracking'), 'canManage' => $canManage,
             'team' => $tenant->users()->orderBy('name')->get(['users.id', 'users.name', 'users.email']),
             'jobs' => FieldServiceJob::query()->forTenantId((int) $tenant->id)->whereNotIn('operational_status', ['canceled', 'history'])->latest('id')->limit(250)->get(['id', 'title']),
         ]);

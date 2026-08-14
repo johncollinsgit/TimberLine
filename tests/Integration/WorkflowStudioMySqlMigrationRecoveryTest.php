@@ -240,6 +240,49 @@ it('repairs the trailing Customer Loop index after MySQL stopped during action-t
         ->and(Schema::hasIndex('customer_loop_actions', 'cl_action_tenant_profile_status_idx'))->toBeTrue();
 });
 
+it('resumes field workforce and fleet tracking after retaining its first settings table', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    foreach (['fleet_location_points', 'fleet_tracking_policy_acknowledgements', 'fleet_tracking_devices', 'tenant_fleet_tracking_settings', 'field_service_time_change_requests', 'field_service_work_shifts', 'tenant_workforce_settings'] as $table) {
+        Schema::dropIfExists($table);
+    }
+    foreach (['tenants', 'users', 'field_service_jobs', 'field_service_time_sessions', 'field_service_time_entries', 'field_service_vehicles'] as $table) {
+        if (! Schema::hasTable($table)) {
+            Schema::create($table, function (Blueprint $table): void {
+                $table->id();
+            });
+        }
+    }
+
+    // Simulate the durable state after the first DDL committed but before the
+    // migration record. The real migration must create every trailing table.
+    Schema::create('tenant_workforce_settings', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->boolean('enforce_scheduled_clocking')->default(false);
+        $table->unsignedSmallInteger('clock_early_minutes')->default(15);
+        $table->unsignedSmallInteger('clock_late_minutes')->default(15);
+        $table->unsignedBigInteger('updated_by_user_id')->nullable();
+        $table->timestamps();
+        $table->unique('tenant_id', 'tws_tenant_unique');
+        $table->foreign('tenant_id', 'tws_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+        $table->foreign('updated_by_user_id', 'tws_updated_by_fk')->references('id')->on('users')->nullOnDelete();
+    });
+
+    $migration = require database_path('migrations/2026_08_13_160000_create_field_workforce_and_fleet_tracking_tables.php');
+    $migration->up();
+
+    expect(Schema::hasTable('tenant_workforce_settings'))->toBeTrue()
+        ->and(Schema::hasTable('field_service_work_shifts'))->toBeTrue()
+        ->and(Schema::hasTable('field_service_time_change_requests'))->toBeTrue()
+        ->and(Schema::hasTable('tenant_fleet_tracking_settings'))->toBeTrue()
+        ->and(Schema::hasTable('fleet_tracking_devices'))->toBeTrue()
+        ->and(Schema::hasTable('fleet_tracking_policy_acknowledgements'))->toBeTrue()
+        ->and(Schema::hasTable('fleet_location_points'))->toBeTrue();
+});
+
 it('keeps a retained wholesale email messenger draft table safe on retry', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

@@ -12,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class FieldServiceTimeClockService
 {
+    public function __construct(private readonly FieldServiceWorkforceService $workforce) {}
+
     public function current(Tenant $tenant, User $user): ?FieldServiceTimeSession
     {
         return FieldServiceTimeSession::query()
@@ -26,6 +28,7 @@ class FieldServiceTimeClockService
     public function start(Tenant $tenant, User $user, FieldServiceJob $job, string $clientUuid, array $context = []): FieldServiceTimeSession
     {
         abort_unless((int) $job->tenant_id === (int) $tenant->id, 404);
+        $this->workforce->assertClockingAllowed($tenant, $user, (int) $job->id);
 
         return DB::transaction(function () use ($tenant, $user, $job, $clientUuid, $context): FieldServiceTimeSession {
             $replayed = FieldServiceTimeSession::query()->forTenantId((int) $tenant->id)

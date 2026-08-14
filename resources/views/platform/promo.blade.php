@@ -30,6 +30,7 @@
                 <a href="#industries">Who it helps</a>
                 <a href="#customer-loop">Customer Loop</a>
                 <a class="eb-studio-nav__demo-link" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
+                <a href="{{ route('platform.pest-control-fleet-demo') }}">Fleet demo</a>
                 <a href="#modules">Modules</a>
                 <a href="{{ route('platform.plans') }}">Plans</a>
             </div>

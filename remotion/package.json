@@ -7,6 +7,7 @@
     "dev": "remotion studio src/index.ts",
     "render:story": "remotion render src/index.ts EverbranchStory ../public/media/everbranch-story.mp4 --codec=h264 --crf=20 --pixel-format=yuv420p",
     "render:rickroll-intro": "remotion render src/index.ts EverbranchStoryRickrollIntro ../public/media/everbranch-story-rickroll-intro.mp4 --codec=h264 --crf=20 --pixel-format=yuv420p",
+    "render:pest-control-demo": "remotion render src/index.ts PestControlFleetDemo ../public/media/green-shield-fleet-demo.mp4 --codec=h264 --crf=20 --pixel-format=yuv420p",
     "still": "remotion still src/index.ts EverbranchStory ../public/media/everbranch-story-poster.jpg --frame=150"
   },
   "dependencies": {

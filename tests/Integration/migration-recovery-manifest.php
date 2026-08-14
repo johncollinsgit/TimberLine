@@ -51,4 +51,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first completion-state column retained before the second column is added'],
     ],
+    '2026_08_13_160000_create_field_workforce_and_fleet_tracking_tables.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['workforce settings table retained before shifts, correction requests, and fleet location tables'],
+    ],
 ];
