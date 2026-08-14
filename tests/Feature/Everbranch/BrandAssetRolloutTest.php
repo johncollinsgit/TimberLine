@@ -11,7 +11,8 @@ test('Everbranch brand assets are configured and available', function (): void {
         ->and($assets['mark'] ?? null)->toBe('brand/everbranch-mark.svg')
         ->and($assets['lockup'] ?? null)->toBe('brand/everbranch-lockup.svg')
         ->and($assets['auth'] ?? null)->toBe('brand/everbranch-auth.svg')
-        ->and($assets['favicon_svg'] ?? null)->toBe('brand/everbranch-favicon.svg');
+        ->and($assets['favicon_svg'] ?? null)->toBe('brand/everbranch-favicon.svg')
+        ->and($assets['og_image'] ?? null)->toBe('og-image-v2.png');
 
     foreach ([
         'public/brand/everbranch-mark.png',
@@ -23,6 +24,7 @@ test('Everbranch brand assets are configured and available', function (): void {
         'public/favicon.ico',
         'public/apple-touch-icon.png',
         'public/og-image.png',
+        'public/og-image-v2.png',
     ] as $path) {
         expect(file_exists(base_path($path)))->toBeTrue();
     }
@@ -46,7 +48,7 @@ test('public and auth surfaces render Everbranch logo assets and refreshed metad
         ->assertSee('brand/everbranch-lockup.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-mark.svg?v='.$cacheTag, false)
         ->assertSee('brand/everbranch-favicon.svg?v='.$cacheTag, false)
-        ->assertSee('og-image.png?v='.$cacheTag, false)
+        ->assertSee('og-image-v2.png?v='.$cacheTag, false)
         ->assertDontSee('brand/forestry-backstage-lockup.svg?v=fb2', false);
 
     $this->get(route('login'))

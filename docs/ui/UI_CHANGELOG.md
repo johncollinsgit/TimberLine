@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-08-14 — Everbranch social preview refresh
+
+### What Changed
+
+- Replaced the public link-preview treatment with a minimal, editorial
+  Everbranch card: the leaf mark now sits directly on the composition (without
+  a boxed background), the message is reduced to **Work, in one place.**, and
+  the card uses a warmer, more dimensional botanical surface.
+- Published the asset as `og-image-v2.png`, giving social platforms a new URL
+  instead of relying solely on a query-string cache refresh.
+
 ## 2026-08-13 — Email Messenger canvas and asset repair
 
 ### What Changed

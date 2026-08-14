@@ -1,5 +1,13 @@
 # SYSTEM SNAPSHOT
 
+## Everbranch social-preview refresh (2026-08-14)
+
+- Public share metadata now uses `public/og-image-v2.png`: a minimal,
+  high-contrast Everbranch card with the mark directly on the artwork and the
+  concise message **Work, in one place.** The new filename provides a clean
+  social-cache boundary; its brand-asset cache tag remains derived by
+  `config/everbranch.php`.
+
 ## Modern Forestry Product Options and Bag-Reminder Safety (2026-08-13)
 
 - `ShopifyProductOptionsService` is the Everbranch authority for Modern
