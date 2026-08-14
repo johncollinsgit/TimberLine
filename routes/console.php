@@ -136,6 +136,13 @@ Schedule::command('integration-health:prune')
     ->withoutOverlapping(30)
     ->runInBackground();
 
+// Location data is intentionally short-lived. Each tenant setting is capped at
+// 30 days and this command permanently removes points past that retention limit.
+Schedule::command('fleet-tracking:prune-location-points')
+    ->dailyAt('02:35')
+    ->withoutOverlapping(20)
+    ->runInBackground();
+
 Schedule::command('marketing:process-tenant-rewards-reminders', [
     '--limit' => 200,
 ])

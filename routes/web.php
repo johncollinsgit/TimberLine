@@ -15,6 +15,9 @@ use App\Http\Controllers\EvergroveServicesController;
 use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\FieldServiceResourcesController;
+use App\Http\Controllers\FieldServiceWorkforceController;
+use App\Http\Controllers\FleetTrackingController;
+use App\Http\Controllers\FleetTrackingWebhookController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\Integrations\InstagramConnectionController;
@@ -528,6 +531,8 @@ Route::view('/story/field-notes-7c8b', 'platform.rickroll-story')->name('platfor
 Route::get('/platform/examples/{discipline?}', [PlatformProductPagesController::class, 'industryDemo'])
     ->where('discipline', 'retail|field|projects|studio|practice|community')
     ->name('platform.industry-demo');
+Route::get('/platform/demos/green-shield-pest-control', [PlatformProductPagesController::class, 'pestControlFleetDemo'])
+    ->name('platform.pest-control-fleet-demo');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
@@ -703,6 +708,7 @@ Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shipping
 Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
 Route::post('/webhooks/website-stripe', [WebsiteCommerceController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.webhook');
 Route::post('/webhooks/website-easypost', [WebsiteCommerceController::class, 'shippingWebhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.shipping-webhook');
+Route::post('/webhooks/bouncie', [FleetTrackingWebhookController::class, 'bouncie'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('fleet-tracking.webhooks.bouncie');
 
 Route::prefix('signup/classes/{tenant:slug}')
     ->name('public.classes.')
@@ -963,10 +969,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/work-candidates/{candidate}/review', [FieldServiceController::class, 'reviewWorkCandidate'])->name('work-candidates.review');
             Route::get('/calendar', [FieldServiceController::class, 'calendar'])->name('calendar');
             Route::get('/payroll-hours', [FieldServiceController::class, 'payrollHours'])->name('payroll-hours');
+            Route::post('/workforce-settings', [FieldServiceWorkforceController::class, 'updateSettings'])->name('workforce.settings.update');
+            Route::post('/shifts', [FieldServiceWorkforceController::class, 'storeShift'])->name('shifts.store');
+            Route::post('/shifts/{shift}/cancel', [FieldServiceWorkforceController::class, 'cancelShift'])->name('shifts.cancel');
             Route::post('/payroll-hours', [FieldServiceController::class, 'storeTimeEntry'])->name('payroll-hours.store');
             Route::post('/payroll-hours/{timeEntry}/review', [FieldServiceController::class, 'reviewTimeEntry'])->name('payroll-hours.review');
             Route::post('/payroll-timers/{timeSession}/review', [FieldServiceController::class, 'reviewTimerSession'])->name('payroll-timers.review');
+            Route::post('/payroll-timers/{session}/change-request', [FieldServiceWorkforceController::class, 'requestSessionCorrection'])->name('payroll-timers.change-request');
+            Route::post('/time-change-requests/{change}/resolve', [FieldServiceWorkforceController::class, 'resolveSessionCorrection'])->name('time-change-requests.resolve');
             Route::get('/payroll-hours-export', [FieldServiceController::class, 'exportTimeEntries'])->name('payroll-hours.export');
+            Route::middleware('module:fleet_tracking')->prefix('fleet-tracking')->name('fleet-tracking.')->group(function (): void {
+                Route::get('/', [FleetTrackingController::class, 'index'])->name('index');
+                Route::post('/settings', [FleetTrackingController::class, 'updateSettings'])->name('settings.update');
+                Route::post('/devices', [FleetTrackingController::class, 'storeDevice'])->name('devices.store');
+            });
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');

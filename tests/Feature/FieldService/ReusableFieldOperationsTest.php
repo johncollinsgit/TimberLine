@@ -2,12 +2,22 @@
 
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceVehicle;
+use App\Models\FieldServiceWorkShift;
+use App\Models\FleetLocationPoint;
+use App\Models\FleetTrackingDevice;
 use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
+use App\Models\TenantFleetTrackingSetting;
+use App\Models\TenantModuleState;
 use App\Models\User;
 use App\Services\FieldService\FieldServiceTimeClockService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
+use App\Services\FieldService\FieldServiceWorkforceService;
 use App\Services\FieldService\TeamCommunicationService;
+use App\Services\FleetTracking\FleetLocationIngestionService;
 use App\Services\Tenancy\TenantEmployeeInvitationService;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 test('the field clock enforces one active job and reconciles idempotent breaks and stop actions', function (): void {
@@ -33,6 +43,59 @@ test('the field clock enforces one active job and reconciles idempotent breaks a
         ->and($stopped->break_seconds)->toBe(600)
         ->and($stopped->duration_seconds)->toBe(3000)
         ->and($stopped->clock_out_notes)->toBe('Finished and cleaned up');
+});
+
+test('a tenant can require an assigned shift window before an employee clocks into the assigned job', function (): void {
+    [$tenant, $employee] = fieldOperationsWorkspace('scheduled-clock');
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'assigned_user_id' => $employee->id, 'title' => 'Scheduled panel swap', 'status' => 'open', 'operational_status' => 'scheduled']);
+    $workforce = app(FieldServiceWorkforceService::class);
+    $workforce->settings($tenant)->forceFill(['enforce_scheduled_clocking' => true, 'clock_early_minutes' => 15, 'clock_late_minutes' => 15])->save();
+    $clock = app(FieldServiceTimeClockService::class);
+
+    expect(fn () => $clock->start($tenant, $employee, $job, '12345678-1111-4111-8111-111111111111'))->toThrow(ValidationException::class);
+    FieldServiceWorkShift::query()->create(['tenant_id' => $tenant->id, 'user_id' => $employee->id, 'field_service_job_id' => $job->id, 'status' => 'scheduled', 'starts_at' => now()->subMinutes(10), 'ends_at' => now()->addHours(2), 'unpaid_break_minutes' => 30]);
+
+    expect($clock->start($tenant, $employee, $job, '12345678-2222-4222-8222-222222222222')->status)->toBe('running');
+});
+
+test('employee timecard corrections retain the requested snapshot and return corrected sessions to review', function (): void {
+    [$tenant, $employee] = fieldOperationsWorkspace('time-change');
+    $manager = User::factory()->create();
+    $manager->tenants()->attach($tenant->id, ['role' => 'manager', 'membership_active' => true]);
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'assigned_user_id' => $employee->id, 'title' => 'Service correction', 'status' => 'open', 'operational_status' => 'active']);
+    $clock = app(FieldServiceTimeClockService::class);
+    $session = $clock->start($tenant, $employee, $job, '12345678-3333-4333-8333-333333333333');
+    $this->travel(2)->hours();
+    $session = $clock->stop($tenant, $employee, '12345678-4444-4444-8444-444444444444');
+    $workforce = app(FieldServiceWorkforceService::class);
+    $change = $workforce->requestSessionCorrection($tenant, $employee, $session, ['clocked_in_at' => $session->clocked_in_at->copy()->subMinutes(15)->toDateTimeString(), 'clocked_out_at' => $session->clocked_out_at->copy()->addMinutes(15)->toDateTimeString(), 'break_minutes' => 15, 'clock_out_notes' => 'Missed break'], 'I missed the first 15 minutes and a break.');
+    $resolved = $workforce->resolveSessionCorrection($tenant, $manager, $change, 'approved', 'Reviewed against dispatch notes.');
+
+    expect($resolved->status)->toBe('approved')
+        ->and($resolved->before_snapshot['duration_seconds'])->toBe(7200)
+        ->and($session->fresh()->status)->toBe('submitted')
+        ->and($session->fresh()->break_seconds)->toBe(900)
+        ->and($session->fresh()->reviewed_at)->toBeNull();
+});
+
+test('a signed Bouncie vehicle event maps only to the configured tenant device and deduplicates retries', function (): void {
+    [$tenant] = fieldOperationsWorkspace('bouncie');
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    foreach (['fleet', 'time_tracking', 'fleet_tracking'] as $module) {
+        TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => $module, 'enabled_override' => true, 'setup_status' => 'configured']);
+    }
+    $vehicle = FieldServiceVehicle::query()->create(['tenant_id' => $tenant->id, 'name' => 'Service Van', 'status' => 'active']);
+    FleetTrackingDevice::query()->create(['tenant_id' => $tenant->id, 'field_service_vehicle_id' => $vehicle->id, 'provider' => 'bouncie', 'external_device_id' => '8675309', 'status' => 'active']);
+    TenantFleetTrackingSetting::query()->create(['tenant_id' => $tenant->id, 'bouncie_tracking_enabled' => true, 'policy_version' => '2026-08', 'policy_sha256' => hash('sha256', 'approved policy'), 'counsel_review_reference' => 'Counsel review 2026-08-13', 'legal_reviewed_at' => now(), 'retention_days' => 30]);
+    config()->set('services.fleet_tracking.enabled', true);
+    config()->set('services.fleet_tracking.bouncie_webhook_key', 'test-bouncie-key');
+    $payload = ['id' => 'evt-1', 'type' => 'tripData', 'device' => ['imei' => '8675309'], 'location' => ['latitude' => 35.2271, 'longitude' => -80.8431], 'timestamp' => now()->toIso8601String()];
+    $request = Request::create('/webhooks/bouncie', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_BOUNCIE_AUTHORIZATION' => 'test-bouncie-key'], json_encode($payload, JSON_THROW_ON_ERROR));
+    $service = app(FleetLocationIngestionService::class);
+
+    expect($service->ingestBouncie($request))->toBe(['accepted' => 1, 'ignored' => 0]);
+    expect($service->ingestBouncie($request))->toBe(['accepted' => 1, 'ignored' => 0])
+        ->and(FleetLocationPoint::query()->forTenantId($tenant->id)->count())->toBe(1);
 });
 
 test('quickbooks estimates and unlinked open invoices enter an explicit tenant review queue', function (): void {

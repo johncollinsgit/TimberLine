@@ -12,6 +12,7 @@
                         <a href="{{ route('field-service.calendar') }}" class="fb-btn fb-btn-secondary">Calendar</a>
                         <a href="{{ route('field-service.payroll-hours') }}" class="fb-btn fb-btn-secondary">Team hours</a>
                         <a href="{{ route('field-service.resources') }}" class="fb-btn fb-btn-secondary">Inventory & vans</a>
+                        @if($fleetTrackingEnabled ?? false)<a href="{{ route('field-service.fleet-tracking.index') }}" class="fb-btn fb-btn-secondary">Location tracking</a>@endif
                         @if($equipmentMaintenanceEnabled ?? false)<a href="{{ route('field-service.equipment.index') }}" class="fb-btn fb-btn-secondary">Equipment</a>@endif
                         @if(data_get($capabilities ?? [], 'create_jobs'))<a href="#new-job" class="fb-btn fb-btn-primary">Create job</a>@endif
                     </div>

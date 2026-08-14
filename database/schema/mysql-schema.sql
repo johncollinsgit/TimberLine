@@ -2927,6 +2927,39 @@ CREATE TABLE `field_service_time_breaks` (
   CONSTRAINT `fs_time_break_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `field_service_time_change_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `field_service_time_change_requests` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `field_service_time_session_id` bigint unsigned DEFAULT NULL,
+  `field_service_time_entry_id` bigint unsigned DEFAULT NULL,
+  `requested_by_user_id` bigint unsigned NOT NULL,
+  `reviewed_by_user_id` bigint unsigned DEFAULT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `before_snapshot` json NOT NULL,
+  `requested_snapshot` json NOT NULL,
+  `resolution_snapshot` json DEFAULT NULL,
+  `reason` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reviewer_note` text COLLATE utf8mb4_unicode_ci,
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fs_time_change_tenant_status_idx` (`tenant_id`,`status`,`created_at`),
+  KEY `fs_time_change_requester_idx` (`tenant_id`,`requested_by_user_id`,`created_at`),
+  KEY `fs_time_change_session_fk` (`field_service_time_session_id`),
+  KEY `fs_time_change_entry_fk` (`field_service_time_entry_id`),
+  KEY `fs_time_change_requester_fk` (`requested_by_user_id`),
+  KEY `fs_time_change_reviewer_fk` (`reviewed_by_user_id`),
+  CONSTRAINT `fs_time_change_entry_fk` FOREIGN KEY (`field_service_time_entry_id`) REFERENCES `field_service_time_entries` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fs_time_change_requester_fk` FOREIGN KEY (`requested_by_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fs_time_change_reviewer_fk` FOREIGN KEY (`reviewed_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fs_time_change_session_fk` FOREIGN KEY (`field_service_time_session_id`) REFERENCES `field_service_time_sessions` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fs_time_change_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `field_service_time_entries`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -3087,6 +3120,35 @@ CREATE TABLE `field_service_work_candidates` (
   CONSTRAINT `fs_candidate_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `field_service_work_shifts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `field_service_work_shifts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `field_service_job_id` bigint unsigned DEFAULT NULL,
+  `created_by_user_id` bigint unsigned DEFAULT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'scheduled',
+  `starts_at` timestamp NOT NULL,
+  `ends_at` timestamp NOT NULL,
+  `unpaid_break_minutes` smallint unsigned NOT NULL DEFAULT '0',
+  `notes` text COLLATE utf8mb4_unicode_ci,
+  `canceled_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fs_shift_tenant_user_start_idx` (`tenant_id`,`user_id`,`starts_at`),
+  KEY `fs_shift_tenant_status_start_idx` (`tenant_id`,`status`,`starts_at`),
+  KEY `fs_shift_user_fk` (`user_id`),
+  KEY `fs_shift_job_fk` (`field_service_job_id`),
+  KEY `fs_shift_created_by_fk` (`created_by_user_id`),
+  CONSTRAINT `fs_shift_created_by_fk` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fs_shift_job_fk` FOREIGN KEY (`field_service_job_id`) REFERENCES `field_service_jobs` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fs_shift_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fs_shift_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `financial_document_workspace_asset`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -3102,6 +3164,87 @@ CREATE TABLE `financial_document_workspace_asset` (
   CONSTRAINT `fin_doc_asset_asset_fk` FOREIGN KEY (`workspace_asset_id`) REFERENCES `workspace_assets` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fin_doc_asset_document_fk` FOREIGN KEY (`field_service_financial_document_id`) REFERENCES `field_service_financial_documents` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fin_doc_asset_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `fleet_location_points`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `fleet_location_points` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `fleet_tracking_device_id` bigint unsigned DEFAULT NULL,
+  `field_service_vehicle_id` bigint unsigned DEFAULT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `field_service_time_session_id` bigint unsigned DEFAULT NULL,
+  `source` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_type` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `latitude` decimal(10,7) NOT NULL,
+  `longitude` decimal(10,7) NOT NULL,
+  `accuracy_meters` int unsigned DEFAULT NULL,
+  `recorded_at` timestamp NOT NULL,
+  `received_at` timestamp NOT NULL,
+  `safe_payload` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ft_point_event_unique` (`tenant_id`,`source`,`event_key`),
+  KEY `ft_point_tenant_time_idx` (`tenant_id`,`recorded_at`),
+  KEY `ft_point_vehicle_time_idx` (`tenant_id`,`field_service_vehicle_id`,`recorded_at`),
+  KEY `ft_point_user_time_idx` (`tenant_id`,`user_id`,`recorded_at`),
+  KEY `ft_point_device_fk` (`fleet_tracking_device_id`),
+  KEY `ft_point_vehicle_fk` (`field_service_vehicle_id`),
+  KEY `ft_point_user_fk` (`user_id`),
+  KEY `ft_point_session_fk` (`field_service_time_session_id`),
+  CONSTRAINT `ft_point_device_fk` FOREIGN KEY (`fleet_tracking_device_id`) REFERENCES `fleet_tracking_devices` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ft_point_session_fk` FOREIGN KEY (`field_service_time_session_id`) REFERENCES `field_service_time_sessions` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ft_point_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ft_point_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ft_point_vehicle_fk` FOREIGN KEY (`field_service_vehicle_id`) REFERENCES `field_service_vehicles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `fleet_tracking_devices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `fleet_tracking_devices` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `field_service_vehicle_id` bigint unsigned NOT NULL,
+  `provider` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'bouncie',
+  `external_device_id` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `label` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `installed_at` timestamp NULL DEFAULT NULL,
+  `uninstalled_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ft_device_provider_unique` (`tenant_id`,`provider`,`external_device_id`),
+  UNIQUE KEY `ft_device_vehicle_unique` (`tenant_id`,`field_service_vehicle_id`),
+  KEY `ft_device_vehicle_fk` (`field_service_vehicle_id`),
+  CONSTRAINT `ft_device_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ft_device_vehicle_fk` FOREIGN KEY (`field_service_vehicle_id`) REFERENCES `field_service_vehicles` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `fleet_tracking_policy_acknowledgements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `fleet_tracking_policy_acknowledgements` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `policy_version` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `policy_sha256` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `accepted_at` timestamp NOT NULL,
+  `acceptance_source` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'mobile',
+  `device_context` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ft_ack_policy_unique` (`tenant_id`,`user_id`,`policy_version`),
+  KEY `ft_ack_user_fk` (`user_id`),
+  CONSTRAINT `ft_ack_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `ft_ack_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `form_submissions`;
@@ -7973,6 +8116,29 @@ CREATE TABLE `tenant_employee_invitations` (
   CONSTRAINT `tenant_employee_invite_user_fk` FOREIGN KEY (`accepted_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_fleet_tracking_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenant_fleet_tracking_settings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `phone_tracking_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `bouncie_tracking_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `policy_version` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `policy_sha256` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `counsel_review_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `legal_reviewed_at` timestamp NULL DEFAULT NULL,
+  `legal_reviewed_by_user_id` bigint unsigned DEFAULT NULL,
+  `retention_days` smallint unsigned NOT NULL DEFAULT '30',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ft_setting_tenant_unique` (`tenant_id`),
+  KEY `ft_setting_legal_by_fk` (`legal_reviewed_by_user_id`),
+  CONSTRAINT `ft_setting_legal_by_fk` FOREIGN KEY (`legal_reviewed_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `ft_setting_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tenant_forms`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -8836,6 +9002,25 @@ CREATE TABLE `tenant_wholesale_settings` (
   CONSTRAINT `tenant_wholesale_settings_confirmed_by_user_id_foreign` FOREIGN KEY (`confirmed_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tenant_wholesale_settings_shopify_store_id_foreign` FOREIGN KEY (`shopify_store_id`) REFERENCES `shopify_stores` (`id`) ON DELETE CASCADE,
   CONSTRAINT `tenant_wholesale_settings_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_workforce_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenant_workforce_settings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `enforce_scheduled_clocking` tinyint(1) NOT NULL DEFAULT '0',
+  `clock_early_minutes` smallint unsigned NOT NULL DEFAULT '15',
+  `clock_late_minutes` smallint unsigned NOT NULL DEFAULT '15',
+  `updated_by_user_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tws_tenant_unique` (`tenant_id`),
+  KEY `tws_updated_by_fk` (`updated_by_user_id`),
+  CONSTRAINT `tws_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `tws_updated_by_fk` FOREIGN KEY (`updated_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tenants`;
@@ -10142,3 +10327,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (251,'2026_08_08_03
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (252,'2026_08_11_120000_create_wholesale_email_messenger_drafts_table',3);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (253,'2026_08_13_150000_add_completion_state_to_modern_forestry_mobile_bag_snapshots',4);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (254,'2026_08_13_151000_reconcile_modern_forestry_product_option_assignments',4);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (255,'2026_08_13_160000_create_field_workforce_and_fleet_tracking_tables',5);

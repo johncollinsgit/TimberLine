@@ -2424,3 +2424,13 @@
 - Reduced the landlord dashboard's ten-way action wall to one primary workspace
   action, one intake action, and a compact overflow menu. Landlord section links
   now use a conventional tab row beneath the header.
+
+## 2026-08-13 — Green Shield vehicle-tracking demo
+
+- Added a public, clearly fictional Green Shield Pest Control walkthrough with
+  a self-hosted 30-second vehicle-tracking product tour and isolated demo-login
+  credentials.
+- The tour explains separately labeled company-van and active-timer phone
+  feeds, scheduling/time-clock boundaries, restricted owner/admin access,
+  short retention, and excluded V1 monitoring behavior without exposing any
+  tenant data.

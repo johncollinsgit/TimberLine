@@ -99,6 +99,16 @@ $catalog = [
             'description' => 'Run job timers, breaks, corrections, and approved payroll hours.',
             'module_key' => 'time_tracking',
         ],
+        'time_tracking.scheduling' => [
+            'display_name' => 'Assigned shifts',
+            'description' => 'Assign approved work windows that can govern clock-ins.',
+            'module_key' => 'time_tracking',
+        ],
+        'time_tracking.correction_requests' => [
+            'display_name' => 'Timecard edit requests',
+            'description' => 'Let employees request an auditable timecard correction.',
+            'module_key' => 'time_tracking',
+        ],
         'team_communication.channels' => [
             'display_name' => 'Team channels',
             'description' => 'Use company, job, and direct channels for field communication.',
@@ -113,6 +123,16 @@ $catalog = [
             'display_name' => 'Job vehicle assignments',
             'description' => 'Assign one or more tenant vehicles to service work.',
             'module_key' => 'fleet',
+        ],
+        'fleet_tracking.vehicle_location' => [
+            'display_name' => 'Company vehicle location',
+            'description' => 'View company-vehicle location feeds supplied by an approved hardware provider.',
+            'module_key' => 'fleet_tracking',
+        ],
+        'fleet_tracking.on_duty_phone_location' => [
+            'display_name' => 'On-duty phone location',
+            'description' => 'Accept voluntary company-policy location updates only during an active work timer.',
+            'module_key' => 'fleet_tracking',
         ],
         'activity.timeline' => [
             'display_name' => 'Customer activity timeline',
@@ -605,8 +625,8 @@ $catalog = [
             ],
         ],
         'time_tracking' => [
-            'display_name' => 'Time Tracking',
-            'description' => 'Job timers, breaks, corrections, and approved payroll hours.',
+            'display_name' => 'Time & Scheduling',
+            'description' => 'Job timers, assigned shifts, correction requests, and approved payroll-hours export.',
             'status' => 'live',
             'market_state' => 'SAFE_TO_MARKET',
             'channels' => ['backstage'],
@@ -619,7 +639,7 @@ $catalog = [
             'billing_mode' => 'custom',
             'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
             'cta_routing' => 'contact_sales',
-            'capabilities' => ['time_tracking.clock'],
+            'capabilities' => ['time_tracking.clock', 'time_tracking.scheduling', 'time_tracking.correction_requests'],
             'mobile' => ['status' => 'hidden', 'display_name' => 'Clock In/Out', 'renderer' => 'field_service', 'entry_screen' => 'field-service.clock', 'contract_version' => 1, 'min_app_version' => '2.1.0', 'navigation' => ['group' => 'work', 'icon' => 'clock', 'position' => 6], 'actions' => ['clock']],
         ],
         'team_communication' => [
@@ -675,6 +695,24 @@ $catalog = [
             'cta_routing' => 'contact_sales',
             'capabilities' => ['fleet.job_assignments'],
             'mobile' => ['status' => 'hidden', 'display_name' => 'Fleet', 'renderer' => 'field_service', 'entry_screen' => 'field-service.vehicles', 'contract_version' => 1, 'min_app_version' => '2.1.0', 'navigation' => ['group' => 'work', 'icon' => 'truck', 'position' => 9], 'actions' => ['view']],
+        ],
+        'fleet_tracking' => [
+            'display_name' => 'Fleet Tracking',
+            'description' => 'Owner-controlled company-vehicle and on-duty phone location feeds with a 30-day default retention limit.',
+            'status' => 'live',
+            'market_state' => 'INTERNAL_ONLY',
+            'channels' => ['backstage'],
+            'classification' => 'tenant-add-on',
+            'activation_policy' => 'guided',
+            'included_in_plans' => [],
+            'default_enabled' => false,
+            'default_setup_status' => 'blocked',
+            'dependencies' => ['fleet', 'time_tracking'],
+            'billing_mode' => 'custom',
+            'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'contact_sales',
+            'capabilities' => ['fleet_tracking.vehicle_location', 'fleet_tracking.on_duty_phone_location'],
+            'mobile' => ['status' => 'hidden', 'display_name' => 'On-duty location sharing', 'renderer' => 'field_service', 'entry_screen' => 'field-service.location', 'contract_version' => 1, 'min_app_version' => '2.3.0', 'roles' => ['owner', 'tenant_owner', 'admin', 'manager', 'member', 'employee'], 'navigation' => ['group' => 'work', 'icon' => 'map-pin', 'position' => 10], 'actions' => ['share_on_duty_location']],
         ],
         'everbranch_billing' => [
             'display_name' => 'Everbranch Billing',

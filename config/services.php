@@ -51,6 +51,14 @@ return [
 
     'google_maps' => [
         'places_api_key' => env('GOOGLE_MAPS_PLACES_API_KEY', env('GOOGLE_PLACES_API_KEY')),
+        'fleet_api_key' => env('GOOGLE_MAPS_FLEET_API_KEY'),
+    ],
+
+    'fleet_tracking' => [
+        // Global kill switch. Tenant module access and legal/policy evidence are
+        // separate gates; all must pass before any point is accepted or shown.
+        'enabled' => env('FLEET_TRACKING_ENABLED', false),
+        'bouncie_webhook_key' => env('BOUNCIE_WEBHOOK_KEY'),
     ],
 
     /*
