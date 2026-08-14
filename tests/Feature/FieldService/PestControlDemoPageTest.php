@@ -9,7 +9,8 @@ test('the public pest-control fleet demonstration identifies its fictional data 
         ->assertSee(EverbranchPreparePestControlDemo::OWNER_EMAIL)
         ->assertSee(EverbranchPreparePestControlDemo::DEFAULT_PASSWORD)
         ->assertSee(route('platform.pest-control-fleet-demo.login'), false)
-        ->assertSee('green-shield-fleet-demo.mp4')
+        ->assertSee('green-shield-fleet-demo.mp4?v=20260813-map-title')
+        ->assertSee('green-shield-fleet-demo-poster.jpg?v=20260813-map-title')
         ->assertSee('Demonstration data is fictional');
 });
 

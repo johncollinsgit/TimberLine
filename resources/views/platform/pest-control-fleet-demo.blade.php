@@ -2,6 +2,9 @@
     $brandAssets = (array) config('everbranch.brand_assets', []);
     $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
     $brandLockupPath = (string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg');
+    // The product tour is replaced independently of application code. Keep its
+    // URL versioned so a browser never continues playing a prior cached movie.
+    $fleetDemoAssetVersion = '20260813-map-title';
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -45,7 +48,7 @@
             <h1>Green Shield Pest Control keeps a clearer eye on the day.</h1>
             <p class="gs-demo__lede">See how scheduled work, the time clock, a company-van hardware feed, and an on-duty phone feed stay separate and controlled in Everbranch.</p>
             <div class="gs-demo__grid">
-                <div class="gs-demo__video"><video controls playsinline preload="metadata" poster="{{ asset('media/green-shield-fleet-demo-poster.jpg') }}"><source src="{{ asset('media/green-shield-fleet-demo.mp4') }}" type="video/mp4" />Your browser does not support this demo video.</video><p>30-second silent product tour. Demonstration data is fictional; Everbranch’s production controls still require tenant access, policy/legal evidence, and the global rollout switch.</p></div>
+                <div class="gs-demo__video"><video controls playsinline preload="metadata" poster="{{ asset('media/green-shield-fleet-demo-poster.jpg') }}?v={{ $fleetDemoAssetVersion }}"><source src="{{ asset('media/green-shield-fleet-demo.mp4') }}?v={{ $fleetDemoAssetVersion }}" type="video/mp4" />Your browser does not support this demo video.</video><p>30-second silent product tour. Demonstration data is fictional; Everbranch’s production controls still require tenant access, policy/legal evidence, and the global rollout switch.</p></div>
                 <aside class="gs-demo__access"><p class="gs-demo__eyebrow">Demo workspace access</p><h2>Try the fictional workspace</h2><div class="gs-demo__credential"><small>Login</small><code>{{ $demoEmail }}</code></div><div class="gs-demo__credential"><small>Password</small><code>{{ $demoPassword }}</code></div><a class="gs-demo__login" href="{{ route('platform.pest-control-fleet-demo.login') }}">Log in to the demo</a><p class="gs-demo__note">The login email is prefilled and sign-in returns to the Green Shield workspace. This account is isolated for demonstration only. Never enter real customer, employee, vehicle, or location data.</p></aside>
             </div>
         </section>
