@@ -1639,6 +1639,50 @@ test('mobile product detail uses the assigned everbranch product options ruleset
         ->toBe(['Lavender', 'Violet Spice']);
 });
 
+test('mobile product detail does not infer scent selections for an unassigned fixed bundle', function (): void {
+    $shopifyPayload = shopifyMobileProductDetailPayload();
+    $shopifyPayload['data']['products']['nodes'][0]['title'] = 'Apple Bundle (3 Candles)';
+    $shopifyPayload['data']['products']['nodes'][0]['handle'] = 'apple-bundle-3-candles';
+    $shopifyPayload['data']['products']['nodes'][0]['productType'] = 'Bundle';
+    $shopifyPayload['data']['products']['nodes'][0]['tags'] = ['bundle', 'apple'];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response($shopifyPayload, 200),
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/products/apple-bundle-3-candles')
+        ->assertOk()
+        ->assertJsonPath('data.bundle', null);
+});
+
+test('mobile checkout rejects scent selections on an unassigned fixed bundle', function (): void {
+    $shopifyPayload = shopifyMobileProductDetailPayload();
+    $shopifyPayload['data']['products']['nodes'][0]['title'] = 'Apple Bundle (3 Candles)';
+    $shopifyPayload['data']['products']['nodes'][0]['handle'] = 'apple-bundle-3-candles';
+    $shopifyPayload['data']['products']['nodes'][0]['productType'] = 'Bundle';
+    $shopifyPayload['data']['products']['nodes'][0]['tags'] = ['bundle', 'apple'];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response($shopifyPayload, 200),
+    ]);
+
+    $this->postJson('/api/mobile/v1/modern-forestry/checkout', [
+        'items' => [[
+            'productHandle' => 'apple-bundle-3-candles',
+            'variantId' => '9001',
+            'quantity' => 1,
+            'attributes' => [
+                ['key' => 'Scent 1', 'value' => "Apple Pickin'"],
+                ['key' => 'Scent 2', 'value' => 'Pumpkin Streusel'],
+                ['key' => 'Scent 3', 'value' => 'Pumpkin Chai'],
+            ],
+        ]],
+    ])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'invalid_bundle_selection')
+        ->assertJsonPath('error.message', 'This product has fixed scents and cannot accept scent selections.');
+});
+
 test('mobile product detail includes laravel-backed review summary and approved reviews', function (): void {
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => 1,
@@ -2742,12 +2786,6 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
                     'productHandle' => 'forest-ember-candle',
                     'variantId' => '9001',
                     'quantity' => 2,
-                    'attributes' => [
-                        [
-                            'key' => 'Scent 1',
-                            'value' => 'Forest Ember',
-                        ],
-                    ],
                 ],
             ],
             'discountCode' => ' candlecash10 ',
@@ -2776,12 +2814,7 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
     expect($body['query'])->not->toContain('customer {');
     expect($body['variables']['input']['lines'][0]['merchandiseId'])->toBe('gid://shopify/ProductVariant/9001');
     expect($body['variables']['input']['lines'][0]['quantity'])->toBe(2);
-    expect($body['variables']['input']['lines'][0]['attributes'])->toBe([
-        [
-            'key' => 'Scent 1',
-            'value' => 'Forest Ember',
-        ],
-    ]);
+    expect($body['variables']['input']['lines'][0])->not->toHaveKey('attributes');
     expect($body['variables']['input']['discountCodes'])->toBe(['CANDLECASH10']);
     expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('mf-test-profile:'.$profile->id);
 

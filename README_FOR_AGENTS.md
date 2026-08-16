@@ -7,7 +7,9 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - Treat `ShopifyProductOptionsService` and its product-handle assignments as the
   only Everbranch authority for bundle scent selectors. A handle has one active
   ruleset; ambiguous mappings fail closed. The Apple bundle has fixed scents
-  and must remain unassigned.
+  and must remain unassigned. The mobile catalog must not infer selectors from
+  a bundle title/tag; checkout rejects stale `Scent N` attributes for an
+  unassigned fixed bundle.
 - The legacy Shopify Infinite Options app is external, read-only comparison
   state. Do not disable, uninstall, or edit it without explicit owner approval.
 - `ModernForestryMobileBagReminderService` completes matching bag snapshots
