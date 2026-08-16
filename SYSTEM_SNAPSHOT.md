@@ -14,6 +14,9 @@
   Forestry bundle scent selectors. Each product handle may belong to one active
   ruleset only; collisions fail closed. The mapping includes the reported-good
   16oz `bundle` and excludes the fixed-scent Apple bundle.
+- The mobile catalog must never infer a scent selector solely from a product
+  title or tag containing “bundle.” Unassigned fixed bundles return no selector,
+  and mobile checkout rejects stale `Scent N` attributes for them.
 - Legacy Infinite Options remains unchanged as the read-only comparison
   baseline. Do not alter it without explicit owner approval or enable it
   alongside the Everbranch block on the same product template.

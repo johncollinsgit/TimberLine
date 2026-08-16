@@ -48,8 +48,7 @@ class ModernForestryMobileCheckoutService
         ?string $customerPhone = null,
         ?ModernForestryMobileCustomerSession $session = null,
         ?string $buyerIp = null
-    ): array
-    {
+    ): array {
         $this->assertModernForestryTenant();
 
         $store = $this->modernForestryRetailStore();
@@ -520,12 +519,16 @@ class ModernForestryMobileCheckoutService
                 throw new ModernForestryMobileCheckoutException('variant_unavailable', 'One item in your bag is no longer available.');
             }
 
+            $attributes = $this->normalizeAttributes($item['attributes'] ?? []);
+            $this->assertScentAttributesAllowed($product, $attributes);
+
             $key = $handle.':'.$variantId;
             if (isset($lines[$key])) {
                 $lines[$key]['quantity'] = min(self::MAX_QUANTITY, $lines[$key]['quantity'] + $quantity);
                 if (! empty($item['attributes']) && $lines[$key]['attributes'] === []) {
-                    $lines[$key]['attributes'] = $this->normalizeAttributes($item['attributes']);
+                    $lines[$key]['attributes'] = $attributes;
                 }
+
                 continue;
             }
 
@@ -537,7 +540,7 @@ class ModernForestryMobileCheckoutService
                 'quantity' => $quantity,
                 'price' => $variant['price'] ?? null,
                 'merchandiseId' => $this->variantGid($variantId),
-                'attributes' => $this->normalizeAttributes($item['attributes'] ?? []),
+                'attributes' => $attributes,
             ];
         }
 
@@ -545,7 +548,6 @@ class ModernForestryMobileCheckoutService
     }
 
     /**
-     * @param mixed $attributes
      * @return array<int,array{key:string,value:string}>
      */
     protected function normalizeAttributes(mixed $attributes): array
@@ -574,6 +576,26 @@ class ModernForestryMobileCheckoutService
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param  array<string,mixed>  $product
+     * @param  array<int,array{key:string,value:string}>  $attributes
+     */
+    protected function assertScentAttributesAllowed(array $product, array $attributes): void
+    {
+        $hasScentSelection = collect($attributes)->contains(
+            static fn (array $attribute): bool => preg_match('/^scent\\s+\\d+$/i', $attribute['key']) === 1
+        );
+
+        if (! $hasScentSelection || is_array($product['bundle'] ?? null)) {
+            return;
+        }
+
+        throw new ModernForestryMobileCheckoutException(
+            'invalid_bundle_selection',
+            'This product has fixed scents and cannot accept scent selections.'
+        );
     }
 
     protected function normalizeHandle(mixed $value): ?string
@@ -868,8 +890,7 @@ GRAPHQL;
         ?MarketingProfile $profile,
         ?string $customerPhone = null,
         bool $allowStoredProfilePhoneFallback = true
-    ): ?array
-    {
+    ): ?array {
         if (! $profile instanceof MarketingProfile) {
             return null;
         }
@@ -926,8 +947,7 @@ GRAPHQL;
         ?string $customerPhone,
         MarketingProfile $profile,
         bool $allowStoredProfilePhoneFallback = true
-    ): ?string
-    {
+    ): ?string {
         $phone = $this->e164Phone($customerPhone);
         if ($phone !== null || ! $allowStoredProfilePhoneFallback) {
             return $phone;
@@ -1015,7 +1035,6 @@ GRAPHQL;
     }
 
     /**
-     * @param  mixed  $money
      * @return array{amount:string,currencyCode:string}|null
      */
     protected function moneyAmount(mixed $money): ?array
@@ -1061,7 +1080,6 @@ GRAPHQL;
     }
 
     /**
-     * @param  mixed  $deliveryGroups
      * @return array{amount:string,currencyCode:string}|null
      */
     protected function deliveryEstimateAmount(mixed $deliveryGroups): ?array
