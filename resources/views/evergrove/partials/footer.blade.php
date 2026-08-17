@@ -2,7 +2,7 @@
     <div class="eg-booking-footer__inner">
         <p>
             <strong>Evergrove Software</strong>
-            <span>Practical software for owner-led businesses.</span>
+            <span>Custom software, websites, and automation for owner-led businesses.</span>
         </p>
 
         <nav aria-label="Footer navigation">

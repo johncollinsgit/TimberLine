@@ -49,22 +49,22 @@ return [
         'og_image' => 'og-image.png',
     ],
     'positioning' => [
-        'eyebrow' => 'Practical software for small businesses',
-        'headline' => 'We build the software small businesses wish already existed.',
-        'summary' => 'Evergrove creates practical apps, portals, automations, and software products for small businesses that have outgrown sticky notes, spreadsheets, and scattered tools.',
+        'eyebrow' => 'Custom software, websites, and automation',
+        'headline' => 'Software built around the way your business actually works.',
+        'summary' => 'Evergrove designs and builds custom websites, internal apps, client portals, and practical automations for businesses that have outgrown scattered tools. Everbranch is one of the products we have built for teams that need their day-to-day work in one place.',
     ],
     'services' => [
         [
-            'title' => 'Workflow audits and software plans',
-            'summary' => 'Map the messy parts of the business, decide what should be fixed first, and turn the next step into a clear build plan.',
+            'title' => 'Websites and ecommerce that work harder',
+            'summary' => 'Design and build websites, Shopify storefronts, and conversion paths that give customers a clear next step.',
         ],
         [
-            'title' => 'Custom internal apps',
-            'summary' => 'Build business-specific tools for customers, jobs, orders, materials, approvals, reporting, and daily team workflows.',
+            'title' => 'Custom internal apps and portals',
+            'summary' => 'Build business-specific tools for customers, jobs, orders, approvals, reporting, and the workflows your team uses every day.',
         ],
         [
-            'title' => 'Portals and connected systems',
-            'summary' => 'Create customer portals, Shopify-connected systems, dashboards, and integrations that keep important work in one place.',
+            'title' => 'Connected systems and automation',
+            'summary' => 'Connect the systems you already rely on, remove repeated handoffs, and keep important work visible in one place.',
         ],
         [
             'title' => 'AI-assisted admin tools',

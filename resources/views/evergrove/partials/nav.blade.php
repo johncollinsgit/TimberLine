@@ -4,7 +4,6 @@
     $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/evergrove-logo.png')).'?v='.$assetVersion;
     $appBaseUrl = rtrim((string) config('app.url', url('/')), '/');
     $loginUrl = $appBaseUrl.'/login';
-    $registerUrl = $appBaseUrl.'/register';
 @endphp
 
 <header class="eg-site-header">
@@ -14,19 +13,17 @@
         </a>
 
         <div class="eg-site-links eg-site-links--tabs" aria-label="Public sections">
-            <a href="/#services">What Changes</a>
+            <a href="/#services">What We Build</a>
             <a href="/#everbranch">Everbranch</a>
-            <a href="/#examples">Fixes</a>
-            <a href="/#work">Studio</a>
+            <a href="/#examples">Use Cases</a>
+            <a href="/#work">Our Work</a>
             <a href="/#contact">Contact</a>
             <a href="/book" @if(request()->routeIs('evergrove.book')) aria-current="page" @endif>Book</a>
         </div>
 
         <div class="eg-site-actions">
             <a href="{{ $loginUrl }}" class="eg-nav-link">Login</a>
-            @if (Route::has('register'))
-                <a href="{{ $registerUrl }}" class="eg-nav-button">Sign Up</a>
-            @endif
+            <a href="/#contact" class="eg-nav-button">Start a Project</a>
         </div>
     </nav>
 </header>
