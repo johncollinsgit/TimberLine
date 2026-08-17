@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-08-17 - Evergrove custom-development positioning
+
+### What Changed
+
+- Reframed the public Evergrove homepage around custom websites, internal apps, client portals, connected systems, and practical automation.
+- Kept Everbranch visible as a real product built by Evergrove, so it serves as proof of delivery and an option when it fits instead of defining the entire studio.
+- Updated public navigation, calls to action, metadata, and inquiry language to support project-based custom-development conversations.
+
+### Guardrails
+
+- This is a company-owned public marketing presentation change only. It does not change Everbranch functionality, tenant data, entitlements, billing, forms, routing, or authentication behavior.
+- The existing public Evergrove controller, design system, and inquiry workflow remain in place; no client-specific or Forestry-specific behavior was added.
+
 ## 2026-08-14 — Everbranch social preview refresh
 
 ### What Changed
