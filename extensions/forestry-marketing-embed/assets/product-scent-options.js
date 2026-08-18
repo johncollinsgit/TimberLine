@@ -75,6 +75,7 @@
     const fields = document.createElement('div');
     fields.className = 'everbranch-product-options__fields';
     const selects = [];
+    const propertyInputs = [];
 
     for (let index = 1; index <= count; index += 1) {
       const field = document.createElement('label');
@@ -86,10 +87,18 @@
 
       const select = document.createElement('select');
       select.className = 'everbranch-product-options__select';
-      select.name = 'properties[Scent ' + index + ']';
-      select.setAttribute('form', form.id);
       select.required = true;
       select.dataset.scentPosition = String(index);
+
+      // Prestige's AJAX cart serializer is only reliable for inputs that are
+      // direct members of the product form. Keep the visible selector
+      // presentation-only and maintain the Shopify line-item properties as
+      // hidden inputs on that form. This also works with a normal HTML submit.
+      const propertyInput = document.createElement('input');
+      propertyInput.type = 'hidden';
+      propertyInput.name = 'properties[Scent ' + index + ']';
+      propertyInput.dataset.everbranchScentPosition = String(index);
+      form.appendChild(propertyInput);
 
       const placeholder = document.createElement('option');
       placeholder.value = '';
@@ -109,6 +118,7 @@
       field.appendChild(select);
       fields.appendChild(field);
       selects.push(select);
+      propertyInputs.push(propertyInput);
     }
 
     root.appendChild(fields);
@@ -119,9 +129,21 @@
     error.setAttribute('aria-live', 'polite');
     root.appendChild(error);
 
+    function syncProperties() {
+      selects.forEach((select, index) => {
+        propertyInputs[index].value = select.value;
+      });
+    }
+
+    selects.forEach((select) => {
+      select.addEventListener('change', syncProperties);
+    });
+
     function validate(event) {
       error.hidden = true;
       error.textContent = '';
+
+      syncProperties();
 
       const missing = selects.find((select) => !select.value);
       if (missing) {
