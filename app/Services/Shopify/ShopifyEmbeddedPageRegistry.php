@@ -101,6 +101,7 @@ class ShopifyEmbeddedPageRegistry
             [
                 'key' => 'product_options',
                 'route_name' => 'shopify.app.product-options',
+                'legacy_route_names' => ['shopify.embedded.product-options'],
                 'label' => 'Product Options',
                 'section' => 'product_options',
                 'group' => 'primary',

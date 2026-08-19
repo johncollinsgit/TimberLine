@@ -149,6 +149,10 @@
             gap: 6px;
         }
 
+        .settings-field--full {
+            grid-column: 1 / -1;
+        }
+
         .settings-field label {
             font-size: 11px;
             font-weight: 700;
@@ -519,6 +523,148 @@
             </div>
         </article>
 
+        @if(is_array($fundraiserInvoiceBootstrap ?? null) && (bool) ($fundraiserInvoiceBootstrap['authorized'] ?? false))
+            @php
+                $fundraiserSettings = is_array(data_get($fundraiserInvoiceBootstrap, 'settings.settings'))
+                    ? data_get($fundraiserInvoiceBootstrap, 'settings.settings')
+                    : [];
+            @endphp
+            <article class="settings-card" id="fundraiser-invoice-settings-card">
+                <div class="settings-head">
+                    <div>
+                        <h2>Fundraiser Order Invoicing</h2>
+                        <p>
+                            Record who the fundraiser company is, who receives the payable invoice, and how its orders should be grouped. Zapier orders enter a manual-review queue; payment collection, QuickBooks invoice creation, email delivery, and recipient-open tracking remain off.
+                        </p>
+                    </div>
+                    <div class="settings-badges" id="fundraiser-invoice-settings-status"></div>
+                </div>
+
+                <div class="settings-inline-status" id="fundraiser-invoice-settings-alert" hidden></div>
+
+                <form id="fundraiser-invoice-settings-form" class="settings-grid" novalidate>
+                    <div class="settings-field">
+                        <label for="fundraiser-name">Fundraiser Company</label>
+                        <input id="fundraiser-name" name="fundraiser_name" type="text" maxlength="160" value="{{ $fundraiserSettings['fundraiser_name'] ?? '' }}" placeholder="Bed sheet fundraiser company">
+                        <small>The company responsible for paying Modern Forestry, not the individual shoppers.</small>
+                        <div class="settings-field-error" data-error-for="fundraiser_name"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-campaign-reference">Campaign Reference</label>
+                        <input id="fundraiser-campaign-reference" name="campaign_reference" type="text" maxlength="160" value="{{ $fundraiserSettings['campaign_reference'] ?? '' }}" placeholder="Spring bed-sheet fundraiser">
+                        <small>Shown in the future invoice and used to keep imported orders identifiable.</small>
+                        <div class="settings-field-error" data-error-for="campaign_reference"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-invoice-payer-name">Accounts Payable Contact</label>
+                        <input id="fundraiser-invoice-payer-name" name="invoice_payer_name" type="text" maxlength="160" value="{{ $fundraiserSettings['invoice_payer_name'] ?? '' }}" placeholder="Accounts Payable">
+                        <small>The person or department that should receive a payment request.</small>
+                        <div class="settings-field-error" data-error-for="invoice_payer_name"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-invoice-payer-email">Accounts Payable Email</label>
+                        <input id="fundraiser-invoice-payer-email" name="invoice_payer_email" type="email" maxlength="255" value="{{ $fundraiserSettings['invoice_payer_email'] ?? '' }}" placeholder="ap@fundraiser.example">
+                        <small>Future payable invoices will be addressed to this contact after payment readiness is approved.</small>
+                        <div class="settings-field-error" data-error-for="invoice_payer_email"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-notification-email">Invoice Notification Email</label>
+                        <input id="fundraiser-notification-email" name="notification_email" type="email" maxlength="255" value="{{ $fundraiserSettings['notification_email'] ?? 'info@theforestrystudio.com' }}">
+                        <small>Receives an internal notification when a future invoice is prepared; this address is not charged.</small>
+                        <div class="settings-field-error" data-error-for="notification_email"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-invoice-cadence">Invoice Cadence</label>
+                        <select id="fundraiser-invoice-cadence" name="invoice_cadence">
+                            <option value="per_order" @selected(($fundraiserSettings['invoice_cadence'] ?? 'per_order') === 'per_order')>One invoice per imported order</option>
+                            <option value="weekly_summary" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'weekly_summary')>Weekly summary invoice</option>
+                            <option value="campaign_close" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'campaign_close')>One invoice when the campaign closes</option>
+                        </select>
+                        <small>Choose the intended grouping now; no invoice is created from this setting alone.</small>
+                        <div class="settings-field-error" data-error-for="invoice_cadence"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-payment-terms">Payment Terms (days)</label>
+                        <input id="fundraiser-payment-terms" name="payment_terms_days" type="number" min="1" max="90" step="1" value="{{ $fundraiserSettings['payment_terms_days'] ?? 14 }}">
+                        <small>Due date measured from invoice delivery once the payment lane is enabled.</small>
+                        <div class="settings-field-error" data-error-for="payment_terms_days"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-shipping-treatment">Shipping Treatment</label>
+                        <select id="fundraiser-shipping-treatment" name="shipping_treatment">
+                            <option value="source_amount" @selected(($fundraiserSettings['shipping_treatment'] ?? 'source_amount') === 'source_amount')>Use the shipping amount supplied with the order</option>
+                            <option value="manual_review" @selected(($fundraiserSettings['shipping_treatment'] ?? '') === 'manual_review')>Require manual shipping review</option>
+                        </select>
+                        <small>Everbranch will never estimate or invent a shipping amount.</small>
+                        <div class="settings-field-error" data-error-for="shipping_treatment"></div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="fundraiser-tax-handling">Tax Handling</label>
+                        <select id="fundraiser-tax-handling" name="tax_handling">
+                            <option value="manual_review_required" @selected(($fundraiserSettings['tax_handling'] ?? 'manual_review_required') === 'manual_review_required')>Block invoicing until tax is reviewed</option>
+                            <option value="source_amount_pending_review" @selected(($fundraiserSettings['tax_handling'] ?? '') === 'source_amount_pending_review')>Retain source tax amount for later review</option>
+                        </select>
+                        <small>This does not determine taxability or authorize tax collection.</small>
+                        <div class="settings-field-error" data-error-for="tax_handling"></div>
+                    </div>
+                </form>
+
+                <div class="settings-provider-help">
+                    <strong>Current safety status:</strong> Zapier orders are encrypted and duplicate-protected, then reviewed before an accountant-review package can be downloaded. Everbranch does not create, send, charge, or track a QuickBooks invoice.
+                </div>
+
+                <div class="settings-actions">
+                    <button class="settings-button settings-button--primary" type="button" id="fundraiser-invoice-settings-save">Save Fundraiser Invoice Settings</button>
+                </div>
+            </article>
+
+            <article class="settings-card" id="fundraiser-zapier-card">
+                <div class="settings-head">
+                    <div>
+                        <h2>Zapier Order Intake</h2>
+                        <p>Configure Zapier to POST one order at a time to this endpoint. Include the recipient and shipping address, product line items, and source-supplied shipping and tax cents.</p>
+                    </div>
+                    <div class="settings-badges" id="fundraiser-zapier-status"></div>
+                </div>
+                <div class="settings-inline-status" id="fundraiser-zapier-alert" hidden></div>
+                <div class="settings-grid">
+                    <div class="settings-field settings-field--full">
+                        <label for="fundraiser-zapier-url">Webhook URL</label>
+                        <input id="fundraiser-zapier-url" type="url" readonly value="{{ $fundraiserInvoiceBootstrap['zapier_webhook_url'] ?? '' }}">
+                        <small>Zapier action: Webhooks by Zapier → POST → JSON. Set header <code>X-Everbranch-Fundraiser-Token</code> to the token generated below.</small>
+                    </div>
+                    <div class="settings-field settings-field--full" id="fundraiser-zapier-secret-wrap" hidden>
+                        <label for="fundraiser-zapier-secret">New webhook token — copy now</label>
+                        <input id="fundraiser-zapier-secret" type="text" readonly autocomplete="off">
+                        <small>For security this token is only shown immediately after generating it. Generating another token disables the previous one.</small>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <button class="settings-button settings-button--primary" type="button" id="fundraiser-zapier-secret-rotate">Generate Zapier Token</button>
+                    <button class="settings-button" type="button" id="fundraiser-zapier-copy-url">Copy Webhook URL</button>
+                    <button class="settings-button" type="button" id="fundraiser-zapier-copy-secret" hidden>Copy Token</button>
+                </div>
+            </article>
+
+            <article class="settings-card" id="fundraiser-invoice-desk-card">
+                <div class="settings-head">
+                    <div>
+                        <h2>Fundraiser Invoice Desk</h2>
+                        <p>Approve source amounts, then prepare a CSV package for an accountant to create and send the actual QuickBooks invoice. Package status cannot claim “sent” or “opened.”</p>
+                    </div>
+                    <div class="settings-badges" id="fundraiser-invoice-desk-status"></div>
+                </div>
+                <div class="settings-inline-status" id="fundraiser-invoice-desk-alert" hidden></div>
+                <div class="settings-provider-help" id="fundraiser-invoice-desk-summary">Loading fundraiser order queue…</div>
+                <div id="fundraiser-invoice-orders" class="settings-sender-list"></div>
+                <div class="settings-actions">
+                    <button class="settings-button settings-button--primary" type="button" id="fundraiser-invoice-package-prepare">Prepare Accounting Package for Selected Orders</button>
+                    <button class="settings-button" type="button" id="fundraiser-invoice-desk-refresh">Refresh Queue</button>
+                </div>
+                <div id="fundraiser-invoice-packages" class="settings-sender-list"></div>
+            </article>
+        @endif
+
         @if(is_array($appContentBootstrap ?? null) && (bool) ($appContentBootstrap['authorized'] ?? false))
             <article class="settings-card" id="app-content-settings-link-card">
                 <div class="settings-head">
@@ -610,16 +756,19 @@
             </article>
         @endif
 
+        @php
+            // The full editor remains intentionally hidden on Settings in favor
+            // of the dedicated Edit App page. Keep its fallback values defined
+            // because the preview markup is compiled even when this branch is off.
+            $publishedContent = is_array(data_get($appContentBootstrap, 'settings.published'))
+                ? data_get($appContentBootstrap, 'settings.published')
+                : data_get($appContentBootstrap, 'defaults', []);
+            $draftContent = is_array(data_get($appContentBootstrap, 'settings.draft'))
+                ? data_get($appContentBootstrap, 'settings.draft')
+                : data_get($appContentBootstrap, 'defaults', []);
+        @endphp
         @if(false && is_array($appContentBootstrap ?? null) && (bool) ($appContentBootstrap['authorized'] ?? false))
             <article class="settings-card" id="app-content-card">
-                @php
-                    $publishedContent = is_array(data_get($appContentBootstrap, 'settings.published'))
-                        ? data_get($appContentBootstrap, 'settings.published')
-                        : data_get($appContentBootstrap, 'defaults', []);
-                    $draftContent = is_array(data_get($appContentBootstrap, 'settings.draft'))
-                        ? data_get($appContentBootstrap, 'settings.draft')
-                        : data_get($appContentBootstrap, 'defaults', []);
-                @endphp
                 <div class="settings-head">
                     <div>
                         <h2>App Content</h2>
@@ -980,6 +1129,7 @@
         (() => {
             const bootstrap = @json($emailSettingsBootstrap ?? []);
             const widgetBootstrap = @json($widgetSettingsBootstrap ?? []);
+            const fundraiserInvoiceBootstrap = @json($fundraiserInvoiceBootstrap ?? []);
             const appContentBootstrap = @json($appContentBootstrap ?? []);
             const root = document.getElementById("email-settings-root");
             if (!root) {
@@ -995,6 +1145,24 @@
             const wishlistDrawerInput = document.getElementById("widget-wishlist-drawer-id");
             const reviewsPositionSelect = document.getElementById("widget-reviews-position");
             const imageRadiusInput = document.getElementById("widget-image-radius");
+            const fundraiserInvoiceForm = document.getElementById("fundraiser-invoice-settings-form");
+            const fundraiserInvoiceAlert = document.getElementById("fundraiser-invoice-settings-alert");
+            const fundraiserInvoiceStatus = document.getElementById("fundraiser-invoice-settings-status");
+            const fundraiserInvoiceSaveButton = document.getElementById("fundraiser-invoice-settings-save");
+            const fundraiserZapierAlert = document.getElementById("fundraiser-zapier-alert");
+            const fundraiserZapierStatus = document.getElementById("fundraiser-zapier-status");
+            const fundraiserZapierSecretWrap = document.getElementById("fundraiser-zapier-secret-wrap");
+            const fundraiserZapierSecretInput = document.getElementById("fundraiser-zapier-secret");
+            const fundraiserZapierRotateButton = document.getElementById("fundraiser-zapier-secret-rotate");
+            const fundraiserZapierCopyUrlButton = document.getElementById("fundraiser-zapier-copy-url");
+            const fundraiserZapierCopySecretButton = document.getElementById("fundraiser-zapier-copy-secret");
+            const fundraiserDeskAlert = document.getElementById("fundraiser-invoice-desk-alert");
+            const fundraiserDeskStatus = document.getElementById("fundraiser-invoice-desk-status");
+            const fundraiserDeskSummary = document.getElementById("fundraiser-invoice-desk-summary");
+            const fundraiserOrders = document.getElementById("fundraiser-invoice-orders");
+            const fundraiserPackages = document.getElementById("fundraiser-invoice-packages");
+            const fundraiserPrepareButton = document.getElementById("fundraiser-invoice-package-prepare");
+            const fundraiserDeskRefreshButton = document.getElementById("fundraiser-invoice-desk-refresh");
             const appContentCard = document.getElementById("app-content-card");
             const appContentForm = document.getElementById("app-content-form");
             const appContentAlert = document.getElementById("app-content-alert");
@@ -1047,6 +1215,13 @@
                 settings: normalizeWidgetSettings(widgetBootstrap?.settings || widgetBootstrap?.defaults || null),
             };
 
+            const fundraiserInvoiceState = {
+                saving: false,
+                settings: normalizeFundraiserInvoiceSettings(fundraiserInvoiceBootstrap?.settings?.settings || null),
+                webhookConfigured: Boolean(fundraiserInvoiceBootstrap?.settings?.zapier_webhook_configured),
+                desk: { summary: {}, orders: [], packages: [] },
+            };
+
             const contentState = {
                 loading: false,
                 saving: false,
@@ -1083,6 +1258,21 @@
                         description: "Scaffolded provider slot for future custom email integrations.",
                     },
                 ];
+            }
+
+            function normalizeFundraiserInvoiceSettings(input) {
+                const source = input && typeof input === "object" ? input : {};
+                return {
+                    fundraiser_name: String(source.fundraiser_name || ""),
+                    campaign_reference: String(source.campaign_reference || ""),
+                    invoice_payer_name: String(source.invoice_payer_name || ""),
+                    invoice_payer_email: String(source.invoice_payer_email || ""),
+                    notification_email: String(source.notification_email || "info@theforestrystudio.com"),
+                    invoice_cadence: ["per_order", "weekly_summary", "campaign_close"].includes(source.invoice_cadence) ? source.invoice_cadence : "per_order",
+                    payment_terms_days: Number.parseInt(source.payment_terms_days, 10) || 14,
+                    shipping_treatment: ["source_amount", "manual_review"].includes(source.shipping_treatment) ? source.shipping_treatment : "source_amount",
+                    tax_handling: ["manual_review_required", "source_amount_pending_review"].includes(source.tax_handling) ? source.tax_handling : "manual_review_required",
+                };
             }
 
             function emptySettings() {
@@ -2213,6 +2403,258 @@
                 }
             }
 
+            function clearFundraiserInvoiceErrors() {
+                fundraiserInvoiceForm?.querySelectorAll("[data-error-for]").forEach((element) => {
+                    element.textContent = "";
+                });
+            }
+
+            function renderFundraiserInvoiceStatus() {
+                if (!fundraiserInvoiceStatus) {
+                    return;
+                }
+
+                const settings = fundraiserInvoiceState.settings;
+                const configured = Boolean(settings.fundraiser_name && settings.invoice_payer_name && settings.invoice_payer_email);
+                fundraiserInvoiceStatus.innerHTML = `
+                    <span class="settings-badge ${configured ? "settings-badge--configured" : "settings-badge--warn"}">${configured ? "Contacts configured" : "Contacts needed"}</span>
+                    <span class="settings-badge settings-badge--warn">Delivery disabled</span>
+                `;
+            }
+
+            function collectFundraiserInvoicePayload() {
+                return {
+                    fundraiser_name: String(document.getElementById("fundraiser-name")?.value || "").trim() || null,
+                    campaign_reference: String(document.getElementById("fundraiser-campaign-reference")?.value || "").trim() || null,
+                    invoice_payer_name: String(document.getElementById("fundraiser-invoice-payer-name")?.value || "").trim() || null,
+                    invoice_payer_email: String(document.getElementById("fundraiser-invoice-payer-email")?.value || "").trim() || null,
+                    notification_email: String(document.getElementById("fundraiser-notification-email")?.value || "").trim(),
+                    invoice_cadence: String(document.getElementById("fundraiser-invoice-cadence")?.value || "per_order"),
+                    payment_terms_days: Number.parseInt(document.getElementById("fundraiser-payment-terms")?.value || "14", 10),
+                    shipping_treatment: String(document.getElementById("fundraiser-shipping-treatment")?.value || "source_amount"),
+                    tax_handling: String(document.getElementById("fundraiser-tax-handling")?.value || "manual_review_required"),
+                };
+            }
+
+            function populateFundraiserInvoiceSettings() {
+                if (!fundraiserInvoiceForm) {
+                    return;
+                }
+
+                const settings = fundraiserInvoiceState.settings;
+                const fields = {
+                    "fundraiser-name": settings.fundraiser_name,
+                    "fundraiser-campaign-reference": settings.campaign_reference,
+                    "fundraiser-invoice-payer-name": settings.invoice_payer_name,
+                    "fundraiser-invoice-payer-email": settings.invoice_payer_email,
+                    "fundraiser-notification-email": settings.notification_email,
+                    "fundraiser-invoice-cadence": settings.invoice_cadence,
+                    "fundraiser-payment-terms": settings.payment_terms_days,
+                    "fundraiser-shipping-treatment": settings.shipping_treatment,
+                    "fundraiser-tax-handling": settings.tax_handling,
+                };
+                Object.entries(fields).forEach(([id, value]) => {
+                    const field = document.getElementById(id);
+                    if (field) {
+                        field.value = value;
+                    }
+                });
+                renderFundraiserInvoiceStatus();
+            }
+
+            async function saveFundraiserInvoiceSettings() {
+                if (!fundraiserInvoiceBootstrap?.authorized || !fundraiserInvoiceBootstrap?.endpoints?.save || !fundraiserInvoiceForm) {
+                    return;
+                }
+
+                clearFundraiserInvoiceErrors();
+                fundraiserInvoiceState.saving = true;
+                fundraiserInvoiceSaveButton?.setAttribute("disabled", "disabled");
+                setAlert(fundraiserInvoiceAlert, "Saving fundraiser invoice settings...", "neutral");
+
+                try {
+                    const response = await fetchJson(fundraiserInvoiceBootstrap.endpoints.save, {
+                        method: "POST",
+                        body: JSON.stringify(collectFundraiserInvoicePayload()),
+                    });
+                    fundraiserInvoiceState.settings = normalizeFundraiserInvoiceSettings(response?.data?.settings?.settings || null);
+                    populateFundraiserInvoiceSettings();
+                    setAlert(fundraiserInvoiceAlert, response?.message || "Fundraiser invoice settings saved.", "success");
+                } catch (error) {
+                    const payload = extractError(error);
+                    Object.entries(payload?.errors || {}).forEach(([field, messages]) => {
+                        const target = fundraiserInvoiceForm.querySelector(`[data-error-for="${cssEscape(String(field))}"]`);
+                        if (target) {
+                            target.textContent = Array.isArray(messages) ? messages.join(" ") : String(messages || "");
+                        }
+                    });
+                    setAlert(fundraiserInvoiceAlert, payload?.message || error?.message || "Failed to save fundraiser invoice settings.", "error");
+                } finally {
+                    fundraiserInvoiceState.saving = false;
+                    fundraiserInvoiceSaveButton?.removeAttribute("disabled");
+                }
+            }
+
+            function renderFundraiserZapierStatus() {
+                if (!fundraiserZapierStatus) {
+                    return;
+                }
+                fundraiserZapierStatus.innerHTML = fundraiserInvoiceState.webhookConfigured
+                    ? '<span class="settings-badge settings-badge--configured">Token configured</span><span class="settings-badge settings-badge--warn">Manual review required</span>'
+                    : '<span class="settings-badge settings-badge--warn">Token needed</span>';
+            }
+
+            function fundraiserMoney(cents, currency = "USD") {
+                return new Intl.NumberFormat("en-US", { style: "currency", currency: String(currency || "USD").toUpperCase() }).format((Number(cents) || 0) / 100);
+            }
+
+            function renderFundraiserDesk() {
+                const desk = fundraiserInvoiceState.desk || {};
+                const summary = desk.summary || {};
+                if (fundraiserDeskSummary) {
+                    fundraiserDeskSummary.textContent = `${Number(summary.needs_review || 0)} awaiting review · ${Number(summary.approved || 0)} approved · ${Number(summary.packaged || 0)} packaged · ${Number(summary.invoice_packages || 0)} accounting packages shown.`;
+                }
+                if (fundraiserDeskStatus) {
+                    fundraiserDeskStatus.innerHTML = '<span class="settings-badge settings-badge--warn">QuickBooks review</span><span class="settings-badge settings-badge--warn">Not sent</span>';
+                }
+                if (fundraiserOrders) {
+                    const orders = Array.isArray(desk.orders) ? desk.orders : [];
+                    fundraiserOrders.innerHTML = orders.length ? orders.map((order) => {
+                        const approved = order.status === "approved";
+                        const review = order.status === "needs_review";
+                        return `<article class="settings-sender-card">
+                            <strong>${escapeHtml(order.reference || order.external_order_id || "Fundraiser order")}</strong>
+                            <div style="margin-top:6px; color:rgba(15,23,42,.72); font-size:14px;">${escapeHtml(fundraiserMoney(order.total_cents, order.currency))} · ${Number(order.items_count || 0)} item(s) · ${escapeHtml(order.status || "needs_review")}</div>
+                            <div class="settings-sender-meta"><span class="settings-sender-pill">Zapier</span><span class="settings-sender-pill">${escapeHtml(order.status || "needs_review")}</span></div>
+                            <div class="settings-actions">
+                                ${approved ? `<label style="display:inline-flex; align-items:center; gap:7px; font-size:13px;"><input type="checkbox" data-fundraiser-package-order="${Number(order.id)}"> Include in package</label>` : ""}
+                                ${review ? `<button class="settings-button" type="button" data-fundraiser-approve-order="${Number(order.id)}">Approve Amounts</button>` : ""}
+                            </div>
+                        </article>`;
+                    }).join("") : '<article class="settings-sender-card">No Zapier fundraiser orders have arrived yet.</article>';
+                }
+                if (fundraiserPackages) {
+                    const packages = Array.isArray(desk.packages) ? desk.packages : [];
+                    fundraiserPackages.innerHTML = packages.length ? packages.map((invoicePackage) => `<article class="settings-sender-card">
+                        <strong>${escapeHtml(invoicePackage.reference || "Accounting package")}</strong>
+                        <div style="margin-top:6px; color:rgba(15,23,42,.72); font-size:14px;">${escapeHtml(fundraiserMoney(invoicePackage.total_cents, invoicePackage.currency))} · ${escapeHtml(invoicePackage.payer_name || "Accounts payable")} · ${escapeHtml(invoicePackage.delivery_status || "not_sent")}</div>
+                        <div class="settings-sender-meta"><span class="settings-sender-pill">Review required</span><span class="settings-sender-pill">Opened: not available</span></div>
+                        <div class="settings-actions"><button class="settings-button" type="button" data-fundraiser-export-package="${Number(invoicePackage.id)}">Download CSV for QuickBooks Review</button></div>
+                    </article>`).join("") : "";
+                }
+            }
+
+            async function loadFundraiserDesk() {
+                if (!fundraiserInvoiceBootstrap?.authorized || !fundraiserInvoiceBootstrap?.endpoints?.desk) {
+                    return;
+                }
+                setAlert(fundraiserDeskAlert, "Loading fundraiser order queue…", "neutral");
+                try {
+                    const response = await fetchJson(fundraiserInvoiceBootstrap.endpoints.desk, { method: "GET" });
+                    fundraiserInvoiceState.desk = response?.data || { summary: {}, orders: [], packages: [] };
+                    renderFundraiserDesk();
+                    setAlert(fundraiserDeskAlert, "", "neutral");
+                } catch (error) {
+                    const payload = extractError(error);
+                    setAlert(fundraiserDeskAlert, payload?.message || error?.message || "Failed to load fundraiser order queue.", "error");
+                }
+            }
+
+            async function rotateFundraiserZapierSecret() {
+                if (!fundraiserInvoiceBootstrap?.endpoints?.rotate_secret) {
+                    return;
+                }
+                fundraiserZapierRotateButton?.setAttribute("disabled", "disabled");
+                setAlert(fundraiserZapierAlert, "Generating a new Zapier token…", "neutral");
+                try {
+                    const response = await fetchJson(fundraiserInvoiceBootstrap.endpoints.rotate_secret, { method: "POST" });
+                    const secret = String(response?.data?.secret || "");
+                    if (!secret) {
+                        throw new Error("Everbranch did not return a new Zapier token.");
+                    }
+                    fundraiserInvoiceState.webhookConfigured = true;
+                    if (fundraiserZapierSecretInput) fundraiserZapierSecretInput.value = secret;
+                    fundraiserZapierSecretWrap?.removeAttribute("hidden");
+                    fundraiserZapierCopySecretButton?.removeAttribute("hidden");
+                    renderFundraiserZapierStatus();
+                    setAlert(fundraiserZapierAlert, response?.message || "New Zapier token created. Copy it now.", "success");
+                } catch (error) {
+                    const payload = extractError(error);
+                    setAlert(fundraiserZapierAlert, payload?.message || error?.message || "Failed to generate the Zapier token.", "error");
+                } finally {
+                    fundraiserZapierRotateButton?.removeAttribute("disabled");
+                }
+            }
+
+            async function copyFundraiserValue(value, alertElement, successMessage) {
+                if (!value) return;
+                try {
+                    await navigator.clipboard.writeText(value);
+                    setAlert(alertElement, successMessage, "success");
+                } catch (_error) {
+                    setAlert(alertElement, "Copy is unavailable here. Select the value and copy it manually.", "error");
+                }
+            }
+
+            async function approveFundraiserOrder(orderId) {
+                const base = fundraiserInvoiceBootstrap?.endpoints?.approve_order_base;
+                if (!base || !orderId) return;
+                setAlert(fundraiserDeskAlert, "Approving source amounts…", "neutral");
+                try {
+                    const response = await fetchJson(base.replace("__ORDER__", String(orderId)), { method: "POST" });
+                    setAlert(fundraiserDeskAlert, response?.message || "Fundraiser order approved.", "success");
+                    await loadFundraiserDesk();
+                } catch (error) {
+                    const payload = extractError(error);
+                    setAlert(fundraiserDeskAlert, payload?.message || error?.message || "Failed to approve fundraiser order.", "error");
+                }
+            }
+
+            async function prepareFundraiserPackage() {
+                const orderIds = Array.from(document.querySelectorAll("[data-fundraiser-package-order]:checked"))
+                    .map((input) => Number(input.getAttribute("data-fundraiser-package-order")))
+                    .filter((id) => Number.isInteger(id) && id > 0);
+                if (!orderIds.length) {
+                    setAlert(fundraiserDeskAlert, "Approve an order, then select it for accounting-package preparation.", "error");
+                    return;
+                }
+                fundraiserPrepareButton?.setAttribute("disabled", "disabled");
+                setAlert(fundraiserDeskAlert, "Preparing accounting-review package…", "neutral");
+                try {
+                    const response = await fetchJson(fundraiserInvoiceBootstrap.endpoints.prepare_package, { method: "POST", body: JSON.stringify({ order_ids: orderIds }) });
+                    setAlert(fundraiserDeskAlert, response?.message || "Accounting-review package prepared.", "success");
+                    await loadFundraiserDesk();
+                } catch (error) {
+                    const payload = extractError(error);
+                    setAlert(fundraiserDeskAlert, payload?.message || error?.message || "Failed to prepare accounting package.", "error");
+                } finally {
+                    fundraiserPrepareButton?.removeAttribute("disabled");
+                }
+            }
+
+            async function downloadFundraiserPackage(packageId) {
+                const base = fundraiserInvoiceBootstrap?.endpoints?.export_package_base;
+                if (!base || !packageId) return;
+                try {
+                    const authHeaders = await resolveEmbeddedAuthHeaders();
+                    const response = await fetch(base.replace("__PACKAGE__", String(packageId)), { headers: authHeaders, credentials: "same-origin" });
+                    if (!response.ok) {
+                        const payload = await response.json().catch(() => null);
+                        throw new Error(payload?.message || "Failed to download accounting package.");
+                    }
+                    const url = URL.createObjectURL(await response.blob());
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = "fundraiser-accounting-review.csv";
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    setAlert(fundraiserDeskAlert, error?.message || "Failed to download accounting package.", "error");
+                }
+            }
+
             async function saveSettings() {
                 clearErrors();
                 setAlert(testAlert, "", "neutral");
@@ -2467,6 +2909,37 @@
 
             if (widgetSaveButton) {
                 widgetSaveButton.addEventListener("click", () => saveWidgetSettings());
+            }
+
+            if (fundraiserInvoiceSaveButton) {
+                fundraiserInvoiceSaveButton.addEventListener("click", () => saveFundraiserInvoiceSettings());
+                populateFundraiserInvoiceSettings();
+            }
+
+            fundraiserZapierRotateButton?.addEventListener("click", () => rotateFundraiserZapierSecret());
+            fundraiserZapierCopyUrlButton?.addEventListener("click", () => copyFundraiserValue(
+                String(fundraiserInvoiceBootstrap?.zapier_webhook_url || ""),
+                fundraiserZapierAlert,
+                "Webhook URL copied."
+            ));
+            fundraiserZapierCopySecretButton?.addEventListener("click", () => copyFundraiserValue(
+                String(fundraiserZapierSecretInput?.value || ""),
+                fundraiserZapierAlert,
+                "Webhook token copied."
+            ));
+            fundraiserDeskRefreshButton?.addEventListener("click", () => loadFundraiserDesk());
+            fundraiserPrepareButton?.addEventListener("click", () => prepareFundraiserPackage());
+            fundraiserOrders?.addEventListener("click", (event) => {
+                const button = event.target?.closest?.("[data-fundraiser-approve-order]");
+                if (button) approveFundraiserOrder(Number(button.getAttribute("data-fundraiser-approve-order")));
+            });
+            fundraiserPackages?.addEventListener("click", (event) => {
+                const button = event.target?.closest?.("[data-fundraiser-export-package]");
+                if (button) downloadFundraiserPackage(Number(button.getAttribute("data-fundraiser-export-package")));
+            });
+            renderFundraiserZapierStatus();
+            if (fundraiserInvoiceBootstrap?.authorized) {
+                scheduleIdleTask(loadFundraiserDesk);
             }
 
             if (appContentForm) {

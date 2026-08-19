@@ -6,6 +6,62 @@ use Illuminate\Support\Facades\Schema;
 
 uses(Tests\TestCase::class);
 
+it('resumes Modern Forestry fundraiser preparation after the order table is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('modern_forestry_fundraiser_invoice_packages');
+    Schema::dropIfExists('modern_forestry_fundraiser_orders');
+
+    if (! Schema::hasTable('tenants')) {
+        Schema::create('tenants', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    // MySQL completed the first CREATE TABLE before a candidate stopped. The
+    // migration must safely create the trailing package table on retry.
+    Schema::create('modern_forestry_fundraiser_orders', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->string('source', 32)->default('zapier');
+        $table->string('external_order_id', 190);
+        $table->string('order_reference', 190)->nullable();
+        $table->string('recipient_name', 190);
+        $table->string('recipient_email', 255)->nullable();
+        $table->string('recipient_phone', 80)->nullable();
+        $table->json('shipping_address');
+        $table->string('currency', 3)->default('usd');
+        $table->unsignedInteger('subtotal_cents');
+        $table->unsignedInteger('discount_cents')->default(0);
+        $table->unsignedInteger('shipping_cents')->default(0);
+        $table->unsignedInteger('tax_cents')->default(0);
+        $table->unsignedInteger('total_cents');
+        $table->string('status', 32)->default('needs_review');
+        $table->string('fingerprint', 64);
+        $table->json('line_items');
+        $table->json('source_payload')->nullable();
+        $table->timestamp('source_created_at')->nullable();
+        $table->timestamp('received_at');
+        $table->timestamp('reviewed_at')->nullable();
+        $table->string('reviewed_by', 190)->nullable();
+        $table->text('review_notes')->nullable();
+        $table->timestamps();
+        $table->foreign('tenant_id', 'mffo_tenant_fk')->references('id')->on('tenants')->cascadeOnDelete();
+        $table->unique(['tenant_id', 'source', 'external_order_id'], 'mffo_tenant_source_external_uq');
+        $table->index(['tenant_id', 'status', 'received_at'], 'mffo_tenant_status_received_idx');
+    });
+
+    $migration = require database_path('migrations/2026_08_19_140000_create_modern_forestry_fundraiser_invoice_preparation_tables.php');
+    $migration->up();
+
+    expect(Schema::hasTable('modern_forestry_fundraiser_orders'))->toBeTrue()
+        ->and(Schema::hasTable('modern_forestry_fundraiser_invoice_packages'))->toBeTrue()
+        ->and(Schema::hasIndex('modern_forestry_fundraiser_orders', 'mffo_tenant_source_external_uq'))->toBeTrue()
+        ->and(Schema::hasIndex('modern_forestry_fundraiser_invoice_packages', 'mffip_tenant_status_prepared_idx'))->toBeTrue();
+});
+
 it('runs cleanly and recovers the partial workflow studio migration on mysql', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');
