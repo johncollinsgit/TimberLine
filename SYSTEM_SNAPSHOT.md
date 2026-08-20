@@ -1,5 +1,37 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry fundraiser invoice preparation (2026-08-19)
+
+- Modern Forestry's verified retail Shopify Settings surface now includes a
+  tenant-scoped **Fundraiser Order Invoicing** configuration card. It records
+  the fundraiser company, payer contact, internal notification address
+  (`info@theforestrystudio.com` by default), planned invoice cadence, payment
+  terms, and shipping/tax handling posture.
+- A token-protected Zapier endpoint accepts one fundraiser order at a time into
+  the dedicated `modern_forestry_fundraiser_orders` queue. It encrypts the
+  recipient and shipping address, requires item/quantity/cents detail, retains
+  only source-supplied shipping/tax amounts, and rejects conflicting replays by
+  external order ID. It is never a Shopify, Website Commerce, or legacy-order
+  record.
+- Operators manually approve each source amount before they can prepare an
+  immutable CSV accounting-review package. The package is expressly not a
+  QuickBooks invoice: it does not create/send a QuickBooks record, collect a
+  payment, email anyone, decide taxability, or report an invoice open. See
+  `docs/operations/modern-forestry-fundraiser-order-invoicing-runbook.md`.
+
+## Modern Forestry embedded app-base compatibility (2026-08-19)
+
+- The live Modern Forestry Backstage App URL is the Everbranch root. Shopify
+  therefore loads Admin deep links such as `/settings` and
+  `/product-options` directly at that root, not beneath `/shopify/app`.
+- Root `settings` now resolves the same Shopify-verified settings controller as
+  `/shopify/app/settings`; root `product-options` resolves the same
+  retail-surface-protected Product Options controller as
+  `/shopify/app/product-options`. Keep their canonical internal routes and
+  their root compatibility entries aligned. `shopify.app.toml` reflects the
+  root App URL; a Shopify app-version deployment is required to alter the
+  Partner-side configuration.
+
 ## Everbranch social-preview refresh (2026-08-14)
 
 - Public share metadata now uses `public/og-image-v2.png`: a minimal,

@@ -55,4 +55,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['workforce settings table retained before shifts, correction requests, and fleet location tables'],
     ],
+    '2026_08_19_140000_create_modern_forestry_fundraiser_invoice_preparation_tables.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['encrypted fundraiser order table retained before accounting-review package table creation'],
+    ],
 ];

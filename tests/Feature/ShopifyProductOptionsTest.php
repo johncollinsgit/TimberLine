@@ -221,6 +221,10 @@ test('product options is visible as a shopify only embedded module when enabled'
         ->assertSeeText('Shopify only')
         ->assertSeeText('Active · Modern Forestry')
         ->assertViewHas('appNavigation', fn (array $navigation): bool => ($navigation['activeSection'] ?? null) === 'product_options');
+
+    $this->get(route('shopify.embedded.product-options', retailEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Everbranch Product Options');
 });
 
 test('product option rules sync required checkout validation into assigned shopify products', function () {

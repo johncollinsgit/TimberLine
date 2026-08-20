@@ -1,8 +1,14 @@
 <?php
 
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
-use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Http\Controllers\ShopifyProductOptionsController;
+use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
+use App\Services\Shopify\ModernForestryFundraiserInvoiceSettingsService;
+use App\Services\Shopify\ShopifyAppContentService;
+use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
+use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -13,7 +19,16 @@ Route::get('settings', function (
     ShopifyEmbeddedSettingsController $controller
 ) {
     if ($contextService->hasPageContext($request)) {
-        return $controller->show($request, $contextService, app(TwilioSenderConfigService::class));
+        return $controller->show(
+            $request,
+            $contextService,
+            app(TwilioSenderConfigService::class),
+            app(TenantResolver::class),
+            app(TenantEmailSettingsService::class),
+            app(ShopifyAppContentService::class),
+            app(ModernForestryFundraiserInvoiceSettingsService::class),
+            app(ModernForestryAlphaBootstrapService::class),
+        );
     }
 
     if (! auth()->check()) {
@@ -22,6 +37,12 @@ Route::get('settings', function (
 
     return redirect('settings/profile');
 })->name('shopify.embedded.settings');
+
+// Shopify's live App URL is the Everbranch root, so Admin deep-link paths are
+// appended directly to it. Internal navigation remains on `/shopify/app/...`.
+Route::get('product-options', [ShopifyProductOptionsController::class, 'show'])
+    ->middleware('shopify.embedded.surface')
+    ->name('shopify.embedded.product-options');
 
 Route::middleware(['auth'])->group(function () {
     Route::livewire('settings/profile', 'pages::settings.profile')->name('profile.edit');

@@ -24,6 +24,7 @@ test('shopify embedded page registry resolves canonical routes from legacy alias
     expect($registry->canonicalRouteName('shopify.embedded.rewards.earn'))->toBe('shopify.app.rewards.earn')
         ->and($registry->canonicalRouteName('shopify.embedded.customers'))->toBe('shopify.app.customers.manage')
         ->and($registry->canonicalRouteName('shopify.embedded.settings'))->toBe('shopify.app.settings')
+        ->and($registry->canonicalRouteName('shopify.embedded.product-options'))->toBe('shopify.app.product-options')
         ->and($registry->canonicalRouteName('shopify.app.customers.manage'))->toBe('shopify.app.customers.manage');
 });
 

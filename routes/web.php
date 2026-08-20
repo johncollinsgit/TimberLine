@@ -67,6 +67,7 @@ use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\SesWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
+use App\Http\Controllers\ModernForestryFundraiserZapierController;
 use App\Http\Controllers\Onboarding\CustomerStartHereController;
 use App\Http\Controllers\Onboarding\FirstLoginWorkspaceController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
@@ -164,6 +165,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+
+Route::post('/webhooks/modern-forestry/fundraiser-orders', [ModernForestryFundraiserZapierController::class, 'store'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:60,1')
+    ->name('modern-forestry.fundraiser-zapier.orders');
 
 $normalizeHost = static function (mixed $value): ?string {
     $host = strtolower(trim((string) $value));
@@ -2233,6 +2239,24 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         Route::post('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'saveWidgetSettings'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('settings.widgets.save');
+        Route::get('/settings/fundraiser-invoicing', [ShopifyEmbeddedSettingsController::class, 'fundraiserInvoiceSettings'])
+            ->name('settings.fundraiser-invoicing');
+        Route::post('/settings/fundraiser-invoicing', [ShopifyEmbeddedSettingsController::class, 'saveFundraiserInvoiceSettings'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.save');
+        Route::get('/settings/fundraiser-invoicing/desk', [ShopifyEmbeddedSettingsController::class, 'fundraiserInvoiceDesk'])
+            ->name('settings.fundraiser-invoicing.desk');
+        Route::post('/settings/fundraiser-invoicing/zapier-secret', [ShopifyEmbeddedSettingsController::class, 'rotateFundraiserZapierSecret'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.zapier-secret');
+        Route::post('/settings/fundraiser-invoicing/orders/{order}/approve', [ShopifyEmbeddedSettingsController::class, 'approveFundraiserOrder'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.orders.approve');
+        Route::post('/settings/fundraiser-invoicing/invoice-packages', [ShopifyEmbeddedSettingsController::class, 'prepareFundraiserInvoicePackage'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.packages.prepare');
+        Route::get('/settings/fundraiser-invoicing/invoice-packages/{package}/export', [ShopifyEmbeddedSettingsController::class, 'exportFundraiserInvoicePackage'])
+            ->name('settings.fundraiser-invoicing.packages.export');
         Route::get('/development-notes/access', [ShopifyEmbeddedDevelopmentNotesController::class, 'access'])
             ->name('development-notes.access');
         Route::get('/development-notes/bootstrap', [ShopifyEmbeddedDevelopmentNotesController::class, 'bootstrap'])

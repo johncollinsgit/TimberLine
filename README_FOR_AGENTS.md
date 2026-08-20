@@ -2,6 +2,28 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Modern Forestry fundraiser invoice preparation (2026-08-19)
+
+- The verified Modern Forestry retail Shopify Settings page has a
+  configuration-only Fundraiser Order Invoicing card. It stores payer/contact,
+  cadence, terms, source-shipping, and tax-review posture; its default internal
+  notification address is `info@theforestrystudio.com`.
+- Its token-protected Zapier order intake is a dedicated encrypted,
+  duplicate-protected manual-review queue. It must not be treated as an active
+  commerce or payment lane: QuickBooks invoice creation/delivery, collection,
+  tax decisions, and email-open tracking remain disabled until the requirements in
+  `docs/operations/modern-forestry-fundraiser-order-invoicing-runbook.md` are
+  satisfied. Never route the flow through legacy orders, Shopify Checkout, the
+  Website commerce lane, or the platform's direct-invoice system.
+
+## Modern Forestry embedded app base (2026-08-19)
+
+- Shopify's live Modern Forestry Backstage App URL is the Everbranch root.
+  Preserve the signed, retail-surface-protected root compatibility entries for
+  `/settings` and `/product-options` alongside canonical `/shopify/app/...`
+  routes. The root settings entry must inject the full current settings
+  controller dependency set; otherwise Shopify Admin shows a 500 in its iframe.
+
 ## Modern Forestry product options and bag reminders (2026-08-13)
 
 - Treat `ShopifyProductOptionsService` and its product-handle assignments as the

@@ -2,7 +2,7 @@
 
 client_id = "197d01d6597c938c96b3b35fae6a087c"
 name = "Modern Forestry Backstage"
-application_url = "https://app.theeverbranch.com/shopify/app"
+application_url = "https://app.theeverbranch.com"
 embedded = true
 handle = "modernforestrybackstage"
 

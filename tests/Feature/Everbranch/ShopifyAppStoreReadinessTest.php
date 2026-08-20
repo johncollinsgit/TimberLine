@@ -12,6 +12,7 @@ beforeEach(function (): void {
 
     config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('tenancy.domains.canonical.scheme', 'https');
+    config()->set('tenancy.domains.canonical.landlord_host', 'app.theeverbranch.com');
     config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');
     config()->set('tenancy.landlord.hosts', ['app.theeverbranch.com']);
     config()->set('services.shopify.api_version', '2026-01');
@@ -34,10 +35,10 @@ function shopifyReadinessDoc(): string
     return (string) file_get_contents(base_path('docs/operations/everbranch-shopify-readiness-audit.md'));
 }
 
-test('shopify cli configuration uses canonical Everbranch URLs for app callback and proxy surfaces', function (): void {
+test('shopify cli configuration uses the live embedded app URL and canonical callback and proxy surfaces', function (): void {
     $toml = shopifyReadinessToml();
 
-    expect($toml)->toContain('application_url = "https://app.theeverbranch.com/shopify/app"')
+    expect($toml)->toContain('application_url = "https://app.theeverbranch.com"')
         ->and($toml)->toContain('"https://app.theeverbranch.com/shopify/callback/retail"')
         ->and($toml)->toContain('"https://app.theeverbranch.com/shopify/callback/wholesale"')
         ->and($toml)->toContain('url = "https://app.theeverbranch.com/shopify/marketing/v1"')
