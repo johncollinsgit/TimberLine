@@ -67,9 +67,11 @@ it('runs cleanly and recovers the partial workflow studio migration on mysql', f
         $this->markTestSkipped('This recovery contract requires MySQL.');
     }
 
-    Schema::create('tenants', function (Blueprint $table): void {
-        $table->id();
-    });
+    if (! Schema::hasTable('tenants')) {
+        Schema::create('tenants', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
 
     Schema::create('automation_workflows', function (Blueprint $table): void {
         $table->id();
