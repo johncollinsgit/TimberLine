@@ -52,7 +52,7 @@ class ModernForestryFundraiserInvoiceSettingsService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     public function saveForTenant(int $tenantId, array $payload, ?string $updatedBy = null): TenantMarketingSetting
     {
@@ -125,7 +125,7 @@ class ModernForestryFundraiserInvoiceSettingsService
     }
 
     /** @param array<string,mixed> $payload
-     *  @return array<string,mixed>
+     * @return array<string,mixed>
      */
     protected function normalize(array $payload): array
     {
