@@ -304,14 +304,14 @@ class EverbranchMobileFieldServiceController extends Controller
             $normalizedPhone = $phone !== '' ? $identityNormalizer->normalizePhone($phone) : null;
             $profile = ($email !== '' || $normalizedPhone !== null)
                 ? MarketingProfile::query()->forTenantId((int) $tenant->id)
-                ->where(function (Builder $profiles) use ($email, $normalizedPhone): void {
-                    if ($email !== '') {
-                        $profiles->where('normalized_email', $email);
-                    }
-                    if ($normalizedPhone !== null) {
-                        $email !== '' ? $profiles->orWhere('normalized_phone', $normalizedPhone) : $profiles->where('normalized_phone', $normalizedPhone);
-                    }
-                })->first()
+                    ->where(function (Builder $profiles) use ($email, $normalizedPhone): void {
+                        if ($email !== '') {
+                            $profiles->where('normalized_email', $email);
+                        }
+                        if ($normalizedPhone !== null) {
+                            $email !== '' ? $profiles->orWhere('normalized_phone', $normalizedPhone) : $profiles->where('normalized_phone', $normalizedPhone);
+                        }
+                    })->first()
                 : null;
             $profile ??= MarketingProfile::query()->create([
                 'tenant_id' => (int) $tenant->id, 'first_name' => $first, 'last_name' => $last,
