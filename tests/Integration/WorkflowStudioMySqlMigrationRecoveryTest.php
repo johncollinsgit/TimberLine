@@ -406,6 +406,40 @@ it('resumes mobile bag completion state after the first column is retained', fun
         ->and(Schema::hasColumn('modern_forestry_mobile_bag_snapshots', 'completed_at'))->toBeTrue();
 });
 
+it('resumes sales-tax reporting destination fields after MySQL retains the first column', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('orders')) {
+        Schema::create('orders', function (Blueprint $table): void {
+            $table->id();
+            $table->string('shipping_address1')->nullable();
+        });
+    }
+
+    foreach (['shipping_city', 'shipping_province', 'shipping_province_code', 'shipping_zip', 'shipping_country_code'] as $column) {
+        if (Schema::hasColumn('orders', $column)) {
+            Schema::table('orders', function (Blueprint $table) use ($column): void {
+                $table->dropColumn($column);
+            });
+        }
+    }
+
+    // Simulate the durable partial state: MySQL committed the first column,
+    // then the release stopped before the remaining address columns.
+    Schema::table('orders', function (Blueprint $table): void {
+        $table->string('shipping_city', 120)->nullable()->after('shipping_address1');
+    });
+
+    $migration = require database_path('migrations/2026_08_20_120000_add_reporting_destination_fields_to_orders_table.php');
+    $migration->up();
+
+    foreach (['shipping_city', 'shipping_province', 'shipping_province_code', 'shipping_zip', 'shipping_country_code'] as $column) {
+        expect(Schema::hasColumn('orders', $column))->toBeTrue();
+    }
+});
+
 it('resumes the complete Commerce foundation from durable partial MySQL state', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

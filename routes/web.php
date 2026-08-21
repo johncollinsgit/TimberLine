@@ -90,6 +90,7 @@ use App\Http\Controllers\ShopifyEmbeddedCustomersController;
 use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
+use App\Http\Controllers\ShopifyEmbeddedSalesTaxReportsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyEmbeddedSubscriptionsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
@@ -2057,6 +2058,7 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/reporting/marketing-results', [ShopifyEmbeddedMessagingController::class, 'marketingResults'])->name('shopify.app.reporting.marketing-results');
+    Route::get('/app/reporting/sales-tax', [ShopifyEmbeddedSalesTaxReportsController::class, 'show'])->name('shopify.app.reporting.sales-tax');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
     Route::get('/app/messaging/app-messages', [ShopifyEmbeddedMessagingController::class, 'appMessages'])->name('shopify.app.messaging.app-messages');
     Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');

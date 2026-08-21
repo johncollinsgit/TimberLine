@@ -59,4 +59,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['encrypted fundraiser order table retained before accounting-review package table creation'],
     ],
+    '2026_08_20_120000_add_reporting_destination_fields_to_orders_table.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['first reporting destination column retained before trailing delivery-address columns'],
+    ],
 ];

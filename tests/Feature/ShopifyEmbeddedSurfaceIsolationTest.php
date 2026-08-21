@@ -32,6 +32,7 @@ test('verified wholesale stores redirect every retail html surface to wholesale 
     'retail customers' => ['shopify.app.customers.manage'],
     'assistant' => ['shopify.app.assistant.start'],
     'marketing results' => ['shopify.app.reporting.marketing-results'],
+    'sales tax reports' => ['shopify.app.reporting.sales-tax'],
     'messages' => ['shopify.app.messaging'],
     'rewards' => ['shopify.app.rewards'],
     'edit app' => ['shopify.app.edit'],

@@ -136,6 +136,11 @@ class ShopifyOrderIngestor
             $order->billing_name = $orderData['billing_address']['name'] ?? null;
             $order->shipping_company = $orderData['shipping_address']['company'] ?? null;
             $order->shipping_address1 = $orderData['shipping_address']['address1'] ?? null;
+            $order->shipping_city = $orderData['shipping_address']['city'] ?? null;
+            $order->shipping_province = $orderData['shipping_address']['province'] ?? null;
+            $order->shipping_province_code = $orderData['shipping_address']['province_code'] ?? null;
+            $order->shipping_zip = $orderData['shipping_address']['zip'] ?? null;
+            $order->shipping_country_code = $orderData['shipping_address']['country_code'] ?? null;
             $order->billing_company = $orderData['billing_address']['company'] ?? null;
             $order->billing_address1 = $orderData['billing_address']['address1'] ?? null;
             $order->shopify_customer_id = isset($orderData['customer']['id']) && $orderData['customer']['id'] !== null
