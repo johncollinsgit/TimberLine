@@ -2470,3 +2470,10 @@
 - Added an attributed OpenStreetMap-backed fictional van-route panel to each
   Green Shield job detail. These route overlays are demo-only and separate
   from the globally gated Fleet Tracking product surface.
+# 2026-08-20 — Shopify state sales tax reports
+
+- Added the embedded **Sales Tax Reports** reporting entry with two visible
+  presets: a state-level summary and an address-level detail report.
+- The detail view intentionally explains that county and municipality are not
+  inferred, so an operator can verify the delivery address before entering a
+  return.

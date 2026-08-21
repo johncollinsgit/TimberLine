@@ -1,5 +1,18 @@
 # SYSTEM SNAPSHOT
 
+## Shopify State Sales Tax Reporting (2026-08-20)
+
+- Modern Forestry Backstage now exposes a tenant-scoped, read-only **Sales Tax
+  Reports** workspace with two presets: **State Sales Tax Summary** and
+  **State Sales Tax Detail**. It reads imported Shopify retail orders only for
+  the signed embedded store, displays imported sales/refund/tax data by
+  delivery state, and keeps delivery-address detail visible for jurisdiction
+  verification.
+- This is reconciliation support, never a tax engine: it does not infer a
+  county or municipality, decide taxability, calculate a filing liability,
+  submit a return, make a payment, or change Shopify/Square/QuickBooks data.
+  See `docs/operations/shopify-state-sales-tax-reporting-runbook.md`.
+
 ## Modern Forestry fundraiser invoice preparation (2026-08-19)
 
 - Modern Forestry's verified retail Shopify Settings surface now includes a
