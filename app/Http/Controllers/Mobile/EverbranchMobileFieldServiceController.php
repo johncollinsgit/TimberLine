@@ -104,6 +104,7 @@ class EverbranchMobileFieldServiceController extends Controller
         if ($bucket === 'past') {
             $query->whereIn('operational_status', ['complete', 'canceled', 'history']);
         } else {
+            $query->whereNull('archived_at');
             $this->applyFilter($query, $filter, $user);
         }
         $search = trim((string) ($validated['q'] ?? ''));
