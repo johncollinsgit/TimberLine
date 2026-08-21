@@ -28,6 +28,7 @@ use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
 use App\Services\Tenancy\TenantFinancialAccess;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -79,7 +80,6 @@ class EverbranchMobileFieldServiceController extends Controller
         }
         $month = Carbon::createFromFormat('Y-m', (string) ($validated['month'] ?? now()->format('Y-m')))->startOfMonth();
         $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
-            ->whereNull('archived_at')
             ->notGeneratedQuickBooksInvoice()
             ->with([
                 'assignedUser:id,name', 'participants:id,name', 'vehicles:id,tenant_id,name,identifier,status',
@@ -104,6 +104,7 @@ class EverbranchMobileFieldServiceController extends Controller
         if ($bucket === 'past') {
             $query->whereIn('operational_status', ['complete', 'canceled', 'history']);
         } else {
+            $query->whereNull('archived_at');
             $this->applyFilter($query, $filter, $user);
         }
         $search = trim((string) ($validated['q'] ?? ''));
@@ -270,7 +271,7 @@ class EverbranchMobileFieldServiceController extends Controller
         ]);
     }
 
-    public function storeJob(Request $request, FieldServiceAccessService $access, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications): JsonResponse
+    public function storeJob(Request $request, FieldServiceAccessService $access, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications, MarketingIdentityNormalizer $identityNormalizer): JsonResponse
     {
         $tenant = $this->tenant($request);
         $user = $this->user($request);
@@ -300,12 +301,46 @@ class EverbranchMobileFieldServiceController extends Controller
             $name = trim((string) $validated['customer_name']);
             [$first, $last] = array_pad(preg_split('/\s+/', $name, 2) ?: [], 2, null);
             $email = Str::lower(trim((string) ($validated['customer_email'] ?? '')));
-            $profile = $email !== '' ? MarketingProfile::query()->forTenantId((int) $tenant->id)->where('normalized_email', $email)->first() : null;
+            $phone = trim((string) ($validated['customer_phone'] ?? ''));
+            $normalizedPhone = $phone !== '' ? $identityNormalizer->normalizePhone($phone) : null;
+            $profile = ($email !== '' || $normalizedPhone !== null)
+                ? MarketingProfile::query()->forTenantId((int) $tenant->id)
+                    ->where(function (Builder $profiles) use ($email, $normalizedPhone): void {
+                        if ($email !== '') {
+                            $profiles->where('normalized_email', $email);
+                        }
+                        if ($normalizedPhone !== null) {
+                            $email !== '' ? $profiles->orWhere('normalized_phone', $normalizedPhone) : $profiles->where('normalized_phone', $normalizedPhone);
+                        }
+                    })->first()
+                : null;
             $profile ??= MarketingProfile::query()->create([
                 'tenant_id' => (int) $tenant->id, 'first_name' => $first, 'last_name' => $last,
-                'email' => $email ?: null, 'normalized_email' => $email ?: null, 'phone' => $validated['customer_phone'] ?? null,
+                'email' => $email ?: null, 'normalized_email' => $email ?: null, 'phone' => $phone ?: null, 'normalized_phone' => $normalizedPhone,
+                'address_line_1' => $validated['service_address_line_1'] ?? null,
+                'address_line_2' => $validated['service_address_line_2'] ?? null,
+                'city' => $validated['service_city'] ?? null,
+                'state' => $validated['service_state'] ?? null,
+                'postal_code' => $validated['service_postal_code'] ?? null,
+                'country' => $validated['service_country'] ?? null,
                 'source_channels' => ['field_service'],
             ]);
+            if ($profile->exists) {
+                $profile->fill([
+                    'phone' => $profile->phone ?: ($phone ?: null),
+                    'normalized_phone' => $profile->normalized_phone ?: $normalizedPhone,
+                    'address_line_1' => $profile->address_line_1 ?: ($validated['service_address_line_1'] ?? null),
+                    'address_line_2' => $profile->address_line_2 ?: ($validated['service_address_line_2'] ?? null),
+                    'city' => $profile->city ?: ($validated['service_city'] ?? null),
+                    'state' => $profile->state ?: ($validated['service_state'] ?? null),
+                    'postal_code' => $profile->postal_code ?: ($validated['service_postal_code'] ?? null),
+                    'country' => $profile->country ?: ($validated['service_country'] ?? null),
+                    'source_channels' => array_values(array_unique([...((array) $profile->source_channels), 'field_service'])),
+                ]);
+                if ($profile->isDirty()) {
+                    $profile->save();
+                }
+            }
         }
         $assigned = $this->tenantUserId($tenant, $validated['assigned_user_id'] ?? null);
         $invoiceIds = collect((array) ($validated['invoice_ids'] ?? []))->filter(fn ($id): bool => is_numeric($id))->map(fn ($id): int => (int) $id)->unique()->values();
@@ -810,7 +845,6 @@ class EverbranchMobileFieldServiceController extends Controller
     protected function counts(Tenant $tenant, User $user, FieldServiceAccessService $access): array
     {
         $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
-            ->whereNull('archived_at')
             ->notGeneratedQuickBooksInvoice();
         $access->scopeVisibleJobs($query, $user, $tenant);
 

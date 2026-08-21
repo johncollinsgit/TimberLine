@@ -16,7 +16,7 @@
 
 <x-layouts::app.sidebar title="Field Service">
     <flux:main>
-        <div class="fb-workflow-shell">
+        <div class="fb-workflow-shell fb-workflow-shell--wide">
             <header class="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 pb-5">
                 <div>
                     <div class="fb-eyebrow">{{ $tenantName }}</div>
