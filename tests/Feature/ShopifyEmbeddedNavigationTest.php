@@ -227,7 +227,7 @@ test('embedded navigation order includes messaging when module access is enabled
 
             return $keys === ['home', 'subscriptions', 'assistant', 'customers', 'reporting', 'messaging', 'rewards', 'edit_app', 'settings']
                 && $labels[2] === 'AI Assistant'
-                && $labels[4] === 'Marketing Results'
+                && $labels[4] === 'Sales Tax Reports'
                 && $labels[5] === 'Messages';
         });
 });
