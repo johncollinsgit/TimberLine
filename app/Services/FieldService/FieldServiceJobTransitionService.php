@@ -36,7 +36,7 @@ class FieldServiceJobTransitionService
                 'blocked_reason' => $action === 'block' ? trim((string) $reason) : null,
                 'completed_at' => $action === 'complete' ? ($job->completed_at ?? $now) : ($action === 'reopen' ? null : $job->completed_at),
                 'canceled_at' => $action === 'cancel' ? ($job->canceled_at ?? $now) : ($action === 'reopen' ? null : $job->canceled_at),
-                'archived_at' => in_array($status, ['canceled', 'history'], true) ? ($job->archived_at ?? $now) : null,
+                'archived_at' => in_array($status, ['complete', 'canceled', 'history'], true) ? ($job->archived_at ?? $now) : null,
             ])->save();
 
             if ($action === 'complete' && $job->equipment) {

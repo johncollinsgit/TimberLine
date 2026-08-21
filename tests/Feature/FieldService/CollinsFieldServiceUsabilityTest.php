@@ -6,6 +6,7 @@ use App\Models\FieldServicePriceBookItem;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceTaskEvent;
 use App\Models\IntegrationConnection;
+use App\Models\MarketingProfile;
 use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
@@ -259,6 +260,49 @@ test('field service mobile fails closed when the branch is disabled', function (
 
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service')->assertNotFound();
+});
+
+test('creating a mobile job saves a reusable customer and its supplied address', function (): void {
+    [$tenant, $owner] = usabilityWorkspace();
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+
+    $response = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs', [
+        'customer_name' => 'Morgan Customer',
+        'customer_email' => 'morgan@example.com',
+        'customer_phone' => '(864) 555-0199',
+        'title' => 'Install garage subpanel',
+        'service_address_line_1' => '42 Main Street',
+        'service_city' => 'Greenville',
+        'service_state' => 'SC',
+        'service_postal_code' => '29601',
+    ])->assertCreated();
+
+    $profile = MarketingProfile::query()->forTenantId($tenant->id)->where('normalized_email', 'morgan@example.com')->firstOrFail();
+    expect($profile->phone)->toBe('(864) 555-0199')
+        ->and($profile->normalized_phone)->not->toBeNull()
+        ->and($profile->address_line_1)->toBe('42 Main Street')
+        ->and($profile->city)->toBe('Greenville')
+        ->and($profile->source_channels)->toContain('field_service')
+        ->and(FieldServiceJob::query()->findOrFail($response->json('job_id'))->marketing_profile_id)->toBe($profile->id);
+});
+
+test('completing a field job archives it while keeping it searchable in past jobs', function (): void {
+    [$tenant, $owner] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Complete and retain',
+        'status' => 'open',
+        'operational_status' => 'active',
+        'status_source' => 'manual',
+    ]);
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'complete'])
+        ->assertOk()->assertJsonPath('status', 'complete');
+
+    expect($job->fresh()->archived_at)->not->toBeNull();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list&bucket=past&q=Complete and retain')
+        ->assertOk()->assertJsonPath('jobs.0.id', $job->id);
 });
 
 test('work 2 readiness and field transitions preserve manager and participant boundaries', function (): void {
