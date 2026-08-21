@@ -6132,6 +6132,16 @@ body.mf-app-shell {
   min-width: 0;
 }
 
+/* Field teams commonly use wide dispatch screens. Let the calendar cards use
+   the available workspace without changing narrower workflow surfaces. */
+@media (min-width: 1280px) {
+  .fb-workflow-shell--wide {
+    width: 100%;
+    max-width: none;
+    padding-inline: 1.5rem;
+  }
+}
+
 @media (max-width: 640px) {
   .fb-workflow-shell {
     max-width: calc(100vw - 24px);
