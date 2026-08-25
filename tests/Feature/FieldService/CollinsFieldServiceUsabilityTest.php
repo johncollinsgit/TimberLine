@@ -499,6 +499,11 @@ test('job details and update attachments stay editable and visible to the full C
         ->get(route('documents.preview', ['tenant' => $tenant->slug, 'asset' => $asset]))
         ->assertOk()
         ->assertHeader('Content-Type', 'image/jpeg');
+    $this->actingAs($member)
+        ->getJson(route('field-service.jobs.updates', ['tenant' => $tenant->slug, 'job' => $job]))
+        ->assertOk()
+        ->assertJsonPath('updates.0.body', 'Before photo from the job site.')
+        ->assertJsonPath('updates.0.attachments.0.name', 'service-before.jpg');
 
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
     $this->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/comments', [

@@ -17,6 +17,7 @@ use App\Models\FieldServiceWorkShift;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WorkspaceAsset;
 use App\Services\Automation\GoogleCalendarWorkflowConnectionService;
 use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
@@ -278,6 +279,42 @@ class FieldServiceController extends Controller
         $job->fill($validated)->save();
 
         return back()->with('status', 'Job details saved.');
+    }
+
+    public function jobUpdates(Request $request, FieldServiceJob $job): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        $job->load([
+            'notes.createdBy',
+            'assets' => fn ($assets) => $assets->where('visibility', 'team')->orderByDesc('workspace_assets.created_at'),
+        ]);
+        $attachmentsByNote = $job->assets
+            ->filter(fn (WorkspaceAsset $asset): bool => filled(data_get($asset->metadata, 'field_service_job_note_id')))
+            ->groupBy(fn (WorkspaceAsset $asset): int => (int) data_get($asset->metadata, 'field_service_job_note_id'));
+
+        return response()->json([
+            'updates' => $job->notes->sortByDesc('noted_at')->map(function (FieldServiceJobNote $note) use ($attachmentsByNote, $tenant): array {
+                return [
+                    'id' => (int) $note->id,
+                    'body' => $note->body,
+                    'author' => $note->createdBy?->name ?: 'Team update',
+                    'noted_at' => $note->noted_at?->toIso8601String(),
+                    'attachments' => $attachmentsByNote->get((int) $note->id, collect())->map(function (WorkspaceAsset $asset) use ($tenant): array {
+                        $image = str_starts_with((string) $asset->mime_type, 'image/');
+
+                        return [
+                            'id' => (int) $asset->id,
+                            'name' => $asset->file_name,
+                            'mime_type' => $asset->mime_type,
+                            'url' => route($image ? 'documents.preview' : 'documents.download', [$tenant, $asset]),
+                            'preview_url' => $image ? route('documents.preview', [$tenant, $asset]) : null,
+                        ];
+                    })->values(),
+                ];
+            })->values(),
+        ]);
     }
 
     public function reviewWorkCandidate(Request $request, FieldServiceWorkCandidate $candidate, FieldServiceWorkCandidateService $candidates): JsonResponse
