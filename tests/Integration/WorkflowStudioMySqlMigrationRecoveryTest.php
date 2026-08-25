@@ -570,6 +570,35 @@ it('resumes marketing profile archival after the additive column is retained', f
     expect(Schema::hasColumn('marketing_profiles', 'archived_at'))->toBeTrue();
 });
 
+it('resumes the job-update SMS setting after its column is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('field_service_reminder_settings')) {
+        Schema::create('field_service_reminder_settings', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('tenant_id');
+            $table->timestamps();
+        });
+    }
+
+    if (Schema::hasColumn('field_service_reminder_settings', 'job_update_sms')) {
+        Schema::table('field_service_reminder_settings', function (Blueprint $table): void {
+            $table->dropColumn('job_update_sms');
+        });
+    }
+
+    $migration = require database_path('migrations/2026_08_25_150000_add_job_update_sms_setting_to_field_service_reminder_settings.php');
+    $migration->up();
+
+    // A deploy may stop after MySQL has committed the DDL but before Laravel
+    // records the migration. A retry must safely retain the existing column.
+    $migration->up();
+
+    expect(Schema::hasColumn('field_service_reminder_settings', 'job_update_sms'))->toBeTrue();
+});
+
 it('resumes marketing groups after MySQL rejects the legacy import-row foreign-key name', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

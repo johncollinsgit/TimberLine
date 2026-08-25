@@ -31,6 +31,7 @@ use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +51,7 @@ class FieldServiceController extends Controller
         protected FieldServiceWorkProfileService $profiles,
         protected FieldServiceTaskAssignmentService $taskAssignments,
         protected GoogleCalendarWorkflowConnectionService $googleCalendar,
+        protected MarketingIdentityNormalizer $identityNormalizer,
     ) {}
 
     public function index(Request $request, TenantFinancialAccess $financialAccess, FieldServiceOwnerHomeMetricsService $homeMetrics): View|RedirectResponse
@@ -894,7 +896,9 @@ class FieldServiceController extends Controller
             'attachments.*' => ['required', 'file', 'max:25600'],
         ]);
 
-        DB::transaction(function () use ($assets, $request, $tenant, $job, $validated): void {
+        $note = null;
+
+        DB::transaction(function () use (&$note, $assets, $request, $tenant, $job, $validated): void {
             $note = FieldServiceJobNote::query()->create([
                 'tenant_id' => (int) $tenant->id,
                 'field_service_job_id' => (int) $job->id,
@@ -938,6 +942,10 @@ class FieldServiceController extends Controller
                 );
             }
         });
+
+        if ($note instanceof FieldServiceJobNote && $request->user() instanceof User) {
+            $this->notifications->notifyComment($job, $note, $request->user(), []);
+        }
 
         return back()->with('status', 'Job update added.');
     }
@@ -1037,7 +1045,19 @@ class FieldServiceController extends Controller
             'timezone' => ['nullable', 'string', 'max:80'],
             'customer_copy' => ['nullable', 'string', 'max:2000'],
             'internal_notes' => ['nullable', 'string', 'max:5000'],
+            'job_update_sms_phone' => ['nullable', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (filled($value) && $this->identityNormalizer->toE164((string) $value) === null) {
+                    $fail('Enter a valid 10-digit United States phone number.');
+                }
+            }],
+            'job_update_sms_enabled' => ['nullable', 'boolean'],
         ]);
+
+        $existing = FieldServiceReminderSetting::query()->forTenantId((int) $tenant->id)->first();
+        $jobUpdateSms = [
+            'phone' => $this->identityNormalizer->toE164($validated['job_update_sms_phone'] ?? null),
+            'enabled' => (bool) ($validated['job_update_sms_enabled'] ?? false),
+        ];
 
         FieldServiceReminderSetting::query()->updateOrCreate(
             ['tenant_id' => (int) $tenant->id],
@@ -1047,13 +1067,14 @@ class FieldServiceController extends Controller
                 'cadence' => (string) $validated['cadence'],
                 'send_time' => $validated['send_time'] ?? null,
                 'timezone' => $validated['timezone'] ?? 'America/New_York',
-                'provider_status' => 'not_verified',
+                'provider_status' => $existing?->provider_status ?: 'not_verified',
+                'job_update_sms' => $jobUpdateSms,
                 'customer_copy' => $validated['customer_copy'] ?? null,
                 'internal_notes' => $validated['internal_notes'] ?? null,
             ]
         );
 
-        return back()->with('status', 'Reminder setup saved for Everbranch review. SMS stays off until delivery is verified.');
+        return back()->with('status', 'Job-update text setting saved. Texts stay off until the Everbranch SMS sender is verified.');
     }
 
     protected function tenant(Request $request): Tenant

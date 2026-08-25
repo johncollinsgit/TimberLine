@@ -67,4 +67,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['archival column retained before Laravel records the migration batch'],
     ],
+    '2026_08_25_150000_add_job_update_sms_setting_to_field_service_reminder_settings.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['job-update SMS setting column retained before Laravel records the migration batch'],
+    ],
 ];

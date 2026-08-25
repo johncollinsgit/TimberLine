@@ -2817,6 +2817,7 @@ CREATE TABLE `field_service_reminder_settings` (
   `internal_notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `job_update_sms` json DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `field_service_reminder_settings_tenant_id_unique` (`tenant_id`),
   KEY `fs_reminders_enabled_provider_idx` (`enabled`,`provider_status`),

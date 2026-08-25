@@ -2,6 +2,7 @@
 
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceMaterial;
+use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
@@ -50,6 +51,28 @@ test('work grid data includes the summary used by the job popup', function (): v
         ->assertJsonPath('rows.0.customer_email', 'nathan@example.com')
         ->assertJsonPath('rows.0.description', 'Inspect the transfer switch and test the generator.')
         ->assertJsonPath('rows.0.service_address', '100 Main Street, Greenville SC 29601');
+});
+
+test('a manager can save one verified-format destination for job update text alerts', function (): void {
+    [$tenant, $user] = fieldServiceTenantAndUser();
+
+    $this->actingAs($user)
+        ->post(route('field-service.reminders.update', ['tenant' => $tenant->slug]), [
+            'enabled' => false,
+            'channel' => 'sms',
+            'cadence' => 'daily',
+            'send_time' => '08:00',
+            'timezone' => 'America/New_York',
+            'job_update_sms_phone' => '18646406642',
+            'job_update_sms_enabled' => true,
+        ])
+        ->assertRedirect();
+
+    $setting = FieldServiceReminderSetting::query()->forTenantId($tenant->id)->sole();
+
+    expect(data_get($setting->job_update_sms, 'phone'))->toBe('+18646406642')
+        ->and(data_get($setting->job_update_sms, 'enabled'))->toBeTrue()
+        ->and($setting->provider_status)->toBe('not_verified');
 });
 
 test('a manager can delete one or more current grid jobs into searchable history', function (): void {

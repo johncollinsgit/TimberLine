@@ -1,5 +1,17 @@
 # UI Changelog
 
+## 2026-08-25 — Job update text-alert destination
+
+### What Changed
+
+- Field-service managers can save one office phone number for job-update text alerts. Collins Electric is prefilled with +1 (864) 640-6642.
+- Web and field-app job comments, photo updates, and file updates now pass through the same job-notification service. Each text identifies the job, the person who posted it, and the update itself.
+
+### Guardrails
+
+- Saving the number never sends a test or live message. Delivery remains blocked until the existing Everbranch SMS sender is verified and an authorized manager turns alerts on.
+- The notification record keeps only the configured destination's last four digits for audit context.
+
 ## 2026-08-24 — Operational customer directory
 
 ### What Changed

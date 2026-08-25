@@ -30,6 +30,45 @@
                 @endif
             </header>
 
+            @if(data_get($capabilities ?? [], 'manage_jobs'))
+                @php
+                    $jobUpdateSms = (array) ($reminderSetting->job_update_sms ?? []);
+                    $jobUpdateSmsEnabled = filter_var(old('job_update_sms_enabled', data_get($jobUpdateSms, 'enabled', false)), FILTER_VALIDATE_BOOLEAN);
+                @endphp
+                <section class="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-7">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 class="text-xl font-semibold text-zinc-950">Job update text alerts</h2>
+                            <p class="mt-1 text-sm text-zinc-600">Choose one office number for update comments, photos, and files from the web or field app.</p>
+                        </div>
+                        <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $reminderSetting->provider_status === 'verified' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900' }}">
+                            {{ $reminderSetting->provider_status === 'verified' ? 'SMS sender verified' : 'SMS sender needs verification' }}
+                        </span>
+                    </div>
+                    <form method="POST" action="{{ route('field-service.reminders.update') }}" class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
+                        @csrf
+                        <input type="hidden" name="enabled" value="{{ $reminderSetting->enabled ? '1' : '0' }}">
+                        <input type="hidden" name="channel" value="{{ $reminderSetting->channel ?: 'sms' }}">
+                        <input type="hidden" name="cadence" value="{{ $reminderSetting->cadence ?: 'daily' }}">
+                        <input type="hidden" name="send_time" value="{{ $reminderSetting->send_time }}">
+                        <input type="hidden" name="timezone" value="{{ $reminderSetting->timezone ?: 'America/New_York' }}">
+                        <input type="hidden" name="customer_copy" value="{{ $reminderSetting->customer_copy }}">
+                        <input type="hidden" name="internal_notes" value="{{ $reminderSetting->internal_notes }}">
+                        <label class="block">
+                            <span class="text-sm font-semibold text-zinc-800">Send job updates to</span>
+                            <input name="job_update_sms_phone" inputmode="tel" autocomplete="tel" value="{{ old('job_update_sms_phone', data_get($jobUpdateSms, 'phone')) }}" class="mt-2 w-full rounded-xl border border-zinc-300 px-3 py-3 text-base" placeholder="+1 (864) 640-6642">
+                        </label>
+                        <label class="flex min-h-12 items-center gap-3 rounded-xl border border-zinc-300 px-4 text-sm font-semibold text-zinc-800">
+                            <input type="hidden" name="job_update_sms_enabled" value="0">
+                            <input type="checkbox" name="job_update_sms_enabled" value="1" class="h-5 w-5 rounded border-zinc-400 text-emerald-700 focus:ring-emerald-600" @checked($jobUpdateSmsEnabled)>
+                            Turn on text alerts
+                        </label>
+                        <button type="submit" class="fb-btn fb-btn-primary min-h-12 justify-center">Save alert number</button>
+                    </form>
+                    <p class="mt-3 text-xs text-zinc-500">Saving this number does not send a text. Alerts remain blocked until the workspace SMS sender is verified.</p>
+                </section>
+            @endif
+
             @php
                 $calendarStart = $homeCalendarStart ?? now()->startOfDay();
                 $calendarDays = collect(range(0, 6))->map(fn (int $offset) => $calendarStart->copy()->addDays($offset));
