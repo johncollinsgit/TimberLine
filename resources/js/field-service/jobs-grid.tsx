@@ -16,11 +16,13 @@ type Row = {
 };
 type Options = { team: { id: number; name: string }[]; vehicles: { id: number; name: string; identifier?: string }[]; statuses: string[] };
 type Meta = { bucket: Bucket; page: number; last_page: number; total: number };
-type Props = { endpoint: string; updateTemplate: string; candidateTemplate: string; canManage: boolean; canManageDrafts: boolean };
+type Props = { endpoint: string; updateTemplate: string; transitionTemplate: string; candidateTemplate: string; canManage: boolean; canManageDrafts: boolean };
 type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
 type OpenCell = CustomCell<{ kind: "open-job" }>;
+type DeleteCell = CustomCell<{ kind: "delete-job" }>;
 
 const openColumn: GridColumn & { id: string } = { id: "open", title: "", width: 92 };
+const deleteColumn: GridColumn & { id: string } = { id: "delete", title: "Action", width: 104 };
 const openCellRenderer: CustomRenderer<OpenCell> = {
     kind: GridCellKind.Custom,
     isMatch: (cell): cell is OpenCell => cell.data.kind === "open-job",
@@ -44,6 +46,34 @@ const openCellRenderer: CustomRenderer<OpenCell> = {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText("Open", rect.x + rect.width / 2, rect.y + rect.height / 2 + 0.5);
+        ctx.restore();
+        return true;
+    },
+};
+
+const deleteCellRenderer: CustomRenderer<DeleteCell> = {
+    kind: GridCellKind.Custom,
+    isMatch: (cell): cell is DeleteCell => cell.data.kind === "delete-job",
+    needsHover: true,
+    draw: ({ ctx, rect, theme, hoverAmount, overrideCursor }) => {
+        const x = rect.x + 9;
+        const y = rect.y + 8;
+        const width = rect.width - 18;
+        const height = rect.height - 16;
+        overrideCursor?.("pointer");
+        ctx.save();
+        ctx.beginPath();
+        roundedRect(ctx, x, y, width, height, 7);
+        ctx.fillStyle = hoverAmount > 0 ? "#fff1f2" : "#fffafa";
+        ctx.fill();
+        ctx.strokeStyle = hoverAmount > 0 ? "#e11d48" : "#fda4af";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = "#9f1239";
+        ctx.font = `600 ${theme.baseFontFull}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Delete", rect.x + rect.width / 2, rect.y + rect.height / 2 + 0.5);
         ctx.restore();
         return true;
     },
@@ -94,7 +124,7 @@ function dateTimeLocalValue(value?: string): string {
     return local.toISOString().slice(0, 16);
 }
 
-function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canManage, canManageDrafts }: Props) {
+function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, candidateTemplate, canManage, canManageDrafts }: Props) {
     const [bucket, setBucket] = useState<Bucket>("current");
     const [rows, setRows] = useState<Row[]>([]);
     const [options, setOptions] = useState<Options>({ team: [], vehicles: [], statuses: [] });
@@ -113,8 +143,10 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
     const [openedJobId, setOpenedJobId] = useState<number | null>(null);
     const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
     const [gridRef, size] = useSize();
+    const archivingJobIds = useRef(new Set<number>());
     const availableColumns = useMemo(() => allColumns.filter(column => canManageDrafts && bucket !== "potential" || !financialColumns.has(column.id)), [bucket, canManageDrafts]);
-    const columns = useMemo(() => [openColumn, ...availableColumns.filter(column => visible.includes(column.id))], [availableColumns, visible]);
+    const showDeleteAction = canManage && bucket === "current";
+    const columns = useMemo(() => [openColumn, ...(showDeleteAction ? [deleteColumn] : []), ...availableColumns.filter(column => visible.includes(column.id))], [availableColumns, showDeleteAction, visible]);
     const openedJob = openedJobId === null ? null : rows.find(row => row.kind === "job" && row.id === openedJobId) || null;
 
     useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
@@ -160,10 +192,30 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
         }
     }, [canManage, rows, updateTemplate]);
 
+    const archiveJob = useCallback(async (row: Row) => {
+        if (!canManage || row.kind !== "job" || archivingJobIds.current.has(row.id)) return;
+        if (!window.confirm(`Delete “${row.title}” from active work? It will remain searchable in job history.`)) return;
+        archivingJobIds.current.add(row.id);
+        setSaveState("Deleting…");
+        try {
+            await axios.post(transitionTemplate.replace(/\/0\/transitions$/, `/${row.id}/transitions`), { action: "archive" });
+            setOpenedJobId(null);
+            setSaveState("Deleted — in history");
+            setReload(value => value + 1);
+            window.setTimeout(() => setSaveState(""), 2200);
+        } catch (failure) {
+            setSaveState("Delete failed");
+            setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "The job could not be deleted." : "The job could not be deleted.");
+        } finally {
+            archivingJobIds.current.delete(row.id);
+        }
+    }, [canManage, transitionTemplate]);
+
     const getCellContent = useCallback(([col, rowIndex]: Item): GridCell => {
         const row = rows[rowIndex]; const column = columns[col];
         if (!row || !column) return { kind: GridCellKind.Text, data: "", displayData: "", readonly: true, allowOverlay: false };
         if (column.id === "open") return { kind: GridCellKind.Custom, data: { kind: "open-job" }, copyData: "Open", readonly: true, allowOverlay: false, cursor: "pointer" };
+        if (column.id === "delete") return { kind: GridCellKind.Custom, data: { kind: "delete-job" }, copyData: "Delete", readonly: true, allowOverlay: false, cursor: "pointer" };
         const value = display(column.id, row);
         return { kind: GridCellKind.Text, data: value === "—" ? "" : value, displayData: value, readonly: !canManage || row.kind !== "job" || !editable.has(column.id), allowOverlay: canManage && row.kind === "job" && editable.has(column.id) };
     }, [canManage, columns, rows]);
@@ -190,9 +242,11 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
 
     const clickCell = useCallback(([col, rowIndex]: Item) => {
         const row = rows[rowIndex]; const key = columns[col]?.id;
-        if (!row || key !== "open") return;
+        if (!row) return;
+        if (key === "delete") { void archiveJob(row); return; }
+        if (key !== "open") return;
         if (row.kind === "candidate") setCandidate(row); else setOpenedJobId(row.id);
-    }, [columns, rows]);
+    }, [archiveJob, columns, rows]);
 
     function saveView() {
         const name = window.prompt("Name this view"); if (!name?.trim()) return;
@@ -239,7 +293,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button onClick={() => setError("")} className="ml-3 font-semibold underline">Dismiss</button></div> : null}
 
         <div ref={gridRef} className="min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={clickCell} cellActivationBehavior="single-click" customRenderers={[openCellRenderer]} freezeColumns={1} rowMarkers="none" width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
+            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={clickCell} cellActivationBehavior="single-click" customRenderers={[openCellRenderer, deleteCellRenderer]} freezeColumns={showDeleteAction ? 2 : 1} rowMarkers="none" width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
         </div>
 
         <div className="flex items-center justify-between"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Previous</button><span className="text-sm text-zinc-600">Page {meta.page} of {Math.max(1, meta.last_page)}</span><button disabled={page >= meta.last_page} onClick={() => setPage(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next</button></div>
@@ -251,6 +305,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
                     <span className="text-sm text-zinc-500">{openedJob.source || "Everbranch"}</span>
                     <div className="ml-auto flex items-center gap-2">
                         {openedJob.url ? <a href={openedJob.url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-950 hover:bg-blue-100">Full job page ↗</a> : null}
+                        {canManage && bucket === "current" ? <button type="button" onClick={() => void archiveJob(openedJob)} className="inline-flex min-h-10 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-100">Delete job</button> : null}
                         <button type="button" onClick={() => setOpenedJobId(null)} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-white text-xl text-zinc-700 hover:bg-zinc-100" aria-label="Close job">×</button>
                     </div>
                 </header>
@@ -335,5 +390,5 @@ function FieldServiceGrid({ endpoint, updateTemplate, candidateTemplate, canMana
 
 const root = document.getElementById("field-service-jobs-grid");
 if (root) {
-    createRoot(root).render(<FieldServiceGrid endpoint={root.dataset.endpoint || ""} updateTemplate={root.dataset.updateTemplate || ""} candidateTemplate={root.dataset.candidateTemplate || ""} canManage={root.dataset.canManage === "1"} canManageDrafts={root.dataset.canManageDrafts === "1"} />);
+    createRoot(root).render(<FieldServiceGrid endpoint={root.dataset.endpoint || ""} updateTemplate={root.dataset.updateTemplate || ""} transitionTemplate={root.dataset.transitionTemplate || ""} candidateTemplate={root.dataset.candidateTemplate || ""} canManage={root.dataset.canManage === "1"} canManageDrafts={root.dataset.canManageDrafts === "1"} />);
 }

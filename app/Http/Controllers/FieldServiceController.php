@@ -785,7 +785,7 @@ class FieldServiceController extends Controller
         return back()->with('status', $result['replayed'] ? 'Task handoff already recorded.' : 'Task handed off.');
     }
 
-    public function transitionJob(Request $request, FieldServiceJob $job): RedirectResponse
+    public function transitionJob(Request $request, FieldServiceJob $job): RedirectResponse|JsonResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
@@ -803,6 +803,14 @@ class FieldServiceController extends Controller
         );
 
         $this->transitions->transition($tenant, $job, $request->user(), $validated['action'], $validated['reason'] ?? null);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'status' => $job->fresh()->operational_status,
+                'archived_at' => $job->fresh()->archived_at?->toIso8601String(),
+            ]);
+        }
 
         return back()->with('status', 'Job status updated.');
     }

@@ -2511,3 +2511,8 @@
 
 - Expanded the job-detail Updates feed across the full Collins workspace canvas so field updates have room for long notes and team handoffs.
 - Added direct **Complete & archive** and recoverable **Delete job** actions to the job header. Both preserve a searchable job-history record, while destructive intent is confirmed before submission.
+
+### Collins Jobs-grid deletion
+
+- Added a confirmed **Delete** action column to the current Jobs grid, plus the same action in its quick-view panel for managers.
+- Grid deletion uses the same audited, recoverable archive transition as the job detail and immediately refreshes the active-work list.

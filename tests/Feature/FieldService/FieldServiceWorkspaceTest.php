@@ -22,6 +22,7 @@ test('base workspace tenant can open the field service start page', function ():
         ->assertSeeText('Find, sort, assign, and update field work')
         ->assertSeeText('Create job')
         ->assertSee('field-service-jobs-grid', false)
+        ->assertSee('data-transition-template', false)
         ->assertDontSeeText('Pour Lists');
 });
 
@@ -49,6 +50,24 @@ test('work grid data includes the summary used by the job popup', function (): v
         ->assertJsonPath('rows.0.customer_email', 'nathan@example.com')
         ->assertJsonPath('rows.0.description', 'Inspect the transfer switch and test the generator.')
         ->assertJsonPath('rows.0.service_address', '100 Main Street, Greenville SC 29601');
+});
+
+test('a manager can delete a current grid job into searchable history', function (): void {
+    [$tenant, $user] = fieldServiceTenantAndUser();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Duplicate panel inspection',
+        'status' => 'open',
+        'operational_status' => 'scheduled',
+        'status_source' => 'manual',
+    ]);
+
+    $this->actingAs($user)
+        ->postJson(route('field-service.jobs.transitions', ['tenant' => $tenant->slug, 'job' => $job]), ['action' => 'archive'])
+        ->assertOk()
+        ->assertJsonPath('status', 'history');
+
+    expect($job->fresh()->archived_at)->not->toBeNull();
 });
 
 test('field service creates a tenant scoped customer job task and material', function (): void {
