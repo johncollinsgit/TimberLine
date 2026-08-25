@@ -46,6 +46,7 @@ class MarketingProfile extends Model
         'merged_into_profile_id',
         'merge_operation_id',
         'merged_at',
+        'archived_at',
         'mobile_avatar_path',
         'mobile_avatar_uploaded_at',
     ];
@@ -64,6 +65,7 @@ class MarketingProfile extends Model
         'merge_operation_id' => 'integer',
         'tags' => 'array',
         'merged_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     protected static function booted(): void

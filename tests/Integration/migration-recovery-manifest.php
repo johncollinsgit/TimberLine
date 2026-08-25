@@ -63,4 +63,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first reporting destination column retained before trailing delivery-address columns'],
     ],
+    '2026_08_24_120000_add_archival_to_marketing_profiles.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['archival column retained before Laravel records the migration batch'],
+    ],
 ];

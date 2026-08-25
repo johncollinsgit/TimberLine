@@ -1,5 +1,16 @@
 # SYSTEM SNAPSHOT
 
+## Operational customer directory and calendar context (2026-08-24)
+
+- Field-service workspaces use a focused customer directory backed by canonical
+  `marketing_profiles`. It omits retail-only Growave, loyalty, review, and
+  birthday controls, supports recoverable archival, and preserves linked jobs
+  and history. Retail marketing presentation remains separate.
+- The Field Service calendar can display read-only upcoming events from the
+  existing tenant-owned Google Calendar connection. It does not create, change,
+  or delete Google events; OAuth and workflow-automation entitlement gates
+  remain required.
+
 ## Shopify State Sales Tax Reporting (2026-08-20)
 
 - Modern Forestry Backstage now exposes a tenant-scoped, read-only **Sales Tax

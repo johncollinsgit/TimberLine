@@ -1,5 +1,24 @@
 # UI Changelog
 
+## 2026-08-24 — Operational customer directory
+
+### What Changed
+
+- Field-service workspaces now use a focused customer directory with service
+  address and linked-job context instead of retail loyalty, Growave, review, or
+  birthday controls.
+- The directory supports checkbox selection with recoverable archive/restore
+  actions. Archived customers leave job and customer history intact.
+- Work → Calendar reserves a compact, read-only company Google Calendar panel
+  alongside scheduled and unscheduled jobs.
+
+### Guardrails
+
+- Retail workspaces keep their established marketing enrichment experience.
+  Field-service workspaces never surface those retail controls.
+- The Google Calendar panel reads only tenant-authorized events and remains
+  unavailable until the existing Google OAuth connection is approved.
+
 ## 2026-08-17 - Evergrove custom-development positioning
 
 ### What Changed

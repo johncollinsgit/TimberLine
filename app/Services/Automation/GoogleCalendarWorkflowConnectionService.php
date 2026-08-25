@@ -315,6 +315,67 @@ class GoogleCalendarWorkflowConnectionService
     }
 
     /**
+     * Read a bounded upcoming-event window for an authenticated tenant calendar.
+     * This intentionally has no event mutation path.
+     *
+     * @return array<int,array{id:string,summary:string,start:?string,end:?string,location:?string,url:?string}>
+     */
+    public function upcomingEvents(
+        int $tenantId,
+        ?string $calendarId = null,
+        ?\DateTimeInterface $start = null,
+        ?\DateTimeInterface $end = null,
+        string $workflowKey = self::WORKFLOW_KEY,
+    ): array {
+        $workflowKey = $this->normalizeWorkflowKey($workflowKey);
+        $calendarId = $this->nullableString($calendarId);
+        if ($calendarId === null) {
+            $calendarId = collect($this->calendarOptions($tenantId, $workflowKey))
+                ->sortByDesc(fn (array $calendar): bool => (bool) ($calendar['primary'] ?? false))
+                ->value('id');
+            $calendarId = $this->nullableString($calendarId);
+        }
+        if ($calendarId === null) {
+            return [];
+        }
+
+        $credentials = $this->connectionCredentials($tenantId, $workflowKey);
+        $accessToken = $this->refreshAccessToken(
+            clientId: $credentials['google_calendar_client_id'] ?? null,
+            clientSecret: $credentials['google_calendar_client_secret'] ?? null,
+            refreshToken: $credentials['google_calendar_refresh_token'] ?? null,
+        );
+        $start ??= now()->startOfDay();
+        $end ??= now()->addDays(45)->endOfDay();
+        $response = Http::acceptJson()->withToken($accessToken)->timeout(20)->retry(2, 250, throw: false)
+            ->get('https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events', [
+                'singleEvents' => 'true',
+                'orderBy' => 'startTime',
+                'timeMin' => $start->format(DATE_RFC3339),
+                'timeMax' => $end->format(DATE_RFC3339),
+                'maxResults' => 100,
+                'fields' => 'items(id,summary,start,end,location,htmlLink,status)',
+            ]);
+        $payload = is_array($response->json()) ? $response->json() : [];
+        if (! $response->successful()) {
+            throw new AutomationWorkflowException(trim((string) data_get($payload, 'error.message', 'Google Calendar events could not be read.')));
+        }
+
+        return collect((array) ($payload['items'] ?? []))
+            ->filter(fn (mixed $event): bool => is_array($event) && (string) ($event['status'] ?? '') !== 'cancelled')
+            ->map(fn (array $event): array => [
+                'id' => (string) ($event['id'] ?? ''),
+                'summary' => trim((string) ($event['summary'] ?? 'Untitled event')) ?: 'Untitled event',
+                'start' => $this->nullableString(data_get($event, 'start.dateTime') ?? data_get($event, 'start.date')),
+                'end' => $this->nullableString(data_get($event, 'end.dateTime') ?? data_get($event, 'end.date')),
+                'location' => $this->nullableString($event['location'] ?? null),
+                'url' => $this->nullableString($event['htmlLink'] ?? null),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * Verify write access without leaving test data behind.
      *
      * @return array{ok:bool,event_id:string,cleanup_ok:bool}

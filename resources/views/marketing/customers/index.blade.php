@@ -16,14 +16,25 @@
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Total Customers</div>
                 <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['total_customers'] ?? 0)) }}</div>
             </article>
-            <article class="px-4 py-3">
-                <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">{{ $rewardsLabel }} Holders</div>
-                <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['candle_cash_holders'] ?? 0)) }}</div>
-            </article>
-            <article class="px-4 py-3">
-                <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Growave Linked</div>
-                <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['growave_linked'] ?? 0)) }}</div>
-            </article>
+            @if($operationalDirectory ?? false)
+                <article class="px-4 py-3">
+                    <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Address Ready</div>
+                    <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['total_customers'] ?? 0) - (int) ($quickStats['missing_address'] ?? 0)) }}</div>
+                </article>
+                <article class="px-4 py-3">
+                    <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Missing Address</div>
+                    <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['missing_address'] ?? 0)) }}</div>
+                </article>
+            @else
+                <article class="px-4 py-3">
+                    <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">{{ $rewardsLabel }} Holders</div>
+                    <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['candle_cash_holders'] ?? 0)) }}</div>
+                </article>
+                <article class="px-4 py-3">
+                    <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Growave Linked</div>
+                    <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['growave_linked'] ?? 0)) }}</div>
+                </article>
+            @endif
             <article class="px-4 py-3">
                 <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Missing Contact</div>
                 <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['missing_contact'] ?? 0)) }}</div>
@@ -36,6 +47,8 @@
                 data-endpoint="{{ data_get($customerGrid, 'endpoint') }}"
                 data-add-customer-url="{{ route('marketing.customers.create') }}"
                 data-message-customer-url="{{ auth()->user()?->canAccessMarketing() ? route('marketing.messages.send') : '' }}"
+                data-bulk-action-url="{{ data_get($customerGrid, 'bulk_action_url') }}"
+                data-operational-directory="{{ data_get($customerGrid, 'operational_directory') ? 'true' : 'false' }}"
                 data-initial-filters='@json(data_get($customerGrid, "filters", []))'
                 data-sort-options='@json(data_get($customerGrid, "sort_options", []))'
                 class="space-y-4"
@@ -46,7 +59,11 @@
                         <h2 class="mt-1 text-xl font-semibold text-zinc-950">Manage Customers</h2>
                         <div class="mt-1.5 text-sm text-zinc-600">
                             {{ number_format((int) ($totalProfiles ?? 0)) }} customer profile{{ (int) ($totalProfiles ?? 0) === 1 ? '' : 's' }} indexed.
-                            Search-first results load in the live grid below, and {{ $rewardsLabel }} stays separate from the legacy Growave balance.
+                            @if($operationalDirectory ?? false)
+                                Search, update service addresses, and archive outdated customers without losing their job history.
+                            @else
+                                Search-first results load in the live grid below, and {{ $rewardsLabel }} stays separate from the legacy Growave balance.
+                            @endif
                         </div>
                     </div>
                     <a href="{{ route('marketing.customers.create') }}" wire:navigate class="inline-flex h-10 items-center rounded-lg border border-emerald-700 bg-emerald-700 px-3.5 text-sm font-medium text-white shadow-sm">
