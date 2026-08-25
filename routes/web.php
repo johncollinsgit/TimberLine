@@ -902,6 +902,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', [WorkspaceDocumentsController::class, 'index'])->name('index');
             Route::post('/', [WorkspaceDocumentsController::class, 'store'])->name('store');
+            Route::get('/{asset}/preview', [WorkspaceDocumentsController::class, 'preview'])->name('preview');
             Route::get('/{asset}/download', [WorkspaceDocumentsController::class, 'download'])->name('download');
             Route::put('/{asset}/jobs', [WorkspaceDocumentsController::class, 'updateLinks'])->name('links');
             Route::delete('/{asset}', [WorkspaceDocumentsController::class, 'destroy'])->name('destroy');
@@ -997,6 +998,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             });
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
+            Route::post('/jobs/{job}/details', [FieldServiceController::class, 'updateJobDetails'])->name('jobs.details.update');
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
             Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
             Route::post('/jobs/{job}/tasks', [FieldServiceController::class, 'storeTask'])->name('tasks.store');

@@ -203,7 +203,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'photos' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'plans' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'documents' => $job->assets->reject(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/') || in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
-            'activity' => $job->notes->map(fn (FieldServiceJobNote $note): array => ['id' => (int) $note->id, 'body' => $note->body, 'status_update' => $note->status_update, 'noted_at' => $note->noted_at?->toIso8601String(), 'created_by' => $note->createdBy?->name ?: 'QuickBooks', 'source' => data_get($note->metadata, 'source', 'everbranch'), 'mentions' => $note->mentions->map(fn (User $mentioned): array => ['id' => (int) $mentioned->id, 'name' => $mentioned->name])->values()])->values(),
+            'activity' => $job->notes->map(fn (FieldServiceJobNote $note): array => ['id' => (int) $note->id, 'body' => $note->body, 'status_update' => $note->status_update, 'noted_at' => $note->noted_at?->toIso8601String(), 'created_by' => $note->createdBy?->name ?: 'QuickBooks', 'source' => data_get($note->metadata, 'source', 'everbranch'), 'mentions' => $note->mentions->map(fn (User $mentioned): array => ['id' => (int) $mentioned->id, 'name' => $mentioned->name])->values(), 'attachments' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => (int) data_get($asset->metadata, 'field_service_job_note_id', 0) === (int) $note->id)->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()])->values(),
             'financials' => $owner ? $job->financialDocuments->map(fn ($document): array => ['id' => (int) $document->id, 'type' => $document->document_type, 'number' => $document->document_number, 'status' => $document->status, 'transaction_date' => $document->transaction_date?->toDateString(), 'total' => (float) $document->total_amount, 'balance' => (float) $document->balance])->values() : [],
             'can_manage' => $access->canManageJobs($user, $tenantModel),
             'can_update_progress' => $access->canUpdateProgress($user, $tenantModel, $job),
@@ -405,16 +405,18 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'status' => $result['job']->operational_status, 'delivery' => $result['delivery']]);
     }
 
-    public function comment(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobNotificationService $notifications): JsonResponse
+    public function comment(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobNotificationService $notifications, WorkspaceAssetService $assets): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
         $validated = $request->validate([
-            'body' => ['required', 'string', 'max:5000'],
+            'body' => ['nullable', 'string', 'max:5000', 'required_without:attachments'],
             'mention_user_ids' => ['nullable', 'array', 'max:30'],
             'mention_user_ids.*' => ['integer'],
             'status_update' => ['nullable', 'in:active,blocked,complete,quote'],
+            'attachments' => ['nullable', 'array', 'max:20'],
+            'attachments.*' => ['required', 'file', 'max:25600'],
         ]);
         if (filled($validated['status_update'] ?? null)) {
             abort_unless($access->canManageJobs($user, $tenantModel), 403);
@@ -422,12 +424,15 @@ class EverbranchMobileFieldServiceController extends Controller
         $mentionIds = $tenantModel->users()->whereIn('users.id', (array) ($validated['mention_user_ids'] ?? []))->pluck('users.id')->map(fn ($id): int => (int) $id)->all();
         $note = FieldServiceJobNote::query()->create([
             'tenant_id' => (int) $tenantModel->id, 'field_service_job_id' => (int) $job->id,
-            'created_by_user_id' => (int) $user->id, 'body' => (string) $validated['body'],
+            'created_by_user_id' => (int) $user->id, 'body' => trim((string) ($validated['body'] ?? '')) ?: 'Added attachments.',
             'status_update' => $validated['status_update'] ?? null, 'noted_at' => now(),
             'metadata' => ['source' => 'everbranch_mobile'],
         ]);
         if ($mentionIds !== []) {
             $note->mentions()->sync(collect($mentionIds)->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id]])->all());
+        }
+        foreach ($request->file('attachments', []) as $attachment) {
+            $assets->storeUpload($tenantModel, $user, $attachment, [(int) $job->id], 'team', null, ['job-update'], ['field_service_job_note_id' => (int) $note->id]);
         }
         if (filled($validated['status_update'] ?? null)) {
             $lifecycle->setManualStatus($job, (string) $validated['status_update']);

@@ -3,10 +3,13 @@ import axios from "axios";
 import "@glideapps/glide-data-grid/dist/index.css";
 import {
     DataEditor,
+    CustomCell,
+    CustomRenderer,
     GridCell,
     GridCellKind,
     GridColumn,
     Item,
+    roundedRect,
     type Theme,
 } from "@glideapps/glide-data-grid";
 import {
@@ -78,6 +81,41 @@ type RootDataset = {
 type ElementSize = {
     width: number;
     height: number;
+};
+
+type CustomerSelectCell = CustomCell<{ kind: "customer-select"; selected: boolean }>;
+
+const customerSelectRenderer: CustomRenderer<CustomerSelectCell> = {
+    kind: GridCellKind.Custom,
+    isMatch: (cell): cell is CustomerSelectCell => cell.data.kind === "customer-select",
+    needsHover: true,
+    draw: ({ ctx, rect, hoverAmount, overrideCursor, cell }) => {
+        const size = 18;
+        const x = rect.x + (rect.width - size) / 2;
+        const y = rect.y + (rect.height - size) / 2;
+        overrideCursor?.("pointer");
+        ctx.save();
+        ctx.beginPath();
+        roundedRect(ctx, x, y, size, size, 4);
+        ctx.fillStyle = cell.data.selected ? "#0f766e" : (hoverAmount > 0 ? "#f0fdfa" : "#ffffff");
+        ctx.fill();
+        ctx.strokeStyle = cell.data.selected ? "#0f766e" : "#6d7175";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (cell.data.selected) {
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.beginPath();
+            ctx.moveTo(x + 4, y + 9);
+            ctx.lineTo(x + 7.5, y + 12.5);
+            ctx.lineTo(x + 14.5, y + 5.5);
+            ctx.stroke();
+        }
+        ctx.restore();
+        return true;
+    },
 };
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -519,9 +557,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
             const selected = selectedIds.includes(rowData.id);
 
             return {
-                kind: GridCellKind.Text,
-                data: selected ? "Selected" : "",
-                displayData: selected ? "✓" : "",
+                kind: GridCellKind.Custom,
+                data: { kind: "customer-select", selected },
+                copyData: selected ? "Selected" : "",
                 allowOverlay: false,
                 readonly: true,
             };
@@ -593,7 +631,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
         }
 
         const action = status === "archived" ? "restore" : "archive";
-        const verb = action === "archive" ? "archive" : "restore";
+        const verb = action === "archive" ? "delete" : "restore";
         if (!window.confirm(`${verb[0].toUpperCase()}${verb.slice(1)} ${selectedIds.length} selected customer${selectedIds.length === 1 ? "" : "s"}? Jobs and history will be kept.`)) {
             return;
         }
@@ -638,7 +676,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         ) : null}
                         {props.operationalDirectory && selectedIds.length > 0 ? (
                             <button type="button" onClick={() => void archiveSelected()} disabled={bulkWorking} className={buttonClass()}>
-                                {bulkWorking ? "Updating…" : `${status === "archived" ? "Restore" : "Archive"} selected (${selectedIds.length})`}
+                                {bulkWorking ? "Updating…" : `${status === "archived" ? "Restore" : "Delete"} selected (${selectedIds.length})`}
                             </button>
                         ) : null}
                         <a href={props.addCustomerUrl} className={primaryButtonClass()}>
@@ -791,6 +829,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             rows={rows.length}
                             getCellContent={getCellContent}
                             onCellClicked={handleCellClicked}
+                            customRenderers={[customerSelectRenderer]}
                             width={gridBounds.width}
                             height={gridHeight}
                             rowMarkers={{ kind: "number", theme: gridTheme }}
