@@ -15,7 +15,7 @@ return new class extends Migration
 
         if (! Schema::hasColumn('field_service_reminder_settings', 'job_update_sms')) {
             Schema::table('field_service_reminder_settings', function (Blueprint $table): void {
-                $table->json('job_update_sms')->nullable()->after('provider_status');
+                $table->json('job_update_sms')->nullable();
             });
         }
 
