@@ -2506,3 +2506,8 @@
 
 - Made the Collins Electric authenticated shell use the full available canvas on large screens, retaining only responsive gutters beside the sidebar.
 - The workspace-wide change applies to jobs, customers, reports, and future Collins pages without changing retail or landlord layouts.
+
+### Collins job detail actions
+
+- Expanded the job-detail Updates feed across the full Collins workspace canvas so field updates have room for long notes and team handoffs.
+- Added direct **Complete & archive** and recoverable **Delete job** actions to the job header. Both preserve a searchable job-history record, while destructive intent is confirmed before submission.

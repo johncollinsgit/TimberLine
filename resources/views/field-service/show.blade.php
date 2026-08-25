@@ -18,7 +18,7 @@
 
 <x-layouts::app.sidebar title="Field Service Job">
     <flux:main>
-        <div class="fb-workflow-shell">
+        <div class="fb-workflow-shell fb-workflow-shell--wide field-service-job-shell">
             <header class="border-b border-zinc-200 pb-5">
                 <a href="{{ $backHref }}" class="text-sm font-semibold text-emerald-800">← {{ ($back ?? '') === 'calendar' ? 'Back to calendar' : 'Field Service' }}</a>
                 <div class="mt-3 flex flex-wrap items-start justify-between gap-4">
@@ -32,15 +32,20 @@
                     </div>
                     @if($canProgress)
                         <div class="flex flex-wrap gap-2">
+                            @if(!in_array($status, ['complete', 'canceled', 'history'], true))
+                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}" onsubmit="return confirm('Complete and archive this job? It will remain searchable in job history.');">@csrf<input type="hidden" name="action" value="complete"><button class="fb-btn fb-btn-primary">Complete &amp; archive</button></form>
+                            @endif
                             @if(in_array($status, ['scheduled', 'needs_details'], true))
                                 <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="start"><button class="fb-btn fb-btn-primary">Start</button></form>
                             @elseif($status === 'active')
                                 <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}" class="flex gap-2"><input type="hidden" name="action" value="block">@csrf<input name="reason" required class="w-48 rounded-lg border border-zinc-300 px-3 text-sm" placeholder="Why is it blocked?"><button class="fb-btn fb-btn-secondary">Block</button></form>
-                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="complete"><button class="fb-btn fb-btn-primary">Complete</button></form>
                             @elseif($status === 'blocked')
                                 <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="resume"><button class="fb-btn fb-btn-primary">Resume</button></form>
                             @elseif(in_array($status, ['complete', 'canceled'], true) && $canManage)
                                 <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="reopen"><button class="fb-btn fb-btn-secondary">Reopen</button></form>
+                            @endif
+                            @if($canManage && !in_array($status, ['complete', 'canceled', 'history'], true))
+                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}" onsubmit="return confirm('Delete this job from active work? It will be retained in searchable job history.');">@csrf<input type="hidden" name="action" value="archive"><button class="fb-btn fb-btn-secondary border-rose-300 text-rose-800 hover:border-rose-400 hover:bg-rose-50">Delete job</button></form>
                             @endif
                         </div>
                     @endif
@@ -74,13 +79,6 @@
                         <section class="fb-panel"><div class="fb-panel-head"><div><div class="fb-panel-title">Fictional job financials</div><p class="mt-1 text-sm text-zinc-600">Demo-only income and cost records; not connected accounting data.</p></div></div><div class="fb-panel-body grid gap-3 sm:grid-cols-2"><div class="rounded-xl border border-emerald-100 bg-emerald-50 p-4"><div class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Money in</div><div class="mt-2 text-2xl font-semibold text-emerald-950">${{ number_format($fictionalMoneyIn, 2) }}</div></div><div class="rounded-xl border border-amber-100 bg-amber-50 p-4"><div class="text-xs font-semibold uppercase tracking-wide text-amber-700">Money spent</div><div class="mt-2 text-2xl font-semibold text-amber-950">${{ number_format($fictionalMoneySpent, 2) }}</div></div></div></section>
                     @endif
 
-                    <section class="fb-panel">
-                        <div class="fb-panel-head"><div class="fb-panel-title">Updates</div></div>
-                        <div class="fb-panel-body space-y-3">
-                            <form method="POST" action="{{ route('field-service.notes.store', $job) }}">@csrf<textarea name="body" required rows="3" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Share an update or @mention a teammate"></textarea><button class="fb-btn fb-btn-primary mt-2">Post update</button></form>
-                            @forelse($job->notes->sortByDesc('noted_at') as $note)<article class="border-t border-zinc-200 pt-3"><div class="text-sm font-semibold text-zinc-950">{{ $note->createdBy?->name ?? 'Team update' }} <span class="font-normal text-zinc-500">{{ optional($note->noted_at)->diffForHumans() }}</span></div><div class="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{{ $note->body }}</div></article>@empty<p class="text-sm text-zinc-600">No updates yet.</p>@endforelse
-                        </div>
-                    </section>
                 </main>
 
                 <aside class="space-y-6">
@@ -114,6 +112,14 @@
                     <section class="fb-panel"><div class="fb-panel-head"><div class="fb-panel-title">Files</div></div><div class="fb-panel-body space-y-4"><div><div class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Drawings & PDFs</div><div class="space-y-2">@forelse($job->assets->filter(fn ($asset) => $asset->mime_type === 'application/pdf') as $asset)<a href="{{ route('documents.download', [$tenant, $asset]) }}" class="flex min-h-11 items-center justify-between rounded-lg border border-zinc-200 px-3 text-sm font-semibold text-emerald-900"><span class="truncate">{{ $asset->file_name }}</span><span>Open PDF →</span></a>@empty<p class="text-sm text-zinc-600">No drawings or PDFs yet. Add one from Files in the Everbranch app.</p>@endforelse</div></div><div><div class="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Photos</div><div class="grid grid-cols-3 gap-2">@foreach($job->photos as $photo)<a href="{{ $photo->file_path }}" class="aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50"><img src="{{ $photo->file_path }}" alt="{{ $photo->caption ?: 'Job photo' }}" class="h-full w-full object-cover"></a>@endforeach</div>@if($job->photos->isEmpty())<p class="text-sm text-zinc-600">No photos yet. Add them from the Everbranch app.</p>@endif</div></div></section>
                 </aside>
             </div>
+
+            <section class="fb-panel">
+                <div class="fb-panel-head"><div><div class="fb-panel-title">Updates</div><p class="fb-panel-copy">Keep the whole team informed with progress, notes, and handoffs.</p></div></div>
+                <div class="fb-panel-body space-y-3">
+                    <form method="POST" action="{{ route('field-service.notes.store', $job) }}">@csrf<textarea name="body" required rows="3" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Share an update or @mention a teammate"></textarea><button class="fb-btn fb-btn-primary mt-2">Post update</button></form>
+                    @forelse($job->notes->sortByDesc('noted_at') as $note)<article class="border-t border-zinc-200 pt-3"><div class="text-sm font-semibold text-zinc-950">{{ $note->createdBy?->name ?? 'Team update' }} <span class="font-normal text-zinc-500">{{ optional($note->noted_at)->diffForHumans() }}</span></div><div class="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{{ $note->body }}</div></article>@empty<p class="text-sm text-zinc-600">No updates yet.</p>@endforelse
+                </div>
+            </section>
         </div>
     </flux:main>
 </x-layouts::app.sidebar>

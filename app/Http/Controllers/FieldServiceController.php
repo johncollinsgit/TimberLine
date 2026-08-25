@@ -793,9 +793,14 @@ class FieldServiceController extends Controller
         abort_unless($this->fieldServiceAccess->canUpdateProgress($request->user(), $tenant, $job), 403);
 
         $validated = $request->validate([
-            'action' => ['required', 'string', 'in:start,block,resume,complete,cancel,reopen'],
+            'action' => ['required', 'string', 'in:start,block,resume,complete,cancel,archive,reopen'],
             'reason' => ['nullable', 'string', 'max:2000', 'required_if:action,block'],
         ]);
+
+        abort_if(
+            $validated['action'] === 'archive' && ! $this->fieldServiceAccess->canManageJobs($request->user(), $tenant),
+            403,
+        );
 
         $this->transitions->transition($tenant, $job, $request->user(), $validated['action'], $validated['reason'] ?? null);
 
