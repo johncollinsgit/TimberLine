@@ -2517,3 +2517,15 @@
 - Added a confirmed **Delete** action column to the current Jobs grid, plus the same action in its quick-view panel for managers.
 - Grid deletion uses the same audited, recoverable archive transition as the job detail and immediately refreshes the active-work list.
 - Managers can now select several current jobs with the frozen checkbox column and archive the selected set after one explicit confirmation.
+
+### Collins job-update attachments
+
+- Updates now accept camera/photos and supported documents directly from the composer, attaching each upload to the corresponding job update.
+- Phone and desktop uploads share the same tenant-scoped, audited storage path; update history exposes the attached photo or file for authorized team members.
+- Attached photos now render as prominent, tappable previews in each update and a visual job-photo gallery; files remain clearly labeled downloads.
+- Managers can edit a job’s work description and full service address directly from its web detail page; the mobile job page exposes the same work-description and job-site-address editors.
+
+### Collins customer deletion controls
+
+- Customer selection now uses a high-contrast square checkbox instead of a text checkmark.
+- The recoverable customer bulk archive action is labeled **Delete selected** for clarity, while retaining job history and allowing restore from archived customers.

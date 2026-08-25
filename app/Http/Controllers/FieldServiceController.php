@@ -27,6 +27,7 @@ use App\Services\FieldService\FieldServiceTaskAssignmentService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkforceService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
+use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\View\View;
@@ -252,6 +253,31 @@ class FieldServiceController extends Controller
         }
 
         return response()->json(['ok' => true, 'saved_at' => now()->toIso8601String()]);
+    }
+
+    public function updateJobDetails(Request $request, FieldServiceJob $job): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless(
+            (int) $job->tenant_id === (int) $tenant->id
+            && $this->fieldServiceAccess->canManageJobs($request->user(), $tenant),
+            403,
+        );
+
+        $validated = $request->validate([
+            'description' => ['nullable', 'string', 'max:5000'],
+            'service_address_line_1' => ['nullable', 'string', 'max:255'],
+            'service_address_line_2' => ['nullable', 'string', 'max:255'],
+            'service_city' => ['nullable', 'string', 'max:120'],
+            'service_state' => ['nullable', 'string', 'max:120'],
+            'service_postal_code' => ['nullable', 'string', 'max:32'],
+            'service_country' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $job->fill($validated)->save();
+
+        return back()->with('status', 'Job details saved.');
     }
 
     public function reviewWorkCandidate(Request $request, FieldServiceWorkCandidate $candidate, FieldServiceWorkCandidateService $candidates): JsonResponse
@@ -815,26 +841,28 @@ class FieldServiceController extends Controller
         return back()->with('status', 'Job status updated.');
     }
 
-    public function storeNote(Request $request, FieldServiceJob $job): RedirectResponse
+    public function storeNote(Request $request, FieldServiceJob $job, WorkspaceAssetService $assets): RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         $this->abortUnlessAccessibleJob($request, $tenant, $job);
 
         $validated = $request->validate([
-            'body' => ['required', 'string', 'max:5000'],
+            'body' => ['nullable', 'string', 'max:5000', 'required_without:attachments'],
             'status_update' => ['nullable', 'string', 'in:open,scheduled,in_progress,blocked,done'],
             'noted_at' => ['nullable', 'date'],
             'photo_file_path' => ['nullable', 'string', 'max:2048'],
             'photo_caption' => ['nullable', 'string', 'max:255'],
+            'attachments' => ['nullable', 'array', 'max:20'],
+            'attachments.*' => ['required', 'file', 'max:25600'],
         ]);
 
-        DB::transaction(function () use ($request, $tenant, $job, $validated): void {
+        DB::transaction(function () use ($assets, $request, $tenant, $job, $validated): void {
             $note = FieldServiceJobNote::query()->create([
                 'tenant_id' => (int) $tenant->id,
                 'field_service_job_id' => (int) $job->id,
                 'created_by_user_id' => $request->user()?->id,
-                'body' => (string) $validated['body'],
+                'body' => trim((string) ($validated['body'] ?? '')) ?: 'Added attachments.',
                 'status_update' => $validated['status_update'] ?? null,
                 'noted_at' => $validated['noted_at'] ?? now(),
             ]);
@@ -858,6 +886,19 @@ class FieldServiceController extends Controller
                     'uploaded_by_user_id' => $request->user()?->id,
                     'captured_at' => $validated['noted_at'] ?? now(),
                 ]);
+            }
+
+            foreach ($request->file('attachments', []) as $attachment) {
+                $assets->storeUpload(
+                    $tenant,
+                    $request->user(),
+                    $attachment,
+                    [(int) $job->id],
+                    'team',
+                    $validated['photo_caption'] ?? null,
+                    ['job-update'],
+                    ['field_service_job_note_id' => (int) $note->id],
+                );
             }
         });
 

@@ -25,10 +25,11 @@ class WorkspaceAssetService
     ];
 
     /** @param array<int,int> $jobIds */
-    public function storeUpload(Tenant $tenant, User $user, UploadedFile $file, array $jobIds, string $visibility, ?string $caption = null, array $tags = []): WorkspaceAsset
+    public function storeUpload(Tenant $tenant, User $user, UploadedFile $file, array $jobIds, string $visibility, ?string $caption = null, array $tags = [], array $metadata = []): WorkspaceAsset
     {
         $mime = (string) ($file->getMimeType() ?: $file->getClientMimeType());
         abort_unless(in_array($mime, $this->allowedMimes, true), 422, 'This file type is not supported.');
+        abort_if((int) ($file->getSize() ?: 0) > 25 * 1024 * 1024, 422, 'Files must be 25 MB or smaller.');
         $bytes = (string) file_get_contents($file->getRealPath());
 
         return $this->storeBytes(
@@ -43,6 +44,7 @@ class WorkspaceAssetService
             (int) $user->id,
             $jobIds,
             $tags,
+            $metadata,
         );
     }
 
