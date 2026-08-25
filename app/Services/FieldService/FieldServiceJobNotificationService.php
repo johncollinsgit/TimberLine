@@ -54,6 +54,8 @@ class FieldServiceJobNotificationService
             $summary[$sent ? 'sms_sent' : 'sms_blocked']++;
         }
 
+        $this->notifyConfiguredJobUpdatePhone($job, $note, $actor, $reminders, $smsReady, $summary);
+
         return $summary;
     }
 
@@ -203,5 +205,60 @@ class FieldServiceJobNotificationService
             'workspace_slug' => Tenant::query()->whereKey((int) $job->tenant_id)->value('slug'),
             'route' => 'field_service_job', 'job_id' => (int) $job->id,
         ];
+    }
+
+    /** @param array<string,int> $summary */
+    private function notifyConfiguredJobUpdatePhone(
+        FieldServiceJob $job,
+        FieldServiceJobNote $note,
+        User $actor,
+        ?FieldServiceReminderSetting $reminders,
+        bool $smsReady,
+        array &$summary,
+    ): void {
+        $setting = (array) ($reminders?->job_update_sms ?? []);
+        $phone = trim((string) ($setting['phone'] ?? ''));
+        $enabled = (bool) ($setting['enabled'] ?? false);
+        $summary['configured_sms_sent'] = 0;
+        $summary['configured_sms_blocked'] = 0;
+
+        if (! $smsReady || ! $enabled || ! preg_match('/^\+[1-9]\d{7,14}$/', $phone)) {
+            $summary['configured_sms_blocked']++;
+
+            return;
+        }
+
+        $eventKey = 'comment:'.$note->id;
+        $notification = FieldServiceJobNotification::query()->firstOrCreate([
+            'tenant_id' => (int) $job->tenant_id,
+            'user_id' => (int) $actor->id,
+            'channel' => 'sms_configured',
+            'event_key' => $eventKey,
+        ], [
+            'field_service_job_id' => (int) $job->id,
+            'field_service_job_note_id' => (int) $note->id,
+            'event_type' => 'comment',
+            'status' => 'pending',
+            'metadata' => array_merge($this->metadata($job, $actor->name.' posted an update', $note->body), [
+                'configured_destination_last4' => substr($phone, -4),
+            ]),
+        ]);
+
+        if (! $notification->wasRecentlyCreated) {
+            return;
+        }
+
+        $brand = (string) (Tenant::query()->whereKey((int) $job->tenant_id)->value('name') ?: 'Everbranch');
+        $message = Str::limit($brand.': '.$actor->name.' updated '.$job->title.'. '.$note->body.' Reply STOP to opt out.', 300);
+        $result = $this->sms->sendSms($phone, $message, ['tenant_id' => (int) $job->tenant_id]);
+        $sent = (bool) ($result['success'] ?? false);
+        $notification->forceFill([
+            'status' => $sent ? 'sent' : 'failed',
+            'provider_message_id' => $result['provider_message_id'] ?? null,
+            'failure_code' => $sent ? null : ($result['error_code'] ?? 'send_failed'),
+            'sent_at' => $sent ? now() : null,
+        ])->save();
+
+        $summary[$sent ? 'configured_sms_sent' : 'configured_sms_blocked']++;
     }
 }
