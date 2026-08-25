@@ -5101,6 +5101,7 @@ CREATE TABLE `marketing_profiles` (
   `merged_into_profile_id` bigint unsigned DEFAULT NULL,
   `merge_operation_id` bigint unsigned DEFAULT NULL,
   `merged_at` timestamp NULL DEFAULT NULL,
+  `archived_at` timestamp NULL DEFAULT NULL,
   `mobile_avatar_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `mobile_avatar_uploaded_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -6138,11 +6139,11 @@ CREATE TABLE `orders` (
   `billing_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `shipping_company` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `shipping_address1` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `shipping_city` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `shipping_province` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `shipping_province_code` varchar(16) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `shipping_zip` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `shipping_country_code` varchar(8) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shipping_city` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shipping_province` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shipping_province_code` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shipping_zip` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shipping_country_code` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `billing_company` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `billing_address1` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `shopify_store` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -10406,3 +10407,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (254,'2026_08_13_15
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (255,'2026_08_13_160000_create_field_workforce_and_fleet_tracking_tables',5);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (256,'2026_08_19_140000_create_modern_forestry_fundraiser_invoice_preparation_tables',6);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (257,'2026_08_20_120000_add_reporting_destination_fields_to_orders_table',7);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (258,'2026_08_24_120000_add_archival_to_marketing_profiles',8);
