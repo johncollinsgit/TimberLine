@@ -19,7 +19,7 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasTable('tenants')) {
+        if (! Schema::hasTable('tenants') || ! Schema::hasColumn('tenants', 'slug')) {
             return;
         }
 
