@@ -38,6 +38,10 @@
   $isNeutralTenantSurface = request()->routeIs('proposals.*', 'billing.*', 'payments.*', 'invoices.*')
       || request()->is('proposals*', 'billing*', 'payments*', 'invoices*');
   $activeTenant = $navigationShell['tenant'] ?? null;
+  $isCollinsWorkspace = ! $isLandlordShell
+      && ! $isNeutralTenantSurface
+      && $activeTenant instanceof \App\Models\Tenant
+      && in_array(strtolower(trim((string) $activeTenant->slug)), ['collins-electric', 'collins-upstate-electric'], true);
   $tenantBrand = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
       ($isLandlordShell || $isNeutralTenantSurface) ? null : ($activeTenant instanceof \App\Models\Tenant ? $activeTenant : null)
   );
@@ -102,7 +106,7 @@
   data-tenant-display="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'classic' : $tenantBrand['display_style'] }}"
   data-tenant-corners="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'soft' : $tenantBrand['corner_style'] }}"
   style="{{ ($isLandlordShell || $isNeutralTenantSurface) ? '' : $tenantThemeStyle }}"
-  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }}"
+  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }} {{ $isCollinsWorkspace ? 'mf-collins-full-canvas' : '' }}"
 >
 
 <header class="mf-global-bar" data-app-shell-topbar>

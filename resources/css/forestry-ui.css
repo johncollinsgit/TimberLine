@@ -14292,6 +14292,24 @@ body.eb-workflow-picker-open {
   padding: 0 !important;
 }
 
+/* Collins dispatch staff routinely work from very wide monitors. Keep the
+   workspace gutter, but remove the shared centered-column cap across every
+   authenticated Collins surface so schedules, job boards, customer lists, and
+   reports can use the available canvas beside the sidebar. */
+.mf-app-shell.mf-collins-full-canvas .mf-app-main {
+  padding-inline: clamp(1rem, 1.8vw, 2.5rem);
+}
+
+.mf-app-shell.mf-collins-full-canvas .mf-shell-content,
+.mf-app-shell.mf-collins-full-canvas .fb-workflow-shell {
+  max-width: none;
+  width: 100%;
+}
+
+.mf-app-shell.mf-collins-full-canvas .fb-workflow-shell {
+  padding-inline: 0;
+}
+
 .mf-app-shell .fb-btn,
 .mf-app-shell .eb-admin-button {
   align-items: center;
