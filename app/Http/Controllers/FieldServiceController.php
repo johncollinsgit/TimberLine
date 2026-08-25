@@ -17,6 +17,7 @@ use App\Models\FieldServiceWorkShift;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Automation\GoogleCalendarWorkflowConnectionService;
 use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
@@ -46,6 +47,7 @@ class FieldServiceController extends Controller
         protected FieldServiceJobNotificationService $notifications,
         protected FieldServiceWorkProfileService $profiles,
         protected FieldServiceTaskAssignmentService $taskAssignments,
+        protected GoogleCalendarWorkflowConnectionService $googleCalendar,
     ) {}
 
     public function index(Request $request, TenantFinancialAccess $financialAccess, FieldServiceOwnerHomeMetricsService $homeMetrics): View|RedirectResponse
@@ -355,6 +357,31 @@ class FieldServiceController extends Controller
         $unscheduled = $unscheduledQuery->latest('last_financial_activity_at')->limit(30)->get();
 
         $all = $scheduled->flatten()->concat($unscheduled);
+        $googleCalendar = [
+            'available' => $this->moduleEnabled($tenant, 'workflow_automations'),
+            'connected' => false,
+            'events' => [],
+            'error' => null,
+        ];
+        if ($googleCalendar['available']) {
+            try {
+                $calendarStatus = $this->googleCalendar->status((int) $tenant->id);
+                $googleCalendar['connected'] = (bool) ($calendarStatus['connected'] ?? false);
+                $googleCalendar['account_label'] = $calendarStatus['account_label'] ?? null;
+                $googleCalendar['calendar_summary'] = $calendarStatus['selected_calendar_summary'] ?? null;
+                if ($googleCalendar['connected']) {
+                    $googleCalendar['events'] = $this->googleCalendar->upcomingEvents(
+                        tenantId: (int) $tenant->id,
+                        calendarId: $calendarStatus['selected_calendar_id'] ?? null,
+                        start: $start,
+                        end: $end,
+                    );
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+                $googleCalendar['error'] = 'Google Calendar is temporarily unavailable. Try refreshing the connection.';
+            }
+        }
 
         return view('field-service.calendar', [
             'tenant' => $tenant,
@@ -365,6 +392,7 @@ class FieldServiceController extends Controller
             'profile' => $this->profiles->forTenant($tenant),
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
+            'googleCalendar' => $googleCalendar,
         ]);
     }
 

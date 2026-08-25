@@ -1287,6 +1287,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->name('results');
                 Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
                 Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
+                Route::post('/customers/bulk-archive', [MarketingCustomersController::class, 'bulkArchive'])->name('customers.bulk-archive');
                 Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
                 Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
                 Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');

@@ -12,6 +12,7 @@
         'complete' => 'border-zinc-200 bg-zinc-100 text-zinc-700',
         default => 'border-orange-200 bg-orange-50 text-orange-800',
     };
+    $googleCalendar = (array) ($googleCalendar ?? []);
 @endphp
 
 <x-layouts::app.sidebar title="Field Service">
@@ -90,6 +91,37 @@
                             @empty
                                 <div class="rounded-lg border border-dashed border-zinc-300 p-5 text-sm text-zinc-600">Everything current is scheduled.</div>
                             @endforelse
+                        </div>
+                        <div class="mt-6 border-t border-zinc-200 pt-5">
+                            <div class="flex items-end justify-between gap-3">
+                                <div>
+                                    <h2 class="text-lg font-semibold text-zinc-950">Google Calendar</h2>
+                                    <p class="mt-1 text-sm text-zinc-600">Read-only events from the connected company calendar.</p>
+                                </div>
+                                @if(!($googleCalendar['available'] ?? false))
+                                    <a href="{{ route('marketing.providers-integrations') }}" class="text-sm font-semibold text-emerald-800 hover:text-emerald-950">Set up</a>
+                                @elseif(!($googleCalendar['connected'] ?? false))
+                                    <a href="{{ route('workflows.connections') }}" class="text-sm font-semibold text-emerald-800 hover:text-emerald-950">Connect</a>
+                                @endif
+                            </div>
+                            @if(($googleCalendar['error'] ?? null) !== null)
+                                <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{{ $googleCalendar['error'] }}</div>
+                            @elseif(!($googleCalendar['available'] ?? false))
+                                <div class="mt-3 rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-600">Calendar connection is available through Workflow Automations.</div>
+                            @elseif(!($googleCalendar['connected'] ?? false))
+                                <div class="mt-3 rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-600">Connect the company Google Calendar to show its events alongside jobs.</div>
+                            @else
+                                <div class="mt-3 space-y-2">
+                                    @forelse((array) ($googleCalendar['events'] ?? []) as $event)
+                                        <a @if(!empty($event['url'])) href="{{ $event['url'] }}" target="_blank" rel="noreferrer" @endif class="block rounded-lg border border-zinc-200 bg-white p-3 transition hover:border-emerald-400">
+                                            <div class="font-semibold text-zinc-950">{{ $event['summary'] }}</div>
+                                            <div class="mt-1 text-xs text-zinc-600">{{ !empty($event['start']) ? \Carbon\CarbonImmutable::parse($event['start'])->format('M j, g:ia') : 'All day' }}@if(!empty($event['location'])) · {{ $event['location'] }}@endif</div>
+                                        </a>
+                                    @empty
+                                        <div class="rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-600">No company-calendar events in the next 45 days.</div>
+                                    @endforelse
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </aside>

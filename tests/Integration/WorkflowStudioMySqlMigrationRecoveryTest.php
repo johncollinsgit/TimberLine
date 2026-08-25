@@ -537,6 +537,39 @@ it('resumes the complete Commerce foundation from durable partial MySQL state', 
         ->and(Schema::hasIndex('website_shipping_rate_quotes', 'website_rate_quotes_tenant_cart_expiry_idx'))->toBeTrue();
 });
 
+it('resumes marketing profile archival after the additive column is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('marketing_profiles')) {
+        Schema::create('marketing_profiles', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('tenant_id')->nullable();
+            $table->timestamp('merged_at')->nullable();
+        });
+    } elseif (! Schema::hasColumn('marketing_profiles', 'merged_at')) {
+        Schema::table('marketing_profiles', function (Blueprint $table): void {
+            $table->timestamp('merged_at')->nullable();
+        });
+    }
+
+    if (Schema::hasColumn('marketing_profiles', 'archived_at')) {
+        Schema::table('marketing_profiles', function (Blueprint $table): void {
+            $table->dropColumn('archived_at');
+        });
+    }
+
+    $migration = require database_path('migrations/2026_08_24_120000_add_archival_to_marketing_profiles.php');
+    $migration->up();
+
+    // Re-run after the first DDL step was retained but before Laravel records
+    // its migration batch. The guard must make the retry safe.
+    $migration->up();
+
+    expect(Schema::hasColumn('marketing_profiles', 'archived_at'))->toBeTrue();
+});
+
 it('resumes marketing groups after MySQL rejects the legacy import-row foreign-key name', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');
