@@ -52,11 +52,18 @@ test('work grid data includes the summary used by the job popup', function (): v
         ->assertJsonPath('rows.0.service_address', '100 Main Street, Greenville SC 29601');
 });
 
-test('a manager can delete a current grid job into searchable history', function (): void {
+test('a manager can delete one or more current grid jobs into searchable history', function (): void {
     [$tenant, $user] = fieldServiceTenantAndUser();
     $job = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
         'title' => 'Duplicate panel inspection',
+        'status' => 'open',
+        'operational_status' => 'scheduled',
+        'status_source' => 'manual',
+    ]);
+    $secondJob = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Duplicate service call',
         'status' => 'open',
         'operational_status' => 'scheduled',
         'status_source' => 'manual',
@@ -67,7 +74,13 @@ test('a manager can delete a current grid job into searchable history', function
         ->assertOk()
         ->assertJsonPath('status', 'history');
 
-    expect($job->fresh()->archived_at)->not->toBeNull();
+    $this->actingAs($user)
+        ->postJson(route('field-service.jobs.transitions', ['tenant' => $tenant->slug, 'job' => $secondJob]), ['action' => 'archive'])
+        ->assertOk()
+        ->assertJsonPath('status', 'history');
+
+    expect($job->fresh()->archived_at)->not->toBeNull()
+        ->and($secondJob->fresh()->archived_at)->not->toBeNull();
 });
 
 test('field service creates a tenant scoped customer job task and material', function (): void {

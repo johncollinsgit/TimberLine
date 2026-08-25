@@ -20,9 +20,43 @@ type Props = { endpoint: string; updateTemplate: string; transitionTemplate: str
 type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
 type OpenCell = CustomCell<{ kind: "open-job" }>;
 type DeleteCell = CustomCell<{ kind: "delete-job" }>;
+type SelectCell = CustomCell<{ kind: "select-job"; selected: boolean }>;
 
+const selectColumn: GridColumn & { id: string } = { id: "select", title: "", width: 52 };
 const openColumn: GridColumn & { id: string } = { id: "open", title: "", width: 92 };
 const deleteColumn: GridColumn & { id: string } = { id: "delete", title: "Action", width: 104 };
+const selectCellRenderer: CustomRenderer<SelectCell> = {
+    kind: GridCellKind.Custom,
+    isMatch: (cell): cell is SelectCell => cell.data.kind === "select-job",
+    needsHover: true,
+    draw: ({ ctx, rect, hoverAmount, overrideCursor, cell }) => {
+        const size = 18;
+        const x = rect.x + (rect.width - size) / 2;
+        const y = rect.y + (rect.height - size) / 2;
+        overrideCursor?.("pointer");
+        ctx.save();
+        ctx.beginPath();
+        roundedRect(ctx, x, y, size, size, 4);
+        ctx.fillStyle = cell.data.selected ? "#0f766e" : (hoverAmount > 0 ? "#f0fdfa" : "#ffffff");
+        ctx.fill();
+        ctx.strokeStyle = cell.data.selected ? "#0f766e" : "#a1a1aa";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (cell.data.selected) {
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.beginPath();
+            ctx.moveTo(x + 4, y + 9);
+            ctx.lineTo(x + 7.5, y + 12.5);
+            ctx.lineTo(x + 14.5, y + 5.5);
+            ctx.stroke();
+        }
+        ctx.restore();
+        return true;
+    },
+};
 const openCellRenderer: CustomRenderer<OpenCell> = {
     kind: GridCellKind.Custom,
     isMatch: (cell): cell is OpenCell => cell.data.kind === "open-job",
@@ -141,12 +175,18 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, candid
     const [columnsOpen, setColumnsOpen] = useState(false);
     const [candidate, setCandidate] = useState<Row | null>(null);
     const [openedJobId, setOpenedJobId] = useState<number | null>(null);
+    const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
     const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
     const [gridRef, size] = useSize();
     const archivingJobIds = useRef(new Set<number>());
     const availableColumns = useMemo(() => allColumns.filter(column => canManageDrafts && bucket !== "potential" || !financialColumns.has(column.id)), [bucket, canManageDrafts]);
     const showDeleteAction = canManage && bucket === "current";
-    const columns = useMemo(() => [openColumn, ...(showDeleteAction ? [deleteColumn] : []), ...availableColumns.filter(column => visible.includes(column.id))], [availableColumns, showDeleteAction, visible]);
+    const columns = useMemo(() => [
+        ...(showDeleteAction ? [selectColumn] : []),
+        openColumn,
+        ...(showDeleteAction ? [deleteColumn] : []),
+        ...availableColumns.filter(column => visible.includes(column.id)),
+    ], [availableColumns, showDeleteAction, visible]);
     const openedJob = openedJobId === null ? null : rows.find(row => row.kind === "job" && row.id === openedJobId) || null;
 
     useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
@@ -161,6 +201,9 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, candid
     useEffect(() => {
         if (openedJobId !== null && !rows.some(row => row.kind === "job" && row.id === openedJobId)) setOpenedJobId(null);
     }, [openedJobId, rows]);
+    useEffect(() => {
+        setSelectedJobIds(current => new Set([...current].filter(id => rows.some(row => row.kind === "job" && row.id === id))));
+    }, [rows]);
     useEffect(() => {
         const controller = new AbortController();
         const timer = window.setTimeout(async () => {
@@ -192,33 +235,44 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, candid
         }
     }, [canManage, rows, updateTemplate]);
 
-    const archiveJob = useCallback(async (row: Row) => {
-        if (!canManage || row.kind !== "job" || archivingJobIds.current.has(row.id)) return;
-        if (!window.confirm(`Delete “${row.title}” from active work? It will remain searchable in job history.`)) return;
-        archivingJobIds.current.add(row.id);
-        setSaveState("Deleting…");
-        try {
-            await axios.post(transitionTemplate.replace(/\/0\/transitions$/, `/${row.id}/transitions`), { action: "archive" });
-            setOpenedJobId(null);
-            setSaveState("Deleted — in history");
+    const archiveJobs = useCallback(async (candidates: Row[]) => {
+        const jobs = candidates.filter(row => row.kind === "job" && !archivingJobIds.current.has(row.id));
+        if (!canManage || jobs.length === 0) return;
+        const confirmation = jobs.length === 1
+            ? `Delete “${jobs[0].title}” from active work? It will remain searchable in job history.`
+            : `Delete ${jobs.length} jobs from active work? Each will remain searchable in job history.`;
+        if (!window.confirm(confirmation)) return;
+        jobs.forEach(job => archivingJobIds.current.add(job.id));
+        setSaveState(jobs.length === 1 ? "Deleting…" : `Deleting ${jobs.length} jobs…`);
+        const results = await Promise.allSettled(jobs.map(job => axios.post(transitionTemplate.replace(/\/0\/transitions$/, `/${job.id}/transitions`), { action: "archive" })));
+        const deletedIds = new Set(jobs.filter((_, index) => results[index].status === "fulfilled").map(job => job.id));
+        const failures = results.filter(result => result.status === "rejected");
+        jobs.forEach(job => archivingJobIds.current.delete(job.id));
+        if (deletedIds.size > 0) {
+            setOpenedJobId(current => current !== null && deletedIds.has(current) ? null : current);
+            setRows(current => current.filter(row => !deletedIds.has(row.id)));
+            setSelectedJobIds(current => new Set([...current].filter(id => !deletedIds.has(id))));
             setReload(value => value + 1);
-            window.setTimeout(() => setSaveState(""), 2200);
-        } catch (failure) {
-            setSaveState("Delete failed");
-            setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "The job could not be deleted." : "The job could not be deleted.");
-        } finally {
-            archivingJobIds.current.delete(row.id);
         }
+        if (failures.length > 0) {
+            setSaveState(deletedIds.size > 0 ? `${deletedIds.size} deleted; ${failures.length} failed` : "Delete failed");
+            const failure = failures[0];
+            setError(failure.status === "rejected" && axios.isAxiosError(failure.reason) ? failure.reason.response?.data?.message || "Some jobs could not be deleted." : "Some jobs could not be deleted.");
+            return;
+        }
+        setSaveState(deletedIds.size === 1 ? "Deleted — in history" : `${deletedIds.size} deleted — in history`);
+        window.setTimeout(() => setSaveState(""), 2200);
     }, [canManage, transitionTemplate]);
 
     const getCellContent = useCallback(([col, rowIndex]: Item): GridCell => {
         const row = rows[rowIndex]; const column = columns[col];
         if (!row || !column) return { kind: GridCellKind.Text, data: "", displayData: "", readonly: true, allowOverlay: false };
+        if (column.id === "select") return { kind: GridCellKind.Custom, data: { kind: "select-job", selected: selectedJobIds.has(row.id) }, copyData: selectedJobIds.has(row.id) ? "Selected" : "Not selected", readonly: true, allowOverlay: false, cursor: "pointer" };
         if (column.id === "open") return { kind: GridCellKind.Custom, data: { kind: "open-job" }, copyData: "Open", readonly: true, allowOverlay: false, cursor: "pointer" };
         if (column.id === "delete") return { kind: GridCellKind.Custom, data: { kind: "delete-job" }, copyData: "Delete", readonly: true, allowOverlay: false, cursor: "pointer" };
         const value = display(column.id, row);
         return { kind: GridCellKind.Text, data: value === "—" ? "" : value, displayData: value, readonly: !canManage || row.kind !== "job" || !editable.has(column.id), allowOverlay: canManage && row.kind === "job" && editable.has(column.id) };
-    }, [canManage, columns, rows]);
+    }, [canManage, columns, rows, selectedJobIds]);
 
     const editCell = useCallback((cell: Item, next: GridCell) => {
         if (next.kind !== GridCellKind.Text) return;
@@ -243,10 +297,22 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, candid
     const clickCell = useCallback(([col, rowIndex]: Item) => {
         const row = rows[rowIndex]; const key = columns[col]?.id;
         if (!row) return;
-        if (key === "delete") { void archiveJob(row); return; }
-        if (key !== "open") return;
+        if (key === "select") {
+            setSelectedJobIds(current => {
+                const next = new Set(current);
+                if (next.has(row.id)) next.delete(row.id); else next.add(row.id);
+                return next;
+            });
+            return;
+        }
+        if (key === "delete") { void archiveJobs([row]); return; }
+    }, [archiveJobs, columns, rows]);
+
+    const activateCell = useCallback(([col, rowIndex]: Item) => {
+        const row = rows[rowIndex]; const key = columns[col]?.id;
+        if (!row || key !== "open") return;
         if (row.kind === "candidate") setCandidate(row); else setOpenedJobId(row.id);
-    }, [archiveJob, columns, rows]);
+    }, [columns, rows]);
 
     function saveView() {
         const name = window.prompt("Name this view"); if (!name?.trim()) return;
@@ -289,11 +355,13 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, candid
             <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket === "potential" ? "job draft" : `${bucket} job`}${meta.total === 1 ? "" : "s"}`)}</span>
         </div>
 
+        {showDeleteAction && selectedJobIds.size > 0 ? <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3"><span className="text-sm font-semibold text-rose-900">{selectedJobIds.size} selected</span><button onClick={() => void archiveJobs(rows.filter(row => selectedJobIds.has(row.id)))} className="min-h-11 rounded-xl border border-rose-300 bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100">Delete selected ({selectedJobIds.size})</button><button onClick={() => setSelectedJobIds(new Set())} className="min-h-11 px-2 text-sm font-semibold text-rose-800 hover:underline">Clear selection</button><span className="text-xs text-rose-700">Selected jobs move to searchable history.</span></div> : null}
+
         {columnsOpen ? <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-3">{availableColumns.map(column => <label key={column.id} className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm"><input type="checkbox" checked={visible.includes(column.id)} onChange={() => setVisible(current => current.includes(column.id) ? current.filter(key => key !== column.id) : [...current, column.id])} />{column.title}</label>)}</div> : null}
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button onClick={() => setError("")} className="ml-3 font-semibold underline">Dismiss</button></div> : null}
 
         <div ref={gridRef} className="min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={clickCell} cellActivationBehavior="single-click" customRenderers={[openCellRenderer, deleteCellRenderer]} freezeColumns={showDeleteAction ? 2 : 1} rowMarkers="none" width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
+            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={activateCell} cellActivationBehavior="single-click" customRenderers={[selectCellRenderer, openCellRenderer, deleteCellRenderer]} freezeColumns={showDeleteAction ? 3 : 1} rowMarkers="none" width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
         </div>
 
         <div className="flex items-center justify-between"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Previous</button><span className="text-sm text-zinc-600">Page {meta.page} of {Math.max(1, meta.last_page)}</span><button disabled={page >= meta.last_page} onClick={() => setPage(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next</button></div>
@@ -305,7 +373,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, candid
                     <span className="text-sm text-zinc-500">{openedJob.source || "Everbranch"}</span>
                     <div className="ml-auto flex items-center gap-2">
                         {openedJob.url ? <a href={openedJob.url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-950 hover:bg-blue-100">Full job page ↗</a> : null}
-                        {canManage && bucket === "current" ? <button type="button" onClick={() => void archiveJob(openedJob)} className="inline-flex min-h-10 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-100">Delete job</button> : null}
+                        {canManage && bucket === "current" ? <button type="button" onClick={() => void archiveJobs([openedJob])} className="inline-flex min-h-10 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-100">Delete job</button> : null}
                         <button type="button" onClick={() => setOpenedJobId(null)} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-white text-xl text-zinc-700 hover:bg-zinc-100" aria-label="Close job">×</button>
                     </div>
                 </header>

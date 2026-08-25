@@ -2516,3 +2516,4 @@
 
 - Added a confirmed **Delete** action column to the current Jobs grid, plus the same action in its quick-view panel for managers.
 - Grid deletion uses the same audited, recoverable archive transition as the job detail and immediately refreshes the active-work list.
+- Managers can now select several current jobs with the frozen checkbox column and archive the selected set after one explicit confirmation.
