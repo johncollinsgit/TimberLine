@@ -2501,3 +2501,8 @@
 - Replaced the Field Service Calendar tab's empty upcoming-schedule column with a responsive month grid, including previous/next-month navigation and a return-to-today control.
 - Scheduled jobs now appear on their actual dates with compact status styling, while connected Google Calendar events appear beside them in a distinct read-only treatment.
 - Retained the needs-scheduling rail so unplanned jobs remain actionable without displacing the operational calendar.
+
+### Collins wide-canvas workspace
+
+- Made the Collins Electric authenticated shell use the full available canvas on large screens, retaining only responsive gutters beside the sidebar.
+- The workspace-wide change applies to jobs, customers, reports, and future Collins pages without changing retail or landlord layouts.
