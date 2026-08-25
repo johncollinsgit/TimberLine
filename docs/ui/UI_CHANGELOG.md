@@ -2496,3 +2496,8 @@
 - The detail view intentionally explains that county and municipality are not
   inferred, so an operator can verify the delivery address before entering a
   return.
+# 2026-08-25 — Field Service calendar grid
+
+- Replaced the Field Service Calendar tab's empty upcoming-schedule column with a responsive month grid, including previous/next-month navigation and a return-to-today control.
+- Scheduled jobs now appear on their actual dates with compact status styling, while connected Google Calendar events appear beside them in a distinct read-only treatment.
+- Retained the needs-scheduling rail so unplanned jobs remain actionable without displacing the operational calendar.

@@ -328,8 +328,16 @@ class FieldServiceController extends Controller
         $this->authorizeFieldService($tenant);
         $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
-        $start = now()->startOfDay();
-        $end = now()->addDays(45)->endOfDay();
+        $validated = $request->validate([
+            'month' => ['nullable', 'date_format:Y-m'],
+        ]);
+        $calendarMonth = filled($validated['month'] ?? null)
+            ? \Carbon\CarbonImmutable::createFromFormat('!Y-m', (string) $validated['month'])
+            : now()->toImmutable()->startOfMonth();
+        $calendarStart = $calendarMonth->startOfMonth()->startOfWeek(\Carbon\CarbonImmutable::SUNDAY)->startOfDay();
+        $calendarEnd = $calendarMonth->endOfMonth()->endOfWeek(\Carbon\CarbonImmutable::SATURDAY)->endOfDay();
+        $calendarDays = collect(range(0, $calendarStart->diffInDays($calendarEnd)))
+            ->map(fn (int $offset): \Carbon\CarbonImmutable => $calendarStart->addDays($offset));
 
         $jobQuery = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
@@ -342,7 +350,7 @@ class FieldServiceController extends Controller
         $scheduled = $jobQuery
             ->clone()
             ->whereNotNull('scheduled_for')
-            ->whereBetween('scheduled_for', [$start, $end])
+            ->whereBetween('scheduled_for', [$calendarStart, $calendarEnd])
             ->orderBy('scheduled_for')
             ->orderBy('id')
             ->get()
@@ -373,8 +381,8 @@ class FieldServiceController extends Controller
                     $googleCalendar['events'] = $this->googleCalendar->upcomingEvents(
                         tenantId: (int) $tenant->id,
                         calendarId: $calendarStatus['selected_calendar_id'] ?? null,
-                        start: $start,
-                        end: $end,
+                        start: $calendarStart,
+                        end: $calendarEnd,
                     );
                 }
             } catch (\Throwable $exception) {
@@ -386,6 +394,9 @@ class FieldServiceController extends Controller
         return view('field-service.calendar', [
             'tenant' => $tenant,
             'jobsByDay' => $scheduled,
+            'calendarMonth' => $calendarMonth,
+            'calendarDays' => $calendarDays,
+            'today' => now()->toDateString(),
             'unscheduled' => $unscheduled,
             'statusLabels' => $this->statusLabels(),
             'readiness' => $all->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
@@ -393,6 +404,9 @@ class FieldServiceController extends Controller
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
             'googleCalendar' => $googleCalendar,
+            'googleEventsByDay' => collect((array) ($googleCalendar['events'] ?? []))
+                ->filter(fn (mixed $event): bool => is_array($event) && filled($event['start'] ?? null))
+                ->groupBy(fn (array $event): string => \Carbon\CarbonImmutable::parse((string) $event['start'])->toDateString()),
         ]);
     }
 
