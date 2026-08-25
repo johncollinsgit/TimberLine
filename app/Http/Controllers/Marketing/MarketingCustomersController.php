@@ -90,7 +90,7 @@ class MarketingCustomersController extends Controller
             ->whereNull('archived_at')
             ->count();
         $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics($totalProfiles);
-        $quickStats = $this->buildIndexQuickStats($totalProfiles, $tenantId);
+        $quickStats = $this->buildIndexQuickStats($totalProfiles, $tenantId, $operationalDirectory);
 
         return view('marketing.customers.index', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -2542,9 +2542,9 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @return array{total_customers:int,candle_cash_holders:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int,missing_address:int}
+     * @return array{total_customers:int,candle_cash_holders:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int,missing_address?:int}
      */
-    protected function buildIndexQuickStats(int $totalProfiles, ?int $tenantId): array
+    protected function buildIndexQuickStats(int $totalProfiles, ?int $tenantId, bool $operationalDirectory = false): array
     {
         $candleCashHolders = Schema::hasTable('candle_cash_balances')
             ? (int) CandleCashBalance::query()
@@ -2580,22 +2580,25 @@ class MarketingCustomersController extends Controller
                 $query->whereNull('normalized_phone')->orWhere('normalized_phone', '');
             })
             ->count();
-        $missingAddress = (int) MarketingProfile::query()
-            ->forTenantId($tenantId)
-            ->whereNull('archived_at')
-            ->where(function ($query): void {
-                $query->whereNull('address_line_1')->orWhere('address_line_1', '');
-            })
-            ->count();
-
-        return [
+        $stats = [
             'total_customers' => $totalProfiles,
             'candle_cash_holders' => $candleCashHolders,
             'growave_linked' => $growaveLinked,
             'shopify_or_order_linked' => $shopifyOrOrderLinked,
             'missing_contact' => $missingContact,
-            'missing_address' => $missingAddress,
         ];
+
+        if ($operationalDirectory) {
+            $stats['missing_address'] = (int) MarketingProfile::query()
+                ->forTenantId($tenantId)
+                ->whereNull('archived_at')
+                ->where(function ($query): void {
+                    $query->whereNull('address_line_1')->orWhere('address_line_1', '');
+                })
+                ->count();
+        }
+
+        return $stats;
     }
 
     /**
