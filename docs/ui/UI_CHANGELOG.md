@@ -2529,3 +2529,8 @@
 
 - Customer selection now uses a high-contrast square checkbox instead of a text checkmark.
 - The recoverable customer bulk archive action is labeled **Delete selected** for clarity, while retaining job history and allowing restore from archived customers.
+
+### Collins Jobs quick-view updates
+
+- Added an Updates composer to the Jobs-grid quick view so crews can post field notes and attach photos or supported files without opening a second page.
+- Update photos appear in a secure in-panel carousel with thumbnail selection, previous/next controls, and a full-size open action.

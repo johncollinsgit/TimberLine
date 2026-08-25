@@ -998,6 +998,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             });
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
+            Route::get('/jobs/{job}/updates', [FieldServiceController::class, 'jobUpdates'])->name('jobs.updates');
             Route::post('/jobs/{job}/details', [FieldServiceController::class, 'updateJobDetails'])->name('jobs.details.update');
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
             Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
