@@ -249,7 +249,7 @@ class FieldServiceJobNotificationService
         }
 
         $brand = (string) (Tenant::query()->whereKey((int) $job->tenant_id)->value('name') ?: 'Everbranch');
-        $message = Str::limit($brand.': '.$actor->name.' updated '.$job->title.'. '.$note->body.' Reply STOP to opt out.', 300);
+        $message = Str::limit($brand.' job update — Job: '.$job->title.'. From: '.$actor->name.'. Update: '.$note->body.' Reply STOP to opt out.', 300);
         $result = $this->sms->sendSms($phone, $message, ['tenant_id' => (int) $job->tenant_id]);
         $sent = (bool) ($result['success'] ?? false);
         $notification->forceFill([

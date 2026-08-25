@@ -5,7 +5,7 @@
 ### What Changed
 
 - Field-service managers can save one office phone number for job-update text alerts. Collins Electric is prefilled with +1 (864) 640-6642.
-- Web and field-app job comments, photo updates, and file updates now pass through the same job-notification service.
+- Web and field-app job comments, photo updates, and file updates now pass through the same job-notification service. Each text identifies the job, the person who posted it, and the update itself.
 
 ### Guardrails
 
