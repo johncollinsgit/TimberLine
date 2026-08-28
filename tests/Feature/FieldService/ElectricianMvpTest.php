@@ -117,6 +117,7 @@ test('electrician field service captures lock box notes calendar and searchable 
 
     $this->actingAs($user)
         ->post(route('field-service.jobs.store', ['tenant' => $tenant->slug]), [
+            'create_customer' => true,
             'customer_name' => 'Pat Electric',
             'customer_email' => 'pat@example.com',
             'customer_phone' => '555-111-2222',

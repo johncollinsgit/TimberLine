@@ -14310,6 +14310,48 @@ body.eb-workflow-picker-open {
   padding-inline: 0;
 }
 
+/* The Collins wordmark is navy-on-light. Keep that high-contrast asset in the
+   permanently light sidebar and give its small type enough rendered size. */
+.mf-app-shell.mf-collins-full-canvas .mf-sidebar-brand-lockup {
+  min-height: 4rem;
+  padding: 0.25rem 0.35rem;
+}
+
+.mf-app-shell.mf-collins-full-canvas .mf-sidebar-brand-mark-image--full {
+  filter: saturate(1.2) contrast(1.35) drop-shadow(0 1px 0 rgba(6, 29, 66, 0.12));
+  height: 3.2rem;
+  max-width: 12.75rem;
+}
+
+.mf-app-shell.mf-collins-full-canvas .mf-sidebar-brand-mark-image--light {
+  display: block !important;
+}
+
+.mf-app-shell.mf-collins-full-canvas .mf-sidebar-brand-mark-image--dark {
+  display: none !important;
+}
+
+.mf-global-employee-preview {
+  align-items: center;
+  border: 1px solid #78b6e8;
+  border-radius: 0.5rem;
+  color: #e8f4ff;
+  display: inline-flex;
+  font-size: 0.74rem;
+  font-weight: 750;
+  gap: 0.35rem;
+  min-height: 2.1rem;
+  padding: 0 0.6rem;
+  text-decoration: none;
+}
+
+.mf-global-employee-preview:hover,
+.mf-global-employee-preview:focus-visible {
+  background: #303c46;
+  color: #ffffff;
+  outline: none;
+}
+
 .mf-app-shell .fb-btn,
 .mf-app-shell .eb-admin-button {
   align-items: center;

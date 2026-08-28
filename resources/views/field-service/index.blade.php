@@ -103,12 +103,22 @@
                         <h2 class="text-xl font-semibold text-zinc-950">Create job</h2>
                         <p class="mt-1 text-sm text-zinc-600">Start with the essentials. You can fill in the rest from the job.</p>
                     </div>
-                    <form method="POST" action="{{ route('field-service.jobs.store') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <form id="field-service-create-job" method="POST" action="{{ route('field-service.jobs.store') }}" class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         @csrf
-                        <input name="customer_name" required class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Customer name">
+                        <div class="xl:col-span-2">
+                            <label for="field-service-customer-lookup" class="mb-1 block text-sm font-semibold text-zinc-700">Customer</label>
+                            <input id="field-service-customer-lookup" name="customer_lookup" list="field-service-customer-options" value="{{ old('customer_lookup') }}" autocomplete="off" class="w-full rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Search and select an existing customer">
+                            <input id="field-service-marketing-profile-id" name="marketing_profile_id" type="hidden" value="{{ old('marketing_profile_id') }}">
+                            <datalist id="field-service-customer-options">@foreach($jobCustomerChoices ?? [] as $customer)<option value="{{ $customer['label'] }}"></option>@endforeach</datalist>
+                            <p id="field-service-customer-help" class="mt-1 text-xs text-zinc-500">Select a customer to prefill their contact and service address.</p>
+                            @error('customer_lookup')<p class="mt-1 text-xs font-semibold text-rose-700">{{ $message }}</p>@enderror
+                        </div>
+                        <label class="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-800 xl:col-span-2"><input id="field-service-create-customer" name="create_customer" value="1" type="checkbox" @checked(old('create_customer')) class="h-5 w-5 rounded border-zinc-400 text-emerald-700 focus:ring-emerald-600">This is a new customer</label>
+                        <input id="field-service-customer-name" name="customer_name" required value="{{ old('customer_name') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Customer name">
                         <input name="title" required class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Job title">
-                        <input name="customer_phone" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Customer phone">
-                        <input name="service_address_line_1" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Service address">
+                        <input id="field-service-customer-phone" name="customer_phone" value="{{ old('customer_phone') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Customer phone">
+                        <input id="field-service-customer-email" name="customer_email" type="email" value="{{ old('customer_email') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Customer email">
+                        <input id="field-service-service-address" name="service_address_line_1" value="{{ old('service_address_line_1') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm xl:col-span-2" placeholder="Service address">
                         <input name="scheduled_for" type="datetime-local" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm">
                         <select name="assigned_user_id" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm">
                             <option value="">Unassigned</option>
@@ -117,6 +127,56 @@
                         <textarea name="description" rows="2" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm md:col-span-2" placeholder="Scope, access notes, or instructions"></textarea>
                         <button type="submit" class="fb-btn fb-btn-primary min-h-11 justify-center">Create job</button>
                     </form>
+                    <script id="field-service-job-customers" type="application/json">@json($jobCustomerChoices ?? [])</script>
+                    <script>
+                        (() => {
+                            const form = document.getElementById('field-service-create-job');
+                            const data = document.getElementById('field-service-job-customers');
+                            if (!form || !data) return;
+
+                            const customers = JSON.parse(data.textContent || '[]');
+                            const lookup = document.getElementById('field-service-customer-lookup');
+                            const profileId = document.getElementById('field-service-marketing-profile-id');
+                            const createCustomer = document.getElementById('field-service-create-customer');
+                            const help = document.getElementById('field-service-customer-help');
+                            const fields = {
+                                name: document.getElementById('field-service-customer-name'),
+                                phone: document.getElementById('field-service-customer-phone'),
+                                email: document.getElementById('field-service-customer-email'),
+                                address_line_1: document.getElementById('field-service-service-address'),
+                            };
+                            const selectCustomer = () => {
+                                const customer = customers.find((item) => item.label === lookup.value);
+                                if (!customer) {
+                                    profileId.value = '';
+                                    if (!createCustomer.checked) help.textContent = 'Choose a customer from the list, or check “This is a new customer”.';
+                                    return;
+                                }
+                                profileId.value = customer.id;
+                                createCustomer.checked = false;
+                                Object.entries(fields).forEach(([key, input]) => { if (input) input.value = customer[key] || ''; });
+                                help.textContent = `Selected ${customer.name}. This job will link to their existing customer record.`;
+                            };
+
+                            lookup.addEventListener('input', selectCustomer);
+                            createCustomer.addEventListener('change', () => {
+                                if (createCustomer.checked) {
+                                    profileId.value = '';
+                                    lookup.value = '';
+                                    help.textContent = 'A new customer will be created only if their email or phone is not already in the customer list.';
+                                } else if (!profileId.value) {
+                                    help.textContent = 'Choose a customer from the list, or check “This is a new customer”.';
+                                }
+                            });
+                            form.addEventListener('submit', (event) => {
+                                if (!profileId.value && !createCustomer.checked) {
+                                    event.preventDefault();
+                                    help.textContent = 'Choose an existing customer or check “This is a new customer” to continue.';
+                                    lookup.focus();
+                                }
+                            });
+                        })();
+                    </script>
                 </section>
             @endif
 

@@ -191,6 +191,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const [reload, setReload] = useState(0);
     const [visible, setVisible] = useState<string[]>(defaultVisible);
     const [columnsOpen, setColumnsOpen] = useState(false);
+    const [editAll, setEditAll] = useState(false);
     const [candidate, setCandidate] = useState<Row | null>(null);
     const [openedJobId, setOpenedJobId] = useState<number | null>(null);
     const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
@@ -218,6 +219,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const pendingImagePreviewUrls = useMemo(() => new Map(pendingImagePreviews.map(preview => [preview.file, preview.url])), [pendingImagePreviews]);
 
     useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
+    useEffect(() => { if (bucket !== "current") setEditAll(false); }, [bucket]);
     useEffect(() => {
         if (openedJobId === null) return;
         const previousOverflow = document.body.style.overflow;
@@ -331,8 +333,8 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
         if (column.id === "open") return { kind: GridCellKind.Custom, data: { kind: "open-job" }, copyData: "Open", readonly: true, allowOverlay: false, cursor: "pointer" };
         if (column.id === "delete") return { kind: GridCellKind.Custom, data: { kind: "delete-job" }, copyData: "Delete", readonly: true, allowOverlay: false, cursor: "pointer" };
         const value = display(column.id, row);
-        return { kind: GridCellKind.Text, data: value === "—" ? "" : value, displayData: value, readonly: !canManage || row.kind !== "job" || !editable.has(column.id), allowOverlay: canManage && row.kind === "job" && editable.has(column.id) };
-    }, [canManage, columns, rows, selectedJobIds]);
+        return { kind: GridCellKind.Text, data: value === "—" ? "" : value, displayData: value, readonly: !canManage || !editAll || row.kind !== "job" || !editable.has(column.id), allowOverlay: canManage && editAll && row.kind === "job" && editable.has(column.id) };
+    }, [canManage, columns, editAll, rows, selectedJobIds]);
 
     const editCell = useCallback((cell: Item, next: GridCell) => {
         if (next.kind !== GridCellKind.Text) return;
@@ -405,6 +407,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
                 <input type="search" value={q} onChange={event => setQ(event.target.value)} placeholder="Search jobs, customers, addresses" className="min-h-11 min-w-[260px] flex-1 rounded-xl border border-zinc-300 bg-white px-4 text-sm xl:max-w-md" />
                 <select value={sort} onChange={event => setSort(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm"><option value="status">Sort: active now</option><option value="scheduled_for">Schedule</option><option value="priority">Priority</option><option value="customer">Customer</option><option value="title">Job</option><option value="hours">Hours</option><option value="updated_at">Last update</option></select>
                 <button onClick={() => setDir(value => value === "asc" ? "desc" : "asc")} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold">{dir === "asc" ? "Ascending" : "Descending"}</button>
+                {canManage && bucket === "current" ? <button onClick={() => setEditAll(value => !value)} className={`min-h-11 rounded-xl border px-4 text-sm font-semibold ${editAll ? "border-emerald-800 bg-emerald-800 text-white hover:bg-emerald-900" : "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"}`}>{editAll ? "Done editing" : "Edit all"}</button> : null}
                 <button onClick={() => setColumnsOpen(value => !value)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold">Columns</button>
             </div>
         </div>
@@ -414,6 +417,8 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
             <button onClick={saveView} className="min-h-11 rounded-xl border border-zinc-300 px-4 text-sm font-semibold">Save this view</button>
             <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket === "potential" ? "job draft" : `${bucket} job`}${meta.total === 1 ? "" : "s"}`)}</span>
         </div>
+
+        {editAll ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950"><strong>Inline editing is on.</strong> Click a Status, Schedule, Lead, Priority, or Vehicles cell to update any job row. Each change saves immediately.</div> : null}
 
         {showDeleteAction && selectedJobIds.size > 0 ? <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3"><span className="text-sm font-semibold text-rose-900">{selectedJobIds.size} selected</span><button onClick={() => void archiveJobs(rows.filter(row => selectedJobIds.has(row.id)))} className="min-h-11 rounded-xl border border-rose-300 bg-white px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100">Delete selected ({selectedJobIds.size})</button><button onClick={() => setSelectedJobIds(new Set())} className="min-h-11 px-2 text-sm font-semibold text-rose-800 hover:underline">Clear selection</button><span className="text-xs text-rose-700">Selected jobs move to searchable history.</span></div> : null}
 
@@ -432,6 +437,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
                     <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-blue-950 ring-1 ring-inset ring-blue-200">{openedJob.status.replaceAll("_", " ")}</span>
                     <span className="text-sm text-zinc-500">{openedJob.source || "Everbranch"}</span>
                     <div className="ml-auto flex items-center gap-2">
+                        {canManage && openedJob.url ? <a href={`${openedJob.url}${openedJob.url.includes("?") ? "&" : "?"}edit=1#job-details`} className="inline-flex min-h-10 items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-900 hover:bg-emerald-100">Edit job</a> : null}
                         {openedJob.url ? <a href={openedJob.url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-950 hover:bg-blue-100">Full job page ↗</a> : null}
                         {canManage && bucket === "current" ? <button type="button" onClick={() => void archiveJobs([openedJob])} className="inline-flex min-h-10 items-center rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-semibold text-rose-800 hover:bg-rose-100">Delete job</button> : null}
                         <button type="button" onClick={() => setOpenedJobId(null)} className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 bg-white text-xl text-zinc-700 hover:bg-zinc-100" aria-label="Close job">×</button>
@@ -511,13 +517,13 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
                                     <div>{openedJob.service_address || "Service address not added"}</div>
                                 </div>
                             </section>
-                            {openedJob.project_manager_name || openedJob.project_manager_phone || openedJob.project_manager_email ? <section className="rounded-xl border border-zinc-200 p-4"><h3 className="text-sm font-semibold text-zinc-950">Project Manager</h3><div className="mt-3 space-y-2 text-sm text-zinc-700"><div className="font-medium text-zinc-950">{openedJob.project_manager_name || "Not named"}</div>{openedJob.project_manager_company ? <div>{openedJob.project_manager_company}</div> : null}{openedJob.project_manager_phone ? <div><a className="font-semibold text-emerald-800" href={`tel:${openedJob.project_manager_phone}`}>Call</a> · <a className="font-semibold text-emerald-800" href={`sms:${openedJob.project_manager_phone}`}>Text</a> · {openedJob.project_manager_phone}</div> : null}{openedJob.project_manager_email ? <a className="break-all text-emerald-800" href={`mailto:${openedJob.project_manager_email}`}>{openedJob.project_manager_email}</a> : null}</div></section> : null}
                             <section className="grid grid-cols-2 gap-3">
                                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Hours</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("hours", openedJob)}</div></div>
                                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Updated</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("updated_at", openedJob)}</div></div>
                                 {openedJob.amount != null ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Amount</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("amount", openedJob)}</div></div> : null}
                                 {openedJob.balance != null ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"><div className="text-xs font-semibold uppercase text-zinc-500">Balance</div><div className="mt-1 text-lg font-semibold text-zinc-950">{display("balance", openedJob)}</div></div> : null}
                             </section>
+                            <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><h3 className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-900">Project manager</h3><div className="mt-2 text-base font-semibold text-zinc-950">{openedJob.project_manager_name || "Project manager not added"}</div>{openedJob.project_manager_company ? <div className="mt-1 text-sm text-zinc-700">{openedJob.project_manager_company}</div> : null}{openedJob.project_manager_phone ? <a className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-emerald-800 px-3 text-sm font-semibold text-white hover:bg-emerald-900" href={`tel:${openedJob.project_manager_phone}`}>Call {openedJob.project_manager_phone}</a> : <p className="mt-2 text-sm text-zinc-600">No PM phone number added.</p>}{openedJob.project_manager_email ? <a className="mt-2 block break-all text-sm font-semibold text-emerald-800" href={`mailto:${openedJob.project_manager_email}`}>{openedJob.project_manager_email}</a> : null}</section>
                         </aside>
                     </div>
                 </div>
