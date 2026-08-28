@@ -1,5 +1,11 @@
 # UI Changelog
 
+## 2026-08-28 — Project manager editing
+
+### What Changed
+
+- The full **Edit job** form always includes optional project-manager name, company, phone, and email fields, so a PM can be added to a job that does not yet have one.
+
 ## 2026-08-28 — Job-update photo selection previews
 
 ### What Changed

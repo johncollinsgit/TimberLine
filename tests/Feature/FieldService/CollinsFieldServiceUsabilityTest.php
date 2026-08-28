@@ -473,11 +473,17 @@ test('job details and update attachments stay editable and visible to the full C
             'service_state' => 'SC',
             'service_postal_code' => '29601',
             'service_country' => 'US',
+            'project_manager_name' => 'Morgan Project Manager',
+            'project_manager_company' => 'Upstate Project Group',
+            'project_manager_phone' => '864-640-6642',
+            'project_manager_email' => 'morgan@example.com',
         ])
         ->assertRedirect();
 
     expect($job->fresh()->description)->toBe('Replace the service disconnect and label the panel.')
-        ->and($job->fresh()->service_address_line_1)->toBe('125 Main Street');
+        ->and($job->fresh()->service_address_line_1)->toBe('125 Main Street')
+        ->and($job->fresh()->project_manager_name)->toBe('Morgan Project Manager')
+        ->and($job->fresh()->project_manager_phone)->toBe('864-640-6642');
 
     $this->actingAs($owner)
         ->post(route('field-service.notes.store', ['tenant' => $tenant->slug, 'job' => $job]), [

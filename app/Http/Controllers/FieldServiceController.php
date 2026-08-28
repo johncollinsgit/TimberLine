@@ -302,6 +302,10 @@ class FieldServiceController extends Controller
             'service_state' => ['nullable', 'string', 'max:120'],
             'service_postal_code' => ['nullable', 'string', 'max:32'],
             'service_country' => ['nullable', 'string', 'max:120'],
+            'project_manager_name' => ['nullable', 'string', 'max:255'],
+            'project_manager_company' => ['nullable', 'string', 'max:255'],
+            'project_manager_phone' => ['nullable', 'string', 'max:80'],
+            'project_manager_email' => ['nullable', 'email', 'max:255'],
         ]);
 
         $job->fill($validated)->save();
