@@ -31,6 +31,13 @@
   $latestRun = $opsAttention['latest_run'] ?? null;
   $shellContext = (string) ($navigationShell['shell_context'] ?? 'tenant');
   $isLandlordShell = $shellContext === 'landlord';
+  $employeePreview = ! $isLandlordShell && $isAdmin && request()->boolean('employee_view');
+  $employeePreviewHref = request()->fullUrlWithQuery(['employee_view' => $employeePreview ? null : 1]);
+  if ($employeePreview) {
+      $orderedSidebarItems = $orderedSidebarItems->reject(
+          fn (array $item): bool => (string) ($item['key'] ?? '') === 'administration'
+      )->values();
+  }
   $commandSearchEndpoint = $isLandlordShell ? route('landlord.search') : route('app.search');
   $commandSearchDescription = $isLandlordShell
       ? 'Search workspaces, setup, plans, modules, requests, and Everbranch Admin destinations.'
@@ -133,6 +140,12 @@
     @foreach($topbarContextPills as $pill)
       <span class="mf-global-context">{{ $pill }}</span>
     @endforeach
+    @if(! $isLandlordShell && $isAdmin)
+      <a href="{{ $employeePreviewHref }}" wire:navigate class="mf-global-employee-preview" title="{{ $employeePreview ? 'Return to the administrator workspace' : 'Preview the employee workspace' }}">
+        <flux:icon :icon="$employeePreview ? 'arrow-uturn-left' : 'eye'" class="size-4" aria-hidden="true" />
+        <span>{{ $employeePreview ? 'Exit employee view' : 'Employee view' }}</span>
+      </a>
+    @endif
     <a
       href="{{ $assistantHref }}"
       wire:navigate
@@ -318,6 +331,13 @@
         >
           <div class="font-semibold">{{ $accessLaneBanner['label'] }}</div>
           <div class="mt-1 text-xs opacity-80">{{ $accessLaneBanner['copy'] }}</div>
+        </div>
+      @endif
+
+      @if($employeePreview)
+        <div class="mx-auto mb-4 max-w-[1180px] rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <div class="font-semibold">Employee view</div>
+          <div class="mt-1 text-xs">This is a read-only visual preview. Your administrator permissions and the workspace data have not changed.</div>
         </div>
       @endif
 

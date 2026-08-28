@@ -23,8 +23,20 @@ test('base workspace tenant can open the field service start page', function ():
         ->assertSeeText('Find, sort, assign, and update field work')
         ->assertSeeText('Create job')
         ->assertSee('field-service-jobs-grid', false)
+        ->assertSee('field-service-customer-lookup', false)
         ->assertSee('data-transition-template', false)
         ->assertDontSeeText('Pour Lists');
+});
+
+test('an administrator can preview the field-service employee view without changing data or permissions', function (): void {
+    [$tenant, $user] = fieldServiceTenantAndUser();
+
+    $this->actingAs($user)
+        ->get(route('field-service.index', ['tenant' => $tenant->slug, 'employee_view' => 1]))
+        ->assertOk()
+        ->assertSeeText('Employee view')
+        ->assertDontSeeText('Create job')
+        ->assertSee('data-can-manage="0"', false);
 });
 
 test('work grid data includes the summary used by the job popup', function (): void {
@@ -111,6 +123,7 @@ test('field service creates a tenant scoped customer job task and material', fun
 
     $this->actingAs($user)
         ->post(route('field-service.jobs.store', ['tenant' => $tenant->slug]), [
+            'create_customer' => true,
             'customer_name' => 'Pat Electric',
             'customer_email' => 'pat@example.com',
             'customer_phone' => '555-111-2222',
@@ -136,6 +149,62 @@ test('field service creates a tenant scoped customer job task and material', fun
 
     expect(FieldServiceTask::query()->where('tenant_id', $tenant->id)->where('field_service_job_id', $job->id)->count())->toBe(1)
         ->and(FieldServiceMaterial::query()->where('tenant_id', $tenant->id)->where('field_service_job_id', $job->id)->count())->toBe(1);
+});
+
+test('field service links a selected existing customer and uses their details for a new job', function (): void {
+    [$tenant, $user] = fieldServiceTenantAndUser();
+    $customer = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Existing',
+        'last_name' => 'Customer',
+        'email' => 'existing@example.com',
+        'normalized_email' => 'existing@example.com',
+        'phone' => '864-555-0100',
+        'normalized_phone' => '8645550100',
+        'address_line_1' => '22 Existing Way',
+        'city' => 'Greenville',
+        'state' => 'SC',
+        'postal_code' => '29601',
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('field-service.jobs.store', ['tenant' => $tenant->slug]), [
+            'marketing_profile_id' => $customer->id,
+            'customer_name' => 'Existing Customer',
+            'title' => 'Existing customer repair',
+        ])
+        ->assertRedirect();
+
+    $job = FieldServiceJob::query()->where('tenant_id', $tenant->id)->where('title', 'Existing customer repair')->sole();
+    expect((int) $job->marketing_profile_id)->toBe((int) $customer->id)
+        ->and($job->customer_email)->toBe('existing@example.com')
+        ->and($job->service_address_line_1)->toBe('22 Existing Way');
+});
+
+test('field service refuses a new-customer job that duplicates an existing customer email or phone', function (): void {
+    [$tenant, $user] = fieldServiceTenantAndUser();
+    MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Existing',
+        'last_name' => 'Customer',
+        'email' => 'existing@example.com',
+        'normalized_email' => 'existing@example.com',
+        'phone' => '864-555-0100',
+        'normalized_phone' => '8645550100',
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('field-service.index', ['tenant' => $tenant->slug]))
+        ->post(route('field-service.jobs.store', ['tenant' => $tenant->slug]), [
+            'create_customer' => true,
+            'customer_name' => 'Duplicate Name',
+            'customer_email' => 'existing@example.com',
+            'title' => 'Duplicate customer repair',
+        ])
+        ->assertRedirect(route('field-service.index', ['tenant' => $tenant->slug]))
+        ->assertSessionHasErrors('customer_lookup');
+
+    expect(FieldServiceJob::query()->where('tenant_id', $tenant->id)->where('title', 'Duplicate customer repair')->exists())->toBeFalse();
 });
 
 test('field service blocks tenants that did not buy the module', function (): void {

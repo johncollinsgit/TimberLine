@@ -65,6 +65,8 @@ class UnifiedAppNavigationService
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
         $managedWebsiteEnabled = $this->moduleStateEnabled($moduleStates['managed_website'] ?? null);
         $accountingEnabled = $this->moduleStateEnabled($moduleStates['accounting_command_center'] ?? null);
+        $isCollinsWorkspace = $tenant instanceof Tenant
+            && in_array(strtolower(trim((string) $tenant->slug)), ['collins-electric', 'collins-upstate-electric'], true);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
         $isFlagshipTenant = $this->isFlagshipTenant($tenant);
@@ -190,7 +192,7 @@ class UnifiedAppNavigationService
                 ];
             }
 
-            if ($accountingEnabled && $tenant && $user && $this->financialAccess()->allows($user, $tenant) && Route::has('accounting.index')) {
+            if (! $isCollinsWorkspace && $accountingEnabled && $tenant && $user && $this->financialAccess()->allows($user, $tenant) && Route::has('accounting.index')) {
                 $workItems[] = [
                     'key' => 'accounting-command-center',
                     'icon' => 'chart-bar',

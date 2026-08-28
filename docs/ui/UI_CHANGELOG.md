@@ -7,6 +7,22 @@
 - The job quick-view update composer now displays selected photos as thumbnail previews with an obvious remove control before posting.
 - Non-image uploads remain compact file controls, so photos are easy to distinguish from PDFs and other documents.
 
+## 2026-08-28 — Safer job customer selection and quick-view actions
+
+### What Changed
+
+- Create Job now searches the existing customer directory, prefills the selected customer’s contact and service address, and links the new job to that customer record.
+- Creating a customer is an explicit checkbox, and duplicate email or phone records are stopped before a duplicate customer can be created.
+- The job quick view now offers an Edit job button, opens the detail editor directly, and shows a prominent one-tap project-manager call card.
+
+## 2026-08-28 — Collins field-service controls and workspace presentation
+
+### What Changed
+
+- Administrators can switch the jobs grid into an explicit Edit all mode to make inline changes across multiple job rows, then finish editing when done.
+- The Collins sidebar keeps the navy wordmark visible on its light background, and the workspace top bar provides a reversible, read-only Employee view preview.
+- Collins field-service screens no longer display QuickBooks financial cards, source columns, or QuickBooks-generated job-draft controls; no QuickBooks connection or existing data is deleted.
+
 ## 2026-08-25 — Job update text-alert destination
 
 ### What Changed
