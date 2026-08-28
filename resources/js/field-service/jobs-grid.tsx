@@ -18,6 +18,7 @@ type Options = { team: { id: number; name: string }[]; vehicles: { id: number; n
 type Meta = { bucket: Bucket; page: number; last_page: number; total: number };
 type JobUpdateAttachment = { id: number; name: string; mime_type: string; url: string; preview_url?: string | null };
 type JobUpdate = { id: number; body: string; author: string; noted_at?: string | null; attachments: JobUpdateAttachment[] };
+type PendingImagePreview = { file: File; url: string };
 type Props = { endpoint: string; updateTemplate: string; transitionTemplate: string; updatesTemplate: string; noteTemplate: string; candidateTemplate: string; canManage: boolean; canManageDrafts: boolean };
 type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
 type OpenCell = CustomCell<{ kind: "open-job" }>;
@@ -160,6 +161,21 @@ function dateTimeLocalValue(value?: string): string {
     return local.toISOString().slice(0, 16);
 }
 
+function usePendingImagePreviews(files: File[]): PendingImagePreview[] {
+    const [previews, setPreviews] = useState<PendingImagePreview[]>([]);
+
+    useEffect(() => {
+        const next = files
+            .filter(file => file.type.startsWith("image/"))
+            .map(file => ({ file, url: URL.createObjectURL(file) }));
+        setPreviews(next);
+
+        return () => next.forEach(preview => URL.revokeObjectURL(preview.url));
+    }, [files]);
+
+    return previews;
+}
+
 function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, updatesTemplate, noteTemplate, candidateTemplate, canManage, canManageDrafts }: Props) {
     const [bucket, setBucket] = useState<Bucket>("current");
     const [rows, setRows] = useState<Row[]>([]);
@@ -198,6 +214,8 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const openedJob = openedJobId === null ? null : rows.find(row => row.kind === "job" && row.id === openedJobId) || null;
     const updatePhotos = useMemo(() => openedUpdates.flatMap(update => update.attachments.filter(attachment => attachment.mime_type.startsWith("image/")).map(attachment => ({ ...attachment, updateId: update.id, author: update.author, notedAt: update.noted_at }))), [openedUpdates]);
     const activePhoto = updatePhotos[activePhotoIndex] || null;
+    const pendingImagePreviews = usePendingImagePreviews(updateFiles);
+    const pendingImagePreviewUrls = useMemo(() => new Map(pendingImagePreviews.map(preview => [preview.file, preview.url])), [pendingImagePreviews]);
 
     useEffect(() => { setPage(1); }, [bucket, q, sort, dir]);
     useEffect(() => {
@@ -469,7 +487,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
                                     <label className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Add files<input type="file" accept="image/*,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx" multiple className="sr-only" onChange={event => setUpdateFiles(current => [...current, ...Array.from(event.target.files || [])].slice(0, 20))} /></label>
                                     <button type="button" disabled={updatePosting || (!updateBody.trim() && updateFiles.length === 0)} onClick={() => void postUpdate()} className="min-h-11 rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40">{updatePosting ? "Posting…" : "Post update"}</button>
                                 </div>
-                                {updateFiles.length > 0 ? <div className="mt-3 flex flex-wrap gap-2">{updateFiles.map((file, index) => <span key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700"><span className="truncate">{file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="text-zinc-500 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></span>)}</div> : null}
+                                {updateFiles.length > 0 ? <div className="mt-3 flex flex-wrap gap-3">{updateFiles.map((file, index) => file.type.startsWith("image/") ? <div key={`${file.name}-${index}`} className="group relative h-24 w-32 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 shadow-sm">{pendingImagePreviewUrls.get(file) ? <img src={pendingImagePreviewUrls.get(file)} alt={`Selected photo: ${file.name}`} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-zinc-200" aria-label={`Loading preview for ${file.name}`} />}<span className="absolute inset-x-0 bottom-0 truncate bg-zinc-950/70 px-2 py-1 text-[11px] font-semibold text-white">{file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-white/95 text-base font-semibold text-zinc-800 shadow-sm hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></div> : <span key={`${file.name}-${index}`} className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700"><span className="truncate">File · {file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="text-zinc-500 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></span>)}</div> : null}
                                 {activePhoto ? <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-950"><div className="relative aspect-[16/9] bg-zinc-900"><img src={activePhoto.preview_url || activePhoto.url} alt={activePhoto.name} className="h-full w-full object-contain" /><a href={activePhoto.url} target="_blank" rel="noreferrer" className="absolute right-3 top-3 rounded-lg bg-white/95 px-3 py-2 text-xs font-semibold text-zinc-950 shadow-sm">Open photo ↗</a>{updatePhotos.length > 1 ? <><button type="button" onClick={() => setActivePhotoIndex(current => (current - 1 + updatePhotos.length) % updatePhotos.length)} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 px-3 py-2 text-lg font-semibold text-zinc-950 shadow-sm" aria-label="Previous photo">‹</button><button type="button" onClick={() => setActivePhotoIndex(current => (current + 1) % updatePhotos.length)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 px-3 py-2 text-lg font-semibold text-zinc-950 shadow-sm" aria-label="Next photo">›</button></> : null}</div><div className="flex items-center justify-between gap-3 bg-zinc-900 px-4 py-3 text-sm text-white"><span className="truncate">{activePhoto.name}</span><span className="shrink-0 text-xs text-zinc-300">{activePhotoIndex + 1} of {updatePhotos.length}</span></div></div> : null}
                                 <div className="mt-5 space-y-3">{updatesLoading ? <p className="text-sm text-zinc-500">Loading updates…</p> : openedUpdates.length === 0 ? <p className="text-sm text-zinc-500">No updates yet. Add the first field note above.</p> : openedUpdates.map(update => <article key={update.id} className="border-t border-zinc-200 pt-3"><div className="flex flex-wrap items-baseline justify-between gap-2"><strong className="text-sm text-zinc-950">{update.author}</strong><span className="text-xs text-zinc-500">{update.noted_at ? new Date(update.noted_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : ""}</span></div><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-zinc-700">{update.body}</p>{update.attachments.length > 0 ? <div className="mt-3 flex flex-wrap gap-2">{update.attachments.map(attachment => attachment.mime_type.startsWith("image/") ? <button type="button" key={attachment.id} onClick={() => setActivePhotoIndex(updatePhotos.findIndex(photo => photo.id === attachment.id))} className="h-20 w-28 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"><img src={attachment.preview_url || attachment.url} alt={attachment.name} className="h-full w-full object-cover" /></button> : <a key={attachment.id} href={attachment.url} className="inline-flex min-h-10 max-w-full items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold text-emerald-800"><span className="truncate">File · {attachment.name}</span></a>)}</div> : null}</article>)}</div>
                             </section>
