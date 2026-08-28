@@ -1,5 +1,12 @@
 # UI Changelog
 
+## 2026-08-28 — Job-update photo selection previews
+
+### What Changed
+
+- The job quick-view update composer now displays selected photos as thumbnail previews with an obvious remove control before posting.
+- Non-image uploads remain compact file controls, so photos are easy to distinguish from PDFs and other documents.
+
 ## 2026-08-25 — Job update text-alert destination
 
 ### What Changed
