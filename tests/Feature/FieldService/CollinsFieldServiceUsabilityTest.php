@@ -451,6 +451,30 @@ test('team visible PDF drawings are tenant scoped audited and readable by every 
     $this->get('/api/mobile/v1/workspaces/'.$foreign->slug.'/field-service/assets/'.$asset->id)->assertNotFound();
 });
 
+test('iPhone photo payload fallback stores a team-visible job photo when multipart upload is unavailable', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'iPhone photo fallback',
+        'operational_status' => 'active',
+    ]);
+    $image = UploadedFile::fake()->image('panel.jpg', 20, 20);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/photos/payload', [
+        'file_name' => 'panel.jpg',
+        'mime_type' => 'image/jpeg',
+        'contents_base64' => base64_encode((string) file_get_contents($image->getRealPath())),
+    ])->assertCreated()->assertJsonPath('photo.mime_type', 'image/jpeg');
+
+    $asset = \App\Models\WorkspaceAsset::query()->forTenantId($tenant->id)->sole();
+    expect($asset->visibility)->toBe('team')
+        ->and($asset->jobs()->whereKey($job->id)->exists())->toBeTrue()
+        ->and($asset->tags)->toContain('ios-payload-fallback');
+});
+
 test('job details and update attachments stay editable and visible to the full Collins team', function (): void {
     Storage::fake('local');
     [$tenant, $owner, $member] = usabilityWorkspace();

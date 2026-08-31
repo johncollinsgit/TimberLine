@@ -32,6 +32,7 @@ use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -451,6 +452,40 @@ class EverbranchMobileFieldServiceController extends Controller
         $created = collect($request->file('photos', []))->map(fn ($photo) => $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-photo']));
 
         return response()->json(['ok' => true, 'photos' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
+    }
+
+    /**
+     * Accepts a phone-sized photo through JSON when an iOS WebView cannot send
+     * a native multipart file. The app attempts the standard endpoint first.
+     */
+    public function uploadPhotoPayload(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        $validated = $request->validate([
+            'file_name' => ['required', 'string', 'max:255'],
+            'mime_type' => ['required', 'in:image/jpeg,image/png,image/webp'],
+            'contents_base64' => ['required', 'string', 'max:1500000'],
+            'caption' => ['nullable', 'string', 'max:255'],
+        ]);
+        $contents = base64_decode((string) $validated['contents_base64'], true);
+        abort_if(! is_string($contents) || $contents === '' || strlen($contents) > 1024 * 1024, 422, 'The phone photo payload is invalid or too large.');
+        $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
+        abort_unless(in_array($detectedMime, ['image/jpeg', 'image/png', 'image/webp'], true), 422, 'The phone photo is not a supported image.');
+
+        $path = tempnam(storage_path('framework/cache'), 'everbranch-phone-photo-');
+        abort_unless(is_string($path), 500, 'Everbranch could not prepare this phone photo.');
+        file_put_contents($path, $contents);
+
+        try {
+            $photo = new UploadedFile($path, basename((string) $validated['file_name']), $detectedMime, null, true);
+            $asset = $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $validated['caption'] ?? null, ['job-photo', 'ios-payload-fallback']);
+        } finally {
+            @unlink($path);
+        }
+
+        return response()->json(['ok' => true, 'photo' => $this->assetPayload($asset, $tenantModel)], 201);
     }
 
     public function uploadFiles(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
