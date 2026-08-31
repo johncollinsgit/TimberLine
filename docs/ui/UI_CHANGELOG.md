@@ -1,5 +1,11 @@
 # UI Changelog
 
+## 2026-08-31 — Reliable iPhone job-photo uploads
+
+### What Changed
+
+- The mobile job-photo flow now has a protected JSON fallback for iOS WebViews that cannot hand a selected photo to a multipart request. It is limited to phone-sized JPEG, PNG, or WebP images and preserves the same team-visible job-photo record.
+
 ## 2026-08-28 — Project manager editing
 
 ### What Changed
