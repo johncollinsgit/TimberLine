@@ -970,7 +970,7 @@ class UnifiedDashboardService
             $actions[] = [
                 'label' => 'Invite your team',
                 'description' => 'Add the people who need access.',
-                'href' => route('admin.index', ['tab' => 'users']),
+                'href' => route('admin.users'),
                 'tone' => 'neutral',
             ];
 

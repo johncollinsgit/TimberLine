@@ -1161,6 +1161,9 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Tenant context services:
   - `app/Services/Tenancy/TenantResolver.php`
   - `app/Services/Tenancy/AuthenticatedTenantContextResolver.php`
+  - Tenant-scoped Team Access screens treat a resolved tenant hostname as
+    authoritative over a stale shared-session workspace selection; they must
+    never render one workspace's data inside another workspace's branded shell.
 - Tenant middleware + registration:
   - `app/Http/Middleware/EnsureTenantAccess.php`
   - `bootstrap/app.php` middleware aliases for `tenant.access` and `marketing.storefront.verify`

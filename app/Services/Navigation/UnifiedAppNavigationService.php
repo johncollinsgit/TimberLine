@@ -643,8 +643,8 @@ class UnifiedAppNavigationService
             $items = $isAdmin ? [[
                 'key' => 'users',
                 'label' => 'Team Access',
-                'href' => route('admin.index', ['tab' => 'users']),
-                'current' => $adminActive && $adminTab === 'users',
+                'href' => route('admin.users'),
+                'current' => request()->routeIs('admin.users') || ($adminActive && $adminTab === 'users'),
             ]] : [];
 
             if ($canCustomizeWorkspace && Route::has('tenant.brand.edit')) {
@@ -669,8 +669,8 @@ class UnifiedAppNavigationService
             ...($isAdmin ? [[
                 'key' => 'users',
                 'label' => 'Team Access',
-                'href' => route('admin.index', ['tab' => 'users']),
-                'current' => $adminActive && $adminTab === 'users',
+                'href' => route('admin.users'),
+                'current' => request()->routeIs('admin.users') || ($adminActive && $adminTab === 'users'),
             ]] : []),
             [
                 'key' => 'imports',
@@ -912,7 +912,7 @@ class UnifiedAppNavigationService
             $actions[] = [
                 'label' => 'Invite your team',
                 'description' => 'Add people who need access to this workspace.',
-                'href' => route('admin.index', ['tab' => 'users']),
+                'href' => route('admin.users'),
             ];
         } elseif ($canAccessOps) {
             $actions[] = [
