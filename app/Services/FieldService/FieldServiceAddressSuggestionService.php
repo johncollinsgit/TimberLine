@@ -11,7 +11,7 @@ class FieldServiceAddressSuggestionService
     {
         $query = trim($query);
         $key = trim((string) config('services.google_maps.places_api_key'));
-        if (mb_strlen($query) < 4 || $key === '') {
+        if (mb_strlen($query) < 3 || $key === '') {
             return [];
         }
 

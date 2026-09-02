@@ -52,6 +52,25 @@ test('place suggestions request the identifier and label required by the job for
         && $request->hasHeader('X-Goog-FieldMask', 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text'));
 });
 
+test('place suggestions begin with three address characters', function (): void {
+    config()->set('services.google_maps.places_api_key', 'test-key');
+    Http::fake([
+        'https://places.googleapis.com/v1/places:autocomplete' => Http::response([
+            'suggestions' => [[
+                'placePrediction' => [
+                    'placeId' => 'place-322',
+                    'text' => ['text' => '322 Main Street, Anderson, SC, USA'],
+                ],
+            ]],
+        ]),
+    ]);
+
+    expect(app(FieldServiceAddressSuggestionService::class)->suggest('322'))->toBe([[
+        'place_id' => 'place-322',
+        'label' => '322 Main Street, Anderson, SC, USA',
+    ]]);
+});
+
 test('address suggestions fail quietly when Google Places is not configured', function (): void {
     config()->set('services.google_maps.places_api_key', null);
 

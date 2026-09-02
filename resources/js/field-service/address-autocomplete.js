@@ -71,7 +71,7 @@ export function mountFieldServiceAddressAutocompleteNow() {
       };
       const search = async () => {
         const query = input.value.trim();
-        if (query.length < 4) return close();
+        if (query.length < 3) return close();
         controller?.abort();
         controller = new AbortController();
         try {
