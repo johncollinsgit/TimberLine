@@ -18,7 +18,6 @@ type Options = { team: { id: number; name: string }[]; vehicles: { id: number; n
 type Meta = { bucket: Bucket; page: number; last_page: number; total: number };
 type JobUpdateAttachment = { id: number; name: string; mime_type: string; url: string; preview_url?: string | null };
 type JobUpdate = { id: number; body: string; author: string; noted_at?: string | null; attachments: JobUpdateAttachment[] };
-type PendingImagePreview = { file: File; url: string };
 type Props = { endpoint: string; updateTemplate: string; transitionTemplate: string; updatesTemplate: string; noteTemplate: string; candidateTemplate: string; canManage: boolean; canManageDrafts: boolean };
 type View = { name: string; bucket: Bucket; sort: string; dir: "asc" | "desc"; q: string; columns: string[] };
 type OpenCell = CustomCell<{ kind: "open-job" }>;
@@ -30,6 +29,17 @@ const openColumn: GridColumn & { id: string } = { id: "open", title: "", width: 
 const deleteColumn: GridColumn & { id: string } = { id: "delete", title: "Action", width: 104 };
 const websitePhotoTargetBytes = 1_500_000;
 const websiteUploadBatchBytes = 6_000_000;
+const pendingFileIds = new WeakMap<File, string>();
+let nextPendingFileId = 0;
+
+function pendingFileId(file: File): string {
+    let id = pendingFileIds.get(file);
+    if (!id) {
+        id = `pending-file-${++nextPendingFileId}`;
+        pendingFileIds.set(file, id);
+    }
+    return id;
+}
 const selectCellRenderer: CustomRenderer<SelectCell> = {
     kind: GridCellKind.Custom,
     isMatch: (cell): cell is SelectCell => cell.data.kind === "select-job",
@@ -235,19 +245,32 @@ function makeWebsiteUploadBatches(files: File[]): File[][] {
     return batches;
 }
 
-function usePendingImagePreviews(files: File[]): PendingImagePreview[] {
-    const [previews, setPreviews] = useState<PendingImagePreview[]>([]);
+function usePendingImagePreviews(files: File[]): Map<string, string> {
+    const previews = useRef(new Map<string, string>());
+    const [version, setVersion] = useState(0);
 
     useEffect(() => {
-        const next = files
-            .filter(file => file.type.startsWith("image/"))
-            .map(file => ({ file, url: URL.createObjectURL(file) }));
-        setPreviews(next);
-
-        return () => next.forEach(preview => URL.revokeObjectURL(preview.url));
+        const activeIds = new Set<string>();
+        files.filter(file => file.type.startsWith("image/")).forEach(file => {
+            const id = pendingFileId(file);
+            activeIds.add(id);
+            if (!previews.current.has(id)) previews.current.set(id, URL.createObjectURL(file));
+        });
+        previews.current.forEach((url, id) => {
+            if (!activeIds.has(id)) {
+                URL.revokeObjectURL(url);
+                previews.current.delete(id);
+            }
+        });
+        setVersion(current => current + 1);
     }, [files]);
 
-    return previews;
+    useEffect(() => () => {
+        previews.current.forEach(url => URL.revokeObjectURL(url));
+        previews.current.clear();
+    }, []);
+
+    return useMemo(() => new Map(previews.current), [version]);
 }
 
 function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, updatesTemplate, noteTemplate, candidateTemplate, canManage, canManageDrafts }: Props) {
@@ -276,6 +299,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const [updatePosting, setUpdatePosting] = useState(false);
     const [updatePostingMessage, setUpdatePostingMessage] = useState("");
     const [updateConfirmation, setUpdateConfirmation] = useState("");
+    const [updateError, setUpdateError] = useState("");
     const [activePhotoIndex, setActivePhotoIndex] = useState(0);
     const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
     const [gridRef, size] = useSize();
@@ -291,8 +315,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const openedJob = openedJobId === null ? null : rows.find(row => row.kind === "job" && row.id === openedJobId) || null;
     const updatePhotos = useMemo(() => openedUpdates.flatMap(update => update.attachments.filter(attachment => attachment.mime_type.startsWith("image/")).map(attachment => ({ ...attachment, updateId: update.id, author: update.author, notedAt: update.noted_at }))), [openedUpdates]);
     const activePhoto = updatePhotos[activePhotoIndex] || null;
-    const pendingImagePreviews = usePendingImagePreviews(updateFiles);
-    const pendingImagePreviewUrls = useMemo(() => new Map(pendingImagePreviews.map(preview => [preview.file, preview.url])), [pendingImagePreviews]);
+    const pendingImagePreviewUrls = usePendingImagePreviews(updateFiles);
     const pendingPhotoCount = useMemo(() => updateFiles.filter(file => file.type.startsWith("image/")).length, [updateFiles]);
     const updatePostLabel = updatePosting
         ? updatePostingMessage || "Preparing upload…"
@@ -314,7 +337,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     }, [openedJobId]);
     useEffect(() => {
         if (!openedJob) {
-            setOpenedUpdates([]); setUpdateBody(""); setUpdateFiles([]); setActivePhotoIndex(0);
+            setOpenedUpdates([]); setUpdateBody(""); setUpdateFiles([]); setUpdateError(""); setActivePhotoIndex(0);
             return;
         }
         const controller = new AbortController();
@@ -397,7 +420,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const postUpdate = useCallback(async () => {
         if (!openedJob || updatePosting || (!updateBody.trim() && updateFiles.length === 0)) return;
         const photoCount = updateFiles.filter(file => file.type.startsWith("image/")).length;
-        setUpdatePosting(true); setUpdatePostingMessage("Preparing photos for upload…"); setError(""); setUpdateConfirmation("");
+        setUpdatePosting(true); setUpdatePostingMessage("Preparing photos for upload…"); setUpdateError(""); setUpdateConfirmation("");
         try {
             const preparedFiles = await Promise.all(updateFiles.map(prepareWebsitePhoto));
             const batches = makeWebsiteUploadBatches(preparedFiles);
@@ -418,9 +441,9 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
             window.setTimeout(() => { setSaveState(""); setUpdateConfirmation(""); }, 5000);
         } catch (failure) {
             if (axios.isAxiosError(failure) && failure.response?.status === 413) {
-                setError("That upload was too large for the server. The selected photos are now sent as smaller website-safe uploads; please try posting again.");
+                setUpdateError("That upload was too large for the server. The selected photos are now sent as smaller website-safe uploads; please try posting again.");
             } else {
-                setError(failure instanceof Error ? failure.message : axios.isAxiosError(failure) ? failure.response?.data?.message || "Could not post the update." : "Could not post the update.");
+                setUpdateError(failure instanceof Error ? failure.message : axios.isAxiosError(failure) ? failure.response?.data?.message || "Could not post the update." : "Could not post the update.");
             }
         } finally { setUpdatePosting(false); setUpdatePostingMessage(""); }
     }, [noteTemplate, openedJob, updateBody, updateFiles, updatePosting, updatesTemplate]);
@@ -587,7 +610,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
                             <section className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5">
                                 <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-base font-semibold text-zinc-950">Updates</h3><p className="mt-1 text-sm text-zinc-600">Add a job note, photos, or files without leaving this job.</p></div><span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-600">{openedUpdates.length} updates</span></div>
                                 <textarea value={updateBody} onChange={event => setUpdateBody(event.target.value)} rows={3} className="mt-4 w-full rounded-xl border border-zinc-300 px-3 py-3 text-sm text-zinc-900" placeholder="Write a job update or field note" />
-                                {updateFiles.length > 0 ? <div className="mt-3 flex flex-wrap gap-3">{updateFiles.map((file, index) => file.type.startsWith("image/") ? <div key={`${file.name}-${index}`} className="group relative h-24 w-32 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 shadow-sm">{pendingImagePreviewUrls.get(file) ? <img src={pendingImagePreviewUrls.get(file)} alt={`Selected photo: ${file.name}`} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-zinc-200" aria-label={`Loading preview for ${file.name}`} />}<span className="absolute inset-x-0 bottom-0 truncate bg-zinc-950/70 px-2 py-1 text-[11px] font-semibold text-white">{file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-white/95 text-base font-semibold text-zinc-800 shadow-sm hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></div> : <span key={`${file.name}-${index}`} className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700"><span className="truncate">File · {file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="text-zinc-500 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></span>)}</div> : null}
+                                {updateFiles.length > 0 ? <div className="mt-4 flex flex-wrap gap-4">{updateFiles.map((file, index) => file.type.startsWith("image/") ? <div key={pendingFileId(file)} className="group relative h-36 w-48 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 shadow-sm">{pendingImagePreviewUrls.get(pendingFileId(file)) ? <img src={pendingImagePreviewUrls.get(pendingFileId(file))} alt={`Selected photo: ${file.name}`} className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center bg-zinc-100 px-4 text-center text-xs font-semibold text-zinc-500" aria-label={`Preparing preview for ${file.name}`}>Preparing photo preview…</div>}<span className="absolute inset-x-0 bottom-0 truncate bg-zinc-950/75 px-2.5 py-1.5 text-[11px] font-semibold text-white">{file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-lg font-semibold text-zinc-800 shadow-sm hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></div> : <span key={`${file.name}-${index}`} className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700"><span className="truncate">File · {file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="text-zinc-500 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></span>)}</div> : null}
                                 <div className="mt-3 flex flex-wrap items-center gap-2">
                                     <label className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Add photos<input type="file" accept="image/*" capture="environment" multiple className="sr-only" onChange={event => setUpdateFiles(current => [...current, ...Array.from(event.target.files || [])].slice(0, 20))} /></label>
                                     <label className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Add files<input type="file" accept="image/*,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx" multiple className="sr-only" onChange={event => setUpdateFiles(current => [...current, ...Array.from(event.target.files || [])].slice(0, 20))} /></label>
@@ -596,6 +619,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
                                 <div className="mt-3" aria-live="polite">
                                     {updatePosting ? <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-950">{updatePostingMessage || "Preparing upload…"} Keep this window open until the confirmation appears.</p> : null}
                                     {!updatePosting && updateConfirmation ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-950">✓ {updateConfirmation}</p> : null}
+                                    {!updatePosting && updateError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-950">{updateError}</p> : null}
                                     {!updatePosting && !updateConfirmation && (updateBody.trim() || updateFiles.length > 0) ? <p className="text-xs font-medium text-zinc-600">Ready to post {updateFiles.length > 0 ? `${updateFiles.length} attachment${updateFiles.length === 1 ? "" : "s"} ` : ""}to this shared job record.</p> : null}
                                 </div>
                                 {activePhoto ? <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-950"><div className="relative aspect-[16/9] bg-zinc-900"><img src={activePhoto.preview_url || activePhoto.url} alt={activePhoto.name} className="h-full w-full object-contain" /><a href={activePhoto.url} target="_blank" rel="noreferrer" className="absolute right-3 top-3 rounded-lg bg-white/95 px-3 py-2 text-xs font-semibold text-zinc-950 shadow-sm">Open photo ↗</a>{updatePhotos.length > 1 ? <><button type="button" onClick={() => setActivePhotoIndex(current => (current - 1 + updatePhotos.length) % updatePhotos.length)} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 px-3 py-2 text-lg font-semibold text-zinc-950 shadow-sm" aria-label="Previous photo">‹</button><button type="button" onClick={() => setActivePhotoIndex(current => (current + 1) % updatePhotos.length)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 px-3 py-2 text-lg font-semibold text-zinc-950 shadow-sm" aria-label="Next photo">›</button></> : null}</div><div className="flex items-center justify-between gap-3 bg-zinc-900 px-4 py-3 text-sm text-white"><span className="truncate">{activePhoto.name}</span><span className="shrink-0 text-xs text-zinc-300">{activePhotoIndex + 1} of {updatePhotos.length}</span></div></div> : null}

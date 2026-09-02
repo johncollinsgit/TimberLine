@@ -2,6 +2,7 @@
 
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceJobNote;
 use App\Models\FieldServicePriceBookItem;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceTaskEvent;
@@ -544,6 +545,28 @@ test('job details and update attachments stay editable and visible to the full C
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
         ->assertOk()
         ->assertJsonFragment(['name' => 'service-after.jpg']);
+});
+
+test('website job updates return a clear success response for photo posts', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $owner->id,
+        'title' => 'Photo post confirmation',
+        'status' => 'open',
+    ]);
+
+    $response = $this->actingAs($owner)
+        ->post(route('field-service.notes.store', ['tenant' => $tenant->slug, 'job' => $job]), [
+            'attachments' => [UploadedFile::fake()->image('panel.jpg', 900, 600)],
+        ], ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest']);
+
+    $response
+        ->assertCreated()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('message', 'Job update added.')
+        ->assertJsonPath('note_id', FieldServiceJobNote::query()->forTenantId($tenant->id)->sole()->id);
 });
 
 test('field operations v7 lets configured members browse every job without broadening mutations or financial payloads', function (): void {
