@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\WorkspaceAsset;
 use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -96,11 +97,12 @@ class WorkspaceDocumentsController extends Controller
         return back()->with('status', 'Document job links updated.');
     }
 
-    public function destroy(Request $request, Tenant $tenant, WorkspaceAsset $asset, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit): RedirectResponse
+    public function destroy(Request $request, Tenant $tenant, WorkspaceAsset $asset, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit, FieldServiceAccessService $fieldServiceAccess): RedirectResponse
     {
         abort_unless((int) $asset->tenant_id === (int) $tenant->id, 404);
         $owner = $financialAccess->allows($request->user(), $tenant);
-        abort_unless($owner || (int) $asset->uploaded_by_user_id === (int) $request->user()->id, 403);
+        $isJobAsset = $asset->jobs()->exists();
+        abort_unless($isJobAsset ? $fieldServiceAccess->canManageJobs($request->user(), $tenant) : ($owner || (int) $asset->uploaded_by_user_id === (int) $request->user()->id), 403);
         $audit->record($tenant, $asset, $request->user(), 'deleted', ['checksum' => $asset->checksum, 'file_name' => $asset->file_name]);
         Storage::disk($asset->storage_disk)->delete($asset->storage_path);
         if ($asset->thumbnail_disk && $asset->thumbnail_path) {

@@ -1,5 +1,16 @@
 # UI Changelog
 
+## 2026-09-02 — Field Service job updates and document controls
+
+### What Changed
+
+- Added explicit saved job updates on the web job-detail page, with optional photo/PDF attachments.
+- Management can remove an individual update, photo, or PDF after a confirmation prompt; field employees retain the ability to add updates and files.
+
+### Guardrails
+
+- Update attachments and deletion remain tenant-scoped and job-scoped. Server-side Field Service management authorization is enforced for every delete action.
+
 ## 2026-08-17 - Evergrove custom-development positioning
 
 ### What Changed

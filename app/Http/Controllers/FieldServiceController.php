@@ -17,6 +17,7 @@ use App\Models\FieldServiceWorkShift;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WorkspaceAsset;
 use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
@@ -26,6 +27,8 @@ use App\Services\FieldService\FieldServiceTaskAssignmentService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkforceService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
+use App\Services\FieldService\WorkspaceAssetAuditService;
+use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use Illuminate\Contracts\View\View;
@@ -33,6 +36,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -760,29 +764,37 @@ class FieldServiceController extends Controller
         return back()->with('status', 'Job status updated.');
     }
 
-    public function storeNote(Request $request, FieldServiceJob $job): RedirectResponse
+    public function storeNote(Request $request, FieldServiceJob $job, WorkspaceAssetService $assets): RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         $this->abortUnlessAccessibleJob($request, $tenant, $job);
 
         $validated = $request->validate([
-            'body' => ['required', 'string', 'max:5000'],
+            'body' => ['nullable', 'string', 'max:5000', 'required_without:attachments'],
             'status_update' => ['nullable', 'string', 'in:open,scheduled,in_progress,blocked,done'],
             'noted_at' => ['nullable', 'date'],
             'photo_file_path' => ['nullable', 'string', 'max:2048'],
             'photo_caption' => ['nullable', 'string', 'max:255'],
+            'attachments' => ['nullable', 'array', 'min:1', 'max:20'],
+            'attachments.*' => ['required', 'file', 'max:25600'],
         ]);
 
-        DB::transaction(function () use ($request, $tenant, $job, $validated): void {
+        DB::transaction(function () use ($request, $tenant, $job, $validated, $assets): void {
             $note = FieldServiceJobNote::query()->create([
                 'tenant_id' => (int) $tenant->id,
                 'field_service_job_id' => (int) $job->id,
                 'created_by_user_id' => $request->user()?->id,
-                'body' => (string) $validated['body'],
+                'body' => trim((string) ($validated['body'] ?? '')),
                 'status_update' => $validated['status_update'] ?? null,
                 'noted_at' => $validated['noted_at'] ?? now(),
             ]);
+            $attachmentIds = collect($request->file('attachments', []))
+                ->map(fn ($file): int => (int) $assets->storeUpload($tenant, $request->user(), $file, [(int) $job->id], 'team', null, ['job-update'])->id)
+                ->all();
+            if ($attachmentIds !== []) {
+                $note->forceFill(['metadata' => ['source' => 'everbranch_web', 'attachment_asset_ids' => $attachmentIds]])->save();
+            }
 
             $status = trim((string) ($validated['status_update'] ?? ''));
             if ($status !== '') {
@@ -807,6 +819,35 @@ class FieldServiceController extends Controller
         });
 
         return back()->with('status', 'Job update added.');
+    }
+
+    public function destroyNote(Request $request, FieldServiceJob $job, FieldServiceJobNote $note): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless((int) $note->tenant_id === (int) $tenant->id && (int) $note->field_service_job_id === (int) $job->id, 404);
+        $note->delete();
+
+        return back()->with('status', 'Job update deleted.');
+    }
+
+    public function destroyJobAsset(Request $request, FieldServiceJob $job, WorkspaceAsset $asset, WorkspaceAssetAuditService $audit): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless((int) $asset->tenant_id === (int) $tenant->id && $job->assets()->whereKey($asset->id)->exists(), 404);
+        $audit->record($tenant, $asset, $request->user(), 'deleted', ['checksum' => $asset->checksum, 'file_name' => $asset->file_name, 'surface' => 'field_service_web']);
+        Storage::disk($asset->storage_disk)->delete($asset->storage_path);
+        if ($asset->thumbnail_disk && $asset->thumbnail_path) {
+            Storage::disk($asset->thumbnail_disk)->delete($asset->thumbnail_path);
+        }
+        $asset->delete();
+
+        return back()->with('status', 'Job file deleted.');
     }
 
     public function storeMaterial(Request $request): RedirectResponse
