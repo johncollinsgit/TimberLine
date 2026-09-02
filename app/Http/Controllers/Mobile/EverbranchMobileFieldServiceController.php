@@ -398,7 +398,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless((int) $job->tenant_id === (int) $tenantModel->id, 404);
-        $validated = $request->validate(['action' => ['required', 'in:start,block,resume,complete,cancel,archive,reopen'], 'reason' => ['nullable', 'string', 'max:500', 'required_if:action,block']]);
+        $validated = $request->validate(['action' => ['required', 'in:start,complete,cancel,archive,reopen'], 'reason' => ['nullable', 'string', 'max:500']]);
         $managerAction = in_array($validated['action'], ['cancel', 'archive', 'reopen'], true);
         abort_unless($managerAction ? $access->canManageJobs($user, $tenantModel) : $access->canUpdateProgress($user, $tenantModel, $job), 403);
         $result = $transitions->transition($tenantModel, $job, $user, $validated['action'], $validated['reason'] ?? null);
@@ -783,7 +783,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'scheduled_end_at' => ['sometimes', 'nullable', 'date'], 'assigned_user_id' => ['sometimes', 'nullable', 'integer'],
             'participant_user_ids' => ['sometimes', 'array', 'max:50'], 'participant_user_ids.*' => ['integer'],
             'vehicle_ids' => ['sometimes', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
-            'operational_status' => ['sometimes', 'in:active,scheduled,blocked,complete,quote,canceled,history'],
+            'operational_status' => ['sometimes', 'in:active,scheduled,complete,quote,canceled,history'],
         ]);
         $before = $job->only(['scheduled_for', 'scheduled_end_at', 'assigned_user_id']);
         $job->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'vehicle_ids', 'operational_status'])->all());
