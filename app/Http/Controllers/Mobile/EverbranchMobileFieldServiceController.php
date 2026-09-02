@@ -487,29 +487,47 @@ class EverbranchMobileFieldServiceController extends Controller
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
-        $validated = $request->validate([
-            'file_name' => ['required', 'string', 'max:255'],
-            'mime_type' => ['required', 'in:image/jpeg,image/png,image/webp'],
-            'contents_base64' => ['required', 'string', 'max:1500000'],
-            'caption' => ['nullable', 'string', 'max:255'],
-        ]);
-        $contents = base64_decode((string) $validated['contents_base64'], true);
-        abort_if(! is_string($contents) || $contents === '' || strlen($contents) > 1024 * 1024, 422, 'The phone photo payload is invalid or too large.');
-        $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
-        abort_unless(in_array($detectedMime, ['image/jpeg', 'image/png', 'image/webp'], true), 422, 'The phone photo is not a supported image.');
+        $singlePayload = ! $request->has('photos');
+        $validated = $singlePayload
+            ? ['photos' => [$request->validate([
+                'file_name' => ['required', 'string', 'max:255'],
+                'mime_type' => ['required', 'in:image/jpeg,image/png,image/webp'],
+                'contents_base64' => ['required', 'string', 'max:1500000'],
+                'caption' => ['nullable', 'string', 'max:255'],
+            ])]]
+            : $request->validate([
+                'photos' => ['required', 'array', 'min:1', 'max:20'],
+                'photos.*.file_name' => ['required', 'string', 'max:255'],
+                'photos.*.mime_type' => ['required', 'in:image/jpeg,image/png,image/webp'],
+                'photos.*.contents_base64' => ['required', 'string', 'max:1500000'],
+                'photos.*.caption' => ['nullable', 'string', 'max:255'],
+            ]);
 
-        $path = tempnam(storage_path('framework/cache'), 'everbranch-phone-photo-');
-        abort_unless(is_string($path), 500, 'Everbranch could not prepare this phone photo.');
-        file_put_contents($path, $contents);
+        $created = collect($validated['photos'])->map(function (array $payload) use ($assets, $job, $tenantModel, $user): WorkspaceAsset {
+            $contents = base64_decode((string) $payload['contents_base64'], true);
+            abort_if(! is_string($contents) || $contents === '' || strlen($contents) > 1024 * 1024, 422, 'The phone photo payload is invalid or too large.');
+            $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
+            abort_unless(in_array($detectedMime, ['image/jpeg', 'image/png', 'image/webp'], true), 422, 'The phone photo is not a supported image.');
 
-        try {
-            $photo = new UploadedFile($path, basename((string) $validated['file_name']), $detectedMime, null, true);
-            $asset = $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $validated['caption'] ?? null, ['job-photo', 'ios-payload-fallback']);
-        } finally {
-            @unlink($path);
-        }
+            $path = tempnam(storage_path('framework/cache'), 'everbranch-phone-photo-');
+            abort_unless(is_string($path), 500, 'Everbranch could not prepare this phone photo.');
+            file_put_contents($path, $contents);
 
-        return response()->json(['ok' => true, 'photo' => $this->assetPayload($asset, $tenantModel)], 201);
+            try {
+                $photo = new UploadedFile($path, basename((string) $payload['file_name']), $detectedMime, null, true);
+                return $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $payload['caption'] ?? null, ['job-photo', 'ios-payload-fallback']);
+            } finally {
+                @unlink($path);
+            }
+        });
+
+        $photos = $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values();
+
+        return response()->json([
+            'ok' => true,
+            'photo' => $singlePayload ? $photos->first() : null,
+            'photos' => $photos,
+        ], 201);
     }
 
     public function uploadFiles(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
