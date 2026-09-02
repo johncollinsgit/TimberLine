@@ -194,6 +194,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'tasks' => $job->tasks->sortBy(['sort_order', 'due_at'])->map(fn (FieldServiceTask $task): array => [
                 ...$assignments->payload($task),
                 'can_update' => $access->canUpdateTask($user, $tenantModel, $job, $task),
+                'photos' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => (int) data_get($asset->metadata, 'field_service_task_id', 0) === (int) $task->id && str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
                 'created_by' => $task->createdBy?->name, 'completed_by' => $task->completedBy?->name,
                 'events' => $task->events->sortByDesc('id')->take(20)->map(fn ($event): array => [
                     'id' => (int) $event->id, 'type' => $event->event_type, 'from_status' => $event->from_status,
@@ -647,7 +648,7 @@ class EverbranchMobileFieldServiceController extends Controller
             $validated['status'] = 'waiting';
         }
         if (! $access->canManageJobs($user, $tenantModel)) {
-            $validated = array_intersect_key($validated, ['status' => true]);
+            $validated = array_intersect_key($validated, ['status' => true, 'description' => true]);
         }
         $previousAssignees = $task->assignees()->pluck('users.id')->map(fn ($id): int => (int) $id);
         $requestedIds = null;
@@ -672,6 +673,52 @@ class EverbranchMobileFieldServiceController extends Controller
         }
 
         return response()->json(['ok' => true, 'task' => $assignments->payload($task)]);
+    }
+
+    public function uploadTaskPhotos(Request $request, string $tenant, FieldServiceJob $job, FieldServiceTask $task, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $task->tenant_id === (int) $tenantModel->id
+            && (int) $task->field_service_job_id === (int) $job->id
+            && $access->canUpdateTask($user, $tenantModel, $job, $task), 403);
+        $request->validate(['photos' => ['required', 'array', 'min:1', 'max:20'], 'photos.*' => ['required', 'image', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
+        $created = collect($request->file('photos', []))->map(fn ($photo) => $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-photo', 'task-photo'], ['field_service_task_id' => (int) $task->id]));
+
+        return response()->json(['ok' => true, 'photos' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
+    }
+
+    public function uploadTaskPhotoPayload(Request $request, string $tenant, FieldServiceJob $job, FieldServiceTask $task, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $task->tenant_id === (int) $tenantModel->id
+            && (int) $task->field_service_job_id === (int) $job->id
+            && $access->canUpdateTask($user, $tenantModel, $job, $task), 403);
+        $validated = $request->validate([
+            'photos' => ['required', 'array', 'min:1', 'max:20'],
+            'photos.*.file_name' => ['required', 'string', 'max:255'],
+            'photos.*.mime_type' => ['required', 'in:image/jpeg,image/png,image/webp'],
+            'photos.*.contents_base64' => ['required', 'string', 'max:1500000'],
+            'photos.*.caption' => ['nullable', 'string', 'max:255'],
+        ]);
+        $created = collect($validated['photos'])->map(function (array $payload) use ($assets, $job, $task, $tenantModel, $user): WorkspaceAsset {
+            $contents = base64_decode((string) $payload['contents_base64'], true);
+            abort_if(! is_string($contents) || $contents === '' || strlen($contents) > 1024 * 1024, 422, 'The phone photo payload is invalid or too large.');
+            $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
+            abort_unless(in_array($detectedMime, ['image/jpeg', 'image/png', 'image/webp'], true), 422, 'The phone photo is not a supported image.');
+            $path = tempnam(storage_path('framework/cache'), 'everbranch-task-photo-');
+            abort_unless(is_string($path), 500, 'Everbranch could not prepare this phone photo.');
+            file_put_contents($path, $contents);
+            try {
+                $photo = new UploadedFile($path, basename((string) $payload['file_name']), $detectedMime, null, true);
+                return $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $payload['caption'] ?? null, ['job-photo', 'task-photo', 'ios-payload-fallback'], ['field_service_task_id' => (int) $task->id]);
+            } finally {
+                @unlink($path);
+            }
+        });
+
+        return response()->json(['ok' => true, 'photos' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
     }
 
     public function handoffTask(Request $request, string $tenant, FieldServiceJob $job, FieldServiceTask $task, FieldServiceAccessService $access, FieldServiceJobNotificationService $notifications, FieldServiceTaskAssignmentService $assignments): JsonResponse
