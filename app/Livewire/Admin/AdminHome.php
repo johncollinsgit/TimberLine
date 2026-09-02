@@ -37,6 +37,15 @@ class AdminHome extends Component
             $this->tab = 'master-data';
         }
 
+        // Team Access has a tenant-scoped route. Send legacy bookmarked
+        // `?tab=users` URLs there instead of rendering the embedded card in
+        // the general Admin Workspace shell.
+        if ($isAdmin && $this->tab === 'users') {
+            $this->redirectRoute('admin.users');
+
+            return;
+        }
+
         if (! $isAdmin && $isManager && $this->tab === 'users') {
             $this->tab = 'imports';
         }
