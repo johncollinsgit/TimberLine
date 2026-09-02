@@ -73,7 +73,12 @@
                                     <summary class="cursor-pointer font-semibold text-emerald-800">Edit job details</summary>
                                     <form method="POST" action="{{ route('field-service.jobs.details.update', $job) }}" class="mt-4 grid gap-3 md:grid-cols-2">@csrf
                                         <label class="text-sm font-semibold text-zinc-700 md:col-span-2">Work description<textarea name="description" rows="4" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 font-normal" placeholder="Describe the work to be done">{{ old('description', $job->description) }}</textarea></label>
-                                        <label class="text-sm font-semibold text-zinc-700 md:col-span-2">Service address<input name="service_address_line_1" value="{{ old('service_address_line_1', $job->service_address_line_1) }}" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 font-normal" placeholder="Street address"></label>
+                                        <label class="relative text-sm font-semibold text-zinc-700 md:col-span-2" data-address-autocomplete>
+                                            Service address
+                                            <input name="service_address_line_1" value="{{ old('service_address_line_1', $job->service_address_line_1) }}" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 font-normal" placeholder="Start typing an address" autocomplete="street-address" aria-autocomplete="list" aria-expanded="false">
+                                            <span class="mt-1 block text-xs font-normal text-zinc-500" data-address-status>Choose a suggested address to fill city, state, postal code, and country.</span>
+                                            <div class="absolute z-20 mt-1 hidden w-full overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg" data-address-suggestions role="listbox"></div>
+                                        </label>
                                         <label class="text-sm font-semibold text-zinc-700 md:col-span-2">Suite, unit, or additional address<input name="service_address_line_2" value="{{ old('service_address_line_2', $job->service_address_line_2) }}" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 font-normal" placeholder="Optional"></label>
                                         <label class="text-sm font-semibold text-zinc-700">City<input name="service_city" value="{{ old('service_city', $job->service_city) }}" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 font-normal"></label>
                                         <label class="text-sm font-semibold text-zinc-700">State<input name="service_state" value="{{ old('service_state', $job->service_state) }}" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 font-normal"></label>
@@ -148,3 +153,81 @@
         </div>
     </flux:main>
 </x-layouts::app.sidebar>
+
+@if($canManage)
+<script>
+    (() => {
+        const container = document.querySelector('[data-address-autocomplete]');
+        if (!container) return;
+
+        const input = container.querySelector('input[name="service_address_line_1"]');
+        const choices = container.querySelector('[data-address-suggestions]');
+        const status = container.querySelector('[data-address-status]');
+        const form = container.closest('form');
+        const suggestionsUrl = @json(route('field-service.address-suggestions'));
+        const detailUrl = @json(route('field-service.address-details', ['placeId' => '__PLACE_ID__']));
+        let timer;
+        let controller;
+
+        const close = () => {
+            choices.replaceChildren();
+            choices.classList.add('hidden');
+            input.setAttribute('aria-expanded', 'false');
+        };
+        const setField = (name, value) => {
+            const field = form?.querySelector(`[name="${name}"]`);
+            if (field && value) field.value = value;
+        };
+        const select = async (suggestion) => {
+            close();
+            status.textContent = 'Filling in address details…';
+            try {
+                const response = await fetch(detailUrl.replace('__PLACE_ID__', encodeURIComponent(suggestion.place_id)), {headers: {Accept: 'application/json'}});
+                const address = (await response.json()).address;
+                if (!address) throw new Error('No address details');
+                setField('service_address_line_1', address.line_1 || suggestion.label);
+                setField('service_address_line_2', address.line_2);
+                setField('service_city', address.city);
+                setField('service_state', address.state);
+                setField('service_postal_code', address.postal_code);
+                setField('service_country', address.country);
+                status.textContent = 'Address details filled in. Review them, then save the job.';
+            } catch (_) {
+                input.value = suggestion.label;
+                status.textContent = 'Address selected. Complete any missing details, then save the job.';
+            }
+        };
+        const search = async () => {
+            const query = input.value.trim();
+            if (query.length < 4) return close();
+            controller?.abort();
+            controller = new AbortController();
+            try {
+                const response = await fetch(`${suggestionsUrl}?q=${encodeURIComponent(query)}`, {headers: {Accept: 'application/json'}, signal: controller.signal});
+                const suggestions = (await response.json()).suggestions || [];
+                if (!suggestions.length) return close();
+                choices.replaceChildren(...suggestions.map((suggestion) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'block w-full border-b border-zinc-100 px-3 py-2 text-left text-sm font-normal text-zinc-800 last:border-b-0 hover:bg-emerald-50 focus:bg-emerald-50';
+                    button.textContent = suggestion.label;
+                    button.setAttribute('role', 'option');
+                    button.addEventListener('click', () => void select(suggestion));
+                    return button;
+                }));
+                choices.classList.remove('hidden');
+                input.setAttribute('aria-expanded', 'true');
+            } catch (error) {
+                if (error.name !== 'AbortError') close();
+            }
+        };
+
+        input.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => void search(), 250);
+        });
+        input.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+        document.addEventListener('click', (event) => { if (!container.contains(event.target)) close(); });
+    })();
+</script>
+@endif

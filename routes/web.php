@@ -978,6 +978,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/resources/deployments', [FieldServiceResourcesController::class, 'deployCrew'])->name('resources.deployments.store');
             Route::post('/resources/deployments/use-stock', [FieldServiceResourcesController::class, 'consumeVehicleStock'])->name('resources.deployments.use-stock');
             Route::get('/jobs-data', [FieldServiceController::class, 'jobsData'])->name('jobs.data');
+            Route::get('/address-suggestions', [FieldServiceController::class, 'addressSuggestions'])->middleware('throttle:30,1')->name('address-suggestions');
+            Route::get('/address-suggestions/{placeId}', [FieldServiceController::class, 'addressDetails'])->middleware('throttle:30,1')->name('address-details');
             Route::patch('/jobs/{job}', [FieldServiceController::class, 'updateJobGrid'])->name('jobs.update');
             Route::post('/work-candidates/{candidate}/review', [FieldServiceController::class, 'reviewWorkCandidate'])->name('work-candidates.review');
             Route::get('/calendar', [FieldServiceController::class, 'calendar'])->name('calendar');

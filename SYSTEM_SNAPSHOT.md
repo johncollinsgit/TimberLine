@@ -1,5 +1,9 @@
 # SYSTEM SNAPSHOT
 
+## Field Service address search (2026-09-02)
+
+- Admins and managers can search a Service address while editing a job. A selected Google Places result fills the street, city, state, postal code, and country fields through tenant-authorized Everbranch endpoints; the Places key remains server-side. Without a configured key or a provider response, the form quietly remains available for manual entry.
+
 ## Operational customer directory and calendar context (2026-08-24)
 
 - Field-service workspaces use a focused customer directory backed by canonical

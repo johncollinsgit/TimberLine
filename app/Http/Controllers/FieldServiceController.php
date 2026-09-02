@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Models\WorkspaceAsset;
 use App\Services\Automation\GoogleCalendarWorkflowConnectionService;
 use App\Services\FieldService\FieldServiceAccessService;
+use App\Services\FieldService\FieldServiceAddressSuggestionService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
 use App\Services\FieldService\FieldServiceJobTransitionService;
@@ -313,6 +314,25 @@ class FieldServiceController extends Controller
         $job->fill($validated)->save();
 
         return back()->with('status', 'Job details saved.');
+    }
+
+    public function addressSuggestions(Request $request, FieldServiceAddressSuggestionService $suggestions): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        $validated = $request->validate(['q' => ['required', 'string', 'min:4', 'max:180']]);
+
+        return response()->json(['suggestions' => $suggestions->suggest((string) $validated['q'])]);
+    }
+
+    public function addressDetails(Request $request, string $placeId, FieldServiceAddressSuggestionService $suggestions): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+
+        return response()->json(['address' => $suggestions->details($placeId)]);
     }
 
     public function jobUpdates(Request $request, FieldServiceJob $job): JsonResponse

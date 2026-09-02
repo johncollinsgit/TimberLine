@@ -1,5 +1,9 @@
 # START HERE
 
+## Field Service address search (2026-09-02)
+
+- Job-detail address autocomplete is an admin/manager-only Field Service feature. It uses the server-side Google Places key and only tenant-authorized endpoints; do not expose the provider key to the browser. Provider/key failures must preserve normal manual address entry.
+
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 ## Shopify state sales tax reporting (2026-08-20)
