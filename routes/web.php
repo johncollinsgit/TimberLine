@@ -1002,10 +1002,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/jobs/{job}/details', [FieldServiceController::class, 'updateJobDetails'])->name('jobs.details.update');
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
             Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
+            Route::delete('/jobs/{job}/notes/{note}', [FieldServiceController::class, 'destroyNote'])->name('notes.destroy');
             Route::post('/jobs/{job}/tasks', [FieldServiceController::class, 'storeTask'])->name('tasks.store');
             Route::patch('/jobs/{job}/tasks/{task}', [FieldServiceController::class, 'updateTask'])->name('tasks.update');
             Route::post('/jobs/{job}/tasks/{task}/handoff', [FieldServiceController::class, 'handoffTask'])->name('tasks.handoff');
             Route::post('/jobs/{job}/photos', [FieldServiceController::class, 'storePhoto'])->name('photos.store');
+            Route::delete('/jobs/{job}/assets/{asset}', [FieldServiceController::class, 'destroyJobAsset'])->name('assets.destroy');
             Route::post('/materials', [FieldServiceController::class, 'storeMaterial'])->name('materials.store');
             Route::post('/reminders', [FieldServiceController::class, 'updateReminderSettings'])->name('reminders.update');
             Route::post('/vehicles', [FieldServiceController::class, 'storeVehicle'])->name('vehicles.store');

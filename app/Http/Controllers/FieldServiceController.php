@@ -28,6 +28,7 @@ use App\Services\FieldService\FieldServiceTaskAssignmentService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkforceService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
+use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -37,6 +38,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -939,7 +941,6 @@ class FieldServiceController extends Controller
                 'status_update' => $validated['status_update'] ?? null,
                 'noted_at' => $validated['noted_at'] ?? now(),
             ]);
-
             $status = trim((string) ($validated['status_update'] ?? ''));
             if ($status !== '') {
                 $job->forceFill([
@@ -980,6 +981,35 @@ class FieldServiceController extends Controller
         }
 
         return back()->with('status', 'Job update added.');
+    }
+
+    public function destroyNote(Request $request, FieldServiceJob $job, FieldServiceJobNote $note): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless((int) $note->tenant_id === (int) $tenant->id && (int) $note->field_service_job_id === (int) $job->id, 404);
+        $note->delete();
+
+        return back()->with('status', 'Job update deleted.');
+    }
+
+    public function destroyJobAsset(Request $request, FieldServiceJob $job, WorkspaceAsset $asset, WorkspaceAssetAuditService $audit): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless((int) $asset->tenant_id === (int) $tenant->id && $job->assets()->whereKey($asset->id)->exists(), 404);
+        $audit->record($tenant, $asset, $request->user(), 'deleted', ['checksum' => $asset->checksum, 'file_name' => $asset->file_name, 'surface' => 'field_service_web']);
+        Storage::disk($asset->storage_disk)->delete($asset->storage_path);
+        if ($asset->thumbnail_disk && $asset->thumbnail_path) {
+            Storage::disk($asset->thumbnail_disk)->delete($asset->thumbnail_path);
+        }
+        $asset->delete();
+
+        return back()->with('status', 'Job file deleted.');
     }
 
     public function storeMaterial(Request $request): RedirectResponse

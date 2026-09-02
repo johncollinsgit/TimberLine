@@ -204,7 +204,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'photos' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'plans' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'documents' => $job->assets->reject(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/') || in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
-            'activity' => $job->notes->map(fn (FieldServiceJobNote $note): array => ['id' => (int) $note->id, 'body' => $note->body, 'status_update' => $note->status_update, 'noted_at' => $note->noted_at?->toIso8601String(), 'created_by' => $note->createdBy?->name ?: 'QuickBooks', 'source' => data_get($note->metadata, 'source', 'everbranch'), 'mentions' => $note->mentions->map(fn (User $mentioned): array => ['id' => (int) $mentioned->id, 'name' => $mentioned->name])->values(), 'attachments' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => (int) data_get($asset->metadata, 'field_service_job_note_id', 0) === (int) $note->id)->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()])->values(),
+            'activity' => $job->notes->map(fn (FieldServiceJobNote $note): array => ['id' => (int) $note->id, 'body' => $note->body, 'status_update' => $note->status_update, 'noted_at' => $note->noted_at?->toIso8601String(), 'created_by' => $note->createdBy?->name ?: 'QuickBooks', 'source' => data_get($note->metadata, 'source', 'everbranch'), 'mentions' => $note->mentions->map(fn (User $mentioned): array => ['id' => (int) $mentioned->id, 'name' => $mentioned->name])->values(), 'attachments' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => (int) data_get($asset->metadata, 'field_service_job_note_id', 0) === (int) $note->id)->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(), 'can_delete' => $access->canManageJobs($user, $tenantModel)])->values(),
             'financials' => $owner ? $job->financialDocuments->map(fn ($document): array => ['id' => (int) $document->id, 'type' => $document->document_type, 'number' => $document->document_number, 'status' => $document->status, 'transaction_date' => $document->transaction_date?->toDateString(), 'total' => (float) $document->total_amount, 'balance' => (float) $document->balance])->values() : [],
             'can_manage' => $access->canManageJobs($user, $tenantModel),
             'can_update_progress' => $access->canUpdateProgress($user, $tenantModel, $job),
@@ -429,6 +429,18 @@ class EverbranchMobileFieldServiceController extends Controller
             'status_update' => $validated['status_update'] ?? null, 'noted_at' => now(),
             'metadata' => ['source' => 'everbranch_mobile'],
         ]);
+        $attachments = collect($request->file('attachments', []))->map(fn (UploadedFile $file) => $assets->storeUpload(
+            $tenantModel,
+            $user,
+            $file,
+            [(int) $job->id],
+            'team',
+            null,
+            ['job-update'],
+        ));
+        if ($attachments->isNotEmpty()) {
+            $note->forceFill(['metadata' => ['source' => 'everbranch_mobile', 'attachment_asset_ids' => $attachments->pluck('id')->map(fn ($id): int => (int) $id)->all()]])->save();
+        }
         if ($mentionIds !== []) {
             $note->mentions()->sync(collect($mentionIds)->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id]])->all());
         }
@@ -440,7 +452,19 @@ class EverbranchMobileFieldServiceController extends Controller
         }
         $delivery = $notifications->notifyComment($job, $note, $user, $mentionIds);
 
-        return response()->json(['ok' => true, 'comment_id' => (int) $note->id, 'delivery' => $delivery], 201);
+        return response()->json(['ok' => true, 'comment_id' => (int) $note->id, 'attachments' => $attachments->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(), 'delivery' => $delivery], 201);
+    }
+
+    public function destroyComment(Request $request, string $tenant, FieldServiceJob $job, FieldServiceJobNote $note, FieldServiceAccessService $access): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
+        abort_unless((int) $note->tenant_id === (int) $tenantModel->id && (int) $note->field_service_job_id === (int) $job->id, 404);
+        $note->delete();
+
+        return response()->json(['ok' => true]);
     }
 
     public function uploadPhotos(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
@@ -497,6 +521,49 @@ class EverbranchMobileFieldServiceController extends Controller
         $created = collect($request->file('files', []))->map(fn ($file) => $assets->storeUpload($tenantModel, $user, $file, [(int) $job->id], 'team', $request->string('caption')->toString(), ['drawing', 'pdf']));
 
         return response()->json(['ok' => true, 'files' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
+    }
+
+    public function uploadFilePayload(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        $validated = $request->validate([
+            'file_name' => ['required', 'string', 'max:255'],
+            'mime_type' => ['required', 'in:application/pdf'],
+            'contents_base64' => ['required', 'string', 'max:36000000'],
+        ]);
+        $bytes = base64_decode((string) $validated['contents_base64'], true);
+        abort_unless($bytes !== false && $bytes !== '', 422, 'The PDF contents could not be read.');
+        abort_if(strlen($bytes) > 25 * 1024 * 1024, 422, 'The PDF is larger than the 25 MB limit.');
+        $path = tempnam(sys_get_temp_dir(), 'everbranch-pdf-');
+        abort_unless($path !== false && file_put_contents($path, $bytes) !== false, 503, 'The PDF could not be prepared for upload.');
+
+        try {
+            $file = new UploadedFile($path, (string) $validated['file_name'], 'application/pdf', null, true);
+            $asset = $assets->storeUpload($tenantModel, $user, $file, [(int) $job->id], 'team', null, ['drawing', 'pdf']);
+        } finally {
+            @unlink($path);
+        }
+
+        return response()->json(['ok' => true, 'files' => [$this->assetPayload($asset, $tenantModel)]], 201);
+    }
+
+    public function destroyJobAsset(Request $request, string $tenant, FieldServiceJob $job, WorkspaceAsset $asset, FieldServiceAccessService $access, WorkspaceAssetAuditService $audit): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
+        abort_unless((int) $asset->tenant_id === (int) $tenantModel->id && $job->assets()->whereKey($asset->id)->exists(), 404);
+        $audit->record($tenantModel, $asset, $user, 'deleted', ['checksum' => $asset->checksum, 'file_name' => $asset->file_name, 'surface' => 'everbranch_mobile']);
+        Storage::disk($asset->storage_disk)->delete($asset->storage_path);
+        if ($asset->thumbnail_disk && $asset->thumbnail_path) {
+            Storage::disk($asset->thumbnail_disk)->delete($asset->thumbnail_path);
+        }
+        $asset->delete();
+
+        return response()->json(['ok' => true]);
     }
 
     public function uploadPlans(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
