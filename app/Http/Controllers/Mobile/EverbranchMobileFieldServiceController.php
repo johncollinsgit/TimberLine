@@ -516,6 +516,7 @@ class EverbranchMobileFieldServiceController extends Controller
 
             try {
                 $photo = new UploadedFile($path, basename((string) $payload['file_name']), $detectedMime, null, true);
+
                 return $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $payload['caption'] ?? null, ['job-photo', 'ios-payload-fallback']);
             } finally {
                 @unlink($path);
@@ -712,6 +713,7 @@ class EverbranchMobileFieldServiceController extends Controller
             file_put_contents($path, $contents);
             try {
                 $photo = new UploadedFile($path, basename((string) $payload['file_name']), $detectedMime, null, true);
+
                 return $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $payload['caption'] ?? null, ['job-photo', 'task-photo', 'ios-payload-fallback'], ['field_service_task_id' => (int) $task->id]);
             } finally {
                 @unlink($path);
