@@ -620,6 +620,9 @@ test('mobile messaging aggregates entitled conversations and scopes thread actio
     $this->getJson('/api/mobile/v1/workspaces/message-workspace/messaging/conversations/'.$conversation->id)
         ->assertOk()
         ->assertJsonPath('messages.0.body', 'Can you help?');
+    $this->getJson('/api/mobile/v1/workspaces/message-workspace/messaging/customers?customer_id='.$customer->id)
+        ->assertOk()
+        ->assertJsonPath('customers.0.id', $customer->id);
     $this->patchJson('/api/mobile/v1/workspaces/message-workspace/messaging/conversations/'.$conversation->id, ['action' => 'mark_read'])
         ->assertOk()
         ->assertJsonPath('thread.conversation.unread_count', 0);
