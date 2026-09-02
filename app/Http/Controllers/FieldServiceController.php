@@ -321,7 +321,7 @@ class FieldServiceController extends Controller
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
-        $validated = $request->validate(['q' => ['required', 'string', 'min:4', 'max:180']]);
+        $validated = $request->validate(['q' => ['required', 'string', 'min:3', 'max:180']]);
 
         return response()->json(['suggestions' => $suggestions->suggest((string) $validated['q'])]);
     }

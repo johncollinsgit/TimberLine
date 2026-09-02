@@ -88,7 +88,7 @@ class EverbranchMobileInvoiceController extends Controller
     public function addressSuggestions(Request $request, TenantFinancialAccess $financialAccess, FieldServiceAddressSuggestionService $suggestions): JsonResponse
     {
         $this->authorized($request, $financialAccess);
-        $validated = $request->validate(['q' => ['required', 'string', 'min:4', 'max:180']]);
+        $validated = $request->validate(['q' => ['required', 'string', 'min:3', 'max:180']]);
 
         return response()->json(['suggestions' => $suggestions->suggest((string) $validated['q'])]);
     }
