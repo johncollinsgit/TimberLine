@@ -123,6 +123,12 @@ const contextualModules = [
     load: () => import("./marketing/customers-grid"),
     mountExport: "mountMarketingCustomersGrid",
   },
+  {
+    key: "fieldServiceAddressAutocomplete",
+    selectors: [".field-service-job-shell input[name='service_address_line_1']"],
+    load: () => import("./field-service/address-autocomplete"),
+    mountExport: "mountFieldServiceAddressAutocompleteNow",
+  },
 ];
 
 const contextualModuleState = new Map();
