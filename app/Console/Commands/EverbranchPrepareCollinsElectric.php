@@ -137,6 +137,18 @@ class EverbranchPrepareCollinsElectric extends Command
                     ],
                 ]
             );
+            $commercialService->setTenantModuleState((int) $tenant->id, 'messaging', true, 'configured', (int) $user->id);
+            $commercialService->setTenantModuleEntitlement((int) $tenant->id, 'messaging', [
+                'availability_status' => 'available',
+                'enabled_status' => 'enabled',
+                'billing_status' => 'custom_contract',
+                'entitlement_source' => 'collins_electric_launch_partner',
+                'notes' => 'Messaging Branch enabled for Collins customer communications. Individual channel availability remains consent and provider-readiness gated.',
+                'metadata' => [
+                    'launch_scope' => 'collins_electric',
+                    'sms_requires_verified_readiness' => true,
+                ],
+            ], (int) $user->id);
 
             $setupStatus = $setupStatusService->forTenant($tenant);
             $setupStatusPayload = $this->setupStatusPayload($setupStatus);

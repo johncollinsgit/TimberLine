@@ -251,9 +251,9 @@ class EverbranchMobileController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->requireBranch($registry, (int) $tenant->id, 'messaging');
-        $validated = $request->validate(['q' => ['nullable', 'string', 'max:160']]);
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'customer_id' => ['nullable', 'integer']]);
 
-        return response()->json(['customers' => $messaging->searchCustomers((int) $tenant->id, (string) ($validated['q'] ?? ''))]);
+        return response()->json(['customers' => $messaging->searchCustomers((int) $tenant->id, (string) ($validated['q'] ?? ''), 20, $validated['customer_id'] ?? null)]);
     }
 
     public function composeMessage(Request $request, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
