@@ -1185,6 +1185,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Admin landing page
     Route::middleware(['role:admin,manager'])->group(function () {
         Route::get('/admin', AdminHome::class)
+            ->middleware(\App\Http\Middleware\RedirectLegacyTeamAccess::class)
             ->name('admin.index');
 
         Route::get('/admin/catalog', function () {
