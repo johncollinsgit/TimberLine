@@ -18,7 +18,13 @@ class FieldServiceAddressSuggestionService
         try {
             // New Places API is the supported Google endpoint. Legacy is retained as
             // a compatibility fallback for an existing legacy-restricted key.
-            $modern = Http::timeout(3)->withHeaders(['X-Goog-Api-Key' => $key])->post('https://places.googleapis.com/v1/places:autocomplete', [
+            $modern = Http::timeout(3)->withHeaders([
+                'X-Goog-Api-Key' => $key,
+                // Ask only for the two values the job form needs. Without an
+                // explicit mask, Google may omit them and every result is
+                // discarded by the mapper below.
+                'X-Goog-FieldMask' => 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text',
+            ])->post('https://places.googleapis.com/v1/places:autocomplete', [
                 'input' => $query,
                 'includedRegionCodes' => ['us'],
             ]);
