@@ -200,6 +200,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const [updateBody, setUpdateBody] = useState("");
     const [updateFiles, setUpdateFiles] = useState<File[]>([]);
     const [updatePosting, setUpdatePosting] = useState(false);
+    const [updateConfirmation, setUpdateConfirmation] = useState("");
     const [activePhotoIndex, setActivePhotoIndex] = useState(0);
     const [views, setViews] = useState<View[]>(() => JSON.parse(localStorage.getItem("everbranch-field-views") || "[]"));
     const [gridRef, size] = useSize();
@@ -315,12 +316,18 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
         const form = new FormData();
         form.append("body", updateBody.trim());
         updateFiles.forEach(file => form.append("attachments[]", file, file.name));
-        setUpdatePosting(true); setError("");
+        const photoCount = updateFiles.filter(file => file.type.startsWith("image/")).length;
+        setUpdatePosting(true); setError(""); setUpdateConfirmation("");
         try {
             await axios.post(noteTemplate.replace(/\/0\/notes$/, `/${openedJob.id}/notes`), form);
             const response = await axios.get(updatesTemplate.replace(/\/0\/updates$/, `/${openedJob.id}/updates`));
             setOpenedUpdates(Array.isArray(response.data?.updates) ? response.data.updates : []);
-            setUpdateBody(""); setUpdateFiles([]); setSaveState("Update posted"); window.setTimeout(() => setSaveState(""), 1600);
+            setUpdateBody(""); setUpdateFiles([]);
+            const confirmation = photoCount > 0
+                ? `${photoCount} ${photoCount === 1 ? "photo" : "photos"} saved to this job and synced to the Everbranch app.`
+                : "Update saved to this job.";
+            setUpdateConfirmation(confirmation); setSaveState("Update posted");
+            window.setTimeout(() => { setSaveState(""); setUpdateConfirmation(""); }, 5000);
         } catch (failure) {
             setError(axios.isAxiosError(failure) ? failure.response?.data?.message || "Could not post the update." : "Could not post the update.");
         } finally { setUpdatePosting(false); }
@@ -491,7 +498,12 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
                                 <div className="mt-3 flex flex-wrap items-center gap-2">
                                     <label className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Add photos<input type="file" accept="image/*" capture="environment" multiple className="sr-only" onChange={event => setUpdateFiles(current => [...current, ...Array.from(event.target.files || [])].slice(0, 20))} /></label>
                                     <label className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50">Add files<input type="file" accept="image/*,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx" multiple className="sr-only" onChange={event => setUpdateFiles(current => [...current, ...Array.from(event.target.files || [])].slice(0, 20))} /></label>
-                                    <button type="button" disabled={updatePosting || (!updateBody.trim() && updateFiles.length === 0)} onClick={() => void postUpdate()} className="min-h-11 rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40">{updatePosting ? "Posting…" : "Post update"}</button>
+                                    <button type="button" disabled={updatePosting || (!updateBody.trim() && updateFiles.length === 0)} onClick={() => void postUpdate()} className="min-h-11 min-w-48 rounded-xl bg-emerald-800 px-5 text-sm font-bold text-white shadow-sm ring-1 ring-inset ring-emerald-950/20 transition hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-zinc-400 disabled:shadow-none disabled:ring-0">{updatePosting ? "Saving securely…" : "Post update to job"}</button>
+                                </div>
+                                <div className="mt-3" aria-live="polite">
+                                    {updatePosting ? <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-950">Saving this update to the job. Keep this window open until the confirmation appears.</p> : null}
+                                    {!updatePosting && updateConfirmation ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-950">✓ {updateConfirmation}</p> : null}
+                                    {!updatePosting && !updateConfirmation && (updateBody.trim() || updateFiles.length > 0) ? <p className="text-xs font-medium text-zinc-600">Ready to save {updateFiles.length > 0 ? `${updateFiles.length} attachment${updateFiles.length === 1 ? "" : "s"} ` : ""}to this shared job record.</p> : null}
                                 </div>
                                 {updateFiles.length > 0 ? <div className="mt-3 flex flex-wrap gap-3">{updateFiles.map((file, index) => file.type.startsWith("image/") ? <div key={`${file.name}-${index}`} className="group relative h-24 w-32 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 shadow-sm">{pendingImagePreviewUrls.get(file) ? <img src={pendingImagePreviewUrls.get(file)} alt={`Selected photo: ${file.name}`} className="h-full w-full object-cover" /> : <div className="h-full w-full animate-pulse bg-zinc-200" aria-label={`Loading preview for ${file.name}`} />}<span className="absolute inset-x-0 bottom-0 truncate bg-zinc-950/70 px-2 py-1 text-[11px] font-semibold text-white">{file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-white/95 text-base font-semibold text-zinc-800 shadow-sm hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></div> : <span key={`${file.name}-${index}`} className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-semibold text-zinc-700"><span className="truncate">File · {file.name}</span><button type="button" onClick={() => setUpdateFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="text-zinc-500 hover:text-rose-700" aria-label={`Remove ${file.name}`}>×</button></span>)}</div> : null}
                                 {activePhoto ? <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-950"><div className="relative aspect-[16/9] bg-zinc-900"><img src={activePhoto.preview_url || activePhoto.url} alt={activePhoto.name} className="h-full w-full object-contain" /><a href={activePhoto.url} target="_blank" rel="noreferrer" className="absolute right-3 top-3 rounded-lg bg-white/95 px-3 py-2 text-xs font-semibold text-zinc-950 shadow-sm">Open photo ↗</a>{updatePhotos.length > 1 ? <><button type="button" onClick={() => setActivePhotoIndex(current => (current - 1 + updatePhotos.length) % updatePhotos.length)} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 px-3 py-2 text-lg font-semibold text-zinc-950 shadow-sm" aria-label="Previous photo">‹</button><button type="button" onClick={() => setActivePhotoIndex(current => (current + 1) % updatePhotos.length)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 px-3 py-2 text-lg font-semibold text-zinc-950 shadow-sm" aria-label="Next photo">›</button></> : null}</div><div className="flex items-center justify-between gap-3 bg-zinc-900 px-4 py-3 text-sm text-white"><span className="truncate">{activePhoto.name}</span><span className="shrink-0 text-xs text-zinc-300">{activePhotoIndex + 1} of {updatePhotos.length}</span></div></div> : null}

@@ -429,6 +429,8 @@ class EverbranchMobileFieldServiceController extends Controller
             'status_update' => $validated['status_update'] ?? null, 'noted_at' => now(),
             'metadata' => ['source' => 'everbranch_mobile'],
         ]);
+        // Store each attachment once with its note relationship. This is the shared
+        // record read by both the website's Updates panel and the mobile app.
         $attachments = collect($request->file('attachments', []))->map(fn (UploadedFile $file) => $assets->storeUpload(
             $tenantModel,
             $user,
@@ -437,15 +439,13 @@ class EverbranchMobileFieldServiceController extends Controller
             'team',
             null,
             ['job-update'],
+            ['field_service_job_note_id' => (int) $note->id],
         ));
         if ($attachments->isNotEmpty()) {
             $note->forceFill(['metadata' => ['source' => 'everbranch_mobile', 'attachment_asset_ids' => $attachments->pluck('id')->map(fn ($id): int => (int) $id)->all()]])->save();
         }
         if ($mentionIds !== []) {
             $note->mentions()->sync(collect($mentionIds)->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id]])->all());
-        }
-        foreach ($request->file('attachments', []) as $attachment) {
-            $assets->storeUpload($tenantModel, $user, $attachment, [(int) $job->id], 'team', null, ['job-update'], ['field_service_job_note_id' => (int) $note->id]);
         }
         if (filled($validated['status_update'] ?? null)) {
             $lifecycle->setManualStatus($job, (string) $validated['status_update']);
