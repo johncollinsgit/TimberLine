@@ -14183,7 +14183,18 @@ body.eb-workflow-picker-open {
   height: calc(100dvh - 3.5rem) !important;
   max-width: 15rem !important;
   min-width: 15rem !important;
+  transition: max-width 180ms ease, min-width 180ms ease, width 180ms ease;
   width: 15rem !important;
+}
+
+/* Flux toggles this attribute when the desktop rail is collapsed. The Collins
+   shell above pins the expanded rail to 15rem, so explicitly reset all three
+   flex dimensions here; otherwise only the navigation labels disappear and
+   the main workspace never gains the reclaimed width. */
+#app-sidebar[data-flux-sidebar-collapsed-desktop] {
+  max-width: 3.5rem !important;
+  min-width: 3.5rem !important;
+  width: 3.5rem !important;
 }
 
 .mf-sidebar-theme-shell {
