@@ -30,6 +30,28 @@ test('place details are normalized into field service address fields', function 
     ]);
 });
 
+test('place suggestions request the identifier and label required by the job form', function (): void {
+    config()->set('services.google_maps.places_api_key', 'test-key');
+    Http::fake([
+        'https://places.googleapis.com/v1/places:autocomplete' => Http::response([
+            'suggestions' => [[
+                'placePrediction' => [
+                    'placeId' => 'place-1600',
+                    'text' => ['text' => '1600 Amphitheatre Pkwy, Mountain View, CA, USA'],
+                ],
+            ]],
+        ]),
+    ]);
+
+    expect(app(FieldServiceAddressSuggestionService::class)->suggest('1600 Amphitheatre'))->toBe([[
+        'place_id' => 'place-1600',
+        'label' => '1600 Amphitheatre Pkwy, Mountain View, CA, USA',
+    ]]);
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://places.googleapis.com/v1/places:autocomplete'
+        && $request->hasHeader('X-Goog-FieldMask', 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text'));
+});
+
 test('address suggestions fail quietly when Google Places is not configured', function (): void {
     config()->set('services.google_maps.places_api_key', null);
 
