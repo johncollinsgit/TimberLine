@@ -787,7 +787,7 @@ class FieldServiceController extends Controller
         return back()->with('status', 'Job created.');
     }
 
-    public function storeTask(Request $request, FieldServiceJob $job): RedirectResponse
+    public function storeTask(Request $request, FieldServiceJob $job, WorkspaceAssetService $assets): RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
@@ -802,6 +802,8 @@ class FieldServiceController extends Controller
             'due_at' => ['nullable', 'date'],
             'description' => ['nullable', 'string', 'max:3000'],
             'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
+            'photos' => ['nullable', 'array', 'max:20'],
+            'photos.*' => ['image', 'max:25600'],
         ]);
 
         $requestedIds = array_key_exists('assignee_ids', $validated)
@@ -824,6 +826,7 @@ class FieldServiceController extends Controller
             'due_at' => $validated['due_at'] ?? null,
         ]);
         $this->taskAssignments->sync($task, $tenant, $request->user(), $assigneeIds->all());
+        collect($request->file('photos', []))->each(fn ($photo) => $assets->storeUpload($tenant, $request->user(), $photo, [(int) $job->id], 'team', null, ['job-photo', 'task-photo'], ['field_service_task_id' => (int) $task->id]));
         $notifyIds = $assigneeIds->reject(fn (int $id): bool => $id === (int) $request->user()->id)->all();
         if ($notifyIds !== []) {
             $this->notifications->notifyJobEvent($job, $request->user(), 'task_assigned', 'New task: '.$task->title, 'web-task-created:'.$task->id, $notifyIds);
@@ -832,7 +835,7 @@ class FieldServiceController extends Controller
         return back()->with('status', 'Task added.');
     }
 
-    public function updateTask(Request $request, FieldServiceJob $job, FieldServiceTask $task): RedirectResponse
+    public function updateTask(Request $request, FieldServiceJob $job, FieldServiceTask $task, WorkspaceAssetService $assets): RedirectResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
@@ -840,12 +843,19 @@ class FieldServiceController extends Controller
             && (int) $task->tenant_id === (int) $tenant->id
             && (int) $task->field_service_job_id === (int) $job->id
             && $this->fieldServiceAccess->canUpdateTask($request->user(), $tenant, $job, $task), 403);
-        $validated = $request->validate(['status' => ['required', 'in:open,in_progress,waiting,done']]);
+        $validated = $request->validate([
+            'status' => ['required', 'in:open,in_progress,waiting,done'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'photos' => ['nullable', 'array', 'max:20'],
+            'photos.*' => ['image', 'max:25600'],
+        ]);
         $task->forceFill([
             'status' => $validated['status'],
+            'description' => $validated['description'] ?? $task->description,
             'completed_at' => $validated['status'] === 'done' ? ($task->completed_at ?? now()) : null,
             'completed_by_user_id' => $validated['status'] === 'done' ? (int) $request->user()->id : null,
         ])->save();
+        collect($request->file('photos', []))->each(fn ($photo) => $assets->storeUpload($tenant, $request->user(), $photo, [(int) $job->id], 'team', null, ['job-photo', 'task-photo'], ['field_service_task_id' => (int) $task->id]));
 
         return back()->with('status', 'Task updated.');
     }
