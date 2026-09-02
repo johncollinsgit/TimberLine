@@ -944,7 +944,7 @@ class FieldServiceController extends Controller
         return back()->with('status', 'Job status updated.');
     }
 
-    public function storeNote(Request $request, FieldServiceJob $job, WorkspaceAssetService $assets): RedirectResponse
+    public function storeNote(Request $request, FieldServiceJob $job, WorkspaceAssetService $assets): RedirectResponse|JsonResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
@@ -1008,6 +1008,14 @@ class FieldServiceController extends Controller
 
         if ($note instanceof FieldServiceJobNote && $request->user() instanceof User) {
             $this->notifications->notifyComment($job, $note, $request->user(), []);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Job update added.',
+                'note_id' => $note?->id,
+            ], 201);
         }
 
         return back()->with('status', 'Job update added.');
