@@ -41,10 +41,6 @@
                             @endif
                             @if(in_array($status, ['scheduled', 'needs_details'], true))
                                 <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="start"><button class="fb-btn fb-btn-primary">Start</button></form>
-                            @elseif($status === 'active')
-                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}" class="flex gap-2"><input type="hidden" name="action" value="block">@csrf<input name="reason" required class="w-48 rounded-lg border border-zinc-300 px-3 text-sm" placeholder="Why is it blocked?"><button class="fb-btn fb-btn-secondary">Block</button></form>
-                            @elseif($status === 'blocked')
-                                <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="resume"><button class="fb-btn fb-btn-primary">Resume</button></form>
                             @elseif(in_array($status, ['complete', 'canceled'], true) && $canManage)
                                 <form method="POST" action="{{ route('field-service.jobs.transitions', $job) }}">@csrf<input type="hidden" name="action" value="reopen"><button class="fb-btn fb-btn-secondary">Reopen</button></form>
                             @endif

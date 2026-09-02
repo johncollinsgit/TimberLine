@@ -255,7 +255,7 @@ class FieldServiceController extends Controller
         $this->authorizeFieldService($tenant);
         abort_unless((int) $job->tenant_id === (int) $tenant->id && $this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
         $validated = $request->validate([
-            'operational_status' => ['sometimes', 'in:needs_details,scheduled,active,blocked,complete,canceled'],
+            'operational_status' => ['sometimes', 'in:needs_details,scheduled,active,complete,canceled'],
             'scheduled_for' => ['sometimes', 'nullable', 'date'], 'priority' => ['sometimes', 'in:low,normal,high,urgent'],
             'assigned_user_id' => ['sometimes', 'nullable', 'integer'], 'participant_user_ids' => ['sometimes', 'array', 'max:50'], 'participant_user_ids.*' => ['integer'],
             'vehicle_ids' => ['sometimes', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
@@ -271,7 +271,7 @@ class FieldServiceController extends Controller
                 'started_at' => $status === 'active' ? ($job->started_at ?? now()) : $job->started_at,
                 'completed_at' => $status === 'complete' ? ($job->completed_at ?? now()) : null,
                 'canceled_at' => $status === 'canceled' ? ($job->canceled_at ?? now()) : null,
-                'blocked_reason' => $status === 'blocked' ? ($job->blocked_reason ?: 'Blocked from jobs grid') : null,
+                'blocked_reason' => null,
             ])->save();
         }
         if (array_key_exists('participant_user_ids', $validated)) {
@@ -416,7 +416,7 @@ class FieldServiceController extends Controller
     /** @return array<string,mixed> */
     protected function gridOptions(Tenant $tenant): array
     {
-        return ['team' => $tenant->users()->wherePivot('membership_active', true)->orderBy('name')->get(['users.id', 'users.name'])->map(fn ($user): array => ['id' => (int) $user->id, 'name' => $user->name])->values(), 'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'identifier']), 'statuses' => ['blocked', 'active', 'scheduled', 'needs_details', 'complete', 'canceled']];
+        return ['team' => $tenant->users()->wherePivot('membership_active', true)->orderBy('name')->get(['users.id', 'users.name'])->map(fn ($user): array => ['id' => (int) $user->id, 'name' => $user->name])->values(), 'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'identifier']), 'statuses' => ['active', 'scheduled', 'needs_details', 'complete', 'canceled']];
     }
 
     public function calendar(Request $request): View
@@ -892,8 +892,8 @@ class FieldServiceController extends Controller
         abort_unless($this->fieldServiceAccess->canUpdateProgress($request->user(), $tenant, $job), 403);
 
         $validated = $request->validate([
-            'action' => ['required', 'string', 'in:start,block,resume,complete,cancel,archive,reopen'],
-            'reason' => ['nullable', 'string', 'max:2000', 'required_if:action,block'],
+            'action' => ['required', 'string', 'in:start,complete,cancel,archive,reopen'],
+            'reason' => ['nullable', 'string', 'max:2000'],
         ]);
 
         abort_if(
