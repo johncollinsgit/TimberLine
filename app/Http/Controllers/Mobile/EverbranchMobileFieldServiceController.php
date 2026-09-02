@@ -569,19 +569,29 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'files' => [$this->assetPayload($asset, $tenantModel)]], 201);
     }
 
-    public function destroyJobAsset(Request $request, string $tenant, FieldServiceJob $job, WorkspaceAsset $asset, FieldServiceAccessService $access, WorkspaceAssetAuditService $audit): JsonResponse
+    public function destroyJobAsset(Request $request, string $tenant, FieldServiceJob $job, int $asset, FieldServiceAccessService $access, WorkspaceAssetAuditService $audit): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
         abort_unless($access->canManageJobs($user, $tenantModel), 403);
-        abort_unless((int) $asset->tenant_id === (int) $tenantModel->id && $job->assets()->whereKey($asset->id)->exists(), 404);
-        $audit->record($tenantModel, $asset, $user, 'deleted', ['checksum' => $asset->checksum, 'file_name' => $asset->file_name, 'surface' => 'everbranch_mobile']);
-        Storage::disk($asset->storage_disk)->delete($asset->storage_path);
-        if ($asset->thumbnail_disk && $asset->thumbnail_path) {
-            Storage::disk($asset->thumbnail_disk)->delete($asset->thumbnail_path);
+        $assetModel = $job->assets()
+            ->where('workspace_assets.tenant_id', $tenantModel->id)
+            ->whereKey($asset)
+            ->first();
+
+        // A file can disappear between the selection screen and the delete
+        // request (or a double tap can repeat it). Deletion is safe to retry.
+        if (! $assetModel instanceof WorkspaceAsset) {
+            return response()->json(['ok' => true, 'already_deleted' => true]);
         }
-        $asset->delete();
+
+        $audit->record($tenantModel, $assetModel, $user, 'deleted', ['checksum' => $assetModel->checksum, 'file_name' => $assetModel->file_name, 'surface' => 'everbranch_mobile']);
+        Storage::disk($assetModel->storage_disk)->delete($assetModel->storage_path);
+        if ($assetModel->thumbnail_disk && $assetModel->thumbnail_path) {
+            Storage::disk($assetModel->thumbnail_disk)->delete($assetModel->thumbnail_path);
+        }
+        $assetModel->delete();
 
         return response()->json(['ok' => true]);
     }
