@@ -69,6 +69,45 @@ test('team access shows only current workspace members and platform requests', f
         ->assertDontSee('Pouring');
 });
 
+test('team access follows the current host workspace instead of a stale session workspace', function (): void {
+    $collins = teamAccessTenant('Collins Upstate Electric', 'collins-upstate-electric');
+    $modernForestry = teamAccessTenant('Modern Forestry', 'modern-forestry');
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+    $admin->tenants()->attach($collins->id, ['role' => 'admin']);
+    $admin->tenants()->attach($modernForestry->id, ['role' => 'admin']);
+
+    $collinsMember = User::factory()->create(['name' => 'Collins Technician']);
+    $collinsMember->tenants()->attach($collins->id, ['role' => 'member']);
+    $modernForestryMember = User::factory()->create(['name' => 'Modern Forestry Technician']);
+    $modernForestryMember->tenants()->attach($modernForestry->id, ['role' => 'member']);
+
+    $originalHostMap = config('tenancy.auth.host_map');
+
+    try {
+        config()->set('tenancy.auth.host_map', [
+            'collins.example.test' => $collins->slug,
+        ]);
+
+        $this->actingAs($admin)
+            ->withSession(['tenant_id' => $modernForestry->id])
+            ->get('http://collins.example.test/admin?tab=users')
+            ->assertOk()
+            ->assertSee('Collins Upstate Electric')
+            ->assertSee('Collins Technician')
+            ->assertDontSee('Modern Forestry Technician');
+
+        $this->actingAs($admin)
+            ->withSession(['tenant_id' => $modernForestry->id])
+            ->get('http://collins.example.test/admin/users')
+            ->assertOk()
+            ->assertSee('Collins Upstate Electric')
+            ->assertSee('Collins Technician')
+            ->assertDontSee('Modern Forestry Technician');
+    } finally {
+        config()->set('tenancy.auth.host_map', $originalHostMap);
+    }
+});
+
 test('rejecting a platform request removes its approve action from the queue immediately', function (): void {
     $tenant = teamAccessTenant('Collins Upstate Electric', 'collins-upstate-electric');
     $admin = teamAccessAdmin($tenant);
