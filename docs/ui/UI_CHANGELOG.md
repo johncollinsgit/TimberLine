@@ -10,6 +10,71 @@
 ### Guardrails
 
 - Update attachments and deletion remain tenant-scoped and job-scoped. Server-side Field Service management authorization is enforced for every delete action.
+## 2026-08-31 — Reliable iPhone job-photo uploads
+
+### What Changed
+
+- The mobile job-photo flow now has a protected JSON fallback for iOS WebViews that cannot hand a selected photo to a multipart request. It is limited to phone-sized JPEG, PNG, or WebP images and preserves the same team-visible job-photo record.
+
+## 2026-08-28 — Project manager editing
+
+### What Changed
+
+- The full **Edit job** form always includes optional project-manager name, company, phone, and email fields, so a PM can be added to a job that does not yet have one.
+
+## 2026-08-28 — Job-update photo selection previews
+
+### What Changed
+
+- The job quick-view update composer now displays selected photos as thumbnail previews with an obvious remove control before posting.
+- Non-image uploads remain compact file controls, so photos are easy to distinguish from PDFs and other documents.
+
+## 2026-08-28 — Safer job customer selection and quick-view actions
+
+### What Changed
+
+- Create Job now searches the existing customer directory, prefills the selected customer’s contact and service address, and links the new job to that customer record.
+- Creating a customer is an explicit checkbox, and duplicate email or phone records are stopped before a duplicate customer can be created.
+- The job quick view now offers an Edit job button, opens the detail editor directly, and shows a prominent one-tap project-manager call card.
+
+## 2026-08-28 — Collins field-service controls and workspace presentation
+
+### What Changed
+
+- Administrators can switch the jobs grid into an explicit Edit all mode to make inline changes across multiple job rows, then finish editing when done.
+- The Collins sidebar keeps the navy wordmark visible on its light background, and the workspace top bar provides a reversible, read-only Employee view preview.
+- Collins field-service screens no longer display QuickBooks financial cards, source columns, or QuickBooks-generated job-draft controls; no QuickBooks connection or existing data is deleted.
+
+## 2026-08-25 — Job update text-alert destination
+
+### What Changed
+
+- Field-service managers can save one office phone number for job-update text alerts. Collins Electric is prefilled with +1 (864) 640-6642.
+- Web and field-app job comments, photo updates, and file updates now pass through the same job-notification service. Each text identifies the job, the person who posted it, and the update itself.
+
+### Guardrails
+
+- Saving the number never sends a test or live message. Delivery remains blocked until the existing Everbranch SMS sender is verified and an authorized manager turns alerts on.
+- The notification record keeps only the configured destination's last four digits for audit context.
+
+## 2026-08-24 — Operational customer directory
+
+### What Changed
+
+- Field-service workspaces now use a focused customer directory with service
+  address and linked-job context instead of retail loyalty, Growave, review, or
+  birthday controls.
+- The directory supports checkbox selection with recoverable archive/restore
+  actions. Archived customers leave job and customer history intact.
+- Work → Calendar reserves a compact, read-only company Google Calendar panel
+  alongside scheduled and unscheduled jobs.
+
+### Guardrails
+
+- Retail workspaces keep their established marketing enrichment experience.
+  Field-service workspaces never surface those retail controls.
+- The Google Calendar panel reads only tenant-authorized events and remains
+  unavailable until the existing Google OAuth connection is approved.
 
 ## 2026-08-17 - Evergrove custom-development positioning
 
@@ -2481,3 +2546,48 @@
 - Added an attributed OpenStreetMap-backed fictional van-route panel to each
   Green Shield job detail. These route overlays are demo-only and separate
   from the globally gated Fleet Tracking product surface.
+# 2026-08-20 — Shopify state sales tax reports
+
+- Added the embedded **Sales Tax Reports** reporting entry with two visible
+  presets: a state-level summary and an address-level detail report.
+- The detail view intentionally explains that county and municipality are not
+  inferred, so an operator can verify the delivery address before entering a
+  return.
+# 2026-08-25 — Field Service calendar grid
+
+- Replaced the Field Service Calendar tab's empty upcoming-schedule column with a responsive month grid, including previous/next-month navigation and a return-to-today control.
+- Scheduled jobs now appear on their actual dates with compact status styling, while connected Google Calendar events appear beside them in a distinct read-only treatment.
+- Retained the needs-scheduling rail so unplanned jobs remain actionable without displacing the operational calendar.
+
+### Collins wide-canvas workspace
+
+- Made the Collins Electric authenticated shell use the full available canvas on large screens, retaining only responsive gutters beside the sidebar.
+- The workspace-wide change applies to jobs, customers, reports, and future Collins pages without changing retail or landlord layouts.
+
+### Collins job detail actions
+
+- Expanded the job-detail Updates feed across the full Collins workspace canvas so field updates have room for long notes and team handoffs.
+- Added direct **Complete & archive** and recoverable **Delete job** actions to the job header. Both preserve a searchable job-history record, while destructive intent is confirmed before submission.
+
+### Collins Jobs-grid deletion
+
+- Added a confirmed **Delete** action column to the current Jobs grid, plus the same action in its quick-view panel for managers.
+- Grid deletion uses the same audited, recoverable archive transition as the job detail and immediately refreshes the active-work list.
+- Managers can now select several current jobs with the frozen checkbox column and archive the selected set after one explicit confirmation.
+
+### Collins job-update attachments
+
+- Updates now accept camera/photos and supported documents directly from the composer, attaching each upload to the corresponding job update.
+- Phone and desktop uploads share the same tenant-scoped, audited storage path; update history exposes the attached photo or file for authorized team members.
+- Attached photos now render as prominent, tappable previews in each update and a visual job-photo gallery; files remain clearly labeled downloads.
+- Managers can edit a job’s work description and full service address directly from its web detail page; the mobile job page exposes the same work-description and job-site-address editors.
+
+### Collins customer deletion controls
+
+- Customer selection now uses a high-contrast square checkbox instead of a text checkmark.
+- The recoverable customer bulk archive action is labeled **Delete selected** for clarity, while retaining job history and allowing restore from archived customers.
+
+### Collins Jobs quick-view updates
+
+- Added an Updates composer to the Jobs-grid quick view so crews can post field notes and attach photos or supported files without opening a second page.
+- Update photos appear in a secure in-panel carousel with thumbnail selection, previous/next controls, and a full-size open action.

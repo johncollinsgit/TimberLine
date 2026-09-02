@@ -90,6 +90,7 @@ use App\Http\Controllers\ShopifyEmbeddedCustomersController;
 use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
+use App\Http\Controllers\ShopifyEmbeddedSalesTaxReportsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyEmbeddedSubscriptionsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
@@ -901,6 +902,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', [WorkspaceDocumentsController::class, 'index'])->name('index');
             Route::post('/', [WorkspaceDocumentsController::class, 'store'])->name('store');
+            Route::get('/{asset}/preview', [WorkspaceDocumentsController::class, 'preview'])->name('preview');
             Route::get('/{asset}/download', [WorkspaceDocumentsController::class, 'download'])->name('download');
             Route::put('/{asset}/jobs', [WorkspaceDocumentsController::class, 'updateLinks'])->name('links');
             Route::delete('/{asset}', [WorkspaceDocumentsController::class, 'destroy'])->name('destroy');
@@ -996,6 +998,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             });
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
+            Route::get('/jobs/{job}/updates', [FieldServiceController::class, 'jobUpdates'])->name('jobs.updates');
+            Route::post('/jobs/{job}/details', [FieldServiceController::class, 'updateJobDetails'])->name('jobs.details.update');
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
             Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
             Route::delete('/jobs/{job}/notes/{note}', [FieldServiceController::class, 'destroyNote'])->name('notes.destroy');
@@ -1288,6 +1292,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->name('results');
                 Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
                 Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
+                Route::post('/customers/bulk-archive', [MarketingCustomersController::class, 'bulkArchive'])->name('customers.bulk-archive');
                 Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
                 Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
                 Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
@@ -2059,6 +2064,7 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/reporting/marketing-results', [ShopifyEmbeddedMessagingController::class, 'marketingResults'])->name('shopify.app.reporting.marketing-results');
+    Route::get('/app/reporting/sales-tax', [ShopifyEmbeddedSalesTaxReportsController::class, 'show'])->name('shopify.app.reporting.sales-tax');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
     Route::get('/app/messaging/app-messages', [ShopifyEmbeddedMessagingController::class, 'appMessages'])->name('shopify.app.messaging.app-messages');
     Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');

@@ -221,7 +221,6 @@ test('managers may remove a job from the current list without deleting its opera
         'status' => 'open',
         'operational_status' => 'active',
     ]);
-
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
     $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
         ->assertOk()->assertJsonPath('ok', true);
@@ -450,6 +449,101 @@ test('team visible PDF drawings are tenant scoped audited and readable by every 
     $other->tenants()->attach($foreign->id, ['role' => 'member']);
     Sanctum::actingAs($other, ['mobile:read']);
     $this->get('/api/mobile/v1/workspaces/'.$foreign->slug.'/field-service/assets/'.$asset->id)->assertNotFound();
+});
+
+test('iPhone photo payload fallback stores a team-visible job photo when multipart upload is unavailable', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'iPhone photo fallback',
+        'operational_status' => 'active',
+    ]);
+    $image = UploadedFile::fake()->image('panel.jpg', 20, 20);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/photos/payload', [
+        'file_name' => 'panel.jpg',
+        'mime_type' => 'image/jpeg',
+        'contents_base64' => base64_encode((string) file_get_contents($image->getRealPath())),
+    ])->assertCreated()->assertJsonPath('photo.mime_type', 'image/jpeg');
+
+    $asset = \App\Models\WorkspaceAsset::query()->forTenantId($tenant->id)->sole();
+    expect($asset->visibility)->toBe('team')
+        ->and($asset->jobs()->whereKey($job->id)->exists())->toBeTrue()
+        ->and($asset->tags)->toContain('ios-payload-fallback');
+});
+
+test('job details and update attachments stay editable and visible to the full Collins team', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    TenantModuleEntitlement::query()->forTenantId($tenant->id)->where('module_key', 'field_service')->update([
+        'metadata' => ['member_job_visibility' => 'all_operational'],
+    ]);
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $owner->id,
+        'title' => 'Service upgrade',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+
+    $this->actingAs($owner)
+        ->post(route('field-service.jobs.details.update', ['tenant' => $tenant->slug, 'job' => $job]), [
+            'description' => 'Replace the service disconnect and label the panel.',
+            'service_address_line_1' => '125 Main Street',
+            'service_city' => 'Greenville',
+            'service_state' => 'SC',
+            'service_postal_code' => '29601',
+            'service_country' => 'US',
+            'project_manager_name' => 'Morgan Project Manager',
+            'project_manager_company' => 'Upstate Project Group',
+            'project_manager_phone' => '864-640-6642',
+            'project_manager_email' => 'morgan@example.com',
+        ])
+        ->assertRedirect();
+
+    expect($job->fresh()->description)->toBe('Replace the service disconnect and label the panel.')
+        ->and($job->fresh()->service_address_line_1)->toBe('125 Main Street')
+        ->and($job->fresh()->project_manager_name)->toBe('Morgan Project Manager')
+        ->and($job->fresh()->project_manager_phone)->toBe('864-640-6642');
+
+    $this->actingAs($owner)
+        ->post(route('field-service.notes.store', ['tenant' => $tenant->slug, 'job' => $job]), [
+            'body' => 'Before photo from the job site.',
+            'attachments' => [UploadedFile::fake()->image('service-before.jpg', 900, 600)],
+        ])
+        ->assertRedirect();
+
+    $asset = \App\Models\WorkspaceAsset::query()->forTenantId($tenant->id)->sole();
+    expect(data_get($asset->metadata, 'field_service_job_note_id'))->toBeInt()
+        ->and($asset->jobs()->whereKey($job->id)->exists())->toBeTrue();
+
+    $this->actingAs($member)
+        ->get(route('field-service.jobs.show', ['tenant' => $tenant->slug, 'job' => $job]))
+        ->assertOk()
+        ->assertSeeText('Before photo from the job site.')
+        ->assertSee(route('documents.preview', ['tenant' => $tenant->slug, 'asset' => $asset]), false);
+    $this->actingAs($member)
+        ->get(route('documents.preview', ['tenant' => $tenant->slug, 'asset' => $asset]))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'image/jpeg');
+    $this->actingAs($member)
+        ->getJson(route('field-service.jobs.updates', ['tenant' => $tenant->slug, 'job' => $job]))
+        ->assertOk()
+        ->assertJsonPath('updates.0.body', 'Before photo from the job site.')
+        ->assertJsonPath('updates.0.attachments.0.name', 'service-before.jpg');
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/comments', [
+        'body' => 'After photo from the job site.',
+        'attachments' => [UploadedFile::fake()->image('service-after.jpg', 900, 600)],
+    ])->assertCreated();
+
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
+        ->assertOk()
+        ->assertJsonFragment(['name' => 'service-after.jpg']);
 });
 
 test('field operations v7 lets configured members browse every job without broadening mutations or financial payloads', function (): void {

@@ -297,8 +297,8 @@ class ShopifyEmbeddedPageRegistry
             ],
             [
                 'key' => 'reporting',
-                'route_name' => 'shopify.app.reporting.marketing-results',
-                'label' => 'Marketing Results',
+                'route_name' => 'shopify.app.reporting.sales-tax',
+                'label' => 'Sales Tax Reports',
                 'section' => 'reporting',
                 'group' => 'primary',
                 'icon_key' => 'chart-bar-square',
@@ -306,9 +306,9 @@ class ShopifyEmbeddedPageRegistry
                 'requires_enabled_access' => true,
                 'searchable' => true,
                 'search_badge' => 'Reporting',
-                'search_subtitle' => 'Review Everbranch-attributed revenue, costs, refunds, and return.',
-                'search_keywords' => ['marketing results', 'revenue', 'roas', 'attribution', 'reporting'],
-                'prefetch_priority' => 'normal',
+                'search_subtitle' => 'State summary and delivery-address detail for sales-tax reconciliation.',
+                'search_keywords' => ['sales tax', 'tax report', 'state report', 'jurisdiction', 'better reports', 'reporting'],
+                'prefetch_priority' => 'high',
             ],
             [
                 'key' => 'messaging',

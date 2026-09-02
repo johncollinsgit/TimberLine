@@ -204,22 +204,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'photos' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/'))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'plans' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
             'documents' => $job->assets->reject(fn (WorkspaceAsset $asset): bool => str_starts_with((string) $asset->mime_type, 'image/') || in_array('job-plan', (array) $asset->tags, true))->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
-            'activity' => $job->notes->map(function (FieldServiceJobNote $note) use ($job, $tenantModel, $access, $user): array {
-                $attachmentIds = collect((array) data_get($note->metadata, 'attachment_asset_ids', []))
-                    ->filter(fn ($id): bool => is_numeric($id))->map(fn ($id): int => (int) $id)->all();
-
-                return [
-                    'id' => (int) $note->id,
-                    'body' => $note->body,
-                    'status_update' => $note->status_update,
-                    'noted_at' => $note->noted_at?->toIso8601String(),
-                    'created_by' => $note->createdBy?->name ?: 'QuickBooks',
-                    'source' => data_get($note->metadata, 'source', 'everbranch'),
-                    'mentions' => $note->mentions->map(fn (User $mentioned): array => ['id' => (int) $mentioned->id, 'name' => $mentioned->name])->values(),
-                    'attachments' => $job->assets->whereIn('id', $attachmentIds)->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
-                    'can_delete' => $access->canManageJobs($user, $tenantModel),
-                ];
-            })->values(),
+            'activity' => $job->notes->map(fn (FieldServiceJobNote $note): array => ['id' => (int) $note->id, 'body' => $note->body, 'status_update' => $note->status_update, 'noted_at' => $note->noted_at?->toIso8601String(), 'created_by' => $note->createdBy?->name ?: 'QuickBooks', 'source' => data_get($note->metadata, 'source', 'everbranch'), 'mentions' => $note->mentions->map(fn (User $mentioned): array => ['id' => (int) $mentioned->id, 'name' => $mentioned->name])->values(), 'attachments' => $job->assets->filter(fn (WorkspaceAsset $asset): bool => (int) data_get($asset->metadata, 'field_service_job_note_id', 0) === (int) $note->id)->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(), 'can_delete' => $access->canManageJobs($user, $tenantModel)])->values(),
             'financials' => $owner ? $job->financialDocuments->map(fn ($document): array => ['id' => (int) $document->id, 'type' => $document->document_type, 'number' => $document->document_number, 'status' => $document->status, 'transaction_date' => $document->transaction_date?->toDateString(), 'total' => (float) $document->total_amount, 'balance' => (float) $document->balance])->values() : [],
             'can_manage' => $access->canManageJobs($user, $tenantModel),
             'can_update_progress' => $access->canUpdateProgress($user, $tenantModel, $job),
@@ -431,7 +416,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'mention_user_ids' => ['nullable', 'array', 'max:30'],
             'mention_user_ids.*' => ['integer'],
             'status_update' => ['nullable', 'in:active,blocked,complete,quote'],
-            'attachments' => ['nullable', 'array', 'min:1', 'max:20'],
+            'attachments' => ['nullable', 'array', 'max:20'],
             'attachments.*' => ['required', 'file', 'max:25600'],
         ]);
         if (filled($validated['status_update'] ?? null)) {
@@ -440,7 +425,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $mentionIds = $tenantModel->users()->whereIn('users.id', (array) ($validated['mention_user_ids'] ?? []))->pluck('users.id')->map(fn ($id): int => (int) $id)->all();
         $note = FieldServiceJobNote::query()->create([
             'tenant_id' => (int) $tenantModel->id, 'field_service_job_id' => (int) $job->id,
-            'created_by_user_id' => (int) $user->id, 'body' => trim((string) ($validated['body'] ?? '')),
+            'created_by_user_id' => (int) $user->id, 'body' => trim((string) ($validated['body'] ?? '')) ?: 'Added attachments.',
             'status_update' => $validated['status_update'] ?? null, 'noted_at' => now(),
             'metadata' => ['source' => 'everbranch_mobile'],
         ]);
@@ -458,6 +443,9 @@ class EverbranchMobileFieldServiceController extends Controller
         }
         if ($mentionIds !== []) {
             $note->mentions()->sync(collect($mentionIds)->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id]])->all());
+        }
+        foreach ($request->file('attachments', []) as $attachment) {
+            $assets->storeUpload($tenantModel, $user, $attachment, [(int) $job->id], 'team', null, ['job-update'], ['field_service_job_note_id' => (int) $note->id]);
         }
         if (filled($validated['status_update'] ?? null)) {
             $lifecycle->setManualStatus($job, (string) $validated['status_update']);
@@ -488,6 +476,40 @@ class EverbranchMobileFieldServiceController extends Controller
         $created = collect($request->file('photos', []))->map(fn ($photo) => $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-photo']));
 
         return response()->json(['ok' => true, 'photos' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
+    }
+
+    /**
+     * Accepts a phone-sized photo through JSON when an iOS WebView cannot send
+     * a native multipart file. The app attempts the standard endpoint first.
+     */
+    public function uploadPhotoPayload(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        $validated = $request->validate([
+            'file_name' => ['required', 'string', 'max:255'],
+            'mime_type' => ['required', 'in:image/jpeg,image/png,image/webp'],
+            'contents_base64' => ['required', 'string', 'max:1500000'],
+            'caption' => ['nullable', 'string', 'max:255'],
+        ]);
+        $contents = base64_decode((string) $validated['contents_base64'], true);
+        abort_if(! is_string($contents) || $contents === '' || strlen($contents) > 1024 * 1024, 422, 'The phone photo payload is invalid or too large.');
+        $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
+        abort_unless(in_array($detectedMime, ['image/jpeg', 'image/png', 'image/webp'], true), 422, 'The phone photo is not a supported image.');
+
+        $path = tempnam(storage_path('framework/cache'), 'everbranch-phone-photo-');
+        abort_unless(is_string($path), 500, 'Everbranch could not prepare this phone photo.');
+        file_put_contents($path, $contents);
+
+        try {
+            $photo = new UploadedFile($path, basename((string) $validated['file_name']), $detectedMime, null, true);
+            $asset = $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $validated['caption'] ?? null, ['job-photo', 'ios-payload-fallback']);
+        } finally {
+            @unlink($path);
+        }
+
+        return response()->json(['ok' => true, 'photo' => $this->assetPayload($asset, $tenantModel)], 201);
     }
 
     public function uploadFiles(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse

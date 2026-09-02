@@ -18,6 +18,7 @@ use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkspaceAsset;
+use App\Services\Automation\GoogleCalendarWorkflowConnectionService;
 use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
@@ -31,6 +32,7 @@ use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +40,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FieldServiceController extends Controller
@@ -50,6 +53,8 @@ class FieldServiceController extends Controller
         protected FieldServiceJobNotificationService $notifications,
         protected FieldServiceWorkProfileService $profiles,
         protected FieldServiceTaskAssignmentService $taskAssignments,
+        protected GoogleCalendarWorkflowConnectionService $googleCalendar,
+        protected MarketingIdentityNormalizer $identityNormalizer,
     ) {}
 
     public function index(Request $request, TenantFinancialAccess $financialAccess, FieldServiceOwnerHomeMetricsService $homeMetrics): View|RedirectResponse
@@ -57,6 +62,7 @@ class FieldServiceController extends Controller
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
         $profile = $this->profiles->forTenant($tenant);
+        $hideQuickBooksForCollins = in_array(strtolower(trim((string) $tenant->slug)), ['collins-electric', 'collins-upstate-electric'], true);
         $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
         $jobQuery = FieldServiceJob::query()
@@ -104,6 +110,16 @@ class FieldServiceController extends Controller
         $team = $tenant->users()
             ->orderBy('name')
             ->get(['users.id', 'users.name', 'users.email']);
+        $jobCustomerChoices = MarketingProfile::query()
+            ->forTenantId((int) $tenant->id)
+            ->whereNull('merged_into_profile_id')
+            ->whereNull('archived_at')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(1500)
+            ->get(['id', 'first_name', 'last_name', 'email', 'phone', 'address_line_1', 'address_line_2', 'city', 'state', 'postal_code', 'country'])
+            ->map(fn (MarketingProfile $customer): array => $this->jobCustomerChoice($customer))
+            ->values();
         $period = $request->validate(['period' => ['nullable', 'in:today,week,month']])['period'] ?? 'month';
         $taskQuery = FieldServiceTask::query()->forTenantId((int) $tenant->id)
             ->with(['job:id,tenant_id,title,operational_status', 'assignees:id,name,email'])
@@ -123,6 +139,18 @@ class FieldServiceController extends Controller
             ['tenant_id' => (int) $tenant->id],
             ['provider_status' => 'not_verified', 'enabled' => false]
         );
+        $employeePreview = $request->boolean('employee_view')
+            && $this->fieldServiceAccess->canManageJobs($request->user(), $tenant);
+        $capabilities = $this->fieldServiceAccess->capabilities($request->user(), $tenant);
+        if ($employeePreview) {
+            $capabilities = [
+                ...$capabilities,
+                'manage_jobs' => false,
+                'create_jobs' => false,
+                'manage_team' => false,
+                'manage_any_task' => false,
+            ];
+        }
 
         return view('field-service.index', [
             'tenant' => $tenant,
@@ -132,15 +160,17 @@ class FieldServiceController extends Controller
             'materials' => $materials,
             'vehicles' => $vehicles,
             'team' => $team,
+            'jobCustomerChoices' => $jobCustomerChoices,
             'statusLabels' => $this->statusLabels(),
             'reminderSetting' => $reminderSetting,
             'readiness' => $jobs->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
             'profile' => $profile,
-            'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
-            'canManageJobDrafts' => $financialAccess->allows($request->user(), $tenant),
+            'capabilities' => $capabilities,
+            'employeePreview' => $employeePreview,
+            'canManageJobDrafts' => ! $employeePreview && ! $hideQuickBooksForCollins && $financialAccess->allows($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
             'fleetTrackingEnabled' => (bool) config('services.fleet_tracking.enabled', false) && $this->moduleEnabled($tenant, 'fleet_tracking') && in_array($this->fieldServiceAccess->role($request->user(), $tenant), ['owner', 'tenant_owner', 'admin'], true),
-            'ownerMetrics' => $financialAccess->allows($request->user(), $tenant) ? $homeMetrics->build($tenant, $period) : null,
+            'ownerMetrics' => ! $employeePreview && ! $hideQuickBooksForCollins && $financialAccess->allows($request->user(), $tenant) ? $homeMetrics->build($tenant, $period) : null,
             'assignedTasks' => $assignedTasks,
             'assignedTaskTotal' => $assignedTaskTotal,
         ]);
@@ -256,6 +286,71 @@ class FieldServiceController extends Controller
         return response()->json(['ok' => true, 'saved_at' => now()->toIso8601String()]);
     }
 
+    public function updateJobDetails(Request $request, FieldServiceJob $job): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        abort_unless(
+            (int) $job->tenant_id === (int) $tenant->id
+            && $this->fieldServiceAccess->canManageJobs($request->user(), $tenant),
+            403,
+        );
+
+        $validated = $request->validate([
+            'description' => ['nullable', 'string', 'max:5000'],
+            'service_address_line_1' => ['nullable', 'string', 'max:255'],
+            'service_address_line_2' => ['nullable', 'string', 'max:255'],
+            'service_city' => ['nullable', 'string', 'max:120'],
+            'service_state' => ['nullable', 'string', 'max:120'],
+            'service_postal_code' => ['nullable', 'string', 'max:32'],
+            'service_country' => ['nullable', 'string', 'max:120'],
+            'project_manager_name' => ['nullable', 'string', 'max:255'],
+            'project_manager_company' => ['nullable', 'string', 'max:255'],
+            'project_manager_phone' => ['nullable', 'string', 'max:80'],
+            'project_manager_email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $job->fill($validated)->save();
+
+        return back()->with('status', 'Job details saved.');
+    }
+
+    public function jobUpdates(Request $request, FieldServiceJob $job): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeFieldService($tenant);
+        $this->abortUnlessAccessibleJob($request, $tenant, $job);
+        $job->load([
+            'notes.createdBy',
+            'assets' => fn ($assets) => $assets->where('visibility', 'team')->orderByDesc('workspace_assets.created_at'),
+        ]);
+        $attachmentsByNote = $job->assets
+            ->filter(fn (WorkspaceAsset $asset): bool => filled(data_get($asset->metadata, 'field_service_job_note_id')))
+            ->groupBy(fn (WorkspaceAsset $asset): int => (int) data_get($asset->metadata, 'field_service_job_note_id'));
+
+        return response()->json([
+            'updates' => $job->notes->sortByDesc('noted_at')->map(function (FieldServiceJobNote $note) use ($attachmentsByNote, $tenant): array {
+                return [
+                    'id' => (int) $note->id,
+                    'body' => $note->body,
+                    'author' => $note->createdBy?->name ?: 'Team update',
+                    'noted_at' => $note->noted_at?->toIso8601String(),
+                    'attachments' => $attachmentsByNote->get((int) $note->id, collect())->map(function (WorkspaceAsset $asset) use ($tenant): array {
+                        $image = str_starts_with((string) $asset->mime_type, 'image/');
+
+                        return [
+                            'id' => (int) $asset->id,
+                            'name' => $asset->file_name,
+                            'mime_type' => $asset->mime_type,
+                            'url' => route($image ? 'documents.preview' : 'documents.download', [$tenant, $asset]),
+                            'preview_url' => $image ? route('documents.preview', [$tenant, $asset]) : null,
+                        ];
+                    })->values(),
+                ];
+            })->values(),
+        ]);
+    }
+
     public function reviewWorkCandidate(Request $request, FieldServiceWorkCandidate $candidate, FieldServiceWorkCandidateService $candidates): JsonResponse
     {
         $tenant = $this->tenant($request);
@@ -330,8 +425,16 @@ class FieldServiceController extends Controller
         $this->authorizeFieldService($tenant);
         $includeOwnerNotes = $this->canViewOwnerNotes($request, $tenant);
 
-        $start = now()->startOfDay();
-        $end = now()->addDays(45)->endOfDay();
+        $validated = $request->validate([
+            'month' => ['nullable', 'date_format:Y-m'],
+        ]);
+        $calendarMonth = filled($validated['month'] ?? null)
+            ? \Carbon\CarbonImmutable::createFromFormat('!Y-m', (string) $validated['month'])
+            : now()->toImmutable()->startOfMonth();
+        $calendarStart = $calendarMonth->startOfMonth()->startOfWeek(\Carbon\CarbonImmutable::SUNDAY)->startOfDay();
+        $calendarEnd = $calendarMonth->endOfMonth()->endOfWeek(\Carbon\CarbonImmutable::SATURDAY)->endOfDay();
+        $calendarDays = collect(range(0, $calendarStart->diffInDays($calendarEnd)))
+            ->map(fn (int $offset): \Carbon\CarbonImmutable => $calendarStart->addDays($offset));
 
         $jobQuery = FieldServiceJob::query()
             ->forTenantId((int) $tenant->id)
@@ -344,7 +447,7 @@ class FieldServiceController extends Controller
         $scheduled = $jobQuery
             ->clone()
             ->whereNotNull('scheduled_for')
-            ->whereBetween('scheduled_for', [$start, $end])
+            ->whereBetween('scheduled_for', [$calendarStart, $calendarEnd])
             ->orderBy('scheduled_for')
             ->orderBy('id')
             ->get()
@@ -359,16 +462,48 @@ class FieldServiceController extends Controller
         $unscheduled = $unscheduledQuery->latest('last_financial_activity_at')->limit(30)->get();
 
         $all = $scheduled->flatten()->concat($unscheduled);
+        $googleCalendar = [
+            'available' => $this->moduleEnabled($tenant, 'workflow_automations'),
+            'connected' => false,
+            'events' => [],
+            'error' => null,
+        ];
+        if ($googleCalendar['available']) {
+            try {
+                $calendarStatus = $this->googleCalendar->status((int) $tenant->id);
+                $googleCalendar['connected'] = (bool) ($calendarStatus['connected'] ?? false);
+                $googleCalendar['account_label'] = $calendarStatus['account_label'] ?? null;
+                $googleCalendar['calendar_summary'] = $calendarStatus['selected_calendar_summary'] ?? null;
+                if ($googleCalendar['connected']) {
+                    $googleCalendar['events'] = $this->googleCalendar->upcomingEvents(
+                        tenantId: (int) $tenant->id,
+                        calendarId: $calendarStatus['selected_calendar_id'] ?? null,
+                        start: $calendarStart,
+                        end: $calendarEnd,
+                    );
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+                $googleCalendar['error'] = 'Google Calendar is temporarily unavailable. Try refreshing the connection.';
+            }
+        }
 
         return view('field-service.calendar', [
             'tenant' => $tenant,
             'jobsByDay' => $scheduled,
+            'calendarMonth' => $calendarMonth,
+            'calendarDays' => $calendarDays,
+            'today' => now()->toDateString(),
             'unscheduled' => $unscheduled,
             'statusLabels' => $this->statusLabels(),
             'readiness' => $all->mapWithKeys(fn (FieldServiceJob $job): array => [$job->id => $this->readiness->forJob($job)]),
             'profile' => $this->profiles->forTenant($tenant),
             'capabilities' => $this->fieldServiceAccess->capabilities($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
+            'googleCalendar' => $googleCalendar,
+            'googleEventsByDay' => collect((array) ($googleCalendar['events'] ?? []))
+                ->filter(fn (mixed $event): bool => is_array($event) && filled($event['start'] ?? null))
+                ->groupBy(fn (array $event): string => \Carbon\CarbonImmutable::parse((string) $event['start'])->toDateString()),
         ]);
     }
 
@@ -557,7 +692,9 @@ class FieldServiceController extends Controller
         abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
 
         $validated = $request->validate([
-            'customer_name' => ['required', 'string', 'max:255'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'create_customer' => ['nullable', 'boolean'],
+            'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_email' => ['nullable', 'email', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:80'],
             'lock_box_code' => ['nullable', 'string', 'max:120'],
@@ -583,8 +720,8 @@ class FieldServiceController extends Controller
 
         $actor = $request->user();
         DB::transaction(function () use ($tenant, $validated, $assignedUserId, $actor): void {
-            $profile = $this->findOrCreateCustomer($tenant, $validated);
-
+            $profile = $this->resolveJobCustomer($tenant, $validated);
+            $validated = $this->prefillJobCustomerDetails($validated, $profile);
             $job = FieldServiceJob::query()->create([
                 'tenant_id' => (int) $tenant->id,
                 'marketing_profile_id' => (int) $profile->id,
@@ -747,7 +884,7 @@ class FieldServiceController extends Controller
         return back()->with('status', $result['replayed'] ? 'Task handoff already recorded.' : 'Task handed off.');
     }
 
-    public function transitionJob(Request $request, FieldServiceJob $job): RedirectResponse
+    public function transitionJob(Request $request, FieldServiceJob $job): RedirectResponse|JsonResponse
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
@@ -755,11 +892,24 @@ class FieldServiceController extends Controller
         abort_unless($this->fieldServiceAccess->canUpdateProgress($request->user(), $tenant, $job), 403);
 
         $validated = $request->validate([
-            'action' => ['required', 'string', 'in:start,block,resume,complete,cancel,reopen'],
+            'action' => ['required', 'string', 'in:start,block,resume,complete,cancel,archive,reopen'],
             'reason' => ['nullable', 'string', 'max:2000', 'required_if:action,block'],
         ]);
 
+        abort_if(
+            $validated['action'] === 'archive' && ! $this->fieldServiceAccess->canManageJobs($request->user(), $tenant),
+            403,
+        );
+
         $this->transitions->transition($tenant, $job, $request->user(), $validated['action'], $validated['reason'] ?? null);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'status' => $job->fresh()->operational_status,
+                'archived_at' => $job->fresh()->archived_at?->toIso8601String(),
+            ]);
+        }
 
         return back()->with('status', 'Job status updated.');
     }
@@ -776,26 +926,21 @@ class FieldServiceController extends Controller
             'noted_at' => ['nullable', 'date'],
             'photo_file_path' => ['nullable', 'string', 'max:2048'],
             'photo_caption' => ['nullable', 'string', 'max:255'],
-            'attachments' => ['nullable', 'array', 'min:1', 'max:20'],
+            'attachments' => ['nullable', 'array', 'max:20'],
             'attachments.*' => ['required', 'file', 'max:25600'],
         ]);
 
-        DB::transaction(function () use ($request, $tenant, $job, $validated, $assets): void {
+        $note = null;
+
+        DB::transaction(function () use (&$note, $assets, $request, $tenant, $job, $validated): void {
             $note = FieldServiceJobNote::query()->create([
                 'tenant_id' => (int) $tenant->id,
                 'field_service_job_id' => (int) $job->id,
                 'created_by_user_id' => $request->user()?->id,
-                'body' => trim((string) ($validated['body'] ?? '')),
+                'body' => trim((string) ($validated['body'] ?? '')) ?: 'Added attachments.',
                 'status_update' => $validated['status_update'] ?? null,
                 'noted_at' => $validated['noted_at'] ?? now(),
             ]);
-            $attachmentIds = collect($request->file('attachments', []))
-                ->map(fn ($file): int => (int) $assets->storeUpload($tenant, $request->user(), $file, [(int) $job->id], 'team', null, ['job-update'])->id)
-                ->all();
-            if ($attachmentIds !== []) {
-                $note->forceFill(['metadata' => ['source' => 'everbranch_web', 'attachment_asset_ids' => $attachmentIds]])->save();
-            }
-
             $status = trim((string) ($validated['status_update'] ?? ''));
             if ($status !== '') {
                 $job->forceFill([
@@ -816,7 +961,24 @@ class FieldServiceController extends Controller
                     'captured_at' => $validated['noted_at'] ?? now(),
                 ]);
             }
+
+            foreach ($request->file('attachments', []) as $attachment) {
+                $assets->storeUpload(
+                    $tenant,
+                    $request->user(),
+                    $attachment,
+                    [(int) $job->id],
+                    'team',
+                    $validated['photo_caption'] ?? null,
+                    ['job-update'],
+                    ['field_service_job_note_id' => (int) $note->id],
+                );
+            }
         });
+
+        if ($note instanceof FieldServiceJobNote && $request->user() instanceof User) {
+            $this->notifications->notifyComment($job, $note, $request->user(), []);
+        }
 
         return back()->with('status', 'Job update added.');
     }
@@ -945,7 +1107,19 @@ class FieldServiceController extends Controller
             'timezone' => ['nullable', 'string', 'max:80'],
             'customer_copy' => ['nullable', 'string', 'max:2000'],
             'internal_notes' => ['nullable', 'string', 'max:5000'],
+            'job_update_sms_phone' => ['nullable', 'string', 'max:40', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (filled($value) && $this->identityNormalizer->toE164((string) $value) === null) {
+                    $fail('Enter a valid 10-digit United States phone number.');
+                }
+            }],
+            'job_update_sms_enabled' => ['nullable', 'boolean'],
         ]);
+
+        $existing = FieldServiceReminderSetting::query()->forTenantId((int) $tenant->id)->first();
+        $jobUpdateSms = [
+            'phone' => $this->identityNormalizer->toE164($validated['job_update_sms_phone'] ?? null),
+            'enabled' => (bool) ($validated['job_update_sms_enabled'] ?? false),
+        ];
 
         FieldServiceReminderSetting::query()->updateOrCreate(
             ['tenant_id' => (int) $tenant->id],
@@ -955,13 +1129,14 @@ class FieldServiceController extends Controller
                 'cadence' => (string) $validated['cadence'],
                 'send_time' => $validated['send_time'] ?? null,
                 'timezone' => $validated['timezone'] ?? 'America/New_York',
-                'provider_status' => 'not_verified',
+                'provider_status' => $existing?->provider_status ?: 'not_verified',
+                'job_update_sms' => $jobUpdateSms,
                 'customer_copy' => $validated['customer_copy'] ?? null,
                 'internal_notes' => $validated['internal_notes'] ?? null,
             ]
         );
 
-        return back()->with('status', 'Reminder setup saved for Everbranch review. SMS stays off until delivery is verified.');
+        return back()->with('status', 'Job-update text setting saved. Texts stay off until the Everbranch SMS sender is verified.');
     }
 
     protected function tenant(Request $request): Tenant
@@ -988,36 +1163,131 @@ class FieldServiceController extends Controller
     /**
      * @param  array<string,mixed>  $validated
      */
-    protected function findOrCreateCustomer(Tenant $tenant, array $validated): MarketingProfile
+    protected function resolveJobCustomer(Tenant $tenant, array $validated): MarketingProfile
     {
-        $email = Str::lower(trim((string) ($validated['customer_email'] ?? '')));
-        $name = trim((string) ($validated['customer_name'] ?? ''));
-        [$firstName, $lastName] = $this->splitName($name);
+        $selectedId = isset($validated['marketing_profile_id']) ? (int) $validated['marketing_profile_id'] : null;
+        if ($selectedId) {
+            $profile = MarketingProfile::query()
+                ->forTenantId((int) $tenant->id)
+                ->whereNull('merged_into_profile_id')
+                ->find($selectedId);
 
-        $query = MarketingProfile::query()->forTenantId((int) $tenant->id);
-        $profile = $email !== ''
-            ? $query->where('normalized_email', $email)->first()
-            : null;
+            if ($profile instanceof MarketingProfile) {
+                return $profile;
+            }
 
-        if (! $profile instanceof MarketingProfile) {
-            $profile = MarketingProfile::query()->create([
-                'tenant_id' => (int) $tenant->id,
-                'first_name' => $firstName,
-                'last_name' => $lastName,
-                'email' => $email !== '' ? $email : null,
-                'normalized_email' => $email !== '' ? $email : null,
-                'phone' => $validated['customer_phone'] ?? null,
-                'source_channels' => ['field_service'],
+            throw ValidationException::withMessages([
+                'marketing_profile_id' => 'That customer is no longer available. Search and select a current customer.',
             ]);
-        } else {
-            $profile->fill([
-                'first_name' => $profile->first_name ?: $firstName,
-                'last_name' => $profile->last_name ?: $lastName,
-                'phone' => $profile->phone ?: ($validated['customer_phone'] ?? null),
-            ])->save();
         }
 
-        return $profile;
+        if (! (bool) ($validated['create_customer'] ?? false)) {
+            throw ValidationException::withMessages([
+                'customer_lookup' => 'Choose an existing customer, or check “This is a new customer” before creating the job.',
+            ]);
+        }
+
+        $name = trim((string) ($validated['customer_name'] ?? ''));
+        if ($name === '') {
+            throw ValidationException::withMessages(['customer_name' => 'Enter the new customer’s name.']);
+        }
+
+        $duplicate = $this->matchingJobCustomer($tenant, $validated);
+        if ($duplicate instanceof MarketingProfile) {
+            throw ValidationException::withMessages([
+                'customer_lookup' => sprintf('A customer already exists for this email or phone (%s). Search and select that customer instead.', $this->jobCustomerDisplayName($duplicate)),
+            ]);
+        }
+
+        [$firstName, $lastName] = $this->splitName($name);
+        $email = $this->identityNormalizer->normalizeEmail($validated['customer_email'] ?? null);
+        $phone = $this->identityNormalizer->normalizePhone($validated['customer_phone'] ?? null);
+
+        return MarketingProfile::query()->create([
+            'tenant_id' => (int) $tenant->id,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'email' => $email,
+            'normalized_email' => $email,
+            'phone' => $validated['customer_phone'] ?? null,
+            'normalized_phone' => $phone,
+            'address_line_1' => $validated['service_address_line_1'] ?? null,
+            'address_line_2' => $validated['service_address_line_2'] ?? null,
+            'city' => $validated['service_city'] ?? null,
+            'state' => $validated['service_state'] ?? null,
+            'postal_code' => $validated['service_postal_code'] ?? null,
+            'country' => $validated['service_country'] ?? null,
+            'source_channels' => ['field_service'],
+        ]);
+    }
+
+    /** @param array<string,mixed> $validated */
+    protected function matchingJobCustomer(Tenant $tenant, array $validated): ?MarketingProfile
+    {
+        $email = $this->identityNormalizer->normalizeEmail($validated['customer_email'] ?? null);
+        $phoneCandidates = $this->identityNormalizer->phoneMatchCandidates($validated['customer_phone'] ?? null);
+
+        if ($email === null && $phoneCandidates === []) {
+            return null;
+        }
+
+        return MarketingProfile::query()
+            ->forTenantId((int) $tenant->id)
+            ->whereNull('merged_into_profile_id')
+            ->where(function ($customers) use ($email, $phoneCandidates): void {
+                if ($email !== null) {
+                    $customers->where('normalized_email', $email);
+                }
+                if ($phoneCandidates !== []) {
+                    $method = $email !== null ? 'orWhereIn' : 'whereIn';
+                    $customers->{$method}('normalized_phone', $phoneCandidates);
+                }
+            })
+            ->first();
+    }
+
+    /** @param array<string,mixed> $validated
+     * @return array<string,mixed>
+     */
+    protected function prefillJobCustomerDetails(array $validated, MarketingProfile $profile): array
+    {
+        $validated['customer_name'] = trim((string) ($validated['customer_name'] ?? '')) ?: $this->jobCustomerDisplayName($profile);
+        $validated['customer_email'] = $validated['customer_email'] ?? $profile->email;
+        $validated['customer_phone'] = $validated['customer_phone'] ?? $profile->phone;
+        $validated['service_address_line_1'] = $validated['service_address_line_1'] ?? $profile->address_line_1;
+        $validated['service_address_line_2'] = $validated['service_address_line_2'] ?? $profile->address_line_2;
+        $validated['service_city'] = $validated['service_city'] ?? $profile->city;
+        $validated['service_state'] = $validated['service_state'] ?? $profile->state;
+        $validated['service_postal_code'] = $validated['service_postal_code'] ?? $profile->postal_code;
+        $validated['service_country'] = $validated['service_country'] ?? $profile->country;
+
+        return $validated;
+    }
+
+    /** @return array<string,mixed> */
+    protected function jobCustomerChoice(MarketingProfile $customer): array
+    {
+        $name = $this->jobCustomerDisplayName($customer);
+        $contact = array_filter([$customer->email, $customer->phone]);
+
+        return [
+            'id' => (int) $customer->id,
+            'label' => $name.(count($contact) ? ' · '.implode(' · ', $contact) : ''),
+            'name' => $name,
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+            'address_line_1' => $customer->address_line_1,
+            'address_line_2' => $customer->address_line_2,
+            'city' => $customer->city,
+            'state' => $customer->state,
+            'postal_code' => $customer->postal_code,
+            'country' => $customer->country,
+        ];
+    }
+
+    protected function jobCustomerDisplayName(MarketingProfile $customer): string
+    {
+        return trim((string) $customer->first_name.' '.(string) $customer->last_name) ?: ($customer->email ?: 'Customer #'.$customer->id);
     }
 
     /**

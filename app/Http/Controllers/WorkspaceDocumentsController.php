@@ -83,6 +83,20 @@ class WorkspaceDocumentsController extends Controller
         ]);
     }
 
+    public function preview(Request $request, Tenant $tenant, WorkspaceAsset $asset, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit, WorkspaceAssetService $assets): StreamedResponse
+    {
+        $this->authorizeAsset($request, $tenant, $asset, $financialAccess);
+        abort_unless(str_starts_with((string) $asset->mime_type, 'image/'), 404);
+        $disk = $assets->readableDisk($asset);
+        abort_unless($disk, 404);
+        $audit->record($tenant, $asset, $request->user(), 'previewed');
+
+        return Storage::disk($disk)->response($asset->storage_path, $asset->file_name, [
+            'Content-Type' => $asset->mime_type,
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
     public function updateLinks(Request $request, Tenant $tenant, WorkspaceAsset $asset, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit): RedirectResponse
     {
         $this->authorizeAsset($request, $tenant, $asset, $financialAccess);

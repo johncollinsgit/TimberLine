@@ -3,10 +3,13 @@ import axios from "axios";
 import "@glideapps/glide-data-grid/dist/index.css";
 import {
     DataEditor,
+    CustomCell,
+    CustomRenderer,
     GridCell,
     GridCellKind,
     GridColumn,
     Item,
+    roundedRect,
     type Theme,
 } from "@glideapps/glide-data-grid";
 import {
@@ -49,6 +52,7 @@ type FilterState = {
     source: string;
     has_points: string;
     has_phone: string;
+    status: string;
 };
 
 type ResponseMeta = {
@@ -68,6 +72,8 @@ type RootDataset = {
     endpoint: string;
     addCustomerUrl: string;
     messageCustomerUrl: string;
+    bulkActionUrl: string;
+    operationalDirectory: boolean;
     initialFilters: FilterState;
     sortOptions: SortOption[];
 };
@@ -75,6 +81,41 @@ type RootDataset = {
 type ElementSize = {
     width: number;
     height: number;
+};
+
+type CustomerSelectCell = CustomCell<{ kind: "customer-select"; selected: boolean }>;
+
+const customerSelectRenderer: CustomRenderer<CustomerSelectCell> = {
+    kind: GridCellKind.Custom,
+    isMatch: (cell): cell is CustomerSelectCell => cell.data.kind === "customer-select",
+    needsHover: true,
+    draw: ({ ctx, rect, hoverAmount, overrideCursor, cell }) => {
+        const size = 18;
+        const x = rect.x + (rect.width - size) / 2;
+        const y = rect.y + (rect.height - size) / 2;
+        overrideCursor?.("pointer");
+        ctx.save();
+        ctx.beginPath();
+        roundedRect(ctx, x, y, size, size, 4);
+        ctx.fillStyle = cell.data.selected ? "#0f766e" : (hoverAmount > 0 ? "#f0fdfa" : "#ffffff");
+        ctx.fill();
+        ctx.strokeStyle = cell.data.selected ? "#0f766e" : "#6d7175";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (cell.data.selected) {
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.beginPath();
+            ctx.moveTo(x + 4, y + 9);
+            ctx.lineTo(x + 7.5, y + 12.5);
+            ctx.lineTo(x + 14.5, y + 5.5);
+            ctx.stroke();
+        }
+        ctx.restore();
+        return true;
+    },
 };
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -240,6 +281,8 @@ function parseRootDataset(root: HTMLElement): RootDataset {
         endpoint: root.dataset.endpoint || "/marketing/customers/data",
         addCustomerUrl: root.dataset.addCustomerUrl || "/marketing/customers/create",
         messageCustomerUrl: root.dataset.messageCustomerUrl || "",
+        bulkActionUrl: root.dataset.bulkActionUrl || "",
+        operationalDirectory: root.dataset.operationalDirectory === "true",
         initialFilters: {
             search: initialFilters.search || "",
             sort: initialFilters.sort || "updated_at",
@@ -249,6 +292,7 @@ function parseRootDataset(root: HTMLElement): RootDataset {
             source: initialFilters.source || "all",
             has_points: initialFilters.has_points || "all",
             has_phone: initialFilters.has_phone || "all",
+            status: initialFilters.status === "archived" ? "archived" : "active",
         },
         sortOptions,
     };
@@ -278,7 +322,7 @@ function columnWidth(column: ColumnMeta): number {
     }
 }
 
-function buildColumns(meta: ResponseMeta | null): GridColumn[] {
+function buildColumns(meta: ResponseMeta | null, operationalDirectory: boolean): GridColumn[] {
     const columns = (meta?.columns ?? []).map((column) => ({
         id: column.key,
         title: column.label,
@@ -286,6 +330,7 @@ function buildColumns(meta: ResponseMeta | null): GridColumn[] {
     }));
 
     return [
+        ...(operationalDirectory ? [{ id: "__select", title: "Select", width: 70 }] : []),
         ...columns,
         {
             id: "__actions",
@@ -359,6 +404,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const [hasPoints, setHasPoints] = useState(props.initialFilters.has_points);
     const [hasPhone, setHasPhone] = useState(props.initialFilters.has_phone);
     const [birthdayFilter, setBirthdayFilter] = useState(props.initialFilters.birthday_filter);
+    const [status, setStatus] = useState(props.initialFilters.status);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [bulkWorking, setBulkWorking] = useState(false);
     const [sortField, setSortField] = useState(props.initialFilters.sort);
     const [sortDir, setSortDir] = useState<"asc" | "desc">(props.initialFilters.dir);
     const [perPage, setPerPage] = useState(props.initialFilters.per_page);
@@ -376,7 +424,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
     const gridTheme = useMemo(() => resolveGridTheme(), []);
     const gridCssVars = useMemo(() => gridThemeVars(gridTheme), [gridTheme]);
-    const columns = useMemo(() => buildColumns(meta), [meta]);
+    const columns = useMemo(() => buildColumns(meta, props.operationalDirectory), [meta, props.operationalDirectory]);
     const gridHeight = Math.max(gridBounds.height, 560);
     const canRenderGrid = gridBounds.width > 0 && gridHeight > 0;
 
@@ -392,6 +440,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
             has_points: hasPoints,
             has_phone: hasPhone,
             birthday_filter: birthdayFilter,
+            status,
             sort: sortField,
             dir: sortDir,
             per_page: String(perPage),
@@ -413,7 +462,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
         }
 
         window.history.replaceState({}, "", `${url.pathname}?${url.searchParams.toString()}`);
-    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, search, sortDir, sortField, source]);
+    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, search, sortDir, sortField, source, status]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -433,6 +482,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         has_points: hasPoints !== "all" ? hasPoints : undefined,
                         has_phone: hasPhone !== "all" ? hasPhone : undefined,
                         birthday_filter: birthdayFilter !== "all" ? birthdayFilter : undefined,
+                        status: props.operationalDirectory ? status : undefined,
                         sort: sortField,
                         dir: sortDir,
                     },
@@ -468,11 +518,15 @@ function MarketingCustomersGridApp(props: RootDataset) {
         return () => {
             controller.abort();
         };
-    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, props.endpoint, reloadToken, search, sortDir, sortField, source]);
+    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, props.endpoint, props.operationalDirectory, reloadToken, search, sortDir, sortField, source, status]);
 
     useEffect(() => {
         setPage(1);
-    }, [birthdayFilter, hasPhone, hasPoints, perPage, search, sortDir, sortField, source]);
+    }, [birthdayFilter, hasPhone, hasPoints, perPage, search, sortDir, sortField, source, status]);
+
+    useEffect(() => {
+        setSelectedIds([]);
+    }, [page, reloadToken, status]);
 
     const getCellContent = ([col, row]: Item): GridCell => {
         const rowData = rows[row];
@@ -499,6 +553,18 @@ function MarketingCustomersGridApp(props: RootDataset) {
             };
         }
 
+        if (gridColumn.id === "__select") {
+            const selected = selectedIds.includes(rowData.id);
+
+            return {
+                kind: GridCellKind.Custom,
+                data: { kind: "customer-select", selected },
+                copyData: selected ? "Selected" : "",
+                allowOverlay: false,
+                readonly: true,
+            };
+        }
+
         const value = formatCellValue(column, rowData[String(gridColumn.id)]);
 
         return {
@@ -510,8 +576,16 @@ function MarketingCustomersGridApp(props: RootDataset) {
         };
     };
 
-    const handleCellClicked = ([, row]: Item) => {
+    const handleCellClicked = ([col, row]: Item) => {
         const rowData = rows[row];
+        const gridColumn = columns[col];
+        if (gridColumn?.id === "__select" && rowData) {
+            setSelectedIds((current) => current.includes(rowData.id)
+                ? current.filter((id) => id !== rowData.id)
+                : [...current, rowData.id]);
+            return;
+        }
+
         if (!rowData?.profile_url) {
             return;
         }
@@ -525,6 +599,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
         setHasPoints("all");
         setHasPhone("all");
         setBirthdayFilter("all");
+        setStatus("active");
         setSortField("updated_at");
         setSortDir("desc");
         setPerPage(25);
@@ -544,10 +619,39 @@ function MarketingCustomersGridApp(props: RootDataset) {
         hasPoints !== "all" ? (hasPoints === "yes" ? "Has Candle Cash" : "No Candle Cash") : null,
         hasPhone !== "all" ? (hasPhone === "yes" ? "Has phone" : "Missing phone") : null,
         birthdayFilter !== "all" ? `Birthday: ${birthdayFilter}` : null,
+        props.operationalDirectory && status === "archived" ? "Archived customers" : null,
         sortField !== "updated_at" ? `Sort: ${sortField}` : null,
         sortDir !== "desc" ? "Ascending" : null,
         perPage !== 25 ? `${perPage} rows` : null,
     ].filter((value): value is string => Boolean(value));
+
+    const archiveSelected = async () => {
+        if (selectedIds.length === 0 || bulkWorking || props.bulkActionUrl === "") {
+            return;
+        }
+
+        const action = status === "archived" ? "restore" : "archive";
+        const verb = action === "archive" ? "delete" : "restore";
+        if (!window.confirm(`${verb[0].toUpperCase()}${verb.slice(1)} ${selectedIds.length} selected customer${selectedIds.length === 1 ? "" : "s"}? Jobs and history will be kept.`)) {
+            return;
+        }
+
+        setBulkWorking(true);
+        setError("");
+        try {
+            const response = await axios.post(props.bulkActionUrl, { action, profile_ids: selectedIds });
+            setSelectedIds([]);
+            setReloadToken((current) => current + 1);
+            setError("");
+            window.alert(response.data?.message || "Customer directory updated.");
+        } catch (requestError) {
+            setError(axios.isAxiosError(requestError)
+                ? requestError.response?.data?.message || "Could not update the selected customers."
+                : "Could not update the selected customers.");
+        } finally {
+            setBulkWorking(false);
+        }
+    };
 
     return (
         <div className="space-y-4">
@@ -559,8 +663,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         </div>
                         <h2 className="mt-1 text-xl font-semibold tracking-[-0.01em] text-[#202223]">Manage Customers</h2>
                         <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#6d7175]">
-                            Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance,
-                            and open full customer records without fighting a long static table.
+                            {props.operationalDirectory
+                                ? "Search customers, keep service addresses current, and archive outdated records without losing job history."
+                                : "Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance, and open full customer records without fighting a long static table."}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -568,6 +673,11 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             <a href={props.messageCustomerUrl} className={buttonClass()}>
                                 Text a customer
                             </a>
+                        ) : null}
+                        {props.operationalDirectory && selectedIds.length > 0 ? (
+                            <button type="button" onClick={() => void archiveSelected()} disabled={bulkWorking} className={buttonClass()}>
+                                {bulkWorking ? "Updating…" : `${status === "archived" ? "Restore" : "Delete"} selected (${selectedIds.length})`}
+                            </button>
                         ) : null}
                         <a href={props.addCustomerUrl} className={primaryButtonClass()}>
                             Add Customer
@@ -593,7 +703,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             type="search"
                             value={searchInput}
                             onChange={(event) => setSearchInput(event.target.value)}
-                            placeholder="Search name, email, phone, source ID"
+                            placeholder={props.operationalDirectory ? "Search name, email, phone, or address" : "Search name, email, phone, source ID"}
                             className={fieldClass()}
                         />
                         </div>
@@ -635,7 +745,13 @@ function MarketingCustomersGridApp(props: RootDataset) {
 
                     {filtersOpen ? (
                         <div className="grid gap-3 border-y border-[#e1e3e5] py-4 md:grid-cols-2 xl:grid-cols-6">
-                            <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
+                            {props.operationalDirectory ? (
+                                <select value={status} onChange={(event) => setStatus(event.target.value === "archived" ? "archived" : "active")} className={fieldClass()}>
+                                    <option value="active">Active customers</option>
+                                    <option value="archived">Archived customers</option>
+                                </select>
+                            ) : (
+                                <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
                                 <option value="all">All sources</option>
                                 <option value="shopify">Shopify</option>
                                 <option value="growave">Growave</option>
@@ -644,23 +760,26 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 <option value="event">Event</option>
                                 <option value="manual">Manual</option>
                             </select>
-                            <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
+                            )}
+                            {!props.operationalDirectory ? <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
                                 <option value="all">All Candle Cash states</option>
                                 <option value="yes">Has Candle Cash</option>
                                 <option value="no">No Candle Cash</option>
                             </select>
+                            : null}
                             <select value={hasPhone} onChange={(event) => setHasPhone(event.target.value)} className={fieldClass()}>
                                 <option value="all">All phone states</option>
                                 <option value="yes">Has phone</option>
                                 <option value="no">No phone</option>
                             </select>
-                            <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
+                            {!props.operationalDirectory ? <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
                                 <option value="all">All birthdays</option>
                                 <option value="today">Birthday today</option>
                                 <option value="week">Birthday this week</option>
                                 <option value="month">Birthday this month</option>
                                 <option value="missing">Birthday missing</option>
                             </select>
+                            : null}
                             <select value={sortField} onChange={(event) => setSortField(event.target.value)} className={fieldClass()}>
                                 {(meta?.sort_options ?? props.sortOptions).map((option) => (
                                     <option key={option.value} value={option.value}>
@@ -710,6 +829,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             rows={rows.length}
                             getCellContent={getCellContent}
                             onCellClicked={handleCellClicked}
+                            customRenderers={[customerSelectRenderer]}
                             width={gridBounds.width}
                             height={gridHeight}
                             rowMarkers={{ kind: "number", theme: gridTheme }}

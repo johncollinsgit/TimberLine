@@ -406,6 +406,40 @@ it('resumes mobile bag completion state after the first column is retained', fun
         ->and(Schema::hasColumn('modern_forestry_mobile_bag_snapshots', 'completed_at'))->toBeTrue();
 });
 
+it('resumes sales-tax reporting destination fields after MySQL retains the first column', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('orders')) {
+        Schema::create('orders', function (Blueprint $table): void {
+            $table->id();
+            $table->string('shipping_address1')->nullable();
+        });
+    }
+
+    foreach (['shipping_city', 'shipping_province', 'shipping_province_code', 'shipping_zip', 'shipping_country_code'] as $column) {
+        if (Schema::hasColumn('orders', $column)) {
+            Schema::table('orders', function (Blueprint $table) use ($column): void {
+                $table->dropColumn($column);
+            });
+        }
+    }
+
+    // Simulate the durable partial state: MySQL committed the first column,
+    // then the release stopped before the remaining address columns.
+    Schema::table('orders', function (Blueprint $table): void {
+        $table->string('shipping_city', 120)->nullable()->after('shipping_address1');
+    });
+
+    $migration = require database_path('migrations/2026_08_20_120000_add_reporting_destination_fields_to_orders_table.php');
+    $migration->up();
+
+    foreach (['shipping_city', 'shipping_province', 'shipping_province_code', 'shipping_zip', 'shipping_country_code'] as $column) {
+        expect(Schema::hasColumn('orders', $column))->toBeTrue();
+    }
+});
+
 it('resumes the complete Commerce foundation from durable partial MySQL state', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');
@@ -501,6 +535,68 @@ it('resumes the complete Commerce foundation from durable partial MySQL state', 
         ->toBeTrue()
         ->and(Schema::hasIndex('website_shipping_rate_quotes', 'website_rate_quotes_expires_idx'))->toBeTrue()
         ->and(Schema::hasIndex('website_shipping_rate_quotes', 'website_rate_quotes_tenant_cart_expiry_idx'))->toBeTrue();
+});
+
+it('resumes marketing profile archival after the additive column is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('marketing_profiles')) {
+        Schema::create('marketing_profiles', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('tenant_id')->nullable();
+            $table->timestamp('merged_at')->nullable();
+        });
+    } elseif (! Schema::hasColumn('marketing_profiles', 'merged_at')) {
+        Schema::table('marketing_profiles', function (Blueprint $table): void {
+            $table->timestamp('merged_at')->nullable();
+        });
+    }
+
+    if (Schema::hasColumn('marketing_profiles', 'archived_at')) {
+        Schema::table('marketing_profiles', function (Blueprint $table): void {
+            $table->dropColumn('archived_at');
+        });
+    }
+
+    $migration = require database_path('migrations/2026_08_24_120000_add_archival_to_marketing_profiles.php');
+    $migration->up();
+
+    // Re-run after the first DDL step was retained but before Laravel records
+    // its migration batch. The guard must make the retry safe.
+    $migration->up();
+
+    expect(Schema::hasColumn('marketing_profiles', 'archived_at'))->toBeTrue();
+});
+
+it('resumes the job-update SMS setting after its column is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('field_service_reminder_settings')) {
+        Schema::create('field_service_reminder_settings', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('tenant_id');
+            $table->timestamps();
+        });
+    }
+
+    if (Schema::hasColumn('field_service_reminder_settings', 'job_update_sms')) {
+        Schema::table('field_service_reminder_settings', function (Blueprint $table): void {
+            $table->dropColumn('job_update_sms');
+        });
+    }
+
+    $migration = require database_path('migrations/2026_08_25_150000_add_job_update_sms_setting_to_field_service_reminder_settings.php');
+    $migration->up();
+
+    // A deploy may stop after MySQL has committed the DDL but before Laravel
+    // records the migration. A retry must safely retain the existing column.
+    $migration->up();
+
+    expect(Schema::hasColumn('field_service_reminder_settings', 'job_update_sms'))->toBeTrue();
 });
 
 it('resumes marketing groups after MySQL rejects the legacy import-row foreign-key name', function (): void {

@@ -59,4 +59,16 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['encrypted fundraiser order table retained before accounting-review package table creation'],
     ],
+    '2026_08_20_120000_add_reporting_destination_fields_to_orders_table.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['first reporting destination column retained before trailing delivery-address columns'],
+    ],
+    '2026_08_24_120000_add_archival_to_marketing_profiles.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['archival column retained before Laravel records the migration batch'],
+    ],
+    '2026_08_25_150000_add_job_update_sms_setting_to_field_service_reminder_settings.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['job-update SMS setting column retained before Laravel records the migration batch'],
+    ],
 ];

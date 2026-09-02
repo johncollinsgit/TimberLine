@@ -2,6 +2,15 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Shopify state sales tax reporting (2026-08-20)
+
+- Embedded **Sales Tax Reports** is a tenant-scoped, read-only reporting
+  surface. Its State Sales Tax Summary and State Sales Tax Detail presets use
+  imported Shopify delivery-address data only; they must never infer a county
+  or local tax, decide taxability, submit a return, make a payment, or mutate
+  Shopify/Square/QuickBooks data. See
+  `docs/operations/shopify-state-sales-tax-reporting-runbook.md`.
+
 ## Modern Forestry fundraiser invoice preparation (2026-08-19)
 
 - The verified Modern Forestry retail Shopify Settings page has a

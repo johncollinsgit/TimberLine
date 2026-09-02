@@ -559,6 +559,7 @@ class UnifiedDashboardService
     protected function ownerReport(?Tenant $tenant, ?User $user, string $rangeKey): ?array
     {
         if (! $tenant || ! $user
+            || in_array(strtolower(trim((string) $tenant->slug)), ['collins-electric', 'collins-upstate-electric'], true)
             || ! Schema::hasTable('quickbooks_reporting_settings')
             || ! $this->financialAccess->allows($user, $tenant)
             || ! $this->moduleAccess->canAccess((int) $tenant->id, 'quickbooks')) {
