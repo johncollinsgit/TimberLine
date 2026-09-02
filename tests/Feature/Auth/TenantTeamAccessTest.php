@@ -91,10 +91,7 @@ test('team access follows the current host workspace instead of a stale session 
         $this->actingAs($admin)
             ->withSession(['tenant_id' => $modernForestry->id])
             ->get('http://collins.example.test/admin?tab=users')
-            ->assertOk()
-            ->assertSee('Collins Upstate Electric')
-            ->assertSee('Collins Technician')
-            ->assertDontSee('Modern Forestry Technician');
+            ->assertRedirect('http://collins.example.test/admin/users');
 
         $this->actingAs($admin)
             ->withSession(['tenant_id' => $modernForestry->id])
