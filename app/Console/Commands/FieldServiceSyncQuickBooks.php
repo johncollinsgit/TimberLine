@@ -54,41 +54,77 @@ class FieldServiceSyncQuickBooks extends Command
             return self::FAILURE;
         }
 
-        $entities = $this->entities($syncService);
-        $summary = $syncService->sync(
-            $tenant,
-            $connections->connector('quickbooks')->client($connection),
-            $entities,
-            (bool) $this->option('dry-run')
-        );
+        $lock = Cache::lock('quickbooks-sync:'.$connection->id, 55 * 60);
+        if (! $lock->get()) {
+            $this->error('A QuickBooks synchronization is already running for this connection.');
 
-        if (! (bool) $this->option('dry-run')) {
-            $lifecycle->reconcileTenant($tenant);
-            Cache::forget('field-service:index:'.$tenant->id);
-            Cache::forget('field-service:my-day:'.$tenant->id);
-            $connection->forceFill(['last_synced_at' => now(), 'last_error_code' => null, 'last_error_message' => null, 'last_error_at' => null])->save();
+            return self::FAILURE;
         }
 
-        $this->line((bool) $this->option('dry-run') ? 'mode=dry-run' : 'mode=live');
-        $this->line('tenant='.$tenant->slug);
-        $this->line('connection='.$syncService->connectionLabel($connection));
-        foreach ([
-            'quickbooks_customers', 'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_payments',
-            'quickbooks_purchases', 'quickbooks_bills', 'quickbooks_items', 'quickbooks_attachments',
-            'customers', 'jobs', 'jobs_created', 'jobs_updated', 'items', 'documents', 'documents_created',
-            'documents_updated', 'documents_linked', 'documents_needing_review', 'lines', 'attachments', 'skipped',
-            'generator_installations_detected', 'generator_equipment_created', 'generator_equipment_updated',
-            'generator_services_detected', 'generator_services_linked', 'generator_services_needing_review',
-        ] as $key) {
-            $this->line($key.'='.(int) ($summary[$key] ?? 0));
-        }
+        try {
+            $entities = $this->entities($syncService);
+            $summary = $syncService->sync(
+                $tenant,
+                $connections->connector('quickbooks')->client($connection),
+                $entities,
+                (bool) $this->option('dry-run')
+            );
 
-        $this->line('recommended_cards=');
-        foreach ((array) ($summary['recommended_cards'] ?? []) as $card) {
-            $this->line('- '.$card['title'].' — '.$card['reason']);
-        }
+            if (! (bool) $this->option('dry-run')) {
+                $lifecycle->reconcileTenant($tenant);
+                Cache::forget('field-service:index:'.$tenant->id);
+                Cache::forget('field-service:my-day:'.$tenant->id);
+                $connection->forceFill(['last_synced_at' => now(), 'last_error_code' => null, 'last_error_message' => null, 'last_error_at' => null])->save();
+            }
 
-        return self::SUCCESS;
+            $this->line((bool) $this->option('dry-run') ? 'mode=dry-run' : 'mode=live');
+            $this->line('tenant='.$tenant->slug);
+            $this->line('connection='.$syncService->connectionLabel($connection));
+            foreach ([
+                'quickbooks_customers', 'quickbooks_customers_active', 'quickbooks_customers_inactive',
+                'quickbooks_customers_with_email', 'quickbooks_customers_missing_email',
+                'quickbooks_customer_emails_inherited', 'quickbooks_customers_with_phone',
+                'quickbooks_customers_missing_phone', 'quickbooks_customer_phones_from_mobile',
+                'quickbooks_customer_phones_from_alternate', 'quickbooks_customer_phones_inherited',
+                'quickbooks_customer_reconciliation_complete_snapshot_before',
+                'quickbooks_customer_links_local_before', 'quickbooks_customer_links_matched_before',
+                'quickbooks_customer_links_missing_before', 'quickbooks_customer_links_extra_before',
+                'quickbooks_customer_profiles_linked_before', 'quickbooks_customer_profiles_shared_before',
+                'quickbooks_customers_on_shared_profiles_before',
+                'quickbooks_customer_shared_profile_email_conflicts_before',
+                'quickbooks_customer_shared_profile_phone_conflicts_before',
+                'quickbooks_customer_emails_missing_local_before', 'quickbooks_customer_emails_different_local_before',
+                'quickbooks_customer_phones_missing_local_before', 'quickbooks_customer_phones_different_local_before',
+                'quickbooks_customer_reconciliation_complete_snapshot',
+                'quickbooks_customer_links_local', 'quickbooks_customer_links_matched',
+                'quickbooks_customer_links_missing', 'quickbooks_customer_links_extra',
+                'quickbooks_customer_profiles_linked', 'quickbooks_customer_profiles_shared',
+                'quickbooks_customers_on_shared_profiles',
+                'quickbooks_customer_shared_profile_email_conflicts',
+                'quickbooks_customer_shared_profile_phone_conflicts',
+                'quickbooks_customer_emails_expected', 'quickbooks_customer_phones_expected',
+                'quickbooks_customer_emails_missing_local', 'quickbooks_customer_emails_different_local',
+                'quickbooks_customer_phones_missing_local', 'quickbooks_customer_phones_different_local',
+                'quickbooks_customer_rows_missing_id', 'quickbooks_customer_duplicate_ids',
+                'quickbooks_invoices', 'quickbooks_estimates', 'quickbooks_payments',
+                'quickbooks_purchases', 'quickbooks_bills', 'quickbooks_items', 'quickbooks_attachments',
+                'customers', 'jobs', 'jobs_created', 'jobs_updated', 'items', 'documents', 'documents_created',
+                'documents_updated', 'documents_linked', 'documents_needing_review', 'lines', 'attachments', 'skipped',
+                'generator_installations_detected', 'generator_equipment_created', 'generator_equipment_updated',
+                'generator_services_detected', 'generator_services_linked', 'generator_services_needing_review',
+            ] as $key) {
+                $this->line($key.'='.(int) ($summary[$key] ?? 0));
+            }
+
+            $this->line('recommended_cards=');
+            foreach ((array) ($summary['recommended_cards'] ?? []) as $card) {
+                $this->line('- '.$card['title'].' — '.$card['reason']);
+            }
+
+            return self::SUCCESS;
+        } finally {
+            $lock->release();
+        }
     }
 
     protected function tenant(): ?Tenant

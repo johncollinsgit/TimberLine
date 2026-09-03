@@ -96,8 +96,14 @@ class QuickBooksFieldServiceImportService
         return 'customers';
     }
 
-    /** @param array<string,string> $row */
-    public function profileForRow(Tenant $tenant, array $row): MarketingProfile
+    /**
+     * @param  array<string,mixed>  $row
+     *
+     * Customer-entity rows are authoritative. Transaction fallback rows may fill
+     * empty profile fields, but must never replace the customer's canonical QBO
+     * contact data or the link evidence used for reconciliation.
+     */
+    public function profileForRow(Tenant $tenant, array $row, bool $authoritative = true): MarketingProfile
     {
         $externalId = $this->first($row, ['customer_id', 'id', 'name', 'customer']);
         $linkId = $this->sourceId((int) $tenant->id, $externalId ?: md5(json_encode($row) ?: ''));
@@ -116,7 +122,13 @@ class QuickBooksFieldServiceImportService
             ? $existingLink->marketingProfile()->first()
             : null;
         $profile ??= $email !== ''
-            ? MarketingProfile::query()->forTenantId((int) $tenant->id)->where('normalized_email', $email)->first()
+            ? MarketingProfile::query()
+                ->forTenantId((int) $tenant->id)
+                ->where('normalized_email', $email)
+                ->whereDoesntHave('links', fn ($links) => $links
+                    ->where('tenant_id', (int) $tenant->id)
+                    ->where('source_type', 'quickbooks_customer'))
+                ->first()
             : null;
 
         if (! $profile instanceof MarketingProfile) {
@@ -145,19 +157,35 @@ class QuickBooksFieldServiceImportService
                 'state' => $this->first($row, ['state']) ?: null,
                 'postal_code' => $this->first($row, ['zip', 'postal_code']) ?: null,
             ], static fn (mixed $value): bool => $value !== null);
+            if ($authoritative && (bool) ($row['shared_profile'] ?? false)) {
+                $updates = [];
+            }
+            if (! $authoritative) {
+                $updates = array_filter(
+                    $updates,
+                    static fn (mixed $value, string $field): bool => blank($profile->getAttribute($field)),
+                    ARRAY_FILTER_USE_BOTH
+                );
+            }
             if ($updates !== []) {
                 $profile->forceFill($updates)->save();
             }
         }
 
+        $linkValues = ['marketing_profile_id' => (int) $profile->id];
+        if ($authoritative || ! $existingLink instanceof MarketingProfileLink) {
+            $linkValues += [
+                'source_meta' => array_merge($row, [
+                    'source_record_kind' => $authoritative ? 'customer' : 'transaction_fallback',
+                ]),
+                'match_method' => $authoritative ? 'quickbooks_import' : 'quickbooks_transaction_fallback',
+                'confidence' => $authoritative ? 1 : 0.75,
+            ];
+        }
+
         MarketingProfileLink::query()->updateOrCreate(
             ['tenant_id' => (int) $tenant->id, 'source_type' => 'quickbooks_customer', 'source_id' => $linkId],
-            [
-                'marketing_profile_id' => (int) $profile->id,
-                'source_meta' => $row,
-                'match_method' => 'quickbooks_import',
-                'confidence' => 1,
-            ]
+            $linkValues
         );
 
         return $profile;
@@ -251,7 +279,7 @@ class QuickBooksFieldServiceImportService
                 'city' => (string) data_get($transaction, 'BillAddr.City', ''),
                 'state' => (string) data_get($transaction, 'BillAddr.CountrySubDivisionCode', ''),
                 'postal_code' => (string) data_get($transaction, 'BillAddr.PostalCode', ''),
-            ]);
+            ], false);
 
             $serviceAddress = $this->serviceAddress($transaction, $profile);
             $existingDocument = FieldServiceFinancialDocument::query()
@@ -763,5 +791,10 @@ class QuickBooksFieldServiceImportService
     protected function sourceId(int $tenantId, string $externalId): string
     {
         return $tenantId.':'.Str::limit(trim($externalId), 150, '');
+    }
+
+    public function quickBooksCustomerSourceId(int $tenantId, string $externalId): string
+    {
+        return $this->sourceId($tenantId, $externalId);
     }
 }

@@ -83,6 +83,10 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 - The discovery command requests Profit and Loss explicitly from January 1 through the current date and records that period alongside the aggregate. Dashboard date controls must not silently relabel a year-to-date QuickBooks report as a shorter window.
 - Do not enable payments, write-back, webhooks, CDC, QuickBooks payroll, or estimator write-back from discovery alone. The hourly scheduler may be enabled for Collins only after the dry-run, backup, two stable live imports, mapping review, and owner/team permission smoke tests pass.
 - QuickBooks documents remain separate from jobs unless source evidence supports a job link. Preserve manual jobs and imported document identities.
+- Customer reconciliation explicitly requests active and inactive QBO customers and follows every result page. It upserts tenant-scoped customer links and never deletes an Everbranch profile merely because a QBO customer is inactive or absent.
+- A new QBO customer ID does not merge into a profile that already owns a different QBO customer link merely because the email matches. Existing shared-profile collisions are reported and left unchanged for a reviewed, separately backed-up repair; the sync still refreshes each link's canonical QBO evidence without applying last-write-wins profile changes.
+- QBO Customer is the canonical contact source. Email uses `PrimaryEmailAddr`; phone uses `PrimaryPhone`, then `Mobile`, then `AlternatePhone`. A subcustomer marked `BillWithParent` with a missing value may use the corresponding value from its QBO `ParentRef`, with the fallback source retained in link metadata. Missing QBO values remain missing unless a QBO transaction supplies a real fallback value; placeholder contacts must never be invented.
+- Invoice and estimate `BillEmail` may fill an empty profile created before its Customer record arrives, but transaction imports must not replace canonical Customer contact fields or canonical customer link metadata.
 - Production discovery on 2026-07-13 verified the Collins OAuth connection and completed a full read-only audit. It found a mature accounting history with hundreds of customers, extensive estimates/invoices, a large purchase history, repeated price patterns, open receivables, and owner-level wage/contract-labor signals. Keep exact source records and financial totals in encrypted tenant data and owner-facing reports rather than this repository.
 - The first legacy sync preview was intentionally blocked because description text alone would have classified nearly every accounting document as a job. `QuickBooksJobEvidenceClassifier` now requires a QuickBooks job/subcustomer, project reference, distinct service address, explicit memo/private note, or service-dated line. Description-only documents import into the owner review queue and remain searchable without creating jobs.
 - Once a transaction independently qualifies as operational work, its job site uses QuickBooks Ship To when present, preserves an already confirmed job address when Ship To is absent, and then falls back to Bill To or the imported customer address. That fallback does not itself qualify a document as a job.
@@ -100,6 +104,8 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 ```bash
 php artisan field-service:audit-quickbooks --tenant=collins-electric --full --dry-run
 php artisan field-service:audit-quickbooks --tenant=collins-electric --full
+php artisan field-service:sync-quickbooks --tenant=collins-electric --entities=customers --dry-run
+php artisan field-service:sync-quickbooks --tenant=collins-electric --entities=customers
 php artisan field-service:sync-quickbooks --tenant=collins-electric --dry-run
 php artisan field-service:sync-quickbooks --tenant=collins-electric
 php artisan field-service:reconcile-lifecycle --tenant=collins-electric --dry-run
@@ -113,5 +119,9 @@ php artisan collins-electric:import-written-sms-consent --confirm-written-consen
 ```
 
 Run the full dry-run audit first, review aggregate counts and errors, take a database backup, then run the snapshot and live sync. Run the live sync a second time and confirm stable row counts with no duplicates.
+
+For a customer-only release, run the customer dry-run and require `quickbooks_customer_rows_missing_id=0` and `quickbooks_customer_duplicate_ids=0`. Review remote active/inactive and missing-contact counts, plus link matched/missing/extra, shared-profile collision, and contact mismatch counts. After the backup, run the live customer command and require `quickbooks_customer_links_missing=0`; rerun it and confirm the link count is stable. Canonical contact mismatches on unshared profiles should be zero. Shared profiles require a separately reviewed repair and must not be split automatically. “Extra” links are reported for review and retained rather than deleted. The shared connection lock prevents manual, UI, and scheduled syncs from overlapping.
+
+`--dry-run` does not write customer, job, or financial rows. If the access token is due, constructing the QBO client can still rotate and persist OAuth credentials; coordinate that credential maintenance before treating a production dry-run as completely database-read-only.
 
 The scheduler runs enabled connections hourly at minute 35 and performs a rate-limited full reconciliation Sunday at 02:50. Each connection has an overlap lock and checkpoint; failed runs do not advance the checkpoint.
