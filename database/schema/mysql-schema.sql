@@ -1859,10 +1859,13 @@ CREATE TABLE `customer_equipment` (
   `last_serviced_at` date DEFAULT NULL,
   `next_service_due_at` date DEFAULT NULL,
   `status` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `external_source` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `external_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `equipment_tenant_external_unique` (`tenant_id`,`external_source`,`external_id`),
   KEY `customer_equipment_marketing_profile_id_foreign` (`marketing_profile_id`),
   KEY `customer_equipment_assigned_user_id_foreign` (`assigned_user_id`),
   KEY `equipment_tenant_customer_idx` (`tenant_id`,`marketing_profile_id`),
@@ -10409,3 +10412,6 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (255,'2026_08_13_16
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (256,'2026_08_19_140000_create_modern_forestry_fundraiser_invoice_preparation_tables',6);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (257,'2026_08_20_120000_add_reporting_destination_fields_to_orders_table',7);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (258,'2026_08_24_120000_add_archival_to_marketing_profiles',8);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (259,'2026_08_25_150000_add_job_update_sms_setting_to_field_service_reminder_settings',9);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (260,'2026_09_02_160000_enable_collins_messaging_branch',9);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (261,'2026_09_03_150000_add_quickbooks_source_to_customer_equipment',9);
