@@ -6,6 +6,48 @@ use Illuminate\Support\Facades\Schema;
 
 uses(Tests\TestCase::class);
 
+it('resumes QuickBooks equipment source columns after MySQL retained the columns before the unique index', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('customer_equipment')) {
+        Schema::create('customer_equipment', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('tenant_id');
+            $table->string('status', 40)->default('active');
+        });
+    }
+
+    if (Schema::hasIndex('customer_equipment', 'equipment_tenant_external_unique')) {
+        Schema::table('customer_equipment', function (Blueprint $table): void {
+            $table->dropUnique('equipment_tenant_external_unique');
+        });
+    }
+    foreach (['external_source', 'external_id'] as $column) {
+        if (Schema::hasColumn('customer_equipment', $column)) {
+            Schema::table('customer_equipment', function (Blueprint $table) use ($column): void {
+                $table->dropColumn($column);
+            });
+        }
+    }
+
+    // Forge completed the two additive columns but stopped before the unique
+    // identity index. A retry must add only the missing index and remain safe.
+    Schema::table('customer_equipment', function (Blueprint $table): void {
+        $table->string('external_source', 80)->nullable()->after('status');
+        $table->string('external_id', 255)->nullable()->after('external_source');
+    });
+
+    $migration = require database_path('migrations/2026_09_03_150000_add_quickbooks_source_to_customer_equipment.php');
+    $migration->up();
+    $migration->up();
+
+    expect(Schema::hasColumn('customer_equipment', 'external_source'))->toBeTrue()
+        ->and(Schema::hasColumn('customer_equipment', 'external_id'))->toBeTrue()
+        ->and(Schema::hasIndex('customer_equipment', 'equipment_tenant_external_unique'))->toBeTrue();
+});
+
 it('resumes Modern Forestry fundraiser preparation after the order table is retained', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');
