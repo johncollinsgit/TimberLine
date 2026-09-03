@@ -1,5 +1,9 @@
 # SYSTEM SNAPSHOT
 
+## Collins QuickBooks generator history (2026-09-03)
+
+- Read-only QuickBooks invoice syncs now promote only clear whole-generator installation evidence into tenant-scoped equipment, retain generator-related connection/transfer work for review, and attach unambiguous annual generator service invoices to the matching equipment history. The equipment board keeps the last service and schedules the next annual due date; the daily scanner creates one-month-out work and guarded alerts. The source audit is `docs/operations/collins-generator-invoice-history-2026-09-03.md`.
+
 ## Mobile field files and material requests (2026-09-03)
 
 - The native job surface uses Overview, Job notes, Materials, and Pics/Drawings; the Tasks tab and My Day task feed are no longer part of the mobile experience.

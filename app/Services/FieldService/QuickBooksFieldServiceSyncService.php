@@ -14,6 +14,7 @@ class QuickBooksFieldServiceSyncService
 {
     public function __construct(
         protected QuickBooksFieldServiceImportService $importService,
+        protected QuickBooksGeneratorEquipmentService $generatorEquipment,
         protected WorkspaceAssetService $assets,
         protected FieldServiceJobLifecycleService $lifecycle,
     ) {}
@@ -31,6 +32,8 @@ class QuickBooksFieldServiceSyncService
                 'quickbooks_customers' => 0, 'quickbooks_invoices' => 0, 'quickbooks_estimates' => 0,
                 'quickbooks_payments' => 0, 'quickbooks_purchases' => 0, 'quickbooks_bills' => 0,
                 'quickbooks_items' => 0, 'quickbooks_attachments' => 0,
+                'generator_installations_detected' => 0, 'generator_equipment_created' => 0, 'generator_equipment_updated' => 0,
+                'generator_services_detected' => 0, 'generator_services_linked' => 0, 'generator_services_needing_review' => 0,
             ];
 
         $fetch = fn (string $entity): array => $updatedSince
@@ -73,6 +76,9 @@ class QuickBooksFieldServiceSyncService
                 $summary = $this->mergeSummary($summary, $this->importService->importQuickBooksTransaction($tenant, $invoice, 'invoice', $dryRun, $knownJobCustomerIds));
             }
             $summary['quickbooks_invoices'] = count($rows);
+            foreach ($this->generatorEquipment->syncInvoices($tenant, $rows, $dryRun) as $key => $value) {
+                $summary[$key] = (int) ($summary[$key] ?? 0) + $value;
+            }
         }
 
         foreach (['payments' => 'Payment', 'purchases' => 'Purchase', 'bills' => 'Bill'] as $key => $entity) {
