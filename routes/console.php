@@ -174,6 +174,27 @@ Schedule::command('marketing:send-modern-forestry-bag-reminders', [
     ->withoutOverlapping(120)
     ->runInBackground();
 
+// Native Everbranch replacement for Happy Birthday: issue the annual reward
+// at the prior 10:00 AM cadence, then send one consent-gated reminder only
+// for unredeemed expiring code rewards. Each delivery is idempotent.
+Schedule::command('marketing:issue-birthday-rewards', [
+    '--tenant-id' => 1,
+    '--limit' => 500,
+])
+    ->dailyAt('10:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
+Schedule::command('marketing:send-birthday-followups', [
+    '--tenant-id' => 1,
+    '--limit' => 500,
+])
+    ->dailyAt('10:15')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
 // Zap-style internal workflow automations (Asana -> Google Calendar, etc).
 Schedule::command('automation:dispatch')
     ->everyMinute()
