@@ -81,6 +81,6 @@ return [
     ],
     '2026_09_03_201000_add_time_hours_reporting_index.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
-        'scenarios' => ['time hours reporting index retained before Laravel records the migration batch'],
+        'scenarios' => ['incomplete time-session source columns skipped safely and reporting index retained before Laravel records the migration batch'],
     ],
 ];

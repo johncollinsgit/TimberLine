@@ -692,7 +692,7 @@ it('resumes material requester attribution after its column is retained', functi
         ))->toBeTrue();
 });
 
-it('resumes after the time hours reporting index is retained', function (): void {
+it('skips incomplete time session tables and resumes after the reporting index is retained', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');
     }
@@ -700,7 +700,24 @@ it('resumes after the time hours reporting index is retained', function (): void
     if (! Schema::hasTable('field_service_time_sessions')) {
         Schema::create('field_service_time_sessions', function (Blueprint $table): void {
             $table->id();
+        });
+    }
+
+    $migration = require database_path('migrations/2026_09_03_201000_add_time_hours_reporting_index.php');
+    if (! Schema::hasColumn('field_service_time_sessions', 'tenant_id')
+        || ! Schema::hasColumn('field_service_time_sessions', 'clocked_in_at')) {
+        $migration->up();
+        $migration->up();
+        expect(Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx'))->toBeFalse();
+    }
+
+    if (! Schema::hasColumn('field_service_time_sessions', 'tenant_id')) {
+        Schema::table('field_service_time_sessions', function (Blueprint $table): void {
             $table->unsignedBigInteger('tenant_id');
+        });
+    }
+    if (! Schema::hasColumn('field_service_time_sessions', 'clocked_in_at')) {
+        Schema::table('field_service_time_sessions', function (Blueprint $table): void {
             $table->timestamp('clocked_in_at');
         });
     }
@@ -711,13 +728,10 @@ it('resumes after the time hours reporting index is retained', function (): void
         });
     }
 
-    // Simulate MySQL retaining the index while the migration row is absent.
-    Schema::table('field_service_time_sessions', function (Blueprint $table): void {
-        $table->index(['tenant_id', 'clocked_in_at'], 'fs_time_tenant_clocked_idx');
-    });
-
-    $migration = require database_path('migrations/2026_09_03_201000_add_time_hours_reporting_index.php');
+    // Build the index only after the source columns exist, then simulate MySQL
+    // retaining that DDL while the migration row is absent by invoking it again.
     $migration->up();
+    expect(Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx'))->toBeTrue();
     $migration->up();
 
     expect(Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx'))->toBeTrue();
