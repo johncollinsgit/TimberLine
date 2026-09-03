@@ -62,11 +62,14 @@ class BirthdayEmailComposerService
     /** @param array<string,mixed> $config @param array<string,mixed> $extra
      * @return array{html:string,sections:array<int,array<string,mixed>>}
      */
-    public function renderForDelivery(string $subject, array $config, MarketingProfile $profile, array $extra): array
+    public function renderForDelivery(string $subject, array $config, MarketingProfile $profile, array $extra, string $templateKey = 'birthday_email_primary'): array
     {
-        $sections = $this->composer->normalizeSections($config['birthday_email_sections'] ?? self::defaultSections());
+        $defaultSections = $templateKey === 'birthday_email_followup'
+            ? self::followupSections()
+            : self::defaultSections();
+        $sections = $this->composer->normalizeSections($config['birthday_email_sections'] ?? $defaultSections);
         if ($sections === []) {
-            $sections = self::defaultSections();
+            $sections = $defaultSections;
         }
         $rendered = $this->renderValue($sections, $profile, $extra);
         $composed = $this->composer->compose($subject, '', 'sections', $rendered, null);
@@ -89,18 +92,29 @@ class BirthdayEmailComposerService
     public static function defaultSections(): array
     {
         $site = 'https://theforestrystudio.com';
-        $hero = 'https://cdn.shopify.com/s/files/1/2081/2479/files/SaleImage-darktheme_5f5f655b-77a9-49f5-b699-037f71dee79e.png?v=1762446943';
+        $hero = 'https://backstage.theforestrystudio.com/images/marketing/birthday-mountain-candle-hero.png';
         $candle = 'https://cdn.shopify.com/s/files/1/2081/2479/files/IMG_1086.jpg?v=1710945776';
 
         return [
-            ['id' => 'birthday-hero', 'type' => 'image', 'imageUrl' => $hero, 'alt' => 'Modern Forestry candles', 'href' => $site.'/collections/all', 'padding' => '0 0 18px 0'],
+            ['id' => 'birthday-hero', 'type' => 'image', 'imageUrl' => $hero, 'alt' => 'A warm Modern Forestry candle in a mountain cabin', 'href' => $site.'/collections/all', 'padding' => '0 0 18px 0'],
             ['id' => 'birthday-heading', 'type' => 'heading', 'text' => 'Happy Birthday, {{ first_name }}!', 'align' => 'center'],
             ['id' => 'birthday-intro', 'type' => 'text', 'html' => 'We hope your day feels warm, bright, and entirely yours.'],
             ['id' => 'birthday-candle', 'type' => 'image', 'imageUrl' => $candle, 'alt' => 'Hand-poured Modern Forestry candle', 'href' => $site.'/collections/all', 'padding' => '8px 0 18px 0'],
             ['id' => 'birthday-reward-heading', 'type' => 'heading', 'text' => 'Your birthday gift is ready', 'align' => 'center'],
-            ['id' => 'birthday-reward-copy', 'type' => 'text', 'html' => 'Use code <strong>{{ coupon_code }}</strong> for {{ reward_value }} off your next order.'],
-            ['id' => 'birthday-cta', 'type' => 'button', 'label' => 'Choose your candle', 'href' => '{{ reward_apply_url }}', 'align' => 'center'],
+            ['id' => 'birthday-reward-copy', 'type' => 'text', 'html' => '{{ birthday_reward_message }}'],
+            ['id' => 'birthday-cta', 'type' => 'button', 'label' => '{{ birthday_cta_label }}', 'href' => '{{ reward_apply_url }}', 'align' => 'center'],
         ];
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public static function followupSections(): array
+    {
+        $sections = self::defaultSections();
+        $sections[1]['text'] = 'Your birthday gift is still waiting, {{ first_name }}';
+        $sections[2]['html'] = 'There is still time to make your birthday gift part of a slow, cozy evening.';
+        $sections[4]['text'] = 'A little birthday time remains';
+
+        return $sections;
     }
 
     /** @return array<string,mixed> */
