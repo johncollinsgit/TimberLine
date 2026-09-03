@@ -13,6 +13,7 @@ class FieldServiceMaterial extends Model
     protected $fillable = [
         'tenant_id',
         'field_service_job_id',
+        'requested_by_user_id',
         'field_material_catalog_item_id',
         'name',
         'quantity',
@@ -30,6 +31,7 @@ class FieldServiceMaterial extends Model
     protected $casts = [
         'tenant_id' => 'integer',
         'field_service_job_id' => 'integer',
+        'requested_by_user_id' => 'integer',
         'field_material_catalog_item_id' => 'integer',
         'quantity' => 'decimal:2',
         'pulled_quantity' => 'decimal:2',
@@ -41,6 +43,11 @@ class FieldServiceMaterial extends Model
     public function job(): BelongsTo
     {
         return $this->belongsTo(FieldServiceJob::class, 'field_service_job_id');
+    }
+
+    public function requestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by_user_id');
     }
 
     public function catalogItem(): BelongsTo

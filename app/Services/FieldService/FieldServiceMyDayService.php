@@ -4,6 +4,7 @@ namespace App\Services\FieldService;
 
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNotification;
+use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceReminderSetting;
 use App\Models\FieldServiceTask;
 use App\Models\Tenant;
@@ -64,6 +65,24 @@ class FieldServiceMyDayService
         $notifications = FieldServiceJobNotification::query()->forTenantId((int) $tenant->id)
             ->where('user_id', (int) $user->id)->where('channel', 'in_app')
             ->with('job:id,tenant_id,title')->latest()->limit(20)->get();
+        $canManage = $this->access->canManageJobs($user, $tenant);
+        $requestedMaterials = collect();
+        $requestedMaterialsCount = 0;
+        if ($canManage) {
+            $requestedMaterialQuery = FieldServiceMaterial::query()->forTenantId((int) $tenant->id)
+                ->where('status', 'needed')
+                ->whereNotNull('field_service_job_id')
+                ->where(function (Builder $requests): void {
+                    $requests->whereNotNull('requested_by_user_id')
+                        ->orWhere(function (Builder $legacy): void {
+                            $legacy->whereNull('external_source')->whereNull('field_material_catalog_item_id');
+                        });
+                });
+            $requestedMaterialsCount = (clone $requestedMaterialQuery)->count();
+            $requestedMaterials = $requestedMaterialQuery
+                ->with(['job:id,tenant_id,title', 'requestedBy:id,name'])
+                ->latest('created_at')->latest('id')->limit(25)->get();
+        }
 
         return [
             'contract_version' => 5,
@@ -77,6 +96,7 @@ class FieldServiceMyDayService
                 'tasks' => $tasks->count(),
                 'attention' => $attention->count(),
                 'unread' => $notifications->whereNull('read_at')->count(),
+                'material_requests' => $requestedMaterialsCount,
             ],
             'today_jobs' => $today->map(fn (FieldServiceJob $job): array => $this->job($job))->values(),
             'upcoming_jobs' => $upcoming->map(fn (FieldServiceJob $job): array => $this->job($job))->values(),
@@ -89,6 +109,20 @@ class FieldServiceMyDayService
             'owner_metrics' => $this->financialAccess->allows($user, $tenant)
                 ? $this->ownerMetrics->build($tenant, $period)
                 : null,
+            'requested_materials' => $requestedMaterials->map(fn (FieldServiceMaterial $material): array => [
+                'id' => (int) $material->id,
+                'name' => (string) $material->name,
+                'quantity' => (float) $material->quantity,
+                'unit' => $material->unit,
+                'status' => (string) $material->status,
+                'notes' => $material->notes,
+                'job' => $material->job ? ['id' => (int) $material->job->id, 'title' => (string) $material->job->title] : null,
+                'requester' => $material->requestedBy ? ['id' => (int) $material->requestedBy->id, 'name' => (string) $material->requestedBy->name] : null,
+                'created_at' => $material->created_at?->toIso8601String(),
+                'destination' => ['kind' => 'field_service_job', 'id' => (int) $material->field_service_job_id, 'tab' => 'materials'],
+                'can_purchase' => true,
+                'can_delete' => true,
+            ])->values(),
             'attention' => $attention->map(fn (FieldServiceJob $job): array => $this->job($job))->values(),
             'notifications' => $notifications->map(fn (FieldServiceJobNotification $notification): array => [
                 'id' => (int) $notification->id, 'event_type' => $notification->event_type, 'read' => (bool) $notification->read_at,

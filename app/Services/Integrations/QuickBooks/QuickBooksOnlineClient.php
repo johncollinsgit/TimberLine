@@ -21,12 +21,36 @@ class QuickBooksOnlineClient
         return $this->allMatching($entity, null, $pageSize);
     }
 
+    /**
+     * QuickBooks name-list queries only return active records by default. Customer
+     * reconciliation must explicitly request both states so an inactive customer
+     * does not silently disappear from Everbranch.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function allCustomers(int $pageSize = 100): array
+    {
+        return $this->allMatching('Customer', 'Active IN (true, false)', $pageSize);
+    }
+
     /** @return array<int,array<string,mixed>> */
     public function allSince(string $entity, CarbonInterface $since, int $pageSize = 100): array
     {
         $timestamp = $since->copy()->utc()->format('Y-m-d\TH:i:sP');
 
         return $this->allMatching($entity, "MetaData.LastUpdatedTime > '{$timestamp}'", $pageSize);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function allCustomersSince(CarbonInterface $since, int $pageSize = 100): array
+    {
+        $timestamp = $since->copy()->utc()->format('Y-m-d\TH:i:sP');
+
+        return $this->allMatching(
+            'Customer',
+            "Active IN (true, false) AND MetaData.LastUpdatedTime > '{$timestamp}'",
+            $pageSize
+        );
     }
 
     /** @return array<int,array<string,mixed>> */

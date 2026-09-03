@@ -9,6 +9,7 @@ use App\Models\FieldServiceMaterial;
 use App\Models\FieldServicePriceBookItem;
 use App\Models\IntegrationConnection;
 use App\Models\MarketingProfile;
+use App\Models\MarketingProfileLink;
 use App\Models\QuickBooksAuditRun;
 use App\Models\QuickBooksSourceRecord;
 use App\Models\Tenant;
@@ -17,10 +18,13 @@ use App\Models\User;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\QuickBooksDiscoveryAuditService;
 use App\Services\FieldService\QuickBooksFieldServiceImportService;
+use App\Services\FieldService\QuickBooksFieldServiceSyncService;
 use App\Services\FieldService\QuickBooksGeneratorEquipmentService;
 use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
 use App\Services\Search\Providers\FieldServiceSearchProvider;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
@@ -347,6 +351,316 @@ test('quickbooks generator invoices create equipment and link a later annual ser
         ->and($equipment->last_serviced_at?->toDateString())->toBe('2025-01-13')
         ->and($equipment->next_service_due_at?->toDateString())->toBe('2026-01-13')
         ->and(FieldServiceJob::query()->where('customer_equipment_id', $equipment->id)->where('operational_status', 'complete')->exists())->toBeTrue();
+});
+
+test('quickbooks customer queries include active and inactive records across every page', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Paged Electric', 'slug' => 'paged-electric']);
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'quickbooks',
+        'external_account_id' => hash_hmac('sha256', 'realm', (string) config('app.key')),
+        'external_account_secret' => 'realm',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'qbo-access-token',
+        'refresh_token' => 'qbo-refresh-token',
+        'expires_at' => now()->addHour(),
+    ]);
+    $queries = [];
+    Http::fake(function (Request $request) use (&$queries) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $parameters);
+        $query = (string) ($parameters['query'] ?? '');
+        $queries[] = $query;
+
+        return str_contains($query, 'startposition 1')
+            ? Http::response(['QueryResponse' => ['Customer' => [
+                ['Id' => '1', 'DisplayName' => 'First', 'Active' => true],
+                ['Id' => '2', 'DisplayName' => 'Second', 'Active' => false],
+            ]]], 200)
+            : Http::response(['QueryResponse' => ['Customer' => [
+                ['Id' => '3', 'DisplayName' => 'Third', 'Active' => true],
+            ]]], 200);
+    });
+
+    $client = new QuickBooksOnlineClient($connection, 'https://sandbox-quickbooks.api.intuit.com');
+    $full = $client->allCustomers(2);
+    $incremental = $client->allCustomersSince(Carbon::parse('2026-07-18T02:00:00Z'), 2);
+
+    expect(collect($full)->pluck('Id')->all())->toBe(['1', '2', '3'])
+        ->and(collect($incremental)->pluck('Id')->all())->toBe(['1', '2', '3'])
+        ->and($queries)->toHaveCount(4)
+        ->and(collect($queries)->every(fn (string $query): bool => str_contains($query, 'Active IN (true, false)')))->toBeTrue()
+        ->and(collect($queries)->filter(fn (string $query): bool => str_contains($query, 'MetaData.LastUpdatedTime'))->count())->toBe(2)
+        ->and(collect($queries)->filter(fn (string $query): bool => str_contains($query, 'startposition 3'))->count())->toBe(2);
+});
+
+test('customer sync preserves canonical contacts metadata and uses only qbo contact fallbacks', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Contact Electric', 'slug' => 'contact-electric']);
+    enableQuickBooksBranchForApiTest($tenant);
+    IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'quickbooks',
+        'external_account_id' => hash_hmac('sha256', 'contact-realm', (string) config('app.key')),
+        'external_account_secret' => 'contact-realm',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'qbo-access-token',
+        'refresh_token' => 'qbo-refresh-token',
+        'expires_at' => now()->addHour(),
+    ]);
+
+    Http::fake(function (Request $request) {
+        $url = urldecode($request->url());
+        expect($url)->toContain('from Customer')
+            ->toContain('Active IN (true, false)');
+
+        return Http::response(['QueryResponse' => ['Customer' => [
+            [
+                'Id' => 'PARENT', 'DisplayName' => 'Parent Customer',
+                'PrimaryEmailAddr' => ['Address' => 'parent@example.com'],
+                'PrimaryPhone' => ['FreeFormNumber' => '555-1000'],
+            ],
+            [
+                'Id' => 'CHILD', 'DisplayName' => 'Child Project',
+                'ParentRef' => ['value' => 'PARENT'], 'Job' => true, 'BillWithParent' => true,
+            ],
+            [
+                'Id' => 'MOBILE', 'DisplayName' => 'Mobile Customer',
+                'Mobile' => ['FreeFormNumber' => '555-2000'],
+            ],
+            [
+                'Id' => 'ALTERNATE', 'DisplayName' => 'Inactive Alternate Customer', 'Active' => false,
+                'AlternatePhone' => ['FreeFormNumber' => '555-3000'],
+            ],
+            [
+                'Id' => 'CANONICAL', 'DisplayName' => 'Canonical Customer',
+                'PrimaryEmailAddr' => ['Address' => 'canonical@example.com'],
+                'PrimaryPhone' => ['FreeFormNumber' => '555-4000'],
+            ],
+        ]]], 200);
+    });
+
+    $this->artisan('field-service:sync-quickbooks', [
+        '--tenant' => $tenant->slug,
+        '--entities' => 'customers',
+    ])
+        ->assertSuccessful()
+        ->expectsOutputToContain('quickbooks_customers=5')
+        ->expectsOutputToContain('quickbooks_customers_active=4')
+        ->expectsOutputToContain('quickbooks_customers_inactive=1')
+        ->expectsOutputToContain('quickbooks_customer_emails_inherited=1')
+        ->expectsOutputToContain('quickbooks_customer_phones_from_mobile=1')
+        ->expectsOutputToContain('quickbooks_customer_phones_from_alternate=1')
+        ->expectsOutputToContain('quickbooks_customer_phones_inherited=1')
+        ->expectsOutputToContain('quickbooks_customer_links_missing_before=5')
+        ->expectsOutputToContain('quickbooks_customer_links_missing=0')
+        ->expectsOutputToContain('quickbooks_customer_profiles_shared=0');
+
+    $sourceId = fn (string $id): string => $tenant->id.':'.$id;
+    $childLink = MarketingProfileLink::query()->forTenantId($tenant->id)
+        ->where('source_type', 'quickbooks_customer')->where('source_id', $sourceId('CHILD'))->firstOrFail();
+    $mobileLink = MarketingProfileLink::query()->forTenantId($tenant->id)
+        ->where('source_type', 'quickbooks_customer')->where('source_id', $sourceId('MOBILE'))->firstOrFail();
+    $alternateLink = MarketingProfileLink::query()->forTenantId($tenant->id)
+        ->where('source_type', 'quickbooks_customer')->where('source_id', $sourceId('ALTERNATE'))->firstOrFail();
+    $canonicalLink = MarketingProfileLink::query()->forTenantId($tenant->id)
+        ->where('source_type', 'quickbooks_customer')->where('source_id', $sourceId('CANONICAL'))->firstOrFail();
+    $parentLink = MarketingProfileLink::query()->forTenantId($tenant->id)
+        ->where('source_type', 'quickbooks_customer')->where('source_id', $sourceId('PARENT'))->firstOrFail();
+
+    expect(data_get($childLink->source_meta, 'email_source'))->toBe('parent_primary_email')
+        ->and(data_get($childLink->source_meta, 'phone_source'))->toBe('parent_primary_phone')
+        ->and($childLink->marketingProfile()->firstOrFail()->email)->toBe('parent@example.com')
+        ->and($childLink->marketing_profile_id)->not->toBe($parentLink->marketing_profile_id)
+        ->and(data_get($mobileLink->source_meta, 'phone_source'))->toBe('mobile')
+        ->and($mobileLink->marketingProfile()->firstOrFail()->phone)->toBe('555-2000')
+        ->and(data_get($alternateLink->source_meta, 'phone_source'))->toBe('alternate_phone')
+        ->and(data_get($alternateLink->source_meta, 'active'))->toBeFalse()
+        ->and(data_get($canonicalLink->source_meta, 'source_record_kind'))->toBe('customer');
+
+    app(QuickBooksFieldServiceImportService::class)->importQuickBooksTransaction($tenant, [
+        'Id' => 'INV-CANONICAL',
+        'CustomerRef' => ['value' => 'CANONICAL', 'name' => 'Invoice Alias'],
+        'BillEmail' => ['Address' => 'invoice-only@example.com'],
+        'BillAddr' => ['Line1' => 'Transaction Address'],
+        'TotalAmt' => 100,
+        'Balance' => 100,
+    ], 'invoice');
+
+    $canonicalLink->refresh();
+    $canonicalProfile = $canonicalLink->marketingProfile()->firstOrFail();
+    expect($canonicalProfile->email)->toBe('canonical@example.com')
+        ->and($canonicalProfile->phone)->toBe('555-4000')
+        ->and(data_get($canonicalLink->source_meta, 'email'))->toBe('canonical@example.com')
+        ->and(data_get($canonicalLink->source_meta, 'source_record_kind'))->toBe('customer');
+
+    app(QuickBooksFieldServiceImportService::class)->importQuickBooksTransaction($tenant, [
+        'Id' => 'INV-FALLBACK',
+        'CustomerRef' => ['value' => 'FALLBACK', 'name' => 'Fallback Customer'],
+        'BillEmail' => ['Address' => 'document-evidence@example.com'],
+        'TotalAmt' => 50,
+        'Balance' => 50,
+    ], 'invoice');
+    $fallbackLink = MarketingProfileLink::query()->forTenantId($tenant->id)
+        ->where('source_type', 'quickbooks_customer')->where('source_id', $sourceId('FALLBACK'))->firstOrFail();
+    expect($fallbackLink->marketingProfile()->firstOrFail()->email)->toBe('document-evidence@example.com')
+        ->and(data_get($fallbackLink->source_meta, 'source_record_kind'))->toBe('transaction_fallback');
+});
+
+test('manual quickbooks sync shares the scheduler connection lock', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Locked Electric', 'slug' => 'locked-electric']);
+    enableQuickBooksBranchForApiTest($tenant);
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'quickbooks',
+        'external_account_id' => hash_hmac('sha256', 'locked-realm', (string) config('app.key')),
+        'external_account_secret' => 'locked-realm',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'qbo-access-token',
+        'refresh_token' => 'qbo-refresh-token',
+        'expires_at' => now()->addHour(),
+    ]);
+    Http::preventStrayRequests();
+    $lock = Cache::lock('quickbooks-sync:'.$connection->id, 60);
+    expect($lock->get())->toBeTrue();
+
+    try {
+        $this->artisan('field-service:sync-quickbooks', [
+            '--tenant' => $tenant->slug,
+            '--entities' => 'customers',
+        ])
+            ->assertFailed()
+            ->expectsOutputToContain('already running');
+    } finally {
+        $lock->release();
+    }
+
+    Http::assertNothingSent();
+});
+
+test('incremental customer sync includes inactive changes without treating untouched links as extras', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Incremental Electric', 'slug' => 'incremental-electric']);
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'quickbooks',
+        'external_account_id' => hash_hmac('sha256', 'incremental-realm', (string) config('app.key')),
+        'external_account_secret' => 'incremental-realm',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'qbo-access-token',
+        'refresh_token' => 'qbo-refresh-token',
+        'expires_at' => now()->addHour(),
+    ]);
+    $import = app(QuickBooksFieldServiceImportService::class);
+    $import->profileForRow($tenant, [
+        'customer_id' => 'PARENT',
+        'customer' => 'Existing Parent',
+        'email' => 'parent@example.com',
+        'email_source' => 'primary_email',
+        'phone' => '555-5000',
+        'phone_source' => 'primary_phone',
+        'active' => true,
+    ]);
+    $import->profileForRow($tenant, [
+        'customer_id' => 'UNTOUCHED',
+        'customer' => 'Untouched Customer',
+        'email' => 'untouched@example.com',
+        'email_source' => 'primary_email',
+        'phone' => '',
+        'phone_source' => 'missing',
+        'active' => true,
+    ]);
+
+    Http::fake(function (Request $request) {
+        $url = urldecode($request->url());
+        expect($url)->toContain('Active IN (true, false)')
+            ->toContain('MetaData.LastUpdatedTime');
+
+        return Http::response(['QueryResponse' => ['Customer' => [[
+            'Id' => 'CHANGED-CHILD',
+            'DisplayName' => 'Changed Child',
+            'Active' => false,
+            'ParentRef' => ['value' => 'PARENT'],
+            'Job' => true,
+            'BillWithParent' => true,
+        ]]]], 200);
+    });
+
+    $summary = app(QuickBooksFieldServiceSyncService::class)->sync(
+        $tenant,
+        new QuickBooksOnlineClient($connection, 'https://sandbox-quickbooks.api.intuit.com'),
+        ['customers'],
+        false,
+        Carbon::parse('2026-07-18T02:00:00Z')
+    );
+
+    expect($summary['quickbooks_customers'])->toBe(1)
+        ->and($summary['quickbooks_customers_inactive'])->toBe(1)
+        ->and($summary['quickbooks_customer_emails_inherited'])->toBe(1)
+        ->and($summary['quickbooks_customer_phones_inherited'])->toBe(1)
+        ->and($summary['quickbooks_customer_reconciliation_complete_snapshot'])->toBe(0)
+        ->and($summary['quickbooks_customer_links_missing_before'])->toBe(1)
+        ->and($summary['quickbooks_customer_links_missing'])->toBe(0)
+        ->and($summary['quickbooks_customer_links_extra'])->toBe(0)
+        ->and(MarketingProfileLink::query()->forTenantId($tenant->id)
+            ->where('source_type', 'quickbooks_customer')->count())->toBe(3);
+
+    $childLink = MarketingProfileLink::query()->forTenantId($tenant->id)
+        ->where('source_type', 'quickbooks_customer')
+        ->where('source_id', $tenant->id.':CHANGED-CHILD')
+        ->firstOrFail();
+    expect(data_get($childLink->source_meta, 'email_source'))->toBe('parent_primary_email')
+        ->and(data_get($childLink->source_meta, 'phone_source'))->toBe('parent_primary_phone')
+        ->and(data_get($childLink->source_meta, 'active'))->toBeFalse();
+});
+
+test('customer reconciliation reports and does not rewrite an existing shared profile collision', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Collision Electric', 'slug' => 'collision-electric']);
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'quickbooks',
+        'external_account_id' => hash_hmac('sha256', 'collision-realm', (string) config('app.key')),
+        'external_account_secret' => 'collision-realm',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'qbo-access-token',
+        'refresh_token' => 'qbo-refresh-token',
+        'expires_at' => now()->addHour(),
+    ]);
+    $profile = app(QuickBooksFieldServiceImportService::class)->profileForRow($tenant, [
+        'customer_id' => 'A', 'customer' => 'Original Identity',
+        'email' => 'shared@example.com', 'phone' => '555-9000',
+    ]);
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'source_type' => 'quickbooks_customer',
+        'source_id' => $tenant->id.':B',
+        'source_meta' => ['customer_id' => 'B', 'source_record_kind' => 'transaction_fallback'],
+        'match_method' => 'quickbooks_transaction_fallback',
+        'confidence' => 0.75,
+    ]);
+    Http::fake(fn () => Http::response(['QueryResponse' => ['Customer' => [
+        [
+            'Id' => 'A', 'DisplayName' => 'Changed A',
+            'PrimaryEmailAddr' => ['Address' => 'shared@example.com'],
+            'PrimaryPhone' => ['FreeFormNumber' => '555-1000'],
+        ],
+        [
+            'Id' => 'B', 'DisplayName' => 'Changed B',
+            'PrimaryEmailAddr' => ['Address' => 'shared@example.com'],
+            'PrimaryPhone' => ['FreeFormNumber' => '555-2000'],
+        ],
+    ]]], 200));
+
+    $summary = app(QuickBooksFieldServiceSyncService::class)->sync(
+        $tenant,
+        new QuickBooksOnlineClient($connection, 'https://sandbox-quickbooks.api.intuit.com'),
+        ['customers']
+    );
+
+    expect($summary['quickbooks_customer_profiles_shared'])->toBe(1)
+        ->and($summary['quickbooks_customers_on_shared_profiles'])->toBe(2)
+        ->and($summary['quickbooks_customer_shared_profile_phone_conflicts'])->toBe(1)
+        ->and($profile->fresh()->first_name)->toBe('Original')
+        ->and($profile->fresh()->phone)->toBe('555-9000')
+        ->and(data_get(MarketingProfileLink::query()->where('source_id', $tenant->id.':B')->firstOrFail()->source_meta, 'source_record_kind'))->toBe('customer');
 });
 
 test('collins normalization changes only untouched invoice generated titles', function (): void {

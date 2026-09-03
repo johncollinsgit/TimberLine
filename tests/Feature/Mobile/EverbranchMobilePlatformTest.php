@@ -29,6 +29,22 @@ function mobilePkceChallenge(string $verifier): string
     return rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
 }
 
+function mobilePlatformPdf(): string
+{
+    $header = "%PDF-1.4\n";
+    $catalogOffset = strlen($header);
+    $catalog = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+    $pagesOffset = $catalogOffset + strlen($catalog);
+    $pages = "2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n";
+    $xrefOffset = $pagesOffset + strlen($pages);
+
+    return $header.$catalog.$pages
+        ."xref\n0 3\n0000000000 65535 f \n"
+        .sprintf('%010d 00000 n ', $catalogOffset)."\n"
+        .sprintf('%010d 00000 n ', $pagesOffset)."\n"
+        ."trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n{$xrefOffset}\n%%EOF\n";
+}
+
 /** @return array<string,string> */
 function mobileAuthorizationParameters(string $verifier, string $state, string $authMethod = 'email'): array
 {
@@ -670,7 +686,7 @@ test('field service photo actions require an entitled tenant scoped job and a li
     expect(FieldServiceJobPhoto::query()->forTenantId((int) $tenant->id)->count())->toBe(1);
 
     $this->post('/api/mobile/v1/workspaces/allowed-actions/field-service/jobs/'.$job->id.'/plans', [
-        'plans' => [UploadedFile::fake()->create('panel-layout.pdf', 120, 'application/pdf')],
+        'plans' => [UploadedFile::fake()->createWithContent('panel-layout.pdf', mobilePlatformPdf())],
     ])->assertCreated()->assertJsonPath('ok', true);
     $this->getJson('/api/mobile/v1/workspaces/allowed-actions/field-service/jobs/'.$job->id)
         ->assertOk()->assertJsonPath('job.plans.0.name', 'panel-layout.pdf');

@@ -75,4 +75,12 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['QuickBooks equipment source columns retained before unique index creation'],
     ],
+    '2026_09_03_200000_add_requester_to_field_service_materials.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['requester column retained before its index and foreign key are added'],
+    ],
+    '2026_09_03_201000_add_time_hours_reporting_index.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['time hours reporting index retained before Laravel records the migration batch'],
+    ],
 ];

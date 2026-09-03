@@ -28,6 +28,20 @@
 - Everbranch APNs uses the `com.everbranch.app` device table and dedicated credentials. Modern Forestry push infrastructure is a separate product boundary.
 - Compatibility routes remain active. Other tenant profiles continue their existing Work surfaces until their renderer is deliberately upgraded and tested.
 
+## Manager Time Clock & Hours Contract (2026-09-03)
+
+- `GET /api/mobile/v1/workspaces/{tenant}/field-service/time-clock-hours` requires `FieldServiceAccessService::canManageJobs` and the enabled `time_tracking` entitlement. Supported presets are `week`, `pay_period`, and `month`; `custom` requires inclusive `start_date` and `end_date` values and is capped at 366 days. The response identifies the tenant timezone, aggregates approved/submitted time by employee, job, and local day, and pages a unified timer/manual ledger at 10–50 rows per page.
+- `edit_options` is limited to 250 active workspace members and 250 relevant jobs, with explicit truncation flags. Every submitted employee/job choice is independently resolved inside the current tenant; the response is presentation metadata, not authorization.
+- `PATCH .../time-clock-hours/{source}/{id}` accepts a nonempty subset of timestamps, break seconds, `submitted|approved|rejected` status, notes, employee, and job. Running and paused timers cannot be corrected. End must follow start, breaks must be shorter than the period, manual entries remain on one local date with whole-minute breaks, and duration is server-recomputed.
+- A timer correction changes `field_service_time_sessions.break_seconds` as the reviewed aggregate while preserving each `field_service_time_breaks` punch. The audit records the before/after aggregate and unchanged raw event count/seconds. Employee reassignment checks the tenant/user/client UUID idempotency key before writing and returns validation failure rather than exposing a database conflict.
+- This surface reports operational timecards only. It does not calculate overtime, wages, payroll, taxes, withholding, filings, remittance, or payments.
+
+## Manager Material Request and Job Edit Contract (2026-09-03)
+
+- Manager My Day returns at most 25 pending `requested_materials` rows and a separate exact `counts.material_requests`. Each row includes job, requester when known, creation time, status, purchase/delete permissions, and a typed destination for the job Materials tab. Existing rows without a requester remain valid with `requester: null`.
+- The manager-only material DELETE route re-resolves tenant, job, and request; it rejects inventory/catalog/provider material and writes an audit snapshot before deletion. Purchasing continues through the existing material update route and may retain an admin note for the crew.
+- The Team response supplies active, tenant-scoped vehicle choices only to job managers. Full job edits independently validate active leads/participants, vehicles, and strict schedule ordering, then audit supported fields and assignment IDs. Lock-box audit state is boolean-only; the secret itself is never recorded.
+
 ## Boundaries
 
 The tenant app is a separate repository at `../everbranch-mobile`, bundled with React/TypeScript and Capacitor for `com.everbranch.app` on iOS and Android. It does not wrap the production web app and does not replace or modify the Modern Forestry SwiftUI customer app. The initial lane is a US B2B pilot.

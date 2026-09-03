@@ -10,6 +10,7 @@ use App\Models\FieldServiceJobNotification;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceTaskEvent;
+use App\Models\FieldServiceVehicle;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\TenantMemberPreference;
@@ -27,6 +28,7 @@ use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
+use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,9 +36,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class EverbranchMobileFieldServiceController extends Controller
 {
@@ -158,7 +164,8 @@ class EverbranchMobileFieldServiceController extends Controller
         $owner = $financialAccess->allows($user, $tenantModel);
         $job->load([
             'assignedUser:id,name,email', 'participants:id,name,email', 'tasks.assignedUser:id,name', 'tasks.assignees:id,name,email', 'tasks.events.actor:id,name', 'tasks.createdBy:id,name', 'tasks.completedBy:id,name',
-            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,notes',
+            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,requested_by_user_id,field_material_catalog_item_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,external_source,notes,created_at',
+            'materials.requestedBy:id,name',
             'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
             'assets' => fn ($assets) => $assets->when(! $owner, fn ($query) => $query->where('visibility', 'team'))->latest('captured_at')->latest('id'),
             'notes' => fn ($notes) => $notes->when(! $owner, fn ($query) => $query->where(fn ($visibility) => $visibility->whereNull('metadata->visibility')->orWhere('metadata->visibility', '!=', 'owner')))->latest('noted_at'),
@@ -536,8 +543,8 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
-        $request->validate(['files' => ['required', 'array', 'min:1', 'max:20'], 'files.*' => ['required', 'file', 'mimetypes:application/pdf', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
+        abort_unless($access->canUpdateProgress($user, $tenantModel, $job), 403);
+        $request->validate(['files' => ['required', 'array', 'size:1'], 'files.*' => ['required', 'file', 'mimetypes:application/pdf', 'max:'.(int) ($assets->legacyPdfUploadBytes() / 1024)], 'caption' => ['nullable', 'string', 'max:255']]);
         $created = collect($request->file('files', []))->map(fn ($file) => $assets->storeUpload($tenantModel, $user, $file, [(int) $job->id], 'team', $request->string('caption')->toString(), ['drawing', 'pdf']));
 
         return response()->json(['ok' => true, 'files' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
@@ -547,15 +554,16 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless($access->canUpdateProgress($user, $tenantModel, $job), 403);
+        $maximumBytes = $assets->legacyPdfUploadBytes();
         $validated = $request->validate([
             'file_name' => ['required', 'string', 'max:255'],
             'mime_type' => ['required', 'in:application/pdf'],
-            'contents_base64' => ['required', 'string', 'max:36000000'],
+            'contents_base64' => ['required', 'string', 'max:'.(4 * (int) ceil($maximumBytes / 3))],
         ]);
         $bytes = base64_decode((string) $validated['contents_base64'], true);
         abort_unless($bytes !== false && $bytes !== '', 422, 'The PDF contents could not be read.');
-        abort_if(strlen($bytes) > 25 * 1024 * 1024, 422, 'The PDF is larger than the 25 MB limit.');
+        abort_if(strlen($bytes) > $maximumBytes, 422, 'The PDF is larger than the workspace upload limit.');
         $path = tempnam(sys_get_temp_dir(), 'everbranch-pdf-');
         abort_unless($path !== false && file_put_contents($path, $bytes) !== false, 503, 'The PDF could not be prepared for upload.');
 
@@ -586,14 +594,56 @@ class EverbranchMobileFieldServiceController extends Controller
             return response()->json(['ok' => true, 'already_deleted' => true]);
         }
 
-        $audit->record($tenantModel, $assetModel, $user, 'deleted', ['checksum' => $assetModel->checksum, 'file_name' => $assetModel->file_name, 'surface' => 'everbranch_mobile']);
-        Storage::disk($assetModel->storage_disk)->delete($assetModel->storage_path);
-        if ($assetModel->thumbnail_disk && $assetModel->thumbnail_path) {
-            Storage::disk($assetModel->thumbnail_disk)->delete($assetModel->thumbnail_path);
-        }
-        $assetModel->delete();
+        $this->deleteAssetRecord($tenantModel, $assetModel, $user, $audit);
 
         return response()->json(['ok' => true]);
+    }
+
+    public function destroyJobAssets(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetAuditService $audit): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
+        $validated = $request->validate([
+            'asset_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'asset_ids.*' => ['required', 'integer', 'distinct', 'min:1'],
+        ]);
+        $requestedIds = collect($validated['asset_ids'])->map(fn (mixed $id): int => (int) $id)->values();
+        $assets = $job->assets()
+            ->where('workspace_assets.tenant_id', $tenantModel->id)
+            ->whereIn('workspace_assets.id', $requestedIds)
+            ->get()
+            ->keyBy(fn (WorkspaceAsset $asset): int => (int) $asset->id);
+        $deletedIds = [];
+        $failedIds = [];
+
+        foreach ($requestedIds as $assetId) {
+            $assetModel = $assets->get($assetId);
+            // Treat an absent link as success. A prior request may have removed
+            // it before its response reached the phone.
+            if (! $assetModel instanceof WorkspaceAsset) {
+                $deletedIds[] = $assetId;
+
+                continue;
+            }
+
+            try {
+                $this->deleteAssetRecord($tenantModel, $assetModel, $user, $audit);
+                $deletedIds[] = $assetId;
+            } catch (Throwable $exception) {
+                report($exception);
+                $failedIds[] = $assetId;
+            }
+        }
+
+        return response()->json([
+            'ok' => $failedIds === [],
+            'deleted_ids' => $deletedIds,
+            'failed_ids' => $failedIds,
+            'deleted_count' => count($deletedIds),
+            'failed_count' => count($failedIds),
+        ]);
     }
 
     public function uploadPlans(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
@@ -601,7 +651,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
-        $request->validate(['plans' => ['required', 'array', 'min:1', 'max:20'], 'plans.*' => ['required', 'file', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
+        $request->validate(['plans' => ['required', 'array', 'size:1'], 'plans.*' => ['required', 'file', 'max:'.(int) ($assets->legacyPdfUploadBytes() / 1024)], 'caption' => ['nullable', 'string', 'max:255']]);
         $created = collect($request->file('plans', []))->map(fn ($plan) => $assets->storeUpload($tenantModel, $user, $plan, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-plan']));
 
         return response()->json(['ok' => true, 'plans' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
@@ -824,11 +874,12 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'replayed' => (bool) $result['replayed'], 'task' => $assignments->payload($result['task']), 'event_id' => (int) $result['event']->id]);
     }
 
-    public function updateJob(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications): JsonResponse
+    public function updateJob(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications, LandlordOperatorActionAuditService $audit): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canManageJobs($user, $tenantModel) && (int) $job->tenant_id === (int) $tenantModel->id, 403);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id, 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'], 'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'customer_name' => ['sometimes', 'nullable', 'string', 'max:255'], 'customer_email' => ['sometimes', 'nullable', 'email', 'max:255'],
@@ -844,33 +895,69 @@ class EverbranchMobileFieldServiceController extends Controller
             'vehicle_ids' => ['sometimes', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
             'operational_status' => ['sometimes', 'in:active,scheduled,complete,quote,canceled,history'],
         ]);
-        $before = $job->only(['scheduled_for', 'scheduled_end_at', 'assigned_user_id']);
-        $job->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'vehicle_ids', 'operational_status'])->all());
-        if (array_key_exists('assigned_user_id', $validated)) {
-            $job->assigned_user_id = is_numeric($validated['assigned_user_id']) ? $tenantModel->users()->whereKey((int) $validated['assigned_user_id'])->value('users.id') : null;
+        $assignedId = null;
+        if (array_key_exists('assigned_user_id', $validated) && $validated['assigned_user_id'] !== null) {
+            $assignedId = $tenantModel->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereKey((int) $validated['assigned_user_id'])->value('users.id');
+            abort_unless($assignedId !== null, 422, 'Choose an active lead from this workspace.');
+            $assignedId = (int) $assignedId;
         }
-        if (array_key_exists('scheduled_for', $validated)) {
-            $job->scheduled_for = $validated['scheduled_for'];
-        }
-        $job->save();
+        $participantIds = collect((array) ($validated['participant_user_ids'] ?? []))->map(fn ($id): int => (int) $id)->unique()->values();
         if (array_key_exists('participant_user_ids', $validated)) {
-            $ids = $tenantModel->users()->whereIn('users.id', $validated['participant_user_ids'])->pluck('users.id')->map(fn ($id): int => (int) $id);
-            $job->participants()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'role' => 'member', 'following' => true]])->all());
+            $matchingParticipants = $tenantModel->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereIn('users.id', $participantIds)->pluck('users.id')->map(fn ($id): int => (int) $id)->values();
+            abort_unless($matchingParticipants->count() === $participantIds->count(), 422, 'Choose active participants from this workspace.');
+            $participantIds = $matchingParticipants;
         }
+        $vehicleIds = collect((array) ($validated['vehicle_ids'] ?? []))->map(fn ($id): int => (int) $id)->unique()->values();
         if (array_key_exists('vehicle_ids', $validated)) {
-            $vehicleIds = \App\Models\FieldServiceVehicle::query()->forTenantId((int) $tenantModel->id)->whereIn('id', $validated['vehicle_ids'])->pluck('id')->map(fn ($id): int => (int) $id);
-            $job->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'assigned_by_user_id' => (int) $user->id]])->all());
+            $matchingVehicles = FieldServiceVehicle::query()->forTenantId((int) $tenantModel->id)->whereIn('id', $vehicleIds)->pluck('id')->map(fn ($id): int => (int) $id)->values();
+            abort_unless($matchingVehicles->count() === $vehicleIds->count(), 422, 'Choose vehicles from this workspace.');
+            $vehicleIds = $matchingVehicles;
         }
-        if (filled($validated['operational_status'] ?? null)) {
-            $lifecycle->setManualStatus($job, (string) $validated['operational_status']);
-        } elseif ($job->status_source !== 'manual' && in_array($job->operational_status, ['active', 'scheduled', 'needs_details'], true)) {
-            $job->load('participants');
-            $job->forceFill(['operational_status' => $readiness->forJob($job)['ready'] ? ($job->started_at ? 'active' : 'scheduled') : 'needs_details'])->save();
-        }
+        $beforeSchedule = $job->only(['scheduled_for', 'scheduled_end_at', 'assigned_user_id']);
+        $updatedJob = DB::transaction(function () use ($tenantModel, $user, $job, $validated, $assignedId, $participantIds, $vehicleIds, $lifecycle, $readiness, $audit): FieldServiceJob {
+            $locked = FieldServiceJob::query()->forTenantId((int) $tenantModel->id)->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            $locked->load(['participants:id', 'vehicles:id']);
+            $scheduledFor = array_key_exists('scheduled_for', $validated) ? $validated['scheduled_for'] : $locked->scheduled_for;
+            $scheduledEndAt = array_key_exists('scheduled_end_at', $validated) ? $validated['scheduled_end_at'] : $locked->scheduled_end_at;
+            abort_if($scheduledFor !== null && $scheduledEndAt !== null
+                && Carbon::parse($scheduledEndAt)->lessThanOrEqualTo(Carbon::parse($scheduledFor)), 422, 'Scheduled end must be after scheduled start.');
+            $before = $this->jobAuditState($locked);
+            $lockBoxChanged = array_key_exists('lock_box_code', $validated) && (string) $locked->lock_box_code !== (string) ($validated['lock_box_code'] ?? '');
+            $locked->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'vehicle_ids', 'operational_status'])->all());
+            if (array_key_exists('assigned_user_id', $validated)) {
+                $locked->assigned_user_id = $assignedId;
+            }
+            $locked->save();
+            if (array_key_exists('participant_user_ids', $validated)) {
+                $locked->participants()->sync($participantIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'role' => 'member', 'following' => true]])->all());
+            }
+            if (array_key_exists('vehicle_ids', $validated)) {
+                $locked->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'assigned_by_user_id' => (int) $user->id]])->all());
+            }
+            if (filled($validated['operational_status'] ?? null)) {
+                $lifecycle->setManualStatus($locked, (string) $validated['operational_status']);
+            } elseif ($locked->status_source !== 'manual' && in_array($locked->operational_status, ['active', 'scheduled', 'needs_details'], true)) {
+                $locked->load('participants');
+                $locked->forceFill(['operational_status' => $readiness->forJob($locked)['ready'] ? ($locked->started_at ? 'active' : 'scheduled') : 'needs_details'])->save();
+            }
+            $locked->refresh()->load(['participants:id', 'vehicles:id']);
+            $audit->record(
+                (int) $tenantModel->id,
+                (int) $user->id,
+                'field_service.job.updated',
+                targetType: 'field_service_job',
+                targetId: $locked->id,
+                context: ['surface' => 'everbranch_mobile', 'lock_box_code_changed' => $lockBoxChanged],
+                beforeState: $before,
+                afterState: $this->jobAuditState($locked),
+            );
 
-        $changed = collect(['scheduled_for', 'scheduled_end_at', 'assigned_user_id'])->contains(fn (string $key): bool => (string) ($before[$key] ?? '') !== (string) $job->{$key});
+            return $locked;
+        });
+
+        $changed = collect(['scheduled_for', 'scheduled_end_at', 'assigned_user_id'])->contains(fn (string $key): bool => (string) ($beforeSchedule[$key] ?? '') !== (string) $updatedJob->{$key});
         if ($changed || array_key_exists('participant_user_ids', $validated) || array_key_exists('vehicle_ids', $validated)) {
-            $notifications->notifyJobEvent($job, $user, 'schedule_changed', 'Schedule or team assignment changed for '.$job->title.'.', 'job-updated:'.$job->id.':'.$job->updated_at?->timestamp);
+            $notifications->notifyJobEvent($updatedJob, $user, 'schedule_changed', 'Schedule or team assignment changed for '.$updatedJob->title.'.', 'job-updated:'.$updatedJob->id.':'.$updatedJob->updated_at?->timestamp);
         }
 
         return response()->json(['ok' => true]);
@@ -901,6 +988,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $material = FieldServiceMaterial::query()->create([
             'tenant_id' => (int) $tenantModel->id,
             'field_service_job_id' => (int) $job->id,
+            'requested_by_user_id' => (int) $user->id,
             'name' => trim((string) $validated['name']),
             'quantity' => (float) ($validated['quantity'] ?? 1),
             'unit' => filled($validated['unit'] ?? null) ? trim((string) $validated['unit']) : null,
@@ -940,15 +1028,54 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'material' => $this->materialPayload($material)]);
     }
 
-    public function team(Request $request): JsonResponse
+    public function destroyMaterial(Request $request, string $tenant, FieldServiceJob $job, FieldServiceMaterial $material, FieldServiceAccessService $access, LandlordOperatorActionAuditService $audit): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id
+            && (int) $material->tenant_id === (int) $tenantModel->id
+            && (int) $material->field_service_job_id === (int) $job->id, 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
+        abort_unless($material->requested_by_user_id !== null
+            || ($material->external_source === null && $material->field_material_catalog_item_id === null), 422, 'Only field material requests can be deleted here.');
+
+        $before = $this->materialAuditState($material);
+        DB::transaction(function () use ($tenantModel, $user, $material, $audit, $before): void {
+            $material->delete();
+            $audit->record(
+                (int) $tenantModel->id,
+                (int) $user->id,
+                'field_service.material_request.deleted',
+                targetType: 'field_service_material',
+                targetId: $material->id,
+                context: ['surface' => 'everbranch_mobile'],
+                beforeState: $before,
+            );
+        });
+
+        return response()->json(status: 204);
+    }
+
+    public function team(Request $request, FieldServiceAccessService $access): JsonResponse
     {
         $tenant = $this->tenant($request);
+        $canManage = $access->canManageJobs($this->user($request), $tenant);
 
-        return response()->json(['members' => $tenant->users()->wherePivot('membership_active', true)->orderBy('name')->get(['users.id', 'users.name', 'users.email'])->map(function (User $user): array {
-            $role = strtolower((string) $user->pivot?->role);
+        return response()->json([
+            'members' => $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->orderBy('name')->get(['users.id', 'users.name', 'users.email'])->map(function (User $user): array {
+                $role = strtolower((string) $user->pivot?->role);
 
-            return ['id' => (int) $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $role, 'office_handoff_recipient' => in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)];
-        })->values()]);
+                return ['id' => (int) $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $role, 'office_handoff_recipient' => in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)];
+            })->values(),
+            'vehicles' => $canManage
+                ? FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->orderBy('id')->get(['id', 'name', 'identifier', 'status'])->map(fn (FieldServiceVehicle $vehicle): array => [
+                    'id' => (int) $vehicle->id,
+                    'name' => (string) $vehicle->name,
+                    'identifier' => $vehicle->identifier,
+                    'status' => (string) $vehicle->status,
+                ])->values()
+                : [],
+        ]);
     }
 
     public function preferences(Request $request): JsonResponse
@@ -1019,12 +1146,7 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless((int) $asset->tenant_id === (int) $tenantModel->id, 404);
-        if ($asset->visibility === 'owner') {
-            abort_unless($financialAccess->allows($user, $tenantModel), 403);
-        } elseif ($asset->jobs()->exists()) {
-            abort_unless($asset->jobs()->get()->contains(fn (FieldServiceJob $job): bool => $access->canAccessJob($user, $tenantModel, $job)), 403);
-        }
+        $this->authorizeAssetViewer($asset, $tenantModel, $user, $access, $financialAccess);
         $thumbnail = $request->boolean('thumbnail') ? $assets->thumbnailLocation($asset) : null;
         $disk = $thumbnail['disk'] ?? $assets->readableDisk($asset);
         abort_unless($disk, 404);
@@ -1034,10 +1156,146 @@ class EverbranchMobileFieldServiceController extends Controller
             $audit->record($tenantModel, $asset, $user, 'downloaded', ['surface' => 'everbranch_mobile']);
         }
 
+        if (! $thumbnail && $asset->mime_type === 'application/pdf') {
+            return $this->pdfAssetResponse($request, $disk, $path, $fileName, (string) $asset->checksum);
+        }
+
         return Storage::disk($disk)->response($path, $fileName, [
             'Cache-Control' => $thumbnail ? 'private, max-age=604800, immutable' : 'private, max-age=300',
             'Content-Type' => $thumbnail ? 'image/jpeg' : $asset->mime_type,
         ]);
+    }
+
+    public function previewAssetUrl(Request $request, string $tenant, WorkspaceAsset $asset, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        $this->authorizeAssetViewer($asset, $tenantModel, $user, $access, $financialAccess);
+        abort_unless($asset->mime_type === 'application/pdf', 404);
+        $disk = $assets->readableDisk($asset);
+        abort_unless($disk === 'local' && config('filesystems.disks.'.$disk.'.driver') === 'local', 404);
+        $expiresAt = now()->addMinutes(5);
+        $audit->record($tenantModel, $asset, $user, 'downloaded', ['surface' => 'everbranch_mobile_pdf_preview_url']);
+
+        return response()->json([
+            'url' => URL::temporarySignedRoute('mobile.v1.asset-previews.show', $expiresAt, [
+                'tenant' => $tenantModel->slug,
+                'asset' => (int) $asset->id,
+            ]),
+            'expires_at' => $expiresAt->toIso8601String(),
+        ]);
+    }
+
+    public function signedAssetPreview(Request $request, string $tenant, int $asset, WorkspaceAssetService $assets): StreamedResponse
+    {
+        $tenantModel = Tenant::query()->where('slug', $tenant)->firstOrFail();
+        $assetModel = WorkspaceAsset::query()->forTenantId((int) $tenantModel->id)->findOrFail($asset);
+        abort_unless($assetModel->mime_type === 'application/pdf', 404);
+        $disk = $assets->readableDisk($assetModel);
+        abort_unless($disk === 'local' && config('filesystems.disks.'.$disk.'.driver') === 'local', 404);
+
+        return $this->pdfAssetResponse($request, $disk, $assetModel->storage_path, $assetModel->file_name, (string) $assetModel->checksum);
+    }
+
+    protected function authorizeAssetViewer(WorkspaceAsset $asset, Tenant $tenant, User $user, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess): void
+    {
+        abort_unless((int) $asset->tenant_id === (int) $tenant->id, 404);
+        if ($asset->visibility === 'owner') {
+            abort_unless($financialAccess->allows($user, $tenant), 403);
+        } elseif ($asset->jobs()->exists()) {
+            abort_unless($asset->jobs()->get()->contains(fn (FieldServiceJob $job): bool => $access->canAccessJob($user, $tenant, $job)), 403);
+        }
+    }
+
+    protected function pdfAssetResponse(Request $request, string $disk, string $path, string $fileName, string $checksum): StreamedResponse
+    {
+        $storage = Storage::disk($disk);
+        $size = (int) $storage->size($path);
+        $fileName = preg_replace('/[\x00-\x1F\x7F]/u', '_', str_replace(['/', '\\'], '_', $fileName)) ?: 'document.pdf';
+        $fallbackName = preg_replace('/[^A-Za-z0-9._ -]/', '_', Str::ascii($fileName)) ?: 'document.pdf';
+        $etag = preg_match('/^[a-f0-9]{64}$/i', $checksum) ? '"'.strtolower($checksum).'"' : null;
+        $headers = [
+            'Accept-Ranges' => config('filesystems.disks.'.$disk.'.driver') === 'local' ? 'bytes' : 'none',
+            'Cache-Control' => 'private, max-age=300',
+            'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_INLINE, $fileName, $fallbackName),
+            'Content-Type' => 'application/pdf',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+        if ($etag) {
+            $headers['ETag'] = $etag;
+        }
+
+        if (config('filesystems.disks.'.$disk.'.driver') !== 'local') {
+            return $storage->response($path, $fileName, [...$headers, 'Content-Length' => (string) $size], HeaderUtils::DISPOSITION_INLINE);
+        }
+
+        $rangeHeader = trim((string) $request->header('Range'));
+        $ifRange = trim((string) $request->header('If-Range'));
+        $honorRange = $rangeHeader !== '' && ($ifRange === '' || ($etag !== null && hash_equals($etag, $ifRange)));
+        $range = $honorRange ? $this->parseByteRange($rangeHeader, $size) : null;
+        if ($honorRange && $range === false) {
+            return new StreamedResponse(static fn () => null, 416, [
+                ...$headers,
+                'Content-Length' => '0',
+                'Content-Range' => 'bytes */'.$size,
+            ]);
+        }
+
+        [$start, $end] = is_array($range) ? $range : [0, max(0, $size - 1)];
+        $length = $size === 0 ? 0 : $end - $start + 1;
+        $status = is_array($range) ? 206 : 200;
+        $responseHeaders = [...$headers, 'Content-Length' => (string) $length];
+        if ($status === 206) {
+            $responseHeaders['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+        }
+        $absolutePath = $storage->path($path);
+
+        return new StreamedResponse(function () use ($absolutePath, $start, $length): void {
+            $stream = fopen($absolutePath, 'rb');
+            if (! is_resource($stream)) {
+                return;
+            }
+            try {
+                if ($start > 0 && fseek($stream, $start) !== 0) {
+                    return;
+                }
+                $remaining = $length;
+                while ($remaining > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(1024 * 1024, $remaining));
+                    if (! is_string($chunk) || $chunk === '') {
+                        break;
+                    }
+                    echo $chunk;
+                    $remaining -= strlen($chunk);
+                }
+            } finally {
+                fclose($stream);
+            }
+        }, $status, $responseHeaders);
+    }
+
+    /** @return array{0:int,1:int}|false */
+    protected function parseByteRange(string $header, int $size): array|false
+    {
+        if ($size < 1 || preg_match('/^bytes=(\d*)-(\d*)$/', $header, $matches) !== 1 || ($matches[1] === '' && $matches[2] === '')) {
+            return false;
+        }
+        if ($matches[1] === '') {
+            $suffixLength = (int) $matches[2];
+            if ($suffixLength < 1) {
+                return false;
+            }
+
+            return [max(0, $size - $suffixLength), $size - 1];
+        }
+
+        $start = (int) $matches[1];
+        if ($start >= $size) {
+            return false;
+        }
+        $end = $matches[2] === '' ? $size - 1 : min((int) $matches[2], $size - 1);
+
+        return $end < $start ? false : [$start, $end];
     }
 
     protected function applyFilter(Builder $query, string $filter, User $user): void
@@ -1136,6 +1394,9 @@ class EverbranchMobileFieldServiceController extends Controller
     /** @return array<string,mixed> */
     protected function materialPayload(FieldServiceMaterial $material): array
     {
+        $isRequest = $material->requested_by_user_id !== null
+            || ($material->external_source === null && $material->field_material_catalog_item_id === null);
+
         return [
             'id' => (int) $material->id,
             'name' => (string) $material->name,
@@ -1143,15 +1404,92 @@ class EverbranchMobileFieldServiceController extends Controller
             'unit' => $material->unit,
             'status' => (string) $material->status,
             'notes' => $material->notes,
+            'is_request' => $isRequest,
+            'can_delete' => $isRequest,
+            'requester' => $material->requestedBy ? ['id' => (int) $material->requestedBy->id, 'name' => (string) $material->requestedBy->name] : null,
+            'created_at' => $material->created_at?->toIso8601String(),
             'pulled_quantity' => (float) $material->pulled_quantity,
             'loaded_quantity' => (float) $material->loaded_quantity,
             'used_quantity' => (float) $material->used_quantity,
         ];
     }
 
+    /** @return array<string,mixed> */
+    protected function materialAuditState(FieldServiceMaterial $material): array
+    {
+        return [
+            'id' => (int) $material->id,
+            'job_id' => (int) $material->field_service_job_id,
+            'requested_by_user_id' => $material->requested_by_user_id === null ? null : (int) $material->requested_by_user_id,
+            'name' => (string) $material->name,
+            'quantity' => (float) $material->quantity,
+            'unit' => $material->unit,
+            'status' => (string) $material->status,
+            'notes' => $material->notes,
+            'created_at' => $material->created_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function jobAuditState(FieldServiceJob $job): array
+    {
+        return [
+            'id' => (int) $job->id,
+            'title' => $job->title,
+            'description' => $job->description,
+            'customer_name' => $job->customer_name,
+            'customer_email' => $job->customer_email,
+            'customer_phone' => $job->customer_phone,
+            'project_manager_name' => $job->project_manager_name,
+            'project_manager_company' => $job->project_manager_company,
+            'project_manager_phone' => $job->project_manager_phone,
+            'project_manager_email' => $job->project_manager_email,
+            'service_address_line_1' => $job->service_address_line_1,
+            'service_address_line_2' => $job->service_address_line_2,
+            'service_city' => $job->service_city,
+            'service_state' => $job->service_state,
+            'service_postal_code' => $job->service_postal_code,
+            'service_country' => $job->service_country,
+            'priority' => $job->priority,
+            'scheduled_for' => $job->scheduled_for?->toIso8601String(),
+            'scheduled_end_at' => $job->scheduled_end_at?->toIso8601String(),
+            'assigned_user_id' => $job->assigned_user_id === null ? null : (int) $job->assigned_user_id,
+            'participant_user_ids' => $job->participants()->pluck('users.id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
+            'vehicle_ids' => $job->vehicles()->pluck('field_service_vehicles.id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
+            'operational_status' => $job->operational_status,
+            'lock_box_code_present' => filled($job->lock_box_code),
+        ];
+    }
+
+    protected function deleteAssetRecord(Tenant $tenant, WorkspaceAsset $asset, User $user, WorkspaceAssetAuditService $audit): void
+    {
+        $locations = collect([
+            ['disk' => (string) $asset->storage_disk, 'path' => (string) $asset->storage_path],
+            ['disk' => (string) $asset->thumbnail_disk, 'path' => (string) $asset->thumbnail_path],
+        ])->filter(fn (array $location): bool => $location['disk'] !== '' && $location['path'] !== '')
+            ->unique(fn (array $location): string => $location['disk'].'|'.$location['path']);
+
+        foreach ($locations as $location) {
+            $disk = Storage::disk($location['disk']);
+            if (! $disk->exists($location['path'])) {
+                continue;
+            }
+            if (! $disk->delete($location['path']) || $disk->exists($location['path'])) {
+                throw new \RuntimeException('Workspace asset storage deletion failed.');
+            }
+        }
+
+        $audit->record($tenant, $asset, $user, 'deleted', [
+            'checksum' => $asset->checksum,
+            'file_name' => $asset->file_name,
+            'surface' => 'everbranch_mobile',
+        ]);
+        $asset->delete();
+    }
+
     protected function officeRecipients(Tenant $tenant): \Illuminate\Support\Collection
     {
-        return $tenant->users()->wherePivot('membership_active', true)->get(['users.id', 'users.name', 'users.email'])
+        return $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->get(['users.id', 'users.name', 'users.email'])
             ->filter(fn (User $member): bool => in_array(strtolower((string) $member->pivot?->role), ['owner', 'tenant_owner', 'admin', 'manager'], true))->values();
     }
 

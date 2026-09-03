@@ -52,7 +52,9 @@ class QuickBooksDiscoveryAuditService
 
         foreach ($full ? self::FULL_ENTITIES : self::CORE_ENTITIES as $entity) {
             try {
-                $rows = $client->all($entity);
+                $rows = $entity === 'Customer'
+                    ? $client->allCustomers()
+                    : $client->all($entity);
                 $summary['entity_counts'][$entity] = count($rows);
                 if ($entity === 'Customer') {
                     $knownJobCustomerIds = $this->jobCustomerIds($rows);
@@ -115,7 +117,12 @@ class QuickBooksDiscoveryAuditService
                 'total' => 0,
                 'with_email' => 0,
                 'with_phone' => 0,
+                'with_primary_phone' => 0,
+                'with_mobile_phone' => 0,
+                'with_alternate_phone' => 0,
                 'with_address' => 0,
+                'active' => 0,
+                'inactive' => 0,
             ],
             'customer_structure' => [
                 'job_or_subcustomers' => 0,
@@ -160,9 +167,17 @@ class QuickBooksDiscoveryAuditService
             $summary['customer_completeness']['total'] = count($rows);
             $summary['customer_structure']['job_or_subcustomers'] = count($knownJobCustomerIds);
             foreach ($rows as $row) {
+                $primaryPhone = filled(data_get($row, 'PrimaryPhone.FreeFormNumber'));
+                $mobilePhone = filled(data_get($row, 'Mobile.FreeFormNumber'));
+                $alternatePhone = filled(data_get($row, 'AlternatePhone.FreeFormNumber'));
                 $summary['customer_completeness']['with_email'] += filled(data_get($row, 'PrimaryEmailAddr.Address')) ? 1 : 0;
-                $summary['customer_completeness']['with_phone'] += filled(data_get($row, 'PrimaryPhone.FreeFormNumber')) ? 1 : 0;
+                $summary['customer_completeness']['with_phone'] += ($primaryPhone || $mobilePhone || $alternatePhone) ? 1 : 0;
+                $summary['customer_completeness']['with_primary_phone'] += $primaryPhone ? 1 : 0;
+                $summary['customer_completeness']['with_mobile_phone'] += $mobilePhone ? 1 : 0;
+                $summary['customer_completeness']['with_alternate_phone'] += $alternatePhone ? 1 : 0;
                 $summary['customer_completeness']['with_address'] += filled(data_get($row, 'BillAddr.Line1')) ? 1 : 0;
+                $summary['customer_completeness']['active'] += ($row['Active'] ?? true) ? 1 : 0;
+                $summary['customer_completeness']['inactive'] += ($row['Active'] ?? true) ? 0 : 1;
             }
         }
 

@@ -2720,6 +2720,7 @@ CREATE TABLE `field_service_materials` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `field_service_job_id` bigint unsigned DEFAULT NULL,
+  `requested_by_user_id` bigint unsigned DEFAULT NULL,
   `field_material_catalog_item_id` bigint unsigned DEFAULT NULL,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `quantity` decimal(10,2) NOT NULL DEFAULT '1.00',
@@ -2740,9 +2741,11 @@ CREATE TABLE `field_service_materials` (
   KEY `field_service_materials_status_index` (`status`),
   KEY `fs_materials_tenant_external_idx` (`tenant_id`,`external_source`,`external_id`),
   KEY `fs_material_catalog_fk` (`field_material_catalog_item_id`),
+  KEY `fs_material_requester_idx` (`requested_by_user_id`),
   CONSTRAINT `field_service_materials_field_service_job_id_foreign` FOREIGN KEY (`field_service_job_id`) REFERENCES `field_service_jobs` (`id`) ON DELETE SET NULL,
   CONSTRAINT `field_service_materials_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fs_material_catalog_fk` FOREIGN KEY (`field_material_catalog_item_id`) REFERENCES `field_material_catalog_items` (`id`) ON DELETE SET NULL
+  CONSTRAINT `fs_material_catalog_fk` FOREIGN KEY (`field_material_catalog_item_id`) REFERENCES `field_material_catalog_items` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fs_material_requester_fk` FOREIGN KEY (`requested_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `field_service_price_book_candidates`;
@@ -3026,6 +3029,7 @@ CREATE TABLE `field_service_time_sessions` (
   KEY `fs_time_session_job_fk` (`field_service_job_id`),
   KEY `fs_time_session_user_fk` (`user_id`),
   KEY `fs_time_session_reviewer_fk` (`reviewed_by_user_id`),
+  KEY `fs_time_tenant_clocked_idx` (`tenant_id`,`clocked_in_at`),
   CONSTRAINT `fs_time_session_job_fk` FOREIGN KEY (`field_service_job_id`) REFERENCES `field_service_jobs` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fs_time_session_reviewer_fk` FOREIGN KEY (`reviewed_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fs_time_session_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
@@ -10415,3 +10419,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (258,'2026_08_24_12
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (259,'2026_08_25_150000_add_job_update_sms_setting_to_field_service_reminder_settings',9);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (260,'2026_09_02_160000_enable_collins_messaging_branch',9);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (261,'2026_09_03_150000_add_quickbooks_source_to_customer_equipment',9);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (262,'2026_09_03_200000_add_requester_to_field_service_materials',9);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (263,'2026_09_03_201000_add_time_hours_reporting_index',9);
