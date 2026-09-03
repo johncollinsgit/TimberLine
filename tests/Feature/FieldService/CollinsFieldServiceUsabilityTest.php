@@ -1112,6 +1112,39 @@ test('resumable PDF initialization enforces file and active staging quotas', fun
         ->assertJsonPath('message', 'This workspace has too many active uploads. Try again shortly.');
 });
 
+test('job photo retries replay one asset across multipart and JSON fallback transports', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Idempotent photo upload',
+        'operational_status' => 'active',
+    ]);
+    $image = UploadedFile::fake()->image('panel.jpg', 20, 20);
+    $contents = (string) file_get_contents($image->getRealPath());
+    $key = (string) Str::uuid();
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/photos';
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $first = $this->withHeader('Idempotency-Key', $key)->post($url, [
+        'photos' => [$image],
+        'caption' => 'Main panel',
+    ])->assertCreated()
+        ->assertJsonPath('replayed', false);
+    $replayed = $this->withHeader('Idempotency-Key', $key)->postJson($url.'/payload', [
+        'file_name' => 'panel.jpg',
+        'mime_type' => 'image/jpeg',
+        'contents_base64' => base64_encode($contents),
+        'caption' => 'Main panel',
+    ])->assertOk()
+        ->assertJsonPath('replayed', true);
+
+    expect($replayed->json('photo.id'))->toBe($first->json('photos.0.id'))
+        ->and(WorkspaceAsset::query()->forTenantId($tenant->id)->count())->toBe(1)
+        ->and(WorkspaceAsset::query()->forTenantId($tenant->id)->sole()->tags)->not->toContain('ios-payload-fallback');
+});
+
 test('iPhone photo payload fallback stores a team-visible job photo when multipart upload is unavailable', function (): void {
     Storage::fake('local');
     [$tenant, $owner, $member] = usabilityWorkspace();

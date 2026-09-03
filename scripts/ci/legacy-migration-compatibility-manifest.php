@@ -33,4 +33,10 @@ return [
         'reason' => 'MySQL rejects the generated 65-character receipt-created index name on a clean install.',
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
     ],
+    'database/migrations/2026_09_03_201000_add_time_hours_reporting_index.php' => [
+        'before_sha256' => '8d32427ba3d55bc1ae4be7de441a4803ca4839a07c3ba1e28869c9d0e1352934',
+        'after_sha256' => '8ce8ab40cdcc5ca456c7e3bc5f3e0a11a8149420868ee83e971f3636af9f2318',
+        'reason' => 'A durable partial legacy time-session table can lack the two source columns, so the original index ALTER fails before any later repair migration can run.',
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+    ],
 ];

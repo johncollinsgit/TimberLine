@@ -9,6 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         if (! Schema::hasTable('field_service_time_sessions')
+            || ! Schema::hasColumn('field_service_time_sessions', 'tenant_id')
+            || ! Schema::hasColumn('field_service_time_sessions', 'clocked_in_at')
             || Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx')) {
             return;
         }

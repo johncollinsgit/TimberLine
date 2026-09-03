@@ -36,6 +36,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -481,9 +482,15 @@ class EverbranchMobileFieldServiceController extends Controller
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
         $request->validate(['photos' => ['required', 'array', 'min:1', 'max:20'], 'photos.*' => ['required', 'image', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
-        $created = collect($request->file('photos', []))->map(fn ($photo) => $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-photo']));
+        $result = $this->idempotentPhotoUpload($request, $tenantModel, $user, $job, fn (): array => collect($request->file('photos', []))
+            ->map(fn ($photo): array => $this->assetPayload($assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-photo']), $tenantModel))
+            ->values()->all());
+        $response = ['ok' => true, 'photos' => $result['photos']];
+        if ($result['replayed'] !== null) {
+            $response['replayed'] = $result['replayed'];
+        }
 
-        return response()->json(['ok' => true, 'photos' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
+        return response()->json($response, $result['replayed'] === true ? 200 : 201);
     }
 
     /**
@@ -511,7 +518,7 @@ class EverbranchMobileFieldServiceController extends Controller
                 'photos.*.caption' => ['nullable', 'string', 'max:255'],
             ]);
 
-        $created = collect($validated['photos'])->map(function (array $payload) use ($assets, $job, $tenantModel, $user): WorkspaceAsset {
+        $result = $this->idempotentPhotoUpload($request, $tenantModel, $user, $job, fn (): array => collect($validated['photos'])->map(function (array $payload) use ($assets, $job, $tenantModel, $user): array {
             $contents = base64_decode((string) $payload['contents_base64'], true);
             abort_if(! is_string($contents) || $contents === '' || strlen($contents) > 1024 * 1024, 422, 'The phone photo payload is invalid or too large.');
             $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
@@ -524,19 +531,21 @@ class EverbranchMobileFieldServiceController extends Controller
             try {
                 $photo = new UploadedFile($path, basename((string) $payload['file_name']), $detectedMime, null, true);
 
-                return $assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $payload['caption'] ?? null, ['job-photo', 'ios-payload-fallback']);
+                return $this->assetPayload($assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $payload['caption'] ?? null, ['job-photo', 'ios-payload-fallback']), $tenantModel);
             } finally {
                 @unlink($path);
             }
-        });
-
-        $photos = $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values();
-
-        return response()->json([
+        })->values()->all());
+        $response = [
             'ok' => true,
-            'photo' => $singlePayload ? $photos->first() : null,
-            'photos' => $photos,
-        ], 201);
+            'photo' => $singlePayload ? ($result['photos'][0] ?? null) : null,
+            'photos' => $result['photos'],
+        ];
+        if ($result['replayed'] !== null) {
+            $response['replayed'] = $result['replayed'];
+        }
+
+        return response()->json($response, $result['replayed'] === true ? 200 : 201);
     }
 
     public function uploadFiles(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
@@ -1369,6 +1378,40 @@ class EverbranchMobileFieldServiceController extends Controller
             'counts' => ['tasks' => (int) ($job->tasks_count ?? 0), 'photos' => (int) ($job->photos_count ?? 0), 'documents' => (int) ($job->documents_count ?? 0), 'updates' => (int) ($job->notes_count ?? 0)],
             'destination' => ['kind' => 'field_service_job', 'id' => (int) $job->id],
         ];
+    }
+
+    /**
+     * @param  callable():array<int,array<string,mixed>>  $upload
+     * @return array{photos:array<int,array<string,mixed>>,replayed:?bool}
+     */
+    protected function idempotentPhotoUpload(Request $request, Tenant $tenant, User $user, FieldServiceJob $job, callable $upload): array
+    {
+        $idempotencyKey = trim((string) $request->header('Idempotency-Key'));
+        if ($idempotencyKey === '') {
+            return ['photos' => $upload(), 'replayed' => null];
+        }
+        abort_if(mb_strlen($idempotencyKey) > 200, 422, 'The Idempotency-Key header may not be greater than 200 characters.');
+
+        $cacheKey = 'everbranch:mobile:job-photo:'.hash('sha256', implode('|', [
+            (int) $tenant->id,
+            (int) $user->id,
+            (int) $job->id,
+            $idempotencyKey,
+        ]));
+        if (is_array($cached = Cache::get($cacheKey))) {
+            return ['photos' => $cached, 'replayed' => true];
+        }
+
+        return Cache::lock($cacheKey.':lock', 300)->block(30, function () use ($cacheKey, $upload): array {
+            if (is_array($cached = Cache::get($cacheKey))) {
+                return ['photos' => $cached, 'replayed' => true];
+            }
+
+            $photos = $upload();
+            Cache::put($cacheKey, $photos, now()->addDay());
+
+            return ['photos' => $photos, 'replayed' => false];
+        });
     }
 
     /** @return array<string,mixed> */
