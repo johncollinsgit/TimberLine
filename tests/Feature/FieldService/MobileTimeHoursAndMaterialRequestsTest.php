@@ -211,7 +211,11 @@ test('material requests carry their requester onto manager home and managers can
 
     Sanctum::actingAs($employee, ['mobile:read', 'mobile:write']);
     $firstId = $this->postJson($materialsUrl.'/requests', ['name' => '12/2 cable', 'quantity' => 250, 'unit' => 'ft'])
-        ->assertCreated()->assertJsonPath('material.requester.id', $employee->id)->json('material.id');
+        ->assertCreated()
+        ->assertJsonPath('material.requester.id', $employee->id)
+        ->assertJsonPath('material.is_request', true)
+        ->assertJsonPath('material.can_delete', true)
+        ->json('material.id');
     expect(FieldServiceMaterial::query()->findOrFail($firstId)->requested_by_user_id)->toBe($employee->id);
 
     Sanctum::actingAs($manager, ['mobile:read', 'mobile:write']);
@@ -249,6 +253,14 @@ test('material requests carry their requester onto manager home and managers can
     ]);
     $this->deleteJson($materialsUrl.'/'.$importedMaterial->id)->assertUnprocessable();
     expect($importedMaterial->fresh())->not->toBeNull();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
+        ->assertOk()
+        ->assertJsonFragment([
+            'id' => $importedMaterial->id,
+            'name' => 'Imported material',
+            'is_request' => false,
+            'can_delete' => false,
+        ]);
 
     foreach (range(1, 26) as $number) {
         FieldServiceMaterial::query()->create([

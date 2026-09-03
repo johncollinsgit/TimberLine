@@ -164,7 +164,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $owner = $financialAccess->allows($user, $tenantModel);
         $job->load([
             'assignedUser:id,name,email', 'participants:id,name,email', 'tasks.assignedUser:id,name', 'tasks.assignees:id,name,email', 'tasks.events.actor:id,name', 'tasks.createdBy:id,name', 'tasks.completedBy:id,name',
-            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,requested_by_user_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,notes,created_at',
+            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,requested_by_user_id,field_material_catalog_item_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,external_source,notes,created_at',
             'materials.requestedBy:id,name',
             'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
             'assets' => fn ($assets) => $assets->when(! $owner, fn ($query) => $query->where('visibility', 'team'))->latest('captured_at')->latest('id'),
@@ -1394,6 +1394,9 @@ class EverbranchMobileFieldServiceController extends Controller
     /** @return array<string,mixed> */
     protected function materialPayload(FieldServiceMaterial $material): array
     {
+        $isRequest = $material->requested_by_user_id !== null
+            || ($material->external_source === null && $material->field_material_catalog_item_id === null);
+
         return [
             'id' => (int) $material->id,
             'name' => (string) $material->name,
@@ -1401,6 +1404,8 @@ class EverbranchMobileFieldServiceController extends Controller
             'unit' => $material->unit,
             'status' => (string) $material->status,
             'notes' => $material->notes,
+            'is_request' => $isRequest,
+            'can_delete' => $isRequest,
             'requester' => $material->requestedBy ? ['id' => (int) $material->requestedBy->id, 'name' => (string) $material->requestedBy->name] : null,
             'created_at' => $material->created_at?->toIso8601String(),
             'pulled_quantity' => (float) $material->pulled_quantity,
