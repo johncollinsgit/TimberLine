@@ -11,6 +11,7 @@ use App\Http\Controllers\Mobile\EverbranchMobileInvoiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileLandlordController;
 use App\Http\Controllers\Mobile\EverbranchMobileTeamController;
 use App\Http\Controllers\Mobile\EverbranchMobileTimeClockController;
+use App\Http\Controllers\Mobile\EverbranchMobileTimeHoursController;
 use App\Http\Controllers\Mobile\EverbranchMobileWorkCandidateController;
 use App\Http\Controllers\Mobile\EverbranchMobileWorkforceController;
 use Illuminate\Support\Facades\Route;
@@ -83,6 +84,8 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/field-service/clock/resume', [EverbranchMobileTimeClockController::class, 'resume'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.resume');
                 Route::post('/field-service/clock/stop', [EverbranchMobileTimeClockController::class, 'stop'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.stop');
                 Route::get('/field-service/shifts', [EverbranchMobileWorkforceController::class, 'shifts'])->middleware('abilities:mobile:read')->name('workspace.field-service.shifts.index');
+                Route::get('/field-service/time-clock-hours', [EverbranchMobileTimeHoursController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.field-service.time-clock-hours.index');
+                Route::patch('/field-service/time-clock-hours/{source}/{entry}', [EverbranchMobileTimeHoursController::class, 'update'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereIn('source', ['timer', 'manual'])->whereNumber('entry')->name('workspace.field-service.time-clock-hours.update');
                 Route::post('/field-service/timecard-change-requests', [EverbranchMobileWorkforceController::class, 'requestCorrection'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.field-service.timecard-change-requests.store');
                 Route::get('/field-service/location-policy', [EverbranchMobileWorkforceController::class, 'locationPolicy'])->middleware('abilities:mobile:read')->name('workspace.field-service.location-policy.show');
                 Route::post('/field-service/location-policy/accept', [EverbranchMobileWorkforceController::class, 'acceptLocationPolicy'])->middleware(['abilities:mobile:write', 'throttle:10,1'])->name('workspace.field-service.location-policy.accept');
@@ -137,6 +140,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/field-service/jobs/{job}/tasks/{task}/send-to-office', [EverbranchMobileFieldServiceController::class, 'sendTaskToOffice'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('task')->name('workspace.field-service.jobs.tasks.send-to-office');
                 Route::post('/field-service/jobs/{job}/materials/requests', [EverbranchMobileFieldServiceController::class, 'storeMaterialRequest'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('job')->name('workspace.field-service.jobs.materials.requests.store');
                 Route::patch('/field-service/jobs/{job}/materials/{material}', [EverbranchMobileFieldServiceController::class, 'updateMaterial'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('material')->name('workspace.field-service.jobs.materials.update');
+                Route::delete('/field-service/jobs/{job}/materials/{material}', [EverbranchMobileFieldServiceController::class, 'destroyMaterial'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('material')->name('workspace.field-service.jobs.materials.destroy');
                 Route::get('/field-service/assets/{asset}', [EverbranchMobileFieldServiceController::class, 'downloadAsset'])->middleware('abilities:mobile:read')->whereNumber('asset')->name('workspace.field-service.assets.show');
                 Route::get('/field-service/assets/{asset}/preview-url', [EverbranchMobileFieldServiceController::class, 'previewAssetUrl'])->middleware('abilities:mobile:read')->whereNumber('asset')->name('workspace.field-service.assets.preview-url');
                 Route::delete('/field-service/jobs/{job}/assets/{asset}', [EverbranchMobileFieldServiceController::class, 'destroyJobAsset'])->middleware('abilities:mobile:write')->whereNumber('job')->whereNumber('asset')->name('workspace.field-service.jobs.assets.destroy');

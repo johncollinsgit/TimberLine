@@ -641,6 +641,88 @@ it('resumes the job-update SMS setting after its column is retained', function (
     expect(Schema::hasColumn('field_service_reminder_settings', 'job_update_sms'))->toBeTrue();
 });
 
+it('resumes material requester attribution after its column is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('users')) {
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+    if (! Schema::hasTable('field_service_materials')) {
+        Schema::create('field_service_materials', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+
+    if (Schema::hasColumn('field_service_materials', 'requested_by_user_id')) {
+        $requesterForeign = collect(Schema::getForeignKeys('field_service_materials'))->first(
+            fn (array $foreign): bool => in_array('requested_by_user_id', (array) ($foreign['columns'] ?? []), true)
+        );
+        if (is_array($requesterForeign)) {
+            Schema::table('field_service_materials', function (Blueprint $table) use ($requesterForeign): void {
+                $table->dropForeign((string) $requesterForeign['name']);
+            });
+        }
+        if (Schema::hasIndex('field_service_materials', 'fs_material_requester_idx')) {
+            Schema::table('field_service_materials', function (Blueprint $table): void {
+                $table->dropIndex('fs_material_requester_idx');
+            });
+        }
+        Schema::table('field_service_materials', function (Blueprint $table): void {
+            $table->dropColumn('requested_by_user_id');
+        });
+    }
+
+    // Simulate MySQL retaining the first ALTER TABLE before the release
+    // process records the migration batch.
+    Schema::table('field_service_materials', function (Blueprint $table): void {
+        $table->unsignedBigInteger('requested_by_user_id')->nullable();
+    });
+
+    $migration = require database_path('migrations/2026_09_03_200000_add_requester_to_field_service_materials.php');
+    $migration->up();
+    $migration->up();
+
+    expect(Schema::hasIndex('field_service_materials', 'fs_material_requester_idx'))->toBeTrue()
+        ->and(collect(Schema::getForeignKeys('field_service_materials'))->contains(
+            fn (array $foreign): bool => in_array('requested_by_user_id', (array) ($foreign['columns'] ?? []), true)
+        ))->toBeTrue();
+});
+
+it('resumes after the time hours reporting index is retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    if (! Schema::hasTable('field_service_time_sessions')) {
+        Schema::create('field_service_time_sessions', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('tenant_id');
+            $table->timestamp('clocked_in_at');
+        });
+    }
+
+    if (Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx')) {
+        Schema::table('field_service_time_sessions', function (Blueprint $table): void {
+            $table->dropIndex('fs_time_tenant_clocked_idx');
+        });
+    }
+
+    // Simulate MySQL retaining the index while the migration row is absent.
+    Schema::table('field_service_time_sessions', function (Blueprint $table): void {
+        $table->index(['tenant_id', 'clocked_in_at'], 'fs_time_tenant_clocked_idx');
+    });
+
+    $migration = require database_path('migrations/2026_09_03_201000_add_time_hours_reporting_index.php');
+    $migration->up();
+    $migration->up();
+
+    expect(Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx'))->toBeTrue();
+});
+
 it('resumes marketing groups after MySQL rejects the legacy import-row foreign-key name', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

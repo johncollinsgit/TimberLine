@@ -10,6 +10,7 @@ use App\Models\FieldServiceJobNotification;
 use App\Models\FieldServiceMaterial;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceTaskEvent;
+use App\Models\FieldServiceVehicle;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\TenantMemberPreference;
@@ -27,6 +28,7 @@ use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
+use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,6 +36,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
@@ -160,7 +163,8 @@ class EverbranchMobileFieldServiceController extends Controller
         $owner = $financialAccess->allows($user, $tenantModel);
         $job->load([
             'assignedUser:id,name,email', 'participants:id,name,email', 'tasks.assignedUser:id,name', 'tasks.assignees:id,name,email', 'tasks.events.actor:id,name', 'tasks.createdBy:id,name', 'tasks.completedBy:id,name',
-            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,notes',
+            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,requested_by_user_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,notes,created_at',
+            'materials.requestedBy:id,name',
             'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
             'assets' => fn ($assets) => $assets->when(! $owner, fn ($query) => $query->where('visibility', 'team'))->latest('captured_at')->latest('id'),
             'notes' => fn ($notes) => $notes->when(! $owner, fn ($query) => $query->where(fn ($visibility) => $visibility->whereNull('metadata->visibility')->orWhere('metadata->visibility', '!=', 'owner')))->latest('noted_at'),
@@ -827,11 +831,12 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'replayed' => (bool) $result['replayed'], 'task' => $assignments->payload($result['task']), 'event_id' => (int) $result['event']->id]);
     }
 
-    public function updateJob(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications): JsonResponse
+    public function updateJob(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, FieldServiceJobLifecycleService $lifecycle, FieldServiceJobReadinessService $readiness, FieldServiceJobNotificationService $notifications, LandlordOperatorActionAuditService $audit): JsonResponse
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canManageJobs($user, $tenantModel) && (int) $job->tenant_id === (int) $tenantModel->id, 403);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id, 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'], 'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'customer_name' => ['sometimes', 'nullable', 'string', 'max:255'], 'customer_email' => ['sometimes', 'nullable', 'email', 'max:255'],
@@ -847,33 +852,69 @@ class EverbranchMobileFieldServiceController extends Controller
             'vehicle_ids' => ['sometimes', 'array', 'max:20'], 'vehicle_ids.*' => ['integer'],
             'operational_status' => ['sometimes', 'in:active,scheduled,complete,quote,canceled,history'],
         ]);
-        $before = $job->only(['scheduled_for', 'scheduled_end_at', 'assigned_user_id']);
-        $job->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'vehicle_ids', 'operational_status'])->all());
-        if (array_key_exists('assigned_user_id', $validated)) {
-            $job->assigned_user_id = is_numeric($validated['assigned_user_id']) ? $tenantModel->users()->whereKey((int) $validated['assigned_user_id'])->value('users.id') : null;
+        $assignedId = null;
+        if (array_key_exists('assigned_user_id', $validated) && $validated['assigned_user_id'] !== null) {
+            $assignedId = $tenantModel->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereKey((int) $validated['assigned_user_id'])->value('users.id');
+            abort_unless($assignedId !== null, 422, 'Choose an active lead from this workspace.');
+            $assignedId = (int) $assignedId;
         }
-        if (array_key_exists('scheduled_for', $validated)) {
-            $job->scheduled_for = $validated['scheduled_for'];
-        }
-        $job->save();
+        $participantIds = collect((array) ($validated['participant_user_ids'] ?? []))->map(fn ($id): int => (int) $id)->unique()->values();
         if (array_key_exists('participant_user_ids', $validated)) {
-            $ids = $tenantModel->users()->whereIn('users.id', $validated['participant_user_ids'])->pluck('users.id')->map(fn ($id): int => (int) $id);
-            $job->participants()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'role' => 'member', 'following' => true]])->all());
+            $matchingParticipants = $tenantModel->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereIn('users.id', $participantIds)->pluck('users.id')->map(fn ($id): int => (int) $id)->values();
+            abort_unless($matchingParticipants->count() === $participantIds->count(), 422, 'Choose active participants from this workspace.');
+            $participantIds = $matchingParticipants;
         }
+        $vehicleIds = collect((array) ($validated['vehicle_ids'] ?? []))->map(fn ($id): int => (int) $id)->unique()->values();
         if (array_key_exists('vehicle_ids', $validated)) {
-            $vehicleIds = \App\Models\FieldServiceVehicle::query()->forTenantId((int) $tenantModel->id)->whereIn('id', $validated['vehicle_ids'])->pluck('id')->map(fn ($id): int => (int) $id);
-            $job->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'assigned_by_user_id' => (int) $user->id]])->all());
+            $matchingVehicles = FieldServiceVehicle::query()->forTenantId((int) $tenantModel->id)->whereIn('id', $vehicleIds)->pluck('id')->map(fn ($id): int => (int) $id)->values();
+            abort_unless($matchingVehicles->count() === $vehicleIds->count(), 422, 'Choose vehicles from this workspace.');
+            $vehicleIds = $matchingVehicles;
         }
-        if (filled($validated['operational_status'] ?? null)) {
-            $lifecycle->setManualStatus($job, (string) $validated['operational_status']);
-        } elseif ($job->status_source !== 'manual' && in_array($job->operational_status, ['active', 'scheduled', 'needs_details'], true)) {
-            $job->load('participants');
-            $job->forceFill(['operational_status' => $readiness->forJob($job)['ready'] ? ($job->started_at ? 'active' : 'scheduled') : 'needs_details'])->save();
-        }
+        $beforeSchedule = $job->only(['scheduled_for', 'scheduled_end_at', 'assigned_user_id']);
+        $updatedJob = DB::transaction(function () use ($tenantModel, $user, $job, $validated, $assignedId, $participantIds, $vehicleIds, $lifecycle, $readiness, $audit): FieldServiceJob {
+            $locked = FieldServiceJob::query()->forTenantId((int) $tenantModel->id)->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            $locked->load(['participants:id', 'vehicles:id']);
+            $scheduledFor = array_key_exists('scheduled_for', $validated) ? $validated['scheduled_for'] : $locked->scheduled_for;
+            $scheduledEndAt = array_key_exists('scheduled_end_at', $validated) ? $validated['scheduled_end_at'] : $locked->scheduled_end_at;
+            abort_if($scheduledFor !== null && $scheduledEndAt !== null
+                && Carbon::parse($scheduledEndAt)->lessThanOrEqualTo(Carbon::parse($scheduledFor)), 422, 'Scheduled end must be after scheduled start.');
+            $before = $this->jobAuditState($locked);
+            $lockBoxChanged = array_key_exists('lock_box_code', $validated) && (string) $locked->lock_box_code !== (string) ($validated['lock_box_code'] ?? '');
+            $locked->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'vehicle_ids', 'operational_status'])->all());
+            if (array_key_exists('assigned_user_id', $validated)) {
+                $locked->assigned_user_id = $assignedId;
+            }
+            $locked->save();
+            if (array_key_exists('participant_user_ids', $validated)) {
+                $locked->participants()->sync($participantIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'role' => 'member', 'following' => true]])->all());
+            }
+            if (array_key_exists('vehicle_ids', $validated)) {
+                $locked->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'assigned_by_user_id' => (int) $user->id]])->all());
+            }
+            if (filled($validated['operational_status'] ?? null)) {
+                $lifecycle->setManualStatus($locked, (string) $validated['operational_status']);
+            } elseif ($locked->status_source !== 'manual' && in_array($locked->operational_status, ['active', 'scheduled', 'needs_details'], true)) {
+                $locked->load('participants');
+                $locked->forceFill(['operational_status' => $readiness->forJob($locked)['ready'] ? ($locked->started_at ? 'active' : 'scheduled') : 'needs_details'])->save();
+            }
+            $locked->refresh()->load(['participants:id', 'vehicles:id']);
+            $audit->record(
+                (int) $tenantModel->id,
+                (int) $user->id,
+                'field_service.job.updated',
+                targetType: 'field_service_job',
+                targetId: $locked->id,
+                context: ['surface' => 'everbranch_mobile', 'lock_box_code_changed' => $lockBoxChanged],
+                beforeState: $before,
+                afterState: $this->jobAuditState($locked),
+            );
 
-        $changed = collect(['scheduled_for', 'scheduled_end_at', 'assigned_user_id'])->contains(fn (string $key): bool => (string) ($before[$key] ?? '') !== (string) $job->{$key});
+            return $locked;
+        });
+
+        $changed = collect(['scheduled_for', 'scheduled_end_at', 'assigned_user_id'])->contains(fn (string $key): bool => (string) ($beforeSchedule[$key] ?? '') !== (string) $updatedJob->{$key});
         if ($changed || array_key_exists('participant_user_ids', $validated) || array_key_exists('vehicle_ids', $validated)) {
-            $notifications->notifyJobEvent($job, $user, 'schedule_changed', 'Schedule or team assignment changed for '.$job->title.'.', 'job-updated:'.$job->id.':'.$job->updated_at?->timestamp);
+            $notifications->notifyJobEvent($updatedJob, $user, 'schedule_changed', 'Schedule or team assignment changed for '.$updatedJob->title.'.', 'job-updated:'.$updatedJob->id.':'.$updatedJob->updated_at?->timestamp);
         }
 
         return response()->json(['ok' => true]);
@@ -904,6 +945,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $material = FieldServiceMaterial::query()->create([
             'tenant_id' => (int) $tenantModel->id,
             'field_service_job_id' => (int) $job->id,
+            'requested_by_user_id' => (int) $user->id,
             'name' => trim((string) $validated['name']),
             'quantity' => (float) ($validated['quantity'] ?? 1),
             'unit' => filled($validated['unit'] ?? null) ? trim((string) $validated['unit']) : null,
@@ -943,15 +985,54 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['ok' => true, 'material' => $this->materialPayload($material)]);
     }
 
-    public function team(Request $request): JsonResponse
+    public function destroyMaterial(Request $request, string $tenant, FieldServiceJob $job, FieldServiceMaterial $material, FieldServiceAccessService $access, LandlordOperatorActionAuditService $audit): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id
+            && (int) $material->tenant_id === (int) $tenantModel->id
+            && (int) $material->field_service_job_id === (int) $job->id, 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
+        abort_unless($material->requested_by_user_id !== null
+            || ($material->external_source === null && $material->field_material_catalog_item_id === null), 422, 'Only field material requests can be deleted here.');
+
+        $before = $this->materialAuditState($material);
+        DB::transaction(function () use ($tenantModel, $user, $material, $audit, $before): void {
+            $material->delete();
+            $audit->record(
+                (int) $tenantModel->id,
+                (int) $user->id,
+                'field_service.material_request.deleted',
+                targetType: 'field_service_material',
+                targetId: $material->id,
+                context: ['surface' => 'everbranch_mobile'],
+                beforeState: $before,
+            );
+        });
+
+        return response()->json(status: 204);
+    }
+
+    public function team(Request $request, FieldServiceAccessService $access): JsonResponse
     {
         $tenant = $this->tenant($request);
+        $canManage = $access->canManageJobs($this->user($request), $tenant);
 
-        return response()->json(['members' => $tenant->users()->wherePivot('membership_active', true)->orderBy('name')->get(['users.id', 'users.name', 'users.email'])->map(function (User $user): array {
-            $role = strtolower((string) $user->pivot?->role);
+        return response()->json([
+            'members' => $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->orderBy('name')->get(['users.id', 'users.name', 'users.email'])->map(function (User $user): array {
+                $role = strtolower((string) $user->pivot?->role);
 
-            return ['id' => (int) $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $role, 'office_handoff_recipient' => in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)];
-        })->values()]);
+                return ['id' => (int) $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $role, 'office_handoff_recipient' => in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)];
+            })->values(),
+            'vehicles' => $canManage
+                ? FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->orderBy('id')->get(['id', 'name', 'identifier', 'status'])->map(fn (FieldServiceVehicle $vehicle): array => [
+                    'id' => (int) $vehicle->id,
+                    'name' => (string) $vehicle->name,
+                    'identifier' => $vehicle->identifier,
+                    'status' => (string) $vehicle->status,
+                ])->values()
+                : [],
+        ]);
     }
 
     public function preferences(Request $request): JsonResponse
@@ -1277,15 +1358,64 @@ class EverbranchMobileFieldServiceController extends Controller
             'unit' => $material->unit,
             'status' => (string) $material->status,
             'notes' => $material->notes,
+            'requester' => $material->requestedBy ? ['id' => (int) $material->requestedBy->id, 'name' => (string) $material->requestedBy->name] : null,
+            'created_at' => $material->created_at?->toIso8601String(),
             'pulled_quantity' => (float) $material->pulled_quantity,
             'loaded_quantity' => (float) $material->loaded_quantity,
             'used_quantity' => (float) $material->used_quantity,
         ];
     }
 
+    /** @return array<string,mixed> */
+    protected function materialAuditState(FieldServiceMaterial $material): array
+    {
+        return [
+            'id' => (int) $material->id,
+            'job_id' => (int) $material->field_service_job_id,
+            'requested_by_user_id' => $material->requested_by_user_id === null ? null : (int) $material->requested_by_user_id,
+            'name' => (string) $material->name,
+            'quantity' => (float) $material->quantity,
+            'unit' => $material->unit,
+            'status' => (string) $material->status,
+            'notes' => $material->notes,
+            'created_at' => $material->created_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function jobAuditState(FieldServiceJob $job): array
+    {
+        return [
+            'id' => (int) $job->id,
+            'title' => $job->title,
+            'description' => $job->description,
+            'customer_name' => $job->customer_name,
+            'customer_email' => $job->customer_email,
+            'customer_phone' => $job->customer_phone,
+            'project_manager_name' => $job->project_manager_name,
+            'project_manager_company' => $job->project_manager_company,
+            'project_manager_phone' => $job->project_manager_phone,
+            'project_manager_email' => $job->project_manager_email,
+            'service_address_line_1' => $job->service_address_line_1,
+            'service_address_line_2' => $job->service_address_line_2,
+            'service_city' => $job->service_city,
+            'service_state' => $job->service_state,
+            'service_postal_code' => $job->service_postal_code,
+            'service_country' => $job->service_country,
+            'priority' => $job->priority,
+            'scheduled_for' => $job->scheduled_for?->toIso8601String(),
+            'scheduled_end_at' => $job->scheduled_end_at?->toIso8601String(),
+            'assigned_user_id' => $job->assigned_user_id === null ? null : (int) $job->assigned_user_id,
+            'participant_user_ids' => $job->participants()->pluck('users.id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
+            'vehicle_ids' => $job->vehicles()->pluck('field_service_vehicles.id')->map(fn ($id): int => (int) $id)->sort()->values()->all(),
+            'operational_status' => $job->operational_status,
+            'lock_box_code_present' => filled($job->lock_box_code),
+        ];
+    }
+
     protected function officeRecipients(Tenant $tenant): \Illuminate\Support\Collection
     {
-        return $tenant->users()->wherePivot('membership_active', true)->get(['users.id', 'users.name', 'users.email'])
+        return $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->get(['users.id', 'users.name', 'users.email'])
             ->filter(fn (User $member): bool => in_array(strtolower((string) $member->pivot?->role), ['owner', 'tenant_owner', 'admin', 'manager'], true))->values();
     }
 

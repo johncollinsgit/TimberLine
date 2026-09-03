@@ -1,5 +1,12 @@
 # START HERE
 
+## Mobile manager timecards and material requests (2026-09-03)
+
+- `/api/mobile/v1/workspaces/{tenant}/field-service/time-clock-hours` is owner/admin/manager-only and requires the canonical `time_tracking` entitlement. Keep ranges bounded, the unified timer/manual ledger paginated, editor choices tenant-scoped, and all completed-entry corrections validated and audited. Do not turn its duration analytics into payroll or overtime calculations.
+- Completed timer edits update the reviewed session aggregate only. Preserve `field_service_time_breaks` as immutable punch evidence, include their totals in the edit audit snapshot, and reject edits to running/paused timers.
+- Manager My Day material cards are a bounded preview, while `counts.material_requests` must use a separate exact tenant-scoped count. Material-request deletion is manager-only, limited to field requests, and requires audit evidence; it must never delete inventory or imported QuickBooks material rows.
+- Full mobile job edits must validate active tenant assignees/participants, tenant vehicles, and `scheduled_end_at > scheduled_for` using the resulting stored values. Audit meaningful before/after state, but never place a lock-box code in audit payloads.
+
 ## Field Service address search (2026-09-02)
 
 - Job-detail address autocomplete is an admin/manager-only Field Service feature. It uses the server-side Google Places key and only tenant-authorized endpoints; do not expose the provider key to the browser. Provider/key failures must preserve normal manual address entry.

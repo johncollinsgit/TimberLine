@@ -2611,3 +2611,10 @@
 - Added live per-file deletion counts, immediate removal of confirmed files, bounded concurrent uploads/deletes, and private thumbnail caching so large photo jobs remain responsive.
 - Replaced proxy-sized PDF requests with two-hour resumable upload sessions. The app sends retry-safe 512 KiB chunks and the server verifies offsets, per-chunk and whole-file SHA-256, the exact declared size, and actual PDF content before an idempotent promotion. The default finite file cap is 50 MiB; active-session, tenant staging-reservation, and expiry cleanup limits keep the workflow bounded.
 - Added authenticated single-range PDF streaming for local storage, including correct `206`/`416`, byte-range headers, exact response lengths, inline disposition, and content-sniffing protection so large drawings can seek and page without repeated full downloads.
+
+## 2026-09-03 — Mobile manager hours and request inbox
+
+- Added the server contract for a manager-only Time Clock & Hours view with range presets, headline totals, employee/job/day analytics, and a paginated timer/manual ledger.
+- Added validated, audited editing for completed hour submissions, with server-recomputed durations and immutable raw break punches.
+- Added pending material-request cards to manager Home with an exact total, purchase notes, Materials-tab destinations, and audited manager deletion.
+- Added tenant-scoped vehicle choices for the expanded manager job editor and audited full job changes without exposing lock-box values.

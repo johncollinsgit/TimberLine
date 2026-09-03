@@ -4,6 +4,13 @@
 
 - Read-only QuickBooks invoice syncs now promote only clear whole-generator installation evidence into tenant-scoped equipment, retain generator-related connection/transfer work for review, and attach unambiguous annual generator service invoices to the matching equipment history. The equipment board keeps the last service and schedules the next annual due date; the daily scanner creates one-month-out work and guarded alerts. The source audit is `docs/operations/collins-generator-invoice-history-2026-09-03.md`.
 
+## Mobile manager hours and material-request inbox (2026-09-03)
+
+- Field Service owners/admins/managers with the `time_tracking` entitlement have a tenant-scoped mobile Time Clock & Hours contract. It provides bounded week, pay-period, month, or custom reporting; approved/submitted totals; employee, job, and day rollups; and a paginated ledger combining timer sessions with manual entries.
+- Managers may correct only completed timer sessions or manual entries. The server validates active workspace employees, tenant jobs, timestamps, breaks, and review status; recomputes duration; rejects idempotency collisions; and records before/after audit evidence. Raw timer break punches remain immutable when a manager corrects the reviewed break aggregate. This remains timecard reporting, not payroll or overtime calculation.
+- The manager My Day response includes up to 25 pending material-request cards plus an exact uncapped pending count. Cards identify the job and requester and deep-link to the Materials tab; purchase notes and manager-only deletion remain tenant-scoped and deletion records an audit snapshot.
+- Manager team metadata exposes active tenant vehicle choices for the full job editor. Job changes validate tenant employees/vehicles and schedule ordering and are audited without storing lock-box values.
+
 ## Mobile field files and material requests (2026-09-03)
 
 - The native job surface uses Overview, Job notes, Materials, and Pics/Drawings; the Tasks tab and My Day task feed are no longer part of the mobile experience.
