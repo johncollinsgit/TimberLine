@@ -199,6 +199,7 @@ class BirthdayPagesController extends Controller
             TenantMarketingSetting::query()->updateOrCreate(
                 ['tenant_id' => $tenantId, 'key' => 'birthday_campaign_config'],
                 ['value' => [
+                    ...$existing,
                     'email_enabled' => array_key_exists('email_enabled', $data) ? (bool) $data['email_enabled'] : (bool) data_get($existing, 'email_enabled', false),
                     'sms_enabled' => array_key_exists('sms_enabled', $data) ? (bool) $data['sms_enabled'] : (bool) data_get($existing, 'sms_enabled', false),
                     'birthday_send_offset' => isset($data['birthday_send_offset']) ? (int) $data['birthday_send_offset'] : (int) data_get($existing, 'birthday_send_offset', 0),

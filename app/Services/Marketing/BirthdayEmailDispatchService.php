@@ -18,7 +18,8 @@ class BirthdayEmailDispatchService
         protected TenantEmailSettingsService $emailSettingsService,
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingEmailReadiness $emailReadiness,
-        protected TenantMarketingSettingsResolver $marketingSettingsResolver
+        protected TenantMarketingSettingsResolver $marketingSettingsResolver,
+        protected BirthdayEmailComposerService $birthdayEmailComposer,
     ) {}
 
     /**
@@ -121,7 +122,7 @@ class BirthdayEmailDispatchService
             if ($textBody === '') {
                 $textBody = 'Your birthday reward is ready.';
             }
-            $htmlBody = $this->htmlFromText($textBody);
+            $htmlBody = $this->birthdayEmailComposer->renderForDelivery($subject, $config, $profile, $this->templateExtra($metadata, $issuance, $applyUrl))['html'];
         }
 
         if (! $failure && trim($toEmail) === '') {
