@@ -2591,3 +2591,8 @@
 
 - Added an Updates composer to the Jobs-grid quick view so crews can post field notes and attach photos or supported files without opening a second page.
 - Update photos appear in a secure in-panel carousel with thumbnail selection, previous/next controls, and a full-size open action.
+# 2026-09-03 — Mobile files and material requests
+
+- Removed the Tasks tab and My Day task feed from the field app, leaving four focused job tabs: Overview, Job notes, Materials, and Pics/Drawings.
+- Added employee material requests inside each job. Admins can mark requests purchased and include a purchase note visible to the crew.
+- Added live per-file deletion counts, immediate removal of confirmed files, bounded concurrent uploads/deletes, retry-safe PDF compatibility upload, and private thumbnail caching so large photo jobs remain responsive.

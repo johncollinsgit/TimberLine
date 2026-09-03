@@ -3,6 +3,8 @@
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
+use App\Models\FieldServiceJobNotification;
+use App\Models\FieldServiceMaterial;
 use App\Models\FieldServicePriceBookItem;
 use App\Models\FieldServiceTask;
 use App\Models\FieldServiceTaskEvent;
@@ -125,6 +127,39 @@ test('field service mobile keeps members on participating jobs and lets owners s
         ->assertOk()->assertJsonCount(2, 'jobs');
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$assigned->id)
         ->assertOk()->assertJsonPath('job.financials.0.balance', 450)->assertJsonPath('job.activity.0.body', 'Panel is labeled and ready for inspection.');
+});
+
+test('employees request job materials and admins record purchase notes', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Material request job',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/materials';
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $materialId = $this->postJson($url.'/requests', ['name' => '200 ft of 12/2 Romex'])
+        ->assertCreated()
+        ->assertJsonPath('material.status', 'needed')
+        ->json('material.id');
+    expect(FieldServiceMaterial::query()->findOrFail($materialId)->name)->toBe('200 ft of 12/2 Romex')
+        ->and(FieldServiceJobNotification::query()->forTenantId($tenant->id)->where('user_id', $owner->id)->where('event_type', 'material_requested')->exists())->toBeTrue();
+    $this->patchJson($url.'/'.$materialId, ['status' => 'purchased', 'notes' => 'Pickup at supply house after 2 PM'])->assertForbidden();
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->patchJson($url.'/'.$materialId, ['status' => 'purchased', 'notes' => 'Pickup at supply house after 2 PM'])
+        ->assertOk()
+        ->assertJsonPath('material.status', 'purchased')
+        ->assertJsonPath('material.notes', 'Pickup at supply house after 2 PM');
+
+    Sanctum::actingAs($member, ['mobile:read']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
+        ->assertOk()
+        ->assertJsonPath('job.materials.0.status', 'purchased')
+        ->assertJsonPath('job.materials.0.notes', 'Pickup at supply house after 2 PM');
 });
 
 test('legacy QuickBooks invoice jobs stay out of current mobile jobs', function (): void {
@@ -474,6 +509,11 @@ test('iPhone photo payload fallback stores a team-visible job photo when multipa
     expect($asset->visibility)->toBe('team')
         ->and($asset->jobs()->whereKey($job->id)->exists())->toBeTrue()
         ->and($asset->tags)->toContain('ios-payload-fallback');
+    $this->get('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/assets/'.$asset->id.'?thumbnail=1')
+        ->assertOk()
+        ->assertHeader('content-type', 'image/jpeg')
+        ->assertHeader('cache-control', 'immutable, max-age=604800, private');
+    expect(\App\Models\WorkspaceAssetEvent::query()->forTenantId($tenant->id)->where('workspace_asset_id', $asset->id)->where('action', 'downloaded')->exists())->toBeFalse();
 });
 
 test('job details and update attachments stay editable and visible to the full Collins team', function (): void {
