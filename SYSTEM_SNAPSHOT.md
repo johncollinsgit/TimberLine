@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Mobile field files and material requests (2026-09-03)
+
+- The native job surface uses Overview, Job notes, Materials, and Pics/Drawings; the Tasks tab and My Day task feed are no longer part of the mobile experience.
+- Assigned employees can create job-scoped material requests. Owners/admins/managers are notified, can mark a request purchased, and can attach a purchase note that remains visible to the crew.
+- Authenticated image thumbnails are generated at upload or on first legacy read, cached privately for seven days, and do not create full-download audit noise. Mobile photo uploads and deletes use bounded concurrency with per-file progress and retry-safe deletion.
+
 ## Field Service address search (2026-09-02)
 
 - Admins and managers can search a Service address while editing a job. A selected Google Places result fills the street, city, state, postal code, and country fields through tenant-authorized Everbranch endpoints; the Places key remains server-side. Without a configured key or a provider response, the form quietly remains available for manual entry.

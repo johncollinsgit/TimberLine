@@ -224,6 +224,30 @@ class WorkspaceAssetService
         return $primary !== 'local' && Storage::disk('local')->exists($asset->storage_path) ? 'local' : null;
     }
 
+    /** @return array{disk:string,path:string}|null */
+    public function thumbnailLocation(WorkspaceAsset $asset): ?array
+    {
+        if (! str_starts_with((string) $asset->mime_type, 'image/')) {
+            return null;
+        }
+        if ($asset->thumbnail_disk && $asset->thumbnail_path && Storage::disk($asset->thumbnail_disk)->exists($asset->thumbnail_path)) {
+            return ['disk' => $asset->thumbnail_disk, 'path' => $asset->thumbnail_path];
+        }
+
+        $sourceDisk = $this->readableDisk($asset);
+        if (! $sourceDisk) {
+            return null;
+        }
+        $bytes = Storage::disk($sourceDisk)->get($asset->storage_path);
+        [$thumbnailDisk, $thumbnailPath] = $this->storeThumbnail($sourceDisk, $asset->storage_path, $bytes, (string) $asset->mime_type);
+        if (! $thumbnailDisk || ! $thumbnailPath) {
+            return null;
+        }
+        $asset->forceFill(['thumbnail_disk' => $thumbnailDisk, 'thumbnail_path' => $thumbnailPath])->save();
+
+        return ['disk' => $thumbnailDisk, 'path' => $thumbnailPath];
+    }
+
     /** @return array{upload:WorkspaceAssetUpload,token:string,url:string,headers:array<string,string>} */
     public function initializeSignedUpload(Tenant $tenant, User $user, string $fileName, string $mime, int $fileSize, ?int $jobId, string $visibility, ?string $caption): array
     {
