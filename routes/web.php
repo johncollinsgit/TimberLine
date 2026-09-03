@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\AgreementProposalController;
+use App\Http\Controllers\BirthdayEmailComposerController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\ClassSchedulingController;
 use App\Http\Controllers\ClientProjectController;
@@ -2054,6 +2055,7 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/rewards/redeem', [ShopifyEmbeddedRewardsController::class, 'redeem'])->name('shopify.app.rewards.redeem');
     Route::get('/app/rewards/referrals', [ShopifyEmbeddedRewardsController::class, 'referrals'])->name('shopify.app.rewards.referrals');
     Route::get('/app/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birthdays'])->name('shopify.app.rewards.birthdays');
+    Route::get('/app/rewards/birthdays/email', [BirthdayEmailComposerController::class, 'show'])->name('shopify.app.rewards.birthdays.email');
     Route::get('/app/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.app.rewards.vip');
     Route::get('/app/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.app.rewards.notifications');
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
@@ -2219,6 +2221,12 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         Route::post('/wholesale/messaging/test-send', [WholesaleEmailMessengerController::class, 'testSend'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wholesale.messaging.test-send');
+        Route::post('/rewards/birthdays/email/draft', [BirthdayEmailComposerController::class, 'save'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.birthdays.email.save');
+        Route::post('/rewards/birthdays/email/test-send', [BirthdayEmailComposerController::class, 'testSend'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.birthdays.email.test-send');
         Route::post('/messaging/responses/{conversation}/actions', [ShopifyEmbeddedMessagingController::class, 'responsesUpdate'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.responses.update');

@@ -8,8 +8,8 @@ interface Draft {
   id: number; name: string; subject: string; sections: EmailSection[]; personalization: Record<string, string>;
   revision: number; rendered_html: string; locked_footer: boolean; sender: { from_email: string; from_name: string };
 }
-interface Bootstrap { authorized: boolean; draft: Draft; context_token?: string | null; endpoints: { save: string; test_send: string } }
-const node = document.getElementById("wholesale-email-messenger-bootstrap");
+interface Bootstrap { authorized: boolean; draft: Draft; context_token?: string | null; endpoints: { save: string; test_send: string }; meta?: { eyebrow?: string; saveNotice?: string; testDescription?: string } }
+const node = document.getElementById("wholesale-email-messenger-bootstrap") || document.getElementById("birthday-email-composer-bootstrap");
 const bootstrap = node?.textContent ? JSON.parse(node.textContent) as Bootstrap : null;
 
 function blockLabel(section: EmailSection, number: number) {
@@ -93,7 +93,7 @@ function App({ initial }: { initial: Bootstrap }) {
     try {
       const response = await requestMessagingJson<Draft>(initial.endpoints.save, { method: "POST", body: JSON.stringify({ subject: draft.subject, sections: draft.sections, personalization: draft.personalization, revision: draft.revision, context_token: initial.context_token }) });
       if (response.data) setDraft(response.data);
-      setNotice("Draft saved to the wholesale workspace."); return true;
+      setNotice(initial.meta?.saveNotice || "Draft saved to the wholesale workspace."); return true;
     } catch (error) { setNotice(error instanceof Error ? error.message : "Draft could not be saved."); return false; }
     finally { setSaving(false); }
   };
@@ -110,12 +110,12 @@ function App({ initial }: { initial: Bootstrap }) {
   };
 
   return <div className="wem-shell">
-    <div className="wem-toolbar"><div><span className="wem-eyebrow">MF Wholesale Backstage</span><strong>{draft.name}</strong><small>From {draft.sender.from_name} &lt;{draft.sender.from_email}&gt; · campaign sending is disabled</small></div><div><button className="wem-button wem-secondary" onClick={() => setPreview(preview === "desktop" ? "mobile" : "desktop")}>{preview === "desktop" ? "Mobile preview" : "Desktop preview"}</button><button className="wem-button" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save draft"}</button></div></div>
+    <div className="wem-toolbar"><div><span className="wem-eyebrow">{initial.meta?.eyebrow || "MF Wholesale Backstage"}</span><strong>{draft.name}</strong><small>From {draft.sender.from_name} &lt;{draft.sender.from_email}&gt; · campaign sending is disabled</small></div><div><button className="wem-button wem-secondary" onClick={() => setPreview(preview === "desktop" ? "mobile" : "desktop")}>{preview === "desktop" ? "Mobile preview" : "Desktop preview"}</button><button className="wem-button" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save draft"}</button></div></div>
     {notice && <div className="wem-notice">{notice}</div>}
     <div className="wem-grid">
-      <aside className="wem-blocks"><h2>16 editable blocks</h2><p>Choose a block here or click it in the email.</p>{draft.sections.map((item, index) => <button key={item.id} onClick={() => setSelected(index)} className={selected === index ? "active" : ""} aria-pressed={selected === index}>{blockLabel(item, index)}</button>)}<div className="wem-locked"><strong>Locked compliance footer</strong><span>Unsubscribe and privacy links are appended server-side.</span></div></aside>
+      <aside className="wem-blocks"><h2>{draft.sections.length} editable blocks</h2><p>Choose a block here or click it in the email.</p>{draft.sections.map((item, index) => <button key={item.id} onClick={() => setSelected(index)} className={selected === index ? "active" : ""} aria-pressed={selected === index}>{blockLabel(item, index)}</button>)}<div className="wem-locked"><strong>Locked compliance footer</strong><span>Unsubscribe and privacy links are appended server-side.</span></div></aside>
       <EmailCanvas draft={draft} selected={selected} preview={preview} onSelect={setSelected} />
-      <aside className="wem-inspector"><div className="wem-inspector-head"><span>Editing block {selected + 1} of 16</span><h2>{blockLabel(section, selected)}</h2></div>
+      <aside className="wem-inspector"><div className="wem-inspector-head"><span>Editing block {selected + 1} of {draft.sections.length}</span><h2>{blockLabel(section, selected)}</h2></div>
         <label>Subject<input value={draft.subject} maxLength={200} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></label>
         <label>Personalization token<input value={draft.personalization.first_name_token || ""} onChange={(event) => setDraft({ ...draft, personalization: { ...draft.personalization, first_name_token: event.target.value } })} /></label>
         <div className="wem-inspector-fields">
@@ -126,10 +126,11 @@ function App({ initial }: { initial: Bootstrap }) {
           {section.type === "product_grid_4" && <ProductGridInspector section={section} replaceSection={replaceSection} />}
           {section.type === "fading_divider" && <><label>Top spacing<input type="number" value={section.spacingTop || 0} onChange={(event) => replaceSection({ spacingTop: Number(event.target.value) })} /></label><label>Bottom spacing<input type="number" value={section.spacingBottom || 0} onChange={(event) => replaceSection({ spacingBottom: Number(event.target.value) })} /></label></>}
         </div>
-        <div className="wem-test"><h2>Send a test only</h2><p>Tests go only to addresses entered below. This screen has no campaign send control and never contacts prospects.</p><input aria-label="Test email" placeholder="you@example.com" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /><button className="wem-button" disabled={testing} onClick={() => void testSend()}>{testing ? "Sending test…" : "Send test email"}</button></div>
+        <div className="wem-test"><h2>Send a test only</h2><p>{initial.meta?.testDescription || "Tests go only to addresses entered below. This screen has no campaign send control and never contacts prospects."}</p><input aria-label="Test email" placeholder="you@example.com" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /><button className="wem-button" disabled={testing} onClick={() => void testSend()}>{testing ? "Sending test…" : "Send test email"}</button></div>
       </aside>
     </div>
   </div>;
 }
 
-if (bootstrap?.authorized && bootstrap.draft) createRoot(document.getElementById("wholesale-email-messenger-root")!).render(<App initial={bootstrap} />);
+const root = document.getElementById("wholesale-email-messenger-root") || document.getElementById("birthday-email-composer-root");
+if (bootstrap?.authorized && bootstrap.draft && root) createRoot(root).render(<App initial={bootstrap} />);

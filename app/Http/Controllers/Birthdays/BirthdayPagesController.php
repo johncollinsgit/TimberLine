@@ -16,13 +16,12 @@ use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Services\Marketing\CandleCashLegacyCompatibilityService;
-use App\Support\Birthdays\BirthdaySectionRegistry;
 use App\Services\Tenancy\TenantMarketingSettingsResolver;
+use App\Support\Birthdays\BirthdaySectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 
 class BirthdayPagesController extends Controller
 {
@@ -199,6 +198,7 @@ class BirthdayPagesController extends Controller
             TenantMarketingSetting::query()->updateOrCreate(
                 ['tenant_id' => $tenantId, 'key' => 'birthday_campaign_config'],
                 ['value' => [
+                    ...$existing,
                     'email_enabled' => array_key_exists('email_enabled', $data) ? (bool) $data['email_enabled'] : (bool) data_get($existing, 'email_enabled', false),
                     'sms_enabled' => array_key_exists('sms_enabled', $data) ? (bool) $data['sms_enabled'] : (bool) data_get($existing, 'sms_enabled', false),
                     'birthday_send_offset' => isset($data['birthday_send_offset']) ? (int) $data['birthday_send_offset'] : (int) data_get($existing, 'birthday_send_offset', 0),
@@ -284,7 +284,7 @@ class BirthdayPagesController extends Controller
         $result = $engine->issueAnnualReward($birthdayProfile);
         $message = (bool) ($result['ok'] ?? false)
             ? 'Birthday reward issued.'
-            : 'Birthday reward could not be issued: ' . (string) ($result['error'] ?? 'unknown');
+            : 'Birthday reward could not be issued: '.(string) ($result['error'] ?? 'unknown');
 
         return back()->with('toast', ['style' => (bool) ($result['ok'] ?? false) ? 'success' : 'danger', 'message' => $message]);
     }
@@ -310,7 +310,7 @@ class BirthdayPagesController extends Controller
             'style' => (bool) ($result['ok'] ?? false) ? 'success' : 'danger',
             'message' => (bool) ($result['ok'] ?? false)
                 ? 'Birthday reward activated and synced to Shopify.'
-                : 'Birthday reward could not be activated: ' . (string) ($result['error'] ?? 'unknown'),
+                : 'Birthday reward could not be activated: '.(string) ($result['error'] ?? 'unknown'),
         ]);
     }
 
@@ -363,11 +363,11 @@ class BirthdayPagesController extends Controller
             ->when($search !== '', function (Builder $builder) use ($search): void {
                 $builder->where(function (Builder $query) use ($search): void {
                     $query->whereHas('marketingProfile', function (Builder $profileQuery) use ($search): void {
-                        $profileQuery->where('first_name', 'like', '%' . $search . '%')
-                            ->orWhere('last_name', 'like', '%' . $search . '%')
-                            ->orWhere('email', 'like', '%' . $search . '%')
-                            ->orWhere('phone', 'like', '%' . $search . '%');
-                    })->orWhere('signup_source', 'like', '%' . $search . '%');
+                        $profileQuery->where('first_name', 'like', '%'.$search.'%')
+                            ->orWhere('last_name', 'like', '%'.$search.'%')
+                            ->orWhere('email', 'like', '%'.$search.'%')
+                            ->orWhere('phone', 'like', '%'.$search.'%');
+                    })->orWhere('signup_source', 'like', '%'.$search.'%');
                 });
             })
             ->when($month >= 1 && $month <= 12, fn (Builder $builder) => $builder->where('birth_month', $month))
@@ -483,6 +483,7 @@ class BirthdayPagesController extends Controller
     protected function campaignConfig(int $tenantId): array
     {
         $resolver = app(TenantMarketingSettingsResolver::class);
+
         return array_merge(
             [
                 'email_enabled' => true,
@@ -506,6 +507,7 @@ class BirthdayPagesController extends Controller
     protected function captureConfig(int $tenantId): array
     {
         $resolver = app(TenantMarketingSettingsResolver::class);
+
         return array_merge(
             [
                 'year_optional' => true,

@@ -15,6 +15,7 @@ export default defineConfig(() => ({
         'resources/js/field-service/jobs-grid.tsx',
         'resources/js/shopify/dashboard.tsx',
         'resources/js/shopify/wholesale-messaging.tsx',
+        'resources/js/shopify/birthday-email-composer.tsx',
       ],
       refresh: true,
     }),
