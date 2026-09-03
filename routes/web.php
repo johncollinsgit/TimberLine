@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\AgreementProposalController;
+use App\Http\Controllers\BirthdayEmailComposerController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\ClassSchedulingController;
 use App\Http\Controllers\ClientProjectController;
@@ -107,7 +108,6 @@ use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WebsiteCommerceController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
 use App\Http\Controllers\WholesaleEmailMessengerController;
-use App\Http\Controllers\BirthdayEmailComposerController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Http\Controllers\WorkspaceDocumentsController;
