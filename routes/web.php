@@ -1022,6 +1022,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('field-service.equipment.')
         ->group(function (): void {
             Route::get('/', [EquipmentMaintenanceController::class, 'index'])->name('index');
+            Route::get('/calendar', [EquipmentMaintenanceController::class, 'calendar'])->name('calendar');
             Route::post('/', [EquipmentMaintenanceController::class, 'store'])->name('store');
             Route::get('/{equipment}', [EquipmentMaintenanceController::class, 'show'])->name('show');
             Route::post('/{equipment}/service-jobs', [EquipmentMaintenanceController::class, 'storeServiceJob'])->name('service-jobs.store');
