@@ -1112,9 +1112,15 @@ test('resumable PDF initialization enforces file and active staging quotas', fun
         ->assertJsonPath('message', 'This workspace has too many active uploads. Try again shortly.');
 });
 
-test('job photo retries replay one asset across multipart and JSON fallback transports', function (): void {
+test('job photo mutations require assignment while assigned members and admins retain cross-transport replay', function (): void {
     Storage::fake('local');
-    [$tenant, $owner, $member] = usabilityWorkspace();
+    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    TenantModuleEntitlement::query()
+        ->where('tenant_id', $tenant->id)
+        ->where('module_key', 'field_service')
+        ->firstOrFail()
+        ->forceFill(['metadata' => ['member_job_visibility' => 'all_operational']])
+        ->save();
     $job = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
         'assigned_user_id' => $member->id,
@@ -1125,6 +1131,17 @@ test('job photo retries replay one asset across multipart and JSON fallback tran
     $contents = (string) file_get_contents($image->getRealPath());
     $key = (string) Str::uuid();
     $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/photos';
+
+    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
+    $this->withHeaders(['Idempotency-Key' => $key, 'Accept' => 'application/json'])->post($url, [
+        'photos' => [UploadedFile::fake()->image('unassigned.jpg', 20, 20)],
+    ])->assertForbidden();
+    $this->withHeader('Idempotency-Key', $key)->postJson($url.'/payload', [
+        'file_name' => 'unassigned.jpg',
+        'mime_type' => 'image/jpeg',
+        'contents_base64' => base64_encode($contents),
+    ])->assertForbidden();
+    expect(WorkspaceAsset::query()->forTenantId($tenant->id)->count())->toBe(0);
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $first = $this->withHeader('Idempotency-Key', $key)->post($url, [
@@ -1143,6 +1160,31 @@ test('job photo retries replay one asset across multipart and JSON fallback tran
     expect($replayed->json('photo.id'))->toBe($first->json('photos.0.id'))
         ->and(WorkspaceAsset::query()->forTenantId($tenant->id)->count())->toBe(1)
         ->and(WorkspaceAsset::query()->forTenantId($tenant->id)->sole()->tags)->not->toContain('ios-payload-fallback');
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $foreignTenant = Tenant::query()->create(['name' => 'Foreign Electric', 'slug' => 'foreign-electric']);
+    $foreignJob = FieldServiceJob::query()->create([
+        'tenant_id' => $foreignTenant->id,
+        'title' => 'Foreign job',
+        'operational_status' => 'active',
+    ]);
+    $foreignUrl = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$foreignJob->id.'/photos';
+    $this->withHeaders(['Idempotency-Key' => $key, 'Accept' => 'application/json'])->post($foreignUrl, [
+        'photos' => [UploadedFile::fake()->image('foreign.jpg', 20, 20)],
+    ])->assertNotFound();
+    $this->withHeader('Idempotency-Key', $key)->postJson($foreignUrl.'/payload', [
+        'file_name' => 'foreign.jpg',
+        'mime_type' => 'image/jpeg',
+        'contents_base64' => base64_encode($contents),
+    ])->assertNotFound();
+
+    $admin = $this->withHeader('Idempotency-Key', $key)->post($url, [
+        'photos' => [UploadedFile::fake()->image('admin.jpg', 20, 20)],
+    ])->assertCreated()
+        ->assertJsonPath('replayed', false);
+
+    expect($admin->json('photos.0.id'))->not->toBe($first->json('photos.0.id'))
+        ->and(WorkspaceAsset::query()->forTenantId($tenant->id)->count())->toBe(2);
 });
 
 test('iPhone photo payload fallback stores a team-visible job photo when multipart upload is unavailable', function (): void {

@@ -480,7 +480,8 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id, 404);
+        abort_unless($access->canUpdateProgress($user, $tenantModel, $job), 403);
         $request->validate(['photos' => ['required', 'array', 'min:1', 'max:20'], 'photos.*' => ['required', 'image', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
         $result = $this->idempotentPhotoUpload($request, $tenantModel, $user, $job, fn (): array => collect($request->file('photos', []))
             ->map(fn ($photo): array => $this->assetPayload($assets->storeUpload($tenantModel, $user, $photo, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-photo']), $tenantModel))
@@ -501,7 +502,8 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless((int) $job->tenant_id === (int) $tenantModel->id, 404);
+        abort_unless($access->canUpdateProgress($user, $tenantModel, $job), 403);
         $singlePayload = ! $request->has('photos');
         $validated = $singlePayload
             ? ['photos' => [$request->validate([
