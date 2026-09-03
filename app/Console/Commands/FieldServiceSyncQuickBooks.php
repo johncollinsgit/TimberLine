@@ -77,6 +77,8 @@ class FieldServiceSyncQuickBooks extends Command
             'quickbooks_purchases', 'quickbooks_bills', 'quickbooks_items', 'quickbooks_attachments',
             'customers', 'jobs', 'jobs_created', 'jobs_updated', 'items', 'documents', 'documents_created',
             'documents_updated', 'documents_linked', 'documents_needing_review', 'lines', 'attachments', 'skipped',
+            'generator_installations_detected', 'generator_equipment_created', 'generator_equipment_updated',
+            'generator_services_detected', 'generator_services_linked', 'generator_services_needing_review',
         ] as $key) {
             $this->line($key.'='.(int) ($summary[$key] ?? 0));
         }

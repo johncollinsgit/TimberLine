@@ -399,7 +399,7 @@ class EverbranchMobileController extends Controller
 
         if ($moduleKey === 'documents' && $actionKey === 'upload_assets') {
             $validated = $request->validate([
-                'files' => ['required', 'array', 'min:1', 'max:20'],
+                'files' => ['required', 'array', 'size:1'],
                 'files.*' => ['required', 'file', 'max:25600'],
                 'job_ids' => ['nullable', 'array'],
                 'job_ids.*' => ['integer'],

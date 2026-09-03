@@ -16,11 +16,17 @@ use App\Models\TenantAccessProfile;
 use App\Models\TenantMemberPreference;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
+use App\Models\WorkspaceAsset;
+use App\Models\WorkspaceAssetUpload;
 use App\Services\FieldService\FieldServiceJobLifecycleService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
+use App\Services\FieldService\WorkspaceAssetService;
+use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
 use App\Services\Mobile\TenantMobileModuleRegistry;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 
 function usabilityWorkspace(): array
@@ -52,6 +58,33 @@ function usabilityWorkspace(): array
     $other->tenants()->attach($tenant->id, ['role' => 'member']);
 
     return [$tenant, $owner, $member, $other];
+}
+
+function resumableTwoPagePdf(int $minimumBytes = 1400000): string
+{
+    $firstPage = "q\nQ\n";
+    $secondPage = str_repeat("q\nQ\n", (int) ceil(max(0, $minimumBytes - 1200) / 4));
+    $objects = [
+        1 => "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        2 => "2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>\nendobj\n",
+        3 => "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R >>\nendobj\n",
+        4 => "4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R >>\nendobj\n",
+        5 => "5 0 obj\n<< /Length ".strlen($firstPage)." >>\nstream\n{$firstPage}endstream\nendobj\n",
+        6 => "6 0 obj\n<< /Length ".strlen($secondPage)." >>\nstream\n{$secondPage}endstream\nendobj\n",
+    ];
+    $pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+    $offsets = [];
+    foreach ($objects as $number => $object) {
+        $offsets[$number] = strlen($pdf);
+        $pdf .= $object;
+    }
+    $xref = strlen($pdf);
+    $pdf .= "xref\n0 7\n0000000000 65535 f \n";
+    foreach (range(1, 6) as $number) {
+        $pdf .= sprintf('%010d 00000 n ', $offsets[$number])."\n";
+    }
+
+    return $pdf."trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF\n";
 }
 
 test('quickbooks lifecycle derives active quote complete and history without replacing manual status', function (): void {
@@ -468,23 +501,615 @@ test('team visible PDF drawings are tenant scoped audited and readable by every 
     Storage::fake('local');
     [$tenant, $owner, $member, $other] = usabilityWorkspace();
     TenantModuleEntitlement::query()->forTenantId($tenant->id)->where('module_key', 'field_service')->update(['metadata' => ['member_job_visibility' => 'all_operational']]);
-    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'assigned_user_id' => $other->id, 'title' => 'Drawing review', 'status' => 'open', 'operational_status' => 'active']);
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'assigned_user_id' => $member->id, 'title' => 'Drawing review', 'status' => 'open', 'operational_status' => 'active']);
+    $pdf = resumableTwoPagePdf(1000);
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
-    $this->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/files', [
-        'files' => [UploadedFile::fake()->create('panel-drawing.pdf', 1024, 'application/pdf')],
+    $this->withHeader('Accept', 'application/json')->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/files', [
+        'files' => [UploadedFile::fake()->createWithContent('panel-drawing.pdf', $pdf)],
     ])->assertCreated()->assertJsonPath('files.0.mime_type', 'application/pdf');
     $asset = \App\Models\WorkspaceAsset::query()->forTenantId($tenant->id)->sole();
     expect($asset->visibility)->toBe('team')->and($asset->jobs()->whereKey($job->id)->exists())->toBeTrue()
         ->and(\App\Models\WorkspaceAssetEvent::query()->forTenantId($tenant->id)->where('workspace_asset_id', $asset->id)->where('action', 'uploaded')->exists())->toBeTrue();
 
     Sanctum::actingAs($other, ['mobile:read']);
-    $this->get('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/assets/'.$asset->id)->assertOk();
+    $assetUrl = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/assets/'.$asset->id;
+    $range = $this->withHeader('Range', 'bytes=10-109')->get($assetUrl)
+        ->assertStatus(206)
+        ->assertHeader('accept-ranges', 'bytes')
+        ->assertHeader('content-range', 'bytes 10-109/'.strlen($pdf))
+        ->assertHeader('content-length', '100')
+        ->assertHeader('content-type', 'application/pdf')
+        ->assertHeader('x-content-type-options', 'nosniff');
+    expect($range->streamedContent())->toBe(substr($pdf, 10, 100))
+        ->and((string) $range->headers->get('content-disposition'))->toContain('inline');
+    $suffix = $this->withHeader('Range', 'bytes=-64')->get($assetUrl)->assertStatus(206);
+    expect($suffix->streamedContent())->toBe(substr($pdf, -64));
+    $this->withHeader('Range', 'bytes='.strlen($pdf).'-')->get($assetUrl)
+        ->assertStatus(416)
+        ->assertHeader('content-range', 'bytes */'.strlen($pdf));
+    $full = $this->withHeader('Range', '')->get($assetUrl)->assertOk()->assertHeader('content-length', (string) strlen($pdf));
+    expect($full->streamedContent())->toBe($pdf);
+
+    $auditCountBeforePreview = \App\Models\WorkspaceAssetEvent::query()
+        ->forTenantId($tenant->id)
+        ->where('workspace_asset_id', $asset->id)
+        ->where('action', 'downloaded')
+        ->count();
+    $previewLink = $this->getJson($assetUrl.'/preview-url')
+        ->assertOk()
+        ->assertJsonStructure(['url', 'expires_at']);
+    $previewUrl = (string) $previewLink->json('url');
+    expect($previewUrl)->toContain('/api/mobile/v1/asset-previews/'.$tenant->slug.'/'.$asset->id)
+        ->and(\App\Models\WorkspaceAssetEvent::query()
+            ->forTenantId($tenant->id)
+            ->where('workspace_asset_id', $asset->id)
+            ->where('action', 'downloaded')
+            ->count())->toBe($auditCountBeforePreview + 1);
+
+    $previewRange = $this->withHeader('Range', 'bytes=100-199')->get($previewUrl)
+        ->assertStatus(206)
+        ->assertHeader('content-range', 'bytes 100-199/'.strlen($pdf))
+        ->assertHeader('content-type', 'application/pdf')
+        ->assertHeader('x-content-type-options', 'nosniff');
+    expect($previewRange->streamedContent())->toBe(substr($pdf, 100, 100));
+    $this->withHeader('Range', 'bytes=200-299')->get($previewUrl)->assertStatus(206);
+    expect(\App\Models\WorkspaceAssetEvent::query()
+        ->forTenantId($tenant->id)
+        ->where('workspace_asset_id', $asset->id)
+        ->where('action', 'downloaded')
+        ->count())->toBe($auditCountBeforePreview + 1);
+
+    $tamperedPreviewUrl = str_replace('/'.$asset->id.'?', '/'.($asset->id + 1).'?', $previewUrl);
+    $this->get($tamperedPreviewUrl)->assertForbidden();
 
     $foreign = Tenant::query()->create(['name' => 'Foreign Electric', 'slug' => 'foreign-electric']);
     $other->tenants()->attach($foreign->id, ['role' => 'member']);
+    $mismatchedSignedUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+        'mobile.v1.asset-previews.show',
+        now()->addMinutes(5),
+        ['tenant' => $foreign->slug, 'asset' => $asset->id],
+    );
+    $this->get($mismatchedSignedUrl)->assertNotFound();
     Sanctum::actingAs($other, ['mobile:read']);
     $this->get('/api/mobile/v1/workspaces/'.$foreign->slug.'/field-service/assets/'.$asset->id)->assertNotFound();
+});
+
+test('resumable initialization replay is stable and does not consume upload quota twice', function (): void {
+    Storage::fake('local');
+    config()->set('filesystems.workspace_asset_disk', 'local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Idempotent drawing upload',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize';
+    $payload = [
+        'file_name' => 'lost-response.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => 1024 * 1024,
+        'job_id' => $job->id,
+        'visibility' => 'team',
+        'caption' => 'Panel schedule',
+    ];
+    $key = (string) Str::uuid();
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $first = $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload)
+        ->assertCreated()
+        ->assertJsonPath('replayed', false);
+    $replayed = $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload)
+        ->assertOk()
+        ->assertJsonPath('replayed', true);
+    expect($replayed->json('upload_id'))->toBe($first->json('upload_id'))
+        ->and($replayed->json('token'))->toBe($first->json('token'))
+        ->and(WorkspaceAssetUpload::query()->count())->toBe(1);
+
+    $this->withHeader('Idempotency-Key', $key)->postJson($url, [...$payload, 'caption' => 'Different drawing'])
+        ->assertConflict()
+        ->assertJsonPath('message', 'This upload idempotency key was already used for different file details.');
+
+    foreach (range(2, WorkspaceAssetService::MAX_ACTIVE_UPLOADS_PER_USER) as $number) {
+        $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson($url, [
+            ...$payload,
+            'file_name' => 'quota-'.$number.'.pdf',
+        ])->assertCreated();
+    }
+    expect(WorkspaceAssetUpload::query()->count())->toBe(WorkspaceAssetService::MAX_ACTIVE_UPLOADS_PER_USER);
+    $this->withHeader('Idempotency-Key', (string) Str::uuid())->postJson($url, [...$payload, 'file_name' => 'over-quota.pdf'])
+        ->assertStatus(429);
+    $this->withHeader('Idempotency-Key', $key)->postJson($url, $payload)
+        ->assertOk()
+        ->assertJsonPath('upload_id', $first->json('upload_id'))
+        ->assertJsonPath('replayed', true);
+    expect(WorkspaceAssetUpload::query()->count())->toBe(WorkspaceAssetService::MAX_ACTIVE_UPLOADS_PER_USER);
+
+    $this->withHeader('Idempotency-Key', 'not-a-uuid')->postJson($url, $payload)
+        ->assertUnprocessable()
+        ->assertJsonPath('message', 'The upload idempotency key must be a UUID.');
+    expect(WorkspaceAssetUpload::query()->count())->toBe(WorkspaceAssetService::MAX_ACTIVE_UPLOADS_PER_USER);
+});
+
+test('local resumable completion requires a checksum while legacy object completion remains compatible', function (): void {
+    Storage::fake('local');
+    Storage::fake('legacy-object');
+    config()->set('filesystems.workspace_asset_disk', 'local');
+    config()->set('filesystems.workspace_asset_pdf_validator_binary', '');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $pdf = resumableTwoPagePdf(1000);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $initialized = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize', [
+        'file_name' => 'checksum-required.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => strlen($pdf),
+    ])->assertCreated();
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+        'token' => $initialized->json('token'),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'A checksum is required for resumable uploads.');
+
+    $legacyToken = Str::random(64);
+    $legacyPath = 'workspace-assets/'.$tenant->id.'/legacy-direct.pdf';
+    Storage::disk('legacy-object')->put($legacyPath, $pdf);
+    $legacy = WorkspaceAssetUpload::query()->create([
+        'tenant_id' => $tenant->id,
+        'uploaded_by_user_id' => $member->id,
+        'field_service_job_id' => null,
+        'token_hash' => hash('sha256', $legacyToken),
+        'storage_disk' => 'legacy-object',
+        'storage_path' => $legacyPath,
+        'file_name' => 'legacy-direct.pdf',
+        'mime_type' => 'application/pdf',
+        'max_file_size' => strlen($pdf),
+        'visibility' => 'team',
+        'status' => 'initialized',
+        'expires_at' => now()->addHour(),
+    ]);
+    $completed = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+        'token' => $legacyToken,
+    ])->assertCreated()
+        ->assertJsonPath('replayed', false);
+    expect($legacy->fresh()->status)->toBe('completed')
+        ->and(WorkspaceAsset::query()->findOrFail((int) $completed->json('asset_id'))->source)->toBe('signed_upload')
+        ->and(Storage::disk('legacy-object')->exists($legacyPath))->toBeTrue();
+});
+
+test('direct object initialization signs the declared content type and length', function (): void {
+    config()->set('filesystems.workspace_asset_disk', 'object-store');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $size = 4 * 1024 * 1024;
+    $disk = Mockery::mock();
+    $disk->shouldReceive('temporaryUploadUrl')
+        ->once()
+        ->with(
+            Mockery::type('string'),
+            Mockery::on(fn ($expiresAt): bool => $expiresAt->isFuture()),
+            ['ContentType' => 'application/pdf', 'ContentLength' => $size],
+        )
+        ->andReturn(['url' => 'https://objects.example.test/signed-upload', 'headers' => ['Content-Type' => 'application/pdf']]);
+    Storage::shouldReceive('disk')->once()->with('object-store')->andReturn($disk);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->withHeader('Idempotency-Key', (string) Str::uuid())
+        ->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize', [
+            'file_name' => 'direct.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => $size,
+        ])->assertCreated()
+        ->assertJsonPath('mode', 'direct')
+        ->assertJsonPath('url', 'https://objects.example.test/signed-upload');
+});
+
+test('structural PDF validation covers multipart base64 resumable and QuickBooks ingress', function (): void {
+    Storage::fake('local');
+    config()->set('filesystems.workspace_asset_disk', 'local');
+    config()->set('filesystems.workspace_asset_pdf_validator_binary', '');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Validate every PDF path',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $invalidPdf = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\nstartxref\n999999\n%%EOF\n";
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->withHeader('Accept', 'application/json')->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/files', [
+        'files' => [UploadedFile::fake()->createWithContent('invalid-multipart.pdf', $invalidPdf)],
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded file is not a valid PDF document.');
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/files/payload', [
+        'file_name' => 'invalid-base64.pdf',
+        'mime_type' => 'application/pdf',
+        'contents_base64' => base64_encode($invalidPdf),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded file is not a valid PDF document.');
+
+    $initialized = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize', [
+        'file_name' => 'invalid-resumable.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => strlen($invalidPdf),
+        'job_id' => $job->id,
+    ])->assertCreated();
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$initialized->json('upload_id').'/chunks/0', [
+        'token' => $initialized->json('token'),
+        'offset' => 0,
+        'contents_base64' => base64_encode($invalidPdf),
+        'checksum_sha256' => hash('sha256', $invalidPdf),
+    ])->assertOk();
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+        'token' => $initialized->json('token'),
+        'checksum_sha256' => hash('sha256', $invalidPdf),
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'The uploaded file is not a valid PDF document.');
+    expect(WorkspaceAssetUpload::query()->findOrFail((int) $initialized->json('upload_id'))->status)->toBe('initialized');
+
+    $downloadUrl = 'https://quickbooks.example.test/invalid.pdf';
+    Http::fake([$downloadUrl => Http::response($invalidPdf, 200, ['Content-Type' => 'application/pdf'])]);
+    $client = Mockery::mock(QuickBooksOnlineClient::class);
+    $client->shouldReceive('attachmentDownloadUrl')->once()->with('qb-invalid')->andReturn($downloadUrl);
+    expect(fn () => app(WorkspaceAssetService::class)->importQuickBooksAttachable($tenant, $client, [
+        'Id' => 'qb-invalid',
+        'FileName' => 'invalid-quickbooks.pdf',
+        'ContentType' => 'application/pdf',
+        'Size' => strlen($invalidPdf),
+    ]))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'The uploaded file is not a valid PDF document.');
+
+    expect(WorkspaceAsset::query()->count())->toBe(0)
+        ->and(Storage::disk('local')->allFiles('workspace-assets'))->toBe([]);
+});
+
+test('upload cancellation never recursively removes asset directories and cannot race completion', function (): void {
+    Storage::fake('local');
+    config()->set('filesystems.workspace_asset_disk', 'local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+
+    $legacyToken = Str::random(64);
+    $legacyPath = 'workspace-assets/'.$tenant->id.'/legacy-upload.pdf';
+    $siblingPath = 'workspace-assets/'.$tenant->id.'/must-survive.pdf';
+    Storage::disk('local')->put($legacyPath, 'legacy upload');
+    Storage::disk('local')->put($siblingPath, 'existing asset');
+    $legacyUpload = WorkspaceAssetUpload::query()->create([
+        'tenant_id' => $tenant->id,
+        'uploaded_by_user_id' => $member->id,
+        'token_hash' => hash('sha256', $legacyToken),
+        'storage_disk' => 'local',
+        'storage_path' => $legacyPath,
+        'file_name' => 'legacy-upload.pdf',
+        'mime_type' => 'application/pdf',
+        'max_file_size' => 13,
+        'visibility' => 'team',
+        'status' => 'initialized',
+        'expires_at' => now()->addHour(),
+    ]);
+    $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$legacyUpload->id, [
+        'token' => $legacyToken,
+    ])->assertOk();
+    expect(Storage::disk('local')->exists($legacyPath))->toBeFalse()
+        ->and(Storage::disk('local')->exists($siblingPath))->toBeTrue()
+        ->and($legacyUpload->fresh()->status)->toBe('canceled');
+
+    $completingToken = Str::random(64);
+    $stagingPath = 'workspace-upload-staging/'.$tenant->id.'/'.Str::uuid().'/assembled.part';
+    Storage::disk('local')->put($stagingPath, 'completion in progress');
+    $completingUpload = WorkspaceAssetUpload::query()->create([
+        'tenant_id' => $tenant->id,
+        'uploaded_by_user_id' => $member->id,
+        'token_hash' => hash('sha256', $completingToken),
+        'storage_disk' => 'local',
+        'storage_path' => $stagingPath,
+        'file_name' => 'completing.pdf',
+        'mime_type' => 'application/pdf',
+        'max_file_size' => 22,
+        'visibility' => 'team',
+        'status' => 'completing',
+        'expires_at' => now()->addMinutes(10),
+    ]);
+    $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$completingUpload->id, [
+        'token' => $completingToken,
+    ])->assertConflict()
+        ->assertJsonPath('message', 'An upload being completed or already completed cannot be canceled.');
+    expect($completingUpload->fresh()->status)->toBe('completing')
+        ->and(Storage::disk('local')->exists($stagingPath))->toBeTrue();
+});
+
+test('expired upload cleanup retains its database row when storage deletion fails', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $upload = WorkspaceAssetUpload::query()->create([
+        'tenant_id' => $tenant->id,
+        'uploaded_by_user_id' => $member->id,
+        'token_hash' => hash('sha256', Str::random(64)),
+        'storage_disk' => 'failing-delete',
+        'storage_path' => 'workspace-assets/'.$tenant->id.'/staged.pdf',
+        'file_name' => 'staged.pdf',
+        'mime_type' => 'application/pdf',
+        'max_file_size' => 100,
+        'visibility' => 'team',
+        'status' => 'initialized',
+        'expires_at' => now()->subMinute(),
+    ]);
+    $failingDisk = Mockery::mock();
+    $failingDisk->shouldReceive('exists')->once()->with($upload->storage_path)->andReturn(true);
+    $failingDisk->shouldReceive('delete')->once()->with($upload->storage_path)->andReturn(false);
+    Storage::shouldReceive('disk')->once()->with('failing-delete')->andReturn($failingDisk);
+
+    expect(app(WorkspaceAssetService::class)->pruneExpiredUploads())->toBe(0)
+        ->and(WorkspaceAssetUpload::query()->whereKey($upload->id)->exists())->toBeTrue();
+});
+
+test('resumable PDF uploads store three independent multi-page files above the proxy body limit', function (): void {
+    Storage::fake('local');
+    config()->set('filesystems.workspace_asset_disk', 'local');
+    config()->set('filesystems.workspace_asset_max_upload_mb', 50);
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Large drawing upload',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $pdf = resumableTwoPagePdf();
+    expect(strlen($pdf))->toBeGreaterThan(1024 * 1024)
+        ->and((new finfo(FILEINFO_MIME_TYPE))->buffer(substr($pdf, 0, 8192)))->toBe('application/pdf');
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $assetIds = [];
+    foreach (range(1, 3) as $fileNumber) {
+        $initialize = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize', [
+            'file_name' => 'two-page-drawing-'.$fileNumber.'.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => strlen($pdf),
+            'job_id' => $job->id,
+            'visibility' => 'team',
+        ])->assertCreated()
+            ->assertJsonPath('mode', 'chunked')
+            ->assertJsonPath('chunk_size', WorkspaceAssetService::CHUNK_SIZE)
+            ->assertJsonPath('max_file_size', 50 * 1024 * 1024)
+            ->assertJsonPath('url', null);
+        $uploadId = (int) $initialize->json('upload_id');
+        $token = (string) $initialize->json('token');
+        $chunks = str_split($pdf, WorkspaceAssetService::CHUNK_SIZE);
+
+        foreach ($chunks as $index => $chunk) {
+            $payload = [
+                'token' => $token,
+                'offset' => $index * WorkspaceAssetService::CHUNK_SIZE,
+                'contents_base64' => base64_encode($chunk),
+                'checksum_sha256' => hash('sha256', $chunk),
+            ];
+            $response = $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/'.$index, $payload)
+                ->assertOk()
+                ->assertJsonPath('chunk_index', $index)
+                ->assertJsonPath('next_offset', min(($index + 1) * WorkspaceAssetService::CHUNK_SIZE, strlen($pdf)))
+                ->assertJsonPath('replayed', false);
+            if ($fileNumber === 1 && $index === 0) {
+                $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/'.$index, $payload)
+                    ->assertOk()
+                    ->assertJsonPath('next_offset', $response->json('next_offset'))
+                    ->assertJsonPath('replayed', true);
+            }
+        }
+
+        if ($fileNumber === 1) {
+            $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+                'token' => $token,
+                'checksum_sha256' => str_repeat('0', 64),
+            ])->assertUnprocessable();
+        }
+        $complete = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+            'token' => $token,
+            'checksum_sha256' => hash('sha256', $pdf),
+        ])->assertCreated()->assertJsonPath('replayed', false);
+        $assetIds[] = (int) $complete->json('asset_id');
+        $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+            'token' => $token,
+            'checksum_sha256' => hash('sha256', $pdf),
+        ])->assertOk()->assertJsonPath('asset_id', $complete->json('asset_id'))->assertJsonPath('replayed', true);
+    }
+
+    expect(WorkspaceAsset::query()->whereIn('id', $assetIds)->count())->toBe(3)
+        ->and(WorkspaceAssetUpload::query()->where('status', 'completed')->count())->toBe(3)
+        ->and($job->assets()->whereIn('workspace_assets.id', $assetIds)->count())->toBe(3);
+    foreach (WorkspaceAsset::query()->whereIn('id', $assetIds)->get() as $asset) {
+        expect($asset->file_size)->toBe(strlen($pdf))
+            ->and($asset->checksum)->toBe(hash('sha256', $pdf))
+            ->and($asset->mime_type)->toBe('application/pdf')
+            ->and(Storage::disk('local')->exists($asset->storage_path))->toBeTrue();
+    }
+
+    $completedUpload = WorkspaceAssetUpload::query()->where('status', 'completed')->firstOrFail();
+    $completedAsset = WorkspaceAsset::query()->where('source', 'resumable_upload')->where('external_id', (string) $completedUpload->id)->firstOrFail();
+    $stagingDirectory = dirname($completedUpload->storage_path);
+    Storage::disk('local')->put($stagingDirectory.'/chunks/post-commit-orphan.part', 'orphan');
+    $completedUpload->forceFill(['expires_at' => now()->subMinute()])->save();
+    expect(app(WorkspaceAssetService::class)->pruneExpiredUploads())->toBe(1)
+        ->and(WorkspaceAssetUpload::query()->whereKey($completedUpload->id)->exists())->toBeFalse()
+        ->and(Storage::disk('local')->exists($stagingDirectory))->toBeFalse()
+        ->and(Storage::disk('local')->exists($completedAsset->storage_path))->toBeTrue();
+});
+
+test('resumable PDF chunks reject unauthorized gaps altered bytes and false PDF contents', function (): void {
+    Storage::fake('local');
+    config()->set('filesystems.workspace_asset_disk', 'local');
+    config()->set('filesystems.workspace_asset_max_upload_mb', 50);
+    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Protected resumable upload',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $pdf = resumableTwoPagePdf();
+
+    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize', [
+        'file_name' => 'unauthorized.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => strlen($pdf),
+        'job_id' => $job->id,
+    ])->assertForbidden();
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $initialize = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize', [
+        'file_name' => 'protected.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => strlen($pdf),
+        'job_id' => $job->id,
+    ])->assertCreated();
+    $uploadId = (int) $initialize->json('upload_id');
+    $token = (string) $initialize->json('token');
+    $chunks = str_split($pdf, WorkspaceAssetService::CHUNK_SIZE);
+    $firstPayload = [
+        'token' => $token,
+        'offset' => 0,
+        'contents_base64' => base64_encode($chunks[0]),
+        'checksum_sha256' => hash('sha256', $chunks[0]),
+    ];
+
+    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/0', $firstPayload)->assertNotFound();
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/0', [
+        ...$firstPayload,
+        'token' => str_repeat('x', 64),
+    ])->assertNotFound();
+    $job->forceFill(['assigned_user_id' => $other->id])->save();
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/0', $firstPayload)->assertForbidden();
+    $job->forceFill(['assigned_user_id' => $member->id])->save();
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/1', [
+        'token' => $token,
+        'offset' => WorkspaceAssetService::CHUNK_SIZE,
+        'contents_base64' => base64_encode($chunks[1]),
+        'checksum_sha256' => hash('sha256', $chunks[1]),
+    ])->assertConflict();
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/0', [
+        ...$firstPayload,
+        'checksum_sha256' => str_repeat('0', 64),
+    ])->assertUnprocessable();
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/0', $firstPayload)->assertOk();
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/0', [
+        ...$firstPayload,
+        'contents_base64' => base64_encode(str_repeat('X', strlen($chunks[0]))),
+        'checksum_sha256' => hash('sha256', str_repeat('X', strlen($chunks[0]))),
+    ])->assertConflict();
+
+    foreach (array_slice($chunks, 1, null, true) as $index => $chunk) {
+        $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/'.$index, [
+            'token' => $token,
+            'offset' => $index * WorkspaceAssetService::CHUNK_SIZE,
+            'contents_base64' => base64_encode($chunk),
+            'checksum_sha256' => hash('sha256', $chunk),
+        ])->assertOk();
+    }
+    $job->forceFill(['assigned_user_id' => $other->id])->save();
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+        'token' => $token,
+        'checksum_sha256' => hash('sha256', $pdf),
+    ])->assertForbidden();
+    $job->forceFill(['assigned_user_id' => $member->id])->save();
+    $upload = WorkspaceAssetUpload::query()->findOrFail($uploadId);
+    $invalidTail = "\nstartxref\n999999999\n%%EOF\n";
+    $invalidPrefix = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n";
+    $invalidPdf = $invalidPrefix.str_repeat('X', strlen($pdf) - strlen($invalidPrefix) - strlen($invalidTail)).$invalidTail;
+    Storage::disk('local')->put($upload->storage_path, $invalidPdf);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
+        'token' => $token,
+        'checksum_sha256' => hash('sha256', $invalidPdf),
+    ])->assertUnprocessable();
+    expect(WorkspaceAsset::query()->count())->toBe(0)
+        ->and(Storage::disk('local')->exists($upload->storage_path))->toBeTrue();
+
+    $stagingDirectory = dirname($upload->storage_path);
+    $upload->forceFill(['expires_at' => now()->subMinute()])->save();
+    expect(app(WorkspaceAssetService::class)->pruneExpiredUploads())->toBe(1)
+        ->and(WorkspaceAssetUpload::query()->whereKey($uploadId)->exists())->toBeFalse()
+        ->and(Storage::disk('local')->exists($stagingDirectory))->toBeFalse();
+});
+
+test('resumable PDF initialization enforces file and active staging quotas', function (): void {
+    Storage::fake('local');
+    config()->set('filesystems.workspace_asset_disk', 'local');
+    config()->set('filesystems.workspace_asset_max_upload_mb', 50);
+    config()->set('filesystems.workspace_asset_active_upload_reservation_mb', 500);
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Upload quota job',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize';
+    $payload = [
+        'file_name' => 'drawing.pdf',
+        'mime_type' => 'application/pdf',
+        'file_size' => 1024 * 1024,
+        'job_id' => $job->id,
+    ];
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $firstUpload = null;
+    foreach (range(1, WorkspaceAssetService::MAX_ACTIVE_UPLOADS_PER_USER) as $number) {
+        $initialized = $this->postJson($url, [...$payload, 'file_name' => 'drawing-'.$number.'.pdf'])->assertCreated();
+        $firstUpload ??= ['id' => (int) $initialized->json('upload_id'), 'token' => (string) $initialized->json('token')];
+    }
+    $this->postJson($url, [...$payload, 'file_name' => 'one-too-many.pdf'])->assertStatus(429);
+    $this->postJson($url, [...$payload, 'file_name' => 'over-limit.pdf', 'file_size' => 50 * 1024 * 1024 + 1])->assertUnprocessable();
+
+    $chunk = "%PDF-1.4\n".str_repeat('x', WorkspaceAssetService::CHUNK_SIZE - 9);
+    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$firstUpload['id'].'/chunks/0', [
+        'token' => $firstUpload['token'],
+        'offset' => 0,
+        'contents_base64' => base64_encode($chunk),
+        'checksum_sha256' => hash('sha256', $chunk),
+    ])->assertOk();
+    $firstSession = WorkspaceAssetUpload::query()->findOrFail($firstUpload['id']);
+    $stagingDirectory = dirname($firstSession->storage_path);
+    expect(Storage::disk('local')->exists($stagingDirectory))->toBeTrue();
+    $cancelUrl = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$firstUpload['id'];
+    $job->forceFill(['assigned_user_id' => $owner->id])->save();
+    $this->deleteJson($cancelUrl, ['token' => $firstUpload['token']])->assertOk()->assertJsonPath('replayed', false);
+    $this->deleteJson($cancelUrl, ['token' => $firstUpload['token']])->assertOk()->assertJsonPath('replayed', true);
+    expect($firstSession->fresh()->status)->toBe('canceled')
+        ->and(Storage::disk('local')->exists($stagingDirectory))->toBeFalse();
+    $job->forceFill(['assigned_user_id' => $member->id])->save();
+    $this->postJson($url, [...$payload, 'file_name' => 'replacement-after-cancel.pdf'])->assertCreated();
+
+    WorkspaceAssetUpload::query()->update(['expires_at' => now()->subMinute()]);
+    config()->set('filesystems.workspace_asset_active_upload_reservation_mb', 2);
+    $this->postJson($url, [...$payload, 'file_name' => 'reserved-one.pdf', 'file_size' => 1536 * 1024])->assertCreated();
+    $this->postJson($url, [...$payload, 'file_name' => 'reservation-exceeded.pdf'])->assertUnprocessable();
+
+    WorkspaceAssetUpload::query()->update(['expires_at' => now()->subMinute()]);
+    config()->set('filesystems.workspace_asset_active_upload_reservation_mb', 500);
+    $tenantUploaders = collect();
+    foreach (range(1, 4) as $number) {
+        $uploader = User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+        $uploader->tenants()->attach($tenant->id, ['role' => 'member']);
+        $tenantUploaders->push($uploader);
+    }
+    foreach ($tenantUploaders as $uploader) {
+        Sanctum::actingAs($uploader, ['mobile:read', 'mobile:write']);
+        foreach (range(1, WorkspaceAssetService::MAX_ACTIVE_UPLOADS_PER_USER) as $number) {
+            $response = $this->postJson($url, [...$payload, 'job_id' => null, 'file_name' => 'tenant-quota-'.$uploader->id.'-'.$number.'.pdf']);
+            expect($response->status())->toBe(201, 'Uploader '.$uploader->id.' item '.$number.': '.$response->getContent());
+        }
+    }
+    $blockedUploader = User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+    $blockedUploader->tenants()->attach($tenant->id, ['role' => 'member']);
+    Sanctum::actingAs($blockedUploader, ['mobile:read', 'mobile:write']);
+    $this->postJson($url, [...$payload, 'job_id' => null, 'file_name' => 'tenant-one-too-many.pdf'])
+        ->assertStatus(429)
+        ->assertJsonPath('message', 'This workspace has too many active uploads. Try again shortly.');
 });
 
 test('iPhone photo payload fallback stores a team-visible job photo when multipart upload is unavailable', function (): void {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\CustomerEquipment;
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceFinancialDocumentLine;
 use App\Models\FieldServiceJob;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\QuickBooksDiscoveryAuditService;
 use App\Services\FieldService\QuickBooksFieldServiceImportService;
+use App\Services\FieldService\QuickBooksGeneratorEquipmentService;
 use App\Services\Integrations\QuickBooks\QuickBooksOnlineClient;
 use App\Services\Search\Providers\FieldServiceSearchProvider;
 use Illuminate\Http\Client\Request;
@@ -304,6 +306,42 @@ test('quickbooks api sync dry run does not write imported records', function ():
     ])->assertSuccessful()->expectsOutputToContain('mode=dry-run');
 
     expect(MarketingProfile::query()->where('tenant_id', $tenant->id)->count())->toBe(0);
+});
+
+test('quickbooks generator invoices create equipment and link a later annual service', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Generator Electric', 'slug' => 'generator-electric']);
+    $customer = MarketingProfile::query()->create(['tenant_id' => $tenant->id, 'first_name' => 'Generator', 'last_name' => 'Owner']);
+    foreach (['GEN-INSTALL', 'GEN-SERVICE'] as $id) {
+        FieldServiceFinancialDocument::query()->create([
+            'tenant_id' => $tenant->id,
+            'marketing_profile_id' => $customer->id,
+            'source' => 'quickbooks',
+            'document_type' => 'invoice',
+            'external_id' => $id,
+        ]);
+    }
+
+    $summary = app(QuickBooksGeneratorEquipmentService::class)->syncInvoices($tenant, [
+        [
+            'Id' => 'GEN-INSTALL', 'DocNumber' => 'G-100', 'TxnDate' => '2024-01-10',
+            'CustomerRef' => ['name' => 'Generator Owner'],
+            'Line' => [['Description' => 'Provide and install 22KW Generac generator with 200 amp automatic transfer switch.']],
+        ],
+        [
+            'Id' => 'GEN-SERVICE', 'DocNumber' => 'G-200', 'TxnDate' => '2025-01-13',
+            'CustomerRef' => ['name' => 'Generator Owner'],
+            'Line' => [['Description' => 'Annual maintenance of 22KW Generac generator. Changed oil and air filter, load tested generator, and reset maintenance timer.']],
+        ],
+    ]);
+
+    $equipment = CustomerEquipment::query()->sole();
+    expect($summary['generator_equipment_created'])->toBe(1)
+        ->and($summary['generator_services_linked'])->toBe(1)
+        ->and($equipment->name)->toBe('Generac 22kW generator')
+        ->and($equipment->installed_at?->toDateString())->toBe('2024-01-10')
+        ->and($equipment->last_serviced_at?->toDateString())->toBe('2025-01-13')
+        ->and($equipment->next_service_due_at?->toDateString())->toBe('2026-01-13')
+        ->and(FieldServiceJob::query()->where('customer_equipment_id', $equipment->id)->where('operational_status', 'complete')->exists())->toBeTrue();
 });
 
 test('collins normalization changes only untouched invoice generated titles', function (): void {

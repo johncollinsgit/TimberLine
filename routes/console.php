@@ -2,6 +2,7 @@
 
 use App\Jobs\ReleaseDueAutomationWorkflowRunItemsJob;
 use App\Models\TenantWholesaleSetting;
+use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Wholesale\WholesaleSuggestionGenerator;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -235,6 +236,14 @@ Schedule::command('field-service:scan-equipment-maintenance')
     ->dailyAt('09:05')
     ->withoutOverlapping(30)
     ->runInBackground();
+
+// Resumable document chunks are short-lived staging data. Expired sessions
+// and any deterministic final file left by an interrupted promotion are safe
+// to remove because completed assets use a different, durable database state.
+Schedule::call(fn (): int => app(WorkspaceAssetService::class)->pruneExpiredUploads(250))
+    ->name('workspace-assets:prune-expired-uploads')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping(10);
 
 // Accepted contract allowances reset by calendar month. Once a period closes,
 // create one auditable Stripe invoice for any metered overage and link it back

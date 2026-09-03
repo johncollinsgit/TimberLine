@@ -35,7 +35,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EverbranchMobileFieldServiceController extends Controller
@@ -536,8 +538,8 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
-        $request->validate(['files' => ['required', 'array', 'min:1', 'max:20'], 'files.*' => ['required', 'file', 'mimetypes:application/pdf', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
+        abort_unless($access->canUpdateProgress($user, $tenantModel, $job), 403);
+        $request->validate(['files' => ['required', 'array', 'size:1'], 'files.*' => ['required', 'file', 'mimetypes:application/pdf', 'max:'.(int) ($assets->legacyPdfUploadBytes() / 1024)], 'caption' => ['nullable', 'string', 'max:255']]);
         $created = collect($request->file('files', []))->map(fn ($file) => $assets->storeUpload($tenantModel, $user, $file, [(int) $job->id], 'team', $request->string('caption')->toString(), ['drawing', 'pdf']));
 
         return response()->json(['ok' => true, 'files' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
@@ -547,15 +549,16 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless($access->canUpdateProgress($user, $tenantModel, $job), 403);
+        $maximumBytes = $assets->legacyPdfUploadBytes();
         $validated = $request->validate([
             'file_name' => ['required', 'string', 'max:255'],
             'mime_type' => ['required', 'in:application/pdf'],
-            'contents_base64' => ['required', 'string', 'max:36000000'],
+            'contents_base64' => ['required', 'string', 'max:'.(4 * (int) ceil($maximumBytes / 3))],
         ]);
         $bytes = base64_decode((string) $validated['contents_base64'], true);
         abort_unless($bytes !== false && $bytes !== '', 422, 'The PDF contents could not be read.');
-        abort_if(strlen($bytes) > 25 * 1024 * 1024, 422, 'The PDF is larger than the 25 MB limit.');
+        abort_if(strlen($bytes) > $maximumBytes, 422, 'The PDF is larger than the workspace upload limit.');
         $path = tempnam(sys_get_temp_dir(), 'everbranch-pdf-');
         abort_unless($path !== false && file_put_contents($path, $bytes) !== false, 503, 'The PDF could not be prepared for upload.');
 
@@ -601,7 +604,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
-        $request->validate(['plans' => ['required', 'array', 'min:1', 'max:20'], 'plans.*' => ['required', 'file', 'max:25600'], 'caption' => ['nullable', 'string', 'max:255']]);
+        $request->validate(['plans' => ['required', 'array', 'size:1'], 'plans.*' => ['required', 'file', 'max:'.(int) ($assets->legacyPdfUploadBytes() / 1024)], 'caption' => ['nullable', 'string', 'max:255']]);
         $created = collect($request->file('plans', []))->map(fn ($plan) => $assets->storeUpload($tenantModel, $user, $plan, [(int) $job->id], 'team', $request->string('caption')->toString(), ['job-plan']));
 
         return response()->json(['ok' => true, 'plans' => $created->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values()], 201);
@@ -1019,12 +1022,7 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless((int) $asset->tenant_id === (int) $tenantModel->id, 404);
-        if ($asset->visibility === 'owner') {
-            abort_unless($financialAccess->allows($user, $tenantModel), 403);
-        } elseif ($asset->jobs()->exists()) {
-            abort_unless($asset->jobs()->get()->contains(fn (FieldServiceJob $job): bool => $access->canAccessJob($user, $tenantModel, $job)), 403);
-        }
+        $this->authorizeAssetViewer($asset, $tenantModel, $user, $access, $financialAccess);
         $thumbnail = $request->boolean('thumbnail') ? $assets->thumbnailLocation($asset) : null;
         $disk = $thumbnail['disk'] ?? $assets->readableDisk($asset);
         abort_unless($disk, 404);
@@ -1034,10 +1032,146 @@ class EverbranchMobileFieldServiceController extends Controller
             $audit->record($tenantModel, $asset, $user, 'downloaded', ['surface' => 'everbranch_mobile']);
         }
 
+        if (! $thumbnail && $asset->mime_type === 'application/pdf') {
+            return $this->pdfAssetResponse($request, $disk, $path, $fileName, (string) $asset->checksum);
+        }
+
         return Storage::disk($disk)->response($path, $fileName, [
             'Cache-Control' => $thumbnail ? 'private, max-age=604800, immutable' : 'private, max-age=300',
             'Content-Type' => $thumbnail ? 'image/jpeg' : $asset->mime_type,
         ]);
+    }
+
+    public function previewAssetUrl(Request $request, string $tenant, WorkspaceAsset $asset, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess, WorkspaceAssetAuditService $audit, WorkspaceAssetService $assets): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        $this->authorizeAssetViewer($asset, $tenantModel, $user, $access, $financialAccess);
+        abort_unless($asset->mime_type === 'application/pdf', 404);
+        $disk = $assets->readableDisk($asset);
+        abort_unless($disk === 'local' && config('filesystems.disks.'.$disk.'.driver') === 'local', 404);
+        $expiresAt = now()->addMinutes(5);
+        $audit->record($tenantModel, $asset, $user, 'downloaded', ['surface' => 'everbranch_mobile_pdf_preview_url']);
+
+        return response()->json([
+            'url' => URL::temporarySignedRoute('mobile.v1.asset-previews.show', $expiresAt, [
+                'tenant' => $tenantModel->slug,
+                'asset' => (int) $asset->id,
+            ]),
+            'expires_at' => $expiresAt->toIso8601String(),
+        ]);
+    }
+
+    public function signedAssetPreview(Request $request, string $tenant, int $asset, WorkspaceAssetService $assets): StreamedResponse
+    {
+        $tenantModel = Tenant::query()->where('slug', $tenant)->firstOrFail();
+        $assetModel = WorkspaceAsset::query()->forTenantId((int) $tenantModel->id)->findOrFail($asset);
+        abort_unless($assetModel->mime_type === 'application/pdf', 404);
+        $disk = $assets->readableDisk($assetModel);
+        abort_unless($disk === 'local' && config('filesystems.disks.'.$disk.'.driver') === 'local', 404);
+
+        return $this->pdfAssetResponse($request, $disk, $assetModel->storage_path, $assetModel->file_name, (string) $assetModel->checksum);
+    }
+
+    protected function authorizeAssetViewer(WorkspaceAsset $asset, Tenant $tenant, User $user, FieldServiceAccessService $access, TenantFinancialAccess $financialAccess): void
+    {
+        abort_unless((int) $asset->tenant_id === (int) $tenant->id, 404);
+        if ($asset->visibility === 'owner') {
+            abort_unless($financialAccess->allows($user, $tenant), 403);
+        } elseif ($asset->jobs()->exists()) {
+            abort_unless($asset->jobs()->get()->contains(fn (FieldServiceJob $job): bool => $access->canAccessJob($user, $tenant, $job)), 403);
+        }
+    }
+
+    protected function pdfAssetResponse(Request $request, string $disk, string $path, string $fileName, string $checksum): StreamedResponse
+    {
+        $storage = Storage::disk($disk);
+        $size = (int) $storage->size($path);
+        $fileName = preg_replace('/[\x00-\x1F\x7F]/u', '_', str_replace(['/', '\\'], '_', $fileName)) ?: 'document.pdf';
+        $fallbackName = preg_replace('/[^A-Za-z0-9._ -]/', '_', Str::ascii($fileName)) ?: 'document.pdf';
+        $etag = preg_match('/^[a-f0-9]{64}$/i', $checksum) ? '"'.strtolower($checksum).'"' : null;
+        $headers = [
+            'Accept-Ranges' => config('filesystems.disks.'.$disk.'.driver') === 'local' ? 'bytes' : 'none',
+            'Cache-Control' => 'private, max-age=300',
+            'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_INLINE, $fileName, $fallbackName),
+            'Content-Type' => 'application/pdf',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+        if ($etag) {
+            $headers['ETag'] = $etag;
+        }
+
+        if (config('filesystems.disks.'.$disk.'.driver') !== 'local') {
+            return $storage->response($path, $fileName, [...$headers, 'Content-Length' => (string) $size], HeaderUtils::DISPOSITION_INLINE);
+        }
+
+        $rangeHeader = trim((string) $request->header('Range'));
+        $ifRange = trim((string) $request->header('If-Range'));
+        $honorRange = $rangeHeader !== '' && ($ifRange === '' || ($etag !== null && hash_equals($etag, $ifRange)));
+        $range = $honorRange ? $this->parseByteRange($rangeHeader, $size) : null;
+        if ($honorRange && $range === false) {
+            return new StreamedResponse(static fn () => null, 416, [
+                ...$headers,
+                'Content-Length' => '0',
+                'Content-Range' => 'bytes */'.$size,
+            ]);
+        }
+
+        [$start, $end] = is_array($range) ? $range : [0, max(0, $size - 1)];
+        $length = $size === 0 ? 0 : $end - $start + 1;
+        $status = is_array($range) ? 206 : 200;
+        $responseHeaders = [...$headers, 'Content-Length' => (string) $length];
+        if ($status === 206) {
+            $responseHeaders['Content-Range'] = 'bytes '.$start.'-'.$end.'/'.$size;
+        }
+        $absolutePath = $storage->path($path);
+
+        return new StreamedResponse(function () use ($absolutePath, $start, $length): void {
+            $stream = fopen($absolutePath, 'rb');
+            if (! is_resource($stream)) {
+                return;
+            }
+            try {
+                if ($start > 0 && fseek($stream, $start) !== 0) {
+                    return;
+                }
+                $remaining = $length;
+                while ($remaining > 0 && ! feof($stream)) {
+                    $chunk = fread($stream, min(1024 * 1024, $remaining));
+                    if (! is_string($chunk) || $chunk === '') {
+                        break;
+                    }
+                    echo $chunk;
+                    $remaining -= strlen($chunk);
+                }
+            } finally {
+                fclose($stream);
+            }
+        }, $status, $responseHeaders);
+    }
+
+    /** @return array{0:int,1:int}|false */
+    protected function parseByteRange(string $header, int $size): array|false
+    {
+        if ($size < 1 || preg_match('/^bytes=(\d*)-(\d*)$/', $header, $matches) !== 1 || ($matches[1] === '' && $matches[2] === '')) {
+            return false;
+        }
+        if ($matches[1] === '') {
+            $suffixLength = (int) $matches[2];
+            if ($suffixLength < 1) {
+                return false;
+            }
+
+            return [max(0, $size - $suffixLength), $size - 1];
+        }
+
+        $start = (int) $matches[1];
+        if ($start >= $size) {
+            return false;
+        }
+        $end = $matches[2] === '' ? $size - 1 : min((int) $matches[2], $size - 1);
+
+        return $end < $start ? false : [$start, $end];
     }
 
     protected function applyFilter(Builder $query, string $filter, User $user): void

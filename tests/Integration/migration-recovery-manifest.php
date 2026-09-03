@@ -71,4 +71,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['job-update SMS setting column retained before Laravel records the migration batch'],
     ],
+    '2026_09_03_150000_add_quickbooks_source_to_customer_equipment.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['QuickBooks equipment source columns retained before unique index creation'],
+    ],
 ];

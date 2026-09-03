@@ -1,5 +1,18 @@
 # UI Changelog
 
+## 2026-09-03 — Durable PDF upload and paged preview
+
+### What Changed
+
+- Resumable PDF initialization is safe to retry with a stable UUID key, and 50 MiB uploads retain ordered chunk and whole-file checksums.
+- Every PDF upload path now checks real document structure; production also uses a bounded Ghostscript parse. Compatibility multipart/base64 requests accept one file up to 25 MiB.
+- The app can request a five-minute signed preview URL so iOS loads PDF pages with byte ranges instead of buffering the complete document.
+
+### Guardrails
+
+- Completion, cancellation, and cleanup are serialized; deletion must be verified and recursive cleanup is restricted to the exact tenant staging-path shape.
+- Preview URL issuance reuses normal asset authorization and records one audit event. Signed range requests are tenant/asset-bound and do not create duplicate download events.
+
 ## 2026-09-02 — Field Service job updates and document controls
 
 ### What Changed
@@ -587,7 +600,7 @@
 ### What Changed
 - Replaced visible Potential/invoice review language with owner/admin-only Job Drafts and Publish Job, Link to Existing Job, Archive, Archived Drafts, and Restore actions.
 - Added structured job addresses with explicit Apple Maps and Google Maps links, an external Project Manager card with Call/Text/Email, and a clear Send to Office task action.
-- Renamed job Photos to Files and separated team-visible Drawings & PDFs from Photos, including system Files selection, 25 MB validation, authenticated inline preview, and matching Documents upload.
+- Renamed job Photos to Files and separated team-visible Drawings & PDFs from Photos, including system Files selection, 50 MiB validation, authenticated inline preview, and matching Documents upload.
 - Applied canonical Collins Upstate Electric navy/white branding, tagline, color theme, and light/dark lockups to the existing Everbranch mobile Home and header.
 - Enabled all current and past operational jobs for active Collins employees while keeping editing and progress controls assignment-aware.
 
@@ -2595,4 +2608,6 @@
 
 - Removed the Tasks tab and My Day task feed from the field app, leaving four focused job tabs: Overview, Job notes, Materials, and Pics/Drawings.
 - Added employee material requests inside each job. Admins can mark requests purchased and include a purchase note visible to the crew.
-- Added live per-file deletion counts, immediate removal of confirmed files, bounded concurrent uploads/deletes, retry-safe PDF compatibility upload, and private thumbnail caching so large photo jobs remain responsive.
+- Added live per-file deletion counts, immediate removal of confirmed files, bounded concurrent uploads/deletes, and private thumbnail caching so large photo jobs remain responsive.
+- Replaced proxy-sized PDF requests with two-hour resumable upload sessions. The app sends retry-safe 512 KiB chunks and the server verifies offsets, per-chunk and whole-file SHA-256, the exact declared size, and actual PDF content before an idempotent promotion. The default finite file cap is 50 MiB; active-session, tenant staging-reservation, and expiry cleanup limits keep the workflow bounded.
+- Added authenticated single-range PDF streaming for local storage, including correct `206`/`416`, byte-range headers, exact response lengths, inline disposition, and content-sniffing protection so large drawings can seek and page without repeated full downloads.
