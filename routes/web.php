@@ -61,6 +61,7 @@ use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\MarketingWishlistController;
+use App\Http\Controllers\Marketing\MarketingWishlistShareController;
 use App\Http\Controllers\Marketing\ModernForestryAppFeedbackController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
@@ -1758,6 +1759,10 @@ Route::post('/account/rewards/redeem', [MarketingPublicEventController::class, '
 Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class, 'showConsentConfirm'])
     ->middleware('throttle:30,1')
     ->name('marketing.public.consent-confirm');
+Route::get('/share/wishlist/{token}', [MarketingWishlistShareController::class, 'show'])
+    ->middleware('throttle:60,1')
+    ->name('marketing.public.wishlist-share');
+
 Route::get('/share/scent-personality/{token}/image.png', [MarketingPublicEventController::class, 'showScentPersonalityShareImage'])
     ->where('token', '[A-Za-z0-9]{20,80}')
     ->middleware('throttle:60,1')
@@ -1874,6 +1879,9 @@ Route::prefix('shopify/marketing')
         Route::post('/wishlist/lists/create', [MarketingShopifyIntegrationController::class, 'createWishlistList'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.lists.create');
+        Route::post('/wishlist/share', [MarketingShopifyIntegrationController::class, 'shareWishlistList'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.share');
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
@@ -1971,6 +1979,9 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/wishlist/lists/create', [MarketingShopifyIntegrationController::class, 'createWishlistList'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.lists.create');
+        Route::post('/wishlist/share', [MarketingShopifyIntegrationController::class, 'shareWishlistList'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.share');
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');

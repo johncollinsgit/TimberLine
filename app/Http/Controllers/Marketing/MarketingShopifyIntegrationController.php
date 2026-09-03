@@ -2374,6 +2374,58 @@ class MarketingShopifyIntegrationController extends Controller
         ], $this->contractMeta($request), ['wishlist_list_created']);
     }
 
+    public function shareWishlistList(
+        Request $request,
+        MarketingWishlistService $wishlistService
+    ): JsonResponse {
+        $data = $request->validate([
+            'guest_token' => ['nullable', 'string', 'max:120'],
+            'wishlist_list_id' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'marketing_profile_id' => ['nullable', 'integer'],
+            'shopify_customer_id' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $storeContext = $this->resolveStoreContext($request, allowBody: true);
+        if (! $this->hasStoreContext($storeContext)) {
+            return $this->missingStoreContextResponse('wishlist_share');
+        }
+
+        $resolved = $this->resolveProfile($request, scope: 'wishlist_share', allowCreate: false, allowBody: true);
+        $profile = $resolved['profile'] ?? null;
+        $identityStatus = (string) ($resolved['status'] ?? 'missing_identity');
+        $guestToken = trim((string) ($data['guest_token'] ?? ''));
+
+        if (! $profile && $guestToken === '') {
+            return $this->identityErrorResponse($identityStatus, $request);
+        }
+
+        try {
+            $share = $wishlistService->shareList($profile, $data['guest_token'] ?? null, [
+                ...$this->wishlistContext($data, $storeContext),
+                'wishlist_list_id' => $data['wishlist_list_id'] ?? null,
+            ]);
+        } catch (\InvalidArgumentException $exception) {
+            return MarketingStorefrontContract::error(
+                code: 'wishlist_not_shareable',
+                message: $exception->getMessage(),
+                status: 422,
+                states: ['wishlist_share_unavailable'],
+                recoveryStates: ['choose_wishlist']
+            );
+        }
+
+        $shareUrl = url('/share/wishlist/'.$share['token']);
+
+        return MarketingStorefrontContract::success([
+            'profile_id' => $profile?->id,
+            'state' => 'wishlist_share_ready',
+            'share_url' => $shareUrl,
+            'list' => $share['list'],
+        ], $this->contractMeta($request), ['wishlist_share_ready']);
+    }
+
     public function submitProductReview(
         Request $request,
         ProductReviewService $productReviewService
