@@ -1141,6 +1141,52 @@ test('iPhone photo payload fallback stores a team-visible job photo when multipa
     expect(\App\Models\WorkspaceAssetEvent::query()->forTenantId($tenant->id)->where('workspace_asset_id', $asset->id)->where('action', 'downloaded')->exists())->toBeFalse();
 });
 
+test('manager bulk deletion removes job assets in one retry safe request', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $member->id,
+        'title' => 'Photo cleanup',
+        'operational_status' => 'active',
+    ]);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/photos', [
+        'photos' => [
+            UploadedFile::fake()->image('one.jpg', 20, 20),
+            UploadedFile::fake()->image('two.jpg', 20, 20),
+            UploadedFile::fake()->image('three.jpg', 20, 20),
+        ],
+    ])->assertCreated();
+    $assets = \App\Models\WorkspaceAsset::query()->forTenantId($tenant->id)->orderBy('id')->get();
+    $ids = $assets->pluck('id')->map(fn ($id): int => (int) $id)->all();
+    $paths = $assets->pluck('storage_path')->all();
+
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/assets/bulk-delete', [
+        'asset_ids' => $ids,
+    ])->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('deleted_count', 3)
+        ->assertJsonPath('failed_count', 0)
+        ->assertJsonPath('deleted_ids', $ids);
+
+    expect(\App\Models\WorkspaceAsset::query()->forTenantId($tenant->id)->count())->toBe(0);
+    foreach ($paths as $path) {
+        Storage::disk('local')->assertMissing($path);
+    }
+
+    // A replay is successful even though the assets are already gone.
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/assets/bulk-delete', [
+        'asset_ids' => $ids,
+    ])->assertOk()->assertJsonPath('deleted_count', 3)->assertJsonPath('failed_count', 0);
+
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/assets/bulk-delete', [
+        'asset_ids' => $ids,
+    ])->assertForbidden();
+});
+
 test('job details and update attachments stay editable and visible to the full Collins team', function (): void {
     Storage::fake('local');
     [$tenant, $owner, $member] = usabilityWorkspace();

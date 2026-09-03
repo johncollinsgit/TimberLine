@@ -42,6 +42,7 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class EverbranchMobileFieldServiceController extends Controller
 {
@@ -593,14 +594,56 @@ class EverbranchMobileFieldServiceController extends Controller
             return response()->json(['ok' => true, 'already_deleted' => true]);
         }
 
-        $audit->record($tenantModel, $assetModel, $user, 'deleted', ['checksum' => $assetModel->checksum, 'file_name' => $assetModel->file_name, 'surface' => 'everbranch_mobile']);
-        Storage::disk($assetModel->storage_disk)->delete($assetModel->storage_path);
-        if ($assetModel->thumbnail_disk && $assetModel->thumbnail_path) {
-            Storage::disk($assetModel->thumbnail_disk)->delete($assetModel->thumbnail_path);
-        }
-        $assetModel->delete();
+        $this->deleteAssetRecord($tenantModel, $assetModel, $user, $audit);
 
         return response()->json(['ok' => true]);
+    }
+
+    public function destroyJobAssets(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetAuditService $audit): JsonResponse
+    {
+        $tenantModel = $this->tenant($request);
+        $user = $this->user($request);
+        abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
+        abort_unless($access->canManageJobs($user, $tenantModel), 403);
+        $validated = $request->validate([
+            'asset_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'asset_ids.*' => ['required', 'integer', 'distinct', 'min:1'],
+        ]);
+        $requestedIds = collect($validated['asset_ids'])->map(fn (mixed $id): int => (int) $id)->values();
+        $assets = $job->assets()
+            ->where('workspace_assets.tenant_id', $tenantModel->id)
+            ->whereIn('workspace_assets.id', $requestedIds)
+            ->get()
+            ->keyBy(fn (WorkspaceAsset $asset): int => (int) $asset->id);
+        $deletedIds = [];
+        $failedIds = [];
+
+        foreach ($requestedIds as $assetId) {
+            $assetModel = $assets->get($assetId);
+            // Treat an absent link as success. A prior request may have removed
+            // it before its response reached the phone.
+            if (! $assetModel instanceof WorkspaceAsset) {
+                $deletedIds[] = $assetId;
+
+                continue;
+            }
+
+            try {
+                $this->deleteAssetRecord($tenantModel, $assetModel, $user, $audit);
+                $deletedIds[] = $assetId;
+            } catch (Throwable $exception) {
+                report($exception);
+                $failedIds[] = $assetId;
+            }
+        }
+
+        return response()->json([
+            'ok' => $failedIds === [],
+            'deleted_ids' => $deletedIds,
+            'failed_ids' => $failedIds,
+            'deleted_count' => count($deletedIds),
+            'failed_count' => count($failedIds),
+        ]);
     }
 
     public function uploadPlans(Request $request, string $tenant, FieldServiceJob $job, FieldServiceAccessService $access, WorkspaceAssetService $assets): JsonResponse
@@ -1411,6 +1454,32 @@ class EverbranchMobileFieldServiceController extends Controller
             'operational_status' => $job->operational_status,
             'lock_box_code_present' => filled($job->lock_box_code),
         ];
+    }
+
+    protected function deleteAssetRecord(Tenant $tenant, WorkspaceAsset $asset, User $user, WorkspaceAssetAuditService $audit): void
+    {
+        $locations = collect([
+            ['disk' => (string) $asset->storage_disk, 'path' => (string) $asset->storage_path],
+            ['disk' => (string) $asset->thumbnail_disk, 'path' => (string) $asset->thumbnail_path],
+        ])->filter(fn (array $location): bool => $location['disk'] !== '' && $location['path'] !== '')
+            ->unique(fn (array $location): string => $location['disk'].'|'.$location['path']);
+
+        foreach ($locations as $location) {
+            $disk = Storage::disk($location['disk']);
+            if (! $disk->exists($location['path'])) {
+                continue;
+            }
+            if (! $disk->delete($location['path']) || $disk->exists($location['path'])) {
+                throw new \RuntimeException('Workspace asset storage deletion failed.');
+            }
+        }
+
+        $audit->record($tenant, $asset, $user, 'deleted', [
+            'checksum' => $asset->checksum,
+            'file_name' => $asset->file_name,
+            'surface' => 'everbranch_mobile',
+        ]);
+        $asset->delete();
     }
 
     protected function officeRecipients(Tenant $tenant): \Illuminate\Support\Collection
