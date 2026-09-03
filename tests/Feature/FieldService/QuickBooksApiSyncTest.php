@@ -315,7 +315,7 @@ test('quickbooks api sync dry run does not write imported records', function ():
 test('quickbooks generator invoices create equipment and link a later annual service', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Generator Electric', 'slug' => 'generator-electric']);
     $customer = MarketingProfile::query()->create(['tenant_id' => $tenant->id, 'first_name' => 'Generator', 'last_name' => 'Owner']);
-    foreach (['GEN-INSTALL', 'GEN-SERVICE'] as $id) {
+    foreach (['GEN-INSTALL', 'GEN-SERVICE', 'GEN-RELATED'] as $id) {
         FieldServiceFinancialDocument::query()->create([
             'tenant_id' => $tenant->id,
             'marketing_profile_id' => $customer->id,
@@ -335,6 +335,11 @@ test('quickbooks generator invoices create equipment and link a later annual ser
             'Id' => 'GEN-SERVICE', 'DocNumber' => 'G-200', 'TxnDate' => '2025-01-13',
             'CustomerRef' => ['name' => 'Generator Owner'],
             'Line' => [['Description' => 'Annual maintenance of 22KW Generac generator. Changed oil and air filter, load tested generator, and reset maintenance timer.']],
+        ],
+        [
+            'Id' => 'GEN-RELATED', 'DocNumber' => 'G-300', 'TxnDate' => '2025-01-14',
+            'CustomerRef' => ['name' => 'Generator Owner'],
+            'Line' => [['Description' => 'Provide a circuit from the indoor panel so the office will be on generator power.']],
         ],
     ]);
 

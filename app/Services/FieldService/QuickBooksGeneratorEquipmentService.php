@@ -132,7 +132,7 @@ class QuickBooksGeneratorEquipmentService
 
     protected function isInstallation(string $text): bool
     {
-        if (! preg_match('/\b(?:\d{2}\s*kw\s+)?(?:generac\s+|kohler\s+|duromax\s+)?generator\b/i', $text) || $this->isMaintenanceText($text)) {
+        if (! preg_match('/\b(?:generac|kohler|duromax)\b.{0,40}\bgenerator\b|\b\d{2}\s*k\s*w\b.{0,50}\bgenerator\b|\bwhole house\s+generator\b/i', $text) || $this->isMaintenanceText($text)) {
             return false;
         }
         if (preg_match('/\b(generator inlet|generator plug|generator hook ?up|generator cord|interlock kit)\b/i', $text)
