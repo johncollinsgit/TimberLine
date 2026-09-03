@@ -728,12 +728,10 @@ it('skips incomplete time session tables and resumes after the reporting index i
         });
     }
 
-    // Simulate MySQL retaining the index while the migration row is absent.
-    Schema::table('field_service_time_sessions', function (Blueprint $table): void {
-        $table->index(['tenant_id', 'clocked_in_at'], 'fs_time_tenant_clocked_idx');
-    });
-
+    // Build the index only after the source columns exist, then simulate MySQL
+    // retaining that DDL while the migration row is absent by invoking it again.
     $migration->up();
+    expect(Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx'))->toBeTrue();
     $migration->up();
 
     expect(Schema::hasIndex('field_service_time_sessions', 'fs_time_tenant_clocked_idx'))->toBeTrue();
