@@ -40,13 +40,15 @@ class FieldServiceTimeHoursService
             $filters['end_date'] ?? null,
             $timezone,
         );
-        $metrics = $this->aggregate($tenant, $range, $timezone);
+        $employeeId = isset($filters['employee_id']) ? (int) $filters['employee_id'] : null;
+        $metrics = $this->aggregate($tenant, $range, $timezone, null, $employeeId);
         $page = $this->ledger(
             $tenant,
             $range,
             $timezone,
             (int) ($filters['per_page'] ?? 25),
             (int) ($filters['page'] ?? 1),
+            $employeeId,
         );
 
         return [
@@ -58,7 +60,10 @@ class FieldServiceTimeHoursService
                 'timezone' => $timezone,
             ],
             ...$metrics,
-            'edit_options' => $this->editOptions($tenant),
+            'scope' => (bool) ($filters['self_only'] ?? false) ? 'my_hours' : 'team_hours',
+            'edit_options' => (bool) ($filters['self_only'] ?? false)
+                ? ['employees' => [], 'employees_truncated' => false, 'jobs' => [], 'jobs_truncated' => false]
+                : $this->editOptions($tenant),
             'entries' => $page,
         ];
     }
@@ -273,14 +278,16 @@ class FieldServiceTimeHoursService
     /** @param array{key:string,start:CarbonImmutable,end:CarbonImmutable,start_utc:CarbonImmutable,end_utc:CarbonImmutable} $range
      * @return array<string,mixed>
      */
-    private function ledger(Tenant $tenant, array $range, string $timezone, int $perPage, int $page): array
+    private function ledger(Tenant $tenant, array $range, string $timezone, int $perPage, int $page, ?int $userId = null): array
     {
         $manual = DB::table('field_service_time_entries')
             ->where('tenant_id', (int) $tenant->id)
+            ->when($userId !== null, fn ($query) => $query->where('user_id', $userId))
             ->whereBetween('work_date', [$range['start']->toDateString(), $range['end']->toDateString()])
             ->selectRaw("'manual' as source, id, work_date as sort_date, started_at as sort_time");
         $timer = DB::table('field_service_time_sessions')
             ->where('tenant_id', (int) $tenant->id)
+            ->when($userId !== null, fn ($query) => $query->where('user_id', $userId))
             ->whereBetween('clocked_in_at', [$range['start_utc'], $range['end_utc']])
             ->selectRaw("'timer' as source, id, DATE(clocked_in_at) as sort_date, TIME(clocked_in_at) as sort_time");
         $paginator = DB::query()
