@@ -12,13 +12,23 @@ it('resumes crew status creation after MySQL retains the table', function (): vo
     }
 
     Schema::dropIfExists('field_service_crew_statuses');
+    foreach (['tenants', 'users', 'field_service_jobs', 'tenant_direct_invoices'] as $tableName) {
+        if (! Schema::hasTable($tableName)) {
+            Schema::create($tableName, function (Blueprint $table): void {
+                $table->id();
+            });
+        }
+    }
     $migration = require database_path('migrations/2026_09_05_180000_create_field_service_crew_statuses_table.php');
     $migration->up();
+    Schema::drop('tenant_ai_usage_events');
     $migration->up();
 
     expect(Schema::hasTable('field_service_crew_statuses'))->toBeTrue()
+        ->and(Schema::hasTable('tenant_ai_usage_events'))->toBeTrue()
         ->and(Schema::hasIndex('field_service_crew_statuses', 'fs_crew_status_tenant_user_unique'))->toBeTrue()
-        ->and(Schema::hasIndex('field_service_crew_statuses', 'fs_crew_status_tenant_state_idx'))->toBeTrue();
+        ->and(Schema::hasIndex('field_service_crew_statuses', 'fs_crew_status_tenant_state_idx'))->toBeTrue()
+        ->and(Schema::hasIndex('tenant_ai_usage_events', 'tenant_ai_usage_tenant_client_unique'))->toBeTrue();
 });
 
 it('resumes QuickBooks equipment source columns after MySQL retained the columns before the unique index', function (): void {

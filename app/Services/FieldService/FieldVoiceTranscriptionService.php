@@ -8,8 +8,8 @@ use RuntimeException;
 
 class FieldVoiceTranscriptionService
 {
-    /** @return array{transcript:string,material:?array{name:string,quantity:float,unit:string},provider:string,model:string,review_required:bool} */
-    public function transcribe(UploadedFile $audio, string $context): array
+    /** @return array{transcript:string,material:?array{name:string,quantity:float,unit:string},provider:string,model:string,review_required:bool,duration_seconds:int,provider_request_id:?string} */
+    public function transcribe(UploadedFile $audio, string $context, int $expectedDurationSeconds): array
     {
         $apiKey = trim((string) config('services.openai.api_key'));
         if ($apiKey === '') {
@@ -53,6 +53,8 @@ class FieldVoiceTranscriptionService
             'provider' => 'openai',
             'model' => $model,
             'review_required' => true,
+            'duration_seconds' => max(1, min(90, (int) ($response->json('usage.seconds') ?: $expectedDurationSeconds))),
+            'provider_request_id' => $response->header('x-request-id'),
         ];
     }
 

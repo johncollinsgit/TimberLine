@@ -85,6 +85,6 @@ return [
     ],
     '2026_09_05_180000_create_field_service_crew_statuses_table.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
-        'scenarios' => ['crew-status table retained before Laravel records the migration batch'],
+        'scenarios' => ['crew-status table retained before the shared tenant AI usage ledger is created'],
     ],
 ];

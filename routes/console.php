@@ -252,3 +252,8 @@ Schedule::command('messaging:invoice-closed-usage', ['--send' => true])
     ->dailyAt('09:15')
     ->withoutOverlapping(30)
     ->runInBackground();
+
+Schedule::command('ai:invoice-closed-usage', ['--send' => true])
+    ->dailyAt('09:20')
+    ->withoutOverlapping(30)
+    ->runInBackground();

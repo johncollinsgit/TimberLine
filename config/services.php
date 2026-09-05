@@ -358,8 +358,10 @@ return [
     ],
 
     'openai' => [
-        'api_key' => env('OPENAI_API_KEY'),
+        'api_key' => env('OPENAI_API_KEY', env('EVERBRANCH_BUD_AI_API_KEY')),
         'field_voice_model' => env('EVERBRANCH_FIELD_VOICE_MODEL', 'gpt-transcribe'),
+        'field_voice_provider_cost_micros_per_minute' => (int) env('EVERBRANCH_FIELD_VOICE_PROVIDER_COST_MICROS_PER_MINUTE', 4500),
+        'field_voice_buyer_rate_micros_per_minute' => (int) env('EVERBRANCH_FIELD_VOICE_BUYER_RATE_MICROS_PER_MINUTE', 4500),
     ],
 
     'modern_forestry_app_review' => [
