@@ -1003,6 +1003,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/', [FleetTrackingController::class, 'index'])->name('index');
                 Route::post('/settings', [FleetTrackingController::class, 'updateSettings'])->name('settings.update');
                 Route::post('/devices', [FleetTrackingController::class, 'storeDevice'])->name('devices.store');
+                Route::post('/bouncie/sync-vehicles', [FleetTrackingController::class, 'syncBouncieVehicles'])->name('bouncie.sync-vehicles');
                 Route::get('/bouncie/connect', [BouncieConnectionController::class, 'connect'])->name('bouncie.connect');
                 Route::post('/bouncie/disconnect', [BouncieConnectionController::class, 'disconnect'])->name('bouncie.disconnect');
             });
