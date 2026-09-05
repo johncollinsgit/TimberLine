@@ -111,11 +111,48 @@ test('mobile managers receive tenant scoped time analytics and a unified paginat
         ->assertJsonValidationErrors('end_date');
 
     Sanctum::actingAs($employee, ['mobile:read', 'mobile:write']);
-    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=week')->assertForbidden();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=custom&start_date=2026-09-01&end_date=2026-09-03&employee_id='.$manager->id)
+        ->assertOk()
+        ->assertJsonPath('scope', 'my_hours')
+        ->assertJsonPath('summary.total_seconds', 17100)
+        ->assertJsonPath('by_employee.0.user.id', $employee->id)
+        ->assertJsonPath('edit_options.employees', []);
 
     TenantModuleEntitlement::query()->forTenantId((int) $tenant->id)->where('module_key', 'time_tracking')->update(['enabled_status' => 'disabled']);
     Sanctum::actingAs($manager, ['mobile:read', 'mobile:write']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=week')->assertForbidden();
+});
+
+test('mobile managers can drill into one employee time ledger without mixing other employees', function (): void {
+    [$tenant, $manager, $employee] = mobileTimeHoursWorkspace('employee-drilldown');
+    $otherEmployee = User::factory()->create(['is_active' => true]);
+    $otherEmployee->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'assigned_user_id' => $employee->id, 'title' => 'Employee drilldown job', 'status' => 'open', 'operational_status' => 'active']);
+
+    foreach ([[$employee, 7200, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'], [$otherEmployee, 3600, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']] as [$worker, $duration, $uuid]) {
+        FieldServiceTimeSession::query()->create([
+            'tenant_id' => $tenant->id,
+            'field_service_job_id' => $job->id,
+            'user_id' => $worker->id,
+            'client_uuid' => $uuid,
+            'status' => 'submitted',
+            'clocked_in_at' => Carbon::parse('2026-09-02 13:00:00 UTC'),
+            'clocked_out_at' => Carbon::parse('2026-09-02 15:00:00 UTC'),
+            'break_seconds' => 0,
+            'duration_seconds' => $duration,
+            'source' => 'mobile',
+        ]);
+    }
+
+    Sanctum::actingAs($manager, ['mobile:read', 'mobile:write']);
+    $response = $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=custom&start_date=2026-09-01&end_date=2026-09-03&employee_id='.$employee->id);
+
+    $response->assertOk()
+        ->assertJsonPath('summary.total_seconds', 7200)
+        ->assertJsonCount(1, 'by_employee')
+        ->assertJsonPath('by_employee.0.user.id', $employee->id)
+        ->assertJsonPath('entries.total', 1)
+        ->assertJsonPath('entries.data.0.user.id', $employee->id);
 });
 
 test('job hourly analytics automatically include new members and never expose another tenant or employee', function (): void {
