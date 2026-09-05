@@ -14,6 +14,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class FleetTrackingController extends Controller
 {
@@ -73,9 +74,102 @@ class FleetTrackingController extends Controller
         return back()->with('status', 'Bouncie device mapped to the company vehicle.');
     }
 
+    public function syncBouncieVehicles(Request $request): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        $this->authorizeBouncieAdmin($request, $tenant);
+        $connection = IntegrationConnection::query()->forTenantId((int) $tenant->id)
+            ->where('provider', 'bouncie')->where('status', IntegrationConnection::STATUS_CONNECTED)->firstOrFail();
+
+        try {
+            $providerVehicles = collect($this->bouncie->client($connection)->vehicles())
+                ->filter(fn (array $vehicle): bool => filled($vehicle['imei'] ?? null))
+                ->unique(fn (array $vehicle): string => trim((string) $vehicle['imei']))
+                ->values();
+        } catch (\Throwable) {
+            return back()->withErrors(['bouncie' => 'Bouncie could not be reached right now. Try the import again in a moment.']);
+        }
+
+        if ($providerVehicles->isEmpty()) {
+            return back()->withErrors(['bouncie' => 'No vehicles were available in the connected Bouncie account.']);
+        }
+
+        $deviceIds = $providerVehicles->pluck('imei')->map(fn ($imei): string => trim((string) $imei))->all();
+        $collision = FleetTrackingDevice::withoutGlobalScopes()->where('provider', 'bouncie')
+            ->whereIn('external_device_id', $deviceIds)->where('tenant_id', '!=', (int) $tenant->id)->exists();
+        abort_if($collision, 409, 'A Bouncie tracker is already assigned to another workspace. Contact Everbranch support before importing.');
+
+        [$created, $updated] = DB::transaction(function () use ($providerVehicles, $tenant): array {
+            $created = 0;
+            $updated = 0;
+
+            foreach ($providerVehicles as $providerVehicle) {
+                $externalId = trim((string) $providerVehicle['imei']);
+                $name = $this->providerVehicleName($providerVehicle);
+                $device = FleetTrackingDevice::query()->forTenantId((int) $tenant->id)
+                    ->where('provider', 'bouncie')->where('external_device_id', $externalId)->first();
+
+                if ($device) {
+                    $device->forceFill(['label' => $device->label ?: $name, 'status' => 'active', 'uninstalled_at' => null])->save();
+                    $updated++;
+
+                    continue;
+                }
+
+                $identifier = 'BOUNCIE-'.strtoupper(substr(hash('sha256', $externalId), 0, 8));
+                $vehicle = FieldServiceVehicle::query()->firstOrCreate(
+                    ['tenant_id' => (int) $tenant->id, 'identifier' => $identifier],
+                    ['name' => $name, 'status' => 'active', 'notes' => 'Imported from the workspace Bouncie connection.'],
+                );
+                $vehicle->forceFill(['status' => 'active'])->save();
+                FleetTrackingDevice::query()->create([
+                    'tenant_id' => (int) $tenant->id,
+                    'field_service_vehicle_id' => (int) $vehicle->id,
+                    'provider' => 'bouncie',
+                    'external_device_id' => $externalId,
+                    'label' => $name,
+                    'status' => 'active',
+                    'installed_at' => now(),
+                ]);
+                $created++;
+            }
+
+            return [$created, $updated];
+        });
+
+        Cache::forget('bouncie_vehicle_inventory:'.$connection->id.':'.$connection->updated_at?->timestamp);
+        $this->audit->record((int) $tenant->id, (int) $request->user()->id, 'fleet_tracking.bouncie.vehicles_synced', targetType: 'integration_connection', targetId: $connection->id, afterState: ['created' => $created, 'updated' => $updated, 'available' => $providerVehicles->count()]);
+
+        return back()->with('status', $created.' Bouncie vehicle'.($created === 1 ? '' : 's').' imported; '.$updated.' existing mapping'.($updated === 1 ? '' : 's').' refreshed.');
+    }
+
     private function authorizeViewer(Request $request, Tenant $tenant): void
     {
         abort_unless($this->access->enabledFor($tenant) && $this->access->canView($request->user(), $tenant), 403);
+    }
+
+    private function authorizeBouncieAdmin(Request $request, Tenant $tenant): void
+    {
+        $membership = $request->user()?->tenants()->whereKey((int) $tenant->id)->first();
+        $role = strtolower(trim((string) ($membership?->pivot->role ?? '')));
+        abort_unless($request->user()?->role === 'platform_admin' || in_array($role, ['admin', 'owner', 'tenant_owner'], true), 403);
+    }
+
+    /** @param array<string, mixed> $vehicle */
+    private function providerVehicleName(array $vehicle): string
+    {
+        $nickname = trim((string) ($vehicle['nickName'] ?? ''));
+        if ($nickname !== '') {
+            return $nickname;
+        }
+
+        $model = trim(implode(' ', array_filter([
+            data_get($vehicle, 'model.year'),
+            data_get($vehicle, 'model.make'),
+            data_get($vehicle, 'model.name'),
+        ], fn ($part): bool => filled($part))));
+
+        return $model !== '' ? $model : 'Bouncie vehicle';
     }
 
     private function tenant(Request $request): Tenant

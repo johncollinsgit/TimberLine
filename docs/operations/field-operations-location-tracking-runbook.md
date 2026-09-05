@@ -45,7 +45,10 @@ enough by itself.
    `BOUNCIE_WEBHOOK_KEY`; the sender's `Authorization` or
    `X-Bouncie-Authorization` value is compared with `hash_equals`.
 6. Every Bouncie device ID/IMEI is mapped to exactly one company vehicle in the
-   tenant before an event is retained.
+   tenant before an event is retained. Use **Import all vehicles** on the setup
+   page to create missing company vehicles and mappings in one idempotent,
+   tenant-scoped transaction; rerunning it refreshes existing mappings without
+   duplicating vehicles.
 
 Legal requirements vary by location and facts. This gate records an operator's
 review evidence; it is not legal advice and does not replace counsel's review

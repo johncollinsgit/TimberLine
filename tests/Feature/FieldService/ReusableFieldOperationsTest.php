@@ -8,6 +8,7 @@ use App\Models\FieldServiceWorkShift;
 use App\Models\FleetLocationPoint;
 use App\Models\FleetTrackingDevice;
 use App\Models\FleetTrackingPolicyAcknowledgement;
+use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantFleetTrackingSetting;
@@ -140,6 +141,39 @@ test('Bouncie OAuth stores a full tenant-scoped encrypted connection and rotates
     Http::assertSent(fn ($request): bool => $request->url() === 'https://auth.bouncie.com/oauth/token'
         && $request['client_id'] === 'everbranch-test'
         && $request['client_secret'] === 'client-secret-test');
+});
+
+test('an administrator can idempotently import and map every vehicle from the tenant Bouncie account', function (): void {
+    [$tenant, $admin] = fieldOperationsWorkspace('bouncie-import', 'admin');
+    $connection = IntegrationConnection::query()->create([
+        'tenant_id' => $tenant->id,
+        'provider' => 'bouncie',
+        'status' => IntegrationConnection::STATUS_CONNECTED,
+        'access_token' => 'tenant-access-token',
+        'external_account_id' => hash('sha256', 'bouncie-import-account'),
+        'external_account_label' => 'Fleet Owner',
+    ]);
+    config()->set('services.fleet_tracking.bouncie_api_base', 'https://api.bouncie.dev/v1');
+    Http::fake([
+        'https://api.bouncie.dev/v1/vehicles*' => Http::response([
+            ['imei' => '867530900000001', 'nickName' => 'Service Van 1'],
+            ['imei' => '867530900000002', 'nickName' => '', 'model' => ['year' => 2024, 'make' => 'Ford', 'name' => 'Transit']],
+        ]),
+    ]);
+
+    $request = Request::create('/field-service/fleet-tracking/bouncie/sync-vehicles', 'POST');
+    $request->setUserResolver(fn (): User => $admin);
+    $request->attributes->set('current_tenant', $tenant);
+    $controller = app(\App\Http\Controllers\FleetTrackingController::class);
+
+    $controller->syncBouncieVehicles($request);
+    $controller->syncBouncieVehicles($request);
+
+    expect(FieldServiceVehicle::query()->forTenantId($tenant->id)->count())->toBe(2)
+        ->and(FleetTrackingDevice::query()->forTenantId($tenant->id)->count())->toBe(2)
+        ->and(FleetTrackingDevice::query()->forTenantId($tenant->id)->where('label', 'Service Van 1')->exists())->toBeTrue()
+        ->and(FleetTrackingDevice::query()->forTenantId($tenant->id)->where('label', '2024 Ford Transit')->exists())->toBeTrue()
+        ->and($connection->fresh()->access_token)->toBe('tenant-access-token');
 });
 
 test('a manager sees only current on-duty locations from their own workspace', function (): void {
