@@ -170,7 +170,7 @@ class FieldServiceController extends Controller
             'employeePreview' => $employeePreview,
             'canManageJobDrafts' => ! $employeePreview && ! $hideQuickBooksForCollins && $financialAccess->allows($request->user(), $tenant),
             'equipmentMaintenanceEnabled' => $this->moduleEnabled($tenant, 'equipment_maintenance'),
-            'fleetTrackingEnabled' => (bool) config('services.fleet_tracking.enabled', false) && $this->moduleEnabled($tenant, 'fleet_tracking') && in_array($this->fieldServiceAccess->role($request->user(), $tenant), ['owner', 'tenant_owner', 'admin'], true),
+            'fleetTrackingEnabled' => (bool) config('services.fleet_tracking.enabled', false) && $this->moduleEnabled($tenant, 'fleet_tracking') && in_array($this->fieldServiceAccess->role($request->user(), $tenant), ['owner', 'tenant_owner', 'admin', 'manager'], true),
             'ownerMetrics' => ! $employeePreview && ! $hideQuickBooksForCollins && $financialAccess->allows($request->user(), $tenant) ? $homeMetrics->build($tenant, $period) : null,
             'assignedTasks' => $assignedTasks,
             'assignedTaskTotal' => $assignedTaskTotal,

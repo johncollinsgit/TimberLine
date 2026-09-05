@@ -28,7 +28,7 @@ class FleetTrackingAccessService
 
     public function canView(User $user, Tenant $tenant): bool
     {
-        return $user->role === 'platform_admin' || in_array($this->fieldAccess->role($user, $tenant), ['owner', 'tenant_owner', 'admin'], true);
+        return $user->role === 'platform_admin' || in_array($this->fieldAccess->role($user, $tenant), ['owner', 'tenant_owner', 'admin', 'manager'], true);
     }
 
     public function assertPhoneSubmissionAllowed(Tenant $tenant, User $user, FieldServiceTimeSession $session): TenantFleetTrackingSetting

@@ -12,8 +12,10 @@ use App\Services\FieldService\FieldServiceWorkforceService;
 use App\Services\FleetTracking\FleetLocationIngestionService;
 use App\Services\FleetTracking\FleetTrackingAccessService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class EverbranchMobileWorkforceController extends Controller
 {
@@ -66,6 +68,85 @@ class EverbranchMobileWorkforceController extends Controller
         $point = $locations->recordPhone($tenant, $this->user($request), $session, $data);
 
         return response()->json(['ok' => true, 'point_id' => (int) $point->id], 201);
+    }
+
+    public function crewMap(Request $request, FleetTrackingAccessService $access): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $viewer = $this->user($request);
+        abort_unless($access->canView($viewer, $tenant), 403);
+
+        $settings = $access->settings($tenant);
+        $enabled = $access->enabledFor($tenant);
+        $legallyReady = $access->isLegallyReady($settings);
+        $members = $tenant->users()->where('users.is_active', true)
+            ->wherePivot('membership_active', true)->orderBy('users.name')->get(['users.id', 'users.name']);
+        $memberIds = $members->pluck('id')->map(fn ($id): int => (int) $id);
+
+        $latestPhonePoints = collect();
+        if ($memberIds->isNotEmpty()) {
+            $ranked = DB::table('fleet_location_points as points')
+                ->join('field_service_time_sessions as sessions', function ($join): void {
+                    $join->on('sessions.id', '=', 'points.field_service_time_session_id')
+                        ->on('sessions.tenant_id', '=', 'points.tenant_id');
+                })
+                ->where('points.tenant_id', (int) $tenant->id)
+                ->where('points.source', 'mobile')
+                ->where('sessions.status', 'running')
+                ->whereIn('points.user_id', $memberIds)
+                ->selectRaw('points.id, points.user_id, points.field_service_time_session_id, points.latitude, points.longitude, points.accuracy_meters, points.recorded_at, row_number() over (partition by points.user_id order by points.recorded_at desc, points.id desc) as location_rank');
+
+            $latestPhonePoints = DB::query()->fromSub($ranked, 'ranked_locations')
+                ->where('location_rank', 1)->get()->keyBy('user_id');
+        }
+
+        $sessions = FieldServiceTimeSession::query()->forTenantId((int) $tenant->id)
+            ->whereIn('user_id', $memberIds)->where('status', 'running')
+            ->with('job:id,tenant_id,title,customer_name')->latest('clocked_in_at')->get()->unique('user_id')->keyBy('user_id');
+
+        $crew = $members->map(function (User $member) use ($latestPhonePoints, $sessions): array {
+            $point = $latestPhonePoints->get($member->id);
+            $session = $sessions->get($member->id);
+            $recordedAt = $point ? Carbon::parse((string) $point->recorded_at) : null;
+            $ageSeconds = $recordedAt ? max(0, (int) $recordedAt->diffInSeconds(now())) : null;
+
+            return [
+                'user' => ['id' => (int) $member->id, 'name' => (string) $member->name, 'role' => (string) $member->pivot->role],
+                'on_duty' => $session !== null,
+                'job' => $session?->job ? ['id' => (int) $session->job->id, 'title' => (string) $session->job->title, 'customer' => $session->job->customer_name] : null,
+                'location' => $point ? [
+                    'latitude' => (float) $point->latitude,
+                    'longitude' => (float) $point->longitude,
+                    'accuracy_meters' => $point->accuracy_meters !== null ? (int) $point->accuracy_meters : null,
+                    'recorded_at' => $recordedAt?->toIso8601String(),
+                    'age_seconds' => $ageSeconds,
+                    'freshness' => $ageSeconds <= 120 ? 'live' : ($ageSeconds <= 900 ? 'recent' : 'stale'),
+                ] : null,
+            ];
+        })->values();
+
+        return response()->json([
+            'contract_version' => 1,
+            'tracking' => [
+                'available' => $enabled && $settings->phone_tracking_enabled && $legallyReady,
+                'module_enabled' => $enabled,
+                'phone_tracking_enabled' => (bool) $settings->phone_tracking_enabled,
+                'policy_ready' => $legallyReady,
+                'retention_days' => (int) $settings->retention_days,
+                'setup_message' => ! $enabled
+                    ? 'The Location Tracker Branch is not enabled for this workspace.'
+                    : (! $legallyReady ? 'An administrator must finish the reviewed location policy before employee sharing can begin.'
+                        : (! $settings->phone_tracking_enabled ? 'On-duty phone sharing is turned off in Location Tracker settings.' : null)),
+            ],
+            'summary' => [
+                'team_members' => $crew->count(),
+                'on_duty' => $crew->where('on_duty', true)->count(),
+                'sharing_now' => $crew->whereNotNull('location')->where('location.freshness', 'live')->count(),
+            ],
+            'crew' => $crew,
+            'refreshed_at' => now()->toIso8601String(),
+            'poll_after_seconds' => 30,
+        ]);
     }
 
     private function assertModule(TenantModuleAccessResolver $modules, Tenant $tenant, string $module): void

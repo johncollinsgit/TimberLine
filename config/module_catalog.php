@@ -712,7 +712,7 @@ $catalog = [
             'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
             'cta_routing' => 'contact_sales',
             'capabilities' => ['fleet_tracking.vehicle_location', 'fleet_tracking.on_duty_phone_location'],
-            'mobile' => ['status' => 'hidden', 'display_name' => 'On-duty location sharing', 'renderer' => 'field_service', 'entry_screen' => 'field-service.location', 'contract_version' => 1, 'min_app_version' => '2.3.0', 'roles' => ['owner', 'tenant_owner', 'admin', 'manager', 'member', 'employee'], 'navigation' => ['group' => 'work', 'icon' => 'map-pin', 'position' => 10], 'actions' => ['share_on_duty_location']],
+            'mobile' => ['status' => 'ready', 'display_name' => 'Location Tracker', 'renderer' => 'field_service', 'entry_screen' => 'field-service.location', 'contract_version' => 1, 'min_app_version' => '2.3.7', 'roles' => ['owner', 'tenant_owner', 'admin', 'manager', 'member', 'employee'], 'navigation' => ['group' => 'work', 'icon' => 'map-pin', 'position' => 10], 'actions' => ['share_on_duty_location', 'view_team_map']],
         ],
         'everbranch_billing' => [
             'display_name' => 'Everbranch Billing',
