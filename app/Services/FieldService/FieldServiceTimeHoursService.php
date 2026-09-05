@@ -63,6 +63,41 @@ class FieldServiceTimeHoursService
         ];
     }
 
+    /** @param array<string,mixed> $filters
+     * @return array<string,mixed>
+     */
+    public function jobAnalytics(Tenant $tenant, FieldServiceJob $job, User $viewer, bool $canManage, array $filters): array
+    {
+        $timezone = $this->timezone($tenant);
+        $range = $this->resolveRange(
+            (string) ($filters['range'] ?? 'week'),
+            $filters['start_date'] ?? null,
+            $filters['end_date'] ?? null,
+            $timezone,
+        );
+        $metrics = $this->aggregate(
+            $tenant,
+            $range,
+            $timezone,
+            (int) $job->id,
+            $canManage ? null : (int) $viewer->id,
+        );
+
+        return [
+            'contract_version' => 1,
+            'range' => [
+                'key' => $range['key'],
+                'start_date' => $range['start']->toDateString(),
+                'end_date' => $range['end']->toDateString(),
+                'timezone' => $timezone,
+            ],
+            'scope' => $canManage ? 'job' : 'my_hours',
+            'summary' => $metrics['summary'],
+            'by_employee' => $metrics['by_employee'],
+            'by_day' => $metrics['by_day'],
+        ];
+    }
+
     /** @param array<string,mixed> $changes
      * @return array<string,mixed>
      */
@@ -84,7 +119,7 @@ class FieldServiceTimeHoursService
     /** @param array{key:string,start:CarbonImmutable,end:CarbonImmutable,start_utc:CarbonImmutable,end_utc:CarbonImmutable} $range
      * @return array<string,mixed>
      */
-    private function aggregate(Tenant $tenant, array $range, string $timezone): array
+    private function aggregate(Tenant $tenant, array $range, string $timezone, ?int $jobId = null, ?int $userId = null): array
     {
         $summary = $this->emptyMetrics();
         $employees = [];
@@ -93,6 +128,8 @@ class FieldServiceTimeHoursService
 
         $manualEntries = FieldServiceTimeEntry::query()
             ->forTenantId((int) $tenant->id)
+            ->when($jobId !== null, fn ($query) => $query->where('field_service_job_id', $jobId))
+            ->when($userId !== null, fn ($query) => $query->where('user_id', $userId))
             ->whereBetween('work_date', [$range['start']->toDateString(), $range['end']->toDateString()])
             ->select(['id', 'user_id', 'field_service_job_id', 'work_date', 'duration_minutes', 'status'])
             ->cursor();
@@ -113,6 +150,8 @@ class FieldServiceTimeHoursService
 
         $timerSessions = FieldServiceTimeSession::query()
             ->forTenantId((int) $tenant->id)
+            ->when($jobId !== null, fn ($query) => $query->where('field_service_job_id', $jobId))
+            ->when($userId !== null, fn ($query) => $query->where('user_id', $userId))
             ->whereBetween('clocked_in_at', [$range['start_utc'], $range['end_utc']])
             ->select(['id', 'user_id', 'field_service_job_id', 'clocked_in_at', 'clocked_out_at', 'break_seconds', 'duration_seconds', 'status'])
             ->cursor();
