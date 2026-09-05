@@ -18,8 +18,11 @@ use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkforceService;
 use App\Services\FieldService\TeamCommunicationService;
 use App\Services\FleetTracking\FleetLocationIngestionService;
+use App\Services\Integrations\Bouncie\BouncieConnector;
 use App\Services\Tenancy\TenantEmployeeInvitationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 
@@ -101,6 +104,44 @@ test('a signed Bouncie vehicle event maps only to the configured tenant device a
         ->and(FleetLocationPoint::query()->forTenantId($tenant->id)->count())->toBe(1);
 });
 
+test('Bouncie OAuth stores a full tenant-scoped encrypted connection and rotates refresh tokens', function (): void {
+    [$tenant] = fieldOperationsWorkspace('bouncie-oauth', 'admin');
+    config()->set('services.fleet_tracking.bouncie_client_id', 'everbranch-test');
+    config()->set('services.fleet_tracking.bouncie_client_secret', 'client-secret-test');
+    config()->set('services.fleet_tracking.bouncie_redirect_uri', 'https://app.example.test/integrations/bouncie/callback');
+    config()->set('services.fleet_tracking.bouncie_api_base', 'https://api.bouncie.dev/v1');
+    config()->set('services.fleet_tracking.bouncie_token_url', 'https://auth.bouncie.com/oauth/token');
+    Http::fake([
+        'https://auth.bouncie.com/oauth/token' => Http::sequence()
+            ->push(['access_token' => 'access-one', 'refresh_token' => 'refresh-one', 'expires_in' => 3600, 'token_type' => 'Bearer'])
+            ->push(['access_token' => 'access-two', 'refresh_token' => 'refresh-two', 'expires_in' => 3600, 'token_type' => 'Bearer']),
+        'https://api.bouncie.dev/v1/user' => Http::response(['id' => 'bouncie-user-42', 'email' => 'fleet@example.test', 'name' => 'Fleet Owner']),
+    ]);
+    $request = Request::create('/integrations/bouncie/callback?code=auth-code', 'GET');
+    $request->attributes->set('bouncie_code_verifier', str_repeat('v', 64));
+    $connector = app(BouncieConnector::class);
+
+    $connection = $connector->handleCallback($tenant, $request);
+    expect($connection->tenant_id)->toBe($tenant->id)
+        ->and($connection->provider)->toBe('bouncie')
+        ->and($connection->external_account_label)->toBe('Fleet Owner')
+        ->and($connection->access_token)->toBe('access-one')
+        ->and($connection->refresh_token)->toBe('refresh-one');
+
+    $raw = DB::table('integration_connections')->where('id', $connection->id)->first();
+    expect((string) $raw->access_token)->not->toContain('access-one')
+        ->and((string) $raw->refresh_token)->not->toContain('refresh-one')
+        ->and((string) $raw->external_account_secret)->not->toContain('bouncie-user-42');
+
+    $connection->forceFill(['expires_at' => now()->subMinute()])->save();
+    $refreshed = $connector->refresh($connection->fresh());
+    expect($refreshed->access_token)->toBe('access-two')->and($refreshed->refresh_token)->toBe('refresh-two');
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://auth.bouncie.com/oauth/token'
+        && $request['client_id'] === 'everbranch-test'
+        && $request['client_secret'] === 'client-secret-test');
+});
+
 test('a manager sees only current on-duty locations from their own workspace', function (): void {
     [$tenant, $manager] = fieldOperationsWorkspace('crew-map', 'manager');
     $employee = User::factory()->create(['is_active' => true]);
@@ -111,7 +152,7 @@ test('a manager sees only current on-duty locations from their own workspace', f
     }
     config()->set('services.fleet_tracking.enabled', true);
     $settings = TenantFleetTrackingSetting::query()->create([
-        'tenant_id' => $tenant->id, 'phone_tracking_enabled' => true, 'policy_version' => '2026-09',
+        'tenant_id' => $tenant->id, 'phone_tracking_enabled' => true, 'bouncie_tracking_enabled' => true, 'policy_version' => '2026-09',
         'policy_sha256' => hash('sha256', 'approved policy'), 'counsel_review_reference' => 'Counsel review 2026-09-05',
         'legal_reviewed_at' => now(), 'retention_days' => 30,
     ]);
@@ -130,6 +171,13 @@ test('a manager sees only current on-duty locations from their own workspace', f
         'source' => 'mobile', 'event_key' => hash('sha256', 'crew-map-point'), 'latitude' => 34.8526,
         'longitude' => -82.3940, 'accuracy_meters' => 12, 'recorded_at' => now()->subSeconds(15), 'received_at' => now(),
     ]);
+    $vehicle = FieldServiceVehicle::query()->create(['tenant_id' => $tenant->id, 'name' => 'Service Van 4', 'identifier' => 'VAN-4', 'status' => 'active']);
+    $device = FleetTrackingDevice::query()->create(['tenant_id' => $tenant->id, 'field_service_vehicle_id' => $vehicle->id, 'provider' => 'bouncie', 'external_device_id' => '867530900000004', 'label' => 'Van 4', 'status' => 'active']);
+    FleetLocationPoint::query()->create([
+        'tenant_id' => $tenant->id, 'fleet_tracking_device_id' => $device->id, 'field_service_vehicle_id' => $vehicle->id,
+        'source' => 'bouncie', 'event_key' => hash('sha256', 'crew-map-vehicle'), 'latitude' => 34.8530,
+        'longitude' => -82.3950, 'recorded_at' => now()->subSeconds(20), 'received_at' => now(),
+    ]);
 
     Sanctum::actingAs($manager, ['mobile:read']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/crew-map')
@@ -137,6 +185,8 @@ test('a manager sees only current on-duty locations from their own workspace', f
         ->assertJsonPath('tracking.available', true)
         ->assertJsonPath('summary.on_duty', 1)
         ->assertJsonPath('summary.sharing_now', 1)
+        ->assertJsonPath('summary.tracked_vehicles', 1)
+        ->assertJsonPath('vehicles.0.vehicle.name', 'Service Van 4')
         ->assertJsonFragment(['id' => $employee->id, 'name' => $employee->name, 'role' => 'member'])
         ->assertJsonFragment(['title' => 'Smoke detector trim-out'])
         ->assertJsonFragment(['freshness' => 'live']);

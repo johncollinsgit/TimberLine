@@ -40,7 +40,8 @@ enough by itself.
    review reference, and a legal-review confirmation in the tenant settings.
 4. Each phone-sharing employee accepts that exact current policy version in the
    mobile app. A new policy version requires a new acknowledgement.
-5. Bouncie is configured to POST only to `/webhooks/bouncie` using the current
+5. The workspace owner/admin connects that workspace's Bouncie account through
+   OAuth. The application webhook is configured to POST only to `/webhooks/bouncie` using the current
    `BOUNCIE_WEBHOOK_KEY`; the sender's `Authorization` or
    `X-Bouncie-Authorization` value is compared with `hash_equals`.
 6. Every Bouncie device ID/IMEI is mapped to exactly one company vehicle in the
@@ -53,10 +54,15 @@ bargaining obligations, and applicable state/local rules.
 
 ## Provider and map setup
 
-- Use Bouncie OAuth/API credentials only through a tenant-scoped encrypted
-  `IntegrationConnection` when an OAuth connection screen is added. Do not put
-  Bouncie tokens in a browser payload or logs. The initial webhook path uses a
-  deployment secret and device mapping to receive Bouncie's location events.
+- Bouncie OAuth uses authorization code plus PKCE. Each workspace stores its
+  own access token, rotating refresh token, and provider account identifier in
+  a tenant-scoped encrypted `IntegrationConnection`; tokens are never returned
+  to a browser payload or written to logs. Bouncie exposes account-level access
+  rather than selectable OAuth scopes, so Everbranch deliberately limits its
+  use to account identity and company vehicle inventory/location data.
+- The application-level webhook uses a deployment secret and globally unique
+  Bouncie IMEI mapping to route an event. Duplicate cross-tenant mappings fail
+  closed instead of guessing which workspace owns a tracker.
 - Bouncie webhook deliveries must be safe to retry. Everbranch deduplicates by
   tenant, source, and a SHA-256 event key. Unknown devices and malformed points
   are ignored; unauthorized deliveries are rejected.
@@ -76,6 +82,8 @@ The server exposes these authenticated membership-scoped endpoints under
 - `GET /field-service/location-policy`
 - `POST /field-service/location-policy/accept`
 - `POST /field-service/location-points`
+- `GET /field-service/crew-map` (contract v2 returns separate `crew` and
+  `vehicles` arrays; the native app renders distinct employee and van pins)
 
 The native client must request platform background-location permission only
 after showing the policy and explaining the active-shift use. It should send a
