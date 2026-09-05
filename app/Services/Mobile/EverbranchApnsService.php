@@ -147,6 +147,7 @@ class EverbranchApnsService
             'type' => 'field_service_job',
             'workspace_slug' => (string) data_get($notification->metadata, 'workspace_slug'),
             'job_id' => (int) $notification->field_service_job_id,
+            'destination_tab' => (string) data_get($notification->metadata, 'destination.tab', ''),
             'notification_id' => (int) $notification->id,
         ];
     }

@@ -129,7 +129,7 @@ class FieldServiceMyDayService
                 'title' => (string) data_get($notification->metadata, 'title', $notification->job?->title ?: 'Job update'),
                 'body' => (string) data_get($notification->metadata, 'body', 'A job was updated.'),
                 'created_at' => $notification->created_at?->toIso8601String(),
-                'destination' => ['kind' => 'field_service_job', 'id' => (int) $notification->field_service_job_id],
+                'destination' => data_get($notification->metadata, 'destination', ['kind' => 'field_service_job', 'id' => (int) $notification->field_service_job_id]),
             ])->values(),
             'owner_shortcuts' => in_array($this->access->role($user, $tenant), ['owner', 'tenant_owner', 'admin'], true) ? [
                 ['label' => 'Reports', 'destination' => ['kind' => 'reporting', 'range' => '1m']],

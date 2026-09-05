@@ -159,7 +159,7 @@ class FieldServiceJobNotificationService
                 'tenant_id' => (int) $job->tenant_id, 'user_id' => (int) $user->id, 'channel' => 'in_app', 'event_key' => $eventKey,
             ], [
                 'field_service_job_id' => (int) $job->id, 'field_service_job_note_id' => $note?->id,
-                'event_type' => $eventType, 'status' => 'delivered', 'sent_at' => now(), 'metadata' => $this->metadata($job, $title, $body),
+                'event_type' => $eventType, 'status' => 'delivered', 'sent_at' => now(), 'metadata' => $this->metadata($job, $title, $body, $eventType),
             ]);
             if ($inApp->wasRecentlyCreated) {
                 $summary['in_app']++;
@@ -175,7 +175,7 @@ class FieldServiceJobNotificationService
                 'tenant_id' => (int) $job->tenant_id, 'user_id' => (int) $user->id, 'channel' => 'push', 'event_key' => $eventKey,
             ], [
                 'field_service_job_id' => (int) $job->id, 'field_service_job_note_id' => $note?->id,
-                'event_type' => $eventType, 'status' => 'queued', 'metadata' => $this->metadata($job, $title, $body),
+                'event_type' => $eventType, 'status' => 'queued', 'metadata' => $this->metadata($job, $title, $body, $eventType),
             ]);
             if ($push->wasRecentlyCreated) {
                 SendFieldServicePushNotification::dispatch((int) $push->id)->afterCommit();
@@ -198,12 +198,17 @@ class FieldServiceJobNotificationService
     }
 
     /** @return array<string,mixed> */
-    private function metadata(FieldServiceJob $job, string $title, string $body): array
+    private function metadata(FieldServiceJob $job, string $title, string $body, ?string $eventType = null): array
     {
+        $destination = ['kind' => 'field_service_job', 'id' => (int) $job->id];
+        if ($eventType === 'material_requested') {
+            $destination['tab'] = 'materials';
+        }
+
         return [
             'title' => Str::limit($title, 120), 'body' => Str::limit($body, 240),
             'workspace_slug' => Tenant::query()->whereKey((int) $job->tenant_id)->value('slug'),
-            'route' => 'field_service_job', 'job_id' => (int) $job->id,
+            'route' => 'field_service_job', 'job_id' => (int) $job->id, 'destination' => $destination,
         ];
     }
 

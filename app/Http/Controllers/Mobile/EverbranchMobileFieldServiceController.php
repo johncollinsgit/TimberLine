@@ -1130,7 +1130,7 @@ class EverbranchMobileFieldServiceController extends Controller
                 'title' => (string) data_get($row->metadata, 'title', $row->job?->title ?: 'Job update'),
                 'body' => (string) data_get($row->metadata, 'body', 'A job was updated.'),
                 'created_at' => $row->created_at?->toIso8601String(),
-                'destination' => ['kind' => 'field_service_job', 'id' => (int) $row->field_service_job_id],
+                'destination' => data_get($row->metadata, 'destination', ['kind' => 'field_service_job', 'id' => (int) $row->field_service_job_id]),
             ])->values(),
         ]);
     }
