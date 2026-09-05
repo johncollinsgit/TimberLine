@@ -2,10 +2,12 @@
 
 use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceTimeSession;
 use App\Models\FieldServiceVehicle;
 use App\Models\FieldServiceWorkShift;
 use App\Models\FleetLocationPoint;
 use App\Models\FleetTrackingDevice;
+use App\Models\FleetTrackingPolicyAcknowledgement;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantFleetTrackingSetting;
@@ -19,6 +21,7 @@ use App\Services\FleetTracking\FleetLocationIngestionService;
 use App\Services\Tenancy\TenantEmployeeInvitationService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\Sanctum;
 
 test('the field clock enforces one active job and reconciles idempotent breaks and stop actions', function (): void {
     [$tenant, $employee] = fieldOperationsWorkspace('clock');
@@ -96,6 +99,51 @@ test('a signed Bouncie vehicle event maps only to the configured tenant device a
     expect($service->ingestBouncie($request))->toBe(['accepted' => 1, 'ignored' => 0]);
     expect($service->ingestBouncie($request))->toBe(['accepted' => 1, 'ignored' => 0])
         ->and(FleetLocationPoint::query()->forTenantId($tenant->id)->count())->toBe(1);
+});
+
+test('a manager sees only current on-duty locations from their own workspace', function (): void {
+    [$tenant, $manager] = fieldOperationsWorkspace('crew-map', 'manager');
+    $employee = User::factory()->create(['is_active' => true]);
+    $employee->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    foreach (['fleet', 'time_tracking', 'fleet_tracking'] as $module) {
+        TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => $module, 'enabled_override' => true, 'setup_status' => 'configured']);
+    }
+    config()->set('services.fleet_tracking.enabled', true);
+    $settings = TenantFleetTrackingSetting::query()->create([
+        'tenant_id' => $tenant->id, 'phone_tracking_enabled' => true, 'policy_version' => '2026-09',
+        'policy_sha256' => hash('sha256', 'approved policy'), 'counsel_review_reference' => 'Counsel review 2026-09-05',
+        'legal_reviewed_at' => now(), 'retention_days' => 30,
+    ]);
+    FleetTrackingPolicyAcknowledgement::query()->create([
+        'tenant_id' => $tenant->id, 'user_id' => $employee->id, 'policy_version' => $settings->policy_version,
+        'policy_sha256' => $settings->policy_sha256, 'accepted_at' => now(), 'acceptance_source' => 'mobile',
+    ]);
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'assigned_user_id' => $employee->id, 'title' => 'Smoke detector trim-out', 'status' => 'open', 'operational_status' => 'active']);
+    $session = FieldServiceTimeSession::query()->create([
+        'tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'user_id' => $employee->id,
+        'client_uuid' => '77777777-7777-4777-8777-777777777777', 'active_user_key' => $employee->id,
+        'status' => 'running', 'clocked_in_at' => now()->subHour(), 'break_seconds' => 0, 'source' => 'mobile',
+    ]);
+    FleetLocationPoint::query()->create([
+        'tenant_id' => $tenant->id, 'user_id' => $employee->id, 'field_service_time_session_id' => $session->id,
+        'source' => 'mobile', 'event_key' => hash('sha256', 'crew-map-point'), 'latitude' => 34.8526,
+        'longitude' => -82.3940, 'accuracy_meters' => 12, 'recorded_at' => now()->subSeconds(15), 'received_at' => now(),
+    ]);
+
+    Sanctum::actingAs($manager, ['mobile:read']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/crew-map')
+        ->assertOk()
+        ->assertJsonPath('tracking.available', true)
+        ->assertJsonPath('summary.on_duty', 1)
+        ->assertJsonPath('summary.sharing_now', 1)
+        ->assertJsonFragment(['id' => $employee->id, 'name' => $employee->name, 'role' => 'member'])
+        ->assertJsonFragment(['title' => 'Smoke detector trim-out'])
+        ->assertJsonFragment(['freshness' => 'live']);
+
+    $session->forceFill(['status' => 'paused', 'active_user_key' => null])->save();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/crew-map')
+        ->assertOk()->assertJsonPath('summary.on_duty', 0)->assertJsonPath('summary.sharing_now', 0);
 });
 
 test('quickbooks estimates and unlinked open invoices enter an explicit tenant review queue', function (): void {
