@@ -15,6 +15,7 @@ use App\Models\Tenant;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\User;
 use App\Services\Billing\StripeHostedBillingService;
+use App\Services\Bud\TenantBudService;
 use App\Services\Dashboard\UnifiedDashboardService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetService;
@@ -351,6 +352,23 @@ class EverbranchMobileController extends Controller
         $validated = $request->validate(['body' => ['required', 'string', 'max:10000']]);
 
         return response()->json($support->reply((int) $this->tenant($request)->id, $ticket, $this->user($request), $validated['body'], 'tenant'));
+    }
+
+    public function askBud(Request $request, TenantBudService $bud): JsonResponse
+    {
+        $validated = $request->validate([
+            'question' => ['required', 'string', 'max:3000'],
+            'transcript' => ['sometimes', 'array', 'max:12'],
+            'transcript.*.role' => ['required_with:transcript', 'in:user,bud'],
+            'transcript.*.text' => ['required_with:transcript', 'string', 'max:3000'],
+        ]);
+
+        return response()->json($bud->respond(
+            $this->tenant($request),
+            $this->user($request),
+            (string) $validated['question'],
+            array_values($validated['transcript'] ?? []),
+        ));
     }
 
     public function registerPushDevice(Request $request): JsonResponse

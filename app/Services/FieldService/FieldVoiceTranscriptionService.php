@@ -60,9 +60,11 @@ class FieldVoiceTranscriptionService
 
     private function prompt(string $context): string
     {
-        $purpose = $context === 'material_request'
-            ? 'This is an electrical material request. Preserve quantities, sizes, units, and product names exactly.'
-            : 'This is a concise field-service job note. Preserve names, measurements, circuit numbers, and technical details.';
+        $purpose = match ($context) {
+            'material_request' => 'This is an electrical material request. Preserve quantities, sizes, units, and product names exactly.',
+            'bud_question' => 'This is a spoken question for the Everbranch workspace assistant Bud. Preserve employee, customer, job, and project names exactly.',
+            default => 'This is a concise field-service job note. Preserve names, measurements, circuit numbers, and technical details.',
+        };
 
         return $purpose.' Collins Upstate Electric vocabulary may include Romex, THHN, EMT, MC cable, GFCI, AFCI, receptacle, breaker, panel, disconnect, conduit, wire gauge, feet, boxes, and fixtures. Use punctuation and readable sentences.';
     }

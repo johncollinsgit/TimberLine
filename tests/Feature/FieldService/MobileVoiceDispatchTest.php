@@ -70,6 +70,28 @@ test('voice drafts use OpenAI transcription and parse electrical material quanti
     Http::assertSent(fn ($request): bool => $request->url() === 'https://api.openai.com/v1/audio/transcriptions');
 });
 
+test('voice drafts accept tenant metered Bud questions', function (): void {
+    [$tenant, , $employee] = voiceDispatchWorkspace('bud-voice');
+    config()->set('services.openai.api_key', 'test-key');
+    config()->set('bud.ai_enabled', true);
+    config()->set('bud.provider_configured', true);
+    Http::fake(['api.openai.com/*' => Http::response(['text' => 'What needs my attention today?'], 200)]);
+    Sanctum::actingAs($employee, ['mobile:read', 'mobile:write']);
+
+    $this->post('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/voice/transcriptions', [
+        'audio' => UploadedFile::fake()->create('bud-question.m4a', 80, 'audio/mp4'),
+        'context' => 'bud_question',
+        'duration_seconds' => 7,
+        'client_uuid' => '88888888-8888-4888-8888-888888888888',
+    ], ['Accept' => 'application/json'])
+        ->assertOk()
+        ->assertJsonPath('transcript', 'What needs my attention today?')
+        ->assertJsonPath('material', null)
+        ->assertJsonPath('billing.scope', 'tenant');
+
+    expect(TenantAiUsageEvent::query()->forTenantId((int) $tenant->id)->sole()->context)->toBe('bud_question');
+});
+
 test('voice drafts fail clearly when transcription is not configured and reject oversized files', function (): void {
     [$tenant, , $employee] = voiceDispatchWorkspace('voice-errors');
     config()->set('services.openai.api_key', null);

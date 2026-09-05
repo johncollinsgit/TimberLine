@@ -64,6 +64,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/support-tickets', [EverbranchMobileController::class, 'createSupportTicket'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.support.create');
                 Route::get('/support-tickets/{ticket}', [EverbranchMobileController::class, 'supportTicket'])->middleware('abilities:mobile:read')->whereNumber('ticket')->name('workspace.support.show');
                 Route::post('/support-tickets/{ticket}/reply', [EverbranchMobileController::class, 'replySupportTicket'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('ticket')->name('workspace.support.reply');
+                Route::post('/bud/questions', [EverbranchMobileController::class, 'askBud'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.bud.questions.store');
                 Route::get('/search', [EverbranchMobileController::class, 'search'])->middleware('abilities:mobile:read')->name('workspace.search');
                 Route::get('/customers', [EverbranchMobileController::class, 'customers'])->middleware('abilities:mobile:read')->name('workspace.customers');
                 Route::post('/customers', [EverbranchMobileController::class, 'storeCustomer'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.customers.store');

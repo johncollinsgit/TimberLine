@@ -579,6 +579,13 @@ test('tenant support tickets stay scoped and authorized landlords can reply and 
     $privateTicket = TenantSupportTicket::withoutGlobalScopes()->create(['tenant_id' => $other->id, 'created_by_user_id' => $member->id, 'subject' => 'Private', 'status' => 'open', 'last_activity_at' => now()]);
 
     $this->getJson('/api/mobile/v1/workspaces/needs-help/support-tickets')->assertOk()->assertJsonCount(1, 'tickets');
+    $this->postJson('/api/mobile/v1/workspaces/needs-help/bud/questions', [
+        'question' => 'What needs my attention?',
+        'transcript' => [['role' => 'user', 'text' => 'Tell me about this workspace.']],
+    ])->assertOk()
+        ->assertJsonPath('confidence', 'high')
+        ->assertJsonPath('uncertain', false)
+        ->assertJsonFragment(['reply' => 'There are 0 open Customer Loop actions in this workspace. Open Follow-up to see the reason, a prepared draft when available, and the person responsible. Bud will never send or publish anything without the final confirmation button.']);
     $this->getJson('/api/mobile/v1/workspaces/needs-help/support-tickets/'.$privateTicket->id)->assertNotFound();
     $this->postJson('/api/mobile/v1/workspaces/needs-help/support-tickets/'.$ticketId.'/reply', ['body' => 'This is still blocking us.'])->assertOk()->assertJsonCount(2, 'messages');
 

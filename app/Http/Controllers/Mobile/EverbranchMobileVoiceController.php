@@ -22,7 +22,7 @@ class EverbranchMobileVoiceController extends Controller
 
         $validated = $request->validate([
             'audio' => ['required', 'file', 'max:15360', 'mimetypes:audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,audio/webm,audio/ogg,video/mp4,application/octet-stream'],
-            'context' => ['required', 'in:job_note,material_request'],
+            'context' => ['required', 'in:job_note,material_request,bud_question'],
             'duration_seconds' => ['required', 'integer', 'min:1', 'max:90'],
             'client_uuid' => ['required', 'uuid'],
         ]);
