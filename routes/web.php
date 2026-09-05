@@ -21,6 +21,7 @@ use App\Http\Controllers\FleetTrackingController;
 use App\Http\Controllers\FleetTrackingWebhookController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Integrations\BouncieConnectionController;
 use App\Http\Controllers\Integrations\InstagramConnectionController;
 use App\Http\Controllers\Integrations\InstagramWebhookController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
@@ -866,6 +867,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])
         ->name('integrations.quickbooks.callback');
 
+    Route::get('/integrations/bouncie/callback', [BouncieConnectionController::class, 'callback'])
+        ->name('integrations.bouncie.callback');
+
     Route::middleware(['role:admin'])
         ->get('/integrations/instagram', [InstagramConnectionController::class, 'index'])
         ->name('integrations.instagram.index');
@@ -999,6 +1003,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/', [FleetTrackingController::class, 'index'])->name('index');
                 Route::post('/settings', [FleetTrackingController::class, 'updateSettings'])->name('settings.update');
                 Route::post('/devices', [FleetTrackingController::class, 'storeDevice'])->name('devices.store');
+                Route::get('/bouncie/connect', [BouncieConnectionController::class, 'connect'])->name('bouncie.connect');
+                Route::post('/bouncie/disconnect', [BouncieConnectionController::class, 'disconnect'])->name('bouncie.disconnect');
             });
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');

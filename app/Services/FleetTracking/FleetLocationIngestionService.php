@@ -81,10 +81,13 @@ class FleetLocationIngestionService
         if ($deviceId === '' || ! is_numeric($latitude) || ! is_numeric($longitude)) {
             return false;
         }
-        $device = FleetTrackingDevice::withoutGlobalScopes()->where('provider', 'bouncie')->where('external_device_id', $deviceId)->where('status', 'active')->first();
-        if (! $device instanceof FleetTrackingDevice) {
+        // Bouncie IMEIs are globally unique. Fail closed if legacy data ever maps
+        // the same tracker to more than one tenant rather than guessing a tenant.
+        $devices = FleetTrackingDevice::withoutGlobalScopes()->where('provider', 'bouncie')->where('external_device_id', $deviceId)->where('status', 'active')->limit(2)->get();
+        if ($devices->count() !== 1) {
             return false;
         }
+        $device = $devices->first();
         $tenant = Tenant::query()->find($device->tenant_id);
         $settings = $tenant ? $this->access->settings($tenant) : null;
         if (! $tenant || ! $settings || ! $this->access->enabledFor($tenant) || ! $settings->bouncie_tracking_enabled || ! $this->access->isLegallyReady($settings)) {

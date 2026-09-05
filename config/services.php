@@ -40,6 +40,9 @@ $defaultAsanaWorkflowRedirect = $canonicalLandlordHost !== null
 $defaultQuickBooksRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/quickbooks/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/quickbooks/callback';
+$defaultBouncieRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/bouncie/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/bouncie/callback';
 $defaultInstagramRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/instagram/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/instagram/callback';
@@ -59,6 +62,13 @@ return [
         // separate gates; all must pass before any point is accepted or shown.
         'enabled' => env('FLEET_TRACKING_ENABLED', false),
         'bouncie_webhook_key' => env('BOUNCIE_WEBHOOK_KEY'),
+        'bouncie_client_id' => env('BOUNCIE_CLIENT_ID'),
+        'bouncie_client_secret' => env('BOUNCIE_CLIENT_SECRET'),
+        'bouncie_redirect_uri' => env('BOUNCIE_REDIRECT_URI', $defaultBouncieRedirect),
+        'bouncie_authorization_url' => env('BOUNCIE_AUTHORIZATION_URL', 'https://auth.bouncie.com/dialog/authorize'),
+        'bouncie_token_url' => env('BOUNCIE_TOKEN_URL', 'https://auth.bouncie.com/oauth/token'),
+        'bouncie_api_base' => env('BOUNCIE_API_BASE', 'https://api.bouncie.dev/v1'),
+        'oauth_state_cache_store' => env('BOUNCIE_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
     ],
 
     /*

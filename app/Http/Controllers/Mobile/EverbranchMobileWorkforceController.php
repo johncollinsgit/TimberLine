@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Mobile;
 use App\Http\Controllers\Controller;
 use App\Models\FieldServiceTimeSession;
 use App\Models\FieldServiceWorkShift;
+use App\Models\FleetTrackingDevice;
 use App\Models\FleetTrackingPolicyAcknowledgement;
 use App\Models\Tenant;
 use App\Models\User;
@@ -79,12 +80,14 @@ class EverbranchMobileWorkforceController extends Controller
         $settings = $access->settings($tenant);
         $enabled = $access->enabledFor($tenant);
         $legallyReady = $access->isLegallyReady($settings);
+        $phoneAvailable = $enabled && $legallyReady && $settings->phone_tracking_enabled;
+        $vehicleAvailable = $enabled && $legallyReady && $settings->bouncie_tracking_enabled;
         $members = $tenant->users()->where('users.is_active', true)
             ->wherePivot('membership_active', true)->orderBy('users.name')->get(['users.id', 'users.name']);
         $memberIds = $members->pluck('id')->map(fn ($id): int => (int) $id);
 
         $latestPhonePoints = collect();
-        if ($memberIds->isNotEmpty()) {
+        if ($phoneAvailable && $memberIds->isNotEmpty()) {
             $ranked = DB::table('fleet_location_points as points')
                 ->join('field_service_time_sessions as sessions', function ($join): void {
                     $join->on('sessions.id', '=', 'points.field_service_time_session_id')
@@ -125,25 +128,55 @@ class EverbranchMobileWorkforceController extends Controller
             ];
         })->values();
 
+        $vehicleDevices = $vehicleAvailable
+            ? FleetTrackingDevice::query()->forTenantId((int) $tenant->id)
+                ->where('provider', 'bouncie')->where('status', 'active')
+                ->with('vehicle:id,tenant_id,name,identifier')->get()
+            : collect();
+        $latestVehiclePoints = collect();
+        if ($vehicleDevices->isNotEmpty()) {
+            $rankedVehicles = DB::table('fleet_location_points')
+                ->where('tenant_id', (int) $tenant->id)->where('source', 'bouncie')
+                ->whereIn('fleet_tracking_device_id', $vehicleDevices->modelKeys())
+                ->selectRaw('id, fleet_tracking_device_id, latitude, longitude, recorded_at, row_number() over (partition by fleet_tracking_device_id order by recorded_at desc, id desc) as location_rank');
+            $latestVehiclePoints = DB::query()->fromSub($rankedVehicles, 'ranked_vehicle_locations')
+                ->where('location_rank', 1)->get()->keyBy('fleet_tracking_device_id');
+        }
+        $vehicles = $vehicleDevices->map(function (FleetTrackingDevice $device) use ($latestVehiclePoints): array {
+            $point = $latestVehiclePoints->get($device->id);
+            $recordedAt = $point ? Carbon::parse((string) $point->recorded_at) : null;
+            $ageSeconds = $recordedAt ? max(0, (int) $recordedAt->diffInSeconds(now())) : null;
+
+            return [
+                'device_id' => (int) $device->id,
+                'label' => (string) ($device->label ?: $device->vehicle?->name ?: 'Company vehicle'),
+                'vehicle' => $device->vehicle ? ['id' => (int) $device->vehicle->id, 'name' => (string) $device->vehicle->name, 'identifier' => $device->vehicle->identifier] : null,
+                'location' => $point ? ['latitude' => (float) $point->latitude, 'longitude' => (float) $point->longitude, 'recorded_at' => $recordedAt?->toIso8601String(), 'age_seconds' => $ageSeconds, 'freshness' => $ageSeconds <= 120 ? 'live' : ($ageSeconds <= 900 ? 'recent' : 'stale')] : null,
+            ];
+        })->values();
+
         return response()->json([
-            'contract_version' => 1,
+            'contract_version' => 2,
             'tracking' => [
-                'available' => $enabled && $settings->phone_tracking_enabled && $legallyReady,
+                'available' => $enabled && $legallyReady && ($settings->phone_tracking_enabled || $settings->bouncie_tracking_enabled),
                 'module_enabled' => $enabled,
                 'phone_tracking_enabled' => (bool) $settings->phone_tracking_enabled,
+                'vehicle_tracking_enabled' => (bool) $settings->bouncie_tracking_enabled,
                 'policy_ready' => $legallyReady,
                 'retention_days' => (int) $settings->retention_days,
                 'setup_message' => ! $enabled
                     ? 'The Location Tracker Branch is not enabled for this workspace.'
                     : (! $legallyReady ? 'An administrator must finish the reviewed location policy before employee sharing can begin.'
-                        : (! $settings->phone_tracking_enabled ? 'On-duty phone sharing is turned off in Location Tracker settings.' : null)),
+                        : (! $settings->phone_tracking_enabled && ! $settings->bouncie_tracking_enabled ? 'Location sharing is turned off in Location Tracker settings.' : null)),
             ],
             'summary' => [
                 'team_members' => $crew->count(),
                 'on_duty' => $crew->where('on_duty', true)->count(),
                 'sharing_now' => $crew->whereNotNull('location')->where('location.freshness', 'live')->count(),
+                'tracked_vehicles' => $vehicles->whereNotNull('location')->count(),
             ],
             'crew' => $crew,
+            'vehicles' => $vehicles,
             'refreshed_at' => now()->toIso8601String(),
             'poll_after_seconds' => 30,
         ]);
