@@ -307,6 +307,11 @@ test('material requests carry their requester onto manager home and managers can
     expect(FieldServiceMaterial::query()->findOrFail($firstId)->requested_by_user_id)->toBe($employee->id);
 
     Sanctum::actingAs($manager, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/notifications')
+        ->assertOk()
+        ->assertJsonPath('notifications.0.event_type', 'material_requested')
+        ->assertJsonPath('notifications.0.destination.id', $job->id)
+        ->assertJsonPath('notifications.0.destination.tab', 'materials');
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/my-day')
         ->assertOk()
         ->assertJsonPath('counts.material_requests', 1)
