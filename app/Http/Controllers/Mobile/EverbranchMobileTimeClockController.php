@@ -28,7 +28,7 @@ class EverbranchMobileTimeClockController extends Controller
         $tenant = $this->tenant($request);
         $user = $this->user($request);
         $job = FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail((int) $validated['job_id']);
-        abort_unless($access->canAccessJob($user, $tenant, $job), 404);
+        abort_unless($access->canAccessJob($user, $tenant, $job), 404, 'That job is not available to your account. Refresh the job list and choose another job.');
         $session = $clock->start($tenant, $user, $job, $validated['client_uuid'], (array) ($validated['device_context'] ?? []));
 
         return response()->json(['ok' => true, 'timer' => $this->payload($session)], 201);

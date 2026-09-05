@@ -118,6 +118,57 @@ test('mobile managers receive tenant scoped time analytics and a unified paginat
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=week')->assertForbidden();
 });
 
+test('job hourly analytics automatically include new members and never expose another tenant or employee', function (): void {
+    Carbon::setTestNow('2026-09-04 16:00:00 UTC');
+    [$tenant, $manager, $employee] = mobileTimeHoursWorkspace('job-hours');
+    [$otherTenant, $otherManager] = mobileTimeHoursWorkspace('job-hours-other');
+    $newEmployee = User::factory()->create(['is_active' => true]);
+    $newEmployee->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $employee->id,
+        'title' => 'Live crew job',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $job->participants()->attach($newEmployee->id, ['tenant_id' => $tenant->id]);
+    $otherJob = FieldServiceJob::query()->create(['tenant_id' => $otherTenant->id, 'title' => 'Private other tenant', 'status' => 'open']);
+    foreach ([[$employee, 3600, '66666666-6666-4666-8666-666666666666'], [$newEmployee, 7200, '77777777-7777-4777-8777-777777777777']] as [$worker, $seconds, $uuid]) {
+        FieldServiceTimeSession::query()->create([
+            'tenant_id' => $tenant->id,
+            'field_service_job_id' => $job->id,
+            'user_id' => $worker->id,
+            'client_uuid' => $uuid,
+            'status' => 'submitted',
+            'clocked_in_at' => now()->subSeconds($seconds),
+            'clocked_out_at' => now(),
+            'break_seconds' => 0,
+            'duration_seconds' => $seconds,
+            'source' => 'mobile',
+        ]);
+    }
+
+    Sanctum::actingAs($manager, ['mobile:read']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/hours?range=week')
+        ->assertOk()
+        ->assertJsonPath('scope', 'job')
+        ->assertJsonPath('summary.total_seconds', 10800)
+        ->assertJsonCount(2, 'by_employee');
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$otherJob->id.'/hours?range=week')->assertNotFound();
+
+    Sanctum::actingAs($employee, ['mobile:read']);
+    $employeeResponse = $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/hours?range=week')
+        ->assertOk()
+        ->assertJsonPath('scope', 'my_hours')
+        ->assertJsonPath('summary.total_seconds', 3600)
+        ->assertJsonCount(1, 'by_employee');
+    expect($employeeResponse->json('by_employee.0.user.id'))->toBe($employee->id);
+
+    Sanctum::actingAs($otherManager, ['mobile:read']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$otherTenant->slug.'/field-service/jobs/'.$job->id.'/hours?range=week')->assertNotFound();
+    Carbon::setTestNow();
+});
+
 test('mobile managers edit completed timer and manual submissions with recomputed durations and audit evidence', function (): void {
     [$tenant, $manager, $employee] = mobileTimeHoursWorkspace('editing');
     [$otherTenant, $otherManager, $otherEmployee] = mobileTimeHoursWorkspace('other');

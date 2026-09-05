@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
+use App\Models\FieldServiceJob;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\FieldService\FieldServiceAccessService;
@@ -13,6 +14,25 @@ use Illuminate\Http\Request;
 
 class EverbranchMobileTimeHoursController extends Controller
 {
+    public function job(Request $request, string $tenant, int $job, FieldServiceAccessService $access, FieldServiceTimeHoursService $hours): JsonResponse
+    {
+        $tenant = $this->tenant($request);
+        $user = $this->user($request);
+        $jobModel = FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail($job);
+        abort_unless($access->canAccessJob($user, $tenant, $jobModel), 404, 'That job is not available to your account.');
+        $validated = $request->validate([
+            'range' => ['nullable', 'in:week,pay_period,month'],
+        ]);
+
+        return response()->json($hours->jobAnalytics(
+            $tenant,
+            $jobModel,
+            $user,
+            $access->canManageJobs($user, $tenant),
+            $validated,
+        ));
+    }
+
     public function index(Request $request, FieldServiceAccessService $access, FieldServiceTimeHoursService $hours, TenantModuleAccessResolver $modules): JsonResponse
     {
         $tenant = $this->tenant($request);
