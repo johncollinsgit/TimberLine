@@ -106,6 +106,11 @@ test('mobile managers receive tenant scoped time analytics and a unified paginat
     expect(collect($response->json('edit_options.employees'))->pluck('id'))
         ->toContain($manager->id, $employee->id)
         ->not->toContain($inactiveEmployee->id);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=custom&start_date=2026-09-01&end_date=2026-09-03&self_only=1')
+        ->assertOk()
+        ->assertJsonPath('scope', 'my_hours')
+        ->assertJsonPath('summary.total_seconds', 0)
+        ->assertJsonPath('edit_options.employees', []);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=custom&start_date=2025-01-01&end_date=2026-09-03')
         ->assertUnprocessable()
         ->assertJsonValidationErrors('end_date');

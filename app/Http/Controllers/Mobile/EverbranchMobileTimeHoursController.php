@@ -43,12 +43,15 @@ class EverbranchMobileTimeHoursController extends Controller
             'start_date' => ['nullable', 'required_if:range,custom', 'date_format:Y-m-d'],
             'end_date' => ['nullable', 'required_if:range,custom', 'date_format:Y-m-d', 'after_or_equal:start_date'],
             'employee_id' => ['nullable', 'integer', 'min:1'],
+            'self_only' => ['nullable', 'boolean'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:10', 'max:50'],
         ]);
-        if (! $access->canManageJobs($user, $tenant)) {
+        if (! $access->canManageJobs($user, $tenant) || ($validated['self_only'] ?? false)) {
             // A field employee can only ever receive their own time data. Ignore
             // a supplied employee_id rather than trusting a client-side filter.
+            // Managers may explicitly request the same self-only scope for the
+            // read-only employee-view preview in the mobile app.
             $validated['employee_id'] = (int) $user->id;
             $validated['self_only'] = true;
         }
