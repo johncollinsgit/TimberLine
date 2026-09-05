@@ -83,4 +83,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['incomplete time-session source columns skipped safely and reporting index retained before Laravel records the migration batch'],
     ],
+    '2026_09_05_180000_create_field_service_crew_statuses_table.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['crew-status table retained before Laravel records the migration batch'],
+    ],
 ];

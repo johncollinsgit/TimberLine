@@ -6,6 +6,21 @@ use Illuminate\Support\Facades\Schema;
 
 uses(Tests\TestCase::class);
 
+it('resumes crew status creation after MySQL retains the table', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('field_service_crew_statuses');
+    $migration = require database_path('migrations/2026_09_05_180000_create_field_service_crew_statuses_table.php');
+    $migration->up();
+    $migration->up();
+
+    expect(Schema::hasTable('field_service_crew_statuses'))->toBeTrue()
+        ->and(Schema::hasIndex('field_service_crew_statuses', 'fs_crew_status_tenant_user_unique'))->toBeTrue()
+        ->and(Schema::hasIndex('field_service_crew_statuses', 'fs_crew_status_tenant_state_idx'))->toBeTrue();
+});
+
 it('resumes QuickBooks equipment source columns after MySQL retained the columns before the unique index', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');
