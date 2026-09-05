@@ -1859,8 +1859,8 @@ CREATE TABLE `customer_equipment` (
   `last_serviced_at` date DEFAULT NULL,
   `next_service_due_at` date DEFAULT NULL,
   `status` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
-  `external_source` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `external_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `external_source` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `external_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -2323,6 +2323,29 @@ CREATE TABLE `field_material_catalog_items` (
   PRIMARY KEY (`id`),
   KEY `field_material_catalog_active_idx` (`tenant_id`,`active`,`name`),
   CONSTRAINT `field_material_catalog_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `field_service_crew_statuses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `field_service_crew_statuses` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `field_service_job_id` bigint unsigned DEFAULT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'available',
+  `note` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `fs_crew_status_tenant_user_unique` (`tenant_id`,`user_id`),
+  KEY `field_service_crew_statuses_user_id_foreign` (`user_id`),
+  KEY `field_service_crew_statuses_field_service_job_id_foreign` (`field_service_job_id`),
+  KEY `fs_crew_status_tenant_state_idx` (`tenant_id`,`status`),
+  CONSTRAINT `field_service_crew_statuses_field_service_job_id_foreign` FOREIGN KEY (`field_service_job_id`) REFERENCES `field_service_jobs` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `field_service_crew_statuses_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `field_service_crew_statuses_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `field_service_estimate_lines`;
@@ -7673,6 +7696,38 @@ CREATE TABLE `tenant_access_profiles` (
   CONSTRAINT `tenant_access_profiles_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_ai_usage_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenant_ai_usage_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `tenant_direct_invoice_id` bigint unsigned DEFAULT NULL,
+  `client_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_request_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `feature` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `context` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'reserved',
+  `duration_seconds` smallint unsigned NOT NULL,
+  `provider_cost_micros` bigint unsigned NOT NULL,
+  `buyer_charge_micros` bigint unsigned NOT NULL,
+  `occurred_at` timestamp NOT NULL,
+  `metadata` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tenant_ai_usage_tenant_client_unique` (`tenant_id`,`client_uuid`),
+  KEY `tenant_ai_usage_events_user_id_foreign` (`user_id`),
+  KEY `tenant_ai_usage_events_tenant_direct_invoice_id_foreign` (`tenant_direct_invoice_id`),
+  KEY `tenant_ai_usage_tenant_period_idx` (`tenant_id`,`status`,`occurred_at`),
+  KEY `tenant_ai_usage_tenant_user_idx` (`tenant_id`,`user_id`,`occurred_at`),
+  CONSTRAINT `tenant_ai_usage_events_tenant_direct_invoice_id_foreign` FOREIGN KEY (`tenant_direct_invoice_id`) REFERENCES `tenant_direct_invoices` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `tenant_ai_usage_events_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `tenant_ai_usage_events_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tenant_billing_fulfillments`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -10421,3 +10476,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (260,'2026_09_02_16
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (261,'2026_09_03_150000_add_quickbooks_source_to_customer_equipment',9);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (262,'2026_09_03_200000_add_requester_to_field_service_materials',9);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (263,'2026_09_03_201000_add_time_hours_reporting_index',9);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (264,'2026_09_05_180000_create_field_service_crew_statuses_table',10);

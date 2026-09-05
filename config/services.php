@@ -357,6 +357,13 @@ return [
         'provider_order' => env('STOCK_PHOTO_PROVIDER_ORDER', 'pexels,unsplash,pixabay'),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY', env('EVERBRANCH_BUD_AI_API_KEY')),
+        'field_voice_model' => env('EVERBRANCH_FIELD_VOICE_MODEL', 'gpt-transcribe'),
+        'field_voice_provider_cost_micros_per_minute' => (int) env('EVERBRANCH_FIELD_VOICE_PROVIDER_COST_MICROS_PER_MINUTE', 4500),
+        'field_voice_buyer_rate_micros_per_minute' => (int) env('EVERBRANCH_FIELD_VOICE_BUYER_RATE_MICROS_PER_MINUTE', 4500),
+    ],
+
     'modern_forestry_app_review' => [
         'email' => env('MF_APP_REVIEW_DEMO_EMAIL', 'app-review@theforestrystudio.com'),
         'password_hash' => env('MF_APP_REVIEW_DEMO_PASSWORD_HASH', '$2y$12$yB2JKPtEPuPeWIWnNLKhAe6ZZw.n133j8v6uGqo9tbnKI.M/inFjS'),
