@@ -37,14 +37,21 @@ class EverbranchMobileTimeHoursController extends Controller
     {
         $tenant = $this->tenant($request);
         $user = $this->user($request);
-        $this->assertAccess($tenant, $user, $access, $modules);
+        $this->assertTimeTracking($tenant, $modules);
         $validated = $request->validate([
             'range' => ['nullable', 'in:week,pay_period,month,custom'],
             'start_date' => ['nullable', 'required_if:range,custom', 'date_format:Y-m-d'],
             'end_date' => ['nullable', 'required_if:range,custom', 'date_format:Y-m-d', 'after_or_equal:start_date'],
+            'employee_id' => ['nullable', 'integer', 'min:1'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:10', 'max:50'],
         ]);
+        if (! $access->canManageJobs($user, $tenant)) {
+            // A field employee can only ever receive their own time data. Ignore
+            // a supplied employee_id rather than trusting a client-side filter.
+            $validated['employee_id'] = (int) $user->id;
+            $validated['self_only'] = true;
+        }
 
         return response()->json($hours->analytics($tenant, $validated));
     }
@@ -72,7 +79,12 @@ class EverbranchMobileTimeHoursController extends Controller
 
     private function assertAccess(Tenant $tenant, User $user, FieldServiceAccessService $access, TenantModuleAccessResolver $modules): void
     {
+        $this->assertTimeTracking($tenant, $modules);
         abort_unless($access->canManageJobs($user, $tenant), 403);
+    }
+
+    private function assertTimeTracking(Tenant $tenant, TenantModuleAccessResolver $modules): void
+    {
         abort_unless((bool) data_get($modules->resolveForTenant((int) $tenant->id, ['time_tracking']), 'modules.time_tracking.enabled', false), 403);
     }
 
