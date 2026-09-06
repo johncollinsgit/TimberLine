@@ -531,6 +531,9 @@ Canonical UI ownership:
 UI maintenance rules:
 - Do not add large inline `<style>` blocks to shell/layout files.
 - Prefer shared tokenized classes and reusable components.
+- Landlord/operator pages use the full canvas beside the navigation rail;
+  tenant reading surfaces retain their established width unless wide layout is
+  selected.
 - Every UI-affecting change must update `docs/ui/UI_CHANGELOG.md`.
 
 ## Current Release State (Scan First)

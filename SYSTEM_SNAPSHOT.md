@@ -1,5 +1,12 @@
 # SYSTEM SNAPSHOT
 
+## Full-width landlord workspace (2026-09-06)
+
+- Everbranch Admin pages use the full available canvas beside the navigation
+  rail. Wide intake queues, tenant-management tables, filters, and commercial
+  controls no longer inherit the tenant reading-column cap; tenant surfaces
+  keep their existing width unless the user's wide-layout preference is on.
+
 ## Collins QuickBooks generator history (2026-09-03)
 
 - Read-only QuickBooks invoice syncs now promote only clear whole-generator installation evidence into tenant-scoped equipment, retain generator-related connection/transfer work for review, and attach unambiguous annual generator service invoices to the matching equipment history. The equipment board keeps the last service and schedules the next annual due date; the daily scanner creates one-month-out work and guarded alerts. The source audit is `docs/operations/collins-generator-invoice-history-2026-09-03.md`.

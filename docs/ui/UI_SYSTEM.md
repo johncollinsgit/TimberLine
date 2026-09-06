@@ -109,6 +109,10 @@ across tenant workspaces, Everbranch Admin, and Shopify-embedded Backstage:
 - **Density:** body text is 14–15px, metadata and labels are 12–13px, and
   textual actions are quiet medium-weight links. Status is a compact badge;
   it must not become an explanatory paragraph.
+- **Canvas width:** landlord/operator pages use the full available canvas beside
+  the navigation rail so review queues, filters, tables, and configuration
+  controls remain usable. Tenant reading surfaces may retain a restrained
+  content width; a user-selected wide layout uses the full canvas as well.
 - **Surfaces:** a row, divider, toolbar, or right rail is preferred to a card.
   Cards are reserved for an independent decision, summary, or exception. Avoid
   nested cards and decorative shadows in operational work.
