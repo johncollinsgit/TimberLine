@@ -1,5 +1,21 @@
 # UI Changelog
 
+## 2026-09-06 — Full-width landlord controls
+
+### What Changed
+
+- Landlord and operator screens now use the full workspace canvas beside the
+  navigation rail instead of compressing wide review queues, filters, and
+  commercial controls into the tenant reading column.
+- The existing user wide-layout preference now applies the same full-canvas
+  treatment consistently.
+
+### Guardrails
+
+- Tenant reading surfaces keep their established width unless the user enables
+  wide layout. Permissions, commercial state, billing, and tenant data are not
+  changed by this presentation fix.
+
 ## 2026-09-03 — Durable PDF upload and paged preview
 
 ### What Changed

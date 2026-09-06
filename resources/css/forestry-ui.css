@@ -14303,6 +14303,24 @@ body.eb-workflow-picker-open {
   padding: 0 !important;
 }
 
+/* Operator pages routinely combine dense filters, review queues, and wide
+   control tables. Give the landlord console the full canvas beside the rail
+   instead of compressing those controls into the tenant reading column. The
+   user wide-layout preference follows the same predictable behavior. */
+.mf-app-shell:is(.mf-landlord-shell, .mf-wide) .mf-app-main {
+  padding-inline: clamp(1rem, 1.8vw, 2.5rem);
+}
+
+.mf-app-shell:is(.mf-landlord-shell, .mf-wide) .mf-shell-content,
+.mf-app-shell:is(.mf-landlord-shell, .mf-wide) .fb-workflow-shell {
+  max-width: none;
+  width: 100%;
+}
+
+.mf-app-shell:is(.mf-landlord-shell, .mf-wide) .fb-workflow-shell {
+  padding-inline: 0;
+}
+
 /* Collins dispatch staff routinely work from very wide monitors. Keep the
    workspace gutter, but remove the shared centered-column cap across every
    authenticated Collins surface so schedules, job boards, customer lists, and
