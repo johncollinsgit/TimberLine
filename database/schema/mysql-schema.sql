@@ -2333,8 +2333,8 @@ CREATE TABLE `field_service_crew_statuses` (
   `tenant_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
   `field_service_job_id` bigint unsigned DEFAULT NULL,
-  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'available',
-  `note` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'available',
+  `note` varchar(240) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `expires_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -7704,12 +7704,12 @@ CREATE TABLE `tenant_ai_usage_events` (
   `tenant_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
   `tenant_direct_invoice_id` bigint unsigned DEFAULT NULL,
-  `client_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider_request_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `feature` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `context` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `model` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'reserved',
+  `client_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_request_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `feature` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `context` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'reserved',
   `duration_seconds` smallint unsigned NOT NULL,
   `provider_cost_micros` bigint unsigned NOT NULL,
   `buyer_charge_micros` bigint unsigned NOT NULL,
@@ -8266,6 +8266,10 @@ CREATE TABLE `tenant_fleet_tracking_settings` (
   `bouncie_tracking_enabled` tinyint(1) NOT NULL DEFAULT '0',
   `policy_version` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `policy_sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `approval_basis` varchar(24) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `approval_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `approved_by_user_id` bigint unsigned DEFAULT NULL,
   `counsel_review_reference` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `legal_reviewed_at` timestamp NULL DEFAULT NULL,
   `legal_reviewed_by_user_id` bigint unsigned DEFAULT NULL,
@@ -8275,8 +8279,10 @@ CREATE TABLE `tenant_fleet_tracking_settings` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `ft_setting_tenant_unique` (`tenant_id`),
   KEY `ft_setting_legal_by_fk` (`legal_reviewed_by_user_id`),
+  KEY `tfts_approved_by_fk` (`approved_by_user_id`),
   CONSTRAINT `ft_setting_legal_by_fk` FOREIGN KEY (`legal_reviewed_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `ft_setting_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+  CONSTRAINT `ft_setting_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `tfts_approved_by_fk` FOREIGN KEY (`approved_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tenant_forms`;
@@ -10477,3 +10483,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (261,'2026_09_03_15
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (262,'2026_09_03_200000_add_requester_to_field_service_materials',9);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (263,'2026_09_03_201000_add_time_hours_reporting_index',9);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (264,'2026_09_05_180000_create_field_service_crew_statuses_table',10);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (265,'2026_09_05_210000_add_owner_approval_to_fleet_tracking_settings',11);

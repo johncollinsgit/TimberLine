@@ -87,4 +87,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['crew-status table retained before the shared tenant AI usage ledger is created'],
     ],
+    '2026_09_05_210000_add_owner_approval_to_fleet_tracking_settings.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['first owner-approval column retained before the remaining approval fields and foreign key'],
+    ],
 ];

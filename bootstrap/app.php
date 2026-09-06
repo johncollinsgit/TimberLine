@@ -61,6 +61,16 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (TokenMismatchException $e, Request $request) {
+            if (! $request->isMethod('post') || ! $request->routeIs('field-service.fleet-tracking.settings.update')) {
+                return null;
+            }
+
+            return redirect()->route('field-service.fleet-tracking.index')
+                ->withInput($request->except(['_token', 'approval_confirmed']))
+                ->withErrors(['session' => 'Your page was refreshed for security. Review the restored details and press Save again.']);
+        });
+
         $exceptions->report(function (Throwable $e): void {
             try {
                 $request = request();

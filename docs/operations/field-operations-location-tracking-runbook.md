@@ -36,8 +36,10 @@ enough by itself.
 2. The tenant has explicit `fleet_tracking` module access through the canonical
    module catalog/resolver, including its `fleet` and `time_tracking`
    dependencies.
-3. An owner/admin records a policy version, policy text hash, retained counsel
-   review reference, and a legal-review confirmation in the tenant settings.
+3. An owner/admin records a policy version, policy text hash, dated owner
+   approval reference, and an approval confirmation in the tenant settings.
+   Record counsel review separately when it exists or applicable law, contract,
+   or company policy requires it; never label owner approval as counsel review.
 4. Each phone-sharing employee accepts that exact current policy version in the
    mobile app. A new policy version requires a new acknowledgement.
 5. The workspace owner/admin connects that workspace's Bouncie account through

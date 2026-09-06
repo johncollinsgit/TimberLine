@@ -408,6 +408,43 @@ it('resumes field workforce and fleet tracking after retaining its first setting
         ->and(Schema::hasTable('fleet_location_points'))->toBeTrue();
 });
 
+it('resumes owner approval fields after MySQL retains the first column', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    $foreign = collect(Schema::getForeignKeys('tenant_fleet_tracking_settings'))->first(
+        fn (array $foreign): bool => in_array('approved_by_user_id', (array) ($foreign['columns'] ?? []), true)
+    );
+    if (is_array($foreign) && is_string($foreign['name'] ?? null)) {
+        Schema::table('tenant_fleet_tracking_settings', function (Blueprint $table) use ($foreign): void {
+            $table->dropForeign($foreign['name']);
+        });
+    }
+    $existing = collect(['approval_basis', 'approval_reference', 'approved_at', 'approved_by_user_id'])
+        ->filter(fn (string $column): bool => Schema::hasColumn('tenant_fleet_tracking_settings', $column))
+        ->values()->all();
+    if ($existing !== []) {
+        Schema::table('tenant_fleet_tracking_settings', function (Blueprint $table) use ($existing): void {
+            $table->dropColumn($existing);
+        });
+    }
+    Schema::table('tenant_fleet_tracking_settings', function (Blueprint $table): void {
+        $table->string('approval_basis', 24)->nullable()->after('policy_sha256');
+    });
+
+    $migration = require database_path('migrations/2026_09_05_210000_add_owner_approval_to_fleet_tracking_settings.php');
+    $migration->up();
+
+    expect(Schema::hasColumn('tenant_fleet_tracking_settings', 'approval_basis'))->toBeTrue()
+        ->and(Schema::hasColumn('tenant_fleet_tracking_settings', 'approval_reference'))->toBeTrue()
+        ->and(Schema::hasColumn('tenant_fleet_tracking_settings', 'approved_at'))->toBeTrue()
+        ->and(Schema::hasColumn('tenant_fleet_tracking_settings', 'approved_by_user_id'))->toBeTrue()
+        ->and(collect(Schema::getForeignKeys('tenant_fleet_tracking_settings'))->contains(
+            fn (array $foreign): bool => in_array('approved_by_user_id', (array) ($foreign['columns'] ?? []), true)
+        ))->toBeTrue();
+});
+
 it('keeps a retained wholesale email messenger draft table safe on retry', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

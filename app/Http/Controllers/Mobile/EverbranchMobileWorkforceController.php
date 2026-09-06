@@ -44,7 +44,7 @@ class EverbranchMobileWorkforceController extends Controller
     {
         $tenant = $this->tenant($request);
         $settings = $access->settings($tenant);
-        $visible = $access->enabledFor($tenant) && $settings->phone_tracking_enabled && $access->isLegallyReady($settings);
+        $visible = $access->enabledFor($tenant) && $settings->phone_tracking_enabled && $access->isPolicyApproved($settings);
         $accepted = $visible && FleetTrackingPolicyAcknowledgement::query()->forTenantId((int) $tenant->id)->where('user_id', (int) $this->user($request)->id)->where('policy_version', $settings->policy_version)->exists();
 
         return response()->json(['contract_version' => 1, 'phone_tracking_available' => $visible, 'policy_version' => $visible ? $settings->policy_version : null, 'accepted' => $accepted, 'retention_days' => $visible ? (int) $settings->retention_days : null, 'rule' => 'Only share while actively clocked in; sharing stops on pause or clock-out.']);
@@ -55,7 +55,7 @@ class EverbranchMobileWorkforceController extends Controller
         $tenant = $this->tenant($request);
         $data = $request->validate(['policy_version' => ['required', 'string', 'max:80'], 'device_context' => ['nullable', 'array']]);
         $settings = $access->settings($tenant);
-        abort_unless($access->enabledFor($tenant) && $settings->phone_tracking_enabled && $access->isLegallyReady($settings) && hash_equals((string) $settings->policy_version, (string) $data['policy_version']), 403);
+        abort_unless($access->enabledFor($tenant) && $settings->phone_tracking_enabled && $access->isPolicyApproved($settings) && hash_equals((string) $settings->policy_version, (string) $data['policy_version']), 403);
         FleetTrackingPolicyAcknowledgement::query()->updateOrCreate(['tenant_id' => (int) $tenant->id, 'user_id' => (int) $this->user($request)->id, 'policy_version' => $settings->policy_version], ['policy_sha256' => $settings->policy_sha256, 'accepted_at' => now(), 'acceptance_source' => 'mobile', 'device_context' => $data['device_context'] ?? null]);
 
         return response()->json(['ok' => true]);
@@ -79,9 +79,9 @@ class EverbranchMobileWorkforceController extends Controller
 
         $settings = $access->settings($tenant);
         $enabled = $access->enabledFor($tenant);
-        $legallyReady = $access->isLegallyReady($settings);
-        $phoneAvailable = $enabled && $legallyReady && $settings->phone_tracking_enabled;
-        $vehicleAvailable = $enabled && $legallyReady && $settings->bouncie_tracking_enabled;
+        $policyApproved = $access->isPolicyApproved($settings);
+        $phoneAvailable = $enabled && $policyApproved && $settings->phone_tracking_enabled;
+        $vehicleAvailable = $enabled && $policyApproved && $settings->bouncie_tracking_enabled;
         $members = $tenant->users()->where('users.is_active', true)
             ->wherePivot('membership_active', true)->orderBy('users.name')->get(['users.id', 'users.name']);
         $memberIds = $members->pluck('id')->map(fn ($id): int => (int) $id);
@@ -158,15 +158,15 @@ class EverbranchMobileWorkforceController extends Controller
         return response()->json([
             'contract_version' => 2,
             'tracking' => [
-                'available' => $enabled && $legallyReady && ($settings->phone_tracking_enabled || $settings->bouncie_tracking_enabled),
+                'available' => $enabled && $policyApproved && ($settings->phone_tracking_enabled || $settings->bouncie_tracking_enabled),
                 'module_enabled' => $enabled,
                 'phone_tracking_enabled' => (bool) $settings->phone_tracking_enabled,
                 'vehicle_tracking_enabled' => (bool) $settings->bouncie_tracking_enabled,
-                'policy_ready' => $legallyReady,
+                'policy_ready' => $policyApproved,
                 'retention_days' => (int) $settings->retention_days,
                 'setup_message' => ! $enabled
                     ? 'The Location Tracker Branch is not enabled for this workspace.'
-                    : (! $legallyReady ? 'An administrator must finish the reviewed location policy before employee sharing can begin.'
+                    : (! $policyApproved ? 'An administrator must record owner approval of the location policy before sharing can begin.'
                         : (! $settings->phone_tracking_enabled && ! $settings->bouncie_tracking_enabled ? 'Location sharing is turned off in Location Tracker settings.' : null)),
             ],
             'summary' => [
