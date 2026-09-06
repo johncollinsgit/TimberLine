@@ -1748,3 +1748,7 @@ Scope guard:
   unsigned tenant draft at those fixed defaults and emits a production-safe
   billing-readiness summary. Its production maintenance workflow requires an
   explicit confirmation input and never sends, accepts, or charges the draft.
+- The production Checkout allowlist has a separate confirmation-gated
+  maintenance workflow. It preserves the complete Forge environment, refuses
+  wildcard rollout, adds only one validated tenant slug, refreshes cached
+  configuration, and re-runs the safe agreement-readiness report.
