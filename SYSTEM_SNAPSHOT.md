@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Managed Website first-time setup (2026-09-06)
+
+- An entitled, allowlisted tenant may open Website before a site record exists,
+  choose an approved starter theme, and create a private draft. The setup screen
+  remains fail-closed for publishing, domains, checkout, and billing.
+
 ## Full-width landlord workspace (2026-09-06)
 
 - Everbranch Admin pages use the full available canvas beside the navigation

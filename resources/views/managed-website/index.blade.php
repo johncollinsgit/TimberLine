@@ -16,6 +16,13 @@
             </header>
             @if(! $isEditorEnabled)
                 <section class="border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Website access is still being approved for this workspace. Nothing public, billable, or connected has been created.</section>
+            @elseif(! $site)
+                <section class="eb-admin-panel p-6" aria-labelledby="website-ready-heading">
+                    <p class="text-xs font-bold uppercase tracking-[.14em] text-emerald-800">Ready to begin</p>
+                    <h2 id="website-ready-heading" class="mt-2 text-2xl font-bold tracking-tight text-zinc-950">Build your first private draft</h2>
+                    <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Choose a starting design and add the business details you want customers to see. Setup creates a private draft only; it does not publish a site, connect a domain, or start billing.</p>
+                    <button class="eb-admin-button eb-admin-button--primary mt-5" type="button" onclick="document.getElementById('website-setup').showModal()">Start website setup</button>
+                </section>
             @else
                 @php
                     $draftTheme = $site->draftSiteVersion;
@@ -83,10 +90,20 @@
     <dialog id="website-setup" class="w-[min(92vw,620px)] border border-zinc-200 bg-white p-0 shadow-2xl backdrop:bg-zinc-950/40">
         <form method="POST" action="{{ route('managed-website.setup.save') }}" class="p-6" data-wizard>@csrf
             <div class="flex items-center justify-between border-b border-zinc-200 pb-4"><div><p class="text-xs font-bold uppercase tracking-[.15em] text-emerald-800">Website setup</p><h2 class="mt-1 text-xl font-bold text-zinc-950">A few quick choices</h2></div><button type="button" class="text-xl text-zinc-500" onclick="this.closest('dialog').close()" aria-label="Close">×</button></div>
-            <section data-step="1" class="space-y-4 pt-5"><h3 class="text-lg font-bold">1. Confirm your customer goal</h3><p class="text-sm leading-6 text-zinc-600">This pilot is set for an electrician who sells services and wants quote requests plus phone calls.</p><div class="border border-zinc-200 bg-zinc-50 p-4 text-sm"><strong>Electrician / trades</strong><br>Services · Request a quote · Call the business</div></section>
-            <section data-step="2" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">2. Your starting design</h3><div class="border-2 border-emerald-700 p-4"><strong>Collins Electric</strong><p class="mt-1 text-sm text-zinc-600">A clear service-first design with space for electrical work, contact details, and quote requests.</p></div></section>
+            <section data-step="1" class="space-y-4 pt-5"><h3 class="text-lg font-bold">1. Confirm your customer goal</h3><p class="text-sm leading-6 text-zinc-600">Create a clear online home where customers can understand what you offer and take the right next step.</p><div class="border border-zinc-200 bg-zinc-50 p-4 text-sm"><strong>Private draft first</strong><br>Review the pages and mobile preview before anything can be published.</div></section>
+            <section data-step="2" class="hidden space-y-4 pt-5">
+                <h3 class="text-lg font-bold">2. Choose a starting design</h3>
+                <div class="grid gap-3">
+                    @foreach($themes as $theme)
+                        <label class="flex cursor-pointer gap-3 border border-zinc-200 p-4 has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-50/50">
+                            <input type="radio" name="theme_key" value="{{ $theme['key'] }}" class="mt-1" @checked(old('theme_key', data_get($themes, '0.key')) === $theme['key'])>
+                            <span><strong class="block text-sm text-zinc-950">{{ $theme['name'] }}</strong><span class="mt-1 block text-sm leading-5 text-zinc-600">{{ $theme['description'] }}</span></span>
+                        </label>
+                    @endforeach
+                </div>
+            </section>
             <section data-step="3" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">3. Business details</h3><div class="grid gap-3 sm:grid-cols-2"><label class="text-sm font-semibold">Business name<input name="contact_name" value="{{ old('contact_name', $setup?->contact_name ?: $tenant->name) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Email<input name="contact_email" type="email" value="{{ old('contact_email', $setup?->contact_email) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Phone<input name="contact_phone" value="{{ old('contact_phone', $setup?->contact_phone) }}" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold">Hours<input name="hours" value="{{ old('hours', $setup?->hours) }}" placeholder="Mon–Fri, 8am–5pm" class="mt-1 block w-full rounded border-zinc-300"></label><label class="text-sm font-semibold sm:col-span-2">Service area<input name="service_area" value="{{ old('service_area', $setup?->service_area) }}" placeholder="Towns, counties, or neighborhoods you serve" class="mt-1 block w-full rounded border-zinc-300"></label></div></section>
-            <section data-step="4" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">4. Add your first service</h3><p class="text-sm leading-6 text-zinc-600">Customers will be able to request a quote for this service. No checkout or deposits are enabled.</p><label class="block text-sm font-semibold">Service name<input name="service_title" placeholder="Panel upgrade" class="mt-1 block w-full rounded border-zinc-300"></label><label class="block text-sm font-semibold">Clear description<textarea name="service_description" rows="3" placeholder="Tell customers when they should request this work." class="mt-1 block w-full rounded border-zinc-300"></textarea></label></section>
+            <section data-step="4" class="hidden space-y-4 pt-5"><h3 class="text-lg font-bold">4. Add a first quote-only offering <span class="font-normal text-zinc-500">(optional)</span></h3><p class="text-sm leading-6 text-zinc-600">Add an offering customers can ask about, or leave this blank and build the catalog later. No checkout, deposits, or billing are enabled here.</p><label class="block text-sm font-semibold">Offering name<input name="service_title" placeholder="Custom project consultation" class="mt-1 block w-full rounded border-zinc-300"></label><label class="block text-sm font-semibold">Clear description<textarea name="service_description" rows="3" placeholder="Tell customers what this offering includes and how to get started." class="mt-1 block w-full rounded border-zinc-300"></textarea></label></section>
             <div class="mt-6 flex justify-between border-t border-zinc-200 pt-4"><button class="fb-btn fb-btn-secondary invisible" type="button" data-back>Back</button><div class="flex gap-2"><button class="fb-btn fb-btn-secondary" type="button" onclick="this.closest('dialog').close()">Save for later</button><button class="fb-btn fb-btn-primary" type="button" data-next>Continue</button><button class="fb-btn fb-btn-primary hidden" type="submit" data-finish>Save setup</button></div></div>
         </form>
     </dialog>

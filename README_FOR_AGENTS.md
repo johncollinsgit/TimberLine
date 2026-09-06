@@ -163,6 +163,9 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   immutable `tenant_site_versions`; never allow a draft theme setting to affect
   a published host. `tenant_site_media` is a public-site-only tenant media
   library and must never expose job, field-service, customer, or workspace files.
+- First-time Website setup must support an entitled tenant before a site record
+  exists and must use an explicit approved starter-theme choice. Never assume a
+  trade, business type, or tenant-specific theme in the shared setup path.
 - Website editor canvas links must never resolve against the Everbranch app
   root. Canvas clicks select structured controls; customer-link testing uses an
   authenticated, no-store draft-preview route whose internal destinations are

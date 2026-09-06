@@ -186,6 +186,9 @@ remain behaviorally isolated.
   screen appropriate to the consequence of the action.
 - Empty states explain what belongs there, why it may be empty, and the next
   useful action.
+- First-time Managed Website setup is an empty state until a draft exists. It
+  offers approved starter themes and states clearly that setup remains private
+  and does not publish or activate billing.
 - Popovers hold small choices; dialogs hold focused decisions; drawers preserve
   list context; full pages host deep or shareable workflows.
 - Destructive confirmations name the record, consequence, and reversibility.
