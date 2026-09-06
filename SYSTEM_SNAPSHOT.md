@@ -1749,6 +1749,7 @@ Scope guard:
   billing-readiness summary. Its production maintenance workflow requires an
   explicit confirmation input and never sends, accepts, or charges the draft.
 - The production Checkout allowlist has a separate confirmation-gated
-  maintenance workflow. It preserves the complete Forge environment, refuses
-  wildcard rollout, adds only one validated tenant slug, refreshes cached
-  configuration, and re-runs the safe agreement-readiness report.
+  maintenance workflow. It preserves and backs up the complete production
+  environment, refuses wildcard rollout, adds only one validated tenant slug,
+  refreshes cached configuration with rollback on failure, and re-runs the safe
+  agreement-readiness report.

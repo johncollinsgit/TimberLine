@@ -14,15 +14,9 @@ if (preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slug) !== 1) {
     exit(1);
 }
 
-$response = file_get_contents($inputPath);
-if (! is_string($response)) {
-    fwrite(STDERR, "Unable to read the Forge environment file.\n");
-    exit(1);
-}
-$document = json_decode($response, true);
-$content = is_array($document) ? ($document['data']['attributes']['content'] ?? null) : null;
+$content = file_get_contents($inputPath);
 if (! is_string($content)) {
-    fwrite(STDERR, "Forge returned an invalid environment document.\n");
+    fwrite(STDERR, "Unable to read the Forge environment file.\n");
     exit(1);
 }
 
@@ -51,7 +45,7 @@ if (preg_match($pattern, $content) === 1) {
     $updated = rtrim($content).PHP_EOL.$replacement.PHP_EOL;
 }
 
-if (! is_string($updated) || file_put_contents($outputPath, json_encode(['environment' => $updated], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)) === false) {
+if (! is_string($updated) || file_put_contents($outputPath, $updated) === false) {
     fwrite(STDERR, "Unable to prepare the Forge environment update.\n");
     exit(1);
 }
