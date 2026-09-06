@@ -37,10 +37,6 @@ jobs:
           CONFIRM_ALLOWLIST: ${{ github.event.inputs.confirm_allowlist }}
           TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
           ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
-          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
-          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
-          FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
-          FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
@@ -48,7 +44,7 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           set -euo pipefail
-          for var in FORGE_API_TOKEN FORGE_ORGANIZATION_SLUG FORGE_SERVER_ID FORGE_SITE_ID DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
             if [ -z "${!var}" ]; then
               echo "::error::Missing required production configuration: $var"
               exit 1
@@ -66,50 +62,12 @@ jobs:
             echo "::error::Invalid actor email."
             exit 1
           fi
-          if ! printf '%s' "$FORGE_SERVER_ID" | grep -Eq '^[0-9]+$' || ! printf '%s' "$FORGE_SITE_ID" | grep -Eq '^[0-9]+$'; then
-            echo "::error::Forge identifiers must be numeric."
-            exit 1
-          fi
-          if ! printf '%s' "$FORGE_ORGANIZATION_SLUG" | grep -Eq '^[A-Za-z0-9._-]+$'; then
-            echo "::error::Invalid Forge organization slug."
-            exit 1
-          fi
 
-      - name: Add tenant to the explicit Forge allowlist
-        env:
-          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
-          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
-          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
-          FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
-          FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
-        run: |
-          set -euo pipefail
-          forge_env_url="https://forge.laravel.com/api/orgs/$FORGE_ORGANIZATION_SLUG/servers/$FORGE_SERVER_ID/sites/$FORGE_SITE_ID/environment"
-          curl --fail --silent --show-error \
-            --header "Authorization: Bearer $FORGE_API_TOKEN" \
-            --header 'Accept: application/json' \
-            "$forge_env_url" > "$RUNNER_TEMP/current.env"
-          php scripts/ci/add-env-allowlist-value.php \
-            "$RUNNER_TEMP/current.env" \
-            "$RUNNER_TEMP/environment-payload.json" \
-            "$TARGET_TENANT"
-          curl --fail --silent --show-error \
-            --request PUT \
-            --header "Authorization: Bearer $FORGE_API_TOKEN" \
-            --header 'Accept: application/json' \
-            --header 'Content-Type: application/json' \
-            --data-binary "@$RUNNER_TEMP/environment-payload.json" \
-            "$forge_env_url" > /dev/null
-
-      - name: Refresh configuration and verify agreement readiness
+      - name: Configure SSH
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
-          ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
@@ -117,5 +75,36 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare the explicit production allowlist
+        env:
+          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env" \
+            "$RUNNER_TEMP/current.env"
+          php scripts/ci/add-env-allowlist-value.php \
+            "$RUNNER_TEMP/current.env" \
+            "$RUNNER_TEMP/updated.env" \
+            "$TARGET_TENANT"
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" \
+            "$RUNNER_TEMP/updated.env" \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env.pending-$GITHUB_RUN_ID"
+
+      - name: Refresh configuration and verify agreement readiness
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
+          ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
+        run: |
+          set -euo pipefail
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan config:clear; php artisan config:cache; php artisan everbranch:prepare-managed-website-agreement '$TARGET_TENANT' --actor-email='$ACTOR_EMAIL' --json"
+            "set -euo pipefail; cd '$DEPLOY_PATH'; pending='.env.pending-$GITHUB_RUN_ID'; backup='.env.backup-$GITHUB_RUN_ID'; grep -q '^APP_KEY=' \"\$pending\"; grep -q '^EVERBRANCH_AGREEMENT_CHECKOUT_TENANT_SLUGS=.*$TARGET_TENANT' \"\$pending\"; cp .env \"\$backup\"; mv \"\$pending\" .env; if ! php artisan config:clear || ! php artisan config:cache; then cp \"\$backup\" .env; php artisan config:clear; php artisan config:cache; exit 1; fi; php artisan everbranch:prepare-managed-website-agreement '$TARGET_TENANT' --actor-email='$ACTOR_EMAIL' --json"
