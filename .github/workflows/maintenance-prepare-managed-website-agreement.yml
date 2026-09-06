@@ -1,0 +1,87 @@
+name: Maintenance Prepare Managed Website Agreement
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenant_slug:
+        description: Tenant slug that will own the agreement draft
+        required: true
+        default: carolina-barrel-co
+        type: string
+      actor_email:
+        description: Existing operator email recorded on the draft
+        required: true
+        default: johncollinsemail@gmail.com
+        type: string
+      confirm_prepare:
+        description: Confirm preparation of an unsigned production draft
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare Managed Website Agreement
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Validate request and secrets
+        env:
+          CONFIRM_PREPARE: ${{ github.event.inputs.confirm_prepare }}
+          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
+          ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              exit 1
+            fi
+          done
+          if [ "$CONFIRM_PREPARE" != "true" ]; then
+            echo "::error::confirm_prepare must be true."
+            exit 1
+          fi
+          if ! printf '%s' "$TARGET_TENANT" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+            echo "::error::Invalid tenant slug."
+            exit 1
+          fi
+          if ! printf '%s' "$ACTOR_EMAIL" | grep -Eiq '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'; then
+            echo "::error::Invalid actor email."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare unsigned production draft
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
+          ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-managed-website-agreement '$TARGET_TENANT' --actor-email='$ACTOR_EMAIL' --json"
