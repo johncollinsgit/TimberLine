@@ -93,7 +93,7 @@ test('a signed Bouncie vehicle event maps only to the configured tenant device a
     }
     $vehicle = FieldServiceVehicle::query()->create(['tenant_id' => $tenant->id, 'name' => 'Service Van', 'status' => 'active']);
     FleetTrackingDevice::query()->create(['tenant_id' => $tenant->id, 'field_service_vehicle_id' => $vehicle->id, 'provider' => 'bouncie', 'external_device_id' => '8675309', 'status' => 'active']);
-    TenantFleetTrackingSetting::query()->create(['tenant_id' => $tenant->id, 'bouncie_tracking_enabled' => true, 'policy_version' => '2026-08', 'policy_sha256' => hash('sha256', 'approved policy'), 'counsel_review_reference' => 'Counsel review 2026-08-13', 'legal_reviewed_at' => now(), 'retention_days' => 30]);
+    TenantFleetTrackingSetting::query()->create(['tenant_id' => $tenant->id, 'bouncie_tracking_enabled' => true, 'policy_version' => '2026-08', 'policy_sha256' => hash('sha256', 'approved policy'), 'approval_basis' => 'owner', 'approval_reference' => 'Owner approval 2026-08-13', 'approved_at' => now(), 'retention_days' => 30]);
     config()->set('services.fleet_tracking.enabled', true);
     config()->set('services.fleet_tracking.bouncie_webhook_key', 'test-bouncie-key');
     $payload = ['id' => 'evt-1', 'type' => 'tripData', 'device' => ['imei' => '8675309'], 'location' => ['latitude' => 35.2271, 'longitude' => -80.8431], 'timestamp' => now()->toIso8601String()];
@@ -103,6 +103,37 @@ test('a signed Bouncie vehicle event maps only to the configured tenant device a
     expect($service->ingestBouncie($request))->toBe(['accepted' => 1, 'ignored' => 0]);
     expect($service->ingestBouncie($request))->toBe(['accepted' => 1, 'ignored' => 0])
         ->and(FleetLocationPoint::query()->forTenantId($tenant->id)->count())->toBe(1);
+});
+
+test('an administrator can activate company vehicle tracking with a recorded owner approval', function (): void {
+    [$tenant, $admin] = fieldOperationsWorkspace('owner-approved-tracking', 'admin');
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    foreach (['fleet', 'time_tracking', 'fleet_tracking'] as $module) {
+        TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => $module, 'enabled_override' => true, 'setup_status' => 'configured']);
+    }
+    config()->set('services.fleet_tracking.enabled', true);
+    $policy = 'Company vehicles are tracked for dispatch and safety. Phone sharing remains off.';
+    $request = Request::create('/field-service/fleet-tracking/settings', 'POST', [
+        'bouncie_tracking_enabled' => '1',
+        'policy_version' => 'CUE-LT-2026-09',
+        'policy_text' => $policy,
+        'approval_reference' => 'Internal owner approval — Nate Collins — September 5, 2026',
+        'retention_days' => '30',
+        'approval_confirmed' => '1',
+    ]);
+    $request->setUserResolver(fn (): User => $admin);
+    $request->attributes->set('current_tenant', $tenant);
+
+    app(\App\Http\Controllers\FleetTrackingController::class)->updateSettings($request);
+
+    $settings = TenantFleetTrackingSetting::query()->forTenantId($tenant->id)->sole();
+    expect($settings->bouncie_tracking_enabled)->toBeTrue()
+        ->and($settings->phone_tracking_enabled)->toBeFalse()
+        ->and($settings->approval_basis)->toBe('owner')
+        ->and($settings->approval_reference)->toContain('Nate Collins')
+        ->and($settings->approved_by_user_id)->toBe($admin->id)
+        ->and($settings->policy_sha256)->toBe(hash('sha256', $policy))
+        ->and(app(\App\Services\FleetTracking\FleetTrackingAccessService::class)->isPolicyApproved($settings))->toBeTrue();
 });
 
 test('Bouncie OAuth stores a full tenant-scoped encrypted connection and rotates refresh tokens', function (): void {
@@ -187,8 +218,8 @@ test('a manager sees only current on-duty locations from their own workspace', f
     config()->set('services.fleet_tracking.enabled', true);
     $settings = TenantFleetTrackingSetting::query()->create([
         'tenant_id' => $tenant->id, 'phone_tracking_enabled' => true, 'bouncie_tracking_enabled' => true, 'policy_version' => '2026-09',
-        'policy_sha256' => hash('sha256', 'approved policy'), 'counsel_review_reference' => 'Counsel review 2026-09-05',
-        'legal_reviewed_at' => now(), 'retention_days' => 30,
+        'policy_sha256' => hash('sha256', 'approved policy'), 'approval_basis' => 'owner',
+        'approval_reference' => 'Owner approval 2026-09-05', 'approved_at' => now(), 'retention_days' => 30,
     ]);
     FleetTrackingPolicyAcknowledgement::query()->create([
         'tenant_id' => $tenant->id, 'user_id' => $employee->id, 'policy_version' => $settings->policy_version,

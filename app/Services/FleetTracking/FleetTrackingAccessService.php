@@ -34,7 +34,7 @@ class FleetTrackingAccessService
     public function assertPhoneSubmissionAllowed(Tenant $tenant, User $user, FieldServiceTimeSession $session): TenantFleetTrackingSetting
     {
         $settings = $this->settings($tenant);
-        if (! $this->enabledFor($tenant) || ! $settings->phone_tracking_enabled || ! $this->isLegallyReady($settings)) {
+        if (! $this->enabledFor($tenant) || ! $settings->phone_tracking_enabled || ! $this->isPolicyApproved($settings)) {
             throw ValidationException::withMessages(['location' => 'Phone location sharing is not enabled for this workspace.']);
         }
         if ((int) $session->tenant_id !== (int) $tenant->id || (int) $session->user_id !== (int) $user->id || $session->status !== 'running') {
@@ -49,11 +49,15 @@ class FleetTrackingAccessService
         return $settings;
     }
 
-    public function isLegallyReady(TenantFleetTrackingSetting $settings): bool
+    public function isPolicyApproved(TenantFleetTrackingSetting $settings): bool
     {
-        return $settings->legal_reviewed_at !== null
-            && filled($settings->counsel_review_reference)
-            && filled($settings->policy_version)
-            && filled($settings->policy_sha256);
+        $currentApproval = $settings->approved_at !== null
+            && filled($settings->approval_reference)
+            && in_array($settings->approval_basis, ['owner', 'counsel'], true);
+        $legacyCounselApproval = $settings->legal_reviewed_at !== null && filled($settings->counsel_review_reference);
+
+        return filled($settings->policy_version)
+            && filled($settings->policy_sha256)
+            && ($currentApproval || $legacyCounselApproval);
     }
 }

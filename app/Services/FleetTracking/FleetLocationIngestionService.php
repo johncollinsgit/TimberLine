@@ -90,7 +90,7 @@ class FleetLocationIngestionService
         $device = $devices->first();
         $tenant = Tenant::query()->find($device->tenant_id);
         $settings = $tenant ? $this->access->settings($tenant) : null;
-        if (! $tenant || ! $settings || ! $this->access->enabledFor($tenant) || ! $settings->bouncie_tracking_enabled || ! $this->access->isLegallyReady($settings)) {
+        if (! $tenant || ! $settings || ! $this->access->enabledFor($tenant) || ! $settings->bouncie_tracking_enabled || ! $this->access->isPolicyApproved($settings)) {
             return false;
         }
         $lat = (float) $latitude;

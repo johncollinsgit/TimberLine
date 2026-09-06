@@ -1,7 +1,7 @@
 @php
     $isConnected = $bouncieConnection?->isConnected() ?? false;
     $mappedCount = $devices->count();
-    $policyReady = $settings->legal_reviewed_at && $settings->counsel_review_reference && $settings->policy_version && $settings->policy_sha256;
+    $policyReady = app(\App\Services\FleetTracking\FleetTrackingAccessService::class)->isPolicyApproved($settings);
 @endphp
 
 <x-layouts::app.sidebar title="Location tracker">
@@ -66,14 +66,14 @@
 
             <section class="rounded-3xl bg-white p-6 shadow-lg shadow-zinc-950/5 ring-1 ring-black/5">
                 <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Activation</p><h2 class="mt-1 text-2xl font-semibold text-zinc-950">Set the rules once</h2><p class="mt-1 text-sm text-zinc-600">These controls must be approved before the first live location is accepted.</p></div><span class="rounded-full px-3 py-1.5 text-xs font-semibold {{ $policyReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900' }}">{{ $policyReady ? 'Policy approved' : 'Approval needed' }}</span></div>
-                <form method="POST" action="{{ route('field-service.fleet-tracking.settings.update') }}" class="mt-6 grid gap-4 md:grid-cols-6">@csrf
+                <form id="fleet-policy-form" method="POST" action="{{ route('field-service.fleet-tracking.settings.update') }}" class="mt-6 grid gap-4 md:grid-cols-6" data-policy-saved="{{ session('status') === 'Tracking policy and retention settings saved. The global feature switch and tenant module must also be enabled before collection begins.' ? '1' : '0' }}">@csrf
                     <label class="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-semibold md:col-span-3"><input type="checkbox" name="bouncie_tracking_enabled" value="1" @checked($settings->bouncie_tracking_enabled) class="rounded border-zinc-300 text-emerald-700"> Company-van Bouncie feed</label>
                     <label class="flex items-center gap-3 rounded-2xl bg-zinc-50 px-4 py-3 text-sm font-semibold md:col-span-3"><input type="checkbox" name="phone_tracking_enabled" value="1" @checked($settings->phone_tracking_enabled) class="rounded border-zinc-300 text-emerald-700"> On-duty phone sharing</label>
-                    <label class="text-sm font-semibold text-zinc-800 md:col-span-1">Retention<input type="number" name="retention_days" min="1" max="30" value="{{ $settings->retention_days }}" class="mt-1.5 block w-full rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200"><span class="mt-1 block text-xs font-normal text-zinc-500">1–30 days</span></label>
-                    <label class="text-sm font-semibold text-zinc-800 md:col-span-2">Policy version<input name="policy_version" required value="{{ $settings->policy_version }}" placeholder="Example: 2026-09" class="mt-1.5 block w-full rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200"></label>
-                    <label class="text-sm font-semibold text-zinc-800 md:col-span-3">Counsel review reference<input name="counsel_review_reference" required value="{{ $settings->counsel_review_reference }}" placeholder="Matter, date, or review reference" class="mt-1.5 block w-full rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200"></label>
-                    <label class="text-sm font-semibold text-zinc-800 md:col-span-6">Approved employee policy<textarea name="policy_text" required rows="4" class="mt-1.5 block w-full resize-y rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200" placeholder="State the company-vehicle scope, active-shift-only phone sharing, manual stop, retention, access, and how employees can ask questions."></textarea></label>
-                    <label class="flex items-start gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-950 md:col-span-4"><input type="checkbox" name="counsel_reviewed" value="1" required class="mt-0.5 rounded border-amber-300 text-emerald-700"><span>I confirm this workspace’s location policy was reviewed by counsel before enabling collection.</span></label>
+                    <label class="text-sm font-semibold text-zinc-800 md:col-span-1">Retention<input type="number" name="retention_days" min="1" max="30" value="{{ old('retention_days', $settings->retention_days) }}" class="mt-1.5 block w-full rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200"><span class="mt-1 block text-xs font-normal text-zinc-500">1–30 days</span></label>
+                    <label class="text-sm font-semibold text-zinc-800 md:col-span-2">Policy version<input name="policy_version" required value="{{ old('policy_version', $settings->policy_version) }}" placeholder="Example: 2026-09" class="mt-1.5 block w-full rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200"></label>
+                    <label class="text-sm font-semibold text-zinc-800 md:col-span-3">Owner approval reference<input name="approval_reference" required value="{{ old('approval_reference', $settings->approval_reference ?: $settings->counsel_review_reference) }}" placeholder="Approver, date, and policy reference" class="mt-1.5 block w-full rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200"></label>
+                    <label class="text-sm font-semibold text-zinc-800 md:col-span-6">Approved employee policy<textarea name="policy_text" required rows="4" class="mt-1.5 block w-full resize-y rounded-xl border-0 bg-zinc-100 px-3 py-2.5 ring-1 ring-inset ring-zinc-200" placeholder="State the company-vehicle scope, active-shift-only phone sharing, manual stop, retention, access, and how employees can ask questions.">{{ old('policy_text') }}</textarea></label>
+                    <label class="flex items-start gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-950 md:col-span-4"><input type="checkbox" name="approval_confirmed" value="1" required class="mt-0.5 rounded border-amber-300 text-emerald-700"><span>I confirm the workspace owner approved this policy and employees will receive notice before location sharing begins.</span></label>
                     <div class="flex items-stretch md:col-span-2"><button class="w-full rounded-2xl bg-zinc-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800">Save and activate controls</button></div>
                 </form>
             </section>
@@ -103,4 +103,45 @@
             </section>
         </div>
     </flux:main>
+<script>
+    (() => {
+        const form = document.getElementById('fleet-policy-form');
+        if (!form) return;
+
+        const draftKey = @json('everbranch:fleet-policy-draft:'.(int) $tenant->id.':'.(int) request()->user()->id);
+        const fields = ['policy_version', 'approval_reference', 'policy_text', 'retention_days', 'bouncie_tracking_enabled', 'phone_tracking_enabled'];
+
+        if (form.dataset.policySaved === '1') {
+            window.localStorage.removeItem(draftKey);
+        } else {
+            try {
+                const draft = JSON.parse(window.localStorage.getItem(draftKey) || 'null');
+                if (draft && typeof draft === 'object') {
+                    for (const name of fields) {
+                        const input = form.elements.namedItem(name);
+                        if (!input || !(name in draft)) continue;
+                        if (input instanceof HTMLInputElement && input.type === 'checkbox') input.checked = Boolean(draft[name]);
+                        else input.value = String(draft[name] ?? '');
+                    }
+                }
+            } catch {
+                window.localStorage.removeItem(draftKey);
+            }
+        }
+
+        const saveDraft = () => {
+            const draft = {};
+            for (const name of fields) {
+                const input = form.elements.namedItem(name);
+                if (!input) continue;
+                draft[name] = input instanceof HTMLInputElement && input.type === 'checkbox' ? input.checked : input.value;
+            }
+            window.localStorage.setItem(draftKey, JSON.stringify(draft));
+        };
+
+        form.addEventListener('input', saveDraft);
+        form.addEventListener('change', saveDraft);
+        form.addEventListener('submit', saveDraft);
+    })();
+</script>
 </x-layouts::app.sidebar>
