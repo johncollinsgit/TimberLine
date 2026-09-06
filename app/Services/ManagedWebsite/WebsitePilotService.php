@@ -13,13 +13,14 @@ class WebsitePilotService
     /** @param array<string,mixed> $input */
     public function saveSetup(Tenant $tenant, TenantSite $site, array $input, ?User $actor): TenantSiteSetup
     {
+        $themeKey = strtolower(trim((string) ($input['theme_key'] ?? 'collins-electric'))) ?: 'collins-electric';
         $setup = TenantSiteSetup::query()->forTenant($tenant)->firstOrNew(['tenant_id' => $tenant->id]);
         $setup->fill([
             'tenant_site_id' => $site->id,
             'business_mode' => 'trades',
             'offering_mode' => 'services',
             'visitor_actions' => ['request_quote', 'call_business'],
-            'design_key' => 'collins-electric',
+            'design_key' => $themeKey,
             'domain_choice' => 'everbranch_subdomain',
             'contact_name' => trim((string) ($input['contact_name'] ?? '')) ?: null,
             'contact_email' => strtolower(trim((string) ($input['contact_email'] ?? ''))) ?: null,
@@ -50,7 +51,8 @@ class WebsitePilotService
     public function checklist(?TenantSite $site, ?TenantSiteSetup $setup): array
     {
         $hasDetails = filled($setup?->contact_name) && filled($setup?->contact_email) && filled($setup?->contact_phone) && filled($setup?->hours) && filled($setup?->service_area);
-        $hasTheme = $setup?->design_key === 'collins-electric' && data_get($site?->settings, 'theme_key') === 'collins-electric';
+        $themeKey = strtolower(trim((string) ($setup?->design_key ?? '')));
+        $hasTheme = $themeKey !== '' && data_get($site?->settings, 'theme_key') === $themeKey;
         $hasServices = $site && WebsiteProduct::query()->forTenantId((int) $site->tenant_id)->where('tenant_site_id', $site->id)->where('product_type', 'quote')->exists();
         $hasQuote = $site && WebsiteProduct::query()->forTenantId((int) $site->tenant_id)->where('tenant_site_id', $site->id)->where('product_type', 'quote')->where('status', 'active')->exists();
         $hasAddress = $site && $site->subdomain !== '' && $setup?->domain_choice === 'everbranch_subdomain';

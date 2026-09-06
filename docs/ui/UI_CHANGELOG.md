@@ -1,5 +1,19 @@
 # UI Changelog
 
+## 2026-09-06 — Safe first-time Website setup
+
+### What Changed
+
+- An allowlisted workspace with no Website draft now receives a useful setup
+  state instead of a server error.
+- First-time setup lets the operator choose from the approved starter themes;
+  the flow no longer assumes every business is an electrician.
+
+### Guardrails
+
+- Setup creates a private draft only. It does not publish, connect a domain,
+  activate checkout, or create billing.
+
 ## 2026-09-06 — Full-width landlord controls
 
 ### What Changed

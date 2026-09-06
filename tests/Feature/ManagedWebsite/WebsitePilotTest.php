@@ -87,6 +87,41 @@ test('website admin leads with the live preview and keeps domain details seconda
         ->toBeLessThan(strpos($html, 'id="website-domains"'));
 });
 
+test('an allowlisted workspace can open first-time website setup before a draft exists', function (): void {
+    $tenant = websitePilotTenant('website-first-setup');
+    $actor = websitePilotUser($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+
+    $this->actingAs($actor)
+        ->get('https://website-first-setup.theeverbranch.com/website')
+        ->assertOk()
+        ->assertSeeText('Build your first private draft')
+        ->assertSeeText('Choose a starting design')
+        ->assertSee('name="theme_key"', false)
+        ->assertDontSee('eb-site-theme-card', false);
+});
+
+test('first-time website setup applies the selected starter theme as a private draft', function (): void {
+    $tenant = websitePilotTenant('website-theme-choice');
+    $actor = websitePilotUser($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+
+    $this->actingAs($actor)
+        ->post('https://website-theme-choice.theeverbranch.com/website/setup', [
+            'theme_key' => 'outdoor-elements',
+            'contact_name' => 'Outdoor Workshop',
+        ])
+        ->assertRedirect(route('managed-website.index'))
+        ->assertSessionHasNoErrors();
+
+    $site = $tenant->fresh()->managedSite()->with(['draftSiteVersion', 'setup'])->firstOrFail();
+
+    expect($site->status)->toBe('draft')
+        ->and($site->public_enabled)->toBeFalse()
+        ->and($site->setup?->design_key)->toBe('outdoor-elements')
+        ->and($site->draftSiteVersion?->settings['theme_key'] ?? null)->toBe('outdoor-elements');
+});
+
 test('only tenant owner or admin can publish while a manager can still save a draft', function (): void {
     $tenant = websitePilotTenant('publish-pilot');
     $admin = websitePilotUser($tenant, 'admin');

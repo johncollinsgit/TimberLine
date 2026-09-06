@@ -21,6 +21,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ManagedWebsiteController extends Controller
@@ -60,6 +61,7 @@ class ManagedWebsiteController extends Controller
         $tenant = $this->tenant($request);
         $this->requireEditor($tenant, $websites);
         $data = $request->validate([
+            'theme_key' => ['required', 'string', Rule::in(collect($websites->themes())->pluck('key')->all())],
             'contact_name' => ['nullable', 'string', 'max:190'],
             'contact_email' => ['nullable', 'email:rfc,dns', 'max:190'],
             'contact_phone' => ['nullable', 'string', 'max:80'],
@@ -69,7 +71,7 @@ class ManagedWebsiteController extends Controller
             'service_description' => ['nullable', 'string', 'max:8000'],
         ]);
         $site = $websites->createSite($tenant, $request->user());
-        $websites->applyTheme($site, 'collins-electric', $request->user());
+        $websites->applyTheme($site, (string) $data['theme_key'], $request->user());
         $pilot->saveSetup($tenant, $site, $data, $request->user());
         if (filled($data['service_title'] ?? null)) {
             $commerce->saveProduct($site, [
