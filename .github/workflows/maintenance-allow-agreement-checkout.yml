@@ -38,6 +38,7 @@ jobs:
           TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
           ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
           FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
           FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
           FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -47,7 +48,7 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           set -euo pipefail
-          for var in FORGE_API_TOKEN FORGE_SERVER_ID FORGE_SITE_ID DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+          for var in FORGE_API_TOKEN FORGE_ORGANIZATION_SLUG FORGE_SERVER_ID FORGE_SITE_ID DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
             if [ -z "${!var}" ]; then
               echo "::error::Missing required production configuration: $var"
               exit 1
@@ -69,16 +70,21 @@ jobs:
             echo "::error::Forge identifiers must be numeric."
             exit 1
           fi
+          if ! printf '%s' "$FORGE_ORGANIZATION_SLUG" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+            echo "::error::Invalid Forge organization slug."
+            exit 1
+          fi
 
       - name: Add tenant to the explicit Forge allowlist
         env:
           TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
           FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
           FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
           FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
         run: |
           set -euo pipefail
-          forge_env_url="https://forge.laravel.com/api/v1/servers/$FORGE_SERVER_ID/sites/$FORGE_SITE_ID/env"
+          forge_env_url="https://forge.laravel.com/api/orgs/$FORGE_ORGANIZATION_SLUG/servers/$FORGE_SERVER_ID/sites/$FORGE_SITE_ID/environment"
           curl --fail --silent --show-error \
             --header "Authorization: Bearer $FORGE_API_TOKEN" \
             --header 'Accept: application/json' \
