@@ -20,6 +20,8 @@ class Agreement extends Model
 
     public const TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES = 'collins_electric_launch_partner';
 
+    public const TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES = 'managed_website_launch_partner';
+
     public const TEMPLATE_FRONT_YARD_SANDBOX_VALIDATION = 'front_yard_foods_sandbox_validation';
 
     public const STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'active', 'termination_pending', 'terminated'];

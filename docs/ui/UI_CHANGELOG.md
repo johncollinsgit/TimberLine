@@ -2648,3 +2648,11 @@
 - Added validated, audited editing for completed hour submissions, with server-recomputed durations and immutable raw break punches.
 - Added pending material-request cards to manager Home with an exact total, purchase notes, Materials-tab destinations, and audited manager deletion.
 - Added tenant-scoped vehicle choices for the expanded manager job editor and audited full job changes without exposing lock-box values.
+## 2026-09-06 — Managed Website agreement template
+
+- Added a tenant-named Managed Website launch-partner choice to landlord
+  agreement preparation so operators do not reuse client-specific field-service
+  or commerce contracts.
+- The agreement presents the $299 / $89 / $149 founder schedule, the exact
+  monthly content-service limits, exclusions, photo-use responsibilities, and
+  the Stripe recurring-authorization path before an operator sends it.

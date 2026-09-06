@@ -16,6 +16,7 @@ class AgreementManagementService
     public function __construct(
         protected FrontYardFoodsAgreementTemplate $frontYardTemplate,
         protected CollinsElectricAgreementTemplate $collinsElectricTemplate,
+        protected ManagedWebsiteAgreementTemplate $managedWebsiteTemplate,
         protected SupplementalWorkAgreementTemplate $supplementalTemplate,
         protected AgreementDocumentRenderer $renderer,
         protected AgreementEventRecorder $events,
@@ -46,6 +47,19 @@ class AgreementManagementService
         $payload = $this->frontYardTemplate->build($implementationAmountCents, $dueOnAcceptanceCents, $dueBeforeLaunchCents, $additionalScope);
 
         return $this->prepareClientAgreement($tenant, $actorUserId, Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, $payload);
+    }
+
+    public function prepareManagedWebsite(
+        Tenant $tenant,
+        ?int $actorUserId,
+        int $onboardingAmountCents = 29900,
+        int $launchPartnerAmountCents = 8900,
+        int $standardAmountCents = 14900,
+        ?string $additionalScope = null,
+    ): Agreement {
+        $payload = $this->managedWebsiteTemplate->build($tenant, $onboardingAmountCents, $launchPartnerAmountCents, $standardAmountCents, $additionalScope);
+
+        return $this->prepareClientAgreement($tenant, $actorUserId, Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES, $payload);
     }
 
     /** @param array<string,mixed> $payload */
@@ -246,7 +260,16 @@ class AgreementManagementService
         if (! in_array($parent->status, ['active', 'termination_pending'], true)) {
             throw new InvalidArgumentException('Only an accepted agreement can receive an amendment.');
         }
-        if ($parent->template_key === Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES) {
+        if ($parent->template_key === Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES) {
+            $cards = collect((array) $parent->currentVersion?->pricing_payload['cards'])->keyBy('key');
+            $payload = $this->managedWebsiteTemplate->build(
+                $parent->tenant,
+                (int) data_get($cards->get('everbranch_onboarding'), 'amount_cents', 29900),
+                (int) data_get($cards->get('everbranch_launch_partner'), 'amount_cents', 8900),
+                (int) data_get($cards->get('everbranch_standard'), 'amount_cents', 14900),
+                $additionalScope,
+            );
+        } elseif ($parent->template_key === Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES) {
             $cards = collect((array) $parent->currentVersion?->pricing_payload['cards'])->keyBy('key');
             $payload = $this->collinsElectricTemplate->build(
                 (int) data_get($cards->get('everbranch_onboarding'), 'amount_cents', 29900),
