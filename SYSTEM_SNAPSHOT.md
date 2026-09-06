@@ -1736,6 +1736,15 @@ Scope guard:
   photo/catalog additions or replacements, two consolidated update requests,
   and one reasonable revision round per request. Unused allowances do not roll
   over and excluded work requires separate written approval.
+- The pricing explanation positions the offer as a managed, bespoke service:
+  the setup fee funds the launch foundation, while monthly service covers the
+  licensed platform, hosting/upkeep, hands-on bounded content work, and eligible
+  standard platform and AI-assisted improvements. It makes no promise of a
+  particular future feature, unlimited AI use, or unbounded custom programming.
 - Acceptance authorizes the existing tenant-linked Stripe Checkout subscription
   and six-cycle promotional schedule. It does not charge or activate service
   before the client accepts the exact version and completes provider Checkout.
+- `everbranch:prepare-managed-website-agreement` idempotently prepares the
+  unsigned tenant draft at those fixed defaults and emits a production-safe
+  billing-readiness summary. Its production maintenance workflow requires an
+  explicit confirmation input and never sends, accepts, or charges the draft.

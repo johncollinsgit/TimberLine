@@ -128,6 +128,9 @@ test('managed website agreement is tenant specific bounded and wired for recurri
         ->and($agreement->currentVersion->rendered_content)->toContain('up to ten client-supplied photograph or catalog-content additions or replacements')
         ->and($agreement->currentVersion->rendered_content)->toContain('up to two consolidated content-update requests')
         ->and($agreement->currentVersion->rendered_content)->toContain('access for up to three named client users')
+        ->and($agreement->currentVersion->rendered_content)->toContain('managed, bespoke website service')
+        ->and($agreement->currentVersion->rendered_content)->toContain('eligible enhancements released generally to the same service plan')
+        ->and($agreement->currentVersion->rendered_content)->toContain('does not promise a particular future feature')
         ->and($agreement->currentVersion->rendered_content)->toContain('does not by itself create a binding order')
         ->and($agreement->currentVersion->rendered_content)->not->toContain('Collins Electric')
         ->and($agreement->currentVersion->rendered_content)->not->toContain('Front Yard Foods');
