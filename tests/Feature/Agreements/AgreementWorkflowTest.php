@@ -103,6 +103,83 @@ test('front yard agreement pricing stays separate configurable and idempotent', 
         ->and($changed->currentVersion->rendered_content)->toContain('Import up to 75 currently active products.');
 });
 
+test('managed website agreement is tenant specific bounded and wired for recurring founder pricing', function (): void {
+    $tenant = agreementTenant('carolina-barrel-co');
+    $service = app(AgreementManagementService::class);
+    $agreement = $service->prepareManagedWebsite($tenant, null, 29900, 8900, 14900);
+    $sameAgreement = $service->prepareManagedWebsite($tenant, null, 29900, 8900, 14900);
+    $cards = collect($agreement->currentVersion->pricing_payload['cards'])->keyBy('key');
+    $subscription = $agreement->currentVersion->subscription_payload;
+
+    expect($sameAgreement->id)->toBe($agreement->id)
+        ->and($agreement->template_key)->toBe(Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES)
+        ->and($agreement->title)->toBe('Carolina Barrel Co — Everbranch Managed Website Launch Partner Agreement')
+        ->and($cards['everbranch_onboarding']['amount_cents'])->toBe(29900)
+        ->and($cards['everbranch_launch_partner']['amount_cents'])->toBe(8900)
+        ->and($cards['everbranch_standard']['amount_cents'])->toBe(14900)
+        ->and($subscription['purchase_key'])->toBe('everbranch.managed_website_launch_partner')
+        ->and($subscription['promotional_cycles'])->toBe(6)
+        ->and($subscription['authorized_line_items'])->toContain([
+            'key' => 'everbranch_standard',
+            'amount_cents' => 14900,
+            'frequency' => 'month',
+            'starts_cycle' => 7,
+        ])
+        ->and($agreement->currentVersion->rendered_content)->toContain('up to ten client-supplied photograph or catalog-content additions or replacements')
+        ->and($agreement->currentVersion->rendered_content)->toContain('up to two consolidated content-update requests')
+        ->and($agreement->currentVersion->rendered_content)->toContain('access for up to three named client users')
+        ->and($agreement->currentVersion->rendered_content)->toContain('does not by itself create a binding order')
+        ->and($agreement->currentVersion->rendered_content)->not->toContain('Collins Electric')
+        ->and($agreement->currentVersion->rendered_content)->not->toContain('Front Yard Foods');
+});
+
+test('landlord can prepare a managed website agreement from the agreement form', function (): void {
+    $tenant = agreementTenant('managed-website-form');
+    $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+    $host = app('router')->getRoutes()->getByName('landlord.agreements.store')?->getDomain() ?: 'app.theeverbranch.com';
+    config()->set('tenancy.landlord.primary_host', $host);
+    config()->set('tenancy.landlord.hosts', [$host]);
+
+    $response = $this->actingAs($admin)->post('http://'.$host.'/landlord/agreements', [
+        'tenant_id' => $tenant->id,
+        'template_key' => Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES,
+        'onboarding_amount' => '299.00',
+        'launch_partner_amount' => '89.00',
+        'standard_amount' => '149.00',
+    ]);
+
+    $agreement = Agreement::query()->forTenant($tenant)->where('template_key', Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES)->firstOrFail();
+    $response->assertRedirect(route('landlord.agreements.show', $agreement));
+    expect($agreement->currentVersion->subscription_payload['promotional_amount_cents'])->toBe(8900);
+});
+
+test('managed website acceptance authorizes the exact initial and recurring Stripe schedule', function (): void {
+    $tenant = agreementTenant('managed-website-billing');
+    $management = app(AgreementManagementService::class);
+    $agreement = $management->prepareManagedWebsite($tenant, null, 29900, 8900, 14900);
+    $access = $management->send($agreement, null, 'ProposalPass123');
+    $token = basename(parse_url($access['url'], PHP_URL_PATH));
+    $url = 'http://evergrove.test/proposals/'.$token;
+
+    $this->post($url.'/unlock', ['password' => 'ProposalPass123'])->assertRedirect();
+    $this->post($url.'/accept', acceptancePayload(['signer_email' => 'owner@carolina.test']))->assertRedirect();
+
+    $authorization = SubscriptionAuthorization::query()->where('agreement_id', $agreement->id)->firstOrFail();
+    $order = TenantBillingOrder::query()->where('agreement_id', $agreement->id)->firstOrFail();
+    $lines = collect($order->line_items)->keyBy('key');
+
+    expect($authorization->purchase_key)->toBe('everbranch.managed_website_launch_partner')
+        ->and($authorization->promotional_amount_cents)->toBe(8900)
+        ->and($authorization->promotional_cycles)->toBe(6)
+        ->and($authorization->standard_amount_cents)->toBe(14900)
+        ->and($order->authorized_subtotal_cents)->toBe(38800)
+        ->and($lines['everbranch_onboarding']['payment_timing'])->toBe('due_on_acceptance')
+        ->and($lines['everbranch_launch_partner']['payment_timing'])->toBe('recurring_current')
+        ->and($lines['everbranch_launch_partner']['cycles'])->toBe(6)
+        ->and($lines['everbranch_standard']['payment_timing'])->toBe('recurring_future')
+        ->and($lines['everbranch_standard']['starts_cycle'])->toBe(7);
+});
+
 test('disposable sandbox agreements never replace or version the client agreement', function (): void {
     $tenant = agreementTenant();
     $service = app(AgreementManagementService::class);

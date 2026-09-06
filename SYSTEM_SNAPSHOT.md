@@ -1726,3 +1726,16 @@ Scope guard:
 - Mobile Current Work hides archived jobs but preserves the underlying job record and its associated operational/accounting evidence. The mobile DELETE route is an archive action, restricted to job managers.
 - Work navigation opens to All Current Jobs for admins/managers and My Jobs for field employees, with an explicit switch between the two. QuickBooks invoices never auto-create jobs; they appear as draft-job opportunities in the admin Work screen and at the top of the Invoice Desk, including invoices attached only to a legacy auto-generated invoice job. Existing invoice-created import jobs are excluded immediately from current job, calendar, and My Day responses, then archived by the next sync, preserving history while cleaning Current Jobs. Every job has a dedicated lock-box-code field and plan-document upload area.
 - Job clock-in is employee/member-only. Photo capture uses the native camera path. Team channels are newest-first and include server-derived unread counts for the current viewer.
+## Managed Website launch-partner agreement (2026-09-06)
+
+- Landlord agreement preparation now includes a tenant-named Managed Website
+  template instead of reusing another client's contract. The default schedule
+  is $299 onboarding, $89/month for six cycles, and $149/month from cycle seven.
+- The immutable agreement spells out the monthly limits: one hosted website and
+  address, up to six launch pages, up to three named users, ten client-supplied
+  photo/catalog additions or replacements, two consolidated update requests,
+  and one reasonable revision round per request. Unused allowances do not roll
+  over and excluded work requires separate written approval.
+- Acceptance authorizes the existing tenant-linked Stripe Checkout subscription
+  and six-cycle promotional schedule. It does not charge or activate service
+  before the client accepts the exact version and completes provider Checkout.

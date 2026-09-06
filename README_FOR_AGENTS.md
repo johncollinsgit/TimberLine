@@ -142,6 +142,14 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 ## Managed Website guardrails (approved contract; not yet enabled)
 
+- The reusable `managed_website_launch_partner` agreement is tenant-named and
+  authorizes Stripe-direct recurring billing only after exact-version client
+  acceptance. Its default founder schedule is $299 onboarding, $89/month for
+  six billing cycles, then $149/month beginning with cycle seven. The contract
+  states the included monthly user, photo/content, and revision limits; do not
+  replace it with the client-specific Collins Electric or Front Yard Foods
+  templates.
+
 - `managed_website` must remain default-disabled and use
   `config/module_catalog.php`, the canonical access resolver, verified/audited
   fulfilment, and an explicit rollout allowlist. Never infer access from a
