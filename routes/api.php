@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Integrations\LevelFoundationsTranscriptionController;
 use App\Http\Controllers\Mobile\EverbranchMobileAssetUploadController;
 use App\Http\Controllers\Mobile\EverbranchMobileAuthController;
 use App\Http\Controllers\Mobile\EverbranchMobileClassSchedulingController;
@@ -17,6 +18,10 @@ use App\Http\Controllers\Mobile\EverbranchMobileVoiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileWorkCandidateController;
 use App\Http\Controllers\Mobile\EverbranchMobileWorkforceController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/integrations/level-foundations/transcriptions', [LevelFoundationsTranscriptionController::class, 'store'])
+    ->middleware('throttle:10,1')
+    ->name('integrations.level-foundations.transcriptions.store');
 
 Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
     Route::post('/auth/exchange', [EverbranchMobileAuthController::class, 'exchange'])
