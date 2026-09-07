@@ -1,5 +1,10 @@
 # SYSTEM SNAPSHOT
 
+## Level Foundations private transcription bridge (2026-09-07)
+
+- Everbranch has a default-disabled, rate-limited server-to-server transcription bridge for the separately hosted Level Foundations editor. It validates an integration bearer token and a 25 MB audio upload, makes one provider request with Everbranch's configured AI credential, and returns text only. It creates no Everbranch tenant/user records and retains or logs neither audio nor transcript content.
+- Activation requires the dedicated `LEVEL_FOUNDATIONS_TRANSCRIPTION_ENABLED` and `LEVEL_FOUNDATIONS_TRANSCRIPTION_TOKEN` runtime values plus the existing Bud provider credential. The Level Foundations runtime receives only its own endpoint URL and shared integration token. See `docs/operations/level-foundations-transcription-runbook.md`.
+
 ## Managed Website first-time setup (2026-09-06)
 
 - An entitled, allowlisted tenant may open Website before a site record exists,

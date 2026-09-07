@@ -1,5 +1,10 @@
 # START HERE
 
+## Level Foundations transcription bridge (2026-09-07)
+
+- The separately hosted Level Foundations editor may use only the default-disabled, bearer-authenticated transcription bridge described in `docs/operations/level-foundations-transcription-runbook.md`. It is a narrow integration exception, not tenant access or a general Bud AI release.
+- Keep provider credentials in Everbranch runtime configuration. The Level Foundations deployment holds only the bridge URL and a dedicated shared integration token. Do not persist or log audio or transcript content, and do not reuse this integration token for any other caller.
+
 ## Mobile manager timecards and material requests (2026-09-03)
 
 - `/api/mobile/v1/workspaces/{tenant}/field-service/time-clock-hours` is owner/admin/manager-only and requires the canonical `time_tracking` entitlement. Keep ranges bounded, the unified timer/manual ledger paginated, editor choices tenant-scoped, and all completed-entry corrections validated and audited. Do not turn its duration analytics into payroll or overtime calculations.
