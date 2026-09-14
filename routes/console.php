@@ -257,3 +257,5 @@ Schedule::command('ai:invoice-closed-usage', ['--send' => true])
     ->dailyAt('09:20')
     ->withoutOverlapping(30)
     ->runInBackground();
+
+\Illuminate\Support\Facades\Schedule::command('trajectory:refresh --notify')->dailyAt('13:00')->withoutOverlapping();

@@ -1201,3 +1201,23 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Dashboard ranges are `1d`, `1w`, `1m`, `30d`, and `ytd`; `1m` means current calendar month and is the default. QuickBooks reports retain their requested report period and must not be relabeled to match a dashboard filter.
 - Collins-specific ownership and workflow notes belong in `docs/collins-electric-access-and-quickbooks.md`; shared connector behavior belongs in canonical services/config/tests.
 - Apple review data is created only through `everbranch:prepare-app-review-workspace`; it uses the `everbranch-review` tenant and fictional contacts/work. Never place reviewer passwords in source, logs, screenshots, or deployment output.
+
+## Trajectory financial privacy and planning
+
+- Read `docs/operations/trajectory-runbook.md` before touching this Branch.
+  `FinanceAccess` requires global availability, enabled space, canonical
+  entitlement, active verified user, and household membership or tenant financial
+  permission. Never let platform-admin status bypass household privacy.
+- Keep provider secrets/raw evidence encrypted; resolve all account, transaction,
+  record, invitation, SMS, and cross-space IDs again on the server. Shared
+  allocations must not disclose the original account or unsplit transaction.
+- Use integer cents and decimal arithmetic. Reviewed rules win; source refreshes
+  retain corrections. Transfers/asset movements and operational sales summaries
+  must not duplicate consumption or accounting revenue. Never write back to QB.
+- Forecasts and metal values expose missing/stale coverage and assumptions. Keep
+  one-time shocks out of recurring baselines, linked debt bills out of duplicate
+  payments, saved goals out of consumption, and linked business equity out of
+  combined net worth. Keep payroll conclusions proportional to imported evidence.
+- Public subscription packages are preparation only. Do not invent prices or
+  remove checkout's hard gate without production access and Stripe lifecycle
+  acceptance. Rollback disables the Branch and preserves financial records.

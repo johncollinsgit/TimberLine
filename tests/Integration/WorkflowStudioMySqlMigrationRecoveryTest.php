@@ -947,3 +947,23 @@ it('creates billing refunds with an identifier below the MySQL limit', function 
 
     expect(Schema::hasIndex('tenant_billing_refunds', 'billing_refunds_receipt_created_idx'))->toBeTrue();
 });
+
+it('resumes trajectory after MySQL retains finance accounts before trailing financial tables', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    $migration = require database_path('migrations/2026_09_14_120000_create_trajectory_tables.php');
+    $migration->up();
+    DB::table('trajectory_spaces')->insert(['tenant_id' => 99123, 'owner_user_id' => 99123, 'kind' => 'household', 'name' => 'Recovery fixture', 'enabled' => false]);
+    $id = DB::table('trajectory_spaces')->where('tenant_id', 99123)->value('id');
+    Schema::drop('trajectory_snapshots');
+    Schema::drop('trajectory_notifications');
+    $migration->up();
+    $migration->up();
+    expect(DB::table('trajectory_spaces')->where('id', $id)->value('name'))->toBe('Recovery fixture')
+        ->and(Schema::hasTable('trajectory_snapshots'))->toBeTrue()
+        ->and(Schema::hasTable('trajectory_notifications'))->toBeTrue()
+        ->and(Schema::hasIndex('trajectory_transactions', 'traj_tx_source'))->toBeTrue()
+        ->and(Schema::hasIndex('trajectory_allocations', 'traj_allocation_unique'))->toBeTrue();
+    DB::table('trajectory_spaces')->where('id', $id)->delete();
+});

@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_09_14_120000_create_trajectory_tables.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['finance account tables retained before notification and valuation tables'],
+    ],
     '2026_03_12_090000_add_marketing_groups_and_addresses.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['earlier marketing tables retained before import-row table creation'],

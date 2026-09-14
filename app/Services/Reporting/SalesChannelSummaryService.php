@@ -49,6 +49,23 @@ class SalesChannelSummaryService
         ];
     }
 
+    /** Read-only provider evidence for Trajectory; never an additional accounting ledger. */
+    public function forTrajectory(Tenant|int $tenant, CarbonInterface $startsAt, CarbonInterface $endsAt): array
+    {
+        $tenantId = $tenant instanceof Tenant ? (int) $tenant->id : $tenant;
+        $summary = $this->forTenant($tenantId, $startsAt, $endsAt);
+        $square = \App\Models\SquareOrder::query()->forTenantId($tenantId)
+            ->whereIn('state', ['COMPLETED', 'completed'])->where('total_money_currency', 'USD')->whereBetween('closed_at', [$startsAt, $endsAt])
+            ->selectRaw('COUNT(*) as order_count, COALESCE(SUM(total_money_amount), 0) as gross_cents, MAX(closed_at) as observed_end')->first();
+        if ((int) $square->getAttribute('order_count') > 0) {
+            $channels = collect($summary['channels'])->reject(fn ($c) => $c['key'] === 'legacy_square')->values();
+            $channels->push(['key' => 'square_provider', 'label' => 'Square completed orders', 'order_count' => (int) $square->getAttribute('order_count'), 'revenue_cents' => (int) $square->getAttribute('gross_cents'), 'latest_order_at' => $square->getAttribute('observed_end')]);
+            $summary = [...$summary, 'channels' => $channels->all(), 'revenue_cents' => $channels->sum('revenue_cents'), 'order_count' => $channels->sum('order_count'), 'channel_count' => $channels->count()];
+        }
+
+        return [...$summary, 'basis' => 'Gross operational order amounts; refunds, taxes, processing fees and payouts require reconciliation.'];
+    }
+
     /** @return Collection<int,array{key:string,label:string,order_count:int,revenue_cents:int,latest_order_at:?string}> */
     private function legacyChannels(int $tenantId, CarbonInterface $startsAt, CarbonInterface $endsAt): Collection
     {

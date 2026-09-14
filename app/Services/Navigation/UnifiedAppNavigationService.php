@@ -192,6 +192,10 @@ class UnifiedAppNavigationService
                 ];
             }
 
+            if ($user && config('trajectory.enabled') && app(\App\Services\Trajectory\FinanceAccess::class)->spaces($user)->isNotEmpty()) {
+                $workItems[] = ['key' => 'trajectory', 'icon' => 'chart-bar', 'href' => route('trajectory.index'), 'label' => 'Trajectory', 'current' => request()->routeIs('trajectory.*')];
+            }
+
             if (! $isCollinsWorkspace && $accountingEnabled && $tenant && $user && $this->financialAccess()->allows($user, $tenant) && Route::has('accounting.index')) {
                 $workItems[] = [
                     'key' => 'accounting-command-center',

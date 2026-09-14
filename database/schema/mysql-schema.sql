@@ -8266,8 +8266,8 @@ CREATE TABLE `tenant_fleet_tracking_settings` (
   `bouncie_tracking_enabled` tinyint(1) NOT NULL DEFAULT '0',
   `policy_version` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `policy_sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `approval_basis` varchar(24) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `approval_reference` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `approval_basis` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `approval_reference` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
   `approved_by_user_id` bigint unsigned DEFAULT NULL,
   `counsel_review_reference` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -9180,6 +9180,226 @@ CREATE TABLE `tenants` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tenants_slug_unique` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_accounts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `connection_id` bigint unsigned DEFAULT NULL,
+  `source_key` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `balance_cents` bigint DEFAULT NULL,
+  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'USD',
+  `history_start` date DEFAULT NULL,
+  `observed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_account_source` (`source_key`),
+  KEY `traj_account_space` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_allocations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_allocations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `transaction_id` bigint unsigned NOT NULL,
+  `space_id` bigint unsigned NOT NULL,
+  `amount_cents` bigint NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_allocation_unique` (`transaction_id`,`space_id`),
+  KEY `traj_allocation_space` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_connections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_connections` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'plaid',
+  `external_id` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `access_token` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `cursor` text COLLATE utf8mb4_unicode_ci,
+  `status` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'connected',
+  `institution_name` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `synced_at` timestamp NULL DEFAULT NULL,
+  `coverage` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_connection_external` (`external_id`),
+  KEY `traj_connection_space` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `actor_id` bigint unsigned DEFAULT NULL,
+  `action` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `record_id` bigint unsigned DEFAULT NULL,
+  `before` text COLLATE utf8mb4_unicode_ci,
+  `after` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `traj_event_space` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_invites`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_invites` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `email` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `accepted_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_invite_token` (`token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_links` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `household_id` bigint unsigned NOT NULL,
+  `business_id` bigint unsigned NOT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_link_unique` (`household_id`,`business_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_members`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_members` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_member_unique` (`space_id`,`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_notifications` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `transaction_id` bigint unsigned DEFAULT NULL,
+  `dedupe_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `phone` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `body` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reply_hash` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `consumed_at` timestamp NULL DEFAULT NULL,
+  `provider_id` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_notification_dedupe` (`dedupe_key`),
+  UNIQUE KEY `traj_reply_hash` (`reply_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_records`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_records` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `kind` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `data` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` bigint unsigned NOT NULL DEFAULT '1',
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `traj_record_lookup` (`space_id`,`kind`,`active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_snapshots`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_snapshots` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `observed_on` date NOT NULL,
+  `data` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_snapshot_unique` (`space_id`,`observed_on`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_spaces`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_spaces` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `owner_user_id` bigint unsigned NOT NULL,
+  `kind` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'USD',
+  `timezone` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'America/New_York',
+  `settings` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_space_tenant_kind` (`tenant_id`,`kind`),
+  KEY `traj_space_tenant` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `trajectory_transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `trajectory_transactions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `space_id` bigint unsigned NOT NULL,
+  `account_id` bigint unsigned NOT NULL,
+  `source_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `pending_source_key` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `posted_on` date NOT NULL,
+  `amount_cents` bigint NOT NULL,
+  `merchant` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `category` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'uncategorized',
+  `flow` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'expense',
+  `pending` tinyint(1) NOT NULL DEFAULT '0',
+  `removed` tinyint(1) NOT NULL DEFAULT '0',
+  `reviewed` tinyint(1) NOT NULL DEFAULT '0',
+  `face_punched` tinyint(1) NOT NULL DEFAULT '0',
+  `bullshit_spending` tinyint(1) NOT NULL DEFAULT '0',
+  `explanation` text COLLATE utf8mb4_unicode_ci,
+  `source` text COLLATE utf8mb4_unicode_ci,
+  `version` bigint unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `traj_tx_source` (`source_key`),
+  KEY `traj_tx_space_date` (`space_id`,`posted_on`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `users`;
@@ -10484,3 +10704,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (262,'2026_09_03_20
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (263,'2026_09_03_201000_add_time_hours_reporting_index',9);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (264,'2026_09_05_180000_create_field_service_crew_statuses_table',10);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (265,'2026_09_05_210000_add_owner_approval_to_fleet_tracking_settings',11);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (266,'2026_09_14_120000_create_trajectory_tables',12);
