@@ -76,11 +76,12 @@ class MonarchImportService
                 $category = $this->category($source['Category']);
                 $sourceCategory = strtolower(trim($source['Category']));
                 $flow = match (true) {
-                    (bool) preg_match('/\b(CASHOUT|FUNDS TRANSFER|DEPOSIT@MOBILE)\b/i', $source['Original Statement'] ?? '') => 'transfer',
+                    (bool) preg_match('/\b(CASHOUT|FUNDS TRANSFER)\b/i', $source['Original Statement'] ?? '') => 'transfer',
                     $sourceCategory === 'transfer', in_array($sourceCategory, ['emergency fund', 'retirement'], true) => 'transfer',
                     $sourceCategory === 'credit card payment' => 'card_payment',
                     $sourceCategory === 'interest' && $amount > 0 => 'income',
                     $amount > 0 && in_array($sourceCategory, ['paychecks', 'business income', 'other income'], true) => 'income',
+                    $amount > 0 && str_contains(strtoupper($source['Original Statement'] ?? ''), 'DEPOSIT@MOBILE') => 'transfer',
                     $amount > 0 => 'refund', default => 'expense',
                 };
                 $rows[] = ['id' => $source['Id'], 'date' => $source['Date'], 'merchant' => $source['Merchant'], 'amount_cents' => $amount, 'category' => $category,

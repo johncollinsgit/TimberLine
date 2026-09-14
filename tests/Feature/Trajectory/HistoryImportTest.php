@@ -175,9 +175,10 @@ test('balance history excludes untyped liabilities and rejects conflicting same 
 });
 
 test('cashout descriptions remain transfers and broad retailers require purpose review', function () {
-    file_put_contents($this->path, "Date,Merchant,Category,Account,Amount,Id,Original Statement\n2026-08-01,Venmo,Groceries,Checking,900.00,x,VENMO CASHOUT\n2026-08-02,eBay,Shopping,Checking,-100.00,y,EBAY ORDER\n");
+    file_put_contents($this->path, "Date,Merchant,Category,Account,Amount,Id,Original Statement\n2026-08-01,Venmo,Groceries,Checking,900.00,x,VENMO CASHOUT\n2026-08-02,eBay,Shopping,Checking,-100.00,y,EBAY ORDER\n2026-08-03,Employer,Paychecks,Checking,1000.00,z,DEPOSIT@MOBILE\n");
     $import = app(MonarchImportService::class);
     $import->import($this->owner, $this->space, $import->read($this->path), ['Checking' => 'cash']);
+    expect(Transaction::where('amount_cents', 100000)->sole()->flow)->toBe('income');
     expect(Transaction::where('amount_cents', 90000)->sole()->flow)->toBe('transfer')->and(Transaction::where('amount_cents', -10000)->sole()->bullshit_spending)->toBeFalse();
 });
 
